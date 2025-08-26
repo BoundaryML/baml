@@ -70,7 +70,10 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
                 .feature_flags
                 .as_ref()
                 .unwrap_or(&default_flags);
-            if let Ok(version) = project.get_common_generator_version(effective_flags) {
+            let client_version = session.baml_settings.get_client_version();
+            if let Ok(version) =
+                project.get_common_generator_version(effective_flags, client_version)
+            {
                 notifier
                     .0
                     .send(lsp_server::Message::Notification(

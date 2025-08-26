@@ -101,6 +101,7 @@ impl Session {
         global_settings: ClientSettings,
         workspace_folders: &[(Url, ClientSettings)],
         runtime_handle: tokio::runtime::Handle,
+        client_version: Option<String>,
     ) -> anyhow::Result<Self> {
         let mut projects = HashMap::new();
         let index = index::Index::new(global_settings.clone());
@@ -129,6 +130,8 @@ impl Session {
                 tracing::info!("Session::new: No baml_src found yet {:?}", workspace_path);
             }
         }
+
+        let baml_settings = BamlSettings::default().with_client_version(client_version);
 
         Ok(Self {
             position_encoding,
@@ -545,6 +548,7 @@ mod tests {
             global_settings,
             &workspace_folders,
             rt.handle().clone(),
+            None, // No client_version for this test
         )
         .unwrap()
     }

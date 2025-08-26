@@ -20,7 +20,7 @@ export declare class BamlImage {
 
 export declare class BamlPdf {
   static fromUrl(url: string): BamlPdf
-  static fromBase64(mediaType: string, base64: string): BamlPdf
+  static fromBase64(base64: string): BamlPdf
   get url(): string | null
   asUrl(): string
   isUrl(): boolean

@@ -116,6 +116,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
             project,
             Some(params.text_document.version),
             effective_flags,
+            session,
         )?;
 
         let elapsed = start_time_total.elapsed();

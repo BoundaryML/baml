@@ -162,12 +162,19 @@ impl Server {
 
         let rt = tokio::runtime::Runtime::new()?;
 
+        // Extract client version from initialization parameters
+        let client_version = init_params
+            .client_info
+            .as_ref()
+            .and_then(|info| info.version.clone());
+
         let mut session = Session::new(
             &client_capabilities,
             position_encoding,
             global_settings,
             &workspaces,
             rt.handle().clone(),
+            client_version,
         )?;
 
         let client = client::Client::new(connection.make_sender());

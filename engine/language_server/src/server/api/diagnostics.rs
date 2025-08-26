@@ -35,12 +35,13 @@ pub fn publish_diagnostics(
     project: Arc<Mutex<Project>>,
     version: Option<i32>,
     feature_flags: &[String],
+    session: &Session,
 ) -> Result<()> {
     tracing::info!(
         "publish_diagnostics called with feature_flags: {:?}",
         feature_flags
     );
-    let diagnostics = project_diagnostics(project.clone(), feature_flags);
+    let diagnostics = project_diagnostics(project.clone(), feature_flags, session);
     // Calculate counts *after* all diagnostics (including generator) are collected.
     let error_count = diagnostics
         .iter()
@@ -112,7 +113,7 @@ pub fn publish_session_lsp_diagnostics(
         "publish_diagnostics_for_file: session feature_flags: {:?}",
         feature_flags
     );
-    let diagnostics = project_diagnostics(project.clone(), feature_flags);
+    let diagnostics = project_diagnostics(project.clone(), feature_flags, session);
     for (uri, diagnostics) in diagnostics {
         notifier
             .notify::<lsp_types::notification::PublishDiagnostics>(PublishDiagnosticsParams {
@@ -129,6 +130,7 @@ pub fn publish_session_lsp_diagnostics(
 pub fn project_diagnostics(
     project: Arc<Mutex<Project>>,
     feature_flags: &[String],
+    session: &Session,
 ) -> HashMap<Url, Vec<lsp_types::Diagnostic>> {
     tracing::info!(
         "project_diagnostics called with feature_flags: {:?}",
@@ -265,7 +267,9 @@ pub fn project_diagnostics(
     }
 
     // Check for generator version mismatch as well.
-    if let Err(message) = guard.get_common_generator_version(feature_flags) {
+    if let Err(message) = guard
+        .get_common_generator_version(feature_flags, session.baml_settings.get_client_version())
+    {
         // Add the diagnostic to all generators
         if let Ok(generators) = guard.list_generators(feature_flags) {
             // Need to list generators again to get their spans
@@ -281,7 +285,7 @@ pub fn project_diagnostics(
                 ) {
                     let diagnostic = Diagnostic {
                         range,
-                        message: message.clone(),
+                        message: message.to_string(),
                         severity: Some(DiagnosticSeverity::ERROR),
                         source: Some("baml".to_string()),
                         ..Default::default()

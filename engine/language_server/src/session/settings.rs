@@ -18,6 +18,7 @@ pub struct BamlSettings {
     pub playground_port: Option<u16>,
     #[serde(default = "default_feature_flags")]
     pub(crate) feature_flags: Option<Vec<String>>,
+    pub(crate) client_version: Option<String>,
 }
 
 impl Default for BamlSettings {
@@ -28,7 +29,21 @@ impl Default for BamlSettings {
             enable_playground: false,
             playground_port: None,
             feature_flags: Some(vec!["beta".to_string()]),
+            client_version: None,
         }
+    }
+}
+
+impl BamlSettings {
+    pub(crate) fn with_client_version(self, client_version: Option<String>) -> Self {
+        Self {
+            client_version,
+            ..self
+        }
+    }
+
+    pub fn get_client_version(&self) -> Option<&str> {
+        self.client_version.as_ref().map(AsRef::as_ref)
     }
 }
 

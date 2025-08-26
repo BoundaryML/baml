@@ -30,7 +30,9 @@ fn republish_all_diagnostics(notifier: &Notifier, session: &mut Session) {
 
     for (root_path, project) in projects_guard.iter() {
         tracing::info!("Republishing diagnostics for project at: {:?}", root_path);
-        if let Err(e) = publish_diagnostics(notifier, project.clone(), None, effective_flags) {
+        if let Err(e) =
+            publish_diagnostics(notifier, project.clone(), None, effective_flags, session)
+        {
             tracing::error!(
                 "Failed to republish diagnostics for project {:?}: {}",
                 root_path,
