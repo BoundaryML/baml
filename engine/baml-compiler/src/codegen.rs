@@ -1040,20 +1040,9 @@ impl<'g> HirCompiler<'g> {
                 });
 
                 // Determine if we're in a nested constructor
-                // Nested constructors have their instance on the evaluation stack
-                // Top-level constructors need to track the instance as a local variable
+                // Both nested and top-level constructors will use Copy to access the instance
+                // The instance is always on the stack after AllocInstance
                 let is_nested = self.constructor_depth > 0;
-                
-                // Only calculate local index for top-level constructors
-                // For nested constructors, we'll use Copy instead of LoadVar
-                let instance_local_index = if !is_nested {
-                    // For top-level constructors, instance will be stored at locals.len() + 1
-                    // This accounts for any existing local variables (like let a = 1; let b = 2; etc.)
-                    Some(self.locals.len() + 1)
-                } else {
-                    // Nested constructors don't use LoadVar - they use Copy from the stack
-                    None
-                };
                 
                 // Track that we're now building this constructor
                 self.constructor_depth += 1;
@@ -1070,17 +1059,9 @@ impl<'g> HirCompiler<'g> {
                         panic!("undefined field: {class_name}.{field_name}");
                     };
 
-                    match instance_local_index {
-                        None => {
-                            // Nested constructor: instance is on top of evaluation stack
-                            // Copy it from position 0 (0 positions from the top)
-                            self.emit(Instruction::Copy(0));
-                        }
-                        Some(index) => {
-                            // Top-level constructor: load from the calculated local variable index
-                            self.emit(Instruction::LoadVar(index));
-                        }
-                    }
+                    // Instance is always on top of stack after AllocInstance
+                    // Copy it to work with it
+                    self.emit(Instruction::Copy(0));
                     self.compile_expression(value);
                     self.emit(Instruction::StoreField(field_index));
 
@@ -1094,28 +1075,13 @@ impl<'g> HirCompiler<'g> {
 
                     self.compile_expression(spread);
 
-                    // Pseudo local, user didn't declare it. + 2 because stack is:
-                    //
-                    // [a, b, c, allocated_instance, spread_local]
-                    //  ^  ^  ^         ^                    ^
-                    //  |  |  |         |                    |
-                    //  |  |  |         |                    +-- spread (+2)
-                    //  |  |  |         |
-                    //  +--+--+         +-- Not yet tracked (+1)
-                    //     |
-                    //     |
-                    //     +-- These are tracked locals.
-                    let spread_local_index = match instance_local_index {
-                        None => {
-                            // For nested constructors, spread is at position 0 on stack
-                            // But this is actually not used since we use Copy instruction
-                            0
-                        }
-                        Some(index) => {
-                            // For top-level constructors, spread is one position after instance
-                            index + 1
-                        }
-                    };
+                    // Stack state after compiling spread:
+                    // [locals..., allocated_instance, spread_value]
+                    //                                       ^-- position 0 from top (Copy(0))
+                    //                    ^-- position 1 from top (Copy(1))
+                    // 
+                    // We'll use Copy to access both values regardless of nesting level
+                    // This is simpler than calculating pseudo-local indices
 
                     let mut pop_spread_local = false;
 
@@ -1129,36 +1095,22 @@ impl<'g> HirCompiler<'g> {
 
                     for (field_name, field_index) in sorted_fields {
                         if !defined_named_fields.contains(field_name.as_str()) {
-                            // Now load allocated instance again:
-                            // [a, b, c, allocated_instance, spread_local, allocated_instance]
-                            match instance_local_index {
-                                None => {
-                                    // Nested constructor: copy from stack position 1 (under spread)
-                                    self.emit(Instruction::Copy(1));
-                                }
-                                Some(index) => {
-                                    // Top-level constructor: load from local variable
-                                    self.emit(Instruction::LoadVar(index));
-                                }
-                            }
-
-                            // Load spread again:
-                            // [a, b, c, allocated_instance, spread_local, allocated_instance, spread_local]
-                            match instance_local_index {
-                                None => {
-                                    // Nested constructor: spread is at position 1 from top (under instance copy)
-                                    self.emit(Instruction::Copy(1));
-                                }
-                                Some(_) => {
-                                    // Top-level constructor: load spread from its local variable
-                                    self.emit(Instruction::LoadVar(spread_local_index));
-                                }
-                            }
-                            // Load field:
-                            // [a, b, c, allocated_instance, spread_local, allocated_instance, field_value]
+                            // Current stack: [locals..., allocated_instance, spread_value]
+                            
+                            // Copy instance from position 1 (under spread)
+                            // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance]
+                            self.emit(Instruction::Copy(1));
+                            
+                            // Copy spread from position 1 (now under instance copy)
+                            // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance, spread_value]
+                            self.emit(Instruction::Copy(1));
+                            
+                            // Load field from spread
+                            // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance, field_value]
                             self.emit(Instruction::LoadField(field_index));
-                            // Store field:
-                            // [a, b, c, allocated_instance, spread_local]
+                            
+                            // Store field to instance
+                            // Stack becomes: [locals..., allocated_instance, spread_value]
                             self.emit(Instruction::StoreField(field_index));
 
                             pop_spread_local = true;
@@ -2045,10 +1997,10 @@ mod tests {
                 "main",
                 vec![
                     Instruction::AllocInstance(ObjectIndex::from_raw(2)),
-                    Instruction::LoadVar(1),
+                    Instruction::Copy(0),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
-                    Instruction::LoadVar(1),
+                    Instruction::Copy(0),
                     Instruction::LoadConst(1),
                     Instruction::StoreField(1),
                     Instruction::LoadVar(1),
@@ -2082,20 +2034,20 @@ mod tests {
                 "main",
                 vec![
                     Instruction::AllocInstance(ObjectIndex::from_raw(3)),
-                    Instruction::LoadVar(1),
+                    Instruction::Copy(0),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
-                    Instruction::LoadVar(1),
+                    Instruction::Copy(0),
                     Instruction::LoadConst(1),
                     Instruction::StoreField(1),
                     Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
-                    Instruction::LoadVar(1),
-                    Instruction::LoadVar(2),
+                    Instruction::Copy(1),  // Copy instance from under spread
+                    Instruction::Copy(1),  // Copy spread from under instance
                     Instruction::LoadField(2),
                     Instruction::StoreField(2),
-                    Instruction::LoadVar(1),
-                    Instruction::LoadVar(2),
+                    Instruction::Copy(1),  // Copy instance from under spread
+                    Instruction::Copy(1),  // Copy spread from under instance
                     Instruction::LoadField(3),
                     Instruction::StoreField(3),
                     Instruction::Pop(1),
@@ -2131,20 +2083,20 @@ mod tests {
                 "main",
                 vec![
                     Instruction::AllocInstance(ObjectIndex::from_raw(3)),
-                    Instruction::LoadVar(1),
+                    Instruction::Copy(0),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
-                    Instruction::LoadVar(1),
+                    Instruction::Copy(0),
                     Instruction::LoadConst(1),
                     Instruction::StoreField(1),
                     Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
-                    Instruction::LoadVar(1),
-                    Instruction::LoadVar(2),
+                    Instruction::Copy(1),  // Copy instance from under spread
+                    Instruction::Copy(1),  // Copy spread from under instance
                     Instruction::LoadField(2),
                     Instruction::StoreField(2),
-                    Instruction::LoadVar(1),
-                    Instruction::LoadVar(2),
+                    Instruction::Copy(1),  // Copy instance from under spread
+                    Instruction::Copy(1),  // Copy spread from under instance
                     Instruction::LoadField(3),
                     Instruction::StoreField(3),
                     Instruction::Pop(1),
@@ -3256,10 +3208,10 @@ mod tests {
                 vec![
                     // Create Outer { inner: Inner { value: 42 } }
                     Instruction::AllocInstance(ObjectIndex::from_raw(3)), // Outer class
-                    Instruction::LoadVar(1),         // o
+                    Instruction::Copy(0),            // Copy Outer instance
                     // Create Inner inline
                     Instruction::AllocInstance(ObjectIndex::from_raw(2)), // Inner class  
-                    Instruction::LoadVar(2),         // Now correctly uses separate index
+                    Instruction::Copy(0),            // Copy Inner instance
                     Instruction::LoadConst(0),       // 42
                     Instruction::StoreField(0),      // Inner.value = 42
                     Instruction::StoreField(0),      // Outer.inner = Inner instance
@@ -3298,19 +3250,19 @@ mod tests {
             expected: vec![(
                 "main",
                 vec![
-                    // This is what we expect but probably not what we get
+                    // Outer constructor
                     Instruction::AllocInstance(ObjectIndex::from_raw(3)), // Outer
-                    Instruction::LoadVar(1),         // o
+                    Instruction::Copy(0),            // Copy Outer instance
                     // Nested Inner construction
                     Instruction::AllocInstance(ObjectIndex::from_raw(2)), // Inner
-                    Instruction::LoadVar(2),         // Load Inner at correct index
+                    Instruction::Copy(0),            // Copy Inner instance
                     Instruction::LoadConst(0),       // 10
                     Instruction::StoreField(0),      // x = 10
-                    Instruction::LoadVar(2),         // reload Inner
+                    Instruction::Copy(0),            // Copy Inner instance again
                     Instruction::LoadConst(1),       // 20  
                     Instruction::StoreField(1),      // y = 20
                     Instruction::StoreField(0),      // Outer.inner = Inner
-                    Instruction::LoadVar(1),         // reload o
+                    Instruction::Copy(0),            // Copy Outer instance
                     Instruction::LoadConst(2),       // 30
                     Instruction::StoreField(1),      // Outer.value = 30
                     // o.value
