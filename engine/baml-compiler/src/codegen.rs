@@ -3128,4 +3128,65 @@ mod tests {
             )],
         })
     }
+
+    #[test]
+    fn field_assignment_compound_add_bytecode() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                class Counter {
+                    value int
+                }
+                
+                function incrementCounter(c: Counter) -> int {
+                    c.value += 10;
+                    c.value
+                }
+            ",
+            expected: vec![(
+                "incrementCounter",
+                vec![
+                    // c.value += 10
+                    Instruction::LoadVar(1),         // Load c
+                    Instruction::Copy(0),            // Duplicate c reference
+                    Instruction::LoadField(0),       // Load c.value
+                    Instruction::LoadConst(0),       // Load 10
+                    Instruction::BinOp(BinOp::Add),  // Add
+                    Instruction::StoreField(0),      // Store back to c.value
+                    // c.value
+                    Instruction::LoadVar(1),         // Load c
+                    Instruction::LoadField(0),       // Load c.value
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn field_assignment_simple_bytecode() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                class Data {
+                    value int
+                }
+                
+                function setDataValue(d: Data) -> int {
+                    d.value = 42;
+                    d.value
+                }
+            ",
+            expected: vec![(
+                "setDataValue",
+                vec![
+                    // d.value = 42
+                    Instruction::LoadVar(1),         // Load d
+                    Instruction::LoadConst(0),       // Load 42
+                    Instruction::StoreField(0),      // Store to d.value
+                    // d.value
+                    Instruction::LoadVar(1),         // Load d
+                    Instruction::LoadField(0),       // Load d.value
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
 }

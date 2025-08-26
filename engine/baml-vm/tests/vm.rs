@@ -1253,6 +1253,158 @@ fn mut_self_method_decl() -> anyhow::Result<()> {
     })
 }
 
+#[test]
+fn field_assignment_add_assign() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Counter {
+                value int
+            }
+            function main() -> int {
+                let mut c = Counter { value: 10 };
+                c.value += 5;
+                c.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(15)),
+    })
+}
+
+#[test]
+fn field_assignment_sub_assign() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Counter {
+                value int
+            }
+            function main() -> int {
+                let mut c = Counter { value: 20 };
+                c.value -= 8;
+                c.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(12)),
+    })
+}
+
+#[test]
+fn field_assignment_mul_assign() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Counter {
+                value int
+            }
+            function main() -> int {
+                let mut c = Counter { value: 7 };
+                c.value *= 3;
+                c.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(21)),
+    })
+}
+
+#[test]
+fn field_assignment_div_assign() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Counter {
+                value int
+            }
+            function main() -> int {
+                let mut c = Counter { value: 24 };
+                c.value /= 4;
+                c.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(6)),
+    })
+}
+
+#[test]
+fn field_assignment_mod_assign() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Counter {
+                value int
+            }
+            function main() -> int {
+                let mut c = Counter { value: 17 };
+                c.value %= 5;
+                c.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(2)),
+    })
+}
+
+#[test]
+fn field_assignment_simple() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Data {
+                value int
+                active bool
+            }
+            function main() -> int {
+                let mut d = Data { value: 100, active: true };
+                d.value = 42;
+                d.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(42)),
+    })
+}
+
+#[test]
+fn field_assignment_multiple_ops() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Stats {
+                score int
+            }
+            function main() -> int {
+                let mut s = Stats { score: 10 };
+                s.score += 5;   // 15
+                s.score *= 2;   // 30
+                s.score -= 10;  // 20
+                s.score /= 4;   // 5
+                s.score
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(5)),
+    })
+}
+
+#[test]
+fn field_assignment_object_field() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                value int
+            }
+            class Outer {
+                inner Inner
+            }
+            function main() -> bool {
+                let mut o = Outer { inner: Inner { value: 10 } };
+                o.inner = Inner { value: 20 };
+                // For now, test that assignment works, not nested field access
+                true
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Bool(true)),
+    })
+}
+
 #[cfg(test)]
 mod c_for_loops {
 
