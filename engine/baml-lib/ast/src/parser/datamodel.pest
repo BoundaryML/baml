@@ -101,11 +101,16 @@ arguments_list = { "(" ~ (NEWLINE?) ~ config_expression? ~ ("," ~ (NEWLINE?) ~ c
 // ######################################
 // Expressions & Functions
 // ######################################
-map_key   = { identifier | quoted_string_literal }
-map_entry = { (comment_block | empty_lines)* ~ map_key ~ (expression | ENTRY_CATCH_ALL)? ~ trailing_comment? }
+
+ident_map_entry = { identifier ~ expression }
+// We'll make colon optional so that parser doesn't choke on missing ":"
+// This will make `ident <missing colon> expression` pass as a string key. We'll report inconsistencies
+// like this within the parser
+expr_map_entry = {  expression ~ COLON? ~ expression }
+
 
 splitter          = _{ ("," ~ NEWLINE?) | NEWLINE }
-map_expression    =  { "{" ~ empty_lines? ~ (map_entry ~ (splitter ~ map_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
+map_expression    =  { "{" ~ NEWLINE* ~ ((ident_map_entry | expr_map_entry))* ~ NEWLINE* ~ "}" }
 array_expression  =  { "[" ~ empty_lines? ~ ((expression | ARRAY_CATCH_ALL) ~ trailing_comment? ~ (splitter ~ (comment_block | empty_lines)* ~ (expression | ARRAY_CATCH_ALL) ~ trailing_comment?)*)? ~ (comment_block | empty_lines)* ~ splitter? ~ "]" }
 jinja_block_open  = _{ "{{" }
 jinja_block_close = _{ "}}" }
@@ -227,8 +232,11 @@ doc_content      = @{ (!NEWLINE ~ ANY)* }
 // ######################################
 // Shared Building Blocks and Comments
 // ######################################
-WHITESPACE  = _{ " " | "\t" }
+WHITESPACE  = _{ " " | "\t" | NEWLINE }
 NEWLINE     =  { "\n" | "\r\n" | "\r" }
+// Like WHITESPACE, this is a special rule that PEST will use for implicit whitespace.
+// Comments are not ignored.
+COMMENT 	= _{ comment_block | trailing_comment }
 empty_lines = @{ (WHITESPACE* ~ NEWLINE)+ }
 
 // ######################################
