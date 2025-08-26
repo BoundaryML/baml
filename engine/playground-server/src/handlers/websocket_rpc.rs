@@ -8,20 +8,16 @@ use serde_json::Value;
 
 use crate::{definitions::PreSendToWasmMessage, server::AppState};
 
-pub async fn ws_rpc_handler<T>(
+pub async fn ws_rpc_handler(
     ws: WebSocketUpgrade,
-    State(state): State<AppState<T>>,
-) -> impl IntoResponse 
-where
-    T: Send + Sync + Clone + 'static,
+    State(state): State<AppState>,
+) -> impl IntoResponse
 {
     ws.on_upgrade(|ws| async move { handle_rpc_websocket(ws, state).await })
 }
 
 /// Handles all playground RPC commands over the WebSocket connection.
-pub async fn handle_rpc_websocket<T>(ws: axum::extract::ws::WebSocket, state: AppState<T>) 
-where
-    T: Clone,
+pub async fn handle_rpc_websocket(ws: axum::extract::ws::WebSocket, state: AppState)
 {
     let (mut ws_tx, mut ws_rx) = ws.split();
     while let Some(Ok(msg)) = ws_rx.next().await {

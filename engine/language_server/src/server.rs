@@ -56,7 +56,7 @@ pub type Result<T> = std::result::Result<T, api::Error>;
 
 pub(crate) struct ServerArgs {
     pub tokio_handle: tokio::runtime::Handle,
-    pub broadcast_tx: broadcast::Sender<LangServerToWasmMessage<lsp_server::Message>>,
+    pub broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
     pub playground_rx: broadcast::Receiver<PreSendToWasmMessage>,
     pub playground_tx: broadcast::Sender<PreSendToWasmMessage>,
     pub playground_port: u16,
@@ -361,7 +361,7 @@ impl Server {
         _client_capabilities: &ClientCapabilities,
         mut session: Session,
         worker_threads: NonZeroUsize,
-        broadcast_tx: broadcast::Sender<LangServerToWasmMessage<lsp_server::Message>>,
+        broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
     ) -> anyhow::Result<()> {
         // Ensure we have a notifier for reload operations
         let client = client::Client::new(connection.make_sender());

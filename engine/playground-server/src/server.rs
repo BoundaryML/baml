@@ -9,38 +9,18 @@ use tokio::{net::TcpListener, sync::broadcast};
 use tower_http::services::ServeDir;
 use anyhow::Context;
 
-use crate::definitions::PreSendToWasmMessage;
+use crate::definitions::{PreSendToWasmMessage, LangServerToWasmMessage};
 
-pub trait AssetManager: Send + Sync {
-    async fn get_static_assets(&self) -> anyhow::Result<PathBuf>;
-}
-
-pub struct GitHubReleaseAssetManager {
-    pub github_repo: &'static str,
-    pub version_env_var: &'static str,
-}
-
-impl AssetManager for GitHubReleaseAssetManager {
-    async fn get_static_assets(&self) -> anyhow::Result<PathBuf> {
-        playground_static_assets().await
-    }
-}
 
 #[derive(Debug)]
-pub struct AppState<T>
-where
-    T: Clone,
-{
-    pub broadcast_rx: broadcast::Receiver<T>,
+pub struct AppState {
+    pub broadcast_rx: broadcast::Receiver<LangServerToWasmMessage>,
     pub playground_tx: broadcast::Sender<PreSendToWasmMessage>,
     pub playground_port: u16,
     pub proxy_port: u16,
 }
 
-impl<T> Clone for AppState<T>
-where
-    T: Clone,
-{
+impl Clone for AppState {
     fn clone(&self) -> Self {
         Self {
             broadcast_rx: self.broadcast_rx.resubscribe(),
@@ -51,27 +31,19 @@ where
     }
 }
 
-pub struct PlaygroundServer<T, A> 
-where
-    T: Clone,
-{
-    pub app_state: AppState<T>,
-    pub asset_manager: A,
+pub struct PlaygroundServer {
+    pub app_state: AppState,
 }
 
-impl<T, A> PlaygroundServer<T, A>
-where
-    T: Send + Sync + Clone + serde::Serialize + 'static,
-    A: AssetManager + 'static,
-{
+impl PlaygroundServer {
     pub async fn run(self, listener: TcpListener) -> Result<(), Box<dyn std::error::Error + Send>> {
-        let dist_dir = self.asset_manager.get_static_assets().await?;
+        let dist_dir = playground_static_assets().await?;
 
         let app = Router::new()
             .route("/health", get(health_check))
             .route("/ping", get(crate::handlers::ping_handler))
-            .route("/ws", get(crate::handlers::ws_handler::<T>))
-            .route("/rpc", get(crate::handlers::ws_rpc_handler::<T>))
+            .route("/ws", get(crate::handlers::ws_handler))
+            .route("/rpc", get(crate::handlers::ws_rpc_handler))
             .fallback_service(ServeDir::new(dist_dir))
             .with_state(self.app_state);
 

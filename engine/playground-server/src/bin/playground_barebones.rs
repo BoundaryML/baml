@@ -1,5 +1,5 @@
 use playground_server::{
-    pick_ports, PortConfiguration, GitHubReleaseAssetManager, PlaygroundServer, AppState, 
+    pick_ports, PortConfiguration, PlaygroundServer, AppState, 
     LangServerToWasmMessage, FrontendMessage, PreSendToWasmMessage,
 };
 use std::collections::HashMap;
@@ -7,24 +7,17 @@ use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 use serde_json::json;
 
-// Type alias for barebones specific message type  
-pub type BarebonesMessage = LangServerToWasmMessage<lsp_server::Message>;
+// Type alias removed - use LangServerToWasmMessage directly
 
 #[derive(Debug)]
 pub struct Playground2Server {
-    pub app_state: AppState<BarebonesMessage>,
+    pub app_state: AppState,
 }
 
 impl Playground2Server {
     pub async fn run(self, listener: tokio::net::TcpListener) -> Result<(), Box<dyn std::error::Error + Send>> {
-        let asset_manager = GitHubReleaseAssetManager {
-            github_repo: "BoundaryML/baml",
-            version_env_var: "CARGO_PKG_VERSION",
-        };
-        
         let server = PlaygroundServer {
             app_state: self.app_state,
-            asset_manager,
         };
         
         server.run(listener).await

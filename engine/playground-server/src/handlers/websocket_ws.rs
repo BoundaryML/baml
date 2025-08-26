@@ -6,16 +6,12 @@ use futures::{SinkExt, StreamExt};
 
 use crate::server::AppState;
 
-pub async fn ws_handler<T>(ws: WebSocketUpgrade, State(state): State<AppState<T>>) -> impl IntoResponse
-where
-    T: Send + Sync + serde::Serialize + Clone + 'static,
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse
 {
     ws.on_upgrade(|ws| async move { start_client_connection(ws, state).await })
 }
 
-pub async fn start_client_connection<T>(ws: axum::extract::ws::WebSocket, state: AppState<T>)
-where
-    T: serde::Serialize + Clone + Send + 'static,
+pub async fn start_client_connection(ws: axum::extract::ws::WebSocket, state: AppState)
 {
     tracing::info!("axum listening on /ws");
     let (mut ws_tx, mut ws_rx) = ws.split();

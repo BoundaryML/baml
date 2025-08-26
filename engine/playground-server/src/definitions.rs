@@ -36,10 +36,9 @@ pub enum PreSendToWasmMessage {
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
-pub enum LangServerToWasmMessage<T> {
-    LspMessage(T),
+pub enum LangServerToWasmMessage {
+    LspMessage(lsp_server::Message),
     PlaygroundMessage(FrontendMessage),
 }
 
-// Default type for backward compatibility
-pub type DefaultLangServerMessage = LangServerToWasmMessage<serde_json::Value>;
+// Default type for backward compatibility - removed since we no longer use generics
