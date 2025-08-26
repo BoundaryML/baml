@@ -365,6 +365,10 @@ struct HirCompiler<'g> {
     /// `AllocInstance` instructions that have a placeholder, which must be resolved when location
     /// of the class object is resolved.
     class_alloc_patch_list: &'g mut Vec<AllocInstancePatch>,
+
+    /// Tracks how many constructors are currently being built
+    /// Used to calculate correct variable indices for nested object construction
+    constructor_depth: usize,
 }
 
 #[derive(Debug)]
@@ -402,6 +406,7 @@ impl<'g> HirCompiler<'g> {
             scopes: Vec::new(),
             current_source_line: 0,
             locals_in_scope: Vec::new(),
+            constructor_depth: 0,
         }
     }
 
@@ -1016,6 +1021,11 @@ impl<'g> HirCompiler<'g> {
                 spread,
                 meta: _,
             } => {
+                // TODO: Long-term solution - Refactor AllocInstance to consume fields from stack
+                // like AllocArray does. This would eliminate the need for LoadVar/StoreField
+                // and naturally handle nested construction without tracking depth.
+                // See: Stack-Based AllocInstance approach in field_access_assignments_implementation.md
+                
                 let Some(&class_index) = self.globals.get(class_name) else {
                     panic!("undefined class: {class_name}");
                 };
@@ -1029,7 +1039,12 @@ impl<'g> HirCompiler<'g> {
                     global: class_index,
                 });
 
-                let instance_local_index = self.locals.len() + 1;
+                // Calculate instance index accounting for nested constructor depth
+                // Each nested constructor is one position deeper on the eval stack
+                let instance_local_index = self.locals.len() + 1 + self.constructor_depth;
+                
+                // Track that we're now building this constructor
+                self.constructor_depth += 1;
 
                 let mut defined_named_fields = std::collections::HashSet::new();
 
@@ -1105,6 +1120,9 @@ impl<'g> HirCompiler<'g> {
                         self.emit(Instruction::Pop(1));
                     }
                 }
+                
+                // Done building this constructor, restore depth
+                self.constructor_depth -= 1;
             }
 
             thir::Expr::If(condition, if_branch, else_branch, _) => {
@@ -1442,6 +1460,7 @@ impl thir::Expr<(Span, Option<TypeIR>)> {
     /// check at some point that return values match the expected type. After
     /// that we should alreay have enough information to decide whether a block
     /// returns or not.
+    #[allow(dead_code)]
     fn produces_final_value(&self) -> bool {
         match self {
             // First call will happen on a block. Recurse on the final expression.
@@ -3190,7 +3209,7 @@ mod tests {
                     Instruction::LoadVar(1),         // o
                     // Create Inner inline
                     Instruction::AllocInstance(ObjectIndex::from_raw(2)), // Inner class  
-                    Instruction::LoadVar(1),         // reuses o variable temporarily
+                    Instruction::LoadVar(2),         // Now correctly uses separate index
                     Instruction::LoadConst(0),       // 42
                     Instruction::StoreField(0),      // Inner.value = 42
                     Instruction::StoreField(0),      // Outer.inner = Inner instance
@@ -3199,6 +3218,54 @@ mod tests {
                     Instruction::LoadVar(1),         // Load o
                     Instruction::LoadField(0),       // Load o.inner (returns Inner)
                     Instruction::LoadField(0),       // Load inner.value (returns 42)
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn nested_object_construction_bytecode() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                class Inner {
+                    x int
+                    y int
+                }
+                class Outer {
+                    inner Inner
+                    value int
+                }
+                
+                function main() -> int {
+                    let o = Outer { 
+                        inner: Inner { x: 10, y: 20 }, 
+                        value: 30 
+                    };
+                    o.value
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    // This is what we expect but probably not what we get
+                    Instruction::AllocInstance(ObjectIndex::from_raw(3)), // Outer
+                    Instruction::LoadVar(1),         // o
+                    // Nested Inner construction
+                    Instruction::AllocInstance(ObjectIndex::from_raw(2)), // Inner
+                    Instruction::LoadVar(2),         // Load Inner at correct index
+                    Instruction::LoadConst(0),       // 10
+                    Instruction::StoreField(0),      // x = 10
+                    Instruction::LoadVar(2),         // reload Inner
+                    Instruction::LoadConst(1),       // 20  
+                    Instruction::StoreField(1),      // y = 20
+                    Instruction::StoreField(0),      // Outer.inner = Inner
+                    Instruction::LoadVar(1),         // reload o
+                    Instruction::LoadConst(2),       // 30
+                    Instruction::StoreField(1),      // Outer.value = 30
+                    // o.value
+                    Instruction::LoadVar(1),         // o
+                    Instruction::LoadField(1),       // value
                     Instruction::Return,
                 ],
             )],

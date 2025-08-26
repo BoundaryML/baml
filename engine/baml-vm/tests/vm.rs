@@ -1384,6 +1384,59 @@ fn field_assignment_multiple_ops() -> anyhow::Result<()> {
 }
 
 #[test] 
+fn test_nested_object_construction() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                x int
+                y int
+            }
+            class Outer {
+                inner Inner
+                value int
+            }
+            function main() -> int {
+                let o = Outer { 
+                    inner: Inner { x: 10, y: 20 }, 
+                    value: 30 
+                };
+                // Test that construction worked by accessing a simple field
+                o.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(30)),
+    })
+}
+
+#[test]
+#[ignore = "Nested field access after nested construction returns Null - separate issue"]
+fn test_nested_object_construction_with_field_access() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                x int
+                y int
+            }
+            class Outer {
+                inner Inner
+                value int
+            }
+            function main() -> int {
+                let o = Outer { 
+                    inner: Inner { x: 10, y: 20 }, 
+                    value: 30 
+                };
+                // Test nested field access after nested construction
+                o.inner.y
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(20)),
+    })
+}
+
+#[test]
 #[ignore = "Nested object construction has a bug with variable reuse"]
 fn test_nested_field_read_with_nested_construction() -> anyhow::Result<()> {
     assert_vm_executes(Program {

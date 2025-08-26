@@ -765,7 +765,7 @@ fn typecheck_statement(
                 }
             }
                 }
-                hir::Expression::FieldAccess { base, field, span: _ } => {
+                hir::Expression::FieldAccess { base, field: _, span: _ } => {
                     // For field access, check if self parameter is mutable
                     if let hir::Expression::Identifier(name, _) = base.as_ref() {
                         if name == "self" {
@@ -852,7 +852,7 @@ fn typecheck_statement(
                 }
             }
                 }
-                hir::Expression::FieldAccess { base, field, span: _ } => {
+                hir::Expression::FieldAccess { base, field: _, span: _ } => {
                     // For field access, check if self parameter is mutable
                     if let hir::Expression::Identifier(name, _) = base.as_ref() {
                         if name == "self" {
@@ -1293,7 +1293,7 @@ pub fn typecheck_expression(
                     name: class_name, ..
                 }) => match context.classes.get(class_name) {
                     Some(class_def) => match class_def.methods.iter().find(|m| &m.name == method) {
-                        Some(method_def) => Some(format!("{class_name}.{method}")),
+                        Some(_method_def) => Some(format!("{class_name}.{method}")),
                         None => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
                                 &format!("Class `{class_name}` has no method `{method}`"),
