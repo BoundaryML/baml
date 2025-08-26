@@ -20,10 +20,11 @@ pub use self::{
     index::DocumentQuery,
     settings::{BamlSettings, ClientSettings},
 };
+use playground_server::{FrontendMessage, PreSendToWasmMessage};
+
 use crate::{
     baml_project::{file_utils::find_top_level_parent, BamlProject, Project},
     edit::{DocumentKey, DocumentVersion},
-    playground::FrontendMessage,
     server::client::Notifier,
 };
 // use crate::system::{url_to_any_system_path, AnySystemPath, LSPSystem};
@@ -38,8 +39,7 @@ use tokio::sync::{broadcast, RwLock};
 // #[cfg(feature = "playground-server")]
 // use crate::playground::PlaygroundState;
 
-// Use the shared PreSendToWasmMessage from playground-server
-pub use playground_server::PreSendToWasmMessage;
+// PreSendToWasmMessage is now imported directly where needed
 
 /// The global state for the LSP
 #[derive(Debug)]

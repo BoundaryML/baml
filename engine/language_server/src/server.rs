@@ -27,14 +27,14 @@ use self::{
     connection::{Connection, ConnectionInitializer},
     schedule::event_loop_thread,
 };
+use playground_server::{FrontendMessage, LangServerToWasmMessage, PreSendToWasmMessage};
+
 use crate::{
     baml_project::file_utils::{find_baml_src, find_top_level_parent},
-    playground::FrontendMessage,
     playground2::{self},
     session::{AllSettings, ClientSettings, Session},
     PositionEncoding,
 };
-use playground_server::{LangServerToWasmMessage, PreSendToWasmMessage};
 
 pub mod api;
 pub mod client;

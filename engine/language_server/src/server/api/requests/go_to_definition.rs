@@ -7,9 +7,10 @@ use lsp_types::{
 
 // #[cfg(feature = "playground-server")]
 // use crate::playground::broadcast_function_change;
+use playground_server::{FrontendMessage, PreSendToWasmMessage};
+
 use crate::{
     baml_project::{position_utils::get_word_at_position, trim_line, BamlRuntimeExt},
-    playground::FrontendMessage,
     server::{
         api::{
             traits::{RequestHandler, SyncRequestHandler},
@@ -18,7 +19,6 @@ use crate::{
         client::{Notifier, Requester},
         Result,
     },
-    session::PreSendToWasmMessage,
     DocumentKey, Session,
 };
 

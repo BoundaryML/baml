@@ -7,7 +7,7 @@ use tokio::time::sleep;
 use webbrowser;
 
 // use crate::server::api::DocumentKey;
-use crate::{playground::FrontendMessage, session::PreSendToWasmMessage};
+use playground_server::{FrontendMessage, PreSendToWasmMessage};
 use crate::{
     server::{
         api::{
@@ -40,7 +40,7 @@ impl SyncRequestHandler for ExecuteCommand {
             // Get the actual playground port from session (determined by server after availability check)
             // Fall back to configured port if actual port not set yet
 
-            use crate::{playground::FrontendMessage, session::PreSendToWasmMessage};
+            use playground_server::{FrontendMessage, PreSendToWasmMessage};
             let port = session
                 .get_session_playground_port()
                 .unwrap_or_else(|| session.baml_settings.playground_port.unwrap_or(3030));

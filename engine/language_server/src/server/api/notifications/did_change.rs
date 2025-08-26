@@ -4,8 +4,9 @@ use lsp_types::{
     notification::DidChangeTextDocument, DidChangeTextDocumentParams, PublishDiagnosticsParams,
 };
 
+use playground_server::{FrontendMessage, PreSendToWasmMessage};
+
 use crate::{
-    playground::FrontendMessage,
     server::{
         api::{
             diagnostics::publish_diagnostics,
@@ -15,7 +16,7 @@ use crate::{
         client::{Notifier, Requester},
         Result,
     },
-    session::{PreSendToWasmMessage, Session},
+    session::Session,
     DocumentKey,
 };
 

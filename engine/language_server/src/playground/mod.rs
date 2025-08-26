@@ -1,3 +1,1 @@
-pub mod definitions;
-
-pub use definitions::FrontendMessage;
+// FrontendMessage is now imported directly from playground_server where needed

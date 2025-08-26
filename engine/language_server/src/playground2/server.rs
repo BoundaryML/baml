@@ -1,21 +1,11 @@
-use playground_server::{
-    PlaygroundServer, AppState, LangServerToWasmMessage,
-};
-use crate::{playground::FrontendMessage, session::PreSendToWasmMessage};
+use playground_server::{PlaygroundServer, AppState};
 
-// Type alias removed - use LangServerToWasmMessage directly
-
-#[derive(Debug)]
-pub struct Playground2Server {
-    pub app_state: AppState,
-}
-
-impl Playground2Server {
-    pub async fn run(self, listener: tokio::net::TcpListener) -> Result<(), Box<dyn std::error::Error + Send>> {
-        let server = PlaygroundServer {
-            app_state: self.app_state,
-        };
-        
-        server.run(listener).await
-    }
+/// Simple helper function to create and run a PlaygroundServer
+/// Replaces the duplicate Playground2Server struct
+pub async fn run_playground_server(
+    app_state: AppState, 
+    listener: tokio::net::TcpListener
+) -> Result<(), Box<dyn std::error::Error + Send>> {
+    let server = PlaygroundServer { app_state };
+    server.run(listener).await
 }
