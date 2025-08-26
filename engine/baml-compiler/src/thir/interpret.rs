@@ -1432,7 +1432,7 @@ mod tests {
 
         match result {
             BamlValueWithMeta::Int(len, _) => assert_eq!(len, 3),
-            v => panic!("expected int, got {:?}", v),
+            v => panic!("expected int, got {v:?}"),
         }
     }
 
@@ -1455,7 +1455,7 @@ mod tests {
 
         match result {
             BamlValueWithMeta::Int(len, _) => assert_eq!(len, 5),
-            v => panic!("expected int, got {:?}", v),
+            v => panic!("expected int, got {v:?}"),
         }
     }
 
@@ -1593,7 +1593,7 @@ mod tests {
         ];
 
         for (input, expected) in test_cases {
-            println!("Testing Fib({}) = {}", input, expected);
+            println!("Testing Fib({input}) = {expected}");
 
             // Create function call: Fib(input)
             let fib_call = Expr::Call {
@@ -1612,11 +1612,10 @@ mod tests {
                 BamlValueWithMeta::Int(actual, _) => {
                     assert_eq!(
                         actual, expected,
-                        "Fib({}) should be {}, got {}",
-                        input, expected, actual
+                        "Fib({input}) should be {expected}, got {actual}"
                     );
                 }
-                v => panic!("Expected int result for Fib({}), got {:?}", input, v),
+                v => panic!("Expected int result for Fib({input}), got {v:?}"),
             }
         }
 

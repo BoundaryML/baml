@@ -539,11 +539,11 @@ impl ReplArgs {
         if let Some(expression) = &self.expression {
             match state.evaluate_expression(expression).await {
                 Ok(result) => {
-                    println!("{}", result);
+                    println!("{result}");
                     return Ok(());
                 }
                 Err(e) => {
-                    eprintln!("Error: {}", e);
+                    eprintln!("Error: {e}");
                     std::process::exit(1);
                 }
             }
