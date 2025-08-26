@@ -74,6 +74,18 @@ pub fn typecheck_returning_context<'a>(
         typing_context.symbols.insert(func.name.clone(), arrow_type);
     }
 
+    // Add class methods to typing context
+    for class in &hir.classes {
+        for method in &class.methods {
+            let method_full_name = format!("{}.{}", class.name, method.name);
+            let arrow_type = TypeIR::arrow(
+                method.parameters.iter().map(|p| p.r#type.clone()).collect(),
+                method.return_type.clone(),
+            );
+            typing_context.symbols.insert(method_full_name, arrow_type);
+        }
+    }
+
     // Add builtin functions to typing context
     // std::fetch_value<T>(std::Request) -> T
     // This is a generic function that takes a Request and returns any type T

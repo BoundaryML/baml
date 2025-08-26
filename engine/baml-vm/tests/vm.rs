@@ -1525,6 +1525,108 @@ fn test_nested_constructor_with_preceding_variables() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_method_call_field_assignment() -> anyhow::Result<()> {
+    // Test that we can modify a field of a method's return value
+    // Note: BAML has value semantics, so methods return copies not references
+    assert_vm_executes(Program {
+        source: r#"
+            class Counter {
+                value int
+            }
+            
+            class Factory {
+                counter Counter
+                
+                function get_counter(self) -> Counter {
+                    self.counter
+                }
+            }
+            
+            function main() -> int {
+                let f = Factory { 
+                    counter: Counter { value: 10 }
+                };
+                // get_counter returns a copy of the counter
+                let mut c = f.get_counter();
+                // We can modify the copy
+                c.value += 5;
+                // Return the modified copy's value
+                c.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(15)), // Modified copy
+    })
+}
+
+#[test]
+fn test_array_element_field_assignment() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Item {
+                count int
+            }
+            
+            function main() -> int {
+                let mut items = [
+                    Item { count: 10 },
+                    Item { count: 20 },
+                    Item { count: 30 }
+                ];
+                
+                // Modify field of array element
+                items[1].count += 5;
+                items[1].count
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(25)), // 20 + 5
+    })
+}
+
+#[test]
+fn test_array_element_method_field_assignment() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Data {
+                value int
+                
+                function get_self(self) -> Data {
+                    self
+                }
+            }
+            
+            class Container {
+                data Data
+                
+                function get_data(self) -> Data {
+                    self.data
+                }
+            }
+            
+            function main() -> int {
+                let mut containers = [
+                    Container { data: Data { value: 10 } },
+                    Container { data: Data { value: 20 } },
+                    Container { data: Data { value: 30 } }
+                ];
+                
+                // First test: Can we modify array element's field?
+                containers[1].data.value += 5;
+                let result1 = containers[1].data.value; // Should be 25
+                
+                // This would fail at compile time:
+                // containers[1].get_data().value += 10;
+                
+                result1
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(25)),
+    })
+}
+
+#[test]
 fn nested_field_assignment_simple() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
