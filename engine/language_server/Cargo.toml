@@ -30,7 +30,9 @@ indexmap = { workspace = true }
 jod-thread = { version = "0.1.2" }
 lsp-server = "0.7.6"
 lsp-types = "0.95.0"
+playground-server.workspace = true
 regex = { version = "1.10.2" }
+reqwest.workspace = true
 rustc-hash = { version = "2.0.0" }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = { version = "1.0.113" }
@@ -80,6 +82,8 @@ futures.workspace = true
 tokio-stream = "0.1.17"
 tower-http = { version = "0.6.6", features = ["fs", "cors"] }
 tower = "0.5"
+webbrowser = "1.0.5"
+mime_guess = "2.0.5"
 
 [dev-dependencies]
 insta = { version = "1.42.1" }

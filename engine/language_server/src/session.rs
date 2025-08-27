@@ -56,6 +56,7 @@ pub struct Session {
 
     pub baml_settings: BamlSettings,
 
+    pub playground_port: u16,
     pub playground_tx: broadcast::Sender<PreSendToWasmMessage>,
 }
 
@@ -67,6 +68,7 @@ impl Clone for Session {
             position_encoding: self.position_encoding,
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
             baml_settings: self.baml_settings.clone(),
+            playground_port: self.playground_port,
             playground_tx: self.playground_tx.clone(),
         }
     }
@@ -79,6 +81,7 @@ impl Session {
         global_settings: ClientSettings,
         workspace_folders: &[(Url, ClientSettings)],
         runtime_handle: tokio::runtime::Handle,
+        playground_port: u16,
         playground_tx: broadcast::Sender<PreSendToWasmMessage>,
         client_version: Option<String>,
     ) -> anyhow::Result<Self> {
@@ -128,6 +131,7 @@ impl Session {
                 tracing::info!("--- Session::new final baml_settings: {:?}", baml_settings);
                 baml_settings
             },
+            playground_port,
             playground_tx,
         })
     }

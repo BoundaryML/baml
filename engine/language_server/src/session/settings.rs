@@ -42,7 +42,6 @@ impl BamlSettings {
     }
 }
 
-
 fn default_feature_flags() -> Option<Vec<String>> {
     Some(vec!["beta".to_string()])
 }

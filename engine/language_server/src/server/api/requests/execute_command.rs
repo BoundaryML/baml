@@ -2,12 +2,10 @@ use std::time::Duration;
 
 use lsp_server::ErrorCode;
 use lsp_types::{request, ExecuteCommandParams, MessageType};
+use playground_server::{FrontendMessage, PreSendToWasmMessage};
 use tokio::time::sleep;
-#[cfg(feature = "playground-server")]
 use webbrowser;
 
-// use crate::server::api::DocumentKey;
-use playground_server::{FrontendMessage, PreSendToWasmMessage};
 use crate::{
     server::{
         api::{
@@ -27,7 +25,6 @@ impl RequestHandler for ExecuteCommand {
 }
 
 impl SyncRequestHandler for ExecuteCommand {
-    #[cfg(feature = "playground-server")]
     fn run(
         session: &mut Session,
         notifier: Notifier,
@@ -41,12 +38,9 @@ impl SyncRequestHandler for ExecuteCommand {
             // Fall back to configured port if actual port not set yet
 
             use playground_server::{FrontendMessage, PreSendToWasmMessage};
-            let port = session
-                .get_session_playground_port()
-                .unwrap_or_else(|| session.baml_settings.playground_port.unwrap_or(3030));
 
             // Construct the URL
-            let url = format!("http://localhost:{port}");
+            let url = format!("http://localhost:{}", session.playground_port);
 
             // Open the browser
             if let Err(e) = webbrowser::open(&url) {
@@ -101,16 +95,6 @@ impl SyncRequestHandler for ExecuteCommand {
                     .unwrap();
             }
             Ok(RegisteredCommands::RunTest(args)) => {
-                // session
-                //     .playground_tx
-                //     .send(PreSendToWasmMessage::FrontendMessage(
-                //         FrontendMessage::select_function {
-                //             root_path: args.project_id,
-                //             function_name: args.function_name.clone(),
-                //         },
-                //     ))
-                //     .unwrap();
-                // std::thread::sleep(std::time::Duration::from_secs(1));
                 session
                     .playground_tx
                     .send(PreSendToWasmMessage::FrontendMessage(

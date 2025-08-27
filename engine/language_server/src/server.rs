@@ -182,6 +182,7 @@ impl Server {
             global_settings,
             &workspaces,
             rt.handle().clone(),
+            args.playground_port,
             args.playground_tx.clone(),
             client_version,
         )?;
