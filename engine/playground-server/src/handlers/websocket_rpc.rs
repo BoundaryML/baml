@@ -42,14 +42,12 @@ pub async fn handle_rpc_websocket(ws: axum::extract::ws::WebSocket, state: AppSt
                         let _ = ws_tx.send(Message::text(response.to_string())).await;
                     }
                     "GET_PLAYGROUND_PORT" => {
-                        let playground_port = state.playground_port;
-
-                        tracing::info!("GET_PLAYGROUND_PORT: returning port={}", playground_port);
-
                         let response = serde_json::json!({
                             "rpcMethod": "GET_PLAYGROUND_PORT",
                             "rpcId": rpc_id,
-                            "data": { "port": playground_port }
+                            // NB(sam): even though this seems like a misnomer, it is not!!! GET_PLAYGROUND_PORT is meant to fetch
+                            // the proxy port for the playground and is just really poorly named.
+                            "data": { "port": state.proxy_port }
                         });
                         let _ = ws_tx.send(Message::text(response.to_string())).await;
                     }
