@@ -345,6 +345,10 @@ fn required_done<T>(
             })
         }
         TypeIR::Arrow(_, _) => false, // TODO: Error? Arrow shouldn't appear here.
+        TypeIR::Top(_) => panic!(
+            "TypeIR::Top should have been resolved by the compiler before code generation. \
+             This indicates a bug in the type resolution phase."
+        ),
     };
 
     type_implies_done || metadata.streaming_behavior.done

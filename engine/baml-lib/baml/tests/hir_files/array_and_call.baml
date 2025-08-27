@@ -5,7 +5,7 @@ function Helper(x: int) -> int {
 function TestArray() -> int[] {
     let arr = [1, 2, 3];
     let result = Helper(42);
-    [arr, result]
+    [arr[0], result]
 }
 
 function ArrayAccess() -> int {
@@ -21,7 +21,7 @@ function ArrayAccess() -> int {
 //   let arr = [1, 2, 3];
 //   let result = Helper(42);
 //
-//   [arr, result]
+//   [arr[0], result]
 // }
 //
 // function ArrayAccess() {

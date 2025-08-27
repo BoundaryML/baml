@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_types::{ir_type::TypeIR, BamlValueWithMeta};
+use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta};
 use baml_vm::{
     BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, GlobalIndex, GlobalPool,
     Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
@@ -44,8 +44,8 @@ pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
 fn compile_thir_to_bytecode(
     thir: &thir::THir<(Span, Option<TypeIR>)>,
 ) -> anyhow::Result<BamlVmProgram> {
-    let mut resolved_globals = HashMap::new();
-    let mut resolved_classes = HashMap::new();
+    let mut resolved_globals = BamlMap::new();
+    let mut resolved_classes = BamlMap::new();
     let mut llm_functions = HashSet::new();
 
     // Resolve global functions from HIR
@@ -260,8 +260,8 @@ impl ForLoopVarCounters {
 /// Compile an HIR function to bytecode.
 fn compile_thir_function(
     func: &thir::ExprFunction<(Span, Option<TypeIR>)>,
-    globals: &HashMap<String, GlobalIndex>,
-    classes: &HashMap<String, HashMap<String, usize>>,
+    globals: &BamlMap<String, GlobalIndex>,
+    classes: &BamlMap<String, HashMap<String, usize>>,
     llm_functions: &HashSet<String>,
     loop_var_counter: &mut ForLoopVarCounters,
     objects: &mut ObjectPool,
@@ -325,7 +325,7 @@ struct HirCompiler<'g> {
     /// Resolved global variables.
     ///
     /// Maps the name of the global variable to its index in the globals pool.
-    globals: &'g HashMap<String, GlobalIndex>,
+    globals: &'g BamlMap<String, GlobalIndex>,
 
     /// Resolved class fields.
     ///
@@ -334,7 +334,7 @@ struct HirCompiler<'g> {
     ///
     /// TODO: The `g` lifetime here doesn't need to be the same as the globals
     /// lifetime.
-    classes: &'g HashMap<String, HashMap<String, usize>>,
+    classes: &'g BamlMap<String, HashMap<String, usize>>,
 
     llm_functions: &'g HashSet<String>,
 
@@ -382,8 +382,8 @@ struct LoopInfo {
 
 impl<'g> HirCompiler<'g> {
     fn new(
-        globals: &'g HashMap<String, GlobalIndex>,
-        classes: &'g HashMap<String, HashMap<String, usize>>,
+        globals: &'g BamlMap<String, GlobalIndex>,
+        classes: &'g BamlMap<String, HashMap<String, usize>>,
         llm_functions: &'g HashSet<String>,
         var_counters: &'g mut ForLoopVarCounters,
         objects: &'g mut ObjectPool,
@@ -512,6 +512,19 @@ impl<'g> HirCompiler<'g> {
                         self.compile_expression(value);
                         self.emit(Instruction::StoreField(field_index));
                     }
+                    thir::Expr::ArrayAccess {base, index, meta: _} => {
+
+                        self.compile_expression(base);
+                        self.compile_expression(index);
+                        self.compile_expression(value);
+
+                        self.emit(match base.meta().1.as_ref().expect("must have a resolved type") {
+                            TypeIR::List(_, _) => Instruction::StoreArrayElement,
+                            TypeIR::Map(_, _, _) => Instruction::StoreMapElement,
+                            _ => panic!("array access should be either map or array.")
+                        });
+
+                    }
                     _ => panic!("Invalid left hand of assignment, only variables, instance fields and array elements can be assigned"),
                 }
             }
@@ -570,6 +583,58 @@ impl<'g> HirCompiler<'g> {
                         self.compile_expression(value);
                         self.emit(binop);
                         self.emit(Instruction::StoreField(field_index));
+                    }
+                    thir::Expr::ArrayAccess { base, index, meta: _ } => {
+                        // Compound Assignment for array[index] or map[key]
+                        //
+                        // For array[index] += value (or other compound ops):
+                        //
+                        // Stack evolution:
+                        // 1. Load array and index -> [array, index]
+                        // 2. Duplicate both for load -> [array, index, array_copy, index_copy]
+                        // 3. Load current value -> [array, index, current_value]
+                        //    (LoadArrayElement consumes array_copy and index_copy)
+                        // 4. Load value to operate with -> [array, index, current_value, value]
+                        // 5. Apply binary operation -> [array, index, result]
+                        //    (BinOp consumes current_value and value)
+                        // 6. Store back to array[index] -> []
+                        //    (StoreArrayElement consumes array, index, and result)
+                        //
+                        // The same pattern applies for maps with StoreMapElement
+
+                        // Determine if it's a list or map
+                        let (load_instr, store_instr) = match base.meta().1.as_ref().expect("must have a resolved type") {
+                            TypeIR::List(_, _) => (Instruction::LoadArrayElement, Instruction::StoreArrayElement),
+                            TypeIR::Map(_, _, _) => (Instruction::LoadMapElement, Instruction::StoreMapElement),
+                            _ => panic!("array access should be either map or array.")
+                        };
+
+                        // Load array and index first
+                        self.compile_expression(base);
+                        self.compile_expression(index);
+
+                        // Stack is now: [array, index]
+                        // Duplicate both for the load operation
+                        self.emit(Instruction::Copy(1));  // Copy array (at position 1 from top)
+                        self.emit(Instruction::Copy(1));  // Copy index (at position 1 from top)
+
+                        // Stack is now: [array, index, array_copy, index_copy]
+                        // Load current value at array[index]
+                        // This consumes array_copy and index_copy
+                        self.emit(load_instr);
+
+                        // Stack is now: [array, index, current_value]
+                        // Load the value to apply operation with
+                        self.compile_expression(value);
+
+                        // Stack is now: [array, index, current_value, new_value]
+                        // Apply the operation
+                        self.emit(binop);
+
+                        // Stack is now: [array, index, result]
+                        // Store back to array[index]
+                        // This consumes array, index, and result value
+                        self.emit(store_instr);
                     }
                     _ => panic!("Invalid left hand of assignment, only variables, instance fields and array elements can be assigned"),
                 }
@@ -866,14 +931,7 @@ impl<'g> HirCompiler<'g> {
                     self.emit(Instruction::LoadConst(index));
                 }
 
-                BamlValueWithMeta::String(v, _) => {
-                    // Allocate the string in the objects pool
-                    let object_index = self.objects.insert(Object::String(v.clone()));
-
-                    // Add a constant that points to the string object
-                    let const_index = self.add_constant(Value::Object(object_index));
-                    self.emit(Instruction::LoadConst(const_index));
-                }
+                BamlValueWithMeta::String(v, _) => self.emit_string_literal(v),
 
                 _ => panic!("unsupported atom: {value:#?}"),
             },
@@ -882,17 +940,37 @@ impl<'g> HirCompiler<'g> {
                 self.compile_block(block);
             }
 
-            thir::Expr::ArrayAccess { base, index, .. } => {
-                // Compile the base expression (the array)
-                self.compile_expression(base);
+            thir::Expr::ArrayAccess {
+                base,
+                index,
+                meta: _,
+            } => {
+                // ArrayAccess compilation for loading elements
+                //
+                // Steps to compile array[index] or map[key]:
+                // 1. Compile the base expression (array or map)
+                // 2. Compile the index/key expression
+                // 3. Determine the type from metadata (List or Map)
+                // 4. Emit the appropriate load instruction:
+                //    - LoadArrayElement for arrays (expects integer index)
+                //    - LoadMapElement for maps (expects string key)
+                //
+                // Stack evolution:
+                // - After base: [array_or_map]
+                // - After index: [array_or_map, index_or_key]
+                // - After load: [element_value]
 
-                // Compile the index expression
+                self.compile_expression(base);
                 self.compile_expression(index);
 
-                // Emit the LoadArrayElement instruction
-                // Stack will be [array, index] and LoadArrayElement will consume both
-                // and push the result element
-                self.emit(Instruction::LoadArrayElement);
+                // Determine if it's an array or map and emit appropriate instruction
+                self.emit(
+                    match base.meta().1.as_ref().expect("must have a resolved type") {
+                        TypeIR::List(_, _) => Instruction::LoadArrayElement,
+                        TypeIR::Map(_, _, _) => Instruction::LoadMapElement,
+                        _ => panic!("array access should be either map or array."),
+                    },
+                );
             }
 
             thir::Expr::FieldAccess { base, field, .. } => {
@@ -941,9 +1019,20 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::AllocArray(elements.len()));
             }
 
-            thir::Expr::Map(_pairs, _) => {
+            thir::Expr::Map(pairs, _) => {
                 // Maps are not yet implemented in bytecode
-                todo!("map compilation")
+                // have N keys, N values.
+                // keys are popped first, so we first compute the values.
+
+                for (_, value) in pairs {
+                    self.compile_expression(value);
+                }
+
+                for (key, _) in pairs {
+                    self.emit_string_literal(key);
+                }
+
+                self.emit(Instruction::AllocMap(pairs.len()));
             }
 
             thir::Expr::Call { func, args, .. } => {
@@ -989,6 +1078,8 @@ impl<'g> HirCompiler<'g> {
                     }) => format!("{class_name}.{method}"),
 
                     Some(TypeIR::List(_, _)) => format!("std.Array.{method}"),
+
+                    Some(TypeIR::Map(_, _, _)) => format!("std.Map.{method}"),
 
                     other => panic!("method calls must be on classes, got: {other:#?}"),
                 };
@@ -1244,6 +1335,14 @@ impl<'g> HirCompiler<'g> {
                 todo!("unsupported expression: {:#?}", expr)
             }
         }
+    }
+
+    fn emit_string_literal(&mut self, v: &str) {
+        // Allocate the string in the objects pool
+        let object_index = self.objects.insert(Object::String(v.to_owned()));
+        // Add a constant that points to the string object
+        let const_index = self.add_constant(Value::Object(object_index));
+        self.emit(Instruction::LoadConst(const_index));
     }
 
     /// Emits a single instruction and returns the index of the instruction.
@@ -3360,5 +3459,200 @@ mod tests {
                 ],
             )],
         })
+    }
+
+    mod maps {
+        use super::*;
+
+        #[test]
+        fn create_and_access() -> anyhow::Result<()> {
+            assert_compiles(Program {
+                source: r#"fn CreateMap() -> map<string, string> {
+    { hello "world" }
+}
+fn UseMap() -> string {
+    let map = CreateMap();
+    map["hello"]
+}"#,
+                expected: vec![
+                    (
+                        "CreateMap",
+                        vec![
+                            Instruction::LoadConst(0),
+                            Instruction::LoadConst(1),
+                            Instruction::AllocMap(1),
+                            Instruction::Return,
+                        ],
+                    ),
+                    (
+                        "UseMap",
+                        vec![
+                            Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                            Instruction::Call(0),
+                            Instruction::LoadVar(1),
+                            Instruction::LoadConst(0),
+                            Instruction::LoadMapElement,
+                            Instruction::Return,
+                        ],
+                    ),
+                ],
+            })
+        }
+
+        #[test]
+        fn access_no_key() -> anyhow::Result<()> {
+            assert_compiles(Program {
+                source: r#"
+fn CreateMap() -> map<string, string> {
+    { hello "world" }
+}
+
+fn UseMapNoKey() -> string {
+    let map = CreateMap();
+    map["world"]
+}"#,
+                expected: vec![
+                    (
+                        "CreateMap",
+                        vec![
+                            Instruction::LoadConst(0),
+                            Instruction::LoadConst(1),
+                            Instruction::AllocMap(1),
+                            Instruction::Return,
+                        ],
+                    ),
+                    (
+                        "UseMapNoKey",
+                        vec![
+                            Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                            Instruction::Call(0),
+                            Instruction::LoadVar(1),
+                            Instruction::LoadConst(0),
+                            Instruction::LoadMapElement,
+                            Instruction::Return,
+                        ],
+                    ),
+                ],
+            })
+        }
+
+        #[test]
+        fn contains() -> anyhow::Result<()> {
+            assert_compiles(Program {
+                source: r#"
+fn CreateMapJSON() -> map<string, string> {
+    {"hello": "world"}
+}
+fn UseMapContains() -> string {
+    let map = CreateMapJSON();
+    if (map.contains("hello")) {
+        map["hello"]
+    } else {
+        "hi"
+    }
+}"#,
+                expected: vec![
+                    (
+                        "CreateMapJSON",
+                        vec![
+                            Instruction::LoadConst(0),
+                            Instruction::LoadConst(1),
+                            Instruction::AllocMap(1),
+                            Instruction::Return,
+                        ],
+                    ),
+                    (
+                        "UseMapContains",
+                        vec![
+                            Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                            Instruction::Call(0),
+                            Instruction::LoadGlobal(GlobalIndex::from_raw(5)),
+                            Instruction::LoadVar(1),
+                            Instruction::LoadConst(0),
+                            Instruction::Call(2),
+                            Instruction::JumpIfFalse(6),
+                            Instruction::Pop(1),
+                            Instruction::LoadVar(1),
+                            Instruction::LoadConst(1),
+                            Instruction::LoadMapElement,
+                            Instruction::Jump(3),
+                            Instruction::Pop(1),
+                            Instruction::LoadConst(2),
+                            Instruction::Return,
+                        ],
+                    ),
+                ],
+            })
+        }
+
+        #[test]
+        fn modify() -> anyhow::Result<()> {
+            assert_compiles(Program {
+                source: r#"
+fn EditMapKey() -> int {
+	let mut map = { hi 123 };
+
+	map["hi"] = 42 - 4;
+	map["hi"] += 4;
+
+	map["hi"]
+
+}"#,
+                expected: vec![(
+                    "EditMapKey",
+                    vec![
+                        Instruction::LoadConst(0),
+                        Instruction::LoadConst(1),
+                        Instruction::AllocMap(1),
+                        Instruction::LoadVar(1),
+                        Instruction::LoadConst(2),
+                        Instruction::LoadConst(3),
+                        Instruction::LoadConst(4),
+                        Instruction::BinOp(BinOp::Sub),
+                        Instruction::StoreMapElement,
+                        Instruction::LoadVar(1),
+                        Instruction::LoadConst(5),
+                        Instruction::Copy(1),
+                        Instruction::Copy(1),
+                        Instruction::LoadMapElement,
+                        Instruction::LoadConst(6),
+                        Instruction::BinOp(BinOp::Add),
+                        Instruction::StoreMapElement,
+                        Instruction::LoadVar(1),
+                        Instruction::LoadConst(7),
+                        Instruction::LoadMapElement,
+                        Instruction::Return,
+                    ],
+                )],
+            })
+        }
+
+        #[test]
+        fn len() -> anyhow::Result<()> {
+            assert_compiles(Program {
+                source: r#"
+fn Len() -> int {
+    let map = {
+        hi 123
+        it_works 456
+    };
+    map.len()
+}"#,
+                expected: vec![(
+                    "Len",
+                    vec![
+                        Instruction::LoadConst(0),
+                        Instruction::LoadConst(1),
+                        Instruction::LoadConst(2),
+                        Instruction::LoadConst(3),
+                        Instruction::AllocMap(2),
+                        Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
+                        Instruction::LoadVar(1),
+                        Instruction::Call(1),
+                        Instruction::Return,
+                    ],
+                )],
+            })
+        }
     }
 }

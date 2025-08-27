@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 pub(super) mod indexable;
 
+use baml_types::BamlMap;
 use indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 
 use crate::{
@@ -129,6 +130,9 @@ pub enum Object {
     /// List of values.
     Array(Vec<Value>),
 
+    /// Map of values.
+    Map(BamlMap<String, Value>),
+
     Future(Future),
 }
 
@@ -165,6 +169,17 @@ impl Object {
             .into()),
         }
     }
+
+    pub fn as_string(&self) -> Result<&String, InternalError> {
+        let Self::String(str) = self else {
+            return Err(InternalError::TypeError {
+                expected: ObjectType::String.into(),
+                got: ObjectType::of(self).into(),
+            });
+        };
+
+        Ok(str)
+    }
 }
 
 impl std::fmt::Display for Object {
@@ -174,7 +189,8 @@ impl std::fmt::Display for Object {
             Object::Class(class) => class.fmt(f),
             Object::Instance(instance) => instance.fmt(f),
             Object::String(string) => string.fmt(f),
-            Object::Array(array) => std::fmt::Debug::fmt(array, f),
+            Object::Array(array) => write!(f, "{array:?}"),
+            Object::Map(map) => write!(f, "{map:?}"),
             Object::Future(future) => match future {
                 Future::Pending(llm_future) => write!(f, "<pending: {}>", llm_future.llm_function),
                 Future::Ready(value) => write!(f, "<ready: {value}>"),
@@ -188,6 +204,12 @@ impl std::fmt::Display for Object {
 /// This struct should not contain allocated objects and should be [`Copy`].
 /// Read the documentation of [`Vm::objects`] to understand how allocated
 /// objects work in the virtual machine.
+///
+/// # On `Hash`
+/// `Value` does not yet implement `Hash`, and should not implement `Eq`. Besides floating point which can be addressed,
+/// strings do not yet have referential equality, i.e "hello" can be represented with two different
+/// object indices. This makes comparisons nontrivial since they have to fetch the string. Same
+/// would happen with any other object type that we don't want to have referential equality for.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Value {
     Null,
@@ -233,6 +255,7 @@ pub enum ObjectType {
     Any,
     Instance,
     Array,
+    Map,
     Function(FunctionType),
     Class,
     String,
@@ -278,6 +301,7 @@ impl ObjectType {
             Object::Instance(_) => Self::Instance,
             Object::String(_) => Self::String,
             Object::Array(_) => Self::Array,
+            Object::Map(_) => Self::Map,
             Object::Future(fut) => Self::Future(fut.into()),
         }
     }
@@ -380,6 +404,9 @@ pub enum RuntimeError {
 
     /// VM internal error.
     InternalError(InternalError),
+
+    /// Map does not contain the requested key.
+    NoSuchKeyInMap,
 }
 
 /// Any kind of virtual machine error.
@@ -769,9 +796,9 @@ impl Vm {
             //         .map(|v| crate::debug::display_value(v, &self.objects))
             //         .collect::<Vec<_>>()
             //         .join(", ");
-
+            //
             //     eprintln!("[{stack}]");
-
+            //
             //     let (instruction, metadata) = crate::debug::display_instruction(
             //         instruction_ptr,
             //         function,
@@ -779,7 +806,7 @@ impl Vm {
             //         &self.objects,
             //         &self.globals,
             //     );
-
+            //
             //     eprintln!("{instruction} {metadata}");
             // }
 
@@ -919,26 +946,28 @@ impl Vm {
                             BinOp::Shr => left >> right,
                         }),
 
-                        (Value::Float(left), Value::Float(right)) => Value::Float(match op {
-                            BinOp::Add => left + right,
-                            BinOp::Sub => left - right,
-                            BinOp::Mul => left * right,
-                            BinOp::Div => left / right,
-                            BinOp::Mod => left % right,
+                        (Value::Float(left), Value::Float(right)) => {
+                            Value::Float(match op {
+                                BinOp::Add => left + right,
+                                BinOp::Sub => left - right,
+                                BinOp::Mul => left * right,
+                                BinOp::Div => left / right,
+                                BinOp::Mod => left % right,
 
-                            // Bitwise ops not applicable to floats.
-                            BinOp::BitAnd
-                            | BinOp::BitOr
-                            | BinOp::BitXor
-                            | BinOp::Shl
-                            | BinOp::Shr => {
-                                return Err(VmError::from(InternalError::CannotApplyBinOp {
-                                    left: Type::Float,
-                                    right: Type::Float,
-                                    op,
-                                }));
-                            }
-                        }),
+                                // Bitwise ops not applicable to floats.
+                                BinOp::BitAnd
+                                | BinOp::BitOr
+                                | BinOp::BitXor
+                                | BinOp::Shl
+                                | BinOp::Shr => {
+                                    return Err(VmError::from(InternalError::CannotApplyBinOp {
+                                        left: Type::Float,
+                                        right: Type::Float,
+                                        op,
+                                    }));
+                                }
+                            })
+                        }
 
                         _ => {
                             return Err(VmError::from(InternalError::CannotApplyBinOp {
@@ -1028,12 +1057,12 @@ impl Vm {
                     let index_value = self.stack.ensure_pop()?;
                     let array_value = self.stack.ensure_pop()?;
 
-                    let array_index = self.objects.as_object(&array_value, ObjectType::Array)?;
+                    let array_ob_index = self.objects.as_object(&array_value, ObjectType::Array)?;
 
-                    let Object::Array(array) = &self.objects[array_index] else {
+                    let Object::Array(array) = &self.objects[array_ob_index] else {
                         return Err(VmError::from(InternalError::TypeError {
                             expected: ObjectType::Array.into(),
-                            got: ObjectType::of(&self.objects[array_index]).into(),
+                            got: ObjectType::of(&self.objects[array_ob_index]).into(),
                         }));
                     };
 
@@ -1065,6 +1094,147 @@ impl Vm {
                     // Push the element onto the stack
                     self.stack.push(array[index]);
                 }
+                Instruction::LoadMapElement => {
+                    // LoadMapElement Instruction
+                    //
+                    // Stack before: [map, key]
+                    // Stack after: [value]
+                    //
+                    // Interpretation steps:
+                    // 1. Pop key from stack (top element)
+                    // 2. Pop map reference from stack (bottom element)
+                    // 3. Validate that the popped map reference is indeed a map object
+                    // 4. Get the key as a string from the objects pool (maps use string keys)
+                    //    - Validate key_value is an object reference to a String
+                    //    - Get the string reference from the objects pool
+                    // 5. Look up the value at map[key]
+                    // 6. Handle the case where key doesn't exist in the map
+                    //    - Return a runtime error NoSuchKeyInMap if key not found
+                    // 7. Push the found value onto the stack
+
+                    let key_value = self.stack.ensure_pop()?;
+                    let map_value = self.stack.ensure_pop()?;
+
+                    let map_index = self.objects.as_object(&map_value, ObjectType::Map)?;
+
+                    let Object::Map(map) = &self.objects[map_index] else {
+                        return Err(VmError::from(InternalError::TypeError {
+                            expected: ObjectType::Map.into(),
+                            got: ObjectType::of(&self.objects[map_index]).into(),
+                        }));
+                    };
+
+                    // Get the string key from the objects pool
+                    let key_index = self.objects.as_object(&key_value, ObjectType::String)?;
+                    let key = self.objects[key_index].as_string()?;
+
+                    // Look up the value in the map
+                    let value = map.get(key).copied().ok_or(RuntimeError::NoSuchKeyInMap)?;
+
+                    // Push the value onto the stack
+                    self.stack.push(value);
+                }
+                Instruction::StoreArrayElement => {
+                    // StoreArrayElement Instruction
+                    //
+                    // Stack before: [array, index, value]
+                    // Stack after: []
+                    //
+                    // Interpretation steps:
+                    // 1. Pop value from stack (top element)
+                    // 2. Pop index from stack (next element)
+                    // 3. Pop array reference from stack (bottom element)
+                    // 4. Validate that the popped array reference is indeed an array object
+                    // 5. Validate that index is an integer
+                    // 6. Check if index is non-negative
+                    // 7. Check if index is within array bounds
+                    // 8. Store the value at array[index]
+                    // 9. No value is pushed back to stack (mutation in place)
+
+                    let value = self.stack.ensure_pop()?;
+                    let index_value = self.stack.ensure_pop()?;
+                    let array_value = self.stack.ensure_pop()?;
+
+                    let array_ob_index = self.objects.as_object(&array_value, ObjectType::Array)?;
+
+                    let Object::Array(array) = &mut self.objects[array_ob_index] else {
+                        return Err(VmError::from(InternalError::TypeError {
+                            expected: ObjectType::Array.into(),
+                            got: ObjectType::of(&self.objects[array_ob_index]).into(),
+                        }));
+                    };
+
+                    // Get the index
+                    let index = match index_value {
+                        Value::Int(i) => {
+                            if i < 0 {
+                                return Err(InternalError::ArrayIndexIsNegative(i).into());
+                            }
+                            i as usize
+                        }
+                        _ => {
+                            return Err(InternalError::TypeError {
+                                expected: Type::Int,
+                                got: self.objects.type_of(&index_value),
+                            }
+                            .into());
+                        }
+                    };
+
+                    // Check bounds
+                    if index >= array.len() {
+                        return Err(VmError::from(InternalError::ArrayIndexOutOfBounds {
+                            index,
+                            length: array.len(),
+                        }));
+                    }
+
+                    // Store the value at the index
+                    array[index] = value;
+
+                    // Restore function reference after mutable borrow of self.objects
+                    function = self.objects[frame.function].as_function()?;
+                }
+                Instruction::StoreMapElement => {
+                    // StoreMapElement Instruction
+                    //
+                    // Stack before: [map, key, value]
+                    // Stack after: []
+                    //
+                    // Interpretation steps:
+                    // 1. Pop value from stack (top element)
+                    // 2. Pop key from stack (next element)
+                    // 3. Pop map reference from stack (bottom element)
+                    // 4. Validate that the popped map reference is indeed a map object
+                    // 5. Get the key as a string from the objects pool (maps use string keys)
+                    //    - Validate key_value is an object reference to a String
+                    //    - Clone the string from the objects pool
+                    // 6. Store/update the value at map[key]
+                    // 7. No value is pushed back to stack (mutation in place)
+
+                    let value = self.stack.ensure_pop()?;
+                    let key_value = self.stack.ensure_pop()?;
+                    let map_value = self.stack.ensure_pop()?;
+
+                    // Get the string key from the objects pool.
+                    let key_index = self.objects.as_object(&key_value, ObjectType::String)?;
+                    let key = self.objects[key_index].as_string()?.clone();
+
+                    let map_index = self.objects.as_object(&map_value, ObjectType::Map)?;
+
+                    let Object::Map(map) = &mut self.objects[map_index] else {
+                        return Err(VmError::from(InternalError::TypeError {
+                            expected: ObjectType::Map.into(),
+                            got: ObjectType::of(&self.objects[map_index]).into(),
+                        }));
+                    };
+
+                    // Store the value at the key
+                    map.insert(key, value);
+
+                    // borrow check
+                    function = self.objects[frame.function].as_function()?;
+                }
                 Instruction::AllocInstance(index) => {
                     let Object::Class(class) = &self.objects[index] else {
                         return Err(InternalError::TypeError {
@@ -1088,8 +1258,7 @@ impl Vm {
                     self.stack
                         .push(Value::Object(ObjectIndex(self.objects.len() - 1)));
 
-                    // Same as in the instruction above.
-                    // TODO: make `frame.function` a valid object index
+                    // borrow check.
                     function = self.objects[frame.function].as_function()?;
                 }
                 Instruction::DispatchFuture(arg_count) => {
@@ -1316,6 +1485,49 @@ impl Vm {
                     if !condition_result {
                         return Err(RuntimeError::AssertionError.into());
                     }
+                }
+                Instruction::AllocMap(n) => {
+                    let map = if n > 0 {
+                        let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1)?;
+                        let end_of_keys = self.stack.ensure_slot_from_top(n - 1)?;
+                        let idx_of_last_key = self.stack.ensure_slot_from_top(n - 1)?;
+
+                        // We can safely copy the objects that act as values so there's no problem
+                        // with not draining them.
+                        let values = self.stack[end_of_values..end_of_keys].iter().copied();
+
+                        // We cannot copy key references since we aren't interning yet, so we
+                        // must clone the strings.
+                        // Here we'll also double-check that the keys are strings. This adds `n`
+                        // branches which is not ideal for performance. Might want to consider this
+                        // in map accesses.
+                        let keys = self.stack[idx_of_last_key..].iter().map(|k| {
+                            let ob_index = self.objects.as_object(k, ObjectType::String)?;
+
+                            self.objects[ob_index].as_string().cloned()
+                        });
+
+                        let pairs = values
+                            .zip(keys)
+                            .map(|(val, key_res)| key_res.map(|k| (k, val)));
+
+                        let map = pairs.collect::<Result<BamlMap<_, _>, _>>()?;
+
+                        // drain & drop the drain so that vec is empty.
+                        self.stack.drain(end_of_values..);
+
+                        map
+                    } else {
+                        // nothing to pop.
+                        BamlMap::new()
+                    };
+
+                    let ob_index = self.objects.insert(Object::Map(map));
+
+                    self.stack.push(Value::Object(ob_index));
+
+                    // borrow check.
+                    function = self.objects[frame.function].as_function()?;
                 }
             }
         }

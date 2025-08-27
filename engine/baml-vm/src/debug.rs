@@ -113,7 +113,11 @@ pub fn display_instruction(
         | Instruction::CmpOp(_)
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
+        | Instruction::AllocMap(_)
         | Instruction::LoadArrayElement
+        | Instruction::LoadMapElement
+        | Instruction::StoreArrayElement
+        | Instruction::StoreMapElement
         | Instruction::DispatchFuture(_)
         | Instruction::Await
         | Instruction::Call(_)
@@ -163,10 +167,13 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::LoadVar(_)
         | Instruction::LoadGlobal(_)
         | Instruction::LoadField(_)
-        | Instruction::LoadArrayElement => Color::Blue,
-        Instruction::StoreVar(_) | Instruction::StoreGlobal(_) | Instruction::StoreField(_) => {
-            Color::Green
-        }
+        | Instruction::LoadArrayElement
+        | Instruction::LoadMapElement => Color::Blue,
+        Instruction::StoreVar(_)
+        | Instruction::StoreGlobal(_)
+        | Instruction::StoreField(_)
+        | Instruction::StoreArrayElement
+        | Instruction::StoreMapElement => Color::Green,
         Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {
             Color::BrightBlue
         }
@@ -177,7 +184,9 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::Pop(_)
         | Instruction::Copy(_)
         | Instruction::PopReplace(_) => Color::Red,
-        Instruction::AllocInstance(_) | Instruction::AllocArray(_) => Color::Cyan,
+        Instruction::AllocMap(_) | Instruction::AllocInstance(_) | Instruction::AllocArray(_) => {
+            Color::Cyan
+        }
         Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
     }
 }

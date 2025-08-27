@@ -6,7 +6,8 @@
 use baml_compiler::test::ast;
 use baml_vm::{
     BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool, Instruction,
-    Object, ObjectIndex, ObjectPool, StackIndex, Value, Vm, VmError, VmExecState,
+    InternalError, Object, ObjectIndex, ObjectPool, RuntimeError, StackIndex, Value, Vm, VmError,
+    VmExecState,
 };
 
 /// Helper struct for testing VM execution.
@@ -280,15 +281,15 @@ fn array_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(3))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(5))),
         },
         |vm| {
             dbg!(&vm.objects);
 
-            let Object::Array(array) = &vm.objects[ObjectIndex::from_raw(3)] else {
+            let Object::Array(array) = &vm.objects[ObjectIndex::from_raw(5)] else {
                 panic!(
                     "expected Array, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(3)]
+                    &vm.objects[ObjectIndex::from_raw(5)]
                 );
             };
 
@@ -316,13 +317,13 @@ fn class_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(4))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(6))),
         },
         |vm| {
-            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(4)] else {
+            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(6)] else {
                 panic!(
                     "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(4)]
+                    &vm.objects[ObjectIndex::from_raw(6)]
                 );
             };
 
@@ -356,13 +357,13 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(5))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(7))),
         },
         |vm| {
-            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(5)] else {
+            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(7)] else {
                 panic!(
                     "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(5)]
+                    &vm.objects[ObjectIndex::from_raw(7)]
                 );
             };
 
@@ -1714,8 +1715,7 @@ fn field_assignment_object_field() -> anyhow::Result<()> {
                 o.inner = Inner { value: 20 };
                 // For now, test that assignment works, not nested field access
                 true
-            }
-        "#,
+            }"#,
         function: "main",
         expected: VmExecState::Complete(Value::Bool(true)),
     })
@@ -1738,8 +1738,7 @@ mod c_for_loops {
                     }
 
                     s
-                }
-                "#,
+                }"#,
             function: "SumToTen",
             expected: VmExecState::Complete(Value::Int(55)),
         })
@@ -1826,8 +1825,7 @@ mod return_stmt {
 
                 fn main() -> int {
                     EarlyReturn(42)
-                }
-                "#,
+                }"#,
             function: "main",
             expected: VmExecState::Complete(Value::Int(1)),
         })
@@ -1896,9 +1894,115 @@ mod assert_stmt {
                     assert 3 == 1;
 
                     2
-                } "#,
+                }"#,
             function: "assertNotOk",
             expected: RuntimeError::AssertionError.into(),
+        })
+    }
+}
+
+#[cfg(test)]
+mod maps {
+    use super::*;
+
+    #[test]
+    fn create_and_access() -> anyhow::Result<()> {
+        let str_index = ObjectIndex::from_raw(0);
+        assert_vm_executes_with_inspection(
+            Program {
+                source: r#"
+fn CreateMap() -> map<string, string> {
+    { hello "world" }
+}
+fn UseMap() -> string {
+    let map = CreateMap();
+    map["hello"]
+}"#,
+                function: "UseMap",
+                expected: VmExecState::Complete(Value::Object(str_index)),
+            },
+            |vm| {
+                assert_eq!(vm.objects[str_index].as_string().unwrap(), "world");
+                Ok(())
+            },
+        )
+    }
+
+    #[test]
+    fn access_no_key() -> anyhow::Result<()> {
+        assert_vm_fails(FailingProgram {
+            source: r#"
+fn CreateMap() -> map<string, string> {
+    { hello "world" }
+}
+
+fn UseMapNoKey() -> string {
+    let map = CreateMap();
+    map["world"]
+}"#,
+            function: "UseMapNoKey",
+            expected: RuntimeError::NoSuchKeyInMap.into(),
+        })
+    }
+
+    #[test]
+    fn contains() -> anyhow::Result<()> {
+        let str_index = ObjectIndex::from_raw(0);
+        assert_vm_executes_with_inspection(
+            Program {
+                source: r#"
+fn CreateMapJSON() -> map<string, string> {
+    {"hello": "world"}
+}
+fn UseMapContains() -> string {
+    let map = CreateMapJSON();
+    if (map.contains("hello")) {
+        map["hello"]
+    } else {
+        "hi"
+    }
+}"#,
+                function: "UseMapContains",
+                expected: VmExecState::Complete(Value::Object(str_index)),
+            },
+            |vm| {
+                assert_eq!(vm.objects[str_index].as_string().unwrap(), "world");
+                Ok(())
+            },
+        )
+    }
+
+    #[test]
+    fn modify() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+fn EditMapKey() -> int {
+	let mut map = { hi 123 };
+
+	map["hi"] = 42 - 4;
+	map["hi"] += 4;
+
+	map["hi"]
+
+}"#,
+            function: "EditMapKey",
+            expected: VmExecState::Complete(Value::Int(42)),
+        })
+    }
+
+    #[test]
+    fn len() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+fn Len() -> int {
+    let map = {
+        hi 123
+        it_works 456
+    };
+    map.len()
+}"#,
+            function: "Len",
+            expected: VmExecState::Complete(Value::Int(2)),
         })
     }
 }

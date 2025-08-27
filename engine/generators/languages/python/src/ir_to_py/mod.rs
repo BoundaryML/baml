@@ -126,6 +126,10 @@ pub(crate) fn stream_type_to_py(field: &TypeStreaming, _lookup: &impl TypeLookup
                 }
             }
         }
+        T::Top(_) => panic!(
+            "TypeGeneric::Top should have been resolved by the compiler before code generation. \
+             This indicates a bug in the type resolution phase."
+        ),
     };
 
     type_py
@@ -224,6 +228,10 @@ pub(crate) fn type_to_py(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
                 }
             }
         },
+        T::Top(_) => panic!(
+            "TypeGeneric::Top should have been resolved by the compiler before code generation. \
+             This indicates a bug in the type resolution phase."
+        ),
     };
 
     type_py

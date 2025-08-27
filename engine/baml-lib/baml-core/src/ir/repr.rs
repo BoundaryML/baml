@@ -106,7 +106,8 @@ impl Pass2Repr {
             | TypeGeneric::Literal(.., meta) => {
                 meta.streaming_behavior.done = true;
             }
-            TypeGeneric::Primitive(
+            TypeGeneric::Top(_)
+            | TypeGeneric::Primitive(
                 TypeValue::String | TypeValue::Media(..) | TypeValue::Null,
                 ..,
             )

@@ -215,6 +215,10 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::ir_type::Type
                 .map(TypeReference::recursive_type_alias)
                 .unwrap_or(TypeReference::Unknown),
             TypeGeneric::Arrow(..) => TypeReference::Unknown,
+            TypeGeneric::Top(_) => panic!(
+                "TypeGeneric::Top should have been resolved by the compiler before code generation. \
+                 This indicates a bug in the type resolution phase."
+            ),
         };
         if !self.meta().constraints.is_empty() {
             let constraints = self.meta().constraints.clone();
