@@ -685,13 +685,10 @@ impl WithRenderRawCurl for AwsClient {
         } else {
             "aws bedrock-runtime converse"
         };
-        cmd.push(base_cmd);
+        cmd.push(base_cmd.to_string());
 
         // --model-id
-        cmd.push(format!(
-            " --model-id '{}'",
-            escape(Cow::Borrowed(&self.properties.model))
-        ));
+        cmd.push(format!("--model-id '{}'", self.properties.model));
 
         // Build --cli-input-json payload
         let mut root = serde_json::Map::new();
