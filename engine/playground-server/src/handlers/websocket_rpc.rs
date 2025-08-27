@@ -11,14 +11,12 @@ use crate::{definitions::PreLangServerToWasmMessage, server::AppState};
 pub async fn ws_rpc_handler(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
-) -> impl IntoResponse
-{
+) -> impl IntoResponse {
     ws.on_upgrade(|ws| async move { handle_rpc_websocket(ws, state).await })
 }
 
 /// Handles all playground RPC commands over the WebSocket connection.
-pub async fn handle_rpc_websocket(ws: axum::extract::ws::WebSocket, state: AppState)
-{
+pub async fn handle_rpc_websocket(ws: axum::extract::ws::WebSocket, state: AppState) {
     let (mut ws_tx, mut ws_rx) = ws.split();
     while let Some(Ok(msg)) = ws_rx.next().await {
         if let Ok(msg) = msg.to_text() {
@@ -34,9 +32,13 @@ pub async fn handle_rpc_websocket(ws: axum::extract::ws::WebSocket, state: AppSt
                             "rpcId": rpc_id,
                             "data": { "ok": true }
                         });
-                        if let Err(e) = state.playground_tx.send(PreLangServerToWasmMessage::WasmIsInitialized)
+                        if let Err(e) = state
+                            .playground_tx
+                            .send(PreLangServerToWasmMessage::WasmIsInitialized)
                         {
-                            tracing::error!("Failed to send INITIALIZED message to language-server: {e}");
+                            tracing::error!(
+                                "Failed to send INITIALIZED message to language-server: {e}"
+                            );
                         }
                         tracing::info!("Sent INITIALIZED message to language-server");
                         let _ = ws_tx.send(Message::text(response.to_string())).await;

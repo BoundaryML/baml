@@ -47,24 +47,24 @@ pub fn run_server() -> anyhow::Result<()> {
 
     {
         let playground_tx = playground_tx.clone();
-    tokio_runtime.spawn(futures::future::join(
-        async move {
-            eprintln!("Playground server started");
-            let server = playground_server::PlaygroundServer {
-                app_state: playground_server::AppState {
-                    broadcast_rx,
-                    playground_tx: playground_tx.clone(),
-                    playground_port: port_picks.playground_port,
-                    proxy_port: port_picks.proxy_port,
-                },
-            };
-            let fut = server.run(port_picks.playground_listener).await;
-            eprintln!("Playground server finished");
-            fut
-        },
-        cors_bypass_proxy::ProxyServer {}.run(port_picks.proxy_listener),
-    ));
-}
+        tokio_runtime.spawn(futures::future::join(
+            async move {
+                eprintln!("Playground server started");
+                let server = playground_server::PlaygroundServer {
+                    app_state: playground_server::AppState {
+                        broadcast_rx,
+                        playground_tx: playground_tx.clone(),
+                        playground_port: port_picks.playground_port,
+                        proxy_port: port_picks.proxy_port,
+                    },
+                };
+                let fut = server.run(port_picks.playground_listener).await;
+                eprintln!("Playground server finished");
+                fut
+            },
+            cors_bypass_proxy::ProxyServer {}.run(port_picks.proxy_listener),
+        ));
+    }
 
     eprintln!(
         "Playground started on: http://localhost:{}",

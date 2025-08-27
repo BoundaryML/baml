@@ -197,7 +197,6 @@ impl Server {
             let lsp_sender = server.connection.make_sender();
             let playground_tx = server.session.playground_tx.clone();
             server.args.tokio_handle.spawn(async move {
-               
                 lsp_sender
                     .send(Message::Notification(lsp_server::Notification::new(
                         "baml/port".to_string(),
@@ -313,7 +312,10 @@ impl Server {
 
         std::thread::spawn(|| {
             const DEADLOCK_WATCHDOG_INTERVAL: Duration = Duration::from_secs(10);
-            tracing::info!("Starting deadlock watchdog (will poll every {:?})", DEADLOCK_WATCHDOG_INTERVAL);
+            tracing::info!(
+                "Starting deadlock watchdog (will poll every {:?})",
+                DEADLOCK_WATCHDOG_INTERVAL
+            );
             loop {
                 std::thread::sleep(DEADLOCK_WATCHDOG_INTERVAL);
                 // NB: this shows deadlocks detected since the _last_ check, not all current deadlocks.

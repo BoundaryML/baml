@@ -1,6 +1,6 @@
 use playground_server::{
-    pick_ports, PortConfiguration, PlaygroundServer, AppState, 
-    LangServerToWasmMessage, FrontendMessage, PreLangServerToWasmMessage,
+    pick_ports, AppState, FrontendMessage, LangServerToWasmMessage, PlaygroundServer,
+    PortConfiguration, PreLangServerToWasmMessage,
 };
 use std::collections::HashMap;
 use tokio::io::AsyncBufReadExt;
@@ -12,11 +12,14 @@ pub struct Playground2Server {
 }
 
 impl Playground2Server {
-    pub async fn run(self, listener: tokio::net::TcpListener) -> Result<(), Box<dyn std::error::Error + Send>> {
+    pub async fn run(
+        self,
+        listener: tokio::net::TcpListener,
+    ) -> Result<(), Box<dyn std::error::Error + Send>> {
         let server = PlaygroundServer {
             app_state: self.app_state,
         };
-        
+
         server.run(listener).await
     }
 }
@@ -38,8 +41,9 @@ pub async fn run_server() -> anyhow::Result<()> {
     let port_picks = pick_ports(PortConfiguration {
         base_port: 3900,
         max_attempts: 100,
-    }).await?;
-    
+    })
+    .await?;
+
     let server = Playground2Server {
         app_state: AppState {
             broadcast_rx,
@@ -75,14 +79,13 @@ pub async fn run_server() -> anyhow::Result<()> {
                             }
                         ));
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                        let playground_message = LangServerToWasmMessage::PlaygroundMessage(
-                            FrontendMessage::run_test {
+                        let playground_message =
+                            LangServerToWasmMessage::PlaygroundMessage(FrontendMessage::run_test {
                                 function_name: "ExtractResume".to_string(),
                                 test_name: "vaibhav_resume".to_string(),
-                            }
-                        );
+                            });
                         tracing::info!("Sending playground message: {:?}", playground_message);
-                        let _  = broadcast_tx.send(playground_message);
+                        let _ = broadcast_tx.send(playground_message);
                     }
                     PreLangServerToWasmMessage::FrontendMessage(msg) => {
                         tracing::info!("Received frontend message: {:?}", msg);
@@ -98,22 +101,21 @@ pub async fn run_server() -> anyhow::Result<()> {
     tokio::spawn(async move {
         let stdin = tokio::io::stdin();
         let mut lines = tokio::io::BufReader::new(stdin).lines();
-        
+
         loop {
             println!("Press enter to send test message");
             let Ok(Some(_line)) = lines.next_line().await else {
                 break;
             };
-            let playground_message = LangServerToWasmMessage::PlaygroundMessage(
-                FrontendMessage::run_test {
+            let playground_message =
+                LangServerToWasmMessage::PlaygroundMessage(FrontendMessage::run_test {
                     function_name: "ExtractResume".to_string(),
                     test_name: "vaibhav_resume".to_string(),
-                }
-            );
+                });
             tracing::info!("Sending playground message: {:?}", playground_message);
-            let _  = broadcast_tx.send(playground_message);
+            let _ = broadcast_tx.send(playground_message);
         }
-        
+
         Ok::<(), anyhow::Error>(())
     });
 
