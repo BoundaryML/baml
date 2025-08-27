@@ -118,7 +118,7 @@ fn get_bytecode_output(content: &str) -> Result<String, String> {
                     }
                     baml_vm::Object::Map(index_map) => {
                         output.push_str(&format!("Map with {} elements\n", index_map.len()));
-                    },
+                    }
                 }
             }
 

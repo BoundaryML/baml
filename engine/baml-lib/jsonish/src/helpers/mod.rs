@@ -298,6 +298,10 @@ fn relevant_data_models<'a>(
             TypeIR::Literal(_, _) => {}
             TypeIR::Primitive(_, _) => {}
             TypeIR::Arrow(_, _) => {}
+            TypeIR::Top(_) => panic!(
+                "TypeIR::Top should have been resolved by the compiler before code generation. \
+                 This indicates a bug in the type resolution phase."
+            ),
         }
     }
 

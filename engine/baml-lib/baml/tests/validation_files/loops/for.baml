@@ -55,23 +55,12 @@ fn SumUnknownType(xs: int, mut b: string) -> int {
 // 23 | // as an argument instead.
 // 24 | fn SumUnknownType(xs: int, mut b: string) -> int {
 //    | 
-// warning: type for 'result' was inferred here
-//   -->  loops/for.baml:12
-//    | 
-// 11 | fn SumBadType(xs: string[]) -> int {
-// 12 | let mut result = 0;
-//    | 
-// warning: type for 'b' was inferred here
-//   -->  loops/for.baml:24
-//    | 
-// 23 | // as an argument instead.
-// 24 | fn SumUnknownType(xs: int, mut b: string) -> int {
-//    | 
 // error: Error validating: Cannot assign string to int
 //   -->  loops/for.baml:16
 //    | 
 // 15 | // should complain about int vs. string.
 // 16 | result = x;
+// 17 | }
 //    | 
 // error: Error validating: iterable in `for` loop must be an array
 //   -->  loops/for.baml:28
@@ -84,4 +73,5 @@ fn SumUnknownType(xs: int, mut b: string) -> int {
 //    | 
 // 30 | // this one will error with "cannot assign string to int"...
 // 31 | b = x;
+// 32 | // ...which is expected behavior for now. See thir/typecheck.rs's ForLoop
 //    | 

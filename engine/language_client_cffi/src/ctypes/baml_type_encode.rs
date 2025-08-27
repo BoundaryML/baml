@@ -218,7 +218,11 @@ where
                         }
                     }
                 }
-            }
+            },
+            TypeGeneric::Top(_) => panic!(
+                "TypeGeneric::Top should have been resolved by the compiler before code generation. \
+                 This indicates a bug in the type resolution phase."
+            ),
         };
 
         CffiFieldTypeHolder {

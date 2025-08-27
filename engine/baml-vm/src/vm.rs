@@ -1504,7 +1504,7 @@ impl Vm {
                         let keys = self.stack[idx_of_last_key..].iter().map(|k| {
                             let ob_index = self.objects.as_object(k, ObjectType::String)?;
 
-                            self.objects[ob_index].as_string().map(Clone::clone)
+                            self.objects[ob_index].as_string().cloned()
                         });
 
                         let pairs = values

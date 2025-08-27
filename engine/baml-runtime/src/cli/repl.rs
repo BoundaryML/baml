@@ -493,6 +493,10 @@ impl ReplState {
                     ReplState::format_type(&arrow.return_type)
                 )
             }
+            TypeIR::Top(_) => panic!(
+                "TypeIR::Top should have been resolved by the compiler before code generation. \
+                 This indicates a bug in the type resolution phase."
+            ),
         }
     }
 

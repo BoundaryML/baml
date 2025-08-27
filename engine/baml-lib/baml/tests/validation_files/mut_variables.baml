@@ -35,9 +35,10 @@ fn ErrorWhenAssigningToConst(x: int) -> int {
 // 14 | 
 // 15 | fn ErrorWhenAssigningToConst(x: int) -> int {
 //    | 
-// error: Error validating: Cannot assign to immutable variable x
+// error: Error validating: Cannot assign to immutable variable `x`
 //   -->  mut_variables.baml:16
 //    | 
 // 15 | fn ErrorWhenAssigningToConst(x: int) -> int {
 // 16 | x = 42;
+// 17 | x
 //    | 

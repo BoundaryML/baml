@@ -40,19 +40,19 @@ fn Len() -> int {
     map.len()
 }
 
-// String: "hello"
 // String: "world"
+// String: "hello"
 // Function: CreateMap
-// 1   0   LOAD_CONST 0   (hello)
-//     1   LOAD_CONST 1   (world)
+// 1   0   LOAD_CONST 0   (world)
+//     1   LOAD_CONST 1   (hello)
 //     2   ALLOC_MAP 1    
 //     3   RETURN         
 //
-// String: "hello"
 // String: "world"
+// String: "hello"
 // Function: CreateMapJSON
-// 5   0   LOAD_CONST 0   (hello)
-//     1   LOAD_CONST 1   (world)
+// 5   0   LOAD_CONST 0   (world)
+//     1   LOAD_CONST 1   (hello)
 //     2   ALLOC_MAP 1    
 //     3   RETURN         
 //
@@ -81,8 +81,8 @@ fn Len() -> int {
 // String: "hi"
 // String: "hi"
 // Function: EditMapKey
-// 19   0    LOAD_CONST 0        (hi)
-//      1    LOAD_CONST 1        (123)
+// 19   0    LOAD_CONST 0        (123)
+//      1    LOAD_CONST 1        (hi)
 //      2    ALLOC_MAP 1         
 //
 // 21   3    LOAD_VAR 1          (map)

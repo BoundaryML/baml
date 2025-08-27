@@ -107,7 +107,7 @@ pub type TypeStreaming = TypeGeneric<type_meta::Streaming>;
 pub struct TypeIRDiagnosticRepr<'a>(&'a TypeIR);
 
 impl TypeIR {
-    pub fn diagnostic_repr(&self) -> TypeIRDiagnosticRepr {
+    pub fn diagnostic_repr(&self) -> TypeIRDiagnosticRepr<'_> {
         TypeIRDiagnosticRepr(self)
     }
 }

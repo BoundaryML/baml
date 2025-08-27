@@ -1,5 +1,3 @@
-use std::f32::DIGITS;
-
 use baml_types::JinjaExpression;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
@@ -317,20 +315,21 @@ fn parse_map(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
         }
     }
 
-    let mut entries: Vec<(Expression, Expression)> = vec![];
     let span = token.as_span();
 
-    let mut inner = token.into_inner().filter(|pair| !matches!(pair.as_rule(), Rule::NEWLINE));
+    let mut inner = token
+        .into_inner()
+        .filter(|pair| !matches!(pair.as_rule(), Rule::NEWLINE));
 
     // Option<(rule, span of inference)>
     // We'll be reporting
 
-    if let Some(first) = inner.next() {
+    let entries = if let Some(first) = inner.next() {
         let first_rule = first.as_rule();
 
-        entries.extend(parse_map_entry(first, diagnostics));
+        let first_entry = parse_map_entry(first, diagnostics).into_iter();
 
-        entries.extend(inner.filter_map(|pair| {
+        let rest_of_entries = inner.filter_map(|pair| {
 
             if first_rule != pair.as_rule() {
                 diagnostics.push_error(DatamodelError::new_validation_error("Inconsistent use of key-value pair syntax. Consider using python-style if any of the keys is an identifier to avoid confusion", diagnostics.span(pair.as_span())));
@@ -339,8 +338,12 @@ fn parse_map(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
             parse_map_entry(pair, diagnostics)
 
 
-        }));
-    }
+        });
+
+        first_entry.chain(rest_of_entries).collect()
+    } else {
+        Vec::new()
+    };
 
     Expression::Map(entries, diagnostics.span(span))
 }

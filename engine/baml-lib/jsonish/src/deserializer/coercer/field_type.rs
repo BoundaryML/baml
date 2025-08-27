@@ -41,6 +41,10 @@ impl TypeCoercer for TypeIR {
             TypeIR::Map(..) => try_cast_map(ctx, self, value).map(|v| v.with_target(target)),
             TypeIR::Tuple(_, _) => None,
             TypeIR::Arrow(_, _) => None,
+            TypeIR::Top(_) => panic!(
+                "TypeIR::Top should have been resolved by the compiler before code generation. \
+                 This indicates a bug in the type resolution phase."
+            ),
         };
 
         match result {
@@ -175,6 +179,10 @@ impl TypeCoercer for TypeIR {
                         }
                         TypeIR::Tuple(_, _) => Err(ctx.error_internal("Tuple not supported")),
                         TypeIR::Arrow(_, _) => Err(ctx.error_internal("Arrow type not supported")),
+                        TypeIR::Top(_) => panic!(
+                            "TypeIR::Top should have been resolved by the compiler before code generation. \
+                             This indicates a bug in the type resolution phase."
+                        ),
                     }
                 }
             }
@@ -304,6 +312,10 @@ impl DefaultValue for TypeIR {
             }
             TypeIR::Primitive(_, _) => None,
             TypeIR::Arrow(_, _) => None,
+            TypeIR::Top(_) => panic!(
+                "TypeIR::Top should have been resolved by the compiler before code generation. \
+                 This indicates a bug in the type resolution phase."
+            ),
         };
 
         // TODO (Greg): Get rid of string-matching for this.

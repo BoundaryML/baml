@@ -152,7 +152,7 @@ struct InlinedBaml<'a> {
 }
 
 pub fn render_inlinedbaml(
-    pkg: &CurrentRenderPackage,
+    _pkg: &CurrentRenderPackage,
     file_map: Vec<(String, String)>,
 ) -> Result<String, askama::Error> {
     InlinedBaml {

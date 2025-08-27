@@ -512,7 +512,7 @@ impl<'g> HirCompiler<'g> {
                         self.compile_expression(value);
                         self.emit(Instruction::StoreField(field_index));
                     }
-                    thir::Expr::ArrayAccess {base, index, meta} => {
+                    thir::Expr::ArrayAccess {base, index, meta: _} => {
 
                         self.compile_expression(base);
                         self.compile_expression(index);
@@ -584,7 +584,7 @@ impl<'g> HirCompiler<'g> {
                         self.emit(binop);
                         self.emit(Instruction::StoreField(field_index));
                     }
-                    thir::Expr::ArrayAccess { base, index, meta } => {
+                    thir::Expr::ArrayAccess { base, index, meta: _ } => {
                         // Compound Assignment for array[index] or map[key]
                         //
                         // For array[index] += value (or other compound ops):
@@ -601,36 +601,36 @@ impl<'g> HirCompiler<'g> {
                         //    (StoreArrayElement consumes array, index, and result)
                         //
                         // The same pattern applies for maps with StoreMapElement
-                        
+
                         // Determine if it's a list or map
                         let (load_instr, store_instr) = match base.meta().1.as_ref().expect("must have a resolved type") {
                             TypeIR::List(_, _) => (Instruction::LoadArrayElement, Instruction::StoreArrayElement),
                             TypeIR::Map(_, _, _) => (Instruction::LoadMapElement, Instruction::StoreMapElement),
                             _ => panic!("array access should be either map or array.")
                         };
-                        
+
                         // Load array and index first
                         self.compile_expression(base);
                         self.compile_expression(index);
-                        
+
                         // Stack is now: [array, index]
                         // Duplicate both for the load operation
                         self.emit(Instruction::Copy(1));  // Copy array (at position 1 from top)
                         self.emit(Instruction::Copy(1));  // Copy index (at position 1 from top)
-                        
+
                         // Stack is now: [array, index, array_copy, index_copy]
                         // Load current value at array[index]
                         // This consumes array_copy and index_copy
                         self.emit(load_instr);
-                        
+
                         // Stack is now: [array, index, current_value]
                         // Load the value to apply operation with
                         self.compile_expression(value);
-                        
+
                         // Stack is now: [array, index, current_value, new_value]
                         // Apply the operation
                         self.emit(binop);
-                        
+
                         // Stack is now: [array, index, result]
                         // Store back to array[index]
                         // This consumes array, index, and result value
@@ -940,7 +940,11 @@ impl<'g> HirCompiler<'g> {
                 self.compile_block(block);
             }
 
-            thir::Expr::ArrayAccess { base, index, meta } => {
+            thir::Expr::ArrayAccess {
+                base,
+                index,
+                meta: _,
+            } => {
                 // ArrayAccess compilation for loading elements
                 //
                 // Steps to compile array[index] or map[key]:
@@ -960,11 +964,13 @@ impl<'g> HirCompiler<'g> {
                 self.compile_expression(index);
 
                 // Determine if it's an array or map and emit appropriate instruction
-                self.emit(match base.meta().1.as_ref().expect("must have a resolved type") {
-                    TypeIR::List(_, _) => Instruction::LoadArrayElement,
-                    TypeIR::Map(_, _, _) => Instruction::LoadMapElement,
-                    _ => panic!("array access should be either map or array.")
-                });
+                self.emit(
+                    match base.meta().1.as_ref().expect("must have a resolved type") {
+                        TypeIR::List(_, _) => Instruction::LoadArrayElement,
+                        TypeIR::Map(_, _, _) => Instruction::LoadMapElement,
+                        _ => panic!("array access should be either map or array."),
+                    },
+                );
             }
 
             thir::Expr::FieldAccess { base, field, .. } => {
@@ -1331,9 +1337,9 @@ impl<'g> HirCompiler<'g> {
         }
     }
 
-    fn emit_string_literal(&mut self, v: &String) {
+    fn emit_string_literal(&mut self, v: &str) {
         // Allocate the string in the objects pool
-        let object_index = self.objects.insert(Object::String(v.clone()));
+        let object_index = self.objects.insert(Object::String(v.to_owned()));
         // Add a constant that points to the string object
         let const_index = self.add_constant(Value::Object(object_index));
         self.emit(Instruction::LoadConst(const_index));
@@ -2198,13 +2204,7 @@ mod tests {
                     "hello"
                 }
             "#,
-            expected: vec![(
-                "main",
-                vec![
-                    Instruction::LoadConst(0),
-                    Instruction::Return,
-                ],
-            )],
+            expected: vec![("main", vec![Instruction::LoadConst(0), Instruction::Return])],
         })
     }
 
@@ -3475,20 +3475,26 @@ fn UseMap() -> string {
     map["hello"]
 }"#,
                 expected: vec![
-                    ("CreateMap", vec![
-                        Instruction::LoadConst(0),
-                        Instruction::LoadConst(1),
-                        Instruction::AllocMap(1),
-                        Instruction::Return,
-                    ]),
-                    ("UseMap", vec![
-                        Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
-                        Instruction::Call(0),
-                        Instruction::LoadVar(1),
-                        Instruction::LoadConst(0),
-                        Instruction::LoadMapElement,
-                        Instruction::Return,
-                    ]),
+                    (
+                        "CreateMap",
+                        vec![
+                            Instruction::LoadConst(0),
+                            Instruction::LoadConst(1),
+                            Instruction::AllocMap(1),
+                            Instruction::Return,
+                        ],
+                    ),
+                    (
+                        "UseMap",
+                        vec![
+                            Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                            Instruction::Call(0),
+                            Instruction::LoadVar(1),
+                            Instruction::LoadConst(0),
+                            Instruction::LoadMapElement,
+                            Instruction::Return,
+                        ],
+                    ),
                 ],
             })
         }
@@ -3506,20 +3512,26 @@ fn UseMapNoKey() -> string {
     map["world"]
 }"#,
                 expected: vec![
-                    ("CreateMap", vec![
-                        Instruction::LoadConst(0),
-                        Instruction::LoadConst(1),
-                        Instruction::AllocMap(1),
-                        Instruction::Return,
-                    ]),
-                    ("UseMapNoKey", vec![
-                        Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
-                        Instruction::Call(0),
-                        Instruction::LoadVar(1),
-                        Instruction::LoadConst(0),
-                        Instruction::LoadMapElement,
-                        Instruction::Return,
-                    ]),
+                    (
+                        "CreateMap",
+                        vec![
+                            Instruction::LoadConst(0),
+                            Instruction::LoadConst(1),
+                            Instruction::AllocMap(1),
+                            Instruction::Return,
+                        ],
+                    ),
+                    (
+                        "UseMapNoKey",
+                        vec![
+                            Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                            Instruction::Call(0),
+                            Instruction::LoadVar(1),
+                            Instruction::LoadConst(0),
+                            Instruction::LoadMapElement,
+                            Instruction::Return,
+                        ],
+                    ),
                 ],
             })
         }
@@ -3540,29 +3552,35 @@ fn UseMapContains() -> string {
     }
 }"#,
                 expected: vec![
-                    ("CreateMapJSON", vec![
-                        Instruction::LoadConst(0),
-                        Instruction::LoadConst(1),
-                        Instruction::AllocMap(1),
-                        Instruction::Return,
-                    ]),
-                    ("UseMapContains", vec![
-                        Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
-                        Instruction::Call(0),
-                        Instruction::LoadGlobal(GlobalIndex::from_raw(5)),
-                        Instruction::LoadVar(1),
-                        Instruction::LoadConst(0),
-                        Instruction::Call(2),
-                        Instruction::JumpIfFalse(6),
-                        Instruction::Pop(1),
-                        Instruction::LoadVar(1),
-                        Instruction::LoadConst(1),
-                        Instruction::LoadMapElement,
-                        Instruction::Jump(3),
-                        Instruction::Pop(1),
-                        Instruction::LoadConst(2),
-                        Instruction::Return,
-                    ]),
+                    (
+                        "CreateMapJSON",
+                        vec![
+                            Instruction::LoadConst(0),
+                            Instruction::LoadConst(1),
+                            Instruction::AllocMap(1),
+                            Instruction::Return,
+                        ],
+                    ),
+                    (
+                        "UseMapContains",
+                        vec![
+                            Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                            Instruction::Call(0),
+                            Instruction::LoadGlobal(GlobalIndex::from_raw(5)),
+                            Instruction::LoadVar(1),
+                            Instruction::LoadConst(0),
+                            Instruction::Call(2),
+                            Instruction::JumpIfFalse(6),
+                            Instruction::Pop(1),
+                            Instruction::LoadVar(1),
+                            Instruction::LoadConst(1),
+                            Instruction::LoadMapElement,
+                            Instruction::Jump(3),
+                            Instruction::Pop(1),
+                            Instruction::LoadConst(2),
+                            Instruction::Return,
+                        ],
+                    ),
                 ],
             })
         }
@@ -3580,8 +3598,9 @@ fn EditMapKey() -> int {
 	map["hi"]
 
 }"#,
-                expected: vec![
-                    ("EditMapKey", vec![
+                expected: vec![(
+                    "EditMapKey",
+                    vec![
                         Instruction::LoadConst(0),
                         Instruction::LoadConst(1),
                         Instruction::AllocMap(1),
@@ -3603,8 +3622,8 @@ fn EditMapKey() -> int {
                         Instruction::LoadConst(7),
                         Instruction::LoadMapElement,
                         Instruction::Return,
-                    ]),
-                ],
+                    ],
+                )],
             })
         }
 
@@ -3619,8 +3638,9 @@ fn Len() -> int {
     };
     map.len()
 }"#,
-                expected: vec![
-                    ("Len", vec![
+                expected: vec![(
+                    "Len",
+                    vec![
                         Instruction::LoadConst(0),
                         Instruction::LoadConst(1),
                         Instruction::LoadConst(2),
@@ -3630,8 +3650,8 @@ fn Len() -> int {
                         Instruction::LoadVar(1),
                         Instruction::Call(1),
                         Instruction::Return,
-                    ]),
-                ],
+                    ],
+                )],
             })
         }
     }

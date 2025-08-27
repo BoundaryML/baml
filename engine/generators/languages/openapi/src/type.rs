@@ -262,6 +262,10 @@ pub fn convert_ir_type(ir: &IntermediateRepr, ty: &TypeNonStreaming) -> TypeOpen
             meta: meta_copy,
             additional_properties: true,
         },
+        TypeNonStreaming::Top(_) => panic!(
+            "TypeNonStreaming::Top should have been resolved by the compiler before code generation. \
+             This indicates a bug in the type resolution phase."
+        ),
     };
 
     let checks = ty

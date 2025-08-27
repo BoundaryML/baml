@@ -978,13 +978,22 @@ fn typecheck_assignment(
     context: &mut TypeContext<'_>,
     diagnostics: &mut Diagnostics,
 ) {
-    if !is_assignable(lhs, rhs, diagnostics, context) {
-        diagnostics.push_error(DatamodelError::new_validation_error(
-            // perf: `new_validation_error` could accept Cow / into cow directly and
-            // avoid copy here.
-            assign_error(lhs).as_ref(),
-            assignment_span.clone(),
-        ));
+    if !is_assignable(lhs, diagnostics, context) {
+        // Only report assignment errors for variables that actually exist.
+        // Unknown variables should only show "unknown variable" errors, not assignment errors.
+        let should_report_assignment_error = match lhs {
+            thir::Expr::Var(name, _) => context.vars.contains_key(name),
+            _ => true, // For non-variables (array access, field access), always report
+        };
+
+        if should_report_assignment_error {
+            diagnostics.push_error(DatamodelError::new_validation_error(
+                // perf: `new_validation_error` could accept Cow / into cow directly and
+                // avoid copy here.
+                assign_error(lhs).as_ref(),
+                assignment_span.clone(),
+            ));
+        }
     }
 
     let rhs_type = &rhs.meta().1;
@@ -1020,7 +1029,12 @@ fn infer_type_if_assigned_var(
         return;
     };
 
-    let info = &mut ctx.vars[name.as_str()];
+    // NOTE: thir::Expr::Var is still generated even for unknown variables
+    // (see typecheck_expression for hir::Expression::Identifier), so we must
+    // handle the case where the variable doesn't exist in ctx.vars.
+    let Some(info) = ctx.vars.get_mut(name.as_str()) else {
+        return;
+    };
 
     let Some(mut_info) = info.mut_var_info.as_mut() else {
         return;
@@ -1056,16 +1070,21 @@ fn assign_error(lhs: &thir::Expr<IRMeta>) -> Cow<'static, str> {
 /// Ensures that the location pointed to by `lhs` is assignable.
 fn is_assignable(
     lhs: &thir::Expr<IRMeta>,
-    rhs: &thir::Expr<IRMeta>,
     diagnostics: &mut Diagnostics,
     ctx: &TypeContext,
 ) -> bool {
     match lhs {
         // base case: check variable mutability.
-        // Since variable has been checked, info must exist.
-        thir::Expr::Var(name, _meta) => ctx.vars[name].mut_var_info.is_some(),
+        // NOTE: thir::Expr::Var is still generated even for unknown variables
+        // (see typecheck_expression for hir::Expression::Identifier), so we must
+        // handle the case where the variable doesn't exist in ctx.vars.
+        thir::Expr::Var(name, _meta) => ctx
+            .vars
+            .get(name)
+            .map(|var_info| var_info.mut_var_info.is_some())
+            .unwrap_or(false),
         thir::Expr::ArrayAccess { base, .. } | thir::Expr::FieldAccess { base, .. } => {
-            is_assignable(base, rhs, diagnostics, ctx)
+            is_assignable(base, diagnostics, ctx)
         }
         _ => {
             diagnostics.push_error(DatamodelError::new_validation_error(
