@@ -343,10 +343,11 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                     x int
                     y int
                     z int
+                    w int
                 }
 
                 fn default_point() -> Point {
-                    Point { x: 0, y: 0, z: 0 }
+                    Point { x: 0, y: 0, z: 0, w: 0 }
                 }
 
                 fn main() -> Point {
@@ -367,12 +368,38 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
 
             assert_eq!(
                 instance.fields,
-                &[Value::Int(1), Value::Int(2), Value::Int(0)]
+                &[Value::Int(1), Value::Int(2), Value::Int(0), Value::Int(0)],
             );
 
             Ok(())
         },
     )
+}
+
+#[test]
+fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: "
+                class Point {
+                    x int
+                    y int
+                    z int
+                    w int
+                }
+
+                fn default_point() -> Point {
+                    Point { x: 0, y: 0, z: 0, w: 0 }
+                }
+
+                fn main() -> int {
+                    let p = Point { x: 1, y: 2, ..default_point() };
+                    let x = 0;
+                    x
+                }
+            ",
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(0)),
+    })
 }
 
 #[test]
@@ -886,6 +913,22 @@ fn builtin_method_call() -> anyhow::Result<()> {
 }
 
 #[test]
+fn bind_method_call() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                let arr = [1, 2, 3];
+                let v = arr.len();
+
+                v
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
+    })
+}
+
+#[test]
 fn while_loop() -> anyhow::Result<()> {
     // NOTE: there's no way to make a safeguard since there's no "return", and we shouldn't rely on
     // "break" to keep the test as isolated as possible.
@@ -1161,6 +1204,523 @@ fn for_loop_nested() -> anyhow::Result<()> {
     })
 }
 
+// #[test]
+// fn basic_method_decl() -> anyhow::Result<()> {
+//     assert_vm_executes(Program {
+//         source: r#"
+//             class Number {
+//                 value int
+//
+//                 function add(self, other: Number) -> Number {
+//                     Number { value: self.value + other.value }
+//                 }
+//             }
+//
+//             function main() -> int {
+//                 let mut a = Number { value: 1 };
+//                 let mut b = Number { value: 2 };
+//                 let n = a.add(b);
+//                 n.value
+//             }
+//         "#,
+//         function: "main",
+//         expected: VmExecState::Complete(Value::Int(3)),
+//     })
+// }
+
+#[test]
+fn mut_self_method_decl() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Number {
+                value int
+
+                function add(mut self, other: Number) -> bool {
+                    self.value += other.value;
+                    true
+                }
+            }
+
+            function main() -> int {
+                let mut a = Number { value: 1 };
+                let mut b = Number { value: 2 };
+                a.add(b);
+                a.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
+    })
+}
+
+#[test]
+fn field_assignment_add_assign() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Counter {
+                value int
+            }
+            function main() -> int {
+                let mut c = Counter { value: 10 };
+                c.value += 5;
+                c.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(15)),
+    })
+}
+
+#[test]
+fn field_assignment_sub_assign() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Counter {
+                value int
+            }
+            function main() -> int {
+                let mut c = Counter { value: 20 };
+                c.value -= 8;
+                c.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(12)),
+    })
+}
+
+#[test]
+fn field_assignment_mul_assign() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Counter {
+                value int
+            }
+            function main() -> int {
+                let mut c = Counter { value: 7 };
+                c.value *= 3;
+                c.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(21)),
+    })
+}
+
+#[test]
+fn field_assignment_div_assign() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Counter {
+                value int
+            }
+            function main() -> int {
+                let mut c = Counter { value: 24 };
+                c.value /= 4;
+                c.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(6)),
+    })
+}
+
+#[test]
+fn field_assignment_mod_assign() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Counter {
+                value int
+            }
+            function main() -> int {
+                let mut c = Counter { value: 17 };
+                c.value %= 5;
+                c.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(2)),
+    })
+}
+
+#[test]
+fn field_assignment_simple() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Data {
+                value int
+                active bool
+            }
+            function main() -> int {
+                let mut d = Data { value: 100, active: true };
+                d.value = 42;
+                d.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(42)),
+    })
+}
+
+#[test]
+fn field_assignment_multiple_ops() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Stats {
+                score int
+            }
+            function main() -> int {
+                let mut s = Stats { score: 10 };
+                s.score += 5;   // 15
+                s.score *= 2;   // 30
+                s.score -= 10;  // 20
+                s.score /= 4;   // 5
+                s.score
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(5)),
+    })
+}
+
+#[test]
+fn test_nested_object_construction() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                x int
+                y int
+            }
+            class Outer {
+                inner Inner
+                value int
+            }
+            function main() -> int {
+                let o = Outer { 
+                    inner: Inner { x: 10, y: 20 }, 
+                    value: 30 
+                };
+                // Test that construction worked by accessing a simple field
+                o.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(30)),
+    })
+}
+
+#[test]
+fn test_nested_object_construction_with_field_access() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                x int
+                y int
+            }
+            class Outer {
+                inner Inner
+                value int
+            }
+            function main() -> int {
+                let o = Outer { 
+                    inner: Inner { x: 10, y: 20 }, 
+                    value: 30 
+                };
+                // Test nested field access after nested construction
+                o.inner.y
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(20)),
+    })
+}
+
+#[test]
+fn test_nested_field_read_with_nested_construction() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                value int
+            }
+            class Outer {
+                inner Inner
+            }
+            function main() -> int {
+                let o = Outer { inner: Inner { value: 42 } };
+                o.inner.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(42)),
+    })
+}
+
+#[test]
+fn test_nested_field_read() -> anyhow::Result<()> {
+    // Test nested field read without nested construction
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                value int
+            }
+            class Outer {
+                inner Inner  
+            }
+            function main() -> int {
+                let i = Inner { value: 42 };
+                let o = Outer { inner: i };
+                o.inner.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(42)),
+    })
+}
+
+#[test]
+fn test_constructor_with_preceding_variables() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class MyClass {
+                x int
+                y int
+            }
+            function main() -> int {
+                let a = 10;
+                let b = 20;
+                let c = 30;
+                let obj = MyClass { x: 100, y: 200 };
+                obj.x + obj.y + a + b + c
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(360)), // 100 + 200 + 10 + 20 + 30
+    })
+}
+
+#[test]
+fn test_nested_constructor_with_preceding_variables() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                val int
+            }
+            class Outer {
+                inner Inner
+                x int
+            }
+            function main() -> int {
+                let a = 5;
+                let b = 10;
+                let obj = Outer { 
+                    inner: Inner { val: 100 },
+                    x: 50
+                };
+                obj.inner.val + obj.x + a + b
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(165)), // 100 + 50 + 5 + 10
+    })
+}
+
+#[test]
+fn test_method_call_field_assignment() -> anyhow::Result<()> {
+    // Test that we can modify a field of a method's return value
+    // Note: BAML has value semantics, so methods return copies not references
+    assert_vm_executes(Program {
+        source: r#"
+            class Counter {
+                value int
+            }
+            
+            class Factory {
+                counter Counter
+                
+                function get_counter(self) -> Counter {
+                    self.counter
+                }
+            }
+            
+            function main() -> int {
+                let f = Factory { 
+                    counter: Counter { value: 10 }
+                };
+                // get_counter returns a copy of the counter
+                let mut c = f.get_counter();
+                // We can modify the copy
+                c.value += 5;
+                // Return the modified copy's value
+                c.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(15)), // Modified copy
+    })
+}
+
+#[test]
+fn test_array_element_field_assignment() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Item {
+                count int
+            }
+            
+            function main() -> int {
+                let mut items = [
+                    Item { count: 10 },
+                    Item { count: 20 },
+                    Item { count: 30 }
+                ];
+                
+                // Modify field of array element
+                items[1].count += 5;
+                items[1].count
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(25)), // 20 + 5
+    })
+}
+
+#[test]
+fn test_array_element_method_field_assignment() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Data {
+                value int
+                
+                function get_self(self) -> Data {
+                    self
+                }
+            }
+            
+            class Container {
+                data Data
+                
+                function get_data(self) -> Data {
+                    self.data
+                }
+            }
+            
+            function main() -> int {
+                let mut containers = [
+                    Container { data: Data { value: 10 } },
+                    Container { data: Data { value: 20 } },
+                    Container { data: Data { value: 30 } }
+                ];
+                
+                // First test: Can we modify array element's field?
+                containers[1].data.value += 5;
+                let result1 = containers[1].data.value; // Should be 25
+                
+                // Test method call assignment:
+                containers[1].get_data().value += 10;
+                let result2 = containers[1].data.value; // Should be 35 (25 + 10)
+                
+                result2
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(35)), // 20 + 5 + 10
+    })
+}
+
+#[test]
+fn test_method_call_then_array_access_assignment() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Item {
+                value int
+            }
+            class Container {
+                data Item[]
+                function get_nested(self) -> Item[] {
+                    self.data
+                }
+            }
+            function main() -> int {
+                let i1 = Item { value: 10 };
+                let i2 = Item { value: 20 };
+                let i3 = Item { value: 30 };
+                let arr = [i1, i2, i3];
+                let mut obj = Container { data: arr };
+                obj.get_nested()[1].value += 5;
+                obj.data[1].value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(25)),
+    })
+}
+
+#[test]
+fn nested_field_assignment_simple() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                value int
+            }
+            class Outer {
+                inner Inner
+            }
+            function main() -> int {
+                let i = Inner { value: 10 };
+                let mut o = Outer { inner: i };
+                o.inner.value = 42;
+                o.inner.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(42)),
+    })
+}
+
+#[test]
+fn nested_field_assignment_compound() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                value int
+            }
+            class Outer {
+                inner Inner
+            }
+            function main() -> int {
+                let i = Inner { value: 10 };
+                let mut o = Outer { inner: i };
+                o.inner.value += 32;
+                o.inner.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(42)),
+    })
+}
+
+#[test]
+fn field_assignment_object_field() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                value int
+            }
+            class Outer {
+                inner Inner
+            }
+            function main() -> bool {
+                let mut o = Outer { inner: Inner { value: 10 } };
+                o.inner = Inner { value: 20 };
+                // For now, test that assignment works, not nested field access
+                true
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Bool(true)),
+    })
+}
+
 #[cfg(test)]
 mod c_for_loops {
 
@@ -1260,7 +1820,7 @@ mod return_stmt {
             source: r#"
                 fn EarlyReturn(x: int) -> int {
                    if (x == 42) { return 1; }
-                   
+
                    x + 5
                 }
 
@@ -1281,14 +1841,14 @@ mod return_stmt {
                    let a = 1;
 
                    if (a == 0) { return 0; }
-                   
+
                    {
                       let b = 1;
                       if (a != b) {
                          return 0;
                       }
                    }
-                   
+
                    {
                       let c = 2;
                       let b = 3;

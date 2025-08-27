@@ -47,7 +47,7 @@ impl FeatureFlags {
                     feature_flags.insert(f);
                 }
                 Err(_) => {
-                    errors.push(format!("Unknown feature flag: '{}'", flag));
+                    errors.push(format!("Unknown feature flag: '{flag}'"));
                 }
             }
         }

@@ -3,6 +3,7 @@ use std::{collections::HashMap, ops::Deref, ptr::null, sync::Arc};
 use anyhow::Result;
 use baml_runtime::{BamlRuntime, FunctionResult};
 use baml_types::BamlValue;
+use dashmap::DashMap;
 use once_cell::sync::Lazy;
 
 use super::*;
@@ -14,6 +15,9 @@ use crate::ffi::{
 /// cbindgen:ignore
 static RUNTIME: Lazy<Arc<tokio::runtime::Runtime>> =
     Lazy::new(|| Arc::new(tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime")));
+
+/// Track active operations with their cancellation triggers
+static OPERATION_TRIGGERS: Lazy<DashMap<u32, stream_cancel::Trigger>> = Lazy::new(DashMap::new);
 
 /// Extern "C" function that returns immediately, scheduling the async call.
 /// Once the asynchronous function completes, the provided callback is invoked.
@@ -74,39 +78,32 @@ fn call_function_from_c_inner(
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
+    // Create a cancellation trigger/tripwire pair
+    let (trigger, tripwire) = stream_cancel::Tripwire::new();
+    OPERATION_TRIGGERS.insert(id, trigger);
+
     // Spawn an async task to await the future and call the callback when done.
     // Ensure that a Tokio runtime is running in your application.
     let rt = RUNTIME.clone();
     rt.spawn(async move {
-        let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async {
-            // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
-            let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
-            runtime
-                .call_function(
-                    func_name,
-                    &kwargs,
-                    &ctx,
-                    type_builder.as_ref(),
-                    client_registry.as_ref(),
-                    collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
-                    env_vars,
-                )
-                .await
-        })) {
-            Ok(future) => future.await,
-            Err(panic_info) => {
-                // Handle the panic case - create an error result
-                let error_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                    format!("Function panicked: {s}")
-                } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                    format!("Function panicked: {s}")
-                } else {
-                    "Function panicked with unknown error".to_string()
-                };
+        // Create a future for the call_function
+        // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
+        let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
+        let result = runtime
+            .call_function(
+                func_name,
+                &kwargs,
+                &ctx,
+                type_builder.as_ref(),
+                client_registry.as_ref(),
+                collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
+                env_vars,
+                Some(tripwire),
+            )
+            .await;
 
-                (Err(anyhow::anyhow!(error_msg)), Default::default())
-            }
-        };
+        // Clean up the trigger
+        OPERATION_TRIGGERS.remove(&id);
 
         let (final_result, _) = result;
         safe_trigger_callback(id, true, final_result, runtime);
@@ -270,8 +267,13 @@ fn call_function_stream_from_c_inner(
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
+    // Create a cancellation trigger/tripwire pair
+    let (trigger, tripwire) = stream_cancel::Tripwire::new();
+    OPERATION_TRIGGERS.insert(id, trigger);
+
     RUNTIME.spawn(async move {
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async move {
+        // Create the stream.run future
+        let stream_future = async move {
             stream
                 .run(
                     Some(|| on_tick(id)),
@@ -282,26 +284,22 @@ fn call_function_stream_from_c_inner(
                     HashMap::new(),
                 )
                 .await
-        }));
+        };
 
-        let final_result = match result {
-            Ok(future) => {
-                let (stream_result, _) = future.await;
+        // Use tokio::select to handle cancellation
+        let final_result = tokio::select! {
+            _ = tripwire => {
+                // Operation was cancelled
+                Err(anyhow::anyhow!("Stream operation cancelled"))
+            }
+            result = stream_future => {
+                let (stream_result, _) = result;
                 stream_result
             }
-            Err(panic_info) => {
-                // Handle the panic case - create an error result
-                let error_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                    format!("Stream function panicked: {s}")
-                } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                    format!("Stream function panicked: {s}")
-                } else {
-                    "Stream function panicked with unknown error".to_string()
-                };
-
-                Err(anyhow::anyhow!(error_msg))
-            }
         };
+
+        // Clean up the trigger
+        OPERATION_TRIGGERS.remove(&id);
 
         safe_trigger_callback(id, true, final_result, runtime);
     });
@@ -316,4 +314,13 @@ fn on_tick(id: u32) {
 
 fn on_event(id: u32, result: FunctionResult, runtime: &BamlRuntime) {
     safe_trigger_callback(id, false, Ok(result), runtime);
+}
+
+/// Cancel a function call by its ID
+#[no_mangle]
+pub extern "C" fn cancel_function_call(id: u32) -> *const libc::c_void {
+    if let Some((_, trigger)) = OPERATION_TRIGGERS.remove(&id) {
+        trigger.cancel();
+    }
+    std::ptr::null()
 }

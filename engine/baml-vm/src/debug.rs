@@ -107,6 +107,7 @@ pub fn display_instruction(
             format!("({})", display_object(objects, *index))
         }
         Instruction::Pop(_)
+        | Instruction::Copy(_)
         | Instruction::PopReplace(_)
         | Instruction::BinOp(_)
         | Instruction::CmpOp(_)
@@ -174,6 +175,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::Assert
         | Instruction::Return
         | Instruction::Pop(_)
+        | Instruction::Copy(_)
         | Instruction::PopReplace(_) => Color::Red,
         Instruction::AllocInstance(_) | Instruction::AllocArray(_) => Color::Cyan,
         Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,

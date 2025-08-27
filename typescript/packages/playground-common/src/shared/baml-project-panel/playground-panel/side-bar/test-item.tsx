@@ -46,7 +46,7 @@ export function TestItem({
 }: TestItemProps) {
   const testHistory = useAtomValue(testHistoryAtom);
   const selectedIndex = useAtomValue(selectedHistoryIndexAtom);
-  const runBamlTests = useRunBamlTests();
+  const { runTests: runBamlTests } = useRunBamlTests();
   const setSelectedItem = useSetAtom(selectedItemAtom);
 
   const testAtom = useMemo(

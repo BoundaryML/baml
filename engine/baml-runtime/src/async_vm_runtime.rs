@@ -144,6 +144,7 @@ impl BamlAsyncVmRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
+        cancel_tripwire: Option<stream_cancel::Tripwire>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         // TODO: Proper error handling. Refactor the API to return a Result.
         let (function_index, function_kind) = self
@@ -159,7 +160,16 @@ impl BamlAsyncVmRuntime {
         if matches!(function_kind, FunctionKind::Llm) {
             return self
                 .llm_runtime
-                .call_function(function_name, params, ctx, tb, cb, collectors, env_vars)
+                .call_function(
+                    function_name,
+                    params,
+                    ctx,
+                    tb,
+                    cb,
+                    collectors,
+                    env_vars,
+                    cancel_tripwire,
+                )
                 .await;
         }
 
@@ -298,6 +308,7 @@ impl BamlAsyncVmRuntime {
 
                         // Spanwed future basically awaits the LLM call and
                         // sends the result to the futures channel.
+                        let cancel_tripwire = cancel_tripwire.clone();
                         async move {
                             let result = llm_runtime
                                 .call_function(
@@ -308,6 +319,7 @@ impl BamlAsyncVmRuntime {
                                     cb.as_ref(),
                                     None,
                                     env_vars,
+                                    cancel_tripwire,
                                 )
                                 .await;
 
@@ -385,6 +397,7 @@ impl BamlAsyncVmRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
+        cancel_tripwire: Option<stream_cancel::Tripwire>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         self.async_runtime.block_on(self.call_function(
             function_name,
@@ -394,6 +407,7 @@ impl BamlAsyncVmRuntime {
             cb,
             collectors,
             env_vars,
+            cancel_tripwire,
         ))
     }
 

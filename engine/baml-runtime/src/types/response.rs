@@ -167,6 +167,9 @@ impl FunctionResult {
                 LLMResponse::InternalFailure(err) => {
                     format!("Internal Failure: {err} - {actual_error}")
                 }
+                LLMResponse::Cancelled(err) => {
+                    format!("Operation Cancelled: {err} - {actual_error}")
+                }
             },
         }
     }

@@ -753,6 +753,24 @@ export const ExtractHobby = async (
 };
 
 /**
+ * Executes the "ExtractName" BAML action.
+ *
+ * This server action calls the underlying BAML function "ExtractName"
+ * with the specified parameters.
+ *
+ * @param { string } text - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const ExtractName = async (
+  text: string,
+): Promise<string> => {
+  return b.ExtractName(
+    text,
+  );
+};
+
+/**
  * Executes the "ExtractNames" BAML action.
  *
  * This server action calls the underlying BAML function "ExtractNames"
@@ -917,6 +935,48 @@ export const FnEnumOutput = async (
 ): Promise<types.EnumOutput> => {
   return b.FnEnumOutput(
     input,
+  );
+};
+
+/**
+ * Executes the "FnFailRetryConstantDelay" BAML action.
+ *
+ * This server action calls the underlying BAML function "FnFailRetryConstantDelay"
+ * with the specified parameters.
+ *
+ * @param { number } retries - Input parameter.
+ * @param { number } delay_ms - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const FnFailRetryConstantDelay = async (
+  retries: number,
+  delay_ms: number,
+): Promise<string> => {
+  return b.FnFailRetryConstantDelay(
+    retries,
+    delay_ms,
+  );
+};
+
+/**
+ * Executes the "FnFailRetryExponentialDelay" BAML action.
+ *
+ * This server action calls the underlying BAML function "FnFailRetryExponentialDelay"
+ * with the specified parameters.
+ *
+ * @param { number } retries - Input parameter.
+ * @param { number } initial_delay_ms - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const FnFailRetryExponentialDelay = async (
+  retries: number,
+  initial_delay_ms: number,
+): Promise<string> => {
+  return b.FnFailRetryExponentialDelay(
+    retries,
+    initial_delay_ms,
   );
 };
 
@@ -2237,6 +2297,24 @@ export const TellStory = async (
 ): Promise<string> => {
   return b.TellStory(
     story,
+  );
+};
+
+/**
+ * Executes the "TestAbortFallbackChain" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestAbortFallbackChain"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestAbortFallbackChain = async (
+  input: string,
+): Promise<string> => {
+  return b.TestAbortFallbackChain(
+    input,
   );
 };
 

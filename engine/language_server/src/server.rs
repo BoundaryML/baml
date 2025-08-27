@@ -96,15 +96,17 @@ impl Server {
         let client_capabilities = init_params.capabilities.clone();
         let position_encoding = Self::find_best_position_encoding(&client_capabilities);
 
+        let init_options = init_params
+            .clone()
+            .initialization_options
+            .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::default()));
+
+        tracing::info!("--- Received initialization options: {:?}", init_options);
+
         let AllSettings {
             global_settings,
             mut workspace_settings,
-        } = AllSettings::from_value(
-            init_params
-                .clone()
-                .initialization_options
-                .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::default())),
-        );
+        } = AllSettings::from_value(init_options);
 
         crate::logging::init_logging(
             global_settings.tracing.log_level.unwrap_or_default(),
@@ -160,12 +162,19 @@ impl Server {
 
         let rt = tokio::runtime::Runtime::new()?;
 
+        // Extract client version from initialization parameters
+        let client_version = init_params
+            .client_info
+            .as_ref()
+            .and_then(|info| info.version.clone());
+
         let mut session = Session::new(
             &client_capabilities,
             position_encoding,
             global_settings,
             &workspaces,
             rt.handle().clone(),
+            client_version,
         )?;
 
         let client = client::Client::new(connection.make_sender());

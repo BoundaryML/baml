@@ -41,6 +41,7 @@ class BamlAsyncClient:
         client_registry: typing.Optional[baml_py.baml_py.ClientRegistry] = None,
         collector: typing.Optional[typing.Union[baml_py.baml_py.Collector, typing.List[baml_py.baml_py.Collector]]] = None,
         env: typing.Optional[typing.Dict[str, typing.Optional[str]]] = None,
+        on_tick: typing.Optional[typing.Callable[[str, baml_py.baml_py.FunctionLog], None]] = None,
     ) -> "BamlAsyncClient":
         options: BamlCallOptions = {}
         if tb is not None:
@@ -51,6 +52,8 @@ class BamlAsyncClient:
             options["collector"] = collector
         if env is not None:
             options["env"] = env
+        if on_tick is not None:
+            options["on_tick"] = on_tick
         return BamlAsyncClient(self.__options.merge_options(options))
 
     @property
@@ -76,38 +79,78 @@ class BamlAsyncClient:
     async def TestAllNull(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.NullableTypes:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestAllNull", args={
-            "input": input,
-        })
-        return typing.cast(types.NullableTypes, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestAllNull(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestAllNull", args={
+                "input": input,
+            })
+            return typing.cast(types.NullableTypes, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestAllOptionalOmitted(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.OptionalFields:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestAllOptionalOmitted", args={
-            "input": input,
-        })
-        return typing.cast(types.OptionalFields, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestAllOptionalOmitted(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestAllOptionalOmitted", args={
+                "input": input,
+            })
+            return typing.cast(types.OptionalFields, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestMixedOptionalNullable(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.MixedOptionalNullable:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestMixedOptionalNullable", args={
-            "input": input,
-        })
-        return typing.cast(types.MixedOptionalNullable, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestMixedOptionalNullable(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestMixedOptionalNullable", args={
+                "input": input,
+            })
+            return typing.cast(types.MixedOptionalNullable, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestNullableTypes(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.NullableTypes:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestNullableTypes", args={
-            "input": input,
-        })
-        return typing.cast(types.NullableTypes, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestNullableTypes(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestNullableTypes", args={
+                "input": input,
+            })
+            return typing.cast(types.NullableTypes, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestOptionalFields(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.OptionalFields:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOptionalFields", args={
-            "input": input,
-        })
-        return typing.cast(types.OptionalFields, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestOptionalFields(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOptionalFields", args={
+                "input": input,
+            })
+            return typing.cast(types.OptionalFields, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 

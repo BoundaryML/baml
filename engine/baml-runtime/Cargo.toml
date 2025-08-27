@@ -30,6 +30,8 @@ arc_with_non_send_sync = "allow"
 anyhow.workspace = true
 baml-compiler = { path = "../baml-compiler" }
 baml-ids.workspace = true
+internal-baml-ast = { path = "../baml-lib/ast" }
+internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 baml-log.workspace = true
 baml-types.workspace = true
 baml-rpc.workspace = true
@@ -38,7 +40,7 @@ base64.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
 clap.workspace = true
-colored = "2.1.0"
+colored.workspace = true
 cowstr.workspace = true
 dashmap.workspace = true
 derive-new.workspace = true
@@ -64,13 +66,14 @@ internal-baml-jinja.workspace = true
 log.workspace = true
 minijinja.workspace = true
 pin-project-lite.workspace = true
+pretty.workspace = true
 regex.workspace = true
 reqwest-eventsource = "0.6.0"
 scopeguard.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-strsim = "0.11.1"
+strsim.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
 thiserror.workspace = true
@@ -135,7 +138,7 @@ aws-config = { version = "=1.5.3", default-features = false, features = [] }
 aws-sdk-bedrockruntime = { version = "=1.76.0", default-features = false, features = [
 
 ] }
-colored = { version = "2.1.0", default-features = false, features = [
+colored = { workspace = true, default-features = false, features = [
   "no-color",
 ] }
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
@@ -149,7 +152,7 @@ reqwest = { version = "0.12.12", features = [
 #
 send_wrapper = { version = "0.6.0", features = ["futures"] }
 serde-wasm-bindgen = "0.6.5"
-uuid = { version = "1.8.0", features = ["v4", "serde", "js"] }
+uuid = { workspace = true, features = ["v4", "serde", "js"] }
 # WARNING: Do not add serde-serialize feature to wasm-bindgen.
 # It may produce a dependency cycle in projects that use wasm and import baml.
 wasm-bindgen = "^0.2.74"
@@ -196,6 +199,7 @@ indicatif = "0.17"
 junit-report = "0.8.3"
 ratatui = "0.29"
 crossterm = "0.28"
+reedline = "0.37"
 
 
 [features]

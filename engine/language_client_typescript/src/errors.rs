@@ -79,6 +79,10 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                     "BamlError: BamlClientError: Something went wrong with the LLM client: {err}"
                 ),
             ),
+            LLMResponse::Cancelled(msg) => napi::Error::new(
+                napi::Status::GenericFailure,
+                format!("BamlAbortError: Operation was aborted: {msg}"),
+            ),
         }
     } else {
         napi::Error::new(napi::Status::GenericFailure, format!("BamlError: {err:?}"))

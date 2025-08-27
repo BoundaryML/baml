@@ -168,3 +168,5 @@ jj-workflow.mdc
 .mise.local.toml
 .mise.*.local.toml
 third_party
+
+baml_repl_history.txt

@@ -284,14 +284,18 @@ impl TestExecutor for BamlRuntime {
                         test_name.clone(),
                         TestExecutionStatus::Running,
                     ));
+                    let on_tick = if false { Some(|| {}) } else { None };
+                    let on_event = if false { Some(|_| {}) } else { None };
                     let (result, _) = runtime
                         .run_test(
                             &function_name,
                             &test_name,
                             &ctx_manager,
-                            Some(|_| {}),
+                            on_event,
                             None,
                             env_vars,
+                            None, // No tripwire for test executor,
+                            on_tick,
                         )
                         .await;
                     let duration = start_instant.elapsed();

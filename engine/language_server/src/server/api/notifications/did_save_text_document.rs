@@ -4,7 +4,7 @@ use lsp_types::{self as types, notification as notif, request::Request, Configur
 
 use crate::{
     server::{
-        api::{notifications::baml_src_version::BamlSrcVersionPayload, ResultExt},
+        api::{self, notifications::baml_src_version::BamlSrcVersionPayload, ResultExt},
         client::{Notifier, Requester},
         Result, Task,
     },
@@ -48,25 +48,46 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
             .get_or_create_project(&path)
             .expect("Ensured that a project db exists");
 
-        let version = project.lock().unwrap().get_common_generator_version();
-        if let Ok(version) = version {
-            let _ = notifier.0.send(lsp_server::Message::Notification(
-                lsp_server::Notification::new(
-                    "baml_src_generator_version".to_string(),
-                    BamlSrcVersionPayload {
-                        version,
-                        root_path: project
-                            .lock()
-                            .unwrap()
-                            .root_path()
-                            .to_string_lossy()
-                            .to_string(),
-                    },
-                ),
-            ));
-        }
+        let default_flags = vec!["beta".to_string()];
+        let effective_flags = session
+            .baml_settings
+            .feature_flags
+            .as_ref()
+            .unwrap_or(&default_flags);
+        let client_version = session.baml_settings.get_client_version();
 
+        let version = project
+            .lock()
+            .unwrap()
+            .get_common_generator_version(effective_flags, client_version)
+            .map_err(|msg| api::Error {
+                error: anyhow::anyhow!(msg),
+                code: lsp_server::ErrorCode::InternalError,
+            })?;
+
+        let _ = notifier.0.send(lsp_server::Message::Notification(
+            lsp_server::Notification::new(
+                "baml_src_generator_version".to_string(),
+                BamlSrcVersionPayload {
+                    version,
+                    root_path: project
+                        .lock()
+                        .unwrap()
+                        .root_path()
+                        .to_string_lossy()
+                        .to_string(),
+                },
+            ),
+        ));
+
+        let default_flags2 = vec!["beta".to_string()];
+        let effective_flags = session
+            .baml_settings
+            .feature_flags
+            .as_ref()
+            .unwrap_or(&default_flags2);
         project.lock().unwrap().run_generators_without_debounce(
+            effective_flags,
             |message| {
                 tracing::info!("About to notify client that generator has run.");
                 notifier.notify_baml_info(&message).unwrap_or(())
@@ -105,7 +126,14 @@ impl super::BackgroundDocumentNotificationHandler for DidSaveTextDocument {
         // Note: In the background version, we need to get the project from the snapshot
         // instead of modifying the session directly
         if let Some(project) = snapshot.project() {
+            let default_flags = vec!["beta".to_string()];
+            let effective_flags = snapshot
+                .session_baml_settings()
+                .feature_flags
+                .as_ref()
+                .unwrap_or(&default_flags);
             project.lock().unwrap().run_generators_without_debounce(
+                effective_flags,
                 |message| {
                     tracing::info!("About to notify client that generator has run.");
                     notifier.notify_baml_info(&message).unwrap_or(())

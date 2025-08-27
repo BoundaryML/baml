@@ -95,3 +95,7 @@ func CallFunctionParseFromC(runtime unsafe.Pointer, functionName string, encoded
 
 	return result, nil
 }
+
+func CancelFunctionCall(id uint32) {
+	C.WrapCancelFunctionCall(C.uint32_t(id))
+}

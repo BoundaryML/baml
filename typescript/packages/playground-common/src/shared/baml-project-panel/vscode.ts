@@ -1,6 +1,8 @@
 import {
   type GetPlaygroundPortRequest,
   type GetPlaygroundPortResponse,
+  type GetVSCodeSettingsRequest,
+  type GetVSCodeSettingsResponse,
   type GetWebviewUriRequest,
   type GetWebviewUriResponse,
   type InitializedRequest,
@@ -12,6 +14,7 @@ import {
   type OpenPlaygroundRequest,
   type OpenPlaygroundResponse,
   type SetProxySettingsRequest,
+  type SetFeatureFlagsRequest,
   decodeBuffer,
 } from './vscode-rpc';
 
@@ -203,6 +206,16 @@ class VSCodeAPIWrapper {
     return resp.port;
   }
 
+  public async getVSCodeSettings() {
+    const resp = await this.rpc<
+      GetVSCodeSettingsRequest,
+      GetVSCodeSettingsResponse
+    >({
+      vscodeCommand: 'GET_VSCODE_SETTINGS',
+    });
+    return resp;
+  }
+
   public async setProxySettings(proxyEnabled: boolean) {
     await this.rpc<SetProxySettingsRequest, void>({
       vscodeCommand: 'SET_PROXY_SETTINGS',
@@ -243,6 +256,13 @@ class VSCodeAPIWrapper {
       vscodeCommand: 'OPEN_PLAYGROUND',
     });
     return resp;
+  }
+
+  public async setFeatureFlags(featureFlags: string[]) {
+    await this.rpc<SetFeatureFlagsRequest, void>({
+      vscodeCommand: 'SET_FEATURE_FLAGS',
+      featureFlags,
+    });
   }
 
   public rpc<TRequest, TResponse>(data: TRequest): Promise<TResponse> {

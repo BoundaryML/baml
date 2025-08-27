@@ -571,6 +571,248 @@ the final number is 129.95, you'll only see null or 129.95 instead of partial
 numbers like 1, 12, 129.9, etc.
 </Note>
 
+## Cancelling Streams
+
+You can cancel ongoing streams using abort controllers, which is essential for responsive applications that allow users to stop generation or implement timeouts.
+
+<Tabs>
+<Tab title="TypeScript">
+```typescript
+import { b } from './baml_client'
+
+const controller = new AbortController()
+
+const stream = b.stream.ExtractReceiptInfo(receipt, {
+  abortController: controller
+})
+
+// Process stream with ability to cancel
+let itemCount = 0
+for await (const partial of stream) {
+  itemCount = partial.items?.length || 0
+  console.log(`Received ${itemCount} items so far`)
+  
+  // Cancel if we have enough items
+  if (itemCount >= 5) {
+    console.log('Stopping stream - got enough items')
+    controller.abort()
+    break
+  }
+}
+
+// Or cancel after a timeout
+setTimeout(() => {
+  controller.abort()
+  console.log('Stream cancelled due to timeout')
+}, 5000)
+```
+</Tab>
+
+<Tab title="Python">
+```python
+from baml_client.async_client import b
+from baml_py import AbortController
+
+controller = AbortController()
+
+stream = b.stream.ExtractReceiptInfo(
+    receipt,
+    baml_options={"abort_controller": controller}
+)
+
+# Process stream with ability to cancel
+item_count = 0
+async for partial in stream:
+    item_count = len(partial.items) if partial.items else 0
+    print(f"Received {item_count} items so far")
+    
+    # Cancel if we have enough items
+    if item_count >= 5:
+        print("Stopping stream - got enough items")
+        controller.abort()
+        break
+
+# Or cancel after a timeout
+import asyncio
+async def cancel_after_timeout():
+    await asyncio.sleep(5)
+    controller.abort()
+    print("Stream cancelled due to timeout")
+
+asyncio.create_task(cancel_after_timeout())
+```
+</Tab>
+
+<Tab title="Go">
+```go
+// Go already uses context for cancellation in the examples above
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+
+stream, err := b.Stream.ExtractReceiptInfo(ctx, receipt)
+if err != nil {
+    log.Printf("Failed to create stream: %v", err)
+    return
+}
+
+for value := range stream {
+    // Stream will automatically stop when context is cancelled
+    select {
+    case <-ctx.Done():
+        log.Printf("Stream cancelled: %v", ctx.Err())
+        return
+    default:
+    }
+    
+    // Process partial results
+    if !value.IsFinal && value.Stream() != nil {
+        partial := *value.Stream()
+        if len(partial.Items) >= 5 {
+            log.Printf("Stopping stream - got %d items", len(partial.Items))
+            cancel() // Cancel the context to stop the stream
+            return
+        }
+    }
+}
+```
+</Tab>
+
+<Tab title="Ruby">
+```ruby
+require 'baml_client'
+
+controller = Baml::AbortController.new
+
+stream = $b.stream.ExtractReceiptInfo(
+  receipt,
+  baml_options: { abort_controller: controller }
+)
+
+# Process stream with ability to cancel
+item_count = 0
+stream.each do |partial|
+  item_count = partial.items&.length || 0
+  puts "Received #{item_count} items so far"
+  
+  # Cancel if we have enough items
+  if item_count >= 5
+    puts "Stopping stream - got enough items"
+    controller.abort
+    break
+  end
+end
+
+# Or cancel after a timeout (in a separate thread)
+Thread.new do
+  sleep(5)
+  controller.abort
+  puts "Stream cancelled due to timeout"
+end
+```
+</Tab>
+</Tabs>
+
+### Common Streaming Cancellation Patterns
+
+#### User-Initiated Cancellation
+Allow users to stop streaming generation with a "Stop" button:
+
+<Tabs>
+<Tab title="React">
+```tsx
+function StreamingComponent() {
+  const [controller, setController] = useState<AbortController | null>(null)
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [result, setResult] = useState("")
+
+  const startStreaming = async () => {
+    const newController = new AbortController()
+    setController(newController)
+    setIsStreaming(true)
+    
+    try {
+      const stream = b.stream.GenerateContent(prompt, {
+        abortController: newController
+      })
+      
+      let accumulated = ""
+      for await (const partial of stream) {
+        accumulated = partial.content || ""
+        setResult(accumulated)
+      }
+    } catch (error) {
+      if (error.name === 'BamlAbortError') {
+        console.log('Stream cancelled by user')
+      }
+    } finally {
+      setIsStreaming(false)
+      setController(null)
+    }
+  }
+
+  const stopStreaming = () => {
+    controller?.abort()
+  }
+
+  return (
+    <div>
+      <button onClick={startStreaming} disabled={isStreaming}>
+        Start Streaming
+      </button>
+      <button onClick={stopStreaming} disabled={!isStreaming}>
+        Stop
+      </button>
+      <div>{result}</div>
+    </div>
+  )
+}
+```
+</Tab>
+
+<Tab title="FastAPI">
+```python
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+from baml_py import AbortController
+import asyncio
+
+app = FastAPI()
+active_streams = {}
+
+@app.post("/stream/{stream_id}")
+async def start_stream(stream_id: str, prompt: str):
+    controller = AbortController()
+    active_streams[stream_id] = controller
+    
+    async def generate():
+        try:
+            stream = b.stream.GenerateContent(
+                prompt,
+                baml_options={"abort_controller": controller}
+            )
+            async for partial in stream:
+                if controller.aborted:
+                    break
+                yield f"data: {partial.content}\n\n"
+        except BamlAbortError:
+            yield "data: [CANCELLED]\n\n"
+        finally:
+            active_streams.pop(stream_id, None)
+    
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+@app.post("/stop/{stream_id}")
+async def stop_stream(stream_id: str):
+    if controller := active_streams.get(stream_id):
+        controller.abort()
+        return {"status": "stopped"}
+    return {"status": "not found"}
+```
+</Tab>
+</Tabs>
+
+For more examples and patterns, see the [Abort Controllers guide](/guide/baml-basics/abort-controllers).
+
 ## Semantic Streaming
 
 BAML provides powerful attributes to control how your data streams, ensuring that partial values always maintain semantic validity. Here are the three key streaming attributes:

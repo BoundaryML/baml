@@ -15,6 +15,7 @@ use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    abort_controller::{cleanup_operation, js_abort_signal_to_rust_tripwire},
     errors::{from_anyhow_error, invalid_argument_error},
     parse_ts_types,
     types::{
@@ -115,6 +116,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
+        signal: Option<JsObject>, // NEW: AbortSignal parameter
     ) -> napi::Result<JsObject> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -125,6 +127,9 @@ impl BamlRuntime {
             )));
         }
         let args_map = args.as_map_owned().unwrap();
+
+        // Convert AbortSignal to Tripwire
+        let (operation_id, tripwire) = js_abort_signal_to_rust_tripwire(env, signal)?;
 
         let baml_runtime = self.inner.clone();
         let ctx_mng = ctx.inner.clone();
@@ -146,8 +151,12 @@ impl BamlRuntime {
                     cb.as_ref(),
                     Some(collector_list),
                     env_vars,
+                    tripwire,
                 )
                 .await;
+
+            // Clean up the operation trigger
+            cleanup_operation(operation_id);
 
             result
                 .0
@@ -169,8 +178,10 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
+        signal: Option<JsObject>, // NEW: AbortSignal parameter (sync doesn't actually use it)
     ) -> napi::Result<FunctionResult> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
+        let (operation_id, tripwire) = js_abort_signal_to_rust_tripwire(env, signal)?;
 
         if !args.is_map() {
             return Err(invalid_argument_error(&format!(
@@ -195,7 +206,9 @@ impl BamlRuntime {
             cb.as_ref(),
             Some(collector_list),
             env_vars,
+            tripwire,
         );
+        cleanup_operation(operation_id);
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)
     }
@@ -214,6 +227,8 @@ impl BamlRuntime {
         client_registry: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
+        signal: Option<JsObject>, // NEW: AbortSignal parameter
+        #[napi(ts_arg_type = "(() => void) | undefined")] on_tick: Option<JsFunction>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -249,7 +264,18 @@ impl BamlRuntime {
             None => None,
         };
 
-        Ok(FunctionResultStream::new(stream, cb, tb, client_registry))
+        let on_tick = match on_tick {
+            Some(tick_cb) => Some(env.create_reference(tick_cb)?),
+            None => None,
+        };
+
+        Ok(FunctionResultStream::new(
+            stream,
+            cb,
+            on_tick,
+            tb,
+            client_registry,
+        ))
     }
 
     #[napi]
@@ -266,6 +292,8 @@ impl BamlRuntime {
         client_registry: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
+        signal: Option<JsObject>, // NEW: AbortSignal parameter
+        #[napi(ts_arg_type = "(() => void) | undefined")] on_tick: Option<JsFunction>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -301,7 +329,18 @@ impl BamlRuntime {
             None => None,
         };
 
-        Ok(FunctionResultStream::new(stream, cb, tb, client_registry))
+        let on_tick = match on_tick {
+            Some(tick_cb) => Some(env.create_reference(tick_cb)?),
+            None => None,
+        };
+
+        Ok(FunctionResultStream::new(
+            stream,
+            cb,
+            on_tick,
+            tb,
+            client_registry,
+        ))
     }
 
     #[napi(ts_return_type = "Promise<HTTPRequest>")]

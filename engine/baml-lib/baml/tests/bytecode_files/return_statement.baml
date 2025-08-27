@@ -100,4 +100,4 @@ fn WithStack(x: int) -> int {
 //      39   RETURN              
 //
 // Class: std::Request with 3 fields
-// Function: len
+// Function: std.Array.len

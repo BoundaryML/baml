@@ -9,13 +9,24 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
   private task: Promise<FunctionResult> | null = null;
 
   private eventQueue: (FunctionResult | null)[] = [];
+  private abortController?: AbortController;
 
   constructor(
     private ffiStream: FunctionResultStream,
     private partialCoerce: (result: any) => PartialOutputType,
     private finalCoerce: (result: any) => FinalOutputType,
     private ctxManager: RuntimeContextManager,
-  ) {}
+    abortController?: AbortController,
+  ) {
+    this.abortController = abortController;
+    
+    // Listen for abort to clean up
+    if (abortController?.signal) {
+      abortController.signal.addEventListener('abort', () => {
+        this.eventQueue.push(null); // Signal end of stream
+      });
+    }
+  }
 
   private async driveToCompletion(): Promise<FunctionResult> {
     try {

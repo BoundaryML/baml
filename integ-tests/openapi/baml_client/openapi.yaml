@@ -578,6 +578,19 @@ paths:
                   - READING
                   $ref: '#/components/schemas/Hobby'
       operationId: ExtractHobby
+  /call/ExtractName:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ExtractName'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ExtractNameResponse
+                type: string
+      operationId: ExtractName
   /call/ExtractNames:
     post:
       requestBody:
@@ -709,6 +722,32 @@ paths:
                 - THREE
                 $ref: '#/components/schemas/EnumOutput'
       operationId: FnEnumOutput
+  /call/FnFailRetryConstantDelay:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnFailRetryConstantDelay'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnFailRetryConstantDelayResponse
+                type: string
+      operationId: FnFailRetryConstantDelay
+  /call/FnFailRetryExponentialDelay:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnFailRetryExponentialDelay'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnFailRetryExponentialDelayResponse
+                type: string
+      operationId: FnFailRetryExponentialDelay
   /call/FnLiteralClassInputOutput:
     post:
       requestBody:
@@ -1763,6 +1802,19 @@ paths:
                 title: TellStoryResponse
                 type: string
       operationId: TellStory
+  /call/TestAbortFallbackChain:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAbortFallbackChain'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAbortFallbackChainResponse
+                type: string
+      operationId: TestAbortFallbackChain
   /call/TestAnthropic:
     post:
       requestBody:
@@ -3655,6 +3707,22 @@ components:
             required:
             - text
             additionalProperties: false
+    ExtractName:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ExtractNameRequest
+            type: object
+            properties:
+              text:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - text
+            additionalProperties: false
     ExtractNames:
       required: true
       content:
@@ -3805,6 +3873,44 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    FnFailRetryConstantDelay:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnFailRetryConstantDelayRequest
+            type: object
+            properties:
+              delay_ms:
+                type: integer
+              retries:
+                type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - delay_ms
+            - retries
+            additionalProperties: false
+    FnFailRetryExponentialDelay:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnFailRetryExponentialDelayRequest
+            type: object
+            properties:
+              initial_delay_ms:
+                type: integer
+              retries:
+                type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - initial_delay_ms
+            - retries
             additionalProperties: false
     FnLiteralClassInputOutput:
       required: true
@@ -5031,6 +5137,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - story
+            additionalProperties: false
+    TestAbortFallbackChain:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAbortFallbackChainRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     TestAnthropic:
       required: true

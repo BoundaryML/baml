@@ -792,6 +792,25 @@ export const ExtractHobby = async (
 };
 
 /**
+ * Executes the streaming variant of the "ExtractName" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } text - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ExtractName = async (
+  text: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.ExtractName(
+    text,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "ExtractNames" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -964,6 +983,50 @@ export const FnEnumOutput = async (
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.FnEnumOutput(
     input,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "FnFailRetryConstantDelay" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { number } retries - Input parameter.
+ * @param { number } delay_ms - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const FnFailRetryConstantDelay = async (
+  retries: number,
+  delay_ms: number,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.FnFailRetryConstantDelay(
+    retries,
+    delay_ms,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "FnFailRetryExponentialDelay" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { number } retries - Input parameter.
+ * @param { number } initial_delay_ms - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const FnFailRetryExponentialDelay = async (
+  retries: number,
+  initial_delay_ms: number,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.FnFailRetryExponentialDelay(
+    retries,
+    initial_delay_ms,
   );
   return Promise.resolve(stream.toStreamable());
 };
@@ -2357,6 +2420,25 @@ export const TellStory = async (
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.TellStory(
     story,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestAbortFallbackChain" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestAbortFallbackChain = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestAbortFallbackChain(
+    input,
   );
   return Promise.resolve(stream.toStreamable());
 };

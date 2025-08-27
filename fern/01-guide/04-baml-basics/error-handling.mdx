@@ -6,6 +6,7 @@ When BAML raises an exception, it will be an instance of a subclass of `BamlErro
 ```python Python
 from baml_client import b
 from baml_py.errors import BamlError, BamlInvalidArgumentError, BamlClientError, BamlClientHttpError, BamlValidationError
+from baml_py import BamlAbortError
 
 try:
   b.CallFunctionThatRaisesError()
@@ -27,8 +28,8 @@ except BamlValidationError as e:
 
 ```typescript TypeScript
 import { b } from './baml_client'
-// For catching parsing errors, you can import this
-import { BamlValidationError, BamlClientFinishReasonError } from '@boundaryml/baml'
+// For catching parsing errors and cancellation errors, you can import these
+import { BamlValidationError, BamlClientFinishReasonError, BamlAbortError } from '@boundaryml/baml'
 // The rest of the BAML errors contain a string that is prefixed with:
 // "BamlError:"
 // Subclasses are sequentially appended to the string.
@@ -42,7 +43,11 @@ async function example() {
   try {
     await b.CallFunctionThatRaisesError()
   } catch (e) {
-    if (e instanceof BamlValidationError || e instanceof BamlClientFinishReasonError) {
+    if (e instanceof BamlAbortError) {
+      // Handle cancellation
+      console.log('Operation was cancelled:', e.message)
+      console.log('Cancellation reason:', e.reason)
+    } else if (e instanceof BamlValidationError || e instanceof BamlClientFinishReasonError) {
       // You should be lenient to these fields missing.
       // The original prompt sent to the LLM
       console.log(e.prompt)
@@ -182,3 +187,138 @@ Raised when BAML fails to parse a string from the LLM into the specified object.
 >
   The original prompt that was sent to the LLM, formatted as a plain string. Images sent as base64-encoded strings are not serialized into this field.
 </ParamField>
+
+### BamlAbortError
+
+Subclass of `BamlError`.
+
+Raised when a BAML operation is cancelled via an abort controller.
+
+<ParamField
+  path="message"
+  type="string"
+>
+  A message describing why the operation was aborted.
+</ParamField>
+
+<ParamField
+  path="reason"
+  type="any"
+>
+  Optional additional context about the cancellation. This can be any value provided when calling the `abort()` method.
+</ParamField>
+
+## Handling Cancellation
+
+When operations are cancelled via abort controllers, specific errors are thrown:
+
+<CodeGroup>
+```python Python
+from baml_client import b
+from baml_py import AbortController, BamlAbortError
+
+async def example():
+    controller = AbortController()
+    
+    # Cancel after 5 seconds
+    async def cancel_after_timeout():
+        await asyncio.sleep(5)
+        controller.abort('timeout')
+    
+    asyncio.create_task(cancel_after_timeout())
+    
+    try:
+        result = await b.ExtractData(
+            input_text,
+            baml_options={"abort_controller": controller}
+        )
+    except BamlAbortError as e:
+        if e.reason == 'timeout':
+            print("Operation timed out after 5 seconds")
+        else:
+            print(f"Operation was cancelled: {e.message}")
+    except BamlValidationError as e:
+        print(f"Validation failed: {e.message}")
+```
+
+```typescript TypeScript
+import { b } from './baml_client'
+import { BamlAbortError } from '@boundaryml/baml'
+
+async function example() {
+  const controller = new AbortController()
+  
+  // Cancel after 5 seconds
+  setTimeout(() => controller.abort('timeout'), 5000)
+  
+  try {
+    const result = await b.ExtractData(inputText, {
+      abortController: controller
+    })
+  } catch (e) {
+    if (e instanceof BamlAbortError) {
+      if (e.reason === 'timeout') {
+        console.log('Operation timed out after 5 seconds')
+      } else {
+        console.log(`Operation was cancelled: ${e.message}`)
+      }
+    } else if (e instanceof BamlValidationError) {
+      console.log(`Validation failed: ${e.message}`)
+    }
+  }
+}
+```
+
+```go Go
+import (
+    "context"
+    "errors"
+    "time"
+)
+
+func example() {
+    // Create context with 5 second timeout
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+    
+    result, err := b.ExtractData(ctx, inputText)
+    if err != nil {
+        if errors.Is(err, context.DeadlineExceeded) {
+            fmt.Println("Operation timed out after 5 seconds")
+        } else if errors.Is(err, context.Canceled) {
+            fmt.Println("Operation was cancelled")
+        } else {
+            // Handle other errors
+            fmt.Printf("Error: %v\n", err)
+        }
+    }
+}
+```
+
+```ruby Ruby
+begin
+  controller = Baml::AbortController.new
+  
+  # Cancel after 5 seconds in another thread
+  Thread.new do
+    sleep(5)
+    controller.abort('timeout')
+  end
+  
+  result = b.extract_data(
+    input_text,
+    baml_options: { abort_controller: controller }
+  )
+rescue Baml::AbortError => e
+  if e.reason == 'timeout'
+    puts "Operation timed out after 5 seconds"
+  else
+    puts "Operation was cancelled: #{e.message}"
+  end
+rescue Baml::ValidationError => e
+  puts "Validation failed: #{e.message}"
+end
+```
+</CodeGroup>
+
+For more information on using abort controllers, see the [Abort Controllers guide](/guide/baml-basics/abort-controllers).

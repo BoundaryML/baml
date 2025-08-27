@@ -25,12 +25,15 @@ baml-ids.workspace = true
 baml-types.workspace = true
 baml-log.workspace = true
 baml-runtime = { path = "../baml-runtime", features = ["internal"] }
+dashmap.workspace = true
 env_logger.workspace = true
 futures.workspace = true
 indexmap.workspace = true
 internal-baml-core.workspace = true
 internal-baml-codegen.workspace = true
 log.workspace = true
+once_cell.workspace = true
+stream-cancel = "0.8"
 napi = { version = "2", features = [
   "anyhow",
   "async",

@@ -7,7 +7,7 @@ description = "BAML Virtual Machine"
 license-file.workspace = true
 
 [dependencies]
-colored = "2.1.0"
+colored.workspace = true
 tokio = { workspace = true }
 baml-types = { path = "../baml-lib/baml-types" }
 

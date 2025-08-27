@@ -123,7 +123,7 @@ export const EventListener: React.FC = () => {
   const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)
   const setBamlConfig = useSetAtom(bamlConfig)
   const [bamlCliVersion, setBamlCliVersion] = useAtom(bamlCliVersionAtom)
-  const runBamlTests = useRunBamlTests()
+  const { runTests: runBamlTests } = useRunBamlTests()
   const wasm = useAtomValue(wasmAtom)
   useEffect(() => {
     if (wasm) {

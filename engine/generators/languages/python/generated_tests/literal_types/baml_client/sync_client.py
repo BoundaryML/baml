@@ -53,6 +53,7 @@ class BamlSyncClient:
         client_registry: typing.Optional[baml_py.baml_py.ClientRegistry] = None,
         collector: typing.Optional[typing.Union[baml_py.baml_py.Collector, typing.List[baml_py.baml_py.Collector]]] = None,
         env: typing.Optional[typing.Dict[str, typing.Optional[str]]] = None,
+        on_tick: typing.Optional[typing.Callable[[str, baml_py.baml_py.FunctionLog], None]] = None,
     ) -> "BamlSyncClient":
         options: BamlCallOptions = {}
         if tb is not None:
@@ -63,6 +64,8 @@ class BamlSyncClient:
             options["collector"] = collector
         if env is not None:
             options["env"] = env
+        if on_tick is not None:
+            options["on_tick"] = on_tick
         return BamlSyncClient(self.__options.merge_options(options))
 
     @property
@@ -88,38 +91,73 @@ class BamlSyncClient:
     def TestBooleanLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.BooleanLiterals:
-        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestBooleanLiterals", args={
-            "input": input,
-        })
-        return typing.cast(types.BooleanLiterals, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestBooleanLiterals(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestBooleanLiterals", args={
+                "input": input,
+            })
+            return typing.cast(types.BooleanLiterals, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestComplexLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.ComplexLiterals:
-        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestComplexLiterals", args={
-            "input": input,
-        })
-        return typing.cast(types.ComplexLiterals, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestComplexLiterals(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestComplexLiterals", args={
+                "input": input,
+            })
+            return typing.cast(types.ComplexLiterals, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestIntegerLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.IntegerLiterals:
-        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestIntegerLiterals", args={
-            "input": input,
-        })
-        return typing.cast(types.IntegerLiterals, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestIntegerLiterals(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestIntegerLiterals", args={
+                "input": input,
+            })
+            return typing.cast(types.IntegerLiterals, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestMixedLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.MixedLiterals:
-        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestMixedLiterals", args={
-            "input": input,
-        })
-        return typing.cast(types.MixedLiterals, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestMixedLiterals(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestMixedLiterals", args={
+                "input": input,
+            })
+            return typing.cast(types.MixedLiterals, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestStringLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.StringLiterals:
-        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestStringLiterals", args={
-            "input": input,
-        })
-        return typing.cast(types.StringLiterals, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestStringLiterals(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestStringLiterals", args={
+                "input": input,
+            })
+            return typing.cast(types.StringLiterals, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
