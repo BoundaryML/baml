@@ -24,7 +24,7 @@ Abort controllers allow you to cancel ongoing LLM operations, which is essential
     // Modern approach: Use AbortSignal.timeout() for automatic timeout
     try {
       const result = await b.ExtractResume(text, {
-        abortSignal: AbortSignal.timeout(5000) // 5 second timeout
+        signal: AbortSignal.timeout(5000) // 5 second timeout
       })
     } catch (error) {
       if (error.name === 'BamlAbortError') {
@@ -35,7 +35,7 @@ Abort controllers allow you to cancel ongoing LLM operations, which is essential
     // Manual approach: Create controller and cancel later
     const controller = new AbortController()
     const promise = b.ExtractResume(text, {
-      abortSignal: controller.signal
+      signal: controller.signal
     })
 
     // Cancel after 5 seconds
@@ -114,7 +114,7 @@ Automatically cancel operations that take too long:
     async function extractWithTimeout(text: string, timeoutMs: number = 30000) {
       try {
         const result = await b.ExtractResume(text, {
-          abortSignal: AbortSignal.timeout(timeoutMs)
+          signal: AbortSignal.timeout(timeoutMs)
         })
         return result
       } catch (error) {
@@ -136,7 +136,7 @@ Automatically cancel operations that take too long:
 
       try {
         const result = await b.ExtractResume(text, {
-          abortSignal: controller.signal
+          signal: controller.signal
         })
         clearTimeout(timeoutId)
         return result
@@ -223,7 +223,7 @@ Build responsive backend services that allow users to cancel long-running operat
       
       try {
         const result = await b.ExtractResume(text, {
-          abortSignal: controller.signal
+          signal: controller.signal
         })
         res.json({ result })
       } catch (error) {
@@ -296,7 +296,7 @@ Abort controllers work seamlessly with streaming responses:
     const controller = new AbortController()
 
     const stream = b.stream.GenerateStory(prompt, {
-      abortSignal: controller.signal
+      signal: controller.signal
     })
 
     let wordCount = 0
@@ -379,7 +379,7 @@ Properly handle abort errors to distinguish cancellations from other failures:
 
     try {
       const result = await b.ExtractResume(text, {
-        abortSignal: controller.signal
+        signal: controller.signal
       })
       return { success: true, data: result }
     } catch (error) {
@@ -458,13 +458,13 @@ Properly handle abort errors to distinguish cancellations from other failures:
     ```typescript
     // ✅ Use AbortSignal.timeout() for simple timeouts
     const result = await b.ExtractResume(text, {
-      abortSignal: AbortSignal.timeout(30000)
+      signal: AbortSignal.timeout(30000)
     })
     
     // ✅ Use manual AbortController when you need to cancel conditionally
     const controller = new AbortController()
     const promise = b.ExtractResume(text, {
-      abortSignal: controller.signal
+      signal: controller.signal
     })
     
     // Cancel based on user action or business logic
@@ -477,7 +477,7 @@ Properly handle abort errors to distinguish cancellations from other failures:
     const timeoutId = setTimeout(() => controller.abort('timeout'), 30000)
     
     const result = await b.ExtractResume(text, {
-      abortSignal: controller.signal
+      signal: controller.signal
     })
     
     clearTimeout(timeoutId)
