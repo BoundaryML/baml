@@ -112,7 +112,9 @@ impl BamlError {
                     message.clone(),
                     status_code.to_u16(),
                 ),
-                ExposedError::AbortError => PyErr::new::<BamlAbortError, _>("AbortError".to_string()),
+                ExposedError::AbortError => {
+                    PyErr::new::<BamlAbortError, _>("AbortError".to_string())
+                }
             }
         } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
             PyErr::new::<BamlInvalidArgumentError, _>(format!("Invalid argument: {er}"))
