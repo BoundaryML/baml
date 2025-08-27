@@ -99,6 +99,7 @@ pub struct EnumVariant {
 #[derive(Clone, Debug)]
 pub struct Parameter {
     pub name: String,
+    /// Always true after mut keyword removal
     pub is_mutable: bool,
     pub r#type: TypeIR,
     pub span: Span,

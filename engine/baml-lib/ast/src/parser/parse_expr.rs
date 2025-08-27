@@ -398,12 +398,7 @@ fn parse_statement_inner_rule(
         Rule::let_expr => {
             let mut let_binding_tokens = stmt_token.into_inner();
 
-            let is_mutable = if let Rule::MUT_KEYWORD = let_binding_tokens.peek()?.as_rule() {
-                let_binding_tokens.next()?;
-                true
-            } else {
-                false
-            };
+            let is_mutable = true; // Always mutable now after mut keyword removal
 
             let identifier = parse_identifier(let_binding_tokens.next()?, diagnostics);
 

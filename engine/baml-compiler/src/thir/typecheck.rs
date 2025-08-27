@@ -144,7 +144,8 @@ pub fn typecheck_returning_context<'a>(
                 param.name.clone(),
                 VarInfo {
                     ty: param.r#type.clone(),
-                    mut_var_info: param.is_mutable.then(|| MutableVarInfo {
+                    // Always add MutableVarInfo since all variables are mutable now
+                    mut_var_info: Some(MutableVarInfo {
                         ty_infer_span: Some(param.span.clone()),
                     }),
                 },
@@ -195,7 +196,8 @@ pub fn typecheck_returning_context<'a>(
                                     param.name.clone(),
                                     VarInfo {
                                         ty: param.r#type.clone(),
-                                        mut_var_info: param.is_mutable.then(|| MutableVarInfo {
+                                        // Always add MutableVarInfo since all variables are mutable now
+                                        mut_var_info: Some(MutableVarInfo {
                                             ty_infer_span: Some(param.span.clone()),
                                         }),
                                     },
@@ -642,7 +644,10 @@ fn typecheck_statement(
                     name.clone(),
                     VarInfo {
                         ty: inferred_type,
-                        mut_var_info: None,
+                        // All variables are mutable now
+                        mut_var_info: Some(MutableVarInfo {
+                            ty_infer_span: Some(span.clone()),
+                        }),
                     },
                 );
             } else {
@@ -652,7 +657,10 @@ fn typecheck_statement(
                     name.clone(),
                     VarInfo {
                         ty: TypeIR::int(),
-                        mut_var_info: None,
+                        // All variables are mutable now
+                        mut_var_info: Some(MutableVarInfo {
+                            ty_infer_span: Some(span.clone()),
+                        }),
                     },
                 );
             }
@@ -737,8 +745,16 @@ fn typecheck_statement(
                 hir::Expression::Identifier(name, _) => {
                     // validate/update type.
                     match context.vars.get_mut(name) {
-                        Some(info) => match info.mut_var_info.as_mut() {
-                            Some(mut_info) => {
+                        Some(info) => {
+                            // Always allow assignment now that all variables are mutable
+                            // Create MutableVarInfo if it doesn't exist (shouldn't happen but be safe)
+                            if info.mut_var_info.is_none() {
+                                info.mut_var_info = Some(MutableVarInfo {
+                                    ty_infer_span: None,
+                                });
+                            }
+
+                            if let Some(mut_info) = info.mut_var_info.as_mut() {
                                 if let Some(inferred_type) = typed_value.meta().1.as_ref() {
                                     if let Some(infer_span) = mut_info.ty_infer_span.as_ref() {
                                         // known type - typecheck against it.
@@ -767,11 +783,7 @@ fn typecheck_statement(
                                     }
                                 }
                             }
-                            None => diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Cannot assign to immutable variable {name}"),
-                                value.span(),
-                            )),
-                        },
+                        }
                         None => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
                                 &format!("Unknown variable {name}"),
@@ -789,13 +801,8 @@ fn typecheck_statement(
                     if let hir::Expression::Identifier(name, _) = base.as_ref() {
                         if name == "self" {
                             match context.vars.get(name) {
-                                Some(info) if info.mut_var_info.is_none() => {
-                                    diagnostics.push_error(DatamodelError::new_validation_error(
-                                        "Cannot assign to field of immutable self",
-                                        span.clone(),
-                                    ));
-                                }
-                                _ => {} // Self is mutable or doesn't exist (will be caught elsewhere)
+                                // All variables including self are mutable now
+                                _ => {} // No immutability check needed
                             }
                         }
                     }
@@ -830,8 +837,16 @@ fn typecheck_statement(
                     // TODO: Extract in funciton, repeated above.
                     // validate/update type.
                     match context.vars.get_mut(name) {
-                        Some(info) => match info.mut_var_info.as_mut() {
-                            Some(mut_info) => {
+                        Some(info) => {
+                            // Always allow assignment now that all variables are mutable
+                            // Create MutableVarInfo if it doesn't exist (shouldn't happen but be safe)
+                            if info.mut_var_info.is_none() {
+                                info.mut_var_info = Some(MutableVarInfo {
+                                    ty_infer_span: None,
+                                });
+                            }
+
+                            if let Some(mut_info) = info.mut_var_info.as_mut() {
                                 if let Some(inferred_type) = typed_value.meta().1.as_ref() {
                                     if let Some(infer_span) = mut_info.ty_infer_span.as_ref() {
                                         // known type - typecheck against it.
@@ -860,11 +875,7 @@ fn typecheck_statement(
                                     }
                                 }
                             }
-                            None => diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Cannot assign to immutable variable {name}"),
-                                value.span(),
-                            )),
-                        },
+                        }
                         None => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
                                 &format!("Unknown variable {name}"),
@@ -882,13 +893,8 @@ fn typecheck_statement(
                     if let hir::Expression::Identifier(name, _) = base.as_ref() {
                         if name == "self" {
                             match context.vars.get(name) {
-                                Some(info) if info.mut_var_info.is_none() => {
-                                    diagnostics.push_error(DatamodelError::new_validation_error(
-                                        "Cannot assign to field of immutable self",
-                                        span.clone(),
-                                    ));
-                                }
-                                _ => {} // Self is mutable or doesn't exist (will be caught elsewhere)
+                                // All variables including self are mutable now
+                                _ => {} // No immutability check needed
                             }
                         }
                     }
@@ -1969,7 +1975,7 @@ mod tests {
             .expect("Should have test_primitives function");
 
         // Check that the let statement has the correct inferred type
-        if let Some(thir::Statement::Let { value, .. }) = test_fn.body.statements.first() {
+        if let Some(thir::Statement::DeclareAndAssign { value, .. }) = test_fn.body.statements.first() {
             assert!(value
                 .meta()
                 .1
@@ -1977,7 +1983,7 @@ mod tests {
                 .expect("a should be inferred")
                 .eq_up_to_span(&TypeIR::int()));
         } else {
-            panic!("Expected let statement");
+            panic!("Expected delcare and assign statement, got {:?}", test_fn.body.statements);
         }
     }
 
@@ -2008,7 +2014,7 @@ mod tests {
             .expect("Should have test_call function");
 
         // Check that the let statement has a function call with the correct return type
-        if let Some(thir::Statement::Let { value, .. }) = test_fn.body.statements.first() {
+        if let Some(thir::Statement::DeclareAndAssign { value, .. }) = test_fn.body.statements.first() {
             match value {
                 thir::Expr::Call { meta, .. } => {
                     assert!(meta

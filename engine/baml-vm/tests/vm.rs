@@ -489,7 +489,7 @@ fn exec_declare_mutable_in_function() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             fn main() -> int {
-                let mut y = 3;
+                let y = 3;
                 y = 5;
                 y
             }
@@ -503,7 +503,7 @@ fn exec_declare_mutable_in_function() -> anyhow::Result<()> {
 fn exec_mutable_in_arg() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn MutableInArg(mut x: int) -> int {
+            fn MutableInArg(x: int) -> int {
                 x = 3;
                 x
             }
@@ -783,7 +783,7 @@ fn basic_assign_add() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             fn main() -> int {
-                let mut x = 1;
+                let x = 1;
                 x += 2;
                 x
             }
@@ -798,7 +798,7 @@ fn basic_assign_sub() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             fn main() -> int {
-                let mut x = 1;
+                let x = 1;
                 x -= 2;
                 x
             }
@@ -813,7 +813,7 @@ fn basic_assign_mul() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             fn main() -> int {
-                let mut x = 1;
+                let x = 1;
                 x *= 2;
                 x
             }
@@ -828,7 +828,7 @@ fn basic_assign_div() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             fn main() -> int {
-                let mut x = 10;
+                let x = 10;
                 x /= 2;
                 x
             }
@@ -843,7 +843,7 @@ fn basic_assign_mod() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             fn main() -> int {
-                let mut x = 10;
+                let x = 10;
                 x %= 3;
                 x
             }
@@ -858,7 +858,7 @@ fn basic_assign_bit_and() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             fn main() -> int {
-                let mut x = 10;
+                let x = 10;
                 x &= 3;
                 x
             }
@@ -873,7 +873,7 @@ fn basic_assign_bit_or() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             fn main() -> int {
-                let mut x = 10;
+                let x = 10;
                 x |= 3;
                 x
             }
@@ -888,7 +888,7 @@ fn basic_assign_bit_xor() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             fn main() -> int {
-                let mut x = 10;
+                let x = 10;
                 x ^= 3;
                 x
             }
@@ -934,7 +934,7 @@ fn while_loop() -> anyhow::Result<()> {
     // "break" to keep the test as isolated as possible.
     // Maybe we should "time-out" the VM? (we know how many jumps it should take...)
     const SOURCE: &str = r#"
-        fn GCD(mut a: int, mut b: int) -> int {
+        fn GCD(a: int, b: int) -> int {
 
             while (a != b) {
 
@@ -965,8 +965,8 @@ fn while_loop() -> anyhow::Result<()> {
 fn break_factorial() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn Factorial(mut limit: int) -> int {
-                let mut result = 1;
+            fn Factorial(limit: int) -> int {
+                let result = 1;
 
                 while (true) {
                     if (limit == 0) {
@@ -993,7 +993,7 @@ fn break_nested_loops() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             fn Nested() -> int {
-                let mut a = 5;
+                let a = 5;
                 while (true) {
                     while (true) {
                         a = a + 1;
@@ -1018,11 +1018,11 @@ fn break_nested_loops() -> anyhow::Result<()> {
 fn continue_factorial() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn Factorial(mut limit: int) -> int {
-                let mut result = 1;
+            fn Factorial(limit: int) -> int {
+                let result = 1;
 
                 // used to make the loop break without relying on `break` implementation.
-                let mut should_continue = true;
+                let should_continue = true;
                 while (should_continue) {
                     result = result * limit;
                     limit = limit - 1;
@@ -1051,7 +1051,7 @@ fn continue_nested() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             fn ContinueNested() -> int {
-                let mut execute = true;
+                let execute = true;
                 while (execute) {
                     while (false) {
                         continue;
@@ -1076,10 +1076,10 @@ fn continue_nested() -> anyhow::Result<()> {
 #[test]
 fn while_with_scope() -> anyhow::Result<()> {
     const SOURCE: &str = r#"
-        fn Fib(mut n: int) -> int {
+        fn Fib(n: int) -> int {
 
-            let mut a = 0;
-            let mut b = 1;
+            let a = 0;
+            let b = 1;
 
             while (n > 0) {
                 n -= 1;
@@ -1108,7 +1108,7 @@ fn for_loop_sum() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             fn Sum(xs: int[]) -> int {
-                let mut result = 0;
+                let result = 0;
 
                 for (x in xs) {
                     result += x;
@@ -1131,7 +1131,7 @@ fn for_loop_with_break() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             fn ForWithBreak(xs: int[]) -> int {
-                let mut result = 0;
+                let result = 0;
 
                 for (x in xs) {
                     if (x > 10) {
@@ -1157,7 +1157,7 @@ fn for_loop_with_continue() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             fn ForWithContinue(xs: int[]) -> int {
-                let mut result = 0;
+                let result = 0;
 
                 for (x in xs) {
                     if (x > 10) {
@@ -1184,7 +1184,7 @@ fn for_loop_nested() -> anyhow::Result<()> {
         source: r#"
             fn NestedFor(arr_a: int[], arr_b: int[]) -> int {
 
-                let mut result =  0;
+                let result =  0;
 
                 for (a in arr_a) {
                     for (b in arr_b) {
@@ -1217,8 +1217,8 @@ fn for_loop_nested() -> anyhow::Result<()> {
 //             }
 //
 //             function main() -> int {
-//                 let mut a = Number { value: 1 };
-//                 let mut b = Number { value: 2 };
+//                 let a = Number { value: 1 };
+//                 let b = Number { value: 2 };
 //                 let n = a.add(b);
 //                 n.value
 //             }
@@ -1235,15 +1235,15 @@ fn mut_self_method_decl() -> anyhow::Result<()> {
             class Number {
                 value int
 
-                function add(mut self, other: Number) -> bool {
+                function add(self, other: Number) -> bool {
                     self.value += other.value;
                     true
                 }
             }
 
             function main() -> int {
-                let mut a = Number { value: 1 };
-                let mut b = Number { value: 2 };
+                let a = Number { value: 1 };
+                let b = Number { value: 2 };
                 a.add(b);
                 a.value
             }
@@ -1261,7 +1261,7 @@ fn field_assignment_add_assign() -> anyhow::Result<()> {
                 value int
             }
             function main() -> int {
-                let mut c = Counter { value: 10 };
+                let c = Counter { value: 10 };
                 c.value += 5;
                 c.value
             }
@@ -1279,7 +1279,7 @@ fn field_assignment_sub_assign() -> anyhow::Result<()> {
                 value int
             }
             function main() -> int {
-                let mut c = Counter { value: 20 };
+                let c = Counter { value: 20 };
                 c.value -= 8;
                 c.value
             }
@@ -1297,7 +1297,7 @@ fn field_assignment_mul_assign() -> anyhow::Result<()> {
                 value int
             }
             function main() -> int {
-                let mut c = Counter { value: 7 };
+                let c = Counter { value: 7 };
                 c.value *= 3;
                 c.value
             }
@@ -1315,7 +1315,7 @@ fn field_assignment_div_assign() -> anyhow::Result<()> {
                 value int
             }
             function main() -> int {
-                let mut c = Counter { value: 24 };
+                let c = Counter { value: 24 };
                 c.value /= 4;
                 c.value
             }
@@ -1333,7 +1333,7 @@ fn field_assignment_mod_assign() -> anyhow::Result<()> {
                 value int
             }
             function main() -> int {
-                let mut c = Counter { value: 17 };
+                let c = Counter { value: 17 };
                 c.value %= 5;
                 c.value
             }
@@ -1352,7 +1352,7 @@ fn field_assignment_simple() -> anyhow::Result<()> {
                 active bool
             }
             function main() -> int {
-                let mut d = Data { value: 100, active: true };
+                let d = Data { value: 100, active: true };
                 d.value = 42;
                 d.value
             }
@@ -1370,7 +1370,7 @@ fn field_assignment_multiple_ops() -> anyhow::Result<()> {
                 score int
             }
             function main() -> int {
-                let mut s = Stats { score: 10 };
+                let s = Stats { score: 10 };
                 s.score += 5;   // 15
                 s.score *= 2;   // 30
                 s.score -= 10;  // 20
@@ -1396,9 +1396,9 @@ fn test_nested_object_construction() -> anyhow::Result<()> {
                 value int
             }
             function main() -> int {
-                let o = Outer { 
-                    inner: Inner { x: 10, y: 20 }, 
-                    value: 30 
+                let o = Outer {
+                    inner: Inner { x: 10, y: 20 },
+                    value: 30
                 };
                 // Test that construction worked by accessing a simple field
                 o.value
@@ -1422,9 +1422,9 @@ fn test_nested_object_construction_with_field_access() -> anyhow::Result<()> {
                 value int
             }
             function main() -> int {
-                let o = Outer { 
-                    inner: Inner { x: 10, y: 20 }, 
-                    value: 30 
+                let o = Outer {
+                    inner: Inner { x: 10, y: 20 },
+                    value: 30
                 };
                 // Test nested field access after nested construction
                 o.inner.y
@@ -1464,7 +1464,7 @@ fn test_nested_field_read() -> anyhow::Result<()> {
                 value int
             }
             class Outer {
-                inner Inner  
+                inner Inner
             }
             function main() -> int {
                 let i = Inner { value: 42 };
@@ -1512,7 +1512,7 @@ fn test_nested_constructor_with_preceding_variables() -> anyhow::Result<()> {
             function main() -> int {
                 let a = 5;
                 let b = 10;
-                let obj = Outer { 
+                let obj = Outer {
                     inner: Inner { val: 100 },
                     x: 50
                 };
@@ -1533,21 +1533,21 @@ fn test_method_call_field_assignment() -> anyhow::Result<()> {
             class Counter {
                 value int
             }
-            
+
             class Factory {
                 counter Counter
-                
+
                 function get_counter(self) -> Counter {
                     self.counter
                 }
             }
-            
+
             function main() -> int {
-                let f = Factory { 
+                let f = Factory {
                     counter: Counter { value: 10 }
                 };
                 // get_counter returns a copy of the counter
-                let mut c = f.get_counter();
+                let c = f.get_counter();
                 // We can modify the copy
                 c.value += 5;
                 // Return the modified copy's value
@@ -1566,14 +1566,14 @@ fn test_array_element_field_assignment() -> anyhow::Result<()> {
             class Item {
                 count int
             }
-            
+
             function main() -> int {
-                let mut items = [
+                let items = [
                     Item { count: 10 },
                     Item { count: 20 },
                     Item { count: 30 }
                 ];
-                
+
                 // Modify field of array element
                 items[1].count += 5;
                 items[1].count
@@ -1590,35 +1590,35 @@ fn test_array_element_method_field_assignment() -> anyhow::Result<()> {
         source: r#"
             class Data {
                 value int
-                
+
                 function get_self(self) -> Data {
                     self
                 }
             }
-            
+
             class Container {
                 data Data
-                
+
                 function get_data(self) -> Data {
                     self.data
                 }
             }
-            
+
             function main() -> int {
-                let mut containers = [
+                let containers = [
                     Container { data: Data { value: 10 } },
                     Container { data: Data { value: 20 } },
                     Container { data: Data { value: 30 } }
                 ];
-                
+
                 // First test: Can we modify array element's field?
                 containers[1].data.value += 5;
                 let result1 = containers[1].data.value; // Should be 25
-                
+
                 // Test method call assignment:
                 containers[1].get_data().value += 10;
                 let result2 = containers[1].data.value; // Should be 35 (25 + 10)
-                
+
                 result2
             }
         "#,
@@ -1645,7 +1645,7 @@ fn test_method_call_then_array_access_assignment() -> anyhow::Result<()> {
                 let i2 = Item { value: 20 };
                 let i3 = Item { value: 30 };
                 let arr = [i1, i2, i3];
-                let mut obj = Container { data: arr };
+                let obj = Container { data: arr };
                 obj.get_nested()[1].value += 5;
                 obj.data[1].value
             }
@@ -1667,7 +1667,7 @@ fn nested_field_assignment_simple() -> anyhow::Result<()> {
             }
             function main() -> int {
                 let i = Inner { value: 10 };
-                let mut o = Outer { inner: i };
+                let o = Outer { inner: i };
                 o.inner.value = 42;
                 o.inner.value
             }
@@ -1689,7 +1689,7 @@ fn nested_field_assignment_compound() -> anyhow::Result<()> {
             }
             function main() -> int {
                 let i = Inner { value: 10 };
-                let mut o = Outer { inner: i };
+                let o = Outer { inner: i };
                 o.inner.value += 32;
                 o.inner.value
             }
@@ -1710,7 +1710,7 @@ fn field_assignment_object_field() -> anyhow::Result<()> {
                 inner Inner
             }
             function main() -> bool {
-                let mut o = Outer { inner: Inner { value: 10 } };
+                let o = Outer { inner: Inner { value: 10 } };
                 o.inner = Inner { value: 20 };
                 // For now, test that assignment works, not nested field access
                 true
@@ -1731,9 +1731,9 @@ mod c_for_loops {
         assert_vm_executes(Program {
             source: r#"
                 fn SumToTen() -> int {
-                    let mut s = 0;
+                    let s = 0;
 
-                    for (let mut i = 1; i <= 10; i += 1) {
+                    for (let i = 1; i <= 10; i += 1) {
                         s += i;
                     }
 
@@ -1750,9 +1750,9 @@ mod c_for_loops {
         assert_vm_executes(Program {
             source: r#"
                 fn SumToTen() -> int {
-                    let mut s = 0;
+                    let s = 0;
 
-                    for (let mut i = 0; ; s += i) {
+                    for (let i = 0; ; s += i) {
                         i += 1;
                         if (i > 10) {
                             let x = 0; // this tests that popping is correct.
@@ -1778,7 +1778,7 @@ mod c_for_loops {
         assert_vm_executes(Program {
             source: r#"
                 fn OnlyCond() -> int {
-                    let mut s = 0;
+                    let s = 0;
 
                     for (; false;) {
                     }
@@ -1795,7 +1795,7 @@ mod c_for_loops {
         assert_vm_executes(Program {
             source: r#"
                 fn Nothing() -> int {
-                    let mut s = 0;
+                    let s = 0;
 
                     for (;;) {
                         break;
