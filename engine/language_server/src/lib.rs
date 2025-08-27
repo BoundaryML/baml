@@ -16,8 +16,6 @@ mod message;
 pub mod cors_bypass_proxy;
 pub mod edit;
 pub mod logging;
-#[cfg(feature = "playground-server")]
-pub mod playground;
 pub mod server;
 pub mod session;
 #[cfg(test)]

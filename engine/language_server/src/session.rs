@@ -35,11 +35,6 @@ pub mod settings;
 
 use tokio::sync::{broadcast, RwLock};
 
-// #[cfg(feature = "playground-server")]
-// use crate::playground::PlaygroundState;
-
-// PreSendToWasmMessage is now imported directly where needed
-
 /// The global state for the LSP
 #[derive(Debug)]
 pub struct Session {
@@ -322,7 +317,7 @@ impl Session {
     /// Registers a text document at the provided `url`.
     /// If a document is already open here, it will be overwritten.
     pub(crate) fn open_text_document(&self, document_key: DocumentKey, document: TextDocument) {
-        let mut index = self.index.lock().open_text_document(document_key, document);
+        self.index.lock().open_text_document(document_key, document);
     }
 
     pub(crate) fn set_unsaved_file(
@@ -491,6 +486,7 @@ mod tests {
             global_settings,
             &workspace_folders,
             rt.handle().clone(),
+            0,
             playground_tx,
             None, // No client_version for this test
         )

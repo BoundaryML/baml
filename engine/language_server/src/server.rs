@@ -43,13 +43,7 @@ mod schedule;
 
 pub(crate) use connection::ClientSender;
 
-// #[cfg(not(feature = "playground-server"))]
 use crate::message::try_show_message;
-// #[cfg(feature = "playground-server")]
-// use crate::{
-//     message::try_show_message,
-//     playground::{PlaygroundServer, PlaygroundState},
-// };
 
 pub type Result<T> = std::result::Result<T, api::Error>;
 
