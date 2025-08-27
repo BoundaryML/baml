@@ -687,8 +687,8 @@ impl WithRenderRawCurl for AwsClient {
         };
         cmd.push(base_cmd.to_string());
 
-        // --model-id
         cmd.push(format!("--model-id '{}'", self.properties.model));
+        cmd.push("--output json".to_string());
 
         // Build --cli-input-json payload
         let mut root = serde_json::Map::new();
