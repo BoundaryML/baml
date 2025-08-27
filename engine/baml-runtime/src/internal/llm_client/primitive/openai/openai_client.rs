@@ -308,23 +308,23 @@ impl ProviderStrategy {
                         body_obj.extend(chat_converter.chat_to_message(messages)?);
                     }
                 }
-                
+
                 // Check if we're in tool_calling mode
                 let is_tool_calling = properties
                     .get("baml_mode")
                     .and_then(|v| v.as_str())
                     .map(|s| s == "tool_calling")
                     .unwrap_or(false);
-                
+
                 if is_tool_calling {
                     // When using tools, remove the output_format field
                     body_obj.remove("output_format");
-                    
+
                     // Add tools and tool_choice if configured
                     if let Some(tools) = properties.get("tools") {
                         body_obj.insert("tools".into(), tools.clone());
                     }
-                    
+
                     if let Some(tool_choice) = properties.get("tool_choice") {
                         body_obj.insert("tool_choice".into(), tool_choice.clone());
                     }
