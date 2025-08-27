@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use axum::{
     body::Body,
@@ -9,7 +11,6 @@ use axum::{
 };
 use mime_guess::from_path;
 use serde::Deserialize;
-use std::collections::HashMap;
 use tokio::{fs, net::TcpListener};
 use tower_http::cors::{Any, CorsLayer};
 
@@ -102,8 +103,10 @@ impl ProxyError {
 }
 
 pub fn create_proxy_router() -> Router<ProxyConfig> {
-    use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
-    use axum::http::HeaderName;
+    use axum::http::{
+        header::{AUTHORIZATION, CONTENT_TYPE},
+        HeaderName,
+    };
 
     // Create CORS layer that allows all origins and methods
     let cors = CorsLayer::new()

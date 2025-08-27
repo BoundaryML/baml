@@ -1,10 +1,9 @@
+use std::{io::Cursor, path::PathBuf, time::Duration};
+
 use anyhow::Context;
 use axum::{routing::get, Router};
 use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
-use std::io::Cursor;
-use std::path::PathBuf;
-use std::time::Duration;
 use tar::Archive;
 use tokio::{net::TcpListener, sync::broadcast};
 use tower_http::services::ServeDir;

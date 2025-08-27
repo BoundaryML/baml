@@ -1,17 +1,23 @@
-use anyhow::Result;
-use notify_debouncer_full::notify::Watcher;
-use notify_debouncer_full::{
-    new_debouncer, notify::RecursiveMode, DebounceEventResult, Debouncer, FileIdMap,
+use std::{
+    collections::VecDeque,
+    io::{self, Write},
+    path::Path,
+    process::{Child, Command, Stdio},
+    sync::{mpsc, Arc, Mutex},
+    time::{Duration, SystemTime},
 };
-use std::collections::VecDeque;
-use std::io::{self, Write};
-use std::path::Path;
-use std::process::{Child, Command, Stdio};
-use std::sync::{mpsc, Arc, Mutex};
-use std::time::{Duration, SystemTime};
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child as TokioChild, Command as TokioCommand};
-use tokio::sync::watch;
+
+use anyhow::Result;
+use notify_debouncer_full::{
+    new_debouncer,
+    notify::{RecursiveMode, Watcher},
+    DebounceEventResult, Debouncer, FileIdMap,
+};
+use tokio::{
+    io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader},
+    process::{Child as TokioChild, Command as TokioCommand},
+    sync::watch,
+};
 use tracing::{info, warn};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 

@@ -19,6 +19,7 @@ use lsp_types::{
     TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url,
     WorkspaceClientCapabilities, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
+use playground_server::{FrontendMessage, LangServerToWasmMessage, PreLangServerToWasmMessage};
 use schedule::Task;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, RwLock};
@@ -27,8 +28,6 @@ use self::{
     connection::{Connection, ConnectionInitializer},
     schedule::event_loop_thread,
 };
-use playground_server::{FrontendMessage, LangServerToWasmMessage, PreLangServerToWasmMessage};
-
 use crate::{
     baml_project::file_utils::{find_baml_src, find_top_level_parent},
     session::{AllSettings, ClientSettings, Session},

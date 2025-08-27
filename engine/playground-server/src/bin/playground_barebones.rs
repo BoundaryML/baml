@@ -1,8 +1,9 @@
+use std::collections::HashMap;
+
 use playground_server::{
     pick_ports, AppState, FrontendMessage, LangServerToWasmMessage, PlaygroundServer,
     PortConfiguration, PreLangServerToWasmMessage,
 };
-use std::collections::HashMap;
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
