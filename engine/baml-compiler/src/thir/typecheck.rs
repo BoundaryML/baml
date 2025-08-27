@@ -17,7 +17,7 @@
 ///
 /// However, the current implementation is simple and ad-hoc, likely wrong
 /// in several places. Bidirectional typing is the target.
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta, TypeValue};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics, Span};
@@ -768,84 +768,9 @@ fn typecheck_statement(
             left, value, span, ..
         } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
-            let typed_left = typecheck_expression(left, context, diagnostics);
+            let mut typed_left = typecheck_expression(left, context, diagnostics);
 
-            // Handle field access and regular identifiers
-            match &left {
-                hir::Expression::Identifier(name, _) => {
-                    // validate/update type.
-                    match context.vars.get_mut(name) {
-                        Some(info) => match info.mut_var_info.as_mut() {
-                            Some(mut_info) => {
-                                if let Some(inferred_type) = typed_value.meta().1.as_ref() {
-                                    if let Some(infer_span) = mut_info.ty_infer_span.as_ref() {
-                                        // known type - typecheck against it.
-                                        if !info.ty.can_be_assigned(inferred_type) {
-                                            diagnostics.push_error(
-                                                DatamodelError::new_validation_error(
-                                                    &format!(
-                                                        "Cannot assign {} to {}",
-                                                        &inferred_type.name_for_user(),
-                                                        &info.ty.name_for_user()
-                                                    ),
-                                                    value.span(),
-                                                ),
-                                            );
-
-                                            diagnostics.push_warning(DatamodelWarning::new(
-                                                format!("type for '{name}' was inferred here"),
-                                                infer_span.clone(),
-                                            ));
-                                        }
-                                    } else {
-                                        // type is not known yet - use this assignment as the type.
-                                        info.ty = inferred_type.clone();
-
-                                        mut_info.ty_infer_span = Some(value.span().clone())
-                                    }
-                                }
-                            }
-                            None => diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Cannot assign to immutable variable {name}"),
-                                value.span(),
-                            )),
-                        },
-                        None => {
-                            diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Unknown variable {name}"),
-                                span.clone(),
-                            ));
-                        }
-                    }
-                }
-                hir::Expression::FieldAccess {
-                    base,
-                    field: _,
-                    span: _,
-                } => {
-                    // For field access, check if self parameter is mutable
-                    if let hir::Expression::Identifier(name, _) = base.as_ref() {
-                        if name == "self" {
-                            match context.vars.get(name) {
-                                Some(info) if info.mut_var_info.is_none() => {
-                                    diagnostics.push_error(DatamodelError::new_validation_error(
-                                        "Cannot assign to field of immutable self",
-                                        span.clone(),
-                                    ));
-                                }
-                                _ => {} // Self is mutable or doesn't exist (will be caught elsewhere)
-                            }
-                        }
-                    }
-                    // Type checking for the field assignment itself happens in codegen
-                }
-                _ => {
-                    diagnostics.push_error(DatamodelError::new_validation_error(
-                        "Invalid left hand of assignment, only variables, instance fields and array elements can be assigned",
-                        span.clone(),
-                    ));
-                }
-            }
+            typecheck_assignment(&typed_value, &mut typed_left, span, context, diagnostics);
 
             Some(thir::Statement::Assign {
                 left: typed_left,
@@ -859,86 +784,10 @@ fn typecheck_statement(
             assign_op,
             ..
         } => {
-            let typed_left = typecheck_expression(left, context, diagnostics);
+            let mut typed_left = typecheck_expression(left, context, diagnostics);
             let typed_value = typecheck_expression(value, context, diagnostics);
 
-            // Handle field access and regular identifiers
-            match &left {
-                hir::Expression::Identifier(name, _) => {
-                    // TODO: Extract in funciton, repeated above.
-                    // validate/update type.
-                    match context.vars.get_mut(name) {
-                        Some(info) => match info.mut_var_info.as_mut() {
-                            Some(mut_info) => {
-                                if let Some(inferred_type) = typed_value.meta().1.as_ref() {
-                                    if let Some(infer_span) = mut_info.ty_infer_span.as_ref() {
-                                        // known type - typecheck against it.
-                                        if !info.ty.can_be_assigned(inferred_type) {
-                                            diagnostics.push_error(
-                                                DatamodelError::new_validation_error(
-                                                    &format!(
-                                                        "Cannot assign {} to {}",
-                                                        &inferred_type.name_for_user(),
-                                                        &info.ty.name_for_user()
-                                                    ),
-                                                    value.span(),
-                                                ),
-                                            );
-
-                                            diagnostics.push_warning(DatamodelWarning::new(
-                                                format!("type for '{name}' was inferred here"),
-                                                infer_span.clone(),
-                                            ));
-                                        }
-                                    } else {
-                                        // type is not known yet - use this assignment as the type.
-                                        info.ty = inferred_type.clone();
-
-                                        mut_info.ty_infer_span = Some(value.span().clone())
-                                    }
-                                }
-                            }
-                            None => diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Cannot assign to immutable variable {name}"),
-                                value.span(),
-                            )),
-                        },
-                        None => {
-                            diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Unknown variable {name}"),
-                                span.clone(),
-                            ));
-                        }
-                    }
-                }
-                hir::Expression::FieldAccess {
-                    base,
-                    field: _,
-                    span: _,
-                } => {
-                    // For field access, check if self parameter is mutable
-                    if let hir::Expression::Identifier(name, _) = base.as_ref() {
-                        if name == "self" {
-                            match context.vars.get(name) {
-                                Some(info) if info.mut_var_info.is_none() => {
-                                    diagnostics.push_error(DatamodelError::new_validation_error(
-                                        "Cannot assign to field of immutable self",
-                                        span.clone(),
-                                    ));
-                                }
-                                _ => {} // Self is mutable or doesn't exist (will be caught elsewhere)
-                            }
-                        }
-                    }
-                    // Type checking for the field assignment itself happens in codegen
-                }
-                _ => {
-                    diagnostics.push_error(DatamodelError::new_validation_error(
-                        "Invalid left hand of assignment, only variables, instance fields and array elements can be assigned",
-                        span.clone(),
-                    ));
-                }
-            }
+            typecheck_assignment(&typed_value, &mut typed_left, span, context, diagnostics);
 
             Some(thir::Statement::AssignOp {
                 left: typed_left,
@@ -1118,6 +967,113 @@ fn typecheck_statement(
                 condition,
                 span: span.clone(),
             })
+        }
+    }
+}
+
+fn typecheck_assignment(
+    rhs: &thir::Expr<IRMeta>,
+    lhs: &mut thir::Expr<IRMeta>,
+    assignment_span: &Span,
+    context: &mut TypeContext<'_>,
+    diagnostics: &mut Diagnostics,
+) {
+    if !is_assignable(lhs, rhs, diagnostics, context) {
+        diagnostics.push_error(DatamodelError::new_validation_error(
+            // perf: `new_validation_error` could accept Cow / into cow directly and
+            // avoid copy here.
+            assign_error(lhs).as_ref(),
+            assignment_span.clone(),
+        ));
+    }
+
+    let rhs_type = &rhs.meta().1;
+    if let (Some(left_type), Some(val_type)) = (lhs.meta().1.as_ref(), rhs_type) {
+        if !types_compatible(left_type, val_type) {
+            diagnostics.push_error(DatamodelError::new_validation_error(
+                &format!(
+                    "Cannot assign {} to {}",
+                    val_type.diagnostic_repr(),
+                    left_type.diagnostic_repr()
+                ),
+                assignment_span.clone(),
+            ))
+        }
+    }
+
+    infer_type_if_assigned_var(lhs, context, rhs_type, &rhs.meta().0);
+}
+
+type IRMeta = (Span, Option<TypeIR>);
+
+fn infer_type_if_assigned_var(
+    lhs: &mut thir::Expr<IRMeta>,
+    ctx: &mut TypeContext,
+    rhs_type: &Option<TypeIR>,
+    rhs_span: &Span,
+) {
+    let Some(rhs_type) = rhs_type else {
+        return;
+    };
+
+    let thir::Expr::Var(name, meta) = lhs else {
+        return;
+    };
+
+    let info = &mut ctx.vars[name.as_str()];
+
+    let Some(mut_info) = info.mut_var_info.as_mut() else {
+        return;
+    };
+
+    if mut_info.ty_infer_span.is_none() {
+        mut_info.ty_infer_span = Some(rhs_span.clone());
+        meta.1 = Some(rhs_type.clone());
+        info.ty = rhs_type.clone();
+    }
+}
+
+fn assign_error(lhs: &thir::Expr<IRMeta>) -> Cow<'static, str> {
+    match lhs {
+        thir::Expr::Var(name, _) => format!("Cannot assign to immutable variable `{name}`").into(),
+        thir::Expr::ArrayAccess { meta, .. } => match meta.1.as_ref() {
+            Some(TypeIR::List(_, _)) => "Cannot assign to index of immutable array",
+            Some(TypeIR::Map(_, _, _)) => "Cannot assign to key of immutable map",
+            _ => "Cannot assign to index of immutable map/array",
+        }
+        .into(),
+
+        thir::Expr::FieldAccess { base, .. } => match base.as_ref() {
+            thir::Expr::Var(name, _) if name == "self" => {
+                "Cannot assign to field of immutable self".into()
+            }
+            _ => "Cannot assign to field of immutable object".into(),
+        },
+        _ => panic!("assign error requested to non-assignable expression"),
+    }
+}
+
+/// Ensures that the location pointed to by `lhs` is assignable.
+fn is_assignable(
+    lhs: &thir::Expr<IRMeta>,
+    rhs: &thir::Expr<IRMeta>,
+    diagnostics: &mut Diagnostics,
+    ctx: &TypeContext,
+) -> bool {
+    match lhs {
+        // base case: check variable mutability.
+        // Since variable has been checked, info must exist.
+        thir::Expr::Var(name, meta) => ctx.vars[name].mut_var_info.is_some(),
+        thir::Expr::ArrayAccess { base, .. } | thir::Expr::FieldAccess { base, .. } => {
+            is_assignable(base, rhs, diagnostics, ctx)
+        }
+        _ => {
+            diagnostics.push_error(DatamodelError::new_validation_error(
+                        "Invalid left hand of assignment, only variables, instance fields and array elements can be assigned",
+                        lhs.span().clone(),
+                    ));
+            // do not error because this is not assigned.
+            true
         }
     }
 }
