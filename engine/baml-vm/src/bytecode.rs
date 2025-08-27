@@ -159,6 +159,12 @@ pub enum Instruction {
     /// the result is the element at that index.
     LoadArrayElement,
 
+    /// Loads a value from a map at a given key.
+    ///
+    /// Format: `LOAD_MAP_ELEMENT` where the stack contains [map, key] and
+    /// the result is the value at that key.
+    LoadMapElement,
+
     /// Stores a value into an array at a given index.
     ///
     /// Format: `STORE_ARRAY_ELEMENT` where the stack contains [array, index, value]
@@ -309,6 +315,7 @@ impl std::fmt::Display for Instruction {
             Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
             Instruction::LoadArrayElement => f.write_str("LOAD_ARRAY_ELEMENT"),
+            Instruction::LoadMapElement => f.write_str("LOAD_MAP_ELEMENT"),
             Instruction::StoreArrayElement => f.write_str("STORE_ARRAY_ELEMENT"),
             Instruction::StoreMapElement => f.write_str("STORE_MAP_ELEMENT"),
             Instruction::AllocInstance(i) => write!(f, "ALLOC_INSTANCE {i}"),

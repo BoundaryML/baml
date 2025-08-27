@@ -1094,6 +1094,46 @@ impl Vm {
                     // Push the element onto the stack
                     self.stack.push(array[index]);
                 }
+                Instruction::LoadMapElement => {
+                    // LoadMapElement Instruction
+                    //
+                    // Stack before: [map, key]
+                    // Stack after: [value]
+                    //
+                    // Interpretation steps:
+                    // 1. Pop key from stack (top element)
+                    // 2. Pop map reference from stack (bottom element)
+                    // 3. Validate that the popped map reference is indeed a map object
+                    // 4. Get the key as a string from the objects pool (maps use string keys)
+                    //    - Validate key_value is an object reference to a String
+                    //    - Get the string reference from the objects pool
+                    // 5. Look up the value at map[key]
+                    // 6. Handle the case where key doesn't exist in the map
+                    //    - Return a runtime error NoSuchKeyInMap if key not found
+                    // 7. Push the found value onto the stack
+
+                    let key_value = self.stack.ensure_pop()?;
+                    let map_value = self.stack.ensure_pop()?;
+
+                    let map_index = self.objects.as_object(&map_value, ObjectType::Map)?;
+
+                    let Object::Map(map) = &self.objects[map_index] else {
+                        return Err(VmError::from(InternalError::TypeError {
+                            expected: ObjectType::Map.into(),
+                            got: ObjectType::of(&self.objects[map_index]).into(),
+                        }));
+                    };
+
+                    // Get the string key from the objects pool
+                    let key_index = self.objects.as_object(&key_value, ObjectType::String)?;
+                    let key = self.objects[key_index].as_string()?;
+
+                    // Look up the value in the map
+                    let value = map.get(key).copied().ok_or(RuntimeError::NoSuchKeyInMap)?;
+
+                    // Push the value onto the stack
+                    self.stack.push(value);
+                }
                 Instruction::StoreArrayElement => {
                     // StoreArrayElement Instruction
                     //

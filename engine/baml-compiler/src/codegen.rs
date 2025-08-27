@@ -604,7 +604,7 @@ impl<'g> HirCompiler<'g> {
                         // Determine if it's a list or map
                         let (load_instr, store_instr) = match meta.1.as_ref().expect("must have a resolved type") {
                             TypeIR::List(_, _) => (Instruction::LoadArrayElement, Instruction::StoreArrayElement),
-                            TypeIR::Map(_, _, _) => (Instruction::LoadArrayElement, Instruction::StoreMapElement),
+                            TypeIR::Map(_, _, _) => (Instruction::LoadMapElement, Instruction::StoreMapElement),
                             _ => panic!("array access should be either map or array.")
                         };
                         
@@ -939,17 +939,31 @@ impl<'g> HirCompiler<'g> {
                 self.compile_block(block);
             }
 
-            thir::Expr::ArrayAccess { base, index, .. } => {
-                // Compile the base expression (the array)
-                self.compile_expression(base);
+            thir::Expr::ArrayAccess { base, index, meta } => {
+                // ArrayAccess compilation for loading elements
+                //
+                // Steps to compile array[index] or map[key]:
+                // 1. Compile the base expression (array or map)
+                // 2. Compile the index/key expression
+                // 3. Determine the type from metadata (List or Map)
+                // 4. Emit the appropriate load instruction:
+                //    - LoadArrayElement for arrays (expects integer index)
+                //    - LoadMapElement for maps (expects string key)
+                //
+                // Stack evolution:
+                // - After base: [array_or_map]
+                // - After index: [array_or_map, index_or_key]
+                // - After load: [element_value]
 
-                // Compile the index expression
+                self.compile_expression(base);
                 self.compile_expression(index);
 
-                // Emit the LoadArrayElement instruction
-                // Stack will be [array, index] and LoadArrayElement will consume both
-                // and push the result element
-                self.emit(Instruction::LoadArrayElement);
+                // Determine if it's an array or map and emit appropriate instruction
+                self.emit(match meta.1.as_ref().expect("must have a resolved type") {
+                    TypeIR::List(_, _) => Instruction::LoadArrayElement,
+                    TypeIR::Map(_, _, _) => Instruction::LoadMapElement,
+                    _ => panic!("array access should be either map or array.")
+                });
             }
 
             thir::Expr::FieldAccess { base, field, .. } => {
