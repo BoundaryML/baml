@@ -83,40 +83,32 @@ func (*stream) PersonTest(ctx context.Context, opts ...CallOptionFunc) (<-chan S
 
 	channel := make(chan StreamValue[stream_types.Person, types.Person])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.Person, types.Person]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.Person)
+				channel <- StreamValue[stream_types.Person, types.Person]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.Person, types.Person]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.Person)
-					channel <- StreamValue[stream_types.Person, types.Person]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.Person)
-					channel <- StreamValue[stream_types.Person, types.Person]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.Person)
+				channel <- StreamValue[stream_types.Person, types.Person]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }

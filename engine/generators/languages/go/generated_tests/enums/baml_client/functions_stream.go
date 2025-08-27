@@ -82,40 +82,32 @@ func (*stream) ConsumeTestEnum(ctx context.Context, input types.TestEnum, opts .
 
 	channel := make(chan StreamValue[types.TestEnum, types.TestEnum])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[types.TestEnum, types.TestEnum]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.TestEnum)
+				channel <- StreamValue[types.TestEnum, types.TestEnum]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[types.TestEnum, types.TestEnum]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.TestEnum)
-					channel <- StreamValue[types.TestEnum, types.TestEnum]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(types.TestEnum)
-					channel <- StreamValue[types.TestEnum, types.TestEnum]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(types.TestEnum)
+				channel <- StreamValue[types.TestEnum, types.TestEnum]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -160,40 +152,32 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts .
 
 	channel := make(chan StreamValue[types.TestEnum, types.TestEnum])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[types.TestEnum, types.TestEnum]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.TestEnum)
+				channel <- StreamValue[types.TestEnum, types.TestEnum]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[types.TestEnum, types.TestEnum]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.TestEnum)
-					channel <- StreamValue[types.TestEnum, types.TestEnum]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(types.TestEnum)
-					channel <- StreamValue[types.TestEnum, types.TestEnum]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(types.TestEnum)
+				channel <- StreamValue[types.TestEnum, types.TestEnum]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }

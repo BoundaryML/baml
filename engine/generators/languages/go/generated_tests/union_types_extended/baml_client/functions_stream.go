@@ -83,40 +83,32 @@ func (*stream) TestComplexUnions(ctx context.Context, input string, opts ...Call
 
 	channel := make(chan StreamValue[stream_types.ComplexUnions, types.ComplexUnions])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.ComplexUnions, types.ComplexUnions]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.ComplexUnions)
+				channel <- StreamValue[stream_types.ComplexUnions, types.ComplexUnions]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.ComplexUnions, types.ComplexUnions]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.ComplexUnions)
-					channel <- StreamValue[stream_types.ComplexUnions, types.ComplexUnions]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.ComplexUnions)
-					channel <- StreamValue[stream_types.ComplexUnions, types.ComplexUnions]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.ComplexUnions)
+				channel <- StreamValue[stream_types.ComplexUnions, types.ComplexUnions]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -161,40 +153,32 @@ func (*stream) TestDiscriminatedUnions(ctx context.Context, input string, opts .
 
 	channel := make(chan StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.DiscriminatedUnions)
+				channel <- StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.DiscriminatedUnions)
-					channel <- StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.DiscriminatedUnions)
-					channel <- StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.DiscriminatedUnions)
+				channel <- StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -239,40 +223,32 @@ func (*stream) TestPrimitiveUnions(ctx context.Context, input string, opts ...Ca
 
 	channel := make(chan StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.PrimitiveUnions)
+				channel <- StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.PrimitiveUnions)
-					channel <- StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.PrimitiveUnions)
-					channel <- StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.PrimitiveUnions)
+				channel <- StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -317,40 +293,32 @@ func (*stream) TestUnionArrays(ctx context.Context, input string, opts ...CallOp
 
 	channel := make(chan StreamValue[stream_types.UnionArrays, types.UnionArrays])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.UnionArrays, types.UnionArrays]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.UnionArrays)
+				channel <- StreamValue[stream_types.UnionArrays, types.UnionArrays]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.UnionArrays, types.UnionArrays]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.UnionArrays)
-					channel <- StreamValue[stream_types.UnionArrays, types.UnionArrays]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.UnionArrays)
-					channel <- StreamValue[stream_types.UnionArrays, types.UnionArrays]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.UnionArrays)
+				channel <- StreamValue[stream_types.UnionArrays, types.UnionArrays]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }

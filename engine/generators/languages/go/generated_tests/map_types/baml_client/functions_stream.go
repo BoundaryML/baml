@@ -83,40 +83,32 @@ func (*stream) TestComplexMaps(ctx context.Context, input string, opts ...CallOp
 
 	channel := make(chan StreamValue[stream_types.ComplexMaps, types.ComplexMaps])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.ComplexMaps, types.ComplexMaps]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.ComplexMaps)
+				channel <- StreamValue[stream_types.ComplexMaps, types.ComplexMaps]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.ComplexMaps, types.ComplexMaps]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.ComplexMaps)
-					channel <- StreamValue[stream_types.ComplexMaps, types.ComplexMaps]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.ComplexMaps)
-					channel <- StreamValue[stream_types.ComplexMaps, types.ComplexMaps]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.ComplexMaps)
+				channel <- StreamValue[stream_types.ComplexMaps, types.ComplexMaps]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -161,40 +153,32 @@ func (*stream) TestEdgeCaseMaps(ctx context.Context, input string, opts ...CallO
 
 	channel := make(chan StreamValue[stream_types.EdgeCaseMaps, types.EdgeCaseMaps])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.EdgeCaseMaps, types.EdgeCaseMaps]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.EdgeCaseMaps)
+				channel <- StreamValue[stream_types.EdgeCaseMaps, types.EdgeCaseMaps]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.EdgeCaseMaps, types.EdgeCaseMaps]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.EdgeCaseMaps)
-					channel <- StreamValue[stream_types.EdgeCaseMaps, types.EdgeCaseMaps]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.EdgeCaseMaps)
-					channel <- StreamValue[stream_types.EdgeCaseMaps, types.EdgeCaseMaps]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.EdgeCaseMaps)
+				channel <- StreamValue[stream_types.EdgeCaseMaps, types.EdgeCaseMaps]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -239,40 +223,32 @@ func (*stream) TestLargeMaps(ctx context.Context, input string, opts ...CallOpti
 
 	channel := make(chan StreamValue[stream_types.SimpleMaps, types.SimpleMaps])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.SimpleMaps)
+				channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.SimpleMaps)
-					channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.SimpleMaps)
-					channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.SimpleMaps)
+				channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -317,40 +293,32 @@ func (*stream) TestNestedMaps(ctx context.Context, input string, opts ...CallOpt
 
 	channel := make(chan StreamValue[stream_types.NestedMaps, types.NestedMaps])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.NestedMaps, types.NestedMaps]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.NestedMaps)
+				channel <- StreamValue[stream_types.NestedMaps, types.NestedMaps]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.NestedMaps, types.NestedMaps]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.NestedMaps)
-					channel <- StreamValue[stream_types.NestedMaps, types.NestedMaps]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.NestedMaps)
-					channel <- StreamValue[stream_types.NestedMaps, types.NestedMaps]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.NestedMaps)
+				channel <- StreamValue[stream_types.NestedMaps, types.NestedMaps]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -395,40 +363,32 @@ func (*stream) TestSimpleMaps(ctx context.Context, input string, opts ...CallOpt
 
 	channel := make(chan StreamValue[stream_types.SimpleMaps, types.SimpleMaps])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.SimpleMaps)
+				channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.SimpleMaps)
-					channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.SimpleMaps)
-					channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.SimpleMaps)
+				channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -473,40 +433,32 @@ func (*stream) TestTopLevelBoolMap(ctx context.Context, input string, opts ...Ca
 
 	channel := make(chan StreamValue[map[string]bool, map[string]bool])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[map[string]bool, map[string]bool]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(map[string]bool)
+				channel <- StreamValue[map[string]bool, map[string]bool]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[map[string]bool, map[string]bool]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(map[string]bool)
-					channel <- StreamValue[map[string]bool, map[string]bool]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(map[string]bool)
-					channel <- StreamValue[map[string]bool, map[string]bool]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(map[string]bool)
+				channel <- StreamValue[map[string]bool, map[string]bool]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -551,40 +503,32 @@ func (*stream) TestTopLevelEmptyMap(ctx context.Context, input string, opts ...C
 
 	channel := make(chan StreamValue[map[string]string, map[string]string])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[map[string]string, map[string]string]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(map[string]string)
+				channel <- StreamValue[map[string]string, map[string]string]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[map[string]string, map[string]string]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(map[string]string)
-					channel <- StreamValue[map[string]string, map[string]string]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(map[string]string)
-					channel <- StreamValue[map[string]string, map[string]string]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(map[string]string)
+				channel <- StreamValue[map[string]string, map[string]string]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -629,40 +573,32 @@ func (*stream) TestTopLevelFloatMap(ctx context.Context, input string, opts ...C
 
 	channel := make(chan StreamValue[map[string]float64, map[string]float64])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[map[string]float64, map[string]float64]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(map[string]float64)
+				channel <- StreamValue[map[string]float64, map[string]float64]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[map[string]float64, map[string]float64]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(map[string]float64)
-					channel <- StreamValue[map[string]float64, map[string]float64]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(map[string]float64)
-					channel <- StreamValue[map[string]float64, map[string]float64]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(map[string]float64)
+				channel <- StreamValue[map[string]float64, map[string]float64]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -707,40 +643,32 @@ func (*stream) TestTopLevelIntMap(ctx context.Context, input string, opts ...Cal
 
 	channel := make(chan StreamValue[map[string]int64, map[string]int64])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[map[string]int64, map[string]int64]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(map[string]int64)
+				channel <- StreamValue[map[string]int64, map[string]int64]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[map[string]int64, map[string]int64]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(map[string]int64)
-					channel <- StreamValue[map[string]int64, map[string]int64]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(map[string]int64)
-					channel <- StreamValue[map[string]int64, map[string]int64]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(map[string]int64)
+				channel <- StreamValue[map[string]int64, map[string]int64]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -785,40 +713,32 @@ func (*stream) TestTopLevelMapOfArrays(ctx context.Context, input string, opts .
 
 	channel := make(chan StreamValue[map[string][]int64, map[string][]int64])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[map[string][]int64, map[string][]int64]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(map[string][]int64)
+				channel <- StreamValue[map[string][]int64, map[string][]int64]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[map[string][]int64, map[string][]int64]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(map[string][]int64)
-					channel <- StreamValue[map[string][]int64, map[string][]int64]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(map[string][]int64)
-					channel <- StreamValue[map[string][]int64, map[string][]int64]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(map[string][]int64)
+				channel <- StreamValue[map[string][]int64, map[string][]int64]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -863,40 +783,32 @@ func (*stream) TestTopLevelMapOfObjects(ctx context.Context, input string, opts 
 
 	channel := make(chan StreamValue[map[string]stream_types.User, map[string]types.User])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[map[string]stream_types.User, map[string]types.User]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(map[string]types.User)
+				channel <- StreamValue[map[string]stream_types.User, map[string]types.User]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[map[string]stream_types.User, map[string]types.User]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(map[string]types.User)
-					channel <- StreamValue[map[string]stream_types.User, map[string]types.User]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(map[string]stream_types.User)
-					channel <- StreamValue[map[string]stream_types.User, map[string]types.User]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(map[string]stream_types.User)
+				channel <- StreamValue[map[string]stream_types.User, map[string]types.User]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -941,40 +853,32 @@ func (*stream) TestTopLevelMapWithNullable(ctx context.Context, input string, op
 
 	channel := make(chan StreamValue[map[string]*string, map[string]*string])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[map[string]*string, map[string]*string]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(map[string]*string)
+				channel <- StreamValue[map[string]*string, map[string]*string]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[map[string]*string, map[string]*string]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(map[string]*string)
-					channel <- StreamValue[map[string]*string, map[string]*string]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(map[string]*string)
-					channel <- StreamValue[map[string]*string, map[string]*string]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(map[string]*string)
+				channel <- StreamValue[map[string]*string, map[string]*string]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -1019,40 +923,32 @@ func (*stream) TestTopLevelNestedMap(ctx context.Context, input string, opts ...
 
 	channel := make(chan StreamValue[map[string]map[string]string, map[string]map[string]string])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[map[string]map[string]string, map[string]map[string]string]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(map[string]map[string]string)
+				channel <- StreamValue[map[string]map[string]string, map[string]map[string]string]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[map[string]map[string]string, map[string]map[string]string]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(map[string]map[string]string)
-					channel <- StreamValue[map[string]map[string]string, map[string]map[string]string]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(map[string]map[string]string)
-					channel <- StreamValue[map[string]map[string]string, map[string]map[string]string]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(map[string]map[string]string)
+				channel <- StreamValue[map[string]map[string]string, map[string]map[string]string]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -1097,40 +993,32 @@ func (*stream) TestTopLevelStringMap(ctx context.Context, input string, opts ...
 
 	channel := make(chan StreamValue[map[string]string, map[string]string])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[map[string]string, map[string]string]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(map[string]string)
+				channel <- StreamValue[map[string]string, map[string]string]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[map[string]string, map[string]string]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(map[string]string)
-					channel <- StreamValue[map[string]string, map[string]string]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(map[string]string)
-					channel <- StreamValue[map[string]string, map[string]string]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(map[string]string)
+				channel <- StreamValue[map[string]string, map[string]string]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }

@@ -83,40 +83,32 @@ func (*stream) TestKitchenSink(ctx context.Context, input string, opts ...CallOp
 
 	channel := make(chan StreamValue[stream_types.KitchenSink, types.KitchenSink])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.KitchenSink, types.KitchenSink]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.KitchenSink)
+				channel <- StreamValue[stream_types.KitchenSink, types.KitchenSink]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.KitchenSink, types.KitchenSink]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.KitchenSink)
-					channel <- StreamValue[stream_types.KitchenSink, types.KitchenSink]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.KitchenSink)
-					channel <- StreamValue[stream_types.KitchenSink, types.KitchenSink]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.KitchenSink)
+				channel <- StreamValue[stream_types.KitchenSink, types.KitchenSink]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -161,40 +153,32 @@ func (*stream) TestRecursiveComplexity(ctx context.Context, input string, opts .
 
 	channel := make(chan StreamValue[stream_types.Node, types.Node])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.Node, types.Node]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.Node)
+				channel <- StreamValue[stream_types.Node, types.Node]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.Node, types.Node]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.Node)
-					channel <- StreamValue[stream_types.Node, types.Node]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.Node)
-					channel <- StreamValue[stream_types.Node, types.Node]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.Node)
+				channel <- StreamValue[stream_types.Node, types.Node]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -239,40 +223,32 @@ func (*stream) TestUltraComplex(ctx context.Context, input string, opts ...CallO
 
 	channel := make(chan StreamValue[stream_types.UltraComplex, types.UltraComplex])
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.UltraComplex, types.UltraComplex]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.UltraComplex)
+				channel <- StreamValue[stream_types.UltraComplex, types.UltraComplex]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.UltraComplex, types.UltraComplex]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.UltraComplex)
-					channel <- StreamValue[stream_types.UltraComplex, types.UltraComplex]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.UltraComplex)
-					channel <- StreamValue[stream_types.UltraComplex, types.UltraComplex]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.UltraComplex)
+				channel <- StreamValue[stream_types.UltraComplex, types.UltraComplex]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
