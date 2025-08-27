@@ -4,7 +4,7 @@ use lsp_types::{
     self, request as req, GotoDefinitionParams, GotoDefinitionResponse, Location, Position, Range,
     Url,
 };
-use playground_server::{FrontendMessage, PreSendToWasmMessage};
+use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
 
 use crate::{
     baml_project::{position_utils::get_word_at_position, trim_line, BamlRuntimeExt},
@@ -116,7 +116,7 @@ impl SyncRequestHandler for GotoDefinition {
                     if let Err(e) =
                         session
                             .playground_tx
-                            .send(PreSendToWasmMessage::FrontendMessage(
+                            .send(PreLangServerToWasmMessage::FrontendMessage(
                                 FrontendMessage::select_function {
                                     root_path: guard.root_path().to_string_lossy().to_string(),
                                     function_name: function.name.clone(),

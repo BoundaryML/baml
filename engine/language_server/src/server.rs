@@ -27,7 +27,7 @@ use self::{
     connection::{Connection, ConnectionInitializer},
     schedule::event_loop_thread,
 };
-use playground_server::{FrontendMessage, LangServerToWasmMessage, PreSendToWasmMessage};
+use playground_server::{FrontendMessage, LangServerToWasmMessage, PreLangServerToWasmMessage};
 
 use crate::{
     baml_project::file_utils::{find_baml_src, find_top_level_parent},
@@ -56,8 +56,8 @@ pub type Result<T> = std::result::Result<T, api::Error>;
 pub(crate) struct ServerArgs {
     pub tokio_handle: tokio::runtime::Handle,
     pub broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
-    pub playground_rx: broadcast::Receiver<PreSendToWasmMessage>,
-    pub playground_tx: broadcast::Sender<PreSendToWasmMessage>,
+    pub playground_rx: broadcast::Receiver<PreLangServerToWasmMessage>,
+    pub playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
     pub playground_port: u16,
     pub proxy_port: u16,
 }
@@ -190,25 +190,15 @@ impl Server {
         let client = client::Client::new(connection.make_sender());
         let notifier = client.notifier();
 
-        // Playground state is initialized here, but server startup is now external
-        // #[cfg(feature = "playground-server")]
-        // {
-        //     let playground_state = Arc::new(RwLock::new(PlaygroundState::new()));
-        //     session.playground_state = Some(playground_state.clone());
-        //     // Store the runtime in the session
-        //     session.playground_runtime = Some(rt);
-        // }
         session.reload(Some(notifier))?;
 
-        let mut server = Self {
+        let server = Self {
             connection,
             worker_threads,
             session,
             client_capabilities,
             args,
         };
-        // #[cfg(feature = "playground-server")]
-        // server.start_playground_server();
 
         {
             let lsp_sender = server.connection.make_sender();
@@ -235,7 +225,7 @@ impl Server {
                 while let Ok(msg) = playground_rx.recv().await {
                     tracing::info!("playground rx loop: {:?}", msg);
                     match msg {
-                        PreSendToWasmMessage::Initialized => {
+                        PreLangServerToWasmMessage::WasmIsInitialized => {
                             tracing::info!("Received playground INITIALIZED request");
                             let projects = session.baml_src_projects.lock();
                             for (_, project) in projects.iter() {
@@ -269,7 +259,7 @@ impl Server {
                                     .unwrap();
                             }
                         }
-                        PreSendToWasmMessage::FrontendMessage(msg) => {
+                        PreLangServerToWasmMessage::FrontendMessage(msg) => {
                             broadcast_tx
                                 .send(LangServerToWasmMessage::PlaygroundMessage(msg))
                                 .unwrap();

@@ -13,7 +13,7 @@ use index::DocumentController;
 use itertools::any;
 use lsp_types::{ClientCapabilities, TextDocumentContentChangeEvent, Url};
 use parking_lot::Mutex;
-use playground_server::{FrontendMessage, PreSendToWasmMessage};
+use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
 use serde_json::Value;
 
 pub(crate) use self::{capabilities::ResolvedClientCapabilities, settings::AllSettings};
@@ -57,7 +57,7 @@ pub struct Session {
     pub baml_settings: BamlSettings,
 
     pub playground_port: u16,
-    pub playground_tx: broadcast::Sender<PreSendToWasmMessage>,
+    pub playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
 }
 
 impl Clone for Session {
@@ -82,7 +82,7 @@ impl Session {
         workspace_folders: &[(Url, ClientSettings)],
         runtime_handle: tokio::runtime::Handle,
         playground_port: u16,
-        playground_tx: broadcast::Sender<PreSendToWasmMessage>,
+        playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
         client_version: Option<String>,
     ) -> anyhow::Result<Self> {
         let mut projects = HashMap::new();

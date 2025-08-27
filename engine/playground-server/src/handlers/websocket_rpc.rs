@@ -6,7 +6,7 @@ use futures::{SinkExt, StreamExt};
 
 use serde_json::Value;
 
-use crate::{definitions::PreSendToWasmMessage, server::AppState};
+use crate::{definitions::PreLangServerToWasmMessage, server::AppState};
 
 pub async fn ws_rpc_handler(
     ws: WebSocketUpgrade,
@@ -34,7 +34,7 @@ pub async fn handle_rpc_websocket(ws: axum::extract::ws::WebSocket, state: AppSt
                             "rpcId": rpc_id,
                             "data": { "ok": true }
                         });
-                        if let Err(e) = state.playground_tx.send(PreSendToWasmMessage::Initialized)
+                        if let Err(e) = state.playground_tx.send(PreLangServerToWasmMessage::WasmIsInitialized)
                         {
                             tracing::error!("Failed to send INITIALIZED message to language-server: {e}");
                         }

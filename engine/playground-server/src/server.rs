@@ -9,13 +9,13 @@ use tokio::{net::TcpListener, sync::broadcast};
 use tower_http::services::ServeDir;
 use anyhow::Context;
 
-use crate::definitions::{PreSendToWasmMessage, LangServerToWasmMessage};
+use crate::definitions::{PreLangServerToWasmMessage, LangServerToWasmMessage};
 
 
 #[derive(Debug)]
 pub struct AppState {
     pub broadcast_rx: broadcast::Receiver<LangServerToWasmMessage>,
-    pub playground_tx: broadcast::Sender<PreSendToWasmMessage>,
+    pub playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
     pub playground_port: u16,
     pub proxy_port: u16,
 }

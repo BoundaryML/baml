@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use lsp_server::ErrorCode;
 use lsp_types::{request, ExecuteCommandParams, MessageType};
-use playground_server::{FrontendMessage, PreSendToWasmMessage};
+use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
 use tokio::time::sleep;
 use webbrowser;
 
@@ -37,7 +37,7 @@ impl SyncRequestHandler for ExecuteCommand {
             // Get the actual playground port from session (determined by server after availability check)
             // Fall back to configured port if actual port not set yet
 
-            use playground_server::{FrontendMessage, PreSendToWasmMessage};
+            use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
 
             // Construct the URL
             let url = format!("http://localhost:{}", session.playground_port);
@@ -63,7 +63,7 @@ impl SyncRequestHandler for ExecuteCommand {
             {
                 session
                     .playground_tx
-                    .send(PreSendToWasmMessage::FrontendMessage(
+                    .send(PreLangServerToWasmMessage::FrontendMessage(
                         FrontendMessage::select_function {
                             // TODO: this can't be correct... but it looks like it is
                             root_path: function_name.to_string(),
@@ -85,7 +85,7 @@ impl SyncRequestHandler for ExecuteCommand {
             Ok(RegisteredCommands::OpenBamlPanel(args)) => {
                 session
                     .playground_tx
-                    .send(PreSendToWasmMessage::FrontendMessage(
+                    .send(PreLangServerToWasmMessage::FrontendMessage(
                         FrontendMessage::select_function {
                             // TODO: this can't be correct... but it looks like it is
                             root_path: args.project_id,
@@ -97,7 +97,7 @@ impl SyncRequestHandler for ExecuteCommand {
             Ok(RegisteredCommands::RunTest(args)) => {
                 session
                     .playground_tx
-                    .send(PreSendToWasmMessage::FrontendMessage(
+                    .send(PreLangServerToWasmMessage::FrontendMessage(
                         FrontendMessage::run_test {
                             function_name: args.function_name,
                             test_name: args.test_case_name,

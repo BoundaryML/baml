@@ -4,7 +4,7 @@ use std::num::NonZeroUsize;
 
 use anyhow::Context;
 pub use edit::{DocumentKey, PositionEncoding, TextDocument};
-use playground_server::{LangServerToWasmMessage, PreSendToWasmMessage};
+use playground_server::{LangServerToWasmMessage, PreLangServerToWasmMessage};
 pub use session::{ClientSettings, DocumentQuery, DocumentSnapshot, Session};
 use tokio::sync::broadcast;
 

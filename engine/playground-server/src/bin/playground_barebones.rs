@@ -1,6 +1,6 @@
 use playground_server::{
     pick_ports, PortConfiguration, PlaygroundServer, AppState, 
-    LangServerToWasmMessage, FrontendMessage, PreSendToWasmMessage,
+    LangServerToWasmMessage, FrontendMessage, PreLangServerToWasmMessage,
 };
 use std::collections::HashMap;
 use tokio::io::AsyncBufReadExt;
@@ -66,7 +66,7 @@ pub async fn run_server() -> anyhow::Result<()> {
             while let Ok(msg) = playground_rx.recv().await {
                 tracing::info!("Received message from playground: {:?}", msg);
                 match msg {
-                    PreSendToWasmMessage::Initialized => {
+                    PreLangServerToWasmMessage::WasmIsInitialized => {
                         tracing::info!("Playground initialized");
                         let _  = broadcast_tx.send(LangServerToWasmMessage::PlaygroundMessage(
                             FrontendMessage::add_project {
@@ -84,7 +84,7 @@ pub async fn run_server() -> anyhow::Result<()> {
                         tracing::info!("Sending playground message: {:?}", playground_message);
                         let _  = broadcast_tx.send(playground_message);
                     }
-                    PreSendToWasmMessage::FrontendMessage(msg) => {
+                    PreLangServerToWasmMessage::FrontendMessage(msg) => {
                         tracing::info!("Received frontend message: {:?}", msg);
                     }
                 }

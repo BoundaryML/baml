@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 // Note: the name add_project should match exactly to the
@@ -29,8 +30,8 @@ pub enum FrontendMessage {
 
 #[derive(Debug, Clone)]
 /// for lang-server internal comms, before sending out to the playground
-pub enum PreSendToWasmMessage {
-    Initialized,
+pub enum PreLangServerToWasmMessage {
+    WasmIsInitialized,
     FrontendMessage(FrontendMessage),
 }
 
