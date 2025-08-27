@@ -2180,23 +2180,3 @@ impl ToJsValue for OrchestrationScope {
         array.into()
     }
 }
-
-
-#[wasm_bindgen]
-pub struct Counter {
-    count: u32,
-}
-
-#[wasm_bindgen]
-impl Counter {
-    #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
-        Self { count: 0 }
-    }
-
-    pub fn inc(&mut self, callback: js_sys::Function) -> Result<(), JsValue> {
-        self.count += 1;
-        callback.call1(&JsValue::NULL, &self.count.into())?;
-        Ok(())
-    }
-}
