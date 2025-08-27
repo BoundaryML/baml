@@ -25,7 +25,7 @@ export class SlackFeedbackLogger {
         fields: [
           {
             type: 'mrkdwn',
-            text: `${request.feedback_type === 'thumbs_up' ? '👍' : '❌'}  from user: _${request.comment}_\n\n[Click here to see the full conversation](${request.notionLink})`,
+            text: `${request.feedback_type === 'thumbs_up' ? '👍' : '❌'}  from user: _${request.comment}_\n\nUser query and response (<${request.notionLink}|see full conversation>):`,
           },
         ],
       },

@@ -76,17 +76,13 @@ func (*stream) TestAllNull(ctx context.Context, input string, opts ...CallOption
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAllNull", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAllNull", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.NullableTypes, types.NullableTypes])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -158,17 +154,13 @@ func (*stream) TestAllOptionalOmitted(ctx context.Context, input string, opts ..
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAllOptionalOmitted", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAllOptionalOmitted", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.OptionalFields, types.OptionalFields])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -240,17 +232,13 @@ func (*stream) TestMixedOptionalNullable(ctx context.Context, input string, opts
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMixedOptionalNullable", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMixedOptionalNullable", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.MixedOptionalNullable, types.MixedOptionalNullable])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -322,17 +310,13 @@ func (*stream) TestNullableTypes(ctx context.Context, input string, opts ...Call
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNullableTypes", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestNullableTypes", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.NullableTypes, types.NullableTypes])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -404,17 +388,13 @@ func (*stream) TestOptionalFields(ctx context.Context, input string, opts ...Cal
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOptionalFields", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOptionalFields", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.OptionalFields, types.OptionalFields])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():

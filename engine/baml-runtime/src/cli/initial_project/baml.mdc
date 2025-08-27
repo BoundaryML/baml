@@ -253,7 +253,7 @@ alwaysApply: false
       # or from URL
       image = BamlImage.from_url("https://example.com/image.jpg")
       # or from base64
-      image = BamlImage.from_base64("data:image/jpeg;base64,...")
+      image = BamlImage.from_base64("image/jpeg", "...")
       
       result = b.AnalyzeImage(image)
       ```

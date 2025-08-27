@@ -155,7 +155,7 @@ export function generateSlug(
  */
 export class SitemapGenerator {
   private docsRoot: string;
-  private config: z.infer<typeof DocsConfigSchema>;
+  private docsConfig: z.infer<typeof DocsConfigSchema>;
 
   constructor(docsYmlPath: string) {
     this.docsRoot = dirname(docsYmlPath);
@@ -165,23 +165,23 @@ export class SitemapGenerator {
     const docsConfig = parseYaml(docsContent);
 
     // Validate with Zod schema
-    this.config = DocsConfigSchema.parse(docsConfig);
+    this.docsConfig = DocsConfigSchema.parse(docsConfig);
   }
 
   /**
    * Generate the complete sitemap
    */
-  async generateSitemap({
-    includeBlogPosts = true,
-  }: {
+  async generateSitemap(generateSettings: {
     includeBlogPosts?: boolean;
   } = {}): Promise<SitemapEntry[]> {
+    console.log('Generating sitemap with settings:', generateSettings);
+
     const sitemap: SitemapEntry[] = [];
 
     // Process each navigation item from docs
-    for (const navItem of this.config.navigation) {
+    for (const navItem of this.docsConfig.navigation) {
       const tabId = navItem.tab;
-      const tabInfo = this.config.tabs[tabId];
+      const tabInfo = this.docsConfig.tabs[tabId];
 
       // Create TabInfo object
       const tab: TabInfo = {
@@ -200,9 +200,8 @@ export class SitemapGenerator {
         sitemap.push(...entries);
       }
     }
-    console.log('blogposts', includeBlogPosts);
 
-    if (includeBlogPosts) {
+    if (generateSettings.includeBlogPosts) {
       try {
         sitemap.push(...(await fetchBlogEntryList()));
       } catch (error) {
@@ -252,7 +251,7 @@ export class SitemapGenerator {
       ];
 
       // From packages/fdr-sdk/src/navigation/versions/v1/slugjoin.ts
-      const pageHref = urljoin(pageSlug)
+      const pageHref = (mdxFrontmatter.slug ?? urljoin(pageSlug))
         .replaceAll('//*', '/')
         .replace(/^\/*/, '/')
         .replace(/\/*$/, '');
@@ -262,7 +261,7 @@ export class SitemapGenerator {
         filepath: mdxPath,
         displayTitle: mdxFrontmatter.title || item.page || 'PLACEHOLDER',
         displaySection: [tab.tabDisplayName, ...sections.map((s) => s.sectionDisplayName)],
-        href: tab.tabId === 'home' ? 'home' : (mdxFrontmatter.slug ?? pageHref),
+        href: pageHref,
       });
     }
 

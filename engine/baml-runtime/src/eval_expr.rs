@@ -173,6 +173,50 @@ fn subst<'a>(
                 meta: meta.clone(),
             })
         }
+        Expr::ArrayAccess { base, index, meta } => {
+            let new_base = subst(base, var_name, val, _env)?;
+            let new_index = subst(index, var_name, val, _env)?;
+            Ok(Expr::ArrayAccess {
+                base: Arc::new(new_base),
+                index: Arc::new(new_index),
+                meta: meta.clone(),
+            })
+        }
+        Expr::FieldAccess { base, field, meta } => {
+            let new_base = subst(base, var_name, val, _env)?;
+            Ok(Expr::FieldAccess {
+                base: Arc::new(new_base),
+                field: field.clone(),
+                meta: meta.clone(),
+            })
+        }
+        Expr::BinaryOperation {
+            left,
+            operator,
+            right,
+            meta,
+        } => {
+            let new_left = subst(left, var_name, val, _env)?;
+            let new_right = subst(right, var_name, val, _env)?;
+            Ok(Expr::BinaryOperation {
+                left: Arc::new(new_left),
+                operator: operator.clone(),
+                right: Arc::new(new_right),
+                meta: meta.clone(),
+            })
+        }
+        Expr::UnaryOperation {
+            expr,
+            operator,
+            meta,
+        } => {
+            let new_expr = subst(expr, var_name, val, _env)?;
+            Ok(Expr::UnaryOperation {
+                expr: Arc::new(new_expr),
+                operator: operator.clone(),
+                meta: meta.clone(),
+            })
+        }
     };
     let res = res?;
     Ok(res)
@@ -283,6 +327,7 @@ async fn beta_reduce<'a>(
                             None,
                             None,
                             env.env_vars.clone(),
+                            None,
                         )
                         .await
                         .0;
@@ -702,6 +747,89 @@ pub async fn eval_to_value_or_llm_call<'a>(
                 let res = Box::pin(beta_reduce(env, &l, false)).await?;
                 current_expr = res;
             }
+            Expr::ArrayAccess { base, index, meta } => {
+                let base_val = eval_to_value(env, base.as_ref()).await?;
+                let index_val = eval_to_value(env, index.as_ref()).await?;
+
+                match (base_val, index_val) {
+                    (
+                        Some(BamlValueWithMeta::List(items, _)),
+                        Some(BamlValueWithMeta::Int(idx, _)),
+                    ) => {
+                        if idx < 0 || idx as usize >= items.len() {
+                            return Err(anyhow!("Array index out of bounds: {}", idx));
+                        }
+                        let val = items[idx as usize].clone();
+                        return Ok(ExprEvalResult::Value {
+                            value: val,
+                            field_type: meta
+                                .1
+                                .clone()
+                                .unwrap_or(TypeIR::Primitive(TypeValue::Null, TypeMeta::default())),
+                        });
+                    }
+                    (Some(BamlValueWithMeta::Map(map, _)), Some(index_val)) => {
+                        let key = match index_val {
+                            BamlValueWithMeta::String(s, _) => s,
+                            _ => return Err(anyhow!("Map index must be a string")),
+                        };
+
+                        match map.get(&key) {
+                            Some(val) => {
+                                return Ok(ExprEvalResult::Value {
+                                    value: val.clone(),
+                                    field_type: meta.1.clone().unwrap_or(TypeIR::Primitive(
+                                        TypeValue::Null,
+                                        TypeMeta::default(),
+                                    )),
+                                });
+                            }
+                            None => return Err(anyhow!("Map key not found: {}", key)),
+                        }
+                    }
+                    _ => return Err(anyhow!("Invalid array/map access")),
+                }
+            }
+            Expr::FieldAccess { base, field, meta } => {
+                let base_val = eval_to_value(env, base.as_ref()).await?;
+
+                match base_val {
+                    Some(BamlValueWithMeta::Class(_, fields, _)) => match fields.get(&field) {
+                        Some(val) => {
+                            return Ok(ExprEvalResult::Value {
+                                value: val.clone(),
+                                field_type: meta.1.clone().unwrap_or(TypeIR::Primitive(
+                                    TypeValue::Null,
+                                    TypeMeta::default(),
+                                )),
+                            });
+                        }
+                        None => return Err(anyhow!("Field not found: {}", field)),
+                    },
+                    _ => return Err(anyhow!("Field access requires a class type")),
+                }
+            }
+            Expr::BinaryOperation {
+                left,
+                operator,
+                right,
+                meta,
+            } => {
+                let left = eval_to_value(env, left.as_ref()).await?;
+                let right = eval_to_value(env, right.as_ref()).await?;
+
+                todo!("impl eval to value for binary operation");
+            }
+
+            Expr::UnaryOperation {
+                expr,
+                operator,
+                meta,
+            } => {
+                let expr = eval_to_value(env, expr.as_ref()).await?;
+
+                todo!("impl eval to value for unary operation");
+            }
         }
     }
     Err(anyhow!("Max steps reached. {:?}", current_expr))
@@ -829,7 +957,10 @@ pub async fn eval_to_value<'a>(
 mod tests {
     use baml_types::{BamlMap, BamlValue};
     use futures::channel::mpsc;
-    use internal_baml_core::ir::{repr::make_test_ir, IRHelper};
+    use internal_baml_core::{
+        ir::{repr::make_test_ir, IRHelper},
+        FeatureFlags,
+    };
 
     use super::*;
     use crate::{internal_baml_diagnostics::Span, BamlRuntime};
@@ -842,6 +973,7 @@ mod tests {
             ".",
             &HashMap::from([("main.baml", content)]),
             HashMap::from([("OPENAI_API_KEY", openai_api_key.as_str())]),
+            FeatureFlags::new(),
         )
         .unwrap()
     }
@@ -1010,7 +1142,16 @@ test Poems {
         let (res, _) = rt
             // .run_test("Second", "TestSecond", &ctx, Some(on_event))
             // .run_test("Go", "Go", &ctx, Some(on_event), None)
-            .run_test("Poems", "Poems", &ctx, Some(on_event), None, HashMap::new())
+            .run_test(
+                "Poems",
+                "Poems",
+                &ctx,
+                Some(on_event),
+                None,
+                HashMap::new(),
+                None,
+                None::<Box<dyn Fn()>>,
+            )
             // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
             // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
             // .run_test("LlmParseInt", "TestParse", &ctx, Some(on_event))
@@ -1142,6 +1283,8 @@ test TestMakePerson() {
                 Some(on_event),
                 None,
                 HashMap::new(),
+                None,
+                None::<Box<dyn Fn()>>,
             )
             // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
             // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
@@ -1218,6 +1361,8 @@ test UseFunction() {
                     "OPENAI_API_KEY".to_string(),
                     std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY is not set."),
                 )]),
+                None,
+                None::<Box<dyn Fn()>>,
             )
             .await;
         dbg!(res);

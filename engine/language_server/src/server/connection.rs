@@ -86,7 +86,7 @@ impl Connection {
     }
 
     /// An iterator over incoming messages from the client.
-    pub fn incoming(&self) -> crossbeam::channel::Iter<lsp::Message> {
+    pub fn incoming(&self) -> crossbeam::channel::Iter<'_, lsp::Message> {
         self.receiver.iter()
     }
 

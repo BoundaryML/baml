@@ -9,14 +9,15 @@ ruby = "3.2.2"
 node = "lts"     # For pnpm
 
 # Rust tools
-"cargo:wasm-pack" = "0.13.1"
+"cargo:bacon" = "latest"
 "cargo:cross" = "latest"
 "cargo:cargo-watch" = "latest"
+"cargo:wasm-pack" = "0.13.1"
 
 # Go tools
-# "go:google.golang.org/protobuf/cmd/protoc-gen-go" = "v1.36.6"
-"aqua:protocolbuffers/protobuf-go/protoc-gen-go" = "v1.36.6"
-"go:golang.org/x/tools/cmd/goimports" = "latest"
+# locked to match the version in .github/actions/setup-go/action.yml
+"protoc-gen-go" = "v1.34.1"
+"go:golang.org/x/tools/cmd/goimports" = "0.36.0"
 
 # Python tools
 "pipx:uv" = "latest"

@@ -234,6 +234,7 @@ pub struct Candidate {
 #[serde(rename_all = "camelCase")]
 pub struct Content {
     pub role: Option<String>,
+    #[serde(default)]
     pub parts: Vec<Part>,
 }
 

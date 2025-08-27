@@ -2,7 +2,7 @@
   "name": "baml-extension",
   "displayName": "Baml",
   "description": "BAML is a DSL for AI applications.",
-  "version": "0.204.0",
+  "version": "0.205.0",
   "publisher": "Boundary",
   "packageManager": "pnpm@9.12.0",
   "repository": "https://github.com/BoundaryML/baml",
@@ -77,6 +77,16 @@
           "type": "string",
           "default": "",
           "description": "Command to run to get environment variables."
+        },
+        "baml.featureFlags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["beta", "display_all_warnings"]
+          },
+          "uniqueItems": true,
+          "default": [],
+          "markdownDescription": "Enable experimental BAML features. **Beta** enables experimental features and suppresses experimental warnings."
         }
       }
     },

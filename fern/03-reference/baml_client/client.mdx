@@ -53,6 +53,34 @@ async function example() {
 ```
 </Tab>
 
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    b "example.com/myproject/baml_client"
+)
+
+func example() error {
+    ctx := context.Background()
+    
+    // Call your BAML functions.
+    story, err := b.TellMeAStory(ctx)
+    if err != nil {
+        return err
+    }
+    
+    poem, err := b.WriteAPoemAbout(ctx, "Roses")
+    if err != nil {
+        return err
+    }
+    
+    return nil
+}
+```
+</Tab>
+
 <Tab title="Ruby" language="ruby">
 ```ruby
 # Ruby doesn't have an async client.
@@ -90,6 +118,34 @@ function example() {
     // Call your BAML functions.
     const story = b.TellMeAStory()
     const poem = b.WriteAPoemAbout("Roses")
+}
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    b "example.com/myproject/baml_client"
+)
+
+func example() error {
+    ctx := context.Background()
+    
+    // Go client functions are always synchronous - they block until completion
+    story, err := b.TellMeAStory(ctx)
+    if err != nil {
+        return err
+    }
+    
+    poem, err := b.WriteAPoemAbout(ctx, "Roses")
+    if err != nil {
+        return err
+    }
+    
+    return nil
 }
 ```
 </Tab>
@@ -145,6 +201,46 @@ async function example() {
     }
 
     console.log(await stream.getFinalResponse())
+}
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func example() error {
+    ctx := context.Background()
+    
+    stream, err := b.Stream.TellMeAStory(ctx)
+    if err != nil {
+        return err
+    }
+
+    for value := range stream {
+        if value.IsError {
+            return value.Error
+        }
+        
+        if !value.IsFinal && value.Stream() != nil {
+            partial := *value.Stream()
+            fmt.Println(partial)
+        }
+        
+        if value.IsFinal && value.Final() != nil {
+            final := *value.Final()
+            fmt.Println(final)
+        }
+    }
+    
+    return nil
 }
 ```
 </Tab>

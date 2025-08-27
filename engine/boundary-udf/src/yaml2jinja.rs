@@ -439,8 +439,8 @@ fn rebuild_from_flattened<'search, 'src>(
             .expect("should have compiled")
     }
 
-    fn rebuild_args<'search, 'ast, 'src>(
-        result_map: &'search mut HashMap<HashByPtr<'ast, ast::Expr<'src>>, String>,
+    fn rebuild_args<'ast, 'src>(
+        result_map: &mut HashMap<HashByPtr<'ast, ast::Expr<'src>>, String>,
         args: &'ast [ast::CallArg<'src>],
     ) -> String {
         args.iter()

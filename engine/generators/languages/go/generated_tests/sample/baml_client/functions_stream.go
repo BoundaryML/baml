@@ -76,17 +76,13 @@ func (*stream) Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "Bar", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "Bar", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -158,17 +154,13 @@ func (*stream) Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "Foo", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "Foo", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():

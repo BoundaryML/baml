@@ -189,11 +189,11 @@ client<llm> OpenAIResponsesImage {
   }
 }
 
-function TestOpenAIResponsesImageInput(image: image|string) -> string {
+function TestOpenAIResponsesImageInput(image: image | string | pdf | audio) -> string {
   client OpenAIResponsesImage
   prompt #"
     {{ _.role("user") }}
-    what is in this image?
+    what is in this content?
     {{ image }}
   "#
 }

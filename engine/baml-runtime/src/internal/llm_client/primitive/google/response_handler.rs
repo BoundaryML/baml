@@ -168,6 +168,10 @@ pub fn scan_google_response_stream(
         }
     }
 
+    inner.metadata.prompt_tokens = event.usage_metadata.prompt_token_count;
+    inner.metadata.output_tokens = event.usage_metadata.candidates_token_count;
+    inner.metadata.total_tokens = event.usage_metadata.total_token_count;
+
     inner.latency = instant_now.elapsed();
     Ok(())
 }
@@ -220,6 +224,39 @@ mod tests {
 }
         "#;
 
+    const FLASH_25_RESPONSE_STREAMING_RESPONSE: &str = r#"
+  {
+    "candidates": [
+      {
+        "content": {
+          "parts": [
+            {
+              "text": "I need the grounding documents to summarize them. Please provide the documents related to the query \"why not?\"."
+            }
+          ],
+          "role": "model"
+        },
+        "finishReason": "STOP",
+        "index": 0
+      }
+    ],
+    "usageMetadata": {
+      "promptTokenCount": 135,
+      "candidatesTokenCount": 21,
+      "totalTokenCount": 404,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 135
+        }
+      ],
+      "thoughtsTokenCount": 248
+    },
+    "modelVersion": "gemini-2.5-flash",
+    "responseId": "THqbaJaMOuCajMcP54G4qAE"
+    }
+    "#;
+
     #[test]
     fn test_json_deserialization() {
         let response: GoogleResponse = serde_json::from_str(RESPONSE).unwrap();
@@ -254,6 +291,12 @@ mod tests {
         let response_json = serde_json::to_string(&response).unwrap();
         let expected_json = serde_json::to_string(&expected).unwrap();
         assert_eq!(response_json, expected_json);
+    }
+
+    #[test]
+
+    fn test_flash25_streaming_deserialization() {
+        let _: GoogleResponse = serde_json::from_str(FLASH_25_RESPONSE_STREAMING_RESPONSE).unwrap();
     }
 
     #[test]

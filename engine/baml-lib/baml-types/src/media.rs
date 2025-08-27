@@ -120,7 +120,7 @@ impl MediaFile {
             .context("Internal error: no path to resolve against")?
             .join(&self.relpath))
     }
-    pub fn extension(&self) -> Option<Cow<str>> {
+    pub fn extension(&self) -> Option<Cow<'_, str>> {
         self.relpath.extension().map(|ext| ext.to_string_lossy())
     }
 }

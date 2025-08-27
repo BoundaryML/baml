@@ -15,3 +15,24 @@
 
   When building prompts, any role not in this list will be set to the `default_role`.
 </ParamField>
+
+<ParamField
+  path="remap_roles"
+  type="map<string, string>"
+>
+  A mapping to transform role names before sending to the API. **Default: `{}`** (no remapping)
+
+  For google-ai provider, the default is: `{ "assistant": "model" }`
+
+  This allows you to use standard role names in your prompts (like "user", "assistant", "system") but send different role names to the API. The remapping happens after role validation and default role assignment.
+
+  **Example:**
+  ```json
+  {
+    "user": "human",
+    "assistant": "ai",
+  }
+  ```
+  
+  With this configuration, `{{ _.role("user") }}` in your prompt will result in a message with role "human" being sent to the API.
+</ParamField>

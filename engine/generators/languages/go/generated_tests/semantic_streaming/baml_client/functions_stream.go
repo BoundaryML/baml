@@ -76,17 +76,13 @@ func (*stream) MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeClassWithBlockDone", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeClassWithBlockDone", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[types.ClassWithBlockDone, types.ClassWithBlockDone])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -158,17 +154,13 @@ func (*stream) MakeClassWithExternalDone(ctx context.Context, opts ...CallOption
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeClassWithExternalDone", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeClassWithExternalDone", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[types.ClassWithoutDone, types.ClassWithoutDone])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -240,17 +232,13 @@ func (*stream) MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeSemanticContainer", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeSemanticContainer", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.SemanticContainer, types.SemanticContainer])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():

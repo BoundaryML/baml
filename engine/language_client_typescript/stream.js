@@ -9,11 +9,19 @@ class BamlStream {
     ctxManager;
     task = null;
     eventQueue = [];
-    constructor(ffiStream, partialCoerce, finalCoerce, ctxManager) {
+    abortController;
+    constructor(ffiStream, partialCoerce, finalCoerce, ctxManager, abortController) {
         this.ffiStream = ffiStream;
         this.partialCoerce = partialCoerce;
         this.finalCoerce = finalCoerce;
         this.ctxManager = ctxManager;
+        this.abortController = abortController;
+        // Listen for abort to clean up
+        if (abortController?.signal) {
+            abortController.signal.addEventListener('abort', () => {
+                this.eventQueue.push(null); // Signal end of stream
+            });
+        }
     }
     async driveToCompletion() {
         try {

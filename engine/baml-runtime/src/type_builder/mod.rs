@@ -10,7 +10,10 @@ use internal_baml_core::{
     internal_baml_parser_database::ParserDatabase, ir::repr::TypeBuilderEntry,
 };
 
-use crate::runtime_context::{PropertyAttributes, RuntimeClassOverride, RuntimeEnumOverride};
+use crate::{
+    runtime::InternalBamlRuntime,
+    runtime_context::{PropertyAttributes, RuntimeClassOverride, RuntimeEnumOverride},
+};
 
 type MetaData = Arc<Mutex<IndexMap<String, BamlValue>>>;
 
@@ -666,7 +669,7 @@ impl TypeBuilder {
     ///
     /// Python, TS and Ruby wrappers will call this function when the user runs
     /// `type_builder.add_baml("BAML CODE")`
-    pub fn add_baml(&self, baml: &str, rt: &crate::BamlRuntime) -> anyhow::Result<()> {
+    pub fn add_baml(&self, baml: &str, rt: &InternalBamlRuntime) -> anyhow::Result<()> {
         use internal_baml_core::{
             internal_baml_ast::parse_type_builder_contents_from_str,
             internal_baml_diagnostics::{Diagnostics, SourceFile},
@@ -688,7 +691,7 @@ impl TypeBuilder {
 
         // TODO: A bunch of mem usage here but at least we drop this one at the
         // end of the function, unlike scoped DBs for type builders.
-        let mut scoped_db = rt.inner.db.clone();
+        let mut scoped_db = rt.db.clone();
 
         let local_ast =
             validate_type_builder_entries(&mut diagnostics, &scoped_db, &type_builder_entries);
@@ -706,7 +709,7 @@ impl TypeBuilder {
         }
 
         let (classes, enums, type_aliases, recursive_classes, recursive_aliases) =
-            IntermediateRepr::type_builder_entries_from_scoped_db(&scoped_db, &rt.inner.db)
+            IntermediateRepr::type_builder_entries_from_scoped_db(&scoped_db, &rt.db)
                 .map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
         self.add_entries(
@@ -837,6 +840,8 @@ impl TypeBuilder {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+
+    use internal_baml_core::feature_flags::FeatureFlags;
 
     use super::*;
 
@@ -1188,6 +1193,7 @@ mod tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+            FeatureFlags::new(),
         )
         .unwrap();
 
@@ -1215,7 +1221,7 @@ mod tests {
             }
         "##;
 
-        builder.add_baml(baml, &runtime)?;
+        builder.add_baml(baml, runtime.internal())?;
         println!("{builder}");
         builder.to_overrides();
         Ok(())

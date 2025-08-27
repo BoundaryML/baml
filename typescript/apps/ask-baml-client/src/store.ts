@@ -1,5 +1,9 @@
 import type { AssistantMessage, UserMessage } from '@baml/sage-interface';
-import { atom } from 'jotai';
+import { atom, useAtom, useSetAtom } from 'jotai';
+import { atomWithStorage } from 'jotai/utils';
+
+const CHATBOT_OPEN_STORAGE_KEY = 'baml-chatbot-open';
+const SESSION_STORAGE_KEY = 'baml-chat-session';
 
 export type StoredMessage = {
   id: string;
@@ -19,8 +23,6 @@ export type StoredMessage = {
       role: 'assistant/progress';
     }
 );
-
-const SESSION_STORAGE_KEY = 'baml-chat-session';
 
 interface SessionData {
   sessionId: string;
@@ -131,3 +133,9 @@ export const resetSessionAtom = atom(null, (get, set) => {
 
 // Atom for external query requests (from search bar, etc.)
 export const pendingQueryAtom = atom<string | null>(null);
+
+// Atom for chatbot open state with session storage persistence
+export const isChatbotOpenAtom = atomWithStorage(
+  CHATBOT_OPEN_STORAGE_KEY,
+  false,
+);

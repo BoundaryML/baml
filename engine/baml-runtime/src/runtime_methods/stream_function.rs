@@ -15,6 +15,7 @@ use internal_baml_core::{
 };
 use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
+use stream_cancel::Tripwire;
 
 use crate::{
     client_registry::ClientProperty,
@@ -82,6 +83,7 @@ impl InternalBamlRuntime {
                 #[cfg(not(target_arch = "wasm32"))]
                 tokio_runtime,
                 collectors,
+                cancel_tripwire: None,
             })
         } else {
             let prepared = self
@@ -101,6 +103,57 @@ impl InternalBamlRuntime {
                 #[cfg(not(target_arch = "wasm32"))]
                 tokio_runtime,
                 collectors,
+                cancel_tripwire: None,
+            })
+        }
+    }
+
+    pub(crate) fn stream_function_impl_with_tripwire(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        tracer: Arc<BamlTracer>,
+        ctx: RuntimeContext,
+        #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
+        collectors: Vec<Arc<Collector>>,
+        cancel_tripwire: Option<Tripwire>,
+    ) -> Result<FunctionResultStream> {
+        let is_expr_fn = self.get_expr_function(&function_name, &ctx).is_ok();
+        if is_expr_fn {
+            let prepared = self
+                .prepare_function(function_name, params)
+                .map_err(|e| e.into_error())?;
+
+            Ok(FunctionResultStream {
+                function_name: prepared.function_name,
+                prepared_func: prepared.baml_args,
+                ir: self.ir.clone(),
+                orchestrator: vec![],
+                tracer,
+                renderer: PromptRenderer::mk_fake(),
+                #[cfg(not(target_arch = "wasm32"))]
+                tokio_runtime,
+                collectors,
+                cancel_tripwire,
+            })
+        } else {
+            let prepared = self
+                .prepare_function(function_name, params)
+                .map_err(|e| e.into_error())?;
+
+            let renderer = PromptRenderer::from_function(&prepared.func, self.ir(), &ctx)?;
+            let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
+            Ok(FunctionResultStream {
+                function_name: prepared.function_name,
+                ir: self.ir.clone(),
+                prepared_func: prepared.baml_args,
+                orchestrator,
+                tracer,
+                renderer,
+                #[cfg(not(target_arch = "wasm32"))]
+                tokio_runtime,
+                collectors,
+                cancel_tripwire,
             })
         }
     }

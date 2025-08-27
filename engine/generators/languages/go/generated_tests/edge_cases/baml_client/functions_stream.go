@@ -76,17 +76,13 @@ func (*stream) TestCircularReference(ctx context.Context, input string, opts ...
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestCircularReference", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestCircularReference", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.CircularReference, types.CircularReference])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -158,17 +154,13 @@ func (*stream) TestDeepRecursion(ctx context.Context, depth int64, opts ...CallO
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestDeepRecursion", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestDeepRecursion", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.DeepRecursion, types.DeepRecursion])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -240,17 +232,13 @@ func (*stream) TestEmptyCollections(ctx context.Context, input string, opts ...C
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestEmptyCollections", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestEmptyCollections", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.EmptyCollections, types.EmptyCollections])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -322,17 +310,13 @@ func (*stream) TestLargeStructure(ctx context.Context, input string, opts ...Cal
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestLargeStructure", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestLargeStructure", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.LargeStructure, types.LargeStructure])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -404,17 +388,13 @@ func (*stream) TestNumberEdgeCases(ctx context.Context, input string, opts ...Ca
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNumberEdgeCases", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestNumberEdgeCases", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.NumberEdgeCases, types.NumberEdgeCases])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -486,17 +466,13 @@ func (*stream) TestSpecialCharacters(ctx context.Context, input string, opts ...
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestSpecialCharacters", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestSpecialCharacters", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.SpecialCharacters, types.SpecialCharacters])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
 		for {
 			select {
 			case <-ctx.Done():

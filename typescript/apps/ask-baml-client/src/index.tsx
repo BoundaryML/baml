@@ -1,19 +1,18 @@
-import { Provider, useSetAtom } from 'jotai';
-import React, { useEffect } from 'react';
+import { useSetAtom } from 'jotai';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import AlgoliaSearch from './AlgoliaSearch';
 import ChatBot from './ChatBot';
-import { pendingQueryAtom } from './store';
+import { pendingQueryAtom, isChatbotOpenAtom } from './store';
 
-// Constants from original custom.js
-const PANEL_W = 380;
-const OPEN = 'baml-ai-open';
 
 // Global state for chatbot
 let chatbotRoot: any = null;
-let chatbotContainer: HTMLElement | null = null;
-let isOpen = false;
 let pendingQueryToSet: string | null = null;
+
+// Function to toggle chatbot from outside React context
+let toggleChatbot: (() => void) | null = null;
+let openChatbot: (() => void) | null = null;
 
 // Helper functions from original custom.js
 const css = (s: string) => {
@@ -77,7 +76,7 @@ function highlightFromStore() {
 // Updated global CSS to integrate with Algolia search styling
 css(`
 /* Dynamic body padding will be handled by ChatBot component directly */
-body.${OPEN}{
+body.baml-ai-open{
   transition: padding-right .3s cubic-bezier(.4,0,.2,1);
   overflow-x: hidden;
 }
@@ -122,31 +121,30 @@ body.resizing {
 }
 `);
 
-// Query Bridge component to connect ChatbotManager with Jotai
-function QueryBridge() {
+// Main Fern Chatbot App component
+function FernChatbotApp() {
   const setPendingQuery = useSetAtom(pendingQueryAtom);
+  const setIsOpen = useSetAtom(isChatbotOpenAtom);
 
+  // Handle pending queries from external calls
   useEffect(() => {
-    // Check for pending query every time component renders
     if (pendingQueryToSet) {
       setPendingQuery(pendingQueryToSet);
       pendingQueryToSet = null;
     }
   });
 
-  // Also set up a global function for ChatbotManager to trigger re-render
+  // Expose toggle functions to global scope
   useEffect(() => {
-    (window as any).__triggerQueryBridge = () => {
-      // Force a re-render by updating a dummy state
-      setPendingQuery((prev) => prev);
+    toggleChatbot = () => {
+      setIsOpen((current) => !current);
     };
-
-    return () => {
-      delete (window as any).__triggerQueryBridge;
+    openChatbot = () => {
+      setIsOpen(true);
     };
-  }, [setPendingQuery]);
+  }, [setIsOpen]);
 
-  return null;
+  return <ChatBot />;
 }
 
 // Error boundary component
@@ -182,40 +180,29 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-// Centralized chatbot management
+// Simplified chatbot coordinator (minimal interface)
 const ChatbotManager = {
-  setOpen(flag: boolean) {
-    isOpen = flag;
-    document.body.classList.toggle(OPEN, flag);
-
-    if (chatbotRoot && chatbotContainer) {
-      try {
-        chatbotRoot.render(
-          <ErrorBoundary fallback={<div className="baml-error">Chatbot failed to load</div>}>
-            <Provider>
-              <QueryBridge />
-              <ChatBot isOpen={flag} onClose={() => this.setOpen(false)} />
-            </Provider>
-          </ErrorBoundary>,
-        );
-      } catch (error) {
-        console.error('Failed to render chatbot:', error);
-      }
+  openWithQuery(query: string) {
+    console.log('openWithQuery', query);
+    // Set the pending query for React to pick up
+    pendingQueryToSet = query;
+    
+    // Open the chatbot using the exposed function
+    if (openChatbot) {
+      openChatbot();
     }
-
-    // Trigger resize after DOM changes
-    setTimeout(() => window.dispatchEvent(new Event('resize')), 10);
-
-    // Update search interface to reflect AI state
-    updateSearchInterface();
   },
 
   toggle() {
-    this.setOpen(!isOpen);
+    // Toggle the chatbot using the exposed function
+    if (toggleChatbot) {
+      toggleChatbot();
+    }
   },
 
   initialize() {
-    if (chatbotRoot && chatbotContainer) {
+    console.info('Initializing chatbot');
+    if (chatbotRoot) {
       return; // Already initialized
     }
 
@@ -226,36 +213,21 @@ const ChatbotManager = {
         existing.remove();
       }
 
-      chatbotContainer = document.createElement('div');
+      // Create a container for the React root
+      const chatbotContainer = document.createElement('div');
       chatbotContainer.id = 'fern-chatbot-root';
       document.body.appendChild(chatbotContainer);
 
       chatbotRoot = createRoot(chatbotContainer);
 
-      // Initial render with closed state
+      // Render the chatbot - always mounted, visibility controlled by atom
       chatbotRoot.render(
         <ErrorBoundary fallback={<div className="baml-error">Chatbot failed to load</div>}>
-          <Provider>
-            <QueryBridge />
-            <ChatBot isOpen={false} onClose={() => this.setOpen(false)} />
-          </Provider>
+            <FernChatbotApp />
         </ErrorBoundary>,
       );
     } catch (error) {
       console.error('Failed to initialize chatbot:', error);
-    }
-  },
-
-  openWithQuery(query: string) {
-    // Set the pending query
-    pendingQueryToSet = query;
-
-    this.initialize();
-    this.setOpen(true);
-
-    // Trigger the QueryBridge to pick up the pending query
-    if ((window as any).__triggerQueryBridge) {
-      (window as any).__triggerQueryBridge();
     }
   },
 
@@ -269,44 +241,18 @@ const ChatbotManager = {
       chatbotRoot = null;
     }
 
-    if (chatbotContainer) {
-      chatbotContainer.remove();
-      chatbotContainer = null;
+    // Clean up the container
+    const container = document.getElementById('fern-chatbot-root');
+    if (container) {
+      container.remove();
     }
 
-    isOpen = false;
-    document.body.classList.remove(OPEN);
+    document.body.classList.remove('baml-ai-open');
   },
 };
 
 // Search interface root reference
 let searchInterfaceRoot: any = null;
-
-// Function to update search interface with current AI state
-function updateSearchInterface() {
-  if (searchInterfaceRoot) {
-    try {
-      const handleAskAI = (query: string) => {
-        ChatbotManager.openWithQuery(query);
-      };
-
-      const handleToggleAI = () => {
-        ChatbotManager.initialize();
-        ChatbotManager.toggle();
-      };
-
-      searchInterfaceRoot.render(
-        <ErrorBoundary fallback={<div className="baml-error">Search failed to load</div>}>
-          <Provider>
-            <AlgoliaSearch onAskAI={handleAskAI} onToggleAI={handleToggleAI} isAIOpen={isOpen} />
-          </Provider>
-        </ErrorBoundary>,
-      );
-    } catch (error) {
-      console.error('Failed to update search interface:', error);
-    }
-  }
-}
 
 // Search interface integration with Algolia
 function initializeSearchInterface() {
@@ -341,20 +287,9 @@ function initializeSearchInterface() {
       // Render Algolia search component with error boundary
       searchInterfaceRoot = createRoot(algoliaContainer);
 
-      const handleAskAI = (query: string) => {
-        ChatbotManager.openWithQuery(query);
-      };
-
-      const handleToggleAI = () => {
-        ChatbotManager.initialize();
-        ChatbotManager.toggle();
-      };
-
       searchInterfaceRoot.render(
         <ErrorBoundary fallback={<div className="baml-error">Search failed to load</div>}>
-          <Provider>
-            <AlgoliaSearch onAskAI={handleAskAI} onToggleAI={handleToggleAI} isAIOpen={isOpen} />
-          </Provider>
+          <AlgoliaSearch onToggleChatbot={() => ChatbotManager.toggle()} />
         </ErrorBoundary>,
       );
 
@@ -419,6 +354,8 @@ window.__fernChatbotCleanup = () => {
 
 window.initFernChatbot = (options = {}) => {
   try {
+    // Always initialize chatbot on page load
+    ChatbotManager.initialize();
     // Initialize search interface integration
     initializeSearchInterface();
 
@@ -436,7 +373,7 @@ window.initFernChatbot = (options = {}) => {
     window.removeEventListener('popstate', handlePopState);
     window.addEventListener('popstate', handlePopState);
 
-    console.log('Fern chatbot initialized successfully');
+    console.log('Initialized BAML custom extensions');
   } catch (error) {
     console.error('Failed to initialize Fern chatbot:', error);
   }

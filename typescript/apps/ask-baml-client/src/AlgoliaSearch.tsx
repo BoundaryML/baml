@@ -1,13 +1,28 @@
 'use client';
 
 import { liteClient as algoliasearch } from 'algoliasearch/lite';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { Configure, InstantSearch, useHits, useSearchBox } from 'react-instantsearch';
 import { z } from 'zod';
 import BamlLambWhite from './baml-lamb-white.svg';
 import { ALGOLIA_SEARCH_CREDENTIALS_ENDPOINT, ALGOLIA_SEARCH_INDEX_NAME } from './constants';
+import { isChatbotOpenAtom, pendingQueryAtom } from './store';
 
+const useChatbot = () => {
+  const [pendingQuery, setPendingQuery] = useAtom(pendingQueryAtom);
+  const [isChatbotOpen, setIsChatbotOpen] = useAtom(isChatbotOpenAtom);
+
+  return {
+    pendingQuery,
+    isChatbotOpen,
+    openChatbotWithQuery: (query: string) => {
+      setPendingQuery(query);
+      setIsChatbotOpen(true);
+    },
+  };
+};
 
 // Zod schema for API response validation
 const SearchCredentialsSchema = z.object({
@@ -459,7 +474,7 @@ function AskWithAIOption({
         }}
       >
         <AIIcon />
-        Ask Baaaaml about "{query}"
+        Ask Baaaml about "{query}"
       </div>
     </button>
   );
@@ -467,13 +482,9 @@ function AskWithAIOption({
 
 // Custom SearchBox with integrated controls
 function CustomSearchBox({
-  onAskAI,
-  onToggleAI,
-  isAIOpen,
+  onToggleChatbot,
 }: {
-  onAskAI: (query: string) => void;
-  onToggleAI?: () => void;
-  isAIOpen?: boolean;
+  onToggleChatbot: () => void;
 }) {
   const { query, refine } = useSearchBox();
   const { hits } = useHits();
@@ -481,6 +492,7 @@ function CustomSearchBox({
   const [isFocused, setIsFocused] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { isChatbotOpen, openChatbotWithQuery } = useChatbot();
 
   useEffect(() => {
     setInputValue(query);
@@ -516,17 +528,11 @@ function CustomSearchBox({
   };
 
   const handleAskAI = () => {
-    onAskAI(inputValue);
+    openChatbotWithQuery(inputValue);
     setIsFocused(false);
   };
 
-  const handleToggleAI = () => {
-    if (onToggleAI) {
-      onToggleAI();
-    }
-  };
-
-  // Calculate total selectable items: Ask Baaaaml option (when query exists) + search results
+  // Calculate total selectable items: Ask Baaaml option (when query exists) + search results
   const totalSelectableItems = (inputValue.trim() ? 1 : 0) + hits.length;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -541,7 +547,7 @@ function CustomSearchBox({
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (selectedIndex === 0 && inputValue.trim()) {
-        // Ask Baaaaml option is selected
+        // Ask Baaaml option is selected
         handleAskAI();
       } else if (selectedIndex > 0) {
         // A search result is selected
@@ -551,7 +557,7 @@ function CustomSearchBox({
           window.location.href = hit.pathname || hit.canonicalPathname || '#';
         }
       } else if (selectedIndex === -1 && inputValue.trim()) {
-        // No selection, trigger Ask Baaaaml by default
+        // No selection, trigger Ask Baaaml by default
         handleAskAI();
       }
     } else if (e.key === 'Escape') {
@@ -704,13 +710,13 @@ function CustomSearchBox({
             </div>
           )}
 
-          {/* Ask Baaaaml / Close button */}
+          {/* Ask Baaaml / Close button */}
           <button
             type="button"
-            onClick={handleToggleAI}
+            onClick={onToggleChatbot}
             style={{
               padding: '6px 10px',
-              background: isAIOpen ? '#6b7280' : '#7c3aed',
+              background: isChatbotOpen ? '#6b7280' : '#7c3aed',
               border: 'none',
               borderRadius: '6px',
               color: 'white',
@@ -727,17 +733,17 @@ function CustomSearchBox({
               boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = isAIOpen ? '#4b5563' : '#6d28d9';
+              e.currentTarget.style.background = isChatbotOpen ? '#4b5563' : '#6d28d9';
               e.currentTarget.style.transform = 'translateY(-0.5px)';
               e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.15)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = isAIOpen ? '#6b7280' : '#7c3aed';
+              e.currentTarget.style.background = isChatbotOpen ? '#6b7280' : '#7c3aed';
               e.currentTarget.style.transform = 'translateY(0)';
               e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
             }}
           >
-            {isAIOpen ? (
+            {isChatbotOpen ? (
               <>
                 <CloseIcon />
                 Close
@@ -745,7 +751,7 @@ function CustomSearchBox({
             ) : (
               <>
                 <AIIcon />
-                Ask Baaaaml
+                Ask Baaaml
               </>
             )}
           </button>
@@ -755,7 +761,7 @@ function CustomSearchBox({
       {/* Pass selectedIndex and handlers to hits */}
       <CustomHits
         selectedIndex={selectedIndex}
-        onAskAI={() => handleAskAI()}
+        onAskBaml={() => handleAskAI()}
         query={inputValue}
         isFocused={isFocused}
       />
@@ -763,15 +769,15 @@ function CustomSearchBox({
   );
 }
 
-// Custom Hits component with conditional visibility and Ask Baaaaml option
+// Custom Hits component with conditional visibility and Ask Baaaml option
 function CustomHits({
   selectedIndex,
-  onAskAI,
+  onAskBaml,
   query,
   isFocused,
 }: {
   selectedIndex?: number;
-  onAskAI?: () => void;
+  onAskBaml?: () => void;
   query?: string;
   isFocused?: boolean;
 }) {
@@ -804,8 +810,8 @@ function CustomHits({
       }}
     >
       {/* Ask with AI option */}
-      {onAskAI && actualQuery.trim() && (
-        <AskWithAIOption isSelected={selectedIndex === 0} onClick={onAskAI} query={actualQuery} />
+      {onAskBaml && actualQuery.trim() && (
+        <AskWithAIOption isSelected={selectedIndex === 0} onClick={onAskBaml} query={actualQuery} />
       )}
 
       {/* Search results */}
@@ -827,10 +833,10 @@ function CustomHits({
           }}
         >
           <div style={{ marginBottom: '6px' }}>No results found for "{actualQuery}"</div>
-          {onAskAI && (
+          {onAskBaml && (
             <button
               type="button"
-              onClick={onAskAI}
+              onClick={onAskBaml}
               style={{
                 color: '#6366f1',
                 background: 'none',
@@ -841,7 +847,7 @@ function CustomHits({
                 fontWeight: '500',
               }}
             >
-              Ask Baaaaml about this instead
+              Ask Baaaml about this instead
             </button>
           )}
         </div>
@@ -851,13 +857,9 @@ function CustomHits({
 }
 
 export default function AlgoliaSearch({
-  onAskAI,
-  onToggleAI,
-  isAIOpen,
+  onToggleChatbot,
 }: {
-  onAskAI?: (query: string) => void;
-  onToggleAI?: () => void;
-  isAIOpen?: boolean;
+  onToggleChatbot: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [searchClient, setSearchClient] = useState<any>(null);
@@ -893,18 +895,6 @@ export default function AlgoliaSearch({
       mounted = false;
     };
   }, []);
-
-  const handleAskAI = (query: string) => {
-    if (onAskAI) {
-      onAskAI(query);
-    }
-  };
-
-  const handleToggleAI = () => {
-    if (onToggleAI) {
-      onToggleAI();
-    }
-  };
 
   if (isLoading) {
     return (
@@ -971,7 +961,7 @@ export default function AlgoliaSearch({
           analyticsTags={['desktop', 'docs.boundaryml.com', 'search-v3-enhanced']}
         />
 
-        <CustomSearchBox onAskAI={handleAskAI} onToggleAI={handleToggleAI} isAIOpen={isAIOpen} />
+        <CustomSearchBox onToggleChatbot={onToggleChatbot} />
       </InstantSearch>
     </div>
   );

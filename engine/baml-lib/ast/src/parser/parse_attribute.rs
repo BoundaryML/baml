@@ -3,7 +3,7 @@ use internal_baml_diagnostics::DatamodelError;
 
 use super::{
     helpers::{parsing_catch_all, Pair},
-    parse_identifier::parse_identifier,
+    parse_identifier::{parse_identifier, parse_path_identifier},
     Rule,
 };
 use crate::{assert_correct_parser, ast::*, parser::parse_arguments::parse_arguments_list};
@@ -22,6 +22,7 @@ pub(crate) fn parse_attribute(
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::identifier => name = parse_identifier(current, diagnostics).into(),
+            Rule::path_identifier => name = parse_path_identifier(current, diagnostics).into(),
             Rule::arguments_list => {
                 parse_arguments_list(current, &mut arguments, &name, diagnostics)
             }

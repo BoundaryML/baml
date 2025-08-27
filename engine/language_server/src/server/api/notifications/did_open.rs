@@ -62,14 +62,18 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             .to_file_path()
             .internal_error_msg(&format!("Could not convert URL '{url}' to file path"))?;
 
-        let project = session.get_or_create_project(&file_path);
-        if project.is_none() {
-            tracing::error!("Failed to get or create project for path: {:?}", file_path);
-            show_err_msg!("Failed to get or create project for path: {:?}", file_path);
-        } else {
-            let project = project.unwrap();
-            let version = project.lock().unwrap().get_common_generator_version();
-            if let Ok(version) = version {
+        if let Some(project) = session.get_or_create_project(&file_path) {
+            let project = project.lock().unwrap();
+            let default_flags = vec!["beta".to_string()];
+            let effective_flags = session
+                .baml_settings
+                .feature_flags
+                .as_ref()
+                .unwrap_or(&default_flags);
+            let client_version = session.baml_settings.get_client_version();
+            if let Ok(version) =
+                project.get_common_generator_version(effective_flags, client_version)
+            {
                 notifier
                     .0
                     .send(lsp_server::Message::Notification(
@@ -77,18 +81,17 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
                             "baml_src_generator_version".to_string(),
                             BamlSrcVersionPayload {
                                 version,
-                                root_path: project
-                                    .lock()
-                                    .unwrap()
-                                    .root_path()
-                                    .to_string_lossy()
-                                    .to_string(),
+                                root_path: project.root_path().to_string_lossy().to_string(),
                             },
                         ),
                     ))
                     .internal_error()?;
             }
+        } else {
+            tracing::error!("Failed to get or create project for path: {:?}", file_path);
+            show_err_msg!("Failed to get or create project for path: {:?}", file_path);
         }
+
         // session.open_text_document(
         //     DocumentKey::from_path(&file_path, &file_path).internal_error()?,
         //     TextDocument::new(params.text_document.text, params.text_document.version),

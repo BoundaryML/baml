@@ -53,6 +53,7 @@ class BamlSyncClient:
         client_registry: typing.Optional[baml_py.baml_py.ClientRegistry] = None,
         collector: typing.Optional[typing.Union[baml_py.baml_py.Collector, typing.List[baml_py.baml_py.Collector]]] = None,
         env: typing.Optional[typing.Dict[str, typing.Optional[str]]] = None,
+        on_tick: typing.Optional[typing.Callable[[str, baml_py.baml_py.FunctionLog], None]] = None,
     ) -> "BamlSyncClient":
         options: BamlCallOptions = {}
         if tb is not None:
@@ -63,6 +64,8 @@ class BamlSyncClient:
             options["collector"] = collector
         if env is not None:
             options["env"] = env
+        if on_tick is not None:
+            options["on_tick"] = on_tick
         return BamlSyncClient(self.__options.merge_options(options))
 
     @property
@@ -88,38 +91,73 @@ class BamlSyncClient:
     def TestAllNull(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.NullableTypes:
-        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAllNull", args={
-            "input": input,
-        })
-        return typing.cast(types.NullableTypes, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestAllNull(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAllNull", args={
+                "input": input,
+            })
+            return typing.cast(types.NullableTypes, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAllOptionalOmitted(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.OptionalFields:
-        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAllOptionalOmitted", args={
-            "input": input,
-        })
-        return typing.cast(types.OptionalFields, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestAllOptionalOmitted(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAllOptionalOmitted", args={
+                "input": input,
+            })
+            return typing.cast(types.OptionalFields, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestMixedOptionalNullable(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.MixedOptionalNullable:
-        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestMixedOptionalNullable", args={
-            "input": input,
-        })
-        return typing.cast(types.MixedOptionalNullable, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestMixedOptionalNullable(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestMixedOptionalNullable", args={
+                "input": input,
+            })
+            return typing.cast(types.MixedOptionalNullable, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestNullableTypes(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.NullableTypes:
-        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestNullableTypes", args={
-            "input": input,
-        })
-        return typing.cast(types.NullableTypes, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestNullableTypes(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestNullableTypes", args={
+                "input": input,
+            })
+            return typing.cast(types.NullableTypes, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOptionalFields(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.OptionalFields:
-        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOptionalFields", args={
-            "input": input,
-        })
-        return typing.cast(types.OptionalFields, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestOptionalFields(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOptionalFields", args={
+                "input": input,
+            })
+            return typing.cast(types.OptionalFields, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 

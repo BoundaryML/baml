@@ -24,7 +24,7 @@ import { b } from '../index';
 import type { Check, Checked  } from "../types";
 import type { Image, Audio, Pdf, Video } from "@boundaryml/baml";
 
-import type {  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyOutput,  DynEnumOne,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
+import type {  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
 
 import type * as types from "../types"
 
@@ -319,6 +319,24 @@ export const ClassifyDynEnumTwo = async (
   input: string,
 ): Promise<(string | types.DynEnumTwo)> => {
   return b.ClassifyDynEnumTwo(
+    input,
+  );
+};
+
+/**
+ * Executes the "ClassifyDynamicStatus" BAML action.
+ *
+ * This server action calls the underlying BAML function "ClassifyDynamicStatus"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<(string | types.DynEnumOne)>} A promise that resolves with the result of the action.
+ */
+export const ClassifyDynamicStatus = async (
+  input: string,
+): Promise<(string | types.DynEnumOne)> => {
+  return b.ClassifyDynamicStatus(
     input,
   );
 };
@@ -681,6 +699,24 @@ export const ExtractContactInfo = async (
 };
 
 /**
+ * Executes the "ExtractDynamicCategories" BAML action.
+ *
+ * This server action calls the underlying BAML function "ExtractDynamicCategories"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<(string | types.DynEnumTwo)[]>} A promise that resolves with the result of the action.
+ */
+export const ExtractDynamicCategories = async (
+  input: string,
+): Promise<(string | types.DynEnumTwo)[]> => {
+  return b.ExtractDynamicCategories(
+    input,
+  );
+};
+
+/**
  * Executes the "ExtractEntities" BAML action.
  *
  * This server action calls the underlying BAML function "ExtractEntities"
@@ -712,6 +748,24 @@ export const ExtractHobby = async (
   text: string,
 ): Promise<(string | types.Hobby)[]> => {
   return b.ExtractHobby(
+    text,
+  );
+};
+
+/**
+ * Executes the "ExtractName" BAML action.
+ *
+ * This server action calls the underlying BAML function "ExtractName"
+ * with the specified parameters.
+ *
+ * @param { string } text - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const ExtractName = async (
+  text: string,
+): Promise<string> => {
+  return b.ExtractName(
     text,
   );
 };
@@ -881,6 +935,48 @@ export const FnEnumOutput = async (
 ): Promise<types.EnumOutput> => {
   return b.FnEnumOutput(
     input,
+  );
+};
+
+/**
+ * Executes the "FnFailRetryConstantDelay" BAML action.
+ *
+ * This server action calls the underlying BAML function "FnFailRetryConstantDelay"
+ * with the specified parameters.
+ *
+ * @param { number } retries - Input parameter.
+ * @param { number } delay_ms - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const FnFailRetryConstantDelay = async (
+  retries: number,
+  delay_ms: number,
+): Promise<string> => {
+  return b.FnFailRetryConstantDelay(
+    retries,
+    delay_ms,
+  );
+};
+
+/**
+ * Executes the "FnFailRetryExponentialDelay" BAML action.
+ *
+ * This server action calls the underlying BAML function "FnFailRetryExponentialDelay"
+ * with the specified parameters.
+ *
+ * @param { number } retries - Input parameter.
+ * @param { number } initial_delay_ms - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const FnFailRetryExponentialDelay = async (
+  retries: number,
+  initial_delay_ms: number,
+): Promise<string> => {
+  return b.FnFailRetryExponentialDelay(
+    retries,
+    initial_delay_ms,
   );
 };
 
@@ -1337,6 +1433,24 @@ export const LiteralUnionsTest = async (
 ): Promise<1 | true | "string output"> => {
   return b.LiteralUnionsTest(
     input,
+  );
+};
+
+/**
+ * Executes the "LlmReturnNumber" BAML action.
+ *
+ * This server action calls the underlying BAML function "LlmReturnNumber"
+ * with the specified parameters.
+ *
+ * @param { number } n - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const LlmReturnNumber = async (
+  n: number,
+): Promise<number> => {
+  return b.LlmReturnNumber(
+    n,
   );
 };
 
@@ -1851,6 +1965,45 @@ export const RecursiveUnionTest = async (
 };
 
 /**
+ * Executes the "RenderDynamicClass" BAML action.
+ *
+ * This server action calls the underlying BAML function "RenderDynamicClass"
+ * with the specified parameters.
+ *
+ * @param { types.RenderTestClass } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const RenderDynamicClass = async (
+  input: types.RenderTestClass,
+): Promise<string> => {
+  return b.RenderDynamicClass(
+    input,
+  );
+};
+
+/**
+ * Executes the "RenderDynamicEnum" BAML action.
+ *
+ * This server action calls the underlying BAML function "RenderDynamicEnum"
+ * with the specified parameters.
+ *
+ * @param { (string | types.RenderTestEnum) } bike - Input parameter.
+ * @param { (string | types.RenderTestEnum) } other - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const RenderDynamicEnum = async (
+  bike: (string | types.RenderTestEnum),
+  other: (string | types.RenderTestEnum),
+): Promise<string> => {
+  return b.RenderDynamicEnum(
+    bike,
+    other,
+  );
+};
+
+/**
  * Executes the "ReturnAliasWithMergedAttributes" BAML action.
  *
  * This server action calls the underlying BAML function "ReturnAliasWithMergedAttributes"
@@ -2144,6 +2297,24 @@ export const TellStory = async (
 ): Promise<string> => {
   return b.TellStory(
     story,
+  );
+};
+
+/**
+ * Executes the "TestAbortFallbackChain" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestAbortFallbackChain"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestAbortFallbackChain = async (
+  input: string,
+): Promise<string> => {
+  return b.TestAbortFallbackChain(
+    input,
   );
 };
 
@@ -3341,12 +3512,12 @@ export const TestOpenAIResponsesFunctionCall = async (
  * This server action calls the underlying BAML function "TestOpenAIResponsesImageInput"
  * with the specified parameters.
  *
- * @param { Image | string } image - Input parameter.
+ * @param { Image | string | Pdf | Audio } image - Input parameter.
  *
  * @returns {Promise<string>} A promise that resolves with the result of the action.
  */
 export const TestOpenAIResponsesImageInput = async (
-  image: Image | string,
+  image: Image | string | Pdf | Audio,
 ): Promise<string> => {
   return b.TestOpenAIResponsesImageInput(
     image,

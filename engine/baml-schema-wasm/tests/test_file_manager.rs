@@ -128,8 +128,9 @@ mod tests {
             .cloned()
             .collect::<HashMap<_, _>>();
         let env_vars_js = to_value(&env_vars).unwrap();
+        let undefined_js = JsValue::UNDEFINED;
 
-        let current_runtime = project.runtime(env_vars_js).unwrap();
+        let current_runtime = project.runtime(env_vars_js, undefined_js).unwrap();
         let diagnostics = project.diagnostics(&current_runtime);
 
         assert!(diagnostics.errors().is_empty());
@@ -164,8 +165,9 @@ function PredictAgeBare(inp: string @assert(big_enough, {{this|length > 1}}) ) -
             .cloned()
             .collect::<HashMap<_, _>>();
         let env_vars_js = to_value(&env_vars).unwrap();
+        let undefined_js = JsValue::UNDEFINED;
 
-        let current_runtime = project.runtime(env_vars_js).unwrap();
+        let current_runtime = project.runtime(env_vars_js, undefined_js).unwrap();
         let diagnostics = project.diagnostics(&current_runtime);
         current_runtime.list_functions();
 
@@ -211,8 +213,9 @@ test Two {
             .cloned()
             .collect::<HashMap<_, _>>();
         let env_vars_js = to_value(&env_vars).unwrap();
+        let undefined_js = JsValue::UNDEFINED;
 
-        let current_runtime = project.runtime(env_vars_js).unwrap();
+        let current_runtime = project.runtime(env_vars_js, undefined_js).unwrap();
 
         let diagnostics = project.diagnostics(&current_runtime);
         let functions = current_runtime.list_functions();
@@ -245,8 +248,9 @@ test Two {
             .cloned()
             .collect::<HashMap<_, _>>();
         let env_vars_js = to_value(&env_vars).unwrap();
+        let undefined_js = JsValue::UNDEFINED;
 
-        let Err(js_error) = project.runtime(env_vars_js) else {
+        let Err(js_error) = project.runtime(env_vars_js, undefined_js) else {
             panic!("Expected error, got Ok");
         };
 
@@ -281,8 +285,9 @@ test Two {
             .cloned()
             .collect::<HashMap<_, _>>();
         let env_vars_js = to_value(&env_vars).unwrap();
+        let undefined_js = JsValue::UNDEFINED;
 
-        let Err(js_error) = project.runtime(env_vars_js) else {
+        let Err(js_error) = project.runtime(env_vars_js, undefined_js) else {
             panic!("Expected error, got Ok");
         };
 
@@ -317,8 +322,9 @@ test Two {
             .cloned()
             .collect::<HashMap<_, _>>();
         let env_vars_js = to_value(&env_vars).unwrap();
+        let undefined_js = JsValue::UNDEFINED;
 
-        let Err(js_error) = project.runtime(env_vars_js) else {
+        let Err(js_error) = project.runtime(env_vars_js, undefined_js) else {
             panic!("Expected error, got Ok");
         };
 

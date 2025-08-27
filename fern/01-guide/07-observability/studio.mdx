@@ -8,15 +8,14 @@ For 2025 Q1, Boundary Studio is free for new accounts!
 Boundary Studio 2 will be released in 2025 Q2 with a new pricing model.
 </Tip>
 
-To enable observability with BAML, you'll first need to sign up for a [Boundary Studio](https://app.boundaryml.com) account. 
+To enable observability with BAML, you'll first need to sign up for a [Boundary Studio](https://app.boundaryml.com) account.
 
-Once you've signed up, you'll be able to create a new project and get your project token.
+Once you've signed up, you'll be able to create a new project and get your API key.
 
-Then simply add the following environment variables prior to running your application:
+Then simply add the following environment variable prior to running your application:
 
 ```bash
-export BOUNDARY_PROJECT_ID=project_uuid
-export BOUNDARY_SECRET=your_token
+export BOUNDARY_API_KEY=your_api_key_here
 ```
 
 There you'll be able to see all the metrics and logs from your application including:
@@ -79,11 +78,11 @@ import { baml } from 'baml_client';
 import { Book, AuthorInfo } from 'baml_client/types';
 import { traceSync, traceAsync } from 'baml_client/tracing';
 
-const preProcessText = traceSync(function(text: string): Promise<string> {
+const preProcessText = traceSync('preProcessText', function(text: string): Promise<string> {
     return text.replace(/\n/g, " ");
 });
 
-const fullAnalysis = traceAsync(async function(book: Book): Promise<any> {
+const fullAnalysis = traceAsync('fullAnalysis', async function(book: Book): Promise<any> {
     const sentiment = await baml.ClassifySentiment(
         preProcessText(book.content)
     );
@@ -91,7 +90,7 @@ const fullAnalysis = traceAsync(async function(book: Book): Promise<any> {
     return bookAnalysis;
 });
 
-const testBook1 = traceAsync(async function(): Promise<any> {
+const testBook1 = traceAsync('testBook1', async function(): Promise<any> {
     const content = `Before I could reply that he [Gatsby] was my neighbor...`;
     const processedContent = preProcessText(content);
     return await fullAnalysis(
@@ -102,6 +101,46 @@ const testBook1 = traceAsync(async function(): Promise<any> {
         )
     );
 });
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+
+    b "example.com/baml_client"
+)
+
+type AuthorInfo struct {
+    FirstName string
+    LastName  string
+}
+
+func main() {
+    ctx := context.Background()
+
+    // BAML functions are automatically traced when using Boundary Studio
+    bookSummary, err := b.GenerateBookSummary(
+        ctx,
+        "The Great Gatsby",
+        AuthorInfo{
+            FirstName: "F. Scott",
+            LastName:  "Fitzgerald",
+        },
+        "A classic American novel...",
+    )
+    if err != nil {
+        panic(fmt.Sprintf("Failed to generate book summary: %v", err))
+    }
+
+    fmt.Printf("Book Summary: %s\n", bookSummary)
+
+    // Note: Tracing non-BAML functions is not yet supported in Go.
+    // Custom function tracing will be available in a future release.
+    // Please contact us if this feature is needed for your use case.
+}
 ```
 
 ```text Ruby

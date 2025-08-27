@@ -11,17 +11,9 @@ import {
   pendingQueryAtom,
   resetSessionAtom,
   sessionIdAtom,
+  isChatbotOpenAtom,
 } from './store';
 import { CHAT_ENDPOINT } from './constants';
-
-const OPEN_BY_DEFAULT = true;
-const SESSION_STORAGE_KEY = 'baml-ai-context';
-
-interface ChatBotProps {
-  apiEndpoint?: string;
-  isOpen?: boolean;
-  onClose?: () => void;
-}
 
 // Transform messages for API format
 const transformMessagesForAPI = (messages: StoredMessage[]): Array<Message> => {
@@ -80,25 +72,40 @@ const postDocChat = async (req: QueryRequest) => {
   return QueryResponseSchema.parse(data);
 };
 
-const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) => {
+const ChatBot: React.FC<{}> = () => {
   const [messages, setMessages] = useAtom(messagesAtom);
   const sessionId = useAtomValue(sessionIdAtom);
   const resetSession = useSetAtom(resetSessionAtom);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pendingQuery, setPendingQuery] = useAtom(pendingQueryAtom);
+  const isOpen = useAtomValue(isChatbotOpenAtom);
+  const setIsOpen = useSetAtom(isChatbotOpenAtom);
   // Add width state for resizing
   const [width, setWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Manage body class for CSS transitions when chatbot opens/closes
+  useEffect(() => {
+    document.body.classList.toggle('baml-ai-open', isOpen);
+  }, [isOpen]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current?.parentElement) {
+      messagesEndRef.current.parentElement.scrollTop = messagesEndRef.current.parentElement.scrollHeight;
+    }
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (isOpen && messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [isOpen, messages.length]);
 
   // Clear chat functionality - now resets session ID too
   const clearChat = () => {
@@ -190,6 +197,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
 
   // Handle pending query from Ask Baaaaml functionality
   useEffect(() => {
+    console.log('pendingQuery', pendingQuery);
     if (pendingQuery && !isLoading) {
       sendMessage(pendingQuery);
       setPendingQuery(null);
@@ -210,9 +218,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
   };
 
   const handleClose = () => {
-    if (onClose) {
-      onClose();
-    }
+    setIsOpen(false);
   };
 
   // Add resize handlers
@@ -278,7 +284,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
 
   console.log('messages', messages);
 
-  return (
+  const chatbotUI = (
     <div
       style={{
         position: 'fixed',
@@ -295,6 +301,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
         zIndex: 2000,
         fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
         overflow: 'hidden',
+        pointerEvents: 'auto', // Enable pointer events for the chatbot itself
       }}
     >
       {/* Resize Handle */}
@@ -1014,49 +1021,49 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
         onSubmit={handleSubmit}
         style={{
           display: 'flex',
+          flexDirection: 'row',
           padding: '16px 24px',
           borderTop: '1px solid #e5e7eb',
           backgroundColor: '#ffffff',
           gap: '12px',
-          alignItems: 'flex-end',
+          alignItems: 'center',
         }}
       >
-        <div style={{ flex: 1, position: 'relative' }}>
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage(input);
-              }
-            }}
-            placeholder="Ask me anything about BAML..."
-            disabled={isLoading}
-            rows={1}
-            style={{
-              width: '100%',
-              minHeight: '44px',
-              maxHeight: '120px',
-              padding: '12px 16px',
-              border: '1px solid #e5e7eb',
-              borderRadius: '12px',
-              fontSize: '14px',
-              outline: 'none',
-              fontFamily: 'inherit',
-              backgroundColor: '#ffffff',
-              color: '#111827',
-              resize: 'none',
-              transition: 'border-color 0.2s ease',
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = '#7d47e3';
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = '#e5e7eb';
-            }}
-          />
-        </div>
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              sendMessage(input);
+            }
+          }}
+          placeholder="Ask me anything about BAML..."
+          disabled={isLoading}
+          rows={1}
+          style={{
+            width: '100%',
+            minHeight: '44px',
+            maxHeight: '120px',
+            padding: '12px 16px',
+            border: '1px solid #e5e7eb',
+            borderRadius: '12px',
+            fontSize: '14px',
+            outline: 'none',
+            fontFamily: 'inherit',
+            backgroundColor: '#ffffff',
+            color: '#111827',
+            resize: 'none',
+            transition: 'border-color 0.2s ease',
+            display: 'flex',
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = '#7d47e3';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = '#e5e7eb';
+          }}
+        />
         <button
           type="submit"
           disabled={isLoading || !input.trim()}
@@ -1071,6 +1078,10 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
             fontSize: '14px',
             transition: 'all 0.2s ease',
             minWidth: '64px',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
           onMouseOver={(e) => {
             if (input.trim() && !isLoading) {
@@ -1122,6 +1133,8 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
       </style>
     </div>
   );
+
+  return chatbotUI;
 };
 
 export default ChatBot;

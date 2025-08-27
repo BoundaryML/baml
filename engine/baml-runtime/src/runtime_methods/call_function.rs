@@ -15,6 +15,7 @@ use internal_baml_core::{
 };
 use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
+use stream_cancel::Tripwire;
 
 use super::prepare_function::PreparedFunction;
 use crate::{
@@ -47,6 +48,7 @@ impl InternalBamlRuntime {
         &'ir self,
         prepared_func_call: PreparedFunction<'ir>,
         ctx: RuntimeContext,
+        cancel_tripwire: Option<Tripwire>,
     ) -> Result<crate::FunctionResult> {
         let future = async {
             let renderer =
@@ -56,11 +58,16 @@ impl InternalBamlRuntime {
             let baml_args = BamlValue::Map(prepared_func_call.baml_args.value);
 
             // Now actually execute the code.
-            let (history, _) =
-                orchestrate_call(orchestrator, self.ir(), &ctx, &renderer, &baml_args, |s| {
-                    renderer.parse(self.ir(), &ctx, s, false)
-                })
-                .await;
+            let (history, _) = orchestrate_call(
+                orchestrator,
+                self.ir(),
+                &ctx,
+                &renderer,
+                &baml_args,
+                |s| renderer.parse(self.ir(), &ctx, s, false),
+                cancel_tripwire,
+            )
+            .await;
 
             FunctionResult::new_chain(history)
         };

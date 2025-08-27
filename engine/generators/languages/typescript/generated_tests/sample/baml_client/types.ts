@@ -49,7 +49,7 @@ export function get_checks<CheckName extends string>(checks: Record<CheckName, C
 }
 export interface Example {
   type: "example_1"
-  a: number
+  a: Checked<number,"a_is_positive">
   b: string
   
 }

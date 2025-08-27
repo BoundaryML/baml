@@ -17,6 +17,7 @@ mod internal_tests {
         BamlRuntime, DiagnosticsError, IRHelper,
     };
     use baml_types::BamlValue;
+    use internal_baml_core::FeatureFlags;
     use wasm_bindgen_test::*;
 
     #[test_log::test]
@@ -70,6 +71,7 @@ mod internal_tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+            internal_baml_core::feature_flags::FeatureFlags::default(),
         )?;
         log::info!("Runtime:");
 
@@ -97,6 +99,7 @@ mod internal_tests {
             None,
             Some(collectors),
             HashMap::new(),
+            None,
         );
 
         let (res, function_span_id) = runtime.async_runtime.block_on(call_function_future);

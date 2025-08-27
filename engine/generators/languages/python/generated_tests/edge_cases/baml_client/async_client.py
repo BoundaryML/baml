@@ -41,6 +41,7 @@ class BamlAsyncClient:
         client_registry: typing.Optional[baml_py.baml_py.ClientRegistry] = None,
         collector: typing.Optional[typing.Union[baml_py.baml_py.Collector, typing.List[baml_py.baml_py.Collector]]] = None,
         env: typing.Optional[typing.Dict[str, typing.Optional[str]]] = None,
+        on_tick: typing.Optional[typing.Callable[[str, baml_py.baml_py.FunctionLog], None]] = None,
     ) -> "BamlAsyncClient":
         options: BamlCallOptions = {}
         if tb is not None:
@@ -51,6 +52,8 @@ class BamlAsyncClient:
             options["collector"] = collector
         if env is not None:
             options["env"] = env
+        if on_tick is not None:
+            options["on_tick"] = on_tick
         return BamlAsyncClient(self.__options.merge_options(options))
 
     @property
@@ -76,45 +79,93 @@ class BamlAsyncClient:
     async def TestCircularReference(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.CircularReference:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestCircularReference", args={
-            "input": input,
-        })
-        return typing.cast(types.CircularReference, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestCircularReference(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestCircularReference", args={
+                "input": input,
+            })
+            return typing.cast(types.CircularReference, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestDeepRecursion(self, depth: int,
         baml_options: BamlCallOptions = {},
     ) -> types.DeepRecursion:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestDeepRecursion", args={
-            "depth": depth,
-        })
-        return typing.cast(types.DeepRecursion, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestDeepRecursion(depth=depth,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestDeepRecursion", args={
+                "depth": depth,
+            })
+            return typing.cast(types.DeepRecursion, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestEmptyCollections(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.EmptyCollections:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestEmptyCollections", args={
-            "input": input,
-        })
-        return typing.cast(types.EmptyCollections, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestEmptyCollections(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestEmptyCollections", args={
+                "input": input,
+            })
+            return typing.cast(types.EmptyCollections, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestLargeStructure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.LargeStructure:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestLargeStructure", args={
-            "input": input,
-        })
-        return typing.cast(types.LargeStructure, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestLargeStructure(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestLargeStructure", args={
+                "input": input,
+            })
+            return typing.cast(types.LargeStructure, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestNumberEdgeCases(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.NumberEdgeCases:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestNumberEdgeCases", args={
-            "input": input,
-        })
-        return typing.cast(types.NumberEdgeCases, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestNumberEdgeCases(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestNumberEdgeCases", args={
+                "input": input,
+            })
+            return typing.cast(types.NumberEdgeCases, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestSpecialCharacters(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.SpecialCharacters:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestSpecialCharacters", args={
-            "input": input,
-        })
-        return typing.cast(types.SpecialCharacters, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestSpecialCharacters(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestSpecialCharacters", args={
+                "input": input,
+            })
+            return typing.cast(types.SpecialCharacters, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 

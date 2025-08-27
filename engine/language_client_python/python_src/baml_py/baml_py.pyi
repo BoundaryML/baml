@@ -2,6 +2,8 @@ from __future__ import annotations
 from typing_extensions import Literal
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+TickReason = Literal["Unknown"]
+
 def get_version() -> str:
     """Get the version of the BAML Python client."""
     ...
@@ -23,6 +25,14 @@ def get_log_level() -> str:
 def set_log_max_chunk_length(length: int) -> None:
     """Set the maximum log chunk length for the BAML Python client."""
     ...
+
+class AbortController:
+    """Controller for cancelling BAML operations."""
+
+    def __init__(self) -> None: ...
+    def abort(self) -> None: ...
+    @property
+    def aborted(self) -> bool: ...
 
 class FunctionResult:
     """The result of a BAML function call.
@@ -109,7 +119,7 @@ class BamlPdfPy:
     @staticmethod
     def from_url(url: str) -> BamlPdfPy: ...
     @staticmethod
-    def from_base64(media_type: str, base64: str) -> BamlPdfPy: ...
+    def from_base64(base64: str) -> BamlPdfPy: ...
     def is_url(self) -> bool: ...
     def is_base64(self) -> bool: ...
     def as_url(self) -> str: ...
@@ -172,6 +182,7 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
         env_vars: Dict[str, str],
+        on_tick: Optional[Callable[[], None]],
     ) -> FunctionResultStream: ...
     def stream_function_sync(
         self,
@@ -183,6 +194,7 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
         env_vars: Dict[str, str],
+        on_tick: Optional[Callable[[], None]],
     ) -> SyncFunctionResultStream: ...
     def create_context_manager(self) -> RuntimeContextManager: ...
     def flush(self) -> None: ...
@@ -223,6 +235,7 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         env_vars: Dict[str, str],
     ) -> Any: ...
+    def disassemble(self, function_name: str) -> None: ...
 
 class LogEventMetadata:
     event_id: str

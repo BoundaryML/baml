@@ -167,6 +167,9 @@ impl FunctionResult {
                 LLMResponse::InternalFailure(err) => {
                     format!("Internal Failure: {err} - {actual_error}")
                 }
+                LLMResponse::Cancelled(err) => {
+                    format!("Operation Cancelled: {err} - {actual_error}")
+                }
             },
         }
     }
@@ -245,7 +248,7 @@ impl PartialEq for TestFailReason<'_> {
 impl Eq for TestFailReason<'_> {}
 
 impl TestResponse {
-    pub fn status(&self) -> TestStatus {
+    pub fn status(&self) -> TestStatus<'_> {
         let func_res = &self.function_response;
         if let Some(parsed) = func_res.result_with_constraints() {
             if parsed.is_ok() {
