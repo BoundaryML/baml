@@ -516,8 +516,9 @@ impl<'g> HirCompiler<'g> {
 
                         self.compile_expression(base);
                         self.compile_expression(index);
+                        self.compile_expression(value);
 
-                        self.emit(match meta.1.as_ref().expect("must have a resolved type") {
+                        self.emit(match base.meta().1.as_ref().expect("must have a resolved type") {
                             TypeIR::List(_, _) => Instruction::StoreArrayElement,
                             TypeIR::Map(_, _, _) => Instruction::StoreMapElement,
                             _ => panic!("array access should be either map or array.")
@@ -602,7 +603,7 @@ impl<'g> HirCompiler<'g> {
                         // The same pattern applies for maps with StoreMapElement
                         
                         // Determine if it's a list or map
-                        let (load_instr, store_instr) = match meta.1.as_ref().expect("must have a resolved type") {
+                        let (load_instr, store_instr) = match base.meta().1.as_ref().expect("must have a resolved type") {
                             TypeIR::List(_, _) => (Instruction::LoadArrayElement, Instruction::StoreArrayElement),
                             TypeIR::Map(_, _, _) => (Instruction::LoadMapElement, Instruction::StoreMapElement),
                             _ => panic!("array access should be either map or array.")
@@ -959,7 +960,7 @@ impl<'g> HirCompiler<'g> {
                 self.compile_expression(index);
 
                 // Determine if it's an array or map and emit appropriate instruction
-                self.emit(match meta.1.as_ref().expect("must have a resolved type") {
+                self.emit(match base.meta().1.as_ref().expect("must have a resolved type") {
                     TypeIR::List(_, _) => Instruction::LoadArrayElement,
                     TypeIR::Map(_, _, _) => Instruction::LoadMapElement,
                     _ => panic!("array access should be either map or array.")
@@ -1015,13 +1016,14 @@ impl<'g> HirCompiler<'g> {
             thir::Expr::Map(pairs, _) => {
                 // Maps are not yet implemented in bytecode
                 // have N keys, N values.
-
-                for (key, _) in pairs {
-                    self.emit_string_literal(key);
-                }
+                // keys are popped first, so we first compute the values.
 
                 for (_, value) in pairs {
                     self.compile_expression(value);
+                }
+
+                for (key, _) in pairs {
+                    self.emit_string_literal(key);
                 }
 
                 self.emit(Instruction::AllocMap(pairs.len()));
@@ -1070,6 +1072,8 @@ impl<'g> HirCompiler<'g> {
                     }) => format!("{class_name}.{method}"),
 
                     Some(TypeIR::List(_, _)) => format!("std.Array.{method}"),
+
+                    Some(TypeIR::Map(_, _, _)) => format!("std.Map.{method}"),
 
                     other => panic!("method calls must be on classes, got: {other:#?}"),
                 };
@@ -2198,8 +2202,6 @@ mod tests {
                 "main",
                 vec![
                     Instruction::LoadConst(0),
-                    Instruction::Return,
-                    Instruction::LoadConst(1),
                     Instruction::Return,
                 ],
             )],
@@ -3472,7 +3474,22 @@ fn UseMap() -> string {
     let map = CreateMap();
     map["hello"]
 }"#,
-                expected: todo!(),
+                expected: vec![
+                    ("CreateMap", vec![
+                        Instruction::LoadConst(0),
+                        Instruction::LoadConst(1),
+                        Instruction::AllocMap(1),
+                        Instruction::Return,
+                    ]),
+                    ("UseMap", vec![
+                        Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                        Instruction::Call(0),
+                        Instruction::LoadVar(1),
+                        Instruction::LoadConst(0),
+                        Instruction::LoadMapElement,
+                        Instruction::Return,
+                    ]),
+                ],
             })
         }
 
@@ -3485,10 +3502,25 @@ fn CreateMap() -> map<string, string> {
 }
 
 fn UseMapNoKey() -> string {
-    let map = CreateMapJSON();
+    let map = CreateMap();
     map["world"]
 }"#,
-                expected: todo!(),
+                expected: vec![
+                    ("CreateMap", vec![
+                        Instruction::LoadConst(0),
+                        Instruction::LoadConst(1),
+                        Instruction::AllocMap(1),
+                        Instruction::Return,
+                    ]),
+                    ("UseMapNoKey", vec![
+                        Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                        Instruction::Call(0),
+                        Instruction::LoadVar(1),
+                        Instruction::LoadConst(0),
+                        Instruction::LoadMapElement,
+                        Instruction::Return,
+                    ]),
+                ],
             })
         }
 
@@ -3507,7 +3539,31 @@ fn UseMapContains() -> string {
         "hi"
     }
 }"#,
-                expected: todo!(),
+                expected: vec![
+                    ("CreateMapJSON", vec![
+                        Instruction::LoadConst(0),
+                        Instruction::LoadConst(1),
+                        Instruction::AllocMap(1),
+                        Instruction::Return,
+                    ]),
+                    ("UseMapContains", vec![
+                        Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                        Instruction::Call(0),
+                        Instruction::LoadGlobal(GlobalIndex::from_raw(5)),
+                        Instruction::LoadVar(1),
+                        Instruction::LoadConst(0),
+                        Instruction::Call(2),
+                        Instruction::JumpIfFalse(6),
+                        Instruction::Pop(1),
+                        Instruction::LoadVar(1),
+                        Instruction::LoadConst(1),
+                        Instruction::LoadMapElement,
+                        Instruction::Jump(3),
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(2),
+                        Instruction::Return,
+                    ]),
+                ],
             })
         }
 
@@ -3524,7 +3580,31 @@ fn EditMapKey() -> int {
 	map["hi"]
 
 }"#,
-                expected: todo!(),
+                expected: vec![
+                    ("EditMapKey", vec![
+                        Instruction::LoadConst(0),
+                        Instruction::LoadConst(1),
+                        Instruction::AllocMap(1),
+                        Instruction::LoadVar(1),
+                        Instruction::LoadConst(2),
+                        Instruction::LoadConst(3),
+                        Instruction::LoadConst(4),
+                        Instruction::BinOp(BinOp::Sub),
+                        Instruction::StoreMapElement,
+                        Instruction::LoadVar(1),
+                        Instruction::LoadConst(5),
+                        Instruction::Copy(1),
+                        Instruction::Copy(1),
+                        Instruction::LoadMapElement,
+                        Instruction::LoadConst(6),
+                        Instruction::BinOp(BinOp::Add),
+                        Instruction::StoreMapElement,
+                        Instruction::LoadVar(1),
+                        Instruction::LoadConst(7),
+                        Instruction::LoadMapElement,
+                        Instruction::Return,
+                    ]),
+                ],
             })
         }
 
@@ -3539,7 +3619,19 @@ fn Len() -> int {
     };
     map.len()
 }"#,
-                expected: todo!(),
+                expected: vec![
+                    ("Len", vec![
+                        Instruction::LoadConst(0),
+                        Instruction::LoadConst(1),
+                        Instruction::LoadConst(2),
+                        Instruction::LoadConst(3),
+                        Instruction::AllocMap(2),
+                        Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
+                        Instruction::LoadVar(1),
+                        Instruction::Call(1),
+                        Instruction::Return,
+                    ]),
+                ],
             })
         }
     }

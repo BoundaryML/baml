@@ -796,9 +796,9 @@ impl Vm {
             //         .map(|v| crate::debug::display_value(v, &self.objects))
             //         .collect::<Vec<_>>()
             //         .join(", ");
-
+            //
             //     eprintln!("[{stack}]");
-
+            //
             //     let (instruction, metadata) = crate::debug::display_instruction(
             //         instruction_ptr,
             //         function,
@@ -806,7 +806,7 @@ impl Vm {
             //         &self.objects,
             //         &self.globals,
             //     );
-
+            //
             //     eprintln!("{instruction} {metadata}");
             // }
 
@@ -1488,15 +1488,13 @@ impl Vm {
                 }
                 Instruction::AllocMap(n) => {
                     let map = if n > 0 {
-                        let idx_of_last_value = self.stack.ensure_slot_from_top(2 * n - 1)?;
-                        let idx_of_first_value = self.stack.ensure_slot_from_top(n)?;
+                        let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1)?;
+                        let end_of_keys = self.stack.ensure_slot_from_top(n - 1)?;
                         let idx_of_last_key = self.stack.ensure_slot_from_top(n - 1)?;
 
                         // We can safely copy the objects that act as values so there's no problem
                         // with not draining them.
-                        let values = self.stack[idx_of_first_value..idx_of_last_value]
-                            .iter()
-                            .copied();
+                        let values = self.stack[end_of_values..end_of_keys].iter().copied();
 
                         // We cannot copy key references since we aren't interning yet, so we
                         // must clone the strings.
@@ -1516,7 +1514,7 @@ impl Vm {
                         let map = pairs.collect::<Result<BamlMap<_, _>, _>>()?;
 
                         // drain & drop the drain so that vec is empty.
-                        self.stack.drain(idx_of_last_value..);
+                        self.stack.drain(end_of_values..);
 
                         map
                     } else {
