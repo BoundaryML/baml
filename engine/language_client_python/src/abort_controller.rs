@@ -32,7 +32,7 @@ impl AbortController {
         Self {
             id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
             aborted: Arc::new(AtomicBool::new(false)),
-            timeout: timeout_ms.map(|t| Duration::from_millis(t)),
+            timeout: timeout_ms.map(Duration::from_millis),
         }
     }
 
@@ -59,7 +59,7 @@ impl AbortController {
         OPERATION_TRIGGERS.insert(self.id, trigger);
         let id = self.id;
         if let Some(timeout) = &self.timeout {
-            let timeout = timeout.clone();
+            let timeout = *timeout;
             let aborted = self.aborted.clone();
             let _ = std::thread::spawn(move || {
                 std::thread::sleep(timeout);
