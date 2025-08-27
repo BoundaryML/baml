@@ -41,7 +41,7 @@ type BamlCallOptions = {
   clientRegistry?: ClientRegistry
   collector?: Collector | Collector[]
   env?: Record<string, string | undefined>
-  abortController?: AbortController
+  abortSignal?: AbortSignal
   onTick?: (reason: TickReason, log: FunctionLog | null) => void
 }
 
@@ -97,7 +97,7 @@ export class BamlAsyncClient {
   ): Promise<Example | Example2> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -142,7 +142,7 @@ export class BamlAsyncClient {
   ): Promise<Example2 | Example> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -201,7 +201,7 @@ class BamlStreamClient {
   ): BamlStream<Example | Example2, Example | Example2> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -251,7 +251,7 @@ class BamlStreamClient {
         (a): Example | Example2 => a,
         (a): Example | Example2 => a,
         this.ctxManager.cloneContext(),
-        options.abortController,
+        options.abortSignal,
       )
     } catch (error) {
       throw toBamlError(error);
@@ -264,7 +264,7 @@ class BamlStreamClient {
   ): BamlStream<Example2 | Example, Example2 | Example> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -314,7 +314,7 @@ class BamlStreamClient {
         (a): Example2 | Example => a,
         (a): Example2 | Example => a,
         this.ctxManager.cloneContext(),
-        options.abortController,
+        options.abortSignal,
       )
     } catch (error) {
       throw toBamlError(error);

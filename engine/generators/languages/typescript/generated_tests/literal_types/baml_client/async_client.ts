@@ -41,7 +41,7 @@ type BamlCallOptions = {
   clientRegistry?: ClientRegistry
   collector?: Collector | Collector[]
   env?: Record<string, string | undefined>
-  abortController?: AbortController
+  abortSignal?: AbortSignal
   onTick?: (reason: TickReason, log: FunctionLog | null) => void
 }
 
@@ -97,7 +97,7 @@ export class BamlAsyncClient {
   ): Promise<types.BooleanLiterals> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -142,7 +142,7 @@ export class BamlAsyncClient {
   ): Promise<types.ComplexLiterals> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -187,7 +187,7 @@ export class BamlAsyncClient {
   ): Promise<types.IntegerLiterals> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -232,7 +232,7 @@ export class BamlAsyncClient {
   ): Promise<types.MixedLiterals> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -277,7 +277,7 @@ export class BamlAsyncClient {
   ): Promise<types.StringLiterals> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -336,7 +336,7 @@ class BamlStreamClient {
   ): BamlStream<partial_types.BooleanLiterals, types.BooleanLiterals> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -386,7 +386,7 @@ class BamlStreamClient {
         (a): partial_types.BooleanLiterals => a,
         (a): types.BooleanLiterals => a,
         this.ctxManager.cloneContext(),
-        options.abortController,
+        options.abortSignal,
       )
     } catch (error) {
       throw toBamlError(error);
@@ -399,7 +399,7 @@ class BamlStreamClient {
   ): BamlStream<partial_types.ComplexLiterals, types.ComplexLiterals> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -449,7 +449,7 @@ class BamlStreamClient {
         (a): partial_types.ComplexLiterals => a,
         (a): types.ComplexLiterals => a,
         this.ctxManager.cloneContext(),
-        options.abortController,
+        options.abortSignal,
       )
     } catch (error) {
       throw toBamlError(error);
@@ -462,7 +462,7 @@ class BamlStreamClient {
   ): BamlStream<partial_types.IntegerLiterals, types.IntegerLiterals> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -512,7 +512,7 @@ class BamlStreamClient {
         (a): partial_types.IntegerLiterals => a,
         (a): types.IntegerLiterals => a,
         this.ctxManager.cloneContext(),
-        options.abortController,
+        options.abortSignal,
       )
     } catch (error) {
       throw toBamlError(error);
@@ -525,7 +525,7 @@ class BamlStreamClient {
   ): BamlStream<partial_types.MixedLiterals, types.MixedLiterals> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -575,7 +575,7 @@ class BamlStreamClient {
         (a): partial_types.MixedLiterals => a,
         (a): types.MixedLiterals => a,
         this.ctxManager.cloneContext(),
-        options.abortController,
+        options.abortSignal,
       )
     } catch (error) {
       throw toBamlError(error);
@@ -588,7 +588,7 @@ class BamlStreamClient {
   ): BamlStream<partial_types.StringLiterals, types.StringLiterals> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -638,7 +638,7 @@ class BamlStreamClient {
         (a): partial_types.StringLiterals => a,
         (a): types.StringLiterals => a,
         this.ctxManager.cloneContext(),
-        options.abortController,
+        options.abortSignal,
       )
     } catch (error) {
       throw toBamlError(error);

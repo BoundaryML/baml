@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use baml_runtime::runtime_interface::ExperimentalTracingInterface;
+use baml_runtime::{runtime_interface::ExperimentalTracingInterface, TripWire};
 use pyo3::{
     prelude::{pymethods, PyResult},
     pyclass,
@@ -211,7 +211,9 @@ impl BamlRuntime {
             })
             .collect::<Vec<_>>();
 
-        let tripwire = abort_controller.and_then(|ac| ac.create_tripwire());
+        let tripwire = abort_controller
+            .map(|ac| ac.create_tripwire())
+            .unwrap_or_else(|| TripWire::new(None));
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let (result, _) = baml_runtime
@@ -270,13 +272,9 @@ impl BamlRuntime {
             .collect::<Vec<_>>();
 
         // Check if already aborted
-        if let Some(ac) = abort_controller {
-            if ac.aborted() {
-                return Err(BamlError::from_anyhow(anyhow::anyhow!(
-                    "Operation was aborted"
-                )));
-            }
-        }
+        let tripwire = abort_controller
+            .map(|ac| ac.create_tripwire())
+            .unwrap_or_else(|| TripWire::new(None));
 
         let (result, _event_id) = Python::with_gil(|py| {
             py.allow_threads(|| {
@@ -288,7 +286,7 @@ impl BamlRuntime {
                     cb.as_ref(),
                     Some(collector_list),
                     env_vars,
-                    None,
+                    tripwire,
                 )
             })
         });
@@ -298,7 +296,7 @@ impl BamlRuntime {
             .map_err(BamlError::from_anyhow)
     }
 
-    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars, on_tick=None))]
+    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars, on_tick=None, abort_controller=None))]
     fn stream_function(
         &self,
         py: Python<'_>,
@@ -311,6 +309,7 @@ impl BamlRuntime {
         collectors: &Bound<'_, PyList>,
         env_vars: HashMap<String, String>,
         on_tick: Option<PyObject>,
+        abort_controller: Option<&crate::abort_controller::AbortController>,
     ) -> PyResult<FunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -330,6 +329,9 @@ impl BamlRuntime {
                 collector.inner.clone()
             })
             .collect::<Vec<_>>();
+        let tripwire = abort_controller
+            .map(|ac| ac.create_tripwire())
+            .unwrap_or_else(|| TripWire::new(None));
         let stream = self
             .inner
             .stream_function(
@@ -340,6 +342,7 @@ impl BamlRuntime {
                 cb.map(|cb| cb.inner.clone()).as_ref(),
                 Some(collector_list),
                 env_vars.clone(),
+                tripwire,
             )
             .map_err(BamlError::from_anyhow)?;
 
@@ -353,7 +356,7 @@ impl BamlRuntime {
         ))
     }
 
-    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars, on_tick=None))]
+    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars, on_tick=None, abort_controller=None))]
     fn stream_function_sync(
         &self,
         py: Python<'_>,
@@ -366,6 +369,7 @@ impl BamlRuntime {
         collectors: &Bound<'_, PyList>,
         env_vars: HashMap<String, String>,
         on_tick: Option<PyObject>,
+        abort_controller: Option<&crate::abort_controller::AbortController>,
     ) -> PyResult<SyncFunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -385,6 +389,9 @@ impl BamlRuntime {
                 collector.inner.clone()
             })
             .collect::<Vec<_>>();
+        let tripwire = abort_controller
+            .map(|ac| ac.create_tripwire())
+            .unwrap_or_else(|| TripWire::new(None));
         let stream = self
             .inner
             .stream_function(
@@ -395,6 +402,7 @@ impl BamlRuntime {
                 cb.map(|cb| cb.inner.clone()).as_ref(),
                 Some(collector_list),
                 env_vars.clone(),
+                tripwire,
             )
             .map_err(BamlError::from_anyhow)?;
 

@@ -8,33 +8,48 @@ class BamlStream {
     finalCoerce;
     ctxManager;
     task = null;
+    error = null;
     eventQueue = [];
-    abortController;
-    constructor(ffiStream, partialCoerce, finalCoerce, ctxManager, abortController) {
+    abortSignal;
+    constructor(ffiStream, partialCoerce, finalCoerce, ctxManager, abortSignal) {
         this.ffiStream = ffiStream;
         this.partialCoerce = partialCoerce;
         this.finalCoerce = finalCoerce;
         this.ctxManager = ctxManager;
-        this.abortController = abortController;
+        this.abortSignal = abortSignal;
         // Listen for abort to clean up
-        if (abortController?.signal) {
-            abortController.signal.addEventListener('abort', () => {
+        if (abortSignal) {
+            abortSignal.addEventListener("abort", () => {
                 this.eventQueue.push(null); // Signal end of stream
             });
         }
     }
     async driveToCompletion() {
         try {
+            // Check for early abort
+            if (this.abortSignal?.aborted) {
+                throw new errors_1.BamlAbortError("Operation was aborted", this.abortSignal.reason);
+            }
             this.ffiStream.onEvent((err, data) => {
                 if (err) {
+                    this.error = err;
                     return;
                 }
-                else {
-                    this.eventQueue.push(data);
-                }
+                this.eventQueue.push(data);
             });
             const retval = await this.ffiStream.done(this.ctxManager);
+            // Check if we have an error to throw
+            if (this.error) {
+                throw this.error;
+            }
             return retval;
+        }
+        catch (error) {
+            if (error instanceof errors_1.BamlAbortError) {
+                this.error = error;
+                this.eventQueue.push(null);
+            }
+            throw error;
         }
         finally {
             this.eventQueue.push(null);
@@ -50,12 +65,20 @@ class BamlStream {
     async *[Symbol.asyncIterator]() {
         this.driveToCompletionInBg();
         while (true) {
+            // Check if we have an error to throw
+            if (this.error) {
+                throw this.error;
+            }
             const event = this.eventQueue.shift();
             if (event === undefined) {
                 await new Promise((resolve) => setTimeout(resolve, 100));
                 continue;
             }
             if (event === null) {
+                // Check one more time for any error before ending
+                if (this.error) {
+                    throw this.error;
+                }
                 break;
             }
             if (event.isOk()) {
@@ -100,12 +123,12 @@ class BamlStream {
                 }
                 catch (streamErr) {
                     const errorPayload = {
-                        type: 'StreamError',
+                        type: "StreamError",
                         message: streamErr instanceof Error
                             ? streamErr.message
-                            : 'Error in stream processing',
-                        prompt: '',
-                        raw_output: '',
+                            : "Error in stream processing",
+                        prompt: "",
+                        raw_output: "",
                     };
                     controller.enqueue(encoder.encode(JSON.stringify({ error: errorPayload })));
                     controller.close();

@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
+use baml_runtime::TripWire;
 use dashmap::DashMap;
 use napi::{Env, JsFunction, JsObject, JsUnknown};
 use once_cell::sync::Lazy;
-use stream_cancel::{Trigger, Tripwire};
+use stream_cancel::Trigger;
 
 // Track active operations with their cancellation triggers
 static OPERATION_TRIGGERS: Lazy<DashMap<u32, Trigger>> = Lazy::new(DashMap::new);
@@ -17,26 +18,33 @@ static OPERATION_ID_COUNTER: Lazy<std::sync::atomic::AtomicU32> =
 pub fn js_abort_signal_to_rust_tripwire(
     env: Env,
     signal: Option<JsObject>,
-) -> napi::Result<(Option<u32>, Option<Tripwire>)> {
+) -> napi::Result<Arc<baml_runtime::TripWire>> {
     let Some(signal) = signal else {
-        return Ok((None, None));
+        return Ok(TripWire::new(None));
     };
 
     // Generate a unique operation ID
     let operation_id = OPERATION_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
     // Create the trigger and tripwire
-    let (trigger, tripwire) = Tripwire::new();
+    let (trigger, tripwire) = stream_cancel::Tripwire::new();
+    let tripwire = TripWire::new_with_on_drop(
+        Some(tripwire),
+        Box::new(move || {
+            OPERATION_TRIGGERS.remove(&operation_id);
+        }),
+    );
 
     // Check if already aborted
     let aborted: bool = signal.get_named_property("aborted")?;
     if aborted {
         trigger.cancel();
-        return Ok((Some(operation_id), Some(tripwire)));
+        return Ok(tripwire);
+    } else {
+        OPERATION_TRIGGERS.insert(operation_id, trigger);
     }
 
     // Store the trigger for potential cancellation
-    OPERATION_TRIGGERS.insert(operation_id, trigger);
 
     // Listen to 'abort' event
     let callback = env.create_function_from_closure("abort_handler", move |_| {
@@ -57,12 +65,5 @@ pub fn js_abort_signal_to_rust_tripwire(
         ],
     )?;
 
-    Ok((Some(operation_id), Some(tripwire)))
-}
-
-/// Clean up operation trigger when operation completes
-pub fn cleanup_operation(operation_id: Option<u32>) {
-    if let Some(id) = operation_id {
-        OPERATION_TRIGGERS.remove(&id);
-    }
+    Ok(tripwire)
 }

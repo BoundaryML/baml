@@ -383,9 +383,10 @@ navigation:
           - page: Concurrent Calls
             icon: fa-regular fa-clock-rotate-left
             path: 01-guide/04-baml-basics/concurrent-calls.mdx
-          - page: Abort Controllers
+          - page: AbortSignal / Timeouts
+            slug: abort-signal
             icon: fa-regular fa-stop-circle
-            path: 01-guide/04-baml-basics/abort-controllers.mdx
+            path: 01-guide/04-baml-basics/abort-signal.mdx
 
       - section: BAML Advanced
         contents:
@@ -669,9 +670,9 @@ navigation:
         contents:
           - page: with_options(..)
             path: 03-reference/baml_client/with_options.mdx
-          - page: AbortController
-            slug: abort-controller
-            path: 03-reference/baml_client/abort-controller.mdx
+          - page: AbortSignal / Timeouts
+            slug: abort-signal
+            path: 03-reference/baml_client/abort-signal.mdx
           - page: Collector
             path: 03-reference/baml_client/collector.mdx
             slug: collector
@@ -1162,10 +1163,10 @@ redirects:
   - source: "/ref/llm-client-providers/openai-generic-vllm"
     destination: "/ref/llm-client-providers/vllm"
   - source: "/cancel"
-    destination: "/guide/baml-basics/abort-controllers"
+    destination: "/guide/baml-basics/abort-signal"
   - source: "/timeout"
-    destination: "/guide/baml-basics/abort-controllers"
+    destination: "/guide/baml-basics/abort-signal"
   - source: "/cancellation"
-    destination: "/guide/baml-basics/abort-controllers"
+    destination: "/guide/baml-basics/abort-signal"
   - source: "/abort"
-    destination: "/guide/baml-basics/abort-controllers"
+    destination: "/guide/baml-basics/abort-signal"

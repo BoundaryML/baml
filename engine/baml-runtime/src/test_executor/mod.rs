@@ -19,7 +19,7 @@ use regex::Regex;
 pub use test_execution_args::TestFilter;
 use tokio::sync::{Mutex, MutexGuard};
 
-use crate::{BamlRuntime, TestResponse, TestStatus};
+use crate::{BamlRuntime, TestResponse, TestStatus, TripWire};
 
 pub enum TestRunStatus {
     /// No tests were selected.
@@ -294,7 +294,7 @@ impl TestExecutor for BamlRuntime {
                             on_event,
                             None,
                             env_vars,
-                            None, // No tripwire for test executor,
+                            TripWire::new(None), // No tripwire for test executor,
                             on_tick,
                         )
                         .await;

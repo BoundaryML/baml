@@ -41,7 +41,7 @@ type BamlCallOptions = {
   clientRegistry?: ClientRegistry
   collector?: Collector | Collector[]
   env?: Record<string, string | undefined>
-  abortController?: AbortController
+  abortSignal?: AbortSignal
   onTick?: (reason: TickReason, log: FunctionLog | null) => void
 }
 
@@ -97,7 +97,7 @@ export class BamlAsyncClient {
   ): Promise<types.KitchenSink> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -142,7 +142,7 @@ export class BamlAsyncClient {
   ): Promise<types.Node> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -187,7 +187,7 @@ export class BamlAsyncClient {
   ): Promise<types.UltraComplex> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -246,7 +246,7 @@ class BamlStreamClient {
   ): BamlStream<partial_types.KitchenSink, types.KitchenSink> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -296,7 +296,7 @@ class BamlStreamClient {
         (a): partial_types.KitchenSink => a,
         (a): types.KitchenSink => a,
         this.ctxManager.cloneContext(),
-        options.abortController,
+        options.abortSignal,
       )
     } catch (error) {
       throw toBamlError(error);
@@ -309,7 +309,7 @@ class BamlStreamClient {
   ): BamlStream<partial_types.Node, types.Node> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -359,7 +359,7 @@ class BamlStreamClient {
         (a): partial_types.Node => a,
         (a): types.Node => a,
         this.ctxManager.cloneContext(),
-        options.abortController,
+        options.abortSignal,
       )
     } catch (error) {
       throw toBamlError(error);
@@ -372,7 +372,7 @@ class BamlStreamClient {
   ): BamlStream<partial_types.UltraComplex, types.UltraComplex> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortController?.signal;
+      const signal = options.abortSignal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -422,7 +422,7 @@ class BamlStreamClient {
         (a): partial_types.UltraComplex => a,
         (a): types.UltraComplex => a,
         this.ctxManager.cloneContext(),
-        options.abortController,
+        options.abortSignal,
       )
     } catch (error) {
       throw toBamlError(error);

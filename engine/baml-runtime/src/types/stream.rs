@@ -19,7 +19,7 @@ use crate::{
     tracing::BamlTracer,
     tracingv2::storage::storage::{Collector, BAML_TRACER},
     type_builder::TypeBuilder,
-    FunctionResult, IntoBamlError, PreparedFunctionArgs, RuntimeContextManager,
+    FunctionResult, IntoBamlError, PreparedFunctionArgs, RuntimeContextManager, TripWire,
 };
 
 /// Wrapper that holds a stream of responses from a BAML function call.
@@ -37,7 +37,7 @@ pub struct FunctionResultStream {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) tokio_runtime: Arc<tokio::runtime::Runtime>,
     pub(crate) collectors: Vec<Arc<Collector>>,
-    pub(crate) cancel_tripwire: Option<Tripwire>,
+    pub(crate) cancel_tripwire: Arc<TripWire>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -124,7 +124,7 @@ impl FunctionResultStream {
                         |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, true),
                         |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, false),
                         on_event,
-                        self.cancel_tripwire.clone(),
+                        self.cancel_tripwire.trip_wire(),
                     )
                     .await;
 

@@ -155,3 +155,21 @@ async def test_abort_timing():
     elapsed = time.time() - start_time
     # Should abort within ~300ms (250ms delay + processing)
     assert elapsed < 0.4, f"Took too long to abort: {elapsed}s"
+
+
+@pytest.mark.asyncio
+async def test_abort_time_out():
+    """Test that abort happens quickly"""
+    abort_controller = AbortController(timeout_ms=250)
+    start_time = time.time()
+    
+    with pytest.raises(Exception):
+        await b.FnFailRetryExponentialDelay(
+            retries=5,
+            initial_delay_ms=100,
+            baml_options={"abort_controller": abort_controller}
+        )
+    
+    elapsed = time.time() - start_time
+    # Should abort within ~300ms (250ms delay + processing)
+    assert elapsed < 0.4, f"Took too long to abort: {elapsed}s"

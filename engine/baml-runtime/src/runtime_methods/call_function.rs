@@ -15,7 +15,6 @@ use internal_baml_core::{
 };
 use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
-use stream_cancel::Tripwire;
 
 use super::prepare_function::PreparedFunction;
 use crate::{
@@ -40,7 +39,7 @@ use crate::{
     tracingv2::storage::storage::{Collector, BAML_TRACER},
     type_builder::TypeBuilder,
     FunctionResult, FunctionResultStream, InternalRuntimeInterface, RenderCurlSettings,
-    RuntimeContext, RuntimeContextManager,
+    RuntimeContext, RuntimeContextManager, TripWire,
 };
 
 impl InternalBamlRuntime {
@@ -48,7 +47,7 @@ impl InternalBamlRuntime {
         &'ir self,
         prepared_func_call: PreparedFunction<'ir>,
         ctx: RuntimeContext,
-        cancel_tripwire: Option<Tripwire>,
+        cancel_tripwire: Arc<TripWire>,
     ) -> Result<crate::FunctionResult> {
         let future = async {
             let renderer =
@@ -65,7 +64,7 @@ impl InternalBamlRuntime {
                 &renderer,
                 &baml_args,
                 |s| renderer.parse(self.ir(), &ctx, s, false),
-                cancel_tripwire,
+                cancel_tripwire.trip_wire(),
             )
             .await;
 

@@ -15,7 +15,7 @@ use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    abort_controller::{cleanup_operation, js_abort_signal_to_rust_tripwire},
+    abort_controller::js_abort_signal_to_rust_tripwire,
     errors::{from_anyhow_error, invalid_argument_error},
     parse_ts_types,
     types::{
@@ -129,7 +129,7 @@ impl BamlRuntime {
         let args_map = args.as_map_owned().unwrap();
 
         // Convert AbortSignal to Tripwire
-        let (operation_id, tripwire) = js_abort_signal_to_rust_tripwire(env, signal)?;
+        let tripwire = js_abort_signal_to_rust_tripwire(env, signal)?;
 
         let baml_runtime = self.inner.clone();
         let ctx_mng = ctx.inner.clone();
@@ -155,9 +155,6 @@ impl BamlRuntime {
                 )
                 .await;
 
-            // Clean up the operation trigger
-            cleanup_operation(operation_id);
-
             result
                 .0
                 .map(FunctionResult::from)
@@ -181,7 +178,7 @@ impl BamlRuntime {
         signal: Option<JsObject>, // NEW: AbortSignal parameter (sync doesn't actually use it)
     ) -> napi::Result<FunctionResult> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
-        let (operation_id, tripwire) = js_abort_signal_to_rust_tripwire(env, signal)?;
+        let tripwire = js_abort_signal_to_rust_tripwire(env, signal)?;
 
         if !args.is_map() {
             return Err(invalid_argument_error(&format!(
@@ -208,7 +205,6 @@ impl BamlRuntime {
             env_vars,
             tripwire,
         );
-        cleanup_operation(operation_id);
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)
     }
@@ -239,6 +235,8 @@ impl BamlRuntime {
         }
         let args_map = args.as_map_owned().unwrap();
 
+        let tripwire = js_abort_signal_to_rust_tripwire(env, signal)?;
+
         let ctx = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
         let client_registry = client_registry.map(|cb| cb.inner.clone());
@@ -256,6 +254,7 @@ impl BamlRuntime {
                 client_registry.as_ref(),
                 Some(collector_list),
                 env_vars,
+                tripwire,
             )
             .map_err(from_anyhow_error)?;
 
@@ -311,6 +310,7 @@ impl BamlRuntime {
             .into_iter()
             .map(|c| c.inner.clone())
             .collect::<Vec<_>>();
+        let tripwire = js_abort_signal_to_rust_tripwire(env, signal)?;
         let stream = self
             .inner
             .stream_function(
@@ -321,6 +321,7 @@ impl BamlRuntime {
                 client_registry.as_ref(),
                 Some(collector_list),
                 env_vars,
+                tripwire,
             )
             .map_err(from_anyhow_error)?;
 

@@ -1,66 +1,82 @@
-import { b } from '../baml_client';
-import { BamlAbortError } from '@boundaryml/baml';
+import { b } from "../baml_client";
+import { BamlAbortError } from "@boundaryml/baml";
 
-describe('Abort Handlers', () => {
-  it('manual cancellation', async () => {
+describe("Abort Handlers", () => {
+  it("manual cancellation", async () => {
     const controller = new AbortController();
-    
+
     const promise = b.FnFailRetryExponentialDelay(5, 100, {
-      abortController: controller,
+      abortSignal: controller.signal,
     });
-    
+
     setTimeout(() => controller.abort(), 100);
-    
+
     await expect(promise).rejects.toThrow();
     // Could be BamlAbortError or another error if cancelled fast enough
   });
-  
-  it('streaming cancellation', async () => {
+
+  it("streaming cancellation", async () => {
     const controller = new AbortController();
-    
-    const stream = b.stream.TestAbortFallbackChain('test', {
-      abortController: controller,
+
+    const stream = b.stream.TestAbortFallbackChain("test", {
+      abortSignal: controller.signal,
     });
-    
-    setTimeout(() => controller.abort(), 50);
-    
+
+    setTimeout(() => {
+      controller.abort();
+    }, 1000);
+
     const values = [];
+    let aborted = false;
     try {
       for await (const value of stream) {
         values.push(value);
       }
     } catch (e) {
+      aborted = true;
       // Expected - stream should be cancelled
     }
-    
+
     // Should have stopped early due to cancellation
+    expect(aborted).toBe(true);
     expect(values.length).toBeLessThan(10);
   });
-  
-  it('timeout using AbortSignal.timeout', async () => {
-    const controller = new AbortController();
-    // Simulate timeout by aborting after 200ms
-    setTimeout(() => controller.abort('timeout'), 200);
-    
+
+  it("timeout using AbortSignal.timeout", async () => {
+    // Using the native AbortSignal.timeout() API
     const promise = b.FnFailRetryConstantDelay(5, 100, {
-      abortController: controller,
+      abortSignal: AbortSignal.timeout(200),
     });
-    
+
     await expect(promise).rejects.toThrow();
   });
 
-  it('early abort check', async () => {
+  it("manual timeout simulation", async () => {
     const controller = new AbortController();
-    controller.abort('early abort');
-    
-    await expect(b.ExtractName('John Doe', {
-      abortController: controller,
-    })).rejects.toThrow(BamlAbortError);
+    // Simulate timeout by aborting after 200ms
+    setTimeout(() => controller.abort("timeout"), 200);
+
+    const promise = b.FnFailRetryConstantDelay(5, 100, {
+      abortSignal: controller.signal,
+    });
+
+    await expect(promise).rejects.toThrow();
   });
 
-  it('normal operation without abort', async () => {
-    const result = await b.ExtractName('My name is Alice');
-    expect(typeof result).toBe('string');
-    expect(result.toLowerCase()).toContain('alice');
+  it("early abort check", async () => {
+    const controller = new AbortController();
+    controller.abort("early abort");
+
+    await expect(
+      b.ExtractName("John Doe", {
+        abortSignal: controller.signal,
+      })
+    ).rejects.toThrow(BamlAbortError);
+  });
+
+  it("normal operation without abort", async () => {
+    const result = await b.ExtractName("My name is Alice");
+    expect(typeof result).toBe("string");
+    expect(result.toLowerCase()).toContain("alice");
   });
 });

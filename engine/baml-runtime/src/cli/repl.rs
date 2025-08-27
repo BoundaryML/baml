@@ -31,7 +31,7 @@ use reedline::{
     Signal,
 };
 
-use crate::BamlRuntime;
+use crate::{BamlRuntime, TripWire};
 
 #[derive(Args, Clone, Debug)]
 pub struct ReplArgs {
@@ -287,7 +287,7 @@ impl ReplState {
                                 None,
                                 None,
                                 env_vars,
-                                None,
+                                TripWire::new(None),
                             )
                             .await;
                         let function_result = res.0?;

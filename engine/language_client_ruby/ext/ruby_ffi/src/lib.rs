@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use baml_runtime::BamlRuntime;
+use baml_runtime::{BamlRuntime, TripWire};
 use baml_types::BamlValue;
 use function_result::FunctionResult;
 use function_result_stream::FunctionResultStream;
@@ -141,7 +141,7 @@ impl BamlRuntimeFfi {
             client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
             Some(collectors),
             env_vars,
-            None,
+            TripWire::new(None),
         )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
             (Err(e), _) => Err(Error::new(
@@ -192,6 +192,7 @@ impl BamlRuntimeFfi {
             client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
             Some(collectors),
             env_vars,
+            TripWire::new(None),
         ) {
             Ok(res) => Ok(FunctionResultStream::new(res, rb_self.t.clone())),
             Err(e) => Err(Error::new(

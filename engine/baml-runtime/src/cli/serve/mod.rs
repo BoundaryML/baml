@@ -39,7 +39,7 @@ use tokio_stream::StreamExt;
 
 use crate::{
     client_registry::ClientRegistry, errors::ExposedError, internal::llm_client::LLMResponse,
-    BamlRuntime, FunctionResult, RuntimeContextManager,
+    BamlRuntime, FunctionResult, RuntimeContextManager, TripWire,
 };
 
 #[derive(clap::Args, Clone, Debug)]
@@ -355,7 +355,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 client_registry.as_ref(),
                 None,
                 env_vars,
-                None,
+                TripWire::new(None),
             )
             .await;
 
@@ -456,6 +456,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 client_registry.as_ref(),
                 Some(vec![]),
                 env_vars,
+                TripWire::new(None),
             );
 
             match result_stream {

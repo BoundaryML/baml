@@ -30,7 +30,7 @@ use crate::{
     tracingv2::storage::storage::Collector,
     type_builder::TypeBuilder,
     BamlRuntime as LlmRuntime, BamlSrcReader, FunctionResult, FunctionResultStream,
-    InnerTraceStats, InternalRuntimeInterface, RuntimeContextManager,
+    InnerTraceStats, InternalRuntimeInterface, RuntimeContextManager, TripWire,
 };
 
 /// Async VM runtime.
@@ -144,7 +144,7 @@ impl BamlAsyncVmRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
-        cancel_tripwire: Option<stream_cancel::Tripwire>,
+        cancel_tripwire: Arc<TripWire>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         // TODO: Proper error handling. Refactor the API to return a Result.
         let (function_index, function_kind) = self
@@ -308,7 +308,7 @@ impl BamlAsyncVmRuntime {
 
                         // Spanwed future basically awaits the LLM call and
                         // sends the result to the futures channel.
-                        let cancel_tripwire = cancel_tripwire.clone();
+                        let cancel_tripwire = cancel_tripwire.to_owned();
                         async move {
                             let result = llm_runtime
                                 .call_function(
@@ -397,7 +397,7 @@ impl BamlAsyncVmRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
-        cancel_tripwire: Option<stream_cancel::Tripwire>,
+        cancel_tripwire: Arc<TripWire>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         self.async_runtime.block_on(self.call_function(
             function_name,
@@ -420,9 +420,19 @@ impl BamlAsyncVmRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
+        // FunctionResultStream is responsible for freeing the TripWire and the clean up.
+        cancel_tripwire: Arc<TripWire>,
     ) -> anyhow::Result<FunctionResultStream> {
-        self.llm_runtime
-            .stream_function(function_name, params, ctx, tb, cb, collectors, env_vars)
+        self.llm_runtime.stream_function(
+            function_name,
+            params,
+            ctx,
+            tb,
+            cb,
+            collectors,
+            env_vars,
+            cancel_tripwire,
+        )
     }
 
     pub async fn build_request(

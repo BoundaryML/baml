@@ -3,7 +3,6 @@ use std::{collections::HashMap, ops::Deref, ptr::null, sync::Arc};
 use anyhow::Result;
 use baml_runtime::{BamlRuntime, FunctionResult};
 use baml_types::BamlValue;
-use dashmap::DashMap;
 use once_cell::sync::Lazy;
 
 use super::*;
@@ -15,9 +14,6 @@ use crate::ffi::{
 /// cbindgen:ignore
 static RUNTIME: Lazy<Arc<tokio::runtime::Runtime>> =
     Lazy::new(|| Arc::new(tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime")));
-
-/// Track active operations with their cancellation triggers
-static OPERATION_TRIGGERS: Lazy<DashMap<u32, stream_cancel::Trigger>> = Lazy::new(DashMap::new);
 
 /// Extern "C" function that returns immediately, scheduling the async call.
 /// Once the asynchronous function completes, the provided callback is invoked.
@@ -77,10 +73,7 @@ fn call_function_from_c_inner(
     } = BamlFunctionArguments::from_c_buffer(encoded_args, length)?;
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
-
-    // Create a cancellation trigger/tripwire pair
-    let (trigger, tripwire) = stream_cancel::Tripwire::new();
-    OPERATION_TRIGGERS.insert(id, trigger);
+    let tripwire = trip_wire::make_trip_wire(id);
 
     // Spawn an async task to await the future and call the callback when done.
     // Ensure that a Tokio runtime is running in your application.
@@ -98,12 +91,9 @@ fn call_function_from_c_inner(
                 client_registry.as_ref(),
                 collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
                 env_vars,
-                Some(tripwire),
+                tripwire,
             )
             .await;
-
-        // Clean up the trigger
-        OPERATION_TRIGGERS.remove(&id);
 
         let (final_result, _) = result;
         safe_trigger_callback(id, true, final_result, runtime);
@@ -247,6 +237,7 @@ fn call_function_stream_from_c_inner(
         type_builder,
     } = BamlFunctionArguments::from_c_buffer(encoded_args, length)?;
 
+    let tripwire = trip_wire::make_trip_wire(id);
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
     // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
     let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
@@ -258,6 +249,7 @@ fn call_function_stream_from_c_inner(
         client_registry.as_ref(),
         collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
         env_vars,
+        tripwire,
     ) {
         Ok(stream) => stream,
         Err(e) => {
@@ -267,39 +259,20 @@ fn call_function_stream_from_c_inner(
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
-    // Create a cancellation trigger/tripwire pair
-    let (trigger, tripwire) = stream_cancel::Tripwire::new();
-    OPERATION_TRIGGERS.insert(id, trigger);
+    let tripwire = trip_wire::make_trip_wire(id);
 
     RUNTIME.spawn(async move {
         // Create the stream.run future
-        let stream_future = async move {
-            stream
-                .run(
-                    Some(|| on_tick(id)),
-                    Some(|r| on_event(id, r, runtime)),
-                    &ctx,
-                    None,
-                    None,
-                    HashMap::new(),
-                )
-                .await
-        };
-
-        // Use tokio::select to handle cancellation
-        let final_result = tokio::select! {
-            _ = tripwire => {
-                // Operation was cancelled
-                Err(anyhow::anyhow!("Stream operation cancelled"))
-            }
-            result = stream_future => {
-                let (stream_result, _) = result;
-                stream_result
-            }
-        };
-
-        // Clean up the trigger
-        OPERATION_TRIGGERS.remove(&id);
+        let (final_result, _) = stream
+            .run(
+                Some(|| on_tick(id)),
+                Some(|r| on_event(id, r, runtime)),
+                &ctx,
+                None,
+                None,
+                HashMap::new(),
+            )
+            .await;
 
         safe_trigger_callback(id, true, final_result, runtime);
     });
@@ -319,8 +292,6 @@ fn on_event(id: u32, result: FunctionResult, runtime: &BamlRuntime) {
 /// Cancel a function call by its ID
 #[no_mangle]
 pub extern "C" fn cancel_function_call(id: u32) -> *const libc::c_void {
-    if let Some((_, trigger)) = OPERATION_TRIGGERS.remove(&id) {
-        trigger.cancel();
-    }
+    trip_wire::cancel(id);
     std::ptr::null()
 }

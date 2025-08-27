@@ -22,7 +22,7 @@ use internal_baml_core::{
 use internal_baml_jinja::types::OutputFormatContent;
 use jsonish::{deserializer::deserialize_flags::Flag, helpers::render_output_format};
 
-use crate::{BamlRuntime, FunctionResult};
+use crate::{BamlRuntime, FunctionResult, TripWire};
 
 const MAX_STEPS: usize = 1000;
 
@@ -327,7 +327,7 @@ async fn beta_reduce<'a>(
                             None,
                             None,
                             env.env_vars.clone(),
-                            None,
+                            TripWire::new(None),
                         )
                         .await
                         .0;
@@ -1149,7 +1149,7 @@ test Poems {
                 Some(on_event),
                 None,
                 HashMap::new(),
-                None,
+                TripWire::new(None),
                 None::<Box<dyn Fn()>>,
             )
             // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
@@ -1283,7 +1283,7 @@ test TestMakePerson() {
                 Some(on_event),
                 None,
                 HashMap::new(),
-                None,
+                TripWire::new(None),
                 None::<Box<dyn Fn()>>,
             )
             // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
@@ -1361,7 +1361,7 @@ test UseFunction() {
                     "OPENAI_API_KEY".to_string(),
                     std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY is not set."),
                 )]),
-                None,
+                TripWire::new(None),
                 None::<Box<dyn Fn()>>,
             )
             .await;

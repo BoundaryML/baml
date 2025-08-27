@@ -12,10 +12,10 @@ mod internal_tests {
 
     use baml_ids::FunctionCallId;
     // use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
-    use baml_runtime::InternalRuntimeInterface;
     use baml_runtime::{
         internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
     };
+    use baml_runtime::{InternalRuntimeInterface, TripWire};
     use baml_types::BamlValue;
     use internal_baml_core::FeatureFlags;
     use wasm_bindgen_test::*;
@@ -110,7 +110,7 @@ mod internal_tests {
                 None,
                 None,
                 HashMap::new(),
-                None,
+                TripWire::new(None),
             )
             .await;
 
@@ -638,7 +638,7 @@ test RecursiveAliasCycle {
             on_event,
             None,
             HashMap::new(),
-            None,
+            TripWire::new(None),
             on_tick,
         );
         let (res, call) = runtime.async_runtime.block_on(run_test_future);
@@ -1084,7 +1084,7 @@ test RecursiveAliasCycle {
             on_event,
             None,
             HashMap::new(),
-            None,
+            TripWire::new(None),
             on_tick,
         );
         let (res1, _) = runtime.async_runtime.block_on(run_test_future);
@@ -1101,7 +1101,7 @@ test RecursiveAliasCycle {
             on_event,
             None,
             env_vars2.clone(),
-            None,
+            TripWire::new(None),
             on_tick,
         );
         let (res2, _) = runtime.async_runtime.block_on(run_test_future);

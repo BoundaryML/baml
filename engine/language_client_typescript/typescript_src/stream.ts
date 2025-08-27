@@ -1,28 +1,29 @@
-import { toBamlError } from './errors';
+import { toBamlError, BamlAbortError } from "./errors";
 import type {
   FunctionResult,
   FunctionResultStream,
   RuntimeContextManager,
-} from './native';
+} from "../native";
 
 export class BamlStream<PartialOutputType, FinalOutputType> {
   private task: Promise<FunctionResult> | null = null;
+  private error: Error | null = null;
 
   private eventQueue: (FunctionResult | null)[] = [];
-  private abortController?: AbortController;
+  private abortSignal?: AbortSignal;
 
   constructor(
     private ffiStream: FunctionResultStream,
     private partialCoerce: (result: any) => PartialOutputType,
     private finalCoerce: (result: any) => FinalOutputType,
     private ctxManager: RuntimeContextManager,
-    abortController?: AbortController,
+    abortSignal?: AbortSignal
   ) {
-    this.abortController = abortController;
-    
+    this.abortSignal = abortSignal;
+
     // Listen for abort to clean up
-    if (abortController?.signal) {
-      abortController.signal.addEventListener('abort', () => {
+    if (abortSignal) {
+      abortSignal.addEventListener("abort", () => {
         this.eventQueue.push(null); // Signal end of stream
       });
     }
@@ -30,18 +31,39 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
 
   private async driveToCompletion(): Promise<FunctionResult> {
     try {
+      // Check for early abort
+      if (this.abortSignal?.aborted) {
+        throw new BamlAbortError(
+          "Operation was aborted",
+          this.abortSignal.reason
+        );
+      }
+
       this.ffiStream.onEvent(
         (err: Error | null, data: FunctionResult | null) => {
           if (err) {
+            this.error = err;
             return;
-          } else {
-            this.eventQueue.push(data);
           }
-        },
+
+          this.eventQueue.push(data);
+        }
       );
+
       const retval = await this.ffiStream.done(this.ctxManager);
 
+      // Check if we have an error to throw
+      if (this.error) {
+        throw this.error;
+      }
+
       return retval;
+    } catch (error) {
+      if (error instanceof BamlAbortError) {
+        this.error = error;
+        this.eventQueue.push(null);
+      }
+      throw error;
     } finally {
       this.eventQueue.push(null);
       this.ffiStream.onEvent(undefined);
@@ -60,6 +82,11 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
     this.driveToCompletionInBg();
 
     while (true) {
+      // Check if we have an error to throw
+      if (this.error) {
+        throw this.error;
+      }
+
       const event = this.eventQueue.shift();
 
       if (event === undefined) {
@@ -68,6 +95,10 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
       }
 
       if (event === null) {
+        // Check one more time for any error before ending
+        if (this.error) {
+          throw this.error;
+        }
         break;
       }
 
@@ -110,27 +141,27 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
             return;
           } catch (err: unknown) {
             const bamlError = toBamlError(
-              err instanceof Error ? err : new Error(String(err)),
+              err instanceof Error ? err : new Error(String(err))
             );
             controller.enqueue(
-              encoder.encode(JSON.stringify({ error: bamlError })),
+              encoder.encode(JSON.stringify({ error: bamlError }))
             );
             controller.close();
             return;
           }
         } catch (streamErr: unknown) {
           const errorPayload = {
-            type: 'StreamError',
+            type: "StreamError",
             message:
               streamErr instanceof Error
                 ? streamErr.message
-                : 'Error in stream processing',
-            prompt: '',
-            raw_output: '',
+                : "Error in stream processing",
+            prompt: "",
+            raw_output: "",
           };
 
           controller.enqueue(
-            encoder.encode(JSON.stringify({ error: errorPayload })),
+            encoder.encode(JSON.stringify({ error: errorPayload }))
           );
           controller.close();
         }
