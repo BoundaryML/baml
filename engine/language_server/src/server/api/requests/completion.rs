@@ -46,7 +46,7 @@ impl SyncRequestHandler for Completion {
         //     .get_or_create_project(&path)
         //     .expect("Failed to get or create project");
 
-        // let guard = project.lock().unwrap();
+        // let guard = project.lock();
         // let document_key =
         //     DocumentKey::from_url(&PathBuf::from(guard.root_path()), &url).internal_error()?;
         // let doc = guard

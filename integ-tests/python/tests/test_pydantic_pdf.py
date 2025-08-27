@@ -25,5 +25,3 @@ def test_model_dump_pdf_url():
             "media_type": "application/pdf",
         }
     }
-
-

@@ -5,11 +5,12 @@ use bstd::ProjectFqn;
 use derive_builder::Builder;
 use enumflags2::BitFlags;
 
-use crate::PreviewFeature;
+use crate::{feature_flags::FeatureFlags, PreviewFeature};
 
 #[derive(Debug)]
 pub struct Configuration {
     pub generators: Vec<Generator>,
+    pub feature_flags: FeatureFlags,
 }
 
 impl Default for Configuration {
@@ -20,13 +21,27 @@ impl Default for Configuration {
 
 impl Configuration {
     pub fn new() -> Self {
-        Self { generators: vec![] }
+        Self {
+            generators: vec![],
+            feature_flags: FeatureFlags::new(),
+        }
+    }
+
+    pub fn new_with_feature_flags(feature_flags: FeatureFlags) -> Self {
+        Self {
+            generators: vec![],
+            feature_flags,
+        }
     }
 
     pub fn preview_features(&self) -> BitFlags<PreviewFeature> {
         self.generators
             .iter()
             .fold(BitFlags::empty(), |acc, _generator| acc)
+    }
+
+    pub fn feature_flags(&self) -> &FeatureFlags {
+        &self.feature_flags
     }
 }
 

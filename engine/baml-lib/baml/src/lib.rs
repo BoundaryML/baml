@@ -6,7 +6,7 @@ pub use internal_baml_core::{
     self, internal_baml_ast,
     internal_baml_diagnostics::{self, Diagnostics, SourceFile},
     internal_baml_parser_database::{self},
-    Configuration, ValidatedSchema,
+    Configuration, FeatureFlags, ValidatedSchema,
 };
 
 /// Parses and validate a schema, but skip analyzing everything except datasource and generator
@@ -24,14 +24,19 @@ pub fn parse_configuration(
 pub fn parse_and_validate_schema(
     root_path: &Path,
     files: impl Into<Vec<SourceFile>>,
+    feature_flags: FeatureFlags,
 ) -> Result<ValidatedSchema, Diagnostics> {
-    let mut schema = validate(root_path, files.into());
+    let mut schema = validate(root_path, files.into(), feature_flags);
     schema.diagnostics.to_result()?;
     Ok(schema)
 }
 
 /// The most general API for dealing with Prisma schemas. It accumulates what analysis and
 /// validation information it can, and returns it along with any error and warning diagnostics.
-pub fn validate(root_path: &Path, files: Vec<SourceFile>) -> ValidatedSchema {
-    internal_baml_core::validate(root_path, files)
+pub fn validate(
+    root_path: &Path,
+    files: Vec<SourceFile>,
+    feature_flags: FeatureFlags,
+) -> ValidatedSchema {
+    internal_baml_core::validate(root_path, files, feature_flags)
 }

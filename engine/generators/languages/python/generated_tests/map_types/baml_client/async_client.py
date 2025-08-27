@@ -41,6 +41,7 @@ class BamlAsyncClient:
         client_registry: typing.Optional[baml_py.baml_py.ClientRegistry] = None,
         collector: typing.Optional[typing.Union[baml_py.baml_py.Collector, typing.List[baml_py.baml_py.Collector]]] = None,
         env: typing.Optional[typing.Dict[str, typing.Optional[str]]] = None,
+        on_tick: typing.Optional[typing.Callable[[str, baml_py.baml_py.FunctionLog], None]] = None,
     ) -> "BamlAsyncClient":
         options: BamlCallOptions = {}
         if tb is not None:
@@ -51,6 +52,8 @@ class BamlAsyncClient:
             options["collector"] = collector
         if env is not None:
             options["env"] = env
+        if on_tick is not None:
+            options["on_tick"] = on_tick
         return BamlAsyncClient(self.__options.merge_options(options))
 
     @property
@@ -76,101 +79,213 @@ class BamlAsyncClient:
     async def TestComplexMaps(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.ComplexMaps:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestComplexMaps", args={
-            "input": input,
-        })
-        return typing.cast(types.ComplexMaps, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestComplexMaps(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestComplexMaps", args={
+                "input": input,
+            })
+            return typing.cast(types.ComplexMaps, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestEdgeCaseMaps(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.EdgeCaseMaps:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestEdgeCaseMaps", args={
-            "input": input,
-        })
-        return typing.cast(types.EdgeCaseMaps, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestEdgeCaseMaps(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestEdgeCaseMaps", args={
+                "input": input,
+            })
+            return typing.cast(types.EdgeCaseMaps, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestLargeMaps(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.SimpleMaps:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestLargeMaps", args={
-            "input": input,
-        })
-        return typing.cast(types.SimpleMaps, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestLargeMaps(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestLargeMaps", args={
+                "input": input,
+            })
+            return typing.cast(types.SimpleMaps, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestNestedMaps(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.NestedMaps:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestNestedMaps", args={
-            "input": input,
-        })
-        return typing.cast(types.NestedMaps, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestNestedMaps(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestNestedMaps", args={
+                "input": input,
+            })
+            return typing.cast(types.NestedMaps, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestSimpleMaps(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.SimpleMaps:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestSimpleMaps", args={
-            "input": input,
-        })
-        return typing.cast(types.SimpleMaps, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestSimpleMaps(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestSimpleMaps", args={
+                "input": input,
+            })
+            return typing.cast(types.SimpleMaps, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestTopLevelBoolMap(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, bool]:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelBoolMap", args={
-            "input": input,
-        })
-        return typing.cast(typing.Dict[str, bool], result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestTopLevelBoolMap(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelBoolMap", args={
+                "input": input,
+            })
+            return typing.cast(typing.Dict[str, bool], result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestTopLevelEmptyMap(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, str]:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelEmptyMap", args={
-            "input": input,
-        })
-        return typing.cast(typing.Dict[str, str], result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestTopLevelEmptyMap(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelEmptyMap", args={
+                "input": input,
+            })
+            return typing.cast(typing.Dict[str, str], result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestTopLevelFloatMap(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, float]:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelFloatMap", args={
-            "input": input,
-        })
-        return typing.cast(typing.Dict[str, float], result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestTopLevelFloatMap(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelFloatMap", args={
+                "input": input,
+            })
+            return typing.cast(typing.Dict[str, float], result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestTopLevelIntMap(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, int]:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelIntMap", args={
-            "input": input,
-        })
-        return typing.cast(typing.Dict[str, int], result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestTopLevelIntMap(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelIntMap", args={
+                "input": input,
+            })
+            return typing.cast(typing.Dict[str, int], result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestTopLevelMapOfArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, typing.List[int]]:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelMapOfArrays", args={
-            "input": input,
-        })
-        return typing.cast(typing.Dict[str, typing.List[int]], result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestTopLevelMapOfArrays(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelMapOfArrays", args={
+                "input": input,
+            })
+            return typing.cast(typing.Dict[str, typing.List[int]], result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestTopLevelMapOfObjects(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, "types.User"]:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelMapOfObjects", args={
-            "input": input,
-        })
-        return typing.cast(typing.Dict[str, "types.User"], result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestTopLevelMapOfObjects(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelMapOfObjects", args={
+                "input": input,
+            })
+            return typing.cast(typing.Dict[str, "types.User"], result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestTopLevelMapWithNullable(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, typing.Optional[str]]:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelMapWithNullable", args={
-            "input": input,
-        })
-        return typing.cast(typing.Dict[str, typing.Optional[str]], result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestTopLevelMapWithNullable(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelMapWithNullable", args={
+                "input": input,
+            })
+            return typing.cast(typing.Dict[str, typing.Optional[str]], result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestTopLevelNestedMap(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, typing.Dict[str, str]]:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelNestedMap", args={
-            "input": input,
-        })
-        return typing.cast(typing.Dict[str, typing.Dict[str, str]], result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestTopLevelNestedMap(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelNestedMap", args={
+                "input": input,
+            })
+            return typing.cast(typing.Dict[str, typing.Dict[str, str]], result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestTopLevelStringMap(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, str]:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelStringMap", args={
-            "input": input,
-        })
-        return typing.cast(typing.Dict[str, str], result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestTopLevelStringMap(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelStringMap", args={
+                "input": input,
+            })
+            return typing.cast(typing.Dict[str, str], result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 

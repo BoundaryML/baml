@@ -26,7 +26,10 @@ use std::io::IsTerminal;
 
 use colored::{Color, Colorize};
 
-use crate::{Function, Instruction, Object, Value};
+use crate::{
+    vm::indexable::GlobalPool, EvalStack, Function, Instruction, Object, ObjectIndex, ObjectPool,
+    StackIndex, Value,
+};
 
 /// Context aware instruction display.
 ///
@@ -45,9 +48,9 @@ use crate::{Function, Instruction, Object, Value};
 pub fn display_instruction(
     instruction_ptr: isize,
     function: &Function,
-    stack: &[Value],
-    objects: &[Object],
-    globals: &[Value],
+    stack: &EvalStack,
+    objects: &ObjectPool,
+    globals: &GlobalPool,
 ) -> (String, String) {
     let instruction = &function.bytecode.instructions[instruction_ptr as usize];
 
@@ -56,15 +59,9 @@ pub fn display_instruction(
             "({})",
             display_value(&function.bytecode.constants[*index], objects)
         ),
-
-        // TODO: For this one we need to add some logic to check if it's
-        // a function or a global variable. In the case of variables, we
-        // have to store the names (potentially in the [`Vm`] struct) and
-        // print it.
         Instruction::LoadGlobal(index) | Instruction::StoreGlobal(index) => {
             format!("({})", display_value(&globals[*index], objects))
         }
-
         Instruction::LoadVar(index) | Instruction::StoreVar(index) => {
             format!(
                 "({})",
@@ -75,7 +72,6 @@ pub fn display_instruction(
                     .unwrap_or(&"?".to_string())
             )
         }
-
         Instruction::LoadField(index) | Instruction::StoreField(index) => 'field: {
             // When the compiler calls this, there's no runtime stack so it's
             // not possible to get instruction parameters from the stack.
@@ -88,7 +84,9 @@ pub fn display_instruction(
                 break 'field String::new();
             }
 
-            let Value::Object(reference) = stack[stack.len() - 2] else {
+            // TODO: prevent panic here
+
+            let Value::Object(reference) = stack[StackIndex::from_raw(stack.len() - 2)] else {
                 break 'field String::from("(ERROR: value not an object)");
             };
 
@@ -102,17 +100,14 @@ pub fn display_instruction(
 
             format!("({})", class.field_names[*index])
         }
-
         Instruction::Jump(offset) | Instruction::JumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr + offset)
         }
-
-        // Classes are also globals, we can get the name from there.
         Instruction::AllocInstance(index) => {
-            format!("({})", display_value(&globals[*index], objects))
+            format!("({})", display_object(objects, *index))
         }
-
         Instruction::Pop(_)
+        | Instruction::Copy(_)
         | Instruction::PopReplace(_)
         | Instruction::BinOp(_)
         | Instruction::CmpOp(_)
@@ -122,6 +117,7 @@ pub fn display_instruction(
         | Instruction::DispatchFuture(_)
         | Instruction::Await
         | Instruction::Call(_)
+        | Instruction::Assert
         | Instruction::Return => String::new(),
     };
 
@@ -133,18 +129,22 @@ pub fn display_instruction(
 /// The default display for objects is just a reference number. If we want
 /// all the information, we have to dereference the object and call it's
 /// `to_string` implementation.
-pub fn display_value(value: &Value, objects: &[Object]) -> String {
+pub fn display_value(value: &Value, objects: &ObjectPool) -> String {
     match value {
-        Value::Object(index) => match &objects[*index] {
-            // This one's a bit tricky to print.
-            Object::Instance(instance) => match &objects[instance.class] {
-                Object::Class(class) => format!("<{} instance>", class.name),
-                // This will most likely never happen, but we're trying not
-                // to panic.
-                other => format!("<{other} instance>"),
-            },
+        Value::Object(index) => display_object(objects, *index),
 
-            other => other.to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn display_object(objects: &ObjectPool, index: ObjectIndex) -> String {
+    match &objects[index] {
+        // This one's a bit tricky to print.
+        Object::Instance(instance) => match &objects[instance.class] {
+            Object::Class(class) => format!("<{} instance>", class.name),
+            // This will most likely never happen, but we're trying not
+            // to panic.
+            other => format!("<{other} instance>"),
         },
 
         other => other.to_string(),
@@ -159,36 +159,25 @@ const COLUMN_MARGIN: usize = 3;
 /// Get color for instruction based on its type
 fn instruction_color(instruction: &Instruction) -> Color {
     match instruction {
-        // Load instructions.
         Instruction::LoadConst(_)
         | Instruction::LoadVar(_)
         | Instruction::LoadGlobal(_)
         | Instruction::LoadField(_)
         | Instruction::LoadArrayElement => Color::Blue,
-
-        // Store instructions.
         Instruction::StoreVar(_) | Instruction::StoreGlobal(_) | Instruction::StoreField(_) => {
             Color::Green
         }
-
-        // Operation instructions.
         Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {
             Color::BrightBlue
         }
-
-        // Branch instructions.
         Instruction::Jump(_) | Instruction::JumpIfFalse(_) => Color::Yellow,
-
-        // Call instructions.
         Instruction::Call(_) => Color::Magenta,
-
-        // Return instructions.
-        Instruction::Return | Instruction::Pop(_) | Instruction::PopReplace(_) => Color::Red,
-
-        // Alloc instructions.
+        Instruction::Assert
+        | Instruction::Return
+        | Instruction::Pop(_)
+        | Instruction::Copy(_)
+        | Instruction::PopReplace(_) => Color::Red,
         Instruction::AllocInstance(_) | Instruction::AllocArray(_) => Color::Cyan,
-
-        // Async instructions.
         Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
     }
 }
@@ -241,9 +230,9 @@ impl Col {
 /// symmetric and returns the entire table.
 pub fn display_bytecode(
     function: &Function,
-    stack: &[Value],
-    objects: &[Object],
-    globals: &[Value],
+    stack: &EvalStack,
+    objects: &ObjectPool,
+    globals: &GlobalPool,
     use_colors: bool,
 ) -> String {
     if function.bytecode.instructions.is_empty() {
@@ -345,7 +334,12 @@ pub fn display_bytecode(
 }
 
 /// Prints the dissassembly of a function.
-pub fn disassemble(function: &Function, stack: &[Value], objects: &[Object], globals: &[Value]) {
+pub fn disassemble(
+    function: &Function,
+    stack: &EvalStack,
+    objects: &ObjectPool,
+    globals: &GlobalPool,
+) {
     let use_colors = std::io::stdout().is_terminal();
 
     let disassembly = display_bytecode(function, stack, objects, globals, use_colors);

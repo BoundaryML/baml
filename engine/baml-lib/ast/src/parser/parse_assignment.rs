@@ -3,7 +3,6 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_identifier::parse_identifier,
-    parse_named_args_list::parse_named_argument_list,
     Rule,
 };
 use crate::{

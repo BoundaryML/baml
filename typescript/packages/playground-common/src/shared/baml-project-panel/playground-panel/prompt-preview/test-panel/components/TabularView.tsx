@@ -116,7 +116,7 @@ const ResponseContent = ({
 
 export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
   const [config, setConfig] = useAtom(tabularViewConfigAtom)
-  const runBamlTests = useRunBamlTests()
+  const { runTests: runBamlTests } = useRunBamlTests()
   const [selectedItem, setSelectedItem] = useAtom(selectedItemAtom)
 
   const toggleConfig = (key: keyof typeof config) => {

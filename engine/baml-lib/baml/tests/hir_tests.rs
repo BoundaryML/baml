@@ -31,15 +31,16 @@ fn format_chunks(chunks: Vec<dissimilar::Chunk<'_>>) -> String {
 use std::{fs, path::Path, sync::Arc};
 
 use baml_compiler::hir::Hir;
-use baml_lib::SourceFile;
+use baml_lib::{FeatureFlags, SourceFile};
 use strip_ansi_escapes::strip_str;
 
 #[allow(dead_code)]
 fn run_hir_test(test_name: &str, content: &str) {
     let result = get_hir_output(content);
+    println!("result: {result:?}");
     let (without_expected, expected) = parse_expected_from_comments(content);
 
-    let actual = result.unwrap_or_else(|e| format!("error: {e}"));
+    let actual = result.unwrap_or_else(|e| e);
 
     if std::env::var("UPDATE_EXPECT").is_ok() {
         update_expected(
@@ -57,7 +58,11 @@ fn get_hir_output(content: &str) -> Result<String, String> {
         "test.baml".into(),
         Arc::from(content.to_string().into_boxed_str()),
     );
-    let schema = baml_lib::validate(&std::path::PathBuf::from("./test"), vec![source_file]);
+    let schema = baml_lib::validate(
+        &std::path::PathBuf::from("./test"),
+        vec![source_file],
+        FeatureFlags::new(),
+    );
 
     // Check for validation errors first
     if !schema.diagnostics.errors().is_empty() {
@@ -132,15 +137,15 @@ fn update_expected(test_name: &str, content: &str, actual: &str) {
         let comment_lines: Vec<String> = actual
             .lines()
             .map(|line| {
-                if line.is_empty() {
+                strip_ansi_escapes::strip_str(if line.is_empty() {
                     "//".to_string()
                 } else {
                     format!("// {line}")
-                }
+                })
             })
             .collect();
 
-        format!("{}\n\n{}", content.trim_end(), comment_lines.join("\n"))
+        format!("{}\n\n{}\n", content.trim_end(), comment_lines.join("\n"))
     };
 
     fs::write(&test_path, new_content).unwrap_or_else(|e| {
@@ -151,8 +156,17 @@ fn update_expected(test_name: &str, content: &str, actual: &str) {
 }
 
 fn compare_output(expected: &str, actual: &str, test_name: &str) {
-    let expected = strip_str(expected);
-    let actual = strip_str(actual);
+    // Strip ANSI codes and normalize trailing whitespace
+    let expected = strip_str(expected)
+        .lines()
+        .map(|line| line.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let actual = strip_str(actual)
+        .lines()
+        .map(|line| line.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
 
     if expected != actual {
         panic_with_diff(&expected, &actual);

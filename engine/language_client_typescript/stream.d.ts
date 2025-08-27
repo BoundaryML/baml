@@ -1,12 +1,14 @@
-import type { FunctionResultStream, RuntimeContextManager } from './native';
+import type { FunctionResultStream, RuntimeContextManager } from "../native";
 export declare class BamlStream<PartialOutputType, FinalOutputType> {
     private ffiStream;
     private partialCoerce;
     private finalCoerce;
     private ctxManager;
     private task;
+    private error;
     private eventQueue;
-    constructor(ffiStream: FunctionResultStream, partialCoerce: (result: any) => PartialOutputType, finalCoerce: (result: any) => FinalOutputType, ctxManager: RuntimeContextManager);
+    private abortSignal?;
+    constructor(ffiStream: FunctionResultStream, partialCoerce: (result: any) => PartialOutputType, finalCoerce: (result: any) => FinalOutputType, ctxManager: RuntimeContextManager, abortSignal?: AbortSignal);
     private driveToCompletion;
     private driveToCompletionInBg;
     [Symbol.asyncIterator](): AsyncIterableIterator<PartialOutputType>;

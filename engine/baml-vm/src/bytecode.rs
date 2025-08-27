@@ -1,6 +1,9 @@
 //! Instruction set and bytecode representation.
 
-use crate::vm::Value;
+use crate::{
+    vm::{indexable::GlobalIndex, Value},
+    ObjectIndex,
+};
 
 /// Individual bytecode instruction.
 ///
@@ -58,13 +61,13 @@ pub enum Instruction {
     /// Note that functions are also globals and can be passed around and stored
     /// in local variables, so we need to load their name in the stack before we
     /// call the function.
-    LoadGlobal(usize),
+    LoadGlobal(GlobalIndex),
 
     /// Store a value in a global variable.
     ///
     /// Format: `STORE_GLOBAL i` where `i` is the index of the global variable
     /// in the [`crate::Vm::globals`] array.
-    StoreGlobal(usize),
+    StoreGlobal(GlobalIndex),
 
     /// Load a field of an object.
     ///
@@ -82,6 +85,13 @@ pub enum Instruction {
     ///
     /// Format: `POP n` where `n` is the number of values to pop.
     Pop(usize),
+
+    /// Copy the i-th value from the top of the stack to the top.
+    ///
+    /// Format: `COPY i` where `i` is the offset from the top of the stack.
+    /// `COPY 0` copies the top element (duplicates it).
+    /// `COPY 1` copies the second element from the top.
+    Copy(usize),
 
     /// End a nested block and put the result value on top of the stack.
     ///
@@ -146,7 +156,7 @@ pub enum Instruction {
     ///
     /// Format: `ALLOC_INSTANCE i` where `i` is the index of the class in the
     /// [`crate::Vm::objects`] array.
-    AllocInstance(usize),
+    AllocInstance(ObjectIndex),
 
     /// Creates a pending future, pushes it on the stack and notifies embedder.
     ///
@@ -183,6 +193,12 @@ pub enum Instruction {
     /// No arguments needed, result is stored in the eval stack and the VM
     /// simply has to clean up the call stack and continue execution.
     Return,
+
+    /// Pops a `Bool` value from the stack. If the value is `false`, raises
+    /// an assertion error.
+    ///
+    /// Format: `ASSERT`
+    Assert,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -265,6 +281,7 @@ impl std::fmt::Display for Instruction {
             Instruction::LoadField(i) => write!(f, "LOAD_FIELD {i}"),
             Instruction::StoreField(i) => write!(f, "STORE_FIELD {i}"),
             Instruction::Pop(n) => write!(f, "POP {n}"),
+            Instruction::Copy(i) => write!(f, "COPY {i}"),
             Instruction::PopReplace(n) => write!(f, "POP_REPLACE {n}"),
             Instruction::Jump(o) => write!(f, "JUMP {o:+}"),
             Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o:+}"),
@@ -278,6 +295,7 @@ impl std::fmt::Display for Instruction {
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call(n) => write!(f, "CALL {n}"),
             Instruction::Return => f.write_str("RETURN"),
+            Instruction::Assert => f.write_str("ASSERT"),
         }
     }
 }

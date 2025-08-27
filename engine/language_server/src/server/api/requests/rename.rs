@@ -44,8 +44,7 @@ impl SyncRequestHandler for Rename {
             .expect("Ensured that a project db exists");
 
         let res = {
-            let mut guard: std::sync::MutexGuard<'_, crate::baml_project::Project> =
-                project.lock().unwrap();
+            let mut guard = project.lock();
             let document_key =
                 DocumentKey::from_url(&PathBuf::from(guard.root_path()), &url).internal_error()?;
 
@@ -64,7 +63,15 @@ impl SyncRequestHandler for Rename {
             let new_symbol = params.new_name;
 
             // If the symbol is a class, find all occurrences and replace them.
-            let runtime = guard.baml_project.runtime(HashMap::new());
+            let default_flags = vec!["beta".to_string()];
+            let runtime = guard.baml_project.runtime(
+                HashMap::new(),
+                session
+                    .baml_settings
+                    .feature_flags
+                    .as_ref()
+                    .unwrap_or(&default_flags),
+            );
             let rt = runtime
                 .as_ref()
                 .map_err(|_| anyhow::anyhow!("Failed to get runtime"))

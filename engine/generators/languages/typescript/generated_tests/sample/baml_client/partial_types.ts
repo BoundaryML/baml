@@ -38,7 +38,7 @@ export interface StreamState<T> {
 export namespace partial_types {
     export interface Example {
       type: "example_1"
-      a?: number | null
+      a?: types.Checked<number,"a_is_positive"> | null
       b?: string | null
     }
     export interface Example2 {

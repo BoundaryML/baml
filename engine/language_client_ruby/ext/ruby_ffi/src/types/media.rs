@@ -83,6 +83,7 @@ impl Pdf {
             inner: BamlMedia::url(BamlMediaType::Pdf, url, Some("application/pdf".to_string())),
         }
     }
+
     pub fn from_base64(base64: String) -> Self {
         Self {
             inner: BamlMedia::base64(

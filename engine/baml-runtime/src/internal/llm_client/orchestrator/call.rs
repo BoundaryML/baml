@@ -3,6 +3,7 @@ use baml_ids::HttpRequestId;
 use baml_types::BamlValue;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::{BamlValueWithFlags, ResponseBamlValue};
+use stream_cancel::Tripwire;
 use web_time::Duration;
 
 use super::{OrchestrationScope, OrchestratorNodeIterator};
@@ -49,6 +50,7 @@ pub async fn orchestrate(
     prompt: &PromptRenderer,
     params: &BamlValue,
     parse_fn: impl Fn(&str) -> Result<ResponseBamlValue>,
+    cancel_tripwire: Option<Tripwire>,
 ) -> (
     Vec<(
         OrchestrationScope,
@@ -60,74 +62,111 @@ pub async fn orchestrate(
     let mut results = Vec::new();
     let mut total_sleep_duration = std::time::Duration::from_secs(0);
 
+    // Create a future that either waits for cancellation or never completes
+    let cancel_future = match cancel_tripwire {
+        Some(tripwire) => Box::pin(async move {
+            tripwire.await;
+        })
+            as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
+        None => Box::pin(futures::future::pending()),
+    };
+    tokio::pin!(cancel_future);
+
     for node in iter {
-        let prompt = match node.render_prompt(ir, prompt, ctx, params).await {
-            Ok(p) => p,
-            Err(e) => {
+        // Check for cancellation at the start of each iteration
+        let cancel_scope = node.scope.clone();
+        tokio::select! {
+            biased;
+
+            _ = &mut cancel_future => {
                 results.push((
-                    node.scope,
-                    LLMResponse::InternalFailure(e.to_string()),
-                    Some(Err(anyhow::anyhow!(e.to_string()))),
-                ));
-                continue;
-            }
-        };
-
-        let ctx = CtxWithHttpRequestId::from(ctx);
-        let response = node.single_call(&ctx, &prompt).await;
-        let parsed_response = match &response {
-            LLMResponse::Success(s) => {
-                if !node
-                    .finish_reason_filter()
-                    .is_allowed(s.metadata.finish_reason.as_ref())
-                {
+                    cancel_scope,
+                    LLMResponse::Cancelled("Operation cancelled".to_string()),
                     Some(Err(anyhow::anyhow!(
-                        crate::errors::ExposedError::FinishReasonError {
-                            prompt: prompt.to_string(),
-                            raw_output: s.content.clone(),
-                            message: "Finish reason not allowed".to_string(),
-                            finish_reason: s.metadata.finish_reason.clone(),
-                        }
-                    )))
-                } else {
-                    Some(parse_fn(&s.content))
-                }
-            }
-            LLMResponse::LLMFailure(LLMErrorResponse {
-                code,
-                client,
-                message,
-                ..
-            }) => {
-                match code {
-                    // This is some internal BAML error, so handle it like any other error
-                    crate::internal::llm_client::ErrorCode::Other(2) => {
-                        Some(Err(anyhow::anyhow!(message.clone())))
-                    }
-                    _ => Some(Err(anyhow::anyhow!(
-                        crate::errors::ExposedError::ClientHttpError {
-                            client_name: client.clone(),
-                            message: message.clone(),
-                            status_code: code.clone(),
-                        }
+                        crate::errors::ExposedError::AbortError
                     ))),
+                ));
+                break;
+            }
+            result = async {
+                let prompt = match node.render_prompt(ir, prompt, ctx, params).await {
+                    Ok(p) => p,
+                    Err(e) => {
+                        return Some((
+                            node.scope,
+                            LLMResponse::InternalFailure(e.to_string()),
+                            Some(Err(anyhow::anyhow!(e.to_string()))),
+                        ));
+                    }
+                };
+
+                let ctx = CtxWithHttpRequestId::from(ctx);
+                let response = node.single_call(&ctx, &prompt).await;
+                let parsed_response = match &response {
+                    LLMResponse::Success(s) => {
+                        if !node
+                            .finish_reason_filter()
+                            .is_allowed(s.metadata.finish_reason.as_ref())
+                        {
+                            Some(Err(anyhow::anyhow!(
+                                crate::errors::ExposedError::FinishReasonError {
+                                    prompt: prompt.to_string(),
+                                    raw_output: s.content.clone(),
+                                    message: "Finish reason not allowed".to_string(),
+                                    finish_reason: s.metadata.finish_reason.clone(),
+                                }
+                            )))
+                        } else {
+                            Some(parse_fn(&s.content))
+                        }
+                    }
+                    LLMResponse::LLMFailure(LLMErrorResponse {
+                        code,
+                        client,
+                        message,
+                        ..
+                    }) => {
+                        match code {
+                            // This is some internal BAML error, so handle it like any other error
+                            crate::internal::llm_client::ErrorCode::Other(2) => {
+                                Some(Err(anyhow::anyhow!(message.clone())))
+                            }
+                            _ => Some(Err(anyhow::anyhow!(
+                                crate::errors::ExposedError::ClientHttpError {
+                                    client_name: client.clone(),
+                                    message: message.clone(),
+                                    status_code: code.clone(),
+                                }
+                            ))),
+                        }
+                    }
+                    _ => None,
+                };
+
+                let sleep_duration = node.error_sleep_duration().cloned();
+                let result = (node.scope, response, parsed_response);
+
+                // Return None to signal success and break
+                if matches!(result.1, LLMResponse::Success(_)) {
+                    return Some(result); // Will break after pushing
+                }
+
+                // Sleep if needed
+                if let Some(duration) = sleep_duration {
+                    total_sleep_duration += duration;
+                    async_std::task::sleep(duration).await;
+                }
+
+                Some(result)
+            } => {
+                if let Some(result) = result {
+                    results.push(result);
+                    // Check if we should break
+                    if results.last().is_some_and(|(_, r, _)| matches!(r, LLMResponse::Success(_))) {
+                        break;
+                    }
                 }
             }
-            _ => None,
-        };
-
-        let sleep_duration = node.error_sleep_duration().cloned();
-        results.push((node.scope, response, parsed_response));
-
-        // Currently, we break out of the loop if an LLM responded, even if we couldn't parse the result.
-        if results
-            .last()
-            .is_some_and(|(_, r, _)| matches!(r, LLMResponse::Success(_)))
-        {
-            break;
-        } else if let Some(duration) = sleep_duration {
-            total_sleep_duration += duration;
-            async_std::task::sleep(duration).await;
         }
     }
 

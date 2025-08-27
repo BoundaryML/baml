@@ -244,6 +244,20 @@ paths:
                 enum: []
                 $ref: '#/components/schemas/DynEnumTwo'
       operationId: ClassifyDynEnumTwo
+  /call/ClassifyDynamicStatus:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ClassifyDynamicStatus'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ClassifyDynamicStatusResponse
+                enum: []
+                $ref: '#/components/schemas/DynEnumOne'
+      operationId: ClassifyDynamicStatus
   /call/ClassifyMessage:
     post:
       requestBody:
@@ -516,6 +530,22 @@ paths:
                 title: ExtractContactInfoResponse
                 $ref: '#/components/schemas/ContactInfo'
       operationId: ExtractContactInfo
+  /call/ExtractDynamicCategories:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ExtractDynamicCategories'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ExtractDynamicCategoriesResponse
+                type: array
+                items:
+                  enum: []
+                  $ref: '#/components/schemas/DynEnumTwo'
+      operationId: ExtractDynamicCategories
   /call/ExtractEntities:
     post:
       requestBody:
@@ -548,6 +578,19 @@ paths:
                   - READING
                   $ref: '#/components/schemas/Hobby'
       operationId: ExtractHobby
+  /call/ExtractName:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ExtractName'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ExtractNameResponse
+                type: string
+      operationId: ExtractName
   /call/ExtractNames:
     post:
       requestBody:
@@ -679,6 +722,32 @@ paths:
                 - THREE
                 $ref: '#/components/schemas/EnumOutput'
       operationId: FnEnumOutput
+  /call/FnFailRetryConstantDelay:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnFailRetryConstantDelay'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnFailRetryConstantDelayResponse
+                type: string
+      operationId: FnFailRetryConstantDelay
+  /call/FnFailRetryExponentialDelay:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnFailRetryExponentialDelay'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnFailRetryExponentialDelayResponse
+                type: string
+      operationId: FnFailRetryExponentialDelay
   /call/FnLiteralClassInputOutput:
     post:
       requestBody:
@@ -1477,6 +1546,32 @@ paths:
                 type: object
                 additionalProperties: true
       operationId: RecursiveUnionTest
+  /call/RenderDynamicClass:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/RenderDynamicClass'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: RenderDynamicClassResponse
+                type: string
+      operationId: RenderDynamicClass
+  /call/RenderDynamicEnum:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/RenderDynamicEnum'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: RenderDynamicEnumResponse
+                type: string
+      operationId: RenderDynamicEnum
   /call/ReturnAliasWithMergedAttributes:
     post:
       requestBody:
@@ -1707,6 +1802,19 @@ paths:
                 title: TellStoryResponse
                 type: string
       operationId: TellStory
+  /call/TestAbortFallbackChain:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAbortFallbackChain'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAbortFallbackChainResponse
+                type: string
+      operationId: TestAbortFallbackChain
   /call/TestAnthropic:
     post:
       requestBody:
@@ -3214,6 +3322,22 @@ components:
             required:
             - input
             additionalProperties: false
+    ClassifyDynamicStatus:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ClassifyDynamicStatusRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     ClassifyMessage:
       required: true
       content:
@@ -3535,6 +3659,22 @@ components:
             required:
             - document
             additionalProperties: false
+    ExtractDynamicCategories:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ExtractDynamicCategoriesRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     ExtractEntities:
       required: true
       content:
@@ -3557,6 +3697,22 @@ components:
         application/json:
           schema:
             title: ExtractHobbyRequest
+            type: object
+            properties:
+              text:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - text
+            additionalProperties: false
+    ExtractName:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ExtractNameRequest
             type: object
             properties:
               text:
@@ -3717,6 +3873,44 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    FnFailRetryConstantDelay:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnFailRetryConstantDelayRequest
+            type: object
+            properties:
+              delay_ms:
+                type: integer
+              retries:
+                type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - delay_ms
+            - retries
+            additionalProperties: false
+    FnFailRetryExponentialDelay:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnFailRetryExponentialDelayRequest
+            type: object
+            properties:
+              initial_delay_ms:
+                type: integer
+              retries:
+                type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - initial_delay_ms
+            - retries
             additionalProperties: false
     FnLiteralClassInputOutput:
       required: true
@@ -4636,6 +4830,47 @@ components:
             required:
             - input
             additionalProperties: false
+    RenderDynamicClass:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: RenderDynamicClassRequest
+            type: object
+            properties:
+              input:
+                $ref: '#/components/schemas/RenderTestClass'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    RenderDynamicEnum:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: RenderDynamicEnumRequest
+            type: object
+            properties:
+              bike:
+                enum:
+                - BIKE
+                - SCOOTER
+                $ref: '#/components/schemas/RenderTestEnum'
+              other:
+                enum:
+                - BIKE
+                - SCOOTER
+                $ref: '#/components/schemas/RenderTestEnum'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - bike
+            - other
+            additionalProperties: false
     ReturnAliasWithMergedAttributes:
       required: true
       content:
@@ -4902,6 +5137,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - story
+            additionalProperties: false
+    TestAbortFallbackChain:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAbortFallbackChainRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     TestAnthropic:
       required: true
@@ -5994,6 +6245,8 @@ components:
                 oneOf:
                 - $ref: '#/components/schemas/BamlImage'
                 - type: string
+                - $ref: '#/components/schemas/BamlPdf'
+                - $ref: '#/components/schemas/BamlAudio'
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -6874,6 +7127,11 @@ components:
     DynEnumOne:
       enum: []
       type: string
+    DynEnumThree:
+      enum:
+      - TRICYCLE
+      - TRIANGLE
+      type: string
     DynEnumTwo:
       enum: []
       type: string
@@ -7694,6 +7952,38 @@ components:
       required:
       - value
       additionalProperties: false
+    RenderEnumInput:
+      type: object
+      properties:
+        testKey:
+          type: string
+      required:
+      - testKey
+      additionalProperties: false
+    RenderStatusEnum:
+      enum:
+      - ACTIVE
+      - INACTIVE
+      type: string
+    RenderTestClass:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          enum:
+          - ACTIVE
+          - INACTIVE
+          $ref: '#/components/schemas/RenderStatusEnum'
+      required:
+      - name
+      - status
+      additionalProperties: false
+    RenderTestEnum:
+      enum:
+      - BIKE
+      - SCOOTER
+      type: string
     Resume:
       type: object
       properties:

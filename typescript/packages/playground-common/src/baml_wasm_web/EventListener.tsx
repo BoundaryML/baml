@@ -123,7 +123,7 @@ export const EventListener: React.FC = () => {
   const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)
   const setBamlConfig = useSetAtom(bamlConfig)
   const [bamlCliVersion, setBamlCliVersion] = useAtom(bamlCliVersionAtom)
-  const runBamlTests = useRunBamlTests()
+  const { runTests: runBamlTests } = useRunBamlTests()
   const wasm = useAtomValue(wasmAtom)
   useEffect(() => {
     if (wasm) {
@@ -246,12 +246,15 @@ export const EventListener: React.FC = () => {
           }
         | {
             command: 'run_test';
-            content: { test_name: string };
+            content: {
+              function_name: string;
+              test_name: string;
+            };
           }
       >,
     ) => {
       const { command, content } = event.data;
-      console.debug('command', command);
+      console.debug('EventListener handling command', {command, content});
 
       switch (command) {
         case 'add_project':
@@ -304,14 +307,12 @@ export const EventListener: React.FC = () => {
           break;
 
         case 'run_test':
-          if (selectedFunc) {
-            setSelectedTestcase(content.test_name);
-            runBamlTests([
-              { functionName: selectedFunc, testName: content.test_name },
-            ]);
-          } else {
-            console.error('No function selected');
-          }
+          console.debug('run_test', content);
+          setSelectedFunction(content.function_name);
+          setSelectedTestcase(content.test_name);
+          runBamlTests([
+            { functionName: content.function_name, testName: content.test_name },
+          ]);
           // run([content.test_name])
           // setShowTests(true)
           // setClientGraph(false)

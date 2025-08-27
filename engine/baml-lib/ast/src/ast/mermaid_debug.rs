@@ -557,6 +557,13 @@ impl MermaidDiagramGenerator {
                 self.connect(&expr_id, &inner_id, Some("expr"));
                 expr_id
             }
+            Expression::MethodCall{ receiver, method, .. } => {
+                let label = format!("Method: {}.{}", receiver, method);
+                let expr_id = self.get_node_id_with_class(&key, &label, "expressionNode");
+                let receiver_id = self.visit_expression(receiver);
+                self.connect(&expr_id, &receiver_id, Some("receiver"));
+                expr_id
+            }
         };
 
         expr_id
@@ -680,7 +687,7 @@ impl MermaidDiagramGenerator {
                 stmt_id
             }
             Stmt::Assign(assign_stmt) => {
-                let label = format!("Assign: {}", assign_stmt.identifier.name());
+                let label = format!("Assign: {}", assign_stmt.expr.to_string());
                 let stmt_id = self.get_node_id_with_class(&key, &label, "statementNode");
                 let expr_id = self.visit_expression(&assign_stmt.expr);
                 self.connect(&stmt_id, &expr_id, Some("value"));
@@ -689,12 +696,77 @@ impl MermaidDiagramGenerator {
             Stmt::AssignOp(assign_op_stmt) => {
                 let label = format!(
                     "AssignOp: {} {}",
-                    assign_op_stmt.identifier.name(),
+                    assign_op_stmt.expr.to_string(),
                     assign_op_stmt.assign_op
                 );
                 let stmt_id = self.get_node_id_with_class(&key, &label, "statementNode");
                 let expr_id = self.visit_expression(&assign_op_stmt.expr);
                 self.connect(&stmt_id, &expr_id, Some("value"));
+                stmt_id
+            }
+            Stmt::CForLoop(c_for_stmt) => {
+                let label = "C-For Loop".to_string();
+                let stmt_id = self.get_node_id_with_class(&key, &label, "statementNode");
+                
+                // Visit init statement if present
+                if let Some(init_stmt) = &c_for_stmt.init_stmt {
+                    let init_id = self.visit_stmt(init_stmt, 0);
+                    self.connect(&stmt_id, &init_id, Some("init"));
+                }
+                
+                // Visit condition if present
+                if let Some(condition) = &c_for_stmt.condition {
+                    let condition_id = self.visit_expression(condition);
+                    self.connect(&stmt_id, &condition_id, Some("condition"));
+                }
+                
+                // Visit after statement if present
+                if let Some(after_stmt) = &c_for_stmt.after_stmt {
+                    let after_id = self.visit_stmt(after_stmt, 0);
+                    self.connect(&stmt_id, &after_id, Some("after"));
+                }
+                
+                let body_id = self.visit_expression_block(&c_for_stmt.body);
+                self.connect(&stmt_id, &body_id, Some("body"));
+                stmt_id
+            }
+            Stmt::WhileLoop(while_stmt) => {
+                let label = "While Loop".to_string();
+                let stmt_id = self.get_node_id_with_class(&key, &label, "statementNode");
+                
+                let condition_id = self.visit_expression(&while_stmt.condition);
+                let body_id = self.visit_expression_block(&while_stmt.body);
+                self.connect(&stmt_id, &condition_id, Some("condition"));
+                self.connect(&stmt_id, &body_id, Some("body"));
+                stmt_id
+            }
+            Stmt::Semicolon(expr) => {
+                let label = "Semicolon Expression".to_string();
+                let stmt_id = self.get_node_id_with_class(&key, &label, "statementNode");
+                let expr_id = self.visit_expression(expr);
+                self.connect(&stmt_id, &expr_id, Some("expr"));
+                stmt_id
+            }
+            Stmt::Break(_) => {
+                let label = "Break".to_string();
+                self.get_node_id_with_class(&key, &label, "statementNode")
+            }
+            Stmt::Continue(_) => {
+                let label = "Continue".to_string();
+                self.get_node_id_with_class(&key, &label, "statementNode")
+            }
+            Stmt::Return(return_stmt) => {
+                let label = "Return".to_string();
+                let stmt_id = self.get_node_id_with_class(&key, &label, "statementNode");
+                let value_id = self.visit_expression(&return_stmt.value);
+                self.connect(&stmt_id, &value_id, Some("value"));
+                stmt_id
+            }
+            Stmt::Assert(assert_stmt) => {
+                let label = "Assert".to_string();
+                let stmt_id = self.get_node_id_with_class(&key, &label, "statementNode");
+                let value_id = self.visit_expression(&assert_stmt.value);
+                self.connect(&stmt_id, &value_id, Some("condition"));
                 stmt_id
             }
         }

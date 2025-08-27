@@ -79,6 +79,45 @@ export function TestPdfInput() {
 }
 ```
 
+```go
+package main
+
+import (
+    "context"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func testPdfInput() error {
+    ctx := context.Background()
+    
+    // Create a PDF object from URL
+    pdfUrl, err := b.NewPDFFromUrl("https://example.com/document.pdf", nil)
+    if err != nil {
+        return err
+    }
+    
+    result1, err := b.TestPdfInput(ctx, pdfUrl)
+    if err != nil {
+        return err
+    }
+    
+    // Create a PDF object from Base64 data
+    pdfB64 := "JVBERi0K..."
+    pdf, err := b.NewPDFFromBase64(pdfB64, nil)
+    if err != nil {
+        return err
+    }
+    
+    result2, err := b.TestPdfInput(ctx, pdf)
+    if err != nil {
+        return err
+    }
+    
+    return nil
+}
+```
+
 ```ruby
 # Ruby implementation is in development.
 ```

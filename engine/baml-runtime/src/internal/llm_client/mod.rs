@@ -137,6 +137,8 @@ pub enum LLMResponse {
     /// BAML failed to make an HTTP request to a model, because of some internal
     /// error after the user's args passed validation
     InternalFailure(String),
+    /// The operation was cancelled by the user
+    Cancelled(String),
 }
 
 impl Error for LLMResponse {}
@@ -155,6 +157,9 @@ impl crate::tracing::Visualize for LLMResponse {
             Self::InternalFailure(message) => {
                 format!("{}", format!("Failed before LLM call: {message}").red())
             }
+            Self::Cancelled(message) => {
+                format!("{}", format!("Operation cancelled: {message}").yellow())
+            }
         }
     }
 }
@@ -168,6 +173,7 @@ impl std::fmt::Display for LLMResponse {
                 write!(f, "Failed before LLM call (user error): {message}")
             }
             Self::InternalFailure(message) => write!(f, "Failed before LLM call: {message}"),
+            Self::Cancelled(message) => write!(f, "Operation cancelled: {message}"),
         }
     }
 }
@@ -183,6 +189,7 @@ impl LLMResponse {
             Self::InternalFailure(message) => {
                 Err(anyhow::anyhow!("Failed before LLM call: {message}"))
             }
+            Self::Cancelled(message) => Err(anyhow::anyhow!("Operation cancelled: {message}")),
         }
     }
 }

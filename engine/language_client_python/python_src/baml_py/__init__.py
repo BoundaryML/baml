@@ -3,6 +3,7 @@
 
 # Re-export the pyo3 API
 from .baml_py import (
+    AbortController,
     BamlRuntime,
     FunctionResult,
     FunctionResultStream,
@@ -24,6 +25,7 @@ from .stream import BamlStream, BamlSyncStream
 from .ctx_manager import CtxManager as BamlCtxManager
 
 __all__ = [
+    "AbortController",
     "BamlRuntime",
     "ClientRegistry",
     "BamlStream",

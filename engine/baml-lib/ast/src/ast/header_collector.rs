@@ -388,6 +388,47 @@ impl HeaderCollector {
                 }
                 Stmt::Assign(assign_stmt) => self.visit_expression(&assign_stmt.expr),
                 Stmt::AssignOp(assign_op_stmt) => self.visit_expression(&assign_op_stmt.expr),
+                Stmt::CForLoop(c_for_stmt) => {
+                    // Visit init statement if present
+                    if let Some(init_stmt) = &c_for_stmt.init_stmt {
+                        // Recursively visit the init statement
+                        match init_stmt.as_ref() {
+                            Stmt::Let(let_stmt) => {
+                                let label_kind = Self::label_kind_for_expr(&let_stmt.expr);
+                                let stmt_header_ids = self.add_headers_for_annotations(&let_stmt.annotations, label_kind);
+                                self.attribute_calls_to_headers(&stmt_header_ids, &let_stmt.expr);
+                                self.visit_expression(&let_stmt.expr);
+                            }
+                            Stmt::Assign(assign_stmt) => self.visit_expression(&assign_stmt.expr),
+                            Stmt::AssignOp(assign_op_stmt) => self.visit_expression(&assign_op_stmt.expr),
+                            _ => {}, // Other statement types in init don't need special handling here
+                        }
+                    }
+                    // Visit condition if present
+                    if let Some(condition) = &c_for_stmt.condition {
+                        self.visit_expression(condition);
+                    }
+                    // Visit after statement if present
+                    if let Some(after_stmt) = &c_for_stmt.after_stmt {
+                        match after_stmt.as_ref() {
+                            Stmt::Assign(assign_stmt) => self.visit_expression(&assign_stmt.expr),
+                            Stmt::AssignOp(assign_op_stmt) => self.visit_expression(&assign_op_stmt.expr),
+                            _ => {}, // Other statement types don't need special handling here
+                        }
+                    }
+                    self.visit_expression_block(&c_for_stmt.body);
+                }
+                Stmt::WhileLoop(while_stmt) => {
+                    self.visit_expression(&while_stmt.condition);
+                    self.visit_expression_block(&while_stmt.body);
+                }
+                Stmt::Semicolon(expr) => self.visit_expression(expr),
+                Stmt::Break(_) => {}, // Break statements don't contain expressions to visit
+                Stmt::Continue(_) => {}, // Continue statements don't contain expressions to visit
+                Stmt::Return(return_stmt) => {
+                    self.visit_expression(&return_stmt.value);
+                }
+                Stmt::Assert(assert_stmt) => self.visit_expression(&assert_stmt.value),
             }
         }
 

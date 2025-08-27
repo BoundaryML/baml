@@ -36,51 +36,39 @@ func (*stream) {{ fn.name }}(ctx context.Context{% for (name, go_type) in fn.arg
         panic(wrapped_err)
     }
 
-    internal_ctx := context.Background()
-    internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "{{ fn.name }}", encoded, callOpts.onTick)
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "{{ fn.name }}", encoded, callOpts.onTick)
     if err != nil {
         return nil, err
     }
 
     channel := make(chan StreamValue[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}])
     go func() {
-        defer func() {
-            internal_ctx.Done()
-        }()
-        for {
-            select {
-            case <-ctx.Done():
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
                 close(channel)
                 return
-            case result, ok := <-internal_channel:
-                if !ok {
-                    // channel closed for some reason
-                    close(channel)
-                    return
-                }
-                if result.Error != nil {
-                    channel <- StreamValue[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}]{
-                        IsError: true,
-                        Error:   result.Error,
-                    }
-                    close(channel)
-                    return
-                }
-                if result.HasData {
+            }
+            if result.HasData {
                     data := {{ fn.return_type.cast_from_function("result.Data", pkg) }}
                     channel <- StreamValue[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}]{
                         IsFinal: true,
                         as_final: &data,
                     }
-                } else {
-                    data := {{ fn.stream_return_type.cast_from_function("result.StreamData", pkg) }}
-                    channel <- StreamValue[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}]{
-                        IsFinal: false,
-                        as_stream: &data,
-                    }
+            } else {
+                data := {{ fn.stream_return_type.cast_from_function("result.StreamData", pkg) }}
+                channel <- StreamValue[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}]{
+                    IsFinal: false,
+                    as_stream: &data,
                 }
             }
         }
+
+		// when internal_channel is closed, close the output too
+		close(channel)
     }()
     return channel, nil
 }

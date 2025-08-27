@@ -47,6 +47,10 @@ impl std::ops::Index<ArgumentId> for BlockArg {
 pub struct BlockArg {
     /// The field's type.
     pub field_type: FieldType,
+    /// Self param does not specify the field type.
+    /// We could make `field_type` a `Option<FieldType>` but requires too much
+    /// refactoring at this point.
+    pub is_self: bool,
     pub is_mutable: bool,
 
     /// The location of this field in the text representation.

@@ -5,6 +5,7 @@ use baml_runtime::{
     BamlRuntime as CoreRuntime,
 };
 use baml_types::BamlValue;
+use internal_baml_core::feature_flags::FeatureFlags;
 use napi::{
     bindgen_prelude::ObjectFinalize,
     threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode},
@@ -14,6 +15,7 @@ use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    abort_controller::js_abort_signal_to_rust_tripwire,
     errors::{from_anyhow_error, invalid_argument_error},
     parse_ts_types,
     types::{
@@ -58,9 +60,11 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
     ) -> napi::Result<Self> {
         let directory = PathBuf::from(directory);
-        Ok(CoreRuntime::from_directory(&directory, env_vars)
-            .map_err(from_anyhow_error)?
-            .into())
+        Ok(
+            CoreRuntime::from_directory(&directory, env_vars, FeatureFlags::new())
+                .map_err(from_anyhow_error)?
+                .into(),
+        )
     }
 
     #[napi(ts_return_type = "BamlRuntime")]
@@ -73,9 +77,11 @@ impl BamlRuntime {
             .into_iter()
             .filter_map(|(key, value)| value.map(|value| (key, value)))
             .collect();
-        Ok(CoreRuntime::from_file_content(&root_path, &files, env_vars)
-            .map_err(from_anyhow_error)?
-            .into())
+        Ok(
+            CoreRuntime::from_file_content(&root_path, &files, env_vars, FeatureFlags::new())
+                .map_err(from_anyhow_error)?
+                .into(),
+        )
     }
 
     #[napi]
@@ -85,9 +91,10 @@ impl BamlRuntime {
         files: HashMap<String, String>,
         env_vars: HashMap<String, String>,
     ) -> napi::Result<()> {
-        self.inner = CoreRuntime::from_file_content(&root_path, &files, env_vars)
-            .map_err(from_anyhow_error)?
-            .into();
+        self.inner =
+            CoreRuntime::from_file_content(&root_path, &files, env_vars, FeatureFlags::new())
+                .map_err(from_anyhow_error)?
+                .into();
         Ok(())
     }
 
@@ -109,6 +116,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
+        signal: Option<JsObject>, // NEW: AbortSignal parameter
     ) -> napi::Result<JsObject> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -119,6 +127,9 @@ impl BamlRuntime {
             )));
         }
         let args_map = args.as_map_owned().unwrap();
+
+        // Convert AbortSignal to Tripwire
+        let tripwire = js_abort_signal_to_rust_tripwire(env, signal)?;
 
         let baml_runtime = self.inner.clone();
         let ctx_mng = ctx.inner.clone();
@@ -140,6 +151,7 @@ impl BamlRuntime {
                     cb.as_ref(),
                     Some(collector_list),
                     env_vars,
+                    tripwire,
                 )
                 .await;
 
@@ -163,8 +175,10 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
+        signal: Option<JsObject>, // NEW: AbortSignal parameter (sync doesn't actually use it)
     ) -> napi::Result<FunctionResult> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
+        let tripwire = js_abort_signal_to_rust_tripwire(env, signal)?;
 
         if !args.is_map() {
             return Err(invalid_argument_error(&format!(
@@ -189,6 +203,7 @@ impl BamlRuntime {
             cb.as_ref(),
             Some(collector_list),
             env_vars,
+            tripwire,
         );
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)
@@ -208,6 +223,8 @@ impl BamlRuntime {
         client_registry: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
+        signal: Option<JsObject>, // NEW: AbortSignal parameter
+        #[napi(ts_arg_type = "(() => void) | undefined")] on_tick: Option<JsFunction>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -217,6 +234,8 @@ impl BamlRuntime {
             )));
         }
         let args_map = args.as_map_owned().unwrap();
+
+        let tripwire = js_abort_signal_to_rust_tripwire(env, signal)?;
 
         let ctx = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
@@ -235,6 +254,7 @@ impl BamlRuntime {
                 client_registry.as_ref(),
                 Some(collector_list),
                 env_vars,
+                tripwire,
             )
             .map_err(from_anyhow_error)?;
 
@@ -243,7 +263,18 @@ impl BamlRuntime {
             None => None,
         };
 
-        Ok(FunctionResultStream::new(stream, cb, tb, client_registry))
+        let on_tick = match on_tick {
+            Some(tick_cb) => Some(env.create_reference(tick_cb)?),
+            None => None,
+        };
+
+        Ok(FunctionResultStream::new(
+            stream,
+            cb,
+            on_tick,
+            tb,
+            client_registry,
+        ))
     }
 
     #[napi]
@@ -260,6 +291,8 @@ impl BamlRuntime {
         client_registry: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
+        signal: Option<JsObject>, // NEW: AbortSignal parameter
+        #[napi(ts_arg_type = "(() => void) | undefined")] on_tick: Option<JsFunction>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -277,6 +310,7 @@ impl BamlRuntime {
             .into_iter()
             .map(|c| c.inner.clone())
             .collect::<Vec<_>>();
+        let tripwire = js_abort_signal_to_rust_tripwire(env, signal)?;
         let stream = self
             .inner
             .stream_function(
@@ -287,6 +321,7 @@ impl BamlRuntime {
                 client_registry.as_ref(),
                 Some(collector_list),
                 env_vars,
+                tripwire,
             )
             .map_err(from_anyhow_error)?;
 
@@ -295,7 +330,18 @@ impl BamlRuntime {
             None => None,
         };
 
-        Ok(FunctionResultStream::new(stream, cb, tb, client_registry))
+        let on_tick = match on_tick {
+            Some(tick_cb) => Some(env.create_reference(tick_cb)?),
+            None => None,
+        };
+
+        Ok(FunctionResultStream::new(
+            stream,
+            cb,
+            on_tick,
+            tb,
+            client_registry,
+        ))
     }
 
     #[napi(ts_return_type = "Promise<HTTPRequest>")]

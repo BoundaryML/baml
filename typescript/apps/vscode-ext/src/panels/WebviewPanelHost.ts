@@ -15,6 +15,7 @@ import { getUri } from '../utils/getUri';
 import {
   type EchoResponse,
   type GetPlaygroundPortResponse,
+  type GetVSCodeSettingsResponse,
   type GetWebviewUriResponse,
   type WebviewToVscodeRpc,
   encodeBuffer,
@@ -24,6 +25,7 @@ import { exec } from 'child_process';
 import * as fs from 'fs';
 import { promisify } from 'util';
 import { GoogleAuth } from 'google-auth-library';
+import { BAML_CONFIG_SINGLETON } from '../plugins/language-server-client/bamlConfig';
 import {
   type Config,
   adjectives,
@@ -402,7 +404,9 @@ export class WebviewPanelHost {
       //   })
       // }
       this.postMessage('baml_cli_version', bamlConfig.cliVersion);
-      this.postMessage('baml_settings_updated', bamlConfig);
+      // Refresh config to ensure we have latest settings before sending
+      const refreshedConfig = refreshBamlConfigSingleton();
+      this.postMessage('baml_settings_updated', refreshedConfig);
     };
 
     vscode.workspace.onDidChangeConfiguration((event) => {
@@ -535,6 +539,54 @@ export class WebviewPanelHost {
               vscode.ConfigurationTarget.Workspace,
             );
             return;
+          case 'SET_FEATURE_FLAGS': {
+            const { featureFlags } = vscodeMessage;
+            const config = vscode.workspace.getConfiguration();
+            config.update(
+              'baml.featureFlags',
+              featureFlags,
+              vscode.ConfigurationTarget.Workspace,
+            );
+            return;
+          }
+          case 'GET_VSCODE_SETTINGS': {
+            // Read directly from VSCode configuration to ensure we get the latest values
+            const config = vscode.workspace.getConfiguration('baml');
+            const featureFlags = config.get('featureFlags', []);
+            const response: GetVSCodeSettingsResponse = {
+              enablePlaygroundProxy: config.get('enablePlaygroundProxy', true),
+              featureFlags: featureFlags,
+            };
+            console.log('GET_VSCODE_SETTINGS response:', response);
+            
+            // Also immediately send the current config to the LSP to ensure it's in sync
+            const bamlSettings = {
+              featureFlags: featureFlags,
+              enablePlaygroundProxy: config.get('enablePlaygroundProxy', true),
+              generateCodeOnSave: config.get('generateCodeOnSave', 'always'),
+              restartTSServerOnSave: config.get('restartTSServerOnSave', false),
+              fileWatcher: config.get('fileWatcher', false),
+              trace: config.get('trace', { server: 'off' }),
+            };
+            
+            // Import the client and send notification if available
+            const { client } = require('../plugins/language-server-client');
+            if (client) {
+              client.sendNotification('workspace/didChangeConfiguration', {
+                settings: { baml: bamlSettings }
+              });
+              console.log('GET_VSCODE_SETTINGS: Configuration sent to LSP');
+            } else {
+              console.log('GET_VSCODE_SETTINGS: LSP client not available');
+            }
+            
+            this._panel.webview.postMessage({
+              rpcId: message.rpcId,
+              rpcMethod: vscodeCommand,
+              data: response,
+            });
+            return;
+          }
           case 'GET_WEBVIEW_URI':
             console.log('GET_WEBVIEW_URI', vscodeMessage);
             // This is 1:1 with the contents of `image.file` in a test file, e.g. given `image { file baml_src://path/to-image.png }`,

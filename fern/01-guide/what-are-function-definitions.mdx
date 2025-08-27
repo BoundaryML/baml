@@ -71,6 +71,31 @@ const main = async () => {
 }
 ```
 
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/myproject/baml_client"
+    "example.com/myproject/baml_client/types"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    weatherInfo, err := b.UseTool(ctx, "What's the weather like in San Francisco?")
+    if err != nil {
+        panic(err)
+    }
+    
+    fmt.Printf("%+v\n", weatherInfo)
+    fmt.Printf("City: %s\n", weatherInfo.City)
+    fmt.Printf("Time of Day: %s\n", weatherInfo.TimeOfDay)
+}
+```
+
 ```ruby Ruby
 require_relative "baml_client/client"
 

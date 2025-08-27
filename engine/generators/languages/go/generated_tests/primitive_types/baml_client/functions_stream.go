@@ -76,51 +76,39 @@ func (*stream) TestEmptyCollections(ctx context.Context, input string, opts ...C
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestEmptyCollections", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestEmptyCollections", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.PrimitiveArrays)
+				channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.PrimitiveArrays)
-					channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.PrimitiveArrays)
-					channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.PrimitiveArrays)
+				channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -158,51 +146,39 @@ func (*stream) TestMixedPrimitives(ctx context.Context, input string, opts ...Ca
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMixedPrimitives", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMixedPrimitives", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.MixedPrimitives, types.MixedPrimitives])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.MixedPrimitives, types.MixedPrimitives]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.MixedPrimitives)
+				channel <- StreamValue[stream_types.MixedPrimitives, types.MixedPrimitives]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.MixedPrimitives, types.MixedPrimitives]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.MixedPrimitives)
-					channel <- StreamValue[stream_types.MixedPrimitives, types.MixedPrimitives]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.MixedPrimitives)
-					channel <- StreamValue[stream_types.MixedPrimitives, types.MixedPrimitives]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.MixedPrimitives)
+				channel <- StreamValue[stream_types.MixedPrimitives, types.MixedPrimitives]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -240,51 +216,39 @@ func (*stream) TestPrimitiveArrays(ctx context.Context, input string, opts ...Ca
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestPrimitiveArrays", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestPrimitiveArrays", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.PrimitiveArrays)
+				channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.PrimitiveArrays)
-					channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.PrimitiveArrays)
-					channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.PrimitiveArrays)
+				channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -322,51 +286,39 @@ func (*stream) TestPrimitiveMaps(ctx context.Context, input string, opts ...Call
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestPrimitiveMaps", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestPrimitiveMaps", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.PrimitiveMaps, types.PrimitiveMaps])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.PrimitiveMaps, types.PrimitiveMaps]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.PrimitiveMaps)
+				channel <- StreamValue[stream_types.PrimitiveMaps, types.PrimitiveMaps]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.PrimitiveMaps, types.PrimitiveMaps]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.PrimitiveMaps)
-					channel <- StreamValue[stream_types.PrimitiveMaps, types.PrimitiveMaps]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.PrimitiveMaps)
-					channel <- StreamValue[stream_types.PrimitiveMaps, types.PrimitiveMaps]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.PrimitiveMaps)
+				channel <- StreamValue[stream_types.PrimitiveMaps, types.PrimitiveMaps]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -404,51 +356,39 @@ func (*stream) TestPrimitiveTypes(ctx context.Context, input string, opts ...Cal
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestPrimitiveTypes", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestPrimitiveTypes", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.PrimitiveTypes, types.PrimitiveTypes])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.PrimitiveTypes, types.PrimitiveTypes]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.PrimitiveTypes)
+				channel <- StreamValue[stream_types.PrimitiveTypes, types.PrimitiveTypes]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.PrimitiveTypes, types.PrimitiveTypes]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.PrimitiveTypes)
-					channel <- StreamValue[stream_types.PrimitiveTypes, types.PrimitiveTypes]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.PrimitiveTypes)
-					channel <- StreamValue[stream_types.PrimitiveTypes, types.PrimitiveTypes]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.PrimitiveTypes)
+				channel <- StreamValue[stream_types.PrimitiveTypes, types.PrimitiveTypes]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -486,51 +426,39 @@ func (*stream) TestTopLevelBool(ctx context.Context, input string, opts ...CallO
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelBool", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelBool", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[bool, bool])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[bool, bool]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(bool)
+				channel <- StreamValue[bool, bool]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[bool, bool]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(bool)
-					channel <- StreamValue[bool, bool]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(bool)
-					channel <- StreamValue[bool, bool]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(bool)
+				channel <- StreamValue[bool, bool]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -568,51 +496,39 @@ func (*stream) TestTopLevelFloat(ctx context.Context, input string, opts ...Call
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelFloat", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelFloat", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[float64, float64])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[float64, float64]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(float64)
+				channel <- StreamValue[float64, float64]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[float64, float64]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(float64)
-					channel <- StreamValue[float64, float64]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(float64)
-					channel <- StreamValue[float64, float64]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(float64)
+				channel <- StreamValue[float64, float64]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -650,51 +566,39 @@ func (*stream) TestTopLevelInt(ctx context.Context, input string, opts ...CallOp
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelInt", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelInt", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[int64, int64])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[int64, int64]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(int64)
+				channel <- StreamValue[int64, int64]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[int64, int64]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(int64)
-					channel <- StreamValue[int64, int64]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(int64)
-					channel <- StreamValue[int64, int64]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(int64)
+				channel <- StreamValue[int64, int64]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -732,51 +636,39 @@ func (*stream) TestTopLevelNull(ctx context.Context, input string, opts ...CallO
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelNull", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelNull", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[any, any])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[any, any]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(any)
+				channel <- StreamValue[any, any]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[any, any]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(any)
-					channel <- StreamValue[any, any]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(any)
-					channel <- StreamValue[any, any]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(any)
+				channel <- StreamValue[any, any]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -814,51 +706,39 @@ func (*stream) TestTopLevelString(ctx context.Context, input string, opts ...Cal
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelString", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelString", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[string, string])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[string, string]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(string)
+				channel <- StreamValue[string, string]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[string, string]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(string)
-					channel <- StreamValue[string, string]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(string)
-					channel <- StreamValue[string, string]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(string)
+				channel <- StreamValue[string, string]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }

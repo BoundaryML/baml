@@ -4,8 +4,9 @@ use crossbeam_channel::{Receiver, Sender};
 use log::LevelFilter;
 use lsp_server::Message;
 use serde_json::json;
+use tokio::sync::broadcast;
 
-use crate::server::{connection::ConnectionInitializer, Server};
+use crate::server::{connection::ConnectionInitializer, Server, ServerArgs};
 
 pub struct TestServer {
     pub thread_join_handle: thread::JoinHandle<()>,
@@ -126,7 +127,23 @@ pub fn new_test_server(worker_threads: NonZeroUsize) -> anyhow::Result<TestServe
             )
             .unwrap();
 
-        let server = Server::new_with_connection(worker_threads, connection, init_params).unwrap();
+        let (playground_tx, playground_rx) = broadcast::channel(1);
+        let (broadcast_tx, _) = broadcast::channel(1);
+
+        let server = Server::new_with_connection(
+            worker_threads,
+            connection,
+            init_params,
+            ServerArgs {
+                tokio_runtime: tokio::runtime::Runtime::new().unwrap(),
+                broadcast_tx,
+                playground_rx,
+                playground_tx,
+                playground_port: 0,
+                proxy_port: 0,
+            },
+        )
+        .unwrap();
         server.run().unwrap();
     });
 

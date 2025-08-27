@@ -1,7 +1,7 @@
 "use strict";
 // NOTE: Don't take a dependency on ./native here, it will break the browser code
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BamlClientHttpError = exports.BamlValidationError = exports.BamlClientFinishReasonError = void 0;
+exports.BamlAbortError = exports.BamlClientHttpError = exports.BamlValidationError = exports.BamlClientFinishReasonError = void 0;
 exports.isBamlError = isBamlError;
 exports.toBamlError = toBamlError;
 class BamlClientFinishReasonError extends Error {
@@ -109,6 +109,29 @@ class BamlClientHttpError extends Error {
     }
 }
 exports.BamlClientHttpError = BamlClientHttpError;
+class BamlAbortError extends Error {
+    reason;
+    constructor(message, reason) {
+        super(message);
+        this.name = 'BamlAbortError';
+        this.reason = reason;
+        Object.setPrototypeOf(this, BamlAbortError.prototype);
+    }
+    toJSON() {
+        return JSON.stringify({
+            name: this.name,
+            message: this.message,
+            reason: this.reason,
+        }, null, 2);
+    }
+    static from(error) {
+        if (error.message.includes('BamlAbortError') || error.message.includes('Operation was aborted') || error.message.includes('Operation cancelled')) {
+            return new BamlAbortError(error.message);
+        }
+        return undefined;
+    }
+}
+exports.BamlAbortError = BamlAbortError;
 function isError(error) {
     if (typeof error === 'string') {
         return false;
@@ -125,6 +148,10 @@ function isError(error) {
 function createBamlErrorUnsafe(error) {
     if (!isError(error)) {
         return new Error(String(error));
+    }
+    const bamlAbortError = BamlAbortError.from(error);
+    if (bamlAbortError) {
+        return bamlAbortError;
     }
     const bamlClientHttpError = BamlClientHttpError.from(error);
     if (bamlClientHttpError) {
@@ -144,17 +171,20 @@ function createBamlErrorUnsafe(error) {
 function isBamlError(error) {
     if (error.type === 'BamlClientHttpError' ||
         error.type === 'BamlValidationError' ||
-        error.type === 'BamlClientFinishReasonError') {
+        error.type === 'BamlClientFinishReasonError' ||
+        error.type === 'BamlAbortError') {
         return true;
     }
     if (error.name === 'BamlClientHttpError' ||
         error.name === 'BamlValidationError' ||
-        error.name === 'BamlClientFinishReasonError') {
+        error.name === 'BamlClientFinishReasonError' ||
+        error.name === 'BamlAbortError') {
         return true;
     }
     return (error instanceof BamlClientHttpError ||
         error instanceof BamlValidationError ||
-        error instanceof BamlClientFinishReasonError);
+        error instanceof BamlClientFinishReasonError ||
+        error instanceof BamlAbortError);
 }
 function toBamlError(error) {
     try {
