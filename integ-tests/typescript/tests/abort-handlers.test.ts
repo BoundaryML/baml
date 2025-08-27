@@ -30,7 +30,7 @@ describe("Abort Handlers", () => {
     let aborted = false;
     try {
       for await (const value of stream) {
-        values.push(value);
+        values.push({ timestamp: Date.now(), value });
       }
       const _ = await stream.getFinalResponse();
     } catch (e) {
@@ -40,7 +40,9 @@ describe("Abort Handlers", () => {
 
     // Should have stopped early due to cancellation
     expect(aborted).toBe(true);
-    expect(values.length).toBeLessThan(10);
+    const latestTimestamp = values[values.length - 1].timestamp;
+    const firstTimestamp = values[0].timestamp;
+    expect(latestTimestamp - firstTimestamp).toBeLessThan(1000);
   });
 
   it("timeout using AbortSignal.timeout", async () => {
