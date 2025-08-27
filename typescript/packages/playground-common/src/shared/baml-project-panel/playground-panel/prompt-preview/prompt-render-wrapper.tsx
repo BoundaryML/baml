@@ -6,7 +6,7 @@ import { useSidebar } from '@baml/ui/sidebar';
 import { useAtom, useAtomValue } from 'jotai';
 import { BarChart2, Check, Copy, Server } from 'lucide-react';
 import React from 'react';
-import { runtimeAtom } from '../../atoms';
+import { runtimeAtom, betaFeatureEnabledAtom } from '../../atoms';
 import { selectionAtom } from '../atoms';
 import { displaySettingsAtom } from '../preview-toolbar';
 import { PromptPreviewContent } from './prompt-preview-content';
@@ -85,6 +85,7 @@ export const PromptRenderWrapper = () => {
   const renderedPrompt = useAtomValue(renderedPromptAtom);
   const [showCopied, setShowCopied] = React.useState(false);
   const { open: isSidebarOpen } = useSidebar();
+  const isBetaEnabled = useAtomValue(betaFeatureEnabledAtom);
 
   // Hide text when sidebar is open or on smaller screens
   const getButtonTextClass = () => {
@@ -117,7 +118,9 @@ export const PromptRenderWrapper = () => {
             <TabsTrigger value="preview">Preview</TabsTrigger>
             <TabsTrigger value="curl">cURL</TabsTrigger>
             <TabsTrigger value="client-graph">Client Graph</TabsTrigger>
-            <TabsTrigger value="mermaid-graph">Mermaid Graph</TabsTrigger>
+            {isBetaEnabled && (
+              <TabsTrigger value="mermaid-graph">Mermaid Graph</TabsTrigger>
+            )}
           </TabsList>
           <FunctionMetadata />
           <Button
@@ -165,9 +168,11 @@ export const PromptRenderWrapper = () => {
       <TabsContent value="client-graph" className="flex-1 min-h-0">
         <ClientGraphView />
       </TabsContent>
-      <TabsContent value="mermaid-graph" className="flex-1 min-h-0">
-        <MermaidGraphView />
-      </TabsContent>
+      {isBetaEnabled && (
+        <TabsContent value="mermaid-graph" className="flex-1 min-h-0">
+          <MermaidGraphView />
+        </TabsContent>
+      )}
     </Tabs>
   );
 };

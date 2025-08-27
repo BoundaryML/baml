@@ -4,8 +4,8 @@ import { atomWithStorage } from 'jotai/utils';
 // Feature flags atom for standalone playground
 export const standaloneFeatureFlagsAtom = atomWithStorage<string[]>('baml-feature-flags', []);
 
-// Beta feature flag convenience atom for standalone use
-export const betaFeatureEnabledAtom = atom(
+// Beta feature flag convenience atom for standalone use (with setter)
+export const standaloneBetaFeatureEnabledAtom = atom(
   (get) => get(standaloneFeatureFlagsAtom).includes('beta'),
   (get, set, enabled: boolean) => {
     const currentFlags = get(standaloneFeatureFlagsAtom);
