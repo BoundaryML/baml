@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.206.0](https://github.com/boundaryml/baml/compare/0.205.0..0.206.0) - 2025-08-27
+
+### Bug Fixes
+
+- package the baml-py license correctly (#2325) - ([eb70206](https://github.com/boundaryml/baml/commit/eb7020639ef4d79ff9f5c513d1102c5ded9b2ed1)) - Samuel Lijin
+- teach PromptRenderer to render enum values as their alias, not the value literal (#2326) - ([5366299](https://github.com/boundaryml/baml/commit/5366299334fb0320245f5fb5d44bdc22f87996d2)) - Samuel Lijin
+- Make the Jetbrains extension work (#2358) - ([09aeb12](https://github.com/boundaryml/baml/commit/09aeb1256c2ba3d6f9074040c89dbce24ef239b4)) - Samuel Lijin
+- Fix ERR_MODULE_NOT_FOUND for ESM users (#2299) - ([1bd1021](https://github.com/boundaryml/baml/commit/1bd10214c700b83a118ee16ca7b74ab53727dcea)) - Luke Ramsden
+- Do not generate code when generator/LSP versions do not match (#2367) - ([e8c9859](https://github.com/boundaryml/baml/commit/e8c98595c3b9048ee40b8a99d2f735ce9610cf74)) - Jesús Lapastora
+- fix roles and multi-modality on openai-responses provider (#2327) - ([01595b2](https://github.com/boundaryml/baml/commit/01595b20433af529bd2be128a6e6a385252f075f)) - hellovai
+- Fix `Pdf.from_base64` in Python to expose a logical API (#2366) - ([76fcd70](https://github.com/boundaryml/baml/commit/76fcd70ecc0df59226f6cda3a5b54b84e6ab9261)) - Antonio Sarosi
+
+
+### Features
+
+- Implement `onTick` which will allow users to get callbacks and access thinking tokens (#2362) - ([915ae27](https://github.com/boundaryml/baml/commit/915ae27118821e499b607185bb34c06f138035a9)) - hellovai
+- Implement AbortController in py, ts, go, wasm (also cancel buttons) (#2357) - ([fb4dd72](https://github.com/boundaryml/baml/commit/fb4dd72136dae70257a49f66c8707343ee7bb191)) - Samuel Lijin
+- Use AbortSignal in typescript, add a native timeout capability in python. (#2373) - ([a12ba5a](https://github.com/boundaryml/baml/commit/a12ba5a61792a2c59b23bf63f96d25f3b6457ea5)) - hellovai
+- render raw curl for aws-bedrock (#2319) - ([2bbb267](https://github.com/boundaryml/baml/commit/2bbb267e7c91bb089bc35089f4d878eddeeaa6c6)) - Ethan Lijin
+
+### Documentation
+
+- add env var docs for studio v2 (#2347) - ([146f4b4](https://github.com/boundaryml/baml/commit/146f4b4659dbefeff669ef2fa58c1ddd6513aab5)) - Chris Watts
+- Add official docs for go (#2253) - ([16d3612](https://github.com/boundaryml/baml/commit/16d3612c79bf89e8f1e0da440f48c749a0cba91f)) - hellovai
+
+### Miscellaneous Chores
+
+- claude code permissions should not be checked in (#2269) - ([99204c8](https://github.com/boundaryml/baml/commit/99204c8c00a559eb3c29961faf960b795e583828)) - Trenton Lawrence
+
 ## [0.205.0](https://github.com/boundaryml/baml/compare/0.204.0..0.205.0) - 2025-08-14
 
 ### Bug Fixes
