@@ -1908,7 +1908,7 @@ mod maps {
 
     #[test]
     fn create_and_access() -> anyhow::Result<()> {
-        assert_compiles(Program {
+        assert_vm_executes(Program {
             source: r#"fn CreateMap() -> map<string, string> {
     { hello "world" }
 }
@@ -1923,7 +1923,7 @@ fn UseMap() -> string {
 
     #[test]
     fn access_no_key() -> anyhow::Result<()> {
-        assert_compiles(Program {
+        assert_vm_executes(Program {
             source: r#"
 fn CreateMap() -> map<string, string> {
     { hello "world" }
@@ -1940,7 +1940,7 @@ fn UseMapNoKey() -> string {
 
     #[test]
     fn contains() -> anyhow::Result<()> {
-        assert_compiles(Program {
+        assert_vm_executes(Program {
             source: r#"
 fn CreateMapJSON() -> map<string, string> {
     {"hello": "world"}
@@ -1960,7 +1960,7 @@ fn UseMapContains() -> string {
 
     #[test]
     fn modify() -> anyhow::Result<()> {
-        assert_compiles(Program {
+        assert_vm_executes(Program {
             source: r#"
 fn EditMapKey() -> int {
 	let mut map = { hi 123 };
@@ -1978,7 +1978,7 @@ fn EditMapKey() -> int {
 
     #[test]
     fn len() -> anyhow::Result<()> {
-        assert_compiles(Program {
+        assert_vm_executes(Program {
             source: r#"
 fn Len() -> int {
     let map = {

@@ -115,6 +115,8 @@ pub fn display_instruction(
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
         | Instruction::LoadArrayElement
+        | Instruction::StoreArrayElement
+        | Instruction::StoreMapElement
         | Instruction::DispatchFuture(_)
         | Instruction::Await
         | Instruction::Call(_)
@@ -165,9 +167,11 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::LoadGlobal(_)
         | Instruction::LoadField(_)
         | Instruction::LoadArrayElement => Color::Blue,
-        Instruction::StoreVar(_) | Instruction::StoreGlobal(_) | Instruction::StoreField(_) => {
-            Color::Green
-        }
+        Instruction::StoreVar(_)
+        | Instruction::StoreGlobal(_)
+        | Instruction::StoreField(_)
+        | Instruction::StoreArrayElement
+        | Instruction::StoreMapElement => Color::Green,
         Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {
             Color::BrightBlue
         }

@@ -159,6 +159,18 @@ pub enum Instruction {
     /// the result is the element at that index.
     LoadArrayElement,
 
+    /// Stores a value into an array at a given index.
+    ///
+    /// Format: `STORE_ARRAY_ELEMENT` where the stack contains [array, index, value]
+    /// and stores the value at array[index].
+    StoreArrayElement,
+
+    /// Stores a value into a map at a given key.
+    ///
+    /// Format: `STORE_MAP_ELEMENT` where the stack contains [map, key, value]
+    /// and stores the value at map[key].
+    StoreMapElement,
+
     /// Builds an instance of a class and allocates it on the heap.
     ///
     /// Format: `ALLOC_INSTANCE i` where `i` is the index of the class in the
@@ -297,6 +309,8 @@ impl std::fmt::Display for Instruction {
             Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
             Instruction::LoadArrayElement => f.write_str("LOAD_ARRAY_ELEMENT"),
+            Instruction::StoreArrayElement => f.write_str("STORE_ARRAY_ELEMENT"),
+            Instruction::StoreMapElement => f.write_str("STORE_MAP_ELEMENT"),
             Instruction::AllocInstance(i) => write!(f, "ALLOC_INSTANCE {i}"),
             Instruction::DispatchFuture(i) => write!(f, "DISPATCH_FUTURE {i}"),
             Instruction::Await => f.write_str("AWAIT"),

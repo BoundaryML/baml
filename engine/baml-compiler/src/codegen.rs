@@ -512,6 +512,18 @@ impl<'g> HirCompiler<'g> {
                         self.compile_expression(value);
                         self.emit(Instruction::StoreField(field_index));
                     }
+                    thir::Expr::ArrayAccess {base, index, meta} => {
+
+                        self.compile_expression(base);
+                        self.compile_expression(index);
+
+                        self.emit(match meta.1.as_ref().expect("must have a resolved type") {
+                            TypeIR::List(_, _) => Instruction::StoreArrayElement,
+                            TypeIR::Map(_, _, _) => Instruction::StoreMapElement,
+                            _ => panic!("array access should be either map or array.")
+                        });
+
+                    }
                     _ => panic!("Invalid left hand of assignment, only variables, instance fields and array elements can be assigned"),
                 }
             }
@@ -570,6 +582,58 @@ impl<'g> HirCompiler<'g> {
                         self.compile_expression(value);
                         self.emit(binop);
                         self.emit(Instruction::StoreField(field_index));
+                    }
+                    thir::Expr::ArrayAccess { base, index, meta } => {
+                        // Compound Assignment for array[index] or map[key]
+                        //
+                        // For array[index] += value (or other compound ops):
+                        //
+                        // Stack evolution:
+                        // 1. Load array and index -> [array, index]
+                        // 2. Duplicate both for load -> [array, index, array_copy, index_copy]
+                        // 3. Load current value -> [array, index, current_value]
+                        //    (LoadArrayElement consumes array_copy and index_copy)
+                        // 4. Load value to operate with -> [array, index, current_value, value]
+                        // 5. Apply binary operation -> [array, index, result]
+                        //    (BinOp consumes current_value and value)
+                        // 6. Store back to array[index] -> []
+                        //    (StoreArrayElement consumes array, index, and result)
+                        //
+                        // The same pattern applies for maps with StoreMapElement
+                        
+                        // Determine if it's a list or map
+                        let (load_instr, store_instr) = match meta.1.as_ref().expect("must have a resolved type") {
+                            TypeIR::List(_, _) => (Instruction::LoadArrayElement, Instruction::StoreArrayElement),
+                            TypeIR::Map(_, _, _) => (Instruction::LoadArrayElement, Instruction::StoreMapElement),
+                            _ => panic!("array access should be either map or array.")
+                        };
+                        
+                        // Load array and index first
+                        self.compile_expression(base);
+                        self.compile_expression(index);
+                        
+                        // Stack is now: [array, index]
+                        // Duplicate both for the load operation
+                        self.emit(Instruction::Copy(1));  // Copy array (at position 1 from top)
+                        self.emit(Instruction::Copy(1));  // Copy index (at position 1 from top)
+                        
+                        // Stack is now: [array, index, array_copy, index_copy]
+                        // Load current value at array[index]
+                        // This consumes array_copy and index_copy
+                        self.emit(load_instr);
+                        
+                        // Stack is now: [array, index, current_value]
+                        // Load the value to apply operation with
+                        self.compile_expression(value);
+                        
+                        // Stack is now: [array, index, current_value, new_value]
+                        // Apply the operation
+                        self.emit(binop);
+                        
+                        // Stack is now: [array, index, result]
+                        // Store back to array[index]
+                        // This consumes array, index, and result value
+                        self.emit(store_instr);
                     }
                     _ => panic!("Invalid left hand of assignment, only variables, instance fields and array elements can be assigned"),
                 }

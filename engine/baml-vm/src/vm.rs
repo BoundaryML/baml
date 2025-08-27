@@ -1057,12 +1057,12 @@ impl Vm {
                     let index_value = self.stack.ensure_pop()?;
                     let array_value = self.stack.ensure_pop()?;
 
-                    let array_index = self.objects.as_object(&array_value, ObjectType::Array)?;
+                    let array_ob_index = self.objects.as_object(&array_value, ObjectType::Array)?;
 
-                    let Object::Array(array) = &self.objects[array_index] else {
+                    let Object::Array(array) = &self.objects[array_ob_index] else {
                         return Err(VmError::from(InternalError::TypeError {
                             expected: ObjectType::Array.into(),
-                            got: ObjectType::of(&self.objects[array_index]).into(),
+                            got: ObjectType::of(&self.objects[array_ob_index]).into(),
                         }));
                     };
 
@@ -1094,6 +1094,107 @@ impl Vm {
                     // Push the element onto the stack
                     self.stack.push(array[index]);
                 }
+                Instruction::StoreArrayElement => {
+                    // StoreArrayElement Instruction
+                    //
+                    // Stack before: [array, index, value]
+                    // Stack after: []
+                    //
+                    // Interpretation steps:
+                    // 1. Pop value from stack (top element)
+                    // 2. Pop index from stack (next element)
+                    // 3. Pop array reference from stack (bottom element)
+                    // 4. Validate that the popped array reference is indeed an array object
+                    // 5. Validate that index is an integer
+                    // 6. Check if index is non-negative
+                    // 7. Check if index is within array bounds
+                    // 8. Store the value at array[index]
+                    // 9. No value is pushed back to stack (mutation in place)
+
+                    let value = self.stack.ensure_pop()?;
+                    let index_value = self.stack.ensure_pop()?;
+                    let array_value = self.stack.ensure_pop()?;
+
+                    let array_ob_index = self.objects.as_object(&array_value, ObjectType::Array)?;
+
+                    let Object::Array(array) = &mut self.objects[array_ob_index] else {
+                        return Err(VmError::from(InternalError::TypeError {
+                            expected: ObjectType::Array.into(),
+                            got: ObjectType::of(&self.objects[array_ob_index]).into(),
+                        }));
+                    };
+
+                    // Get the index
+                    let index = match index_value {
+                        Value::Int(i) => {
+                            if i < 0 {
+                                return Err(InternalError::ArrayIndexIsNegative(i).into());
+                            }
+                            i as usize
+                        }
+                        _ => {
+                            return Err(InternalError::TypeError {
+                                expected: Type::Int,
+                                got: self.objects.type_of(&index_value),
+                            }
+                            .into());
+                        }
+                    };
+
+                    // Check bounds
+                    if index >= array.len() {
+                        return Err(VmError::from(InternalError::ArrayIndexOutOfBounds {
+                            index,
+                            length: array.len(),
+                        }));
+                    }
+
+                    // Store the value at the index
+                    array[index] = value;
+
+                    // Restore function reference after mutable borrow of self.objects
+                    function = self.objects[frame.function].as_function()?;
+                }
+                Instruction::StoreMapElement => {
+                    // StoreMapElement Instruction
+                    //
+                    // Stack before: [map, key, value]
+                    // Stack after: []
+                    //
+                    // Interpretation steps:
+                    // 1. Pop value from stack (top element)
+                    // 2. Pop key from stack (next element)
+                    // 3. Pop map reference from stack (bottom element)
+                    // 4. Validate that the popped map reference is indeed a map object
+                    // 5. Get the key as a string from the objects pool (maps use string keys)
+                    //    - Validate key_value is an object reference to a String
+                    //    - Clone the string from the objects pool
+                    // 6. Store/update the value at map[key]
+                    // 7. No value is pushed back to stack (mutation in place)
+
+                    let value = self.stack.ensure_pop()?;
+                    let key_value = self.stack.ensure_pop()?;
+                    let map_value = self.stack.ensure_pop()?;
+
+                    // Get the string key from the objects pool.
+                    let key_index = self.objects.as_object(&key_value, ObjectType::String)?;
+                    let key = self.objects[key_index].as_string()?.clone();
+
+                    let map_index = self.objects.as_object(&map_value, ObjectType::Map)?;
+
+                    let Object::Map(map) = &mut self.objects[map_index] else {
+                        return Err(VmError::from(InternalError::TypeError {
+                            expected: ObjectType::Map.into(),
+                            got: ObjectType::of(&self.objects[map_index]).into(),
+                        }));
+                    };
+
+                    // Store the value at the key
+                    map.insert(key, value);
+
+                    // borrow check
+                    function = self.objects[frame.function].as_function()?;
+                }
                 Instruction::AllocInstance(index) => {
                     let Object::Class(class) = &self.objects[index] else {
                         return Err(InternalError::TypeError {
@@ -1117,8 +1218,7 @@ impl Vm {
                     self.stack
                         .push(Value::Object(ObjectIndex(self.objects.len() - 1)));
 
-                    // Same as in the instruction above.
-                    // TODO: make `frame.function` a valid object index
+                    // borrow check.
                     function = self.objects[frame.function].as_function()?;
                 }
                 Instruction::DispatchFuture(arg_count) => {
