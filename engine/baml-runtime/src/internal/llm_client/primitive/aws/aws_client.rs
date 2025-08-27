@@ -673,16 +673,22 @@ impl WithRenderRawCurl for AwsClient {
             .collect::<Result<Vec<_>>>()?;
 
         // Build CLI command
-        let mut cmd_body = String::new();
+        let mut cmd = vec![];
+        if let Some(region) = &self.properties.region {
+            cmd.push(format!("AWS_REGION={region}"));
+        }
+        if let Some(profile) = &self.properties.profile {
+            cmd.push(format!(" AWS_PROFILE={profile}"));
+        }
         let base_cmd = if render_settings.stream && self.supports_streaming() {
             "aws bedrock-runtime converse-stream"
         } else {
             "aws bedrock-runtime converse"
         };
-        cmd_body.push_str(base_cmd);
+        cmd.push(base_cmd);
 
         // --model-id
-        cmd_body.push_str(&format!(
+        cmd.push(format!(
             " --model-id '{}'",
             escape(Cow::Borrowed(&self.properties.model))
         ));
@@ -726,25 +732,9 @@ impl WithRenderRawCurl for AwsClient {
         // pretty, multi-line JSON
         let input_json_str = serde_json::to_string_pretty(&serde_json::Value::Object(root))?;
         let input_json_escaped = escape(Cow::Borrowed(&input_json_str));
-        cmd_body.push_str(&format!(" --cli-input-json {}", input_json_escaped));
+        cmd.push(format!("--cli-input-json {}", input_json_escaped));
 
-        // Prefix with environment variables instead of --region/--profile flags
-        let mut env_parts: Vec<String> = Vec::new();
-        if let Some(region) = &self.properties.region {
-            env_parts.push(format!("AWS_REGION={}", escape(Cow::Borrowed(region))));
-        }
-        if let Some(profile) = &self.properties.profile {
-            env_parts.push(format!("AWS_PROFILE={}", escape(Cow::Borrowed(profile))));
-        }
-        let env_prefix = if env_parts.is_empty() {
-            String::new()
-        } else {
-            format!("{} ", env_parts.join(" "))
-        };
-
-        let cmd = format!("{}{}", env_prefix, cmd_body);
-
-        Ok(cmd)
+        Ok(cmd.join(" "))
     }
 }
 
