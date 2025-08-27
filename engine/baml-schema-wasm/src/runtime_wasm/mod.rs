@@ -30,8 +30,7 @@ use wasm_bindgen_futures::JsFuture;
 
 use self::runtime_prompt::WasmScope;
 use crate::{
-    abort_controller::{cleanup_operation, js_abort_signal_to_tripwire},
-    runtime_wasm::runtime_prompt::WasmPrompt,
+    abort_controller::js_abort_signal_to_tripwire, runtime_wasm::runtime_prompt::WasmPrompt,
 };
 
 type JsResult<T> = core::result::Result<T, JsError>;
@@ -1594,14 +1593,13 @@ impl WasmRuntime {
         abort_signal: Option<js_sys::Object>,
     ) -> Result<WasmTestResponses, JsValue> {
         // Convert abort signal to tripwire
-        let (operation_id, tripwire) =
-            match crate::abort_controller::js_abort_signal_to_tripwire(abort_signal) {
-                Ok((id, tw)) => (id, tw),
-                Err(_e) => {
-                    log::error!("WASM Parallel: Failed to setup abort handler");
-                    (0, None)
-                }
-            };
+        let tripwire = match crate::abort_controller::js_abort_signal_to_tripwire(abort_signal) {
+            Ok(tripwire) => tripwire,
+            Err(_e) => {
+                log::error!("WASM Parallel: Failed to setup abort handler");
+                baml_runtime::TripWire::new(None)
+            }
+        };
 
         // Create a vector to store all test futures
         let mut test_futures = Vec::new();
@@ -1693,11 +1691,6 @@ impl WasmRuntime {
 
         // Run all tests in parallel
         let results = futures::future::join_all(test_futures).await;
-
-        // Clean up operation if we had an abort signal
-        if operation_id > 0 {
-            crate::abort_controller::cleanup_operation(operation_id);
-        }
 
         Ok(WasmTestResponses { responses: results })
     }
@@ -1934,8 +1927,7 @@ impl WasmFunction {
         abort_signal: Option<js_sys::Object>,
     ) -> Result<WasmTestResponse, JsValue> {
         // Convert abort signal to tripwire
-        let (operation_id, tripwire) =
-            js_abort_signal_to_tripwire(abort_signal).map_err(JsValue::from)?;
+        let tripwire = js_abort_signal_to_tripwire(abort_signal).map_err(JsValue::from)?;
 
         let rt = &rt.runtime;
         let function_name = self.name.clone();
@@ -2004,9 +1996,6 @@ impl WasmFunction {
             )
             .await;
 
-        // Clean up the operation
-        cleanup_operation(operation_id);
-
         let (test_response, span) = result;
 
         Ok(WasmTestResponse {
@@ -2034,8 +2023,7 @@ impl WasmFunction {
         abort_signal: Option<js_sys::Object>,
     ) -> Result<WasmTestResponse, JsValue> {
         // Convert abort signal to tripwire
-        let (operation_id, tripwire) =
-            js_abort_signal_to_tripwire(abort_signal).map_err(JsValue::from)?;
+        let tripwire = js_abort_signal_to_tripwire(abort_signal).map_err(JsValue::from)?;
 
         let rt = &rt.runtime;
         let function_name = self.name.clone();
@@ -2082,9 +2070,6 @@ impl WasmFunction {
                 on_tick,
             )
             .await;
-
-        // Clean up the operation
-        cleanup_operation(operation_id);
 
         let (test_response, span) = result;
 

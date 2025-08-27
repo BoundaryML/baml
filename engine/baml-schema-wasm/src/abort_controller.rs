@@ -1,7 +1,8 @@
 use std::{cell::RefCell, collections::HashMap};
 
-use stream_cancel::{Trigger, Tripwire};
-use wasm_bindgen::{closure::Closure, prelude::*};
+use baml_runtime::TripWire;
+use stream_cancel::Trigger;
+use wasm_bindgen::prelude::*;
 use web_sys::AbortSignal;
 
 thread_local! {
@@ -12,9 +13,9 @@ thread_local! {
 
 pub fn js_abort_signal_to_tripwire(
     signal: Option<js_sys::Object>,
-) -> Result<(u32, Option<Tripwire>), JsError> {
+) -> Result<std::sync::Arc<baml_runtime::TripWire>, JsError> {
     let Some(signal) = signal else {
-        return Ok((0, None));
+        return Ok(TripWire::new(None));
     };
 
     let abort_signal: AbortSignal = signal
@@ -28,20 +29,18 @@ pub fn js_abort_signal_to_tripwire(
         id
     });
 
-    let (trigger, tripwire) = Tripwire::new();
+    let (trigger, tripwire) = stream_cancel::Tripwire::new();
 
     // Early abort check
     if abort_signal.aborted() {
         trigger.cancel();
-        return Ok((operation_id, Some(tripwire)));
+        return Ok(TripWire::new(Some(tripwire)));
     }
 
     // Store the trigger for later cancellation
     OPERATION_TRIGGERS.with(|triggers| {
         triggers.borrow_mut().insert(operation_id, trigger);
     });
-
-    // Create closure for abort event
     let op_id = operation_id;
     let closure = Closure::wrap(Box::new(move || {
         // Cancel the operation when abort is triggered
@@ -64,10 +63,15 @@ pub fn js_abort_signal_to_tripwire(
         closures.borrow_mut().insert(operation_id, closure);
     });
 
-    Ok((operation_id, Some(tripwire)))
+    let tripwire = TripWire::new_with_on_drop(
+        Some(tripwire),
+        Box::new(move || cleanup_operation(operation_id)),
+    );
+
+    Ok(tripwire)
 }
 
-pub fn cleanup_operation(operation_id: u32) {
+fn cleanup_operation(operation_id: u32) {
     ABORT_CLOSURES.with(|closures| {
         closures.borrow_mut().remove(&operation_id);
     });
