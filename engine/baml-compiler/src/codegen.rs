@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta};
 use baml_vm::{
     BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, GlobalIndex, GlobalPool,
-    HashableFloat, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
+    Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
 };
 use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_parser_database::ParserDatabase;
@@ -862,18 +862,11 @@ impl<'g> HirCompiler<'g> {
                 }
 
                 BamlValueWithMeta::Float(v, _) => {
-                    let index = self.add_constant(Value::Float(HashableFloat(*v)));
+                    let index = self.add_constant(Value::Float(*v));
                     self.emit(Instruction::LoadConst(index));
                 }
 
-                BamlValueWithMeta::String(v, _) => {
-                    // Allocate the string in the objects pool
-                    let object_index = self.objects.insert(Object::String(v.clone()));
-
-                    // Add a constant that points to the string object
-                    let const_index = self.add_constant(Value::Object(object_index));
-                    self.emit(Instruction::LoadConst(const_index));
-                }
+                BamlValueWithMeta::String(v, _) => self.emit_string_literal(v),
 
                 _ => panic!("unsupported atom: {value:#?}"),
             },
@@ -941,9 +934,19 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::AllocArray(elements.len()));
             }
 
-            thir::Expr::Map(_pairs, _) => {
+            thir::Expr::Map(pairs, _) => {
                 // Maps are not yet implemented in bytecode
-                todo!("map compilation")
+                // have N keys, N values.
+
+                for (key, _) in pairs {
+                    self.emit_string_literal(key);
+                }
+
+                for (_, value) in pairs {
+                    self.compile_expression(value);
+                }
+
+                self.emit(Instruction::AllocMap(pairs.len()));
             }
 
             thir::Expr::Call { func, args, .. } => {
@@ -1244,6 +1247,14 @@ impl<'g> HirCompiler<'g> {
                 todo!("unsupported expression: {:#?}", expr)
             }
         }
+    }
+
+    fn emit_string_literal(&mut self, v: &String) {
+        // Allocate the string in the objects pool
+        let object_index = self.objects.insert(Object::String(v.clone()));
+        // Add a constant that points to the string object
+        let const_index = self.add_constant(Value::Object(object_index));
+        self.emit(Instruction::LoadConst(const_index));
     }
 
     /// Emits a single instruction and returns the index of the instruction.

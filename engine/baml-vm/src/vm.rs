@@ -131,7 +131,7 @@ pub enum Object {
     Array(Vec<Value>),
 
     /// Map of values.
-    Map(BamlMap<Value, Value>),
+    Map(BamlMap<String, Value>),
 
     Future(Future),
 }
@@ -169,6 +169,17 @@ impl Object {
             .into()),
         }
     }
+
+    pub fn as_string(&self) -> Result<&String, InternalError> {
+        let Self::String(str) = self else {
+            return Err(InternalError::TypeError {
+                expected: ObjectType::String.into(),
+                got: ObjectType::of(self).into(),
+            });
+        };
+
+        Ok(str)
+    }
 }
 
 impl std::fmt::Display for Object {
@@ -193,62 +204,23 @@ impl std::fmt::Display for Object {
 /// This struct should not contain allocated objects and should be [`Copy`].
 /// Read the documentation of [`Vm::objects`] to understand how allocated
 /// objects work in the virtual machine.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+///
+/// # On `Hash`
+/// `Value` does not yet implement `Hash`, and should not implement `Eq`. Besides floating point which can be addressed,
+/// strings do not yet have referential equality, i.e "hello" can be represented with two different
+/// object indices. This makes comparisons nontrivial since they have to fetch the string. Same
+/// would happen with any other object type that we don't want to have referential equality for.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Value {
     Null,
     Int(i64),
-    Float(HashableFloat),
+    Float(f64),
     Bool(bool),
 
     /// Index into the [`Vm::objects`] vec.
     ///
     /// Strings are also objects, don't add `Value::String`.
     Object(ObjectIndex),
-}
-
-/// Representation of floating point that implements Eq + Hash, so that values can be hashed.
-/// When hashing, it will appropiately handle NaN/+-inf.
-#[derive(Clone, Copy, PartialEq, PartialOrd)]
-#[repr(transparent)]
-pub struct HashableFloat(pub f64);
-
-impl std::fmt::Debug for HashableFloat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::fmt::Display for HashableFloat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl Eq for HashableFloat {}
-
-impl std::hash::Hash for HashableFloat {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        #[derive(Eq, PartialEq, Hash)]
-        enum FloatTag {
-            NaN,
-            PosInf,
-            NegInf,
-            Regular(u64),
-        }
-        let tagged = if self.0.is_nan() {
-            FloatTag::NaN
-        } else if self.0.is_infinite() {
-            if self.0.is_sign_negative() {
-                FloatTag::NegInf
-            } else {
-                FloatTag::PosInf
-            }
-        } else {
-            FloatTag::Regular(self.0.to_bits())
-        };
-
-        tagged.hash(state);
-    }
 }
 
 impl std::fmt::Display for Value {
@@ -974,8 +946,8 @@ impl Vm {
                             BinOp::Shr => left >> right,
                         }),
 
-                        (Value::Float(HashableFloat(left)), Value::Float(HashableFloat(right))) => {
-                            Value::Float(HashableFloat(match op {
+                        (Value::Float(left), Value::Float(right)) => {
+                            Value::Float(match op {
                                 BinOp::Add => left + right,
                                 BinOp::Sub => left - right,
                                 BinOp::Mul => left * right,
@@ -994,7 +966,7 @@ impl Vm {
                                         op,
                                     }));
                                 }
-                            }))
+                            })
                         }
 
                         _ => {
@@ -1052,9 +1024,7 @@ impl Vm {
                     let result = match (op, value) {
                         (UnaryOp::Not, Value::Bool(value)) => Value::Bool(!value),
                         (UnaryOp::Neg, Value::Int(value)) => Value::Int(-value),
-                        (UnaryOp::Neg, Value::Float(HashableFloat(value))) => {
-                            Value::Float(HashableFloat(-value))
-                        }
+                        (UnaryOp::Neg, Value::Float(value)) => Value::Float(-value),
                         _ => {
                             return Err(VmError::from(InternalError::CannotApplyUnaryOp {
                                 op,
@@ -1375,6 +1345,51 @@ impl Vm {
                     if !condition_result {
                         return Err(RuntimeError::AssertionError.into());
                     }
+                }
+                Instruction::AllocMap(n) => {
+                    let map = if n > 0 {
+                        let idx_of_last_value = self.stack.ensure_slot_from_top(2 * n - 1)?;
+                        let idx_of_first_value = self.stack.ensure_slot_from_top(n)?;
+                        let idx_of_last_key = self.stack.ensure_slot_from_top(n - 1)?;
+
+                        // We can safely copy the objects that act as values so there's no problem
+                        // with not draining them.
+                        let values = self.stack[idx_of_first_value..idx_of_last_value]
+                            .iter()
+                            .copied();
+
+                        // We cannot copy key references since we aren't interning yet, so we
+                        // must clone the strings.
+                        // Here we'll also double-check that the keys are strings. This adds `n`
+                        // branches which is not ideal for performance. Might want to consider this
+                        // in map accesses.
+                        let keys = self.stack[idx_of_last_key..].iter().map(|k| {
+                            let ob_index = self.objects.as_object(k, ObjectType::String)?;
+
+                            self.objects[ob_index].as_string().map(Clone::clone)
+                        });
+
+                        let pairs = values
+                            .zip(keys)
+                            .map(|(val, key_res)| key_res.map(|k| (k, val)));
+
+                        let map = pairs.collect::<Result<BamlMap<_, _>, _>>()?;
+
+                        // drain & drop the drain so that vec is empty.
+                        self.stack.drain(idx_of_last_value..);
+
+                        map
+                    } else {
+                        // nothing to pop.
+                        BamlMap::new()
+                    };
+
+                    let ob_index = self.objects.insert(Object::Map(map));
+
+                    self.stack.push(Value::Object(ob_index));
+
+                    // borrow check.
+                    function = self.objects[frame.function].as_function()?;
                 }
             }
         }

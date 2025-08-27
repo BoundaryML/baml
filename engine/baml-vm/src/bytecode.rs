@@ -146,6 +146,13 @@ pub enum Instruction {
     /// executed.
     AllocArray(usize),
 
+    /// Builds a map and allocates it on the heap.
+    ///
+    /// Format `ALLOC_MAP n` where `n` is the number of entries in the map.
+    /// `n` keys are popped first and then `n` values are popped after that.
+    /// In total that's 2n stack required before the instruction is executed.
+    AllocMap(usize),
+
     /// Loads an element from an array at a given index.
     ///
     /// Format: `LOAD_ARRAY_ELEMENT` where the stack contains [array, index] and
@@ -296,6 +303,7 @@ impl std::fmt::Display for Instruction {
             Instruction::Call(n) => write!(f, "CALL {n}"),
             Instruction::Return => f.write_str("RETURN"),
             Instruction::Assert => f.write_str("ASSERT"),
+            Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
         }
     }
 }

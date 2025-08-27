@@ -6,7 +6,7 @@ use baml_types::BamlMap;
 
 use crate::{
     vm::{InternalError, Object, ObjectType, Vm, VmError},
-    RuntimeError, Value,
+    Value,
 };
 
 impl Vm {
@@ -62,9 +62,9 @@ impl Vm {
             .into());
         };
 
-        let value = map.get(&args[1]).ok_or(RuntimeError::NoSuchKeyInMap)?;
+        let key = self.objects.as_string(&args[1])?;
 
-        Ok(*value)
+        Ok(Value::Bool(map.contains_key(key)))
     }
 }
 
@@ -78,7 +78,5 @@ pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
         ("std.Map.contains".to_string(), (Vm::map_contains, 2)),
     ];
 
-
     BamlMap::from_iter(fns)
-
 }

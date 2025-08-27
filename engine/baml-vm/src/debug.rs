@@ -113,6 +113,7 @@ pub fn display_instruction(
         | Instruction::CmpOp(_)
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
+        | Instruction::AllocMap(_)
         | Instruction::LoadArrayElement
         | Instruction::DispatchFuture(_)
         | Instruction::Await
@@ -177,7 +178,9 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::Pop(_)
         | Instruction::Copy(_)
         | Instruction::PopReplace(_) => Color::Red,
-        Instruction::AllocInstance(_) | Instruction::AllocArray(_) => Color::Cyan,
+        Instruction::AllocMap(_) | Instruction::AllocInstance(_) | Instruction::AllocArray(_) => {
+            Color::Cyan
+        }
         Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
     }
 }
