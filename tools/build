@@ -209,8 +209,8 @@ case "$_path" in
       #command="${command} && BAML_LOG=trace infisical run --env=test -- uv run python baml_example_tracing.py"
       # command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=test -- uv run pytest -s tests/test_functions.py::test_streaming"
       # command="${command} && BAML_LOG=debug,baml_runtime=trace  uv run pytest -s tests/test_functions.py::test_should_work_with_vertex_claude"
-      # command="${command} && BAML_LOG=info infisical run --env=test -- uv run pytest"
-      command="${command} && BAML_LOG=info  uv run pytest -s tests/test_dynamic_enum_request.py"
+      command="${command} && BAML_LOG=info infisical run --env=test -- uv run pytest"
+      # command="${command} && BAML_LOG=info  uv run pytest -s tests/test_dynamic_enum_request.py"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
@@ -277,7 +277,7 @@ case "$_path" in
     command="(cd ${_repo_root}/engine/language_client_cffi && cargo make)"
 
     if [ "$_test_mode" -eq 1 ]; then
-      command="${command} && BAML_LIBRARY_PATH=${_repo_root}/engine/target/debug/libbaml_cffi.dylib infisical run --env=test -- go test"
+      command="${command} && BAML_LIBRARY_PATH=${_repo_root}/engine/target/debug/libbaml_cffi.dylib infisical run --env=test -- go test -timeout 0"
     fi
 
     if [ "$_watch_mode" -eq 1 ]; then
