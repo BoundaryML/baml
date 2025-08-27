@@ -6,7 +6,7 @@ describe("Abort Handlers", () => {
     const controller = new AbortController();
 
     const promise = b.FnFailRetryExponentialDelay(5, 100, {
-      abortSignal: controller.signal,
+      signal: controller.signal,
     });
 
     setTimeout(() => controller.abort(), 100);
@@ -19,7 +19,7 @@ describe("Abort Handlers", () => {
     const controller = new AbortController();
 
     const stream = b.stream.TestAbortFallbackChain("test", {
-      abortSignal: controller.signal,
+      signal: controller.signal,
     });
 
     setTimeout(() => {
@@ -46,7 +46,7 @@ describe("Abort Handlers", () => {
   it("timeout using AbortSignal.timeout", async () => {
     // Using the native AbortSignal.timeout() API
     const promise = b.FnFailRetryConstantDelay(5, 100, {
-      abortSignal: AbortSignal.timeout(200),
+      signal: AbortSignal.timeout(200),
     });
 
     await expect(promise).rejects.toThrow();
@@ -58,7 +58,7 @@ describe("Abort Handlers", () => {
     setTimeout(() => controller.abort("timeout"), 200);
 
     const promise = b.FnFailRetryConstantDelay(5, 100, {
-      abortSignal: controller.signal,
+      signal: controller.signal,
     });
 
     await expect(promise).rejects.toThrow();
@@ -70,7 +70,7 @@ describe("Abort Handlers", () => {
 
     await expect(
       b.ExtractName("John Doe", {
-        abortSignal: controller.signal,
+        signal: controller.signal,
       })
     ).rejects.toThrow(BamlAbortError);
   });

@@ -44,7 +44,7 @@ type BamlCallOptions = {
   clientRegistry?: ClientRegistry
   collector?: Collector | Collector[]
   env?: Record<string, string | undefined>
-  abortSignal?: AbortSignal
+  signal?: AbortSignal
   onTick?: (reason: TickReason, log: FunctionLog | null) => void
 }
 
@@ -99,7 +99,7 @@ export class BamlSyncClient {
   ): types.Recipe {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -139,7 +139,7 @@ export class BamlSyncClient {
   ): types.LinkedListAliasNode {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -179,7 +179,7 @@ export class BamlSyncClient {
   ): types.Checked<number,"gt_ten"> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -219,7 +219,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -259,7 +259,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -299,7 +299,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -339,7 +339,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -379,7 +379,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -419,7 +419,7 @@ export class BamlSyncClient {
   ): types.OptionalListAndMap {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -459,7 +459,7 @@ export class BamlSyncClient {
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -499,7 +499,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -539,7 +539,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -579,7 +579,7 @@ export class BamlSyncClient {
   ): types.LinkedList {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -619,7 +619,7 @@ export class BamlSyncClient {
   ): types.Tree {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -659,7 +659,7 @@ export class BamlSyncClient {
   ): types.ClassToRecAlias {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -699,7 +699,7 @@ export class BamlSyncClient {
   ): (string | types.DynEnumTwo) {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -739,7 +739,7 @@ export class BamlSyncClient {
   ): (string | types.DynEnumOne) {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -779,7 +779,7 @@ export class BamlSyncClient {
   ): types.Category {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -819,7 +819,7 @@ export class BamlSyncClient {
   ): types.Category {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -859,7 +859,7 @@ export class BamlSyncClient {
   ): types.Category {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -899,7 +899,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -939,7 +939,7 @@ export class BamlSyncClient {
   ): BookOrder | FlightConfirmation | GroceryReceipt {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -979,7 +979,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1019,7 +1019,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1059,7 +1059,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1099,7 +1099,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1139,7 +1139,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1179,7 +1179,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1219,7 +1219,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1259,7 +1259,7 @@ export class BamlSyncClient {
   ): OriginalA | OriginalB {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1299,7 +1299,7 @@ export class BamlSyncClient {
   ): types.DummyOutput {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1339,7 +1339,7 @@ export class BamlSyncClient {
   ): types.DynamicClassTwo {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1379,7 +1379,7 @@ export class BamlSyncClient {
   ): types.DynInputOutput {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1419,7 +1419,7 @@ export class BamlSyncClient {
   ): types.DynInputOutput[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1459,7 +1459,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1499,7 +1499,7 @@ export class BamlSyncClient {
   ): types.ContactInfo {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1539,7 +1539,7 @@ export class BamlSyncClient {
   ): (string | types.DynEnumTwo)[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1579,7 +1579,7 @@ export class BamlSyncClient {
   ): types.DynamicSchema {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1619,7 +1619,7 @@ export class BamlSyncClient {
   ): (string | types.Hobby)[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1659,7 +1659,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1699,7 +1699,7 @@ export class BamlSyncClient {
   ): string[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1739,7 +1739,7 @@ export class BamlSyncClient {
   ): types.Person[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1779,7 +1779,7 @@ export class BamlSyncClient {
   ): types.ReceiptInfo {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1819,7 +1819,7 @@ export class BamlSyncClient {
   ): types.Resume {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1859,7 +1859,7 @@ export class BamlSyncClient {
   ): types.Resume {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1899,7 +1899,7 @@ export class BamlSyncClient {
   ): types.ClassOptionalOutput | null {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1939,7 +1939,7 @@ export class BamlSyncClient {
   ): types.ClassOptionalOutput2 | null {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -1979,7 +1979,7 @@ export class BamlSyncClient {
   ): types.EnumOutput[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2019,7 +2019,7 @@ export class BamlSyncClient {
   ): types.EnumOutput {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2059,7 +2059,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2099,7 +2099,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2139,7 +2139,7 @@ export class BamlSyncClient {
   ): types.LiteralClassHello {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2179,7 +2179,7 @@ export class BamlSyncClient {
   ): LiteralClassOne | LiteralClassTwo {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2219,7 +2219,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2259,7 +2259,7 @@ export class BamlSyncClient {
   ): boolean {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2299,7 +2299,7 @@ export class BamlSyncClient {
   ): types.TestOutputClass {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2339,7 +2339,7 @@ export class BamlSyncClient {
   ): types.TestOutputClass[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2379,7 +2379,7 @@ export class BamlSyncClient {
   ): types.TestClassNested {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2419,7 +2419,7 @@ export class BamlSyncClient {
   ): types.TestClassWithEnum {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2459,7 +2459,7 @@ export class BamlSyncClient {
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2499,7 +2499,7 @@ export class BamlSyncClient {
   ): false {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2539,7 +2539,7 @@ export class BamlSyncClient {
   ): 5 {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2579,7 +2579,7 @@ export class BamlSyncClient {
   ): "example output" {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2619,7 +2619,7 @@ export class BamlSyncClient {
   ): string[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2659,7 +2659,7 @@ export class BamlSyncClient {
   ): types.TestEnum {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2699,7 +2699,7 @@ export class BamlSyncClient {
   ): types.TestClassAlias {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2739,7 +2739,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2779,7 +2779,7 @@ export class BamlSyncClient {
   ): types.RaysData {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2819,7 +2819,7 @@ export class BamlSyncClient {
   ): types.OrderInfo {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2859,7 +2859,7 @@ export class BamlSyncClient {
   ): types.SearchParams {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2899,7 +2899,7 @@ export class BamlSyncClient {
   ): Partial<Record<types.MapKey, string>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2939,7 +2939,7 @@ export class BamlSyncClient {
   ): Partial<Record<"one" | "two" | "three" | "four", string>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -2979,7 +2979,7 @@ export class BamlSyncClient {
   ): Record<"key", string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3019,7 +3019,7 @@ export class BamlSyncClient {
   ): types.JsonValue {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3059,7 +3059,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3099,7 +3099,7 @@ export class BamlSyncClient {
   ): 1 | true | "string output" {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3139,7 +3139,7 @@ export class BamlSyncClient {
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3179,7 +3179,7 @@ export class BamlSyncClient {
   ): types.Checked<types.BlockConstraint,"cross_field"> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3219,7 +3219,7 @@ export class BamlSyncClient {
   ): types.ClassWithBlockDone {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3259,7 +3259,7 @@ export class BamlSyncClient {
   ): types.ClassWithoutDone {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3299,7 +3299,7 @@ export class BamlSyncClient {
   ): types.NestedBlockConstraint {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3339,7 +3339,7 @@ export class BamlSyncClient {
   ): types.SemanticContainer {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3379,7 +3379,7 @@ export class BamlSyncClient {
   ): Record<string, string[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3419,7 +3419,7 @@ export class BamlSyncClient {
   ): types.MergeAttrs {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3459,7 +3459,7 @@ export class BamlSyncClient {
   ): types.DynamicOutput {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3499,7 +3499,7 @@ export class BamlSyncClient {
   ): number | string | boolean | number | string[] | Record<string, string[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3539,7 +3539,7 @@ export class BamlSyncClient {
   ): types.ClassForNullLiteral {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3579,7 +3579,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3619,7 +3619,7 @@ export class BamlSyncClient {
   ): (types.OptionalTest_ReturnType | null)[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3659,7 +3659,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3699,7 +3699,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3739,7 +3739,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3779,7 +3779,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3819,7 +3819,7 @@ export class BamlSyncClient {
   ): types.FooAny {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3859,7 +3859,7 @@ export class BamlSyncClient {
   ): types.Checked<number,"too_big"> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3899,7 +3899,7 @@ export class BamlSyncClient {
   ): number | string | boolean | number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3939,7 +3939,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -3979,7 +3979,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4019,7 +4019,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4059,7 +4059,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4099,7 +4099,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4139,7 +4139,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4179,7 +4179,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4219,7 +4219,7 @@ export class BamlSyncClient {
   ): types.RecAliasOne {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4259,7 +4259,7 @@ export class BamlSyncClient {
   ): types.NodeWithAliasIndirection {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4299,7 +4299,7 @@ export class BamlSyncClient {
   ): types.RecursiveUnion {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4339,7 +4339,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4379,7 +4379,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4419,7 +4419,7 @@ export class BamlSyncClient {
   ): types.Checked<number,"gt_ten"> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4459,7 +4459,7 @@ export class BamlSyncClient {
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4499,7 +4499,7 @@ export class BamlSyncClient {
   ): types.JsonTemplate {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4539,7 +4539,7 @@ export class BamlSyncClient {
   ): types.MalformedConstraints {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4579,7 +4579,7 @@ export class BamlSyncClient {
   ): types.Schema {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4619,7 +4619,7 @@ export class BamlSyncClient {
   ): types.RecursiveListAlias {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4659,7 +4659,7 @@ export class BamlSyncClient {
   ): types.RecursiveMapAlias {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4699,7 +4699,7 @@ export class BamlSyncClient {
   ): types.BigNumbers {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4739,7 +4739,7 @@ export class BamlSyncClient {
   ): types.TwoStoriesOneTitle {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4779,7 +4779,7 @@ export class BamlSyncClient {
   ): types.TwoStoriesOneTitleCheck {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4819,7 +4819,7 @@ export class BamlSyncClient {
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4859,7 +4859,7 @@ export class BamlSyncClient {
   ): (number | string)[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4899,7 +4899,7 @@ export class BamlSyncClient {
   ): types.CompoundBigNumbers {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4939,7 +4939,7 @@ export class BamlSyncClient {
   ): types.Document1559 {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -4979,7 +4979,7 @@ export class BamlSyncClient {
   ): types.RecursiveAliasDependency {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5019,7 +5019,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5059,7 +5059,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5099,7 +5099,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5139,7 +5139,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5179,7 +5179,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5219,7 +5219,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5259,7 +5259,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5299,7 +5299,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5339,7 +5339,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5379,7 +5379,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5419,7 +5419,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5459,7 +5459,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5499,7 +5499,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5539,7 +5539,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5579,7 +5579,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5619,7 +5619,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5659,7 +5659,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5699,7 +5699,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5739,7 +5739,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5779,7 +5779,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5819,7 +5819,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5859,7 +5859,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5899,7 +5899,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5939,7 +5939,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -5979,7 +5979,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6019,7 +6019,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6059,7 +6059,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6099,7 +6099,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6139,7 +6139,7 @@ export class BamlSyncClient {
   ): Record<string, types.StringToClassEntry> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6179,7 +6179,7 @@ export class BamlSyncClient {
   ): Record<string, Record<string, string>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6219,7 +6219,7 @@ export class BamlSyncClient {
   ): Record<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6259,7 +6259,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6299,7 +6299,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6339,7 +6339,7 @@ export class BamlSyncClient {
   ): string[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6379,7 +6379,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6419,7 +6419,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6459,7 +6459,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6499,7 +6499,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6539,7 +6539,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6579,7 +6579,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6619,7 +6619,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6659,7 +6659,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6699,7 +6699,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6739,7 +6739,7 @@ export class BamlSyncClient {
   ): types.TestMemoryOutput {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6779,7 +6779,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6819,7 +6819,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6859,7 +6859,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6899,7 +6899,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6939,7 +6939,7 @@ export class BamlSyncClient {
   ): string | null {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -6979,7 +6979,7 @@ export class BamlSyncClient {
   ): types.Haiku {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7019,7 +7019,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7059,7 +7059,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7099,7 +7099,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7139,7 +7139,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7179,7 +7179,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7219,7 +7219,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7259,7 +7259,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7299,7 +7299,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7339,7 +7339,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7379,7 +7379,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7419,7 +7419,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7459,7 +7459,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7499,7 +7499,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7539,7 +7539,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7579,7 +7579,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7619,7 +7619,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7659,7 +7659,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7699,7 +7699,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7739,7 +7739,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7779,7 +7779,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7819,7 +7819,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7859,7 +7859,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7899,7 +7899,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7939,7 +7939,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -7979,7 +7979,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8019,7 +8019,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8059,7 +8059,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8099,7 +8099,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8139,7 +8139,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8179,7 +8179,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8219,7 +8219,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8259,7 +8259,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8299,7 +8299,7 @@ export class BamlSyncClient {
   ): types.CustomStory {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8339,7 +8339,7 @@ export class BamlSyncClient {
   ): types.UniverseQuestion {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8379,7 +8379,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8419,7 +8419,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8459,7 +8459,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8499,7 +8499,7 @@ export class BamlSyncClient {
   ): types.UnionTest_ReturnType {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8539,7 +8539,7 @@ export class BamlSyncClient {
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8579,7 +8579,7 @@ export class BamlSyncClient {
   ): types.MaintainFieldOrder {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8619,7 +8619,7 @@ export class BamlSyncClient {
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8659,7 +8659,7 @@ export class BamlSyncClient {
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8699,7 +8699,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8739,7 +8739,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8779,7 +8779,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -8819,7 +8819,7 @@ export class BamlSyncClient {
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
