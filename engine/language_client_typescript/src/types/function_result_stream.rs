@@ -15,7 +15,7 @@ crate::lang_wrapper!(
     baml_runtime::FunctionResultStream,
     custom_finalize,
     no_from,
-    thread_safe,
+    optional,
     callback: Option<napi::Ref<()>>,
     on_tick: Option<napi::Ref<()>>,
     tb: Option<baml_runtime::type_builder::TypeBuilder>,
@@ -32,7 +32,7 @@ impl FunctionResultStream {
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
     ) -> Self {
         Self {
-            inner: std::sync::Arc::new(tokio::sync::Mutex::new(inner)),
+            inner: Some(inner),
             callback: event,
             on_tick,
             tb,
@@ -66,8 +66,10 @@ impl FunctionResultStream {
     }
 
     #[napi(ts_return_type = "Promise<FunctionResult>")]
-    pub fn done(&self, env: Env, rctx: &RuntimeContextManager) -> napi::Result<JsObject> {
-        let inner = self.inner.clone();
+    pub fn done(&mut self, env: Env, rctx: &RuntimeContextManager) -> napi::Result<JsObject> {
+        let Some(inner) = self.inner.take() else {
+            return Err(napi::Error::from_reason("Stream already finished"));
+        };
 
         let on_event = match &self.callback {
             Some(cb) => {
@@ -118,9 +120,8 @@ impl FunctionResultStream {
 
         let fut = async move {
             let ctx_mng = ctx_mng;
+            let mut inner = inner;
             let res = inner
-                .lock()
-                .await
                 .run(
                     on_tick_callback,
                     on_event,
