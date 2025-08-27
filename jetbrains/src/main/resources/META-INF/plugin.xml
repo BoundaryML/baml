@@ -31,7 +31,7 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow
-                id="BAML Playground"
+                id="BAML Playground (beta)"
                 factoryClass="com.boundaryml.jetbrains_ext.BamlToolWindowFactory"
                 icon="/icons/baml-lamb-light-mode.svg"
         />
