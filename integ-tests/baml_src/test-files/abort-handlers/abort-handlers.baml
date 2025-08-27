@@ -73,8 +73,8 @@ function FnFailRetryExponentialDelay(retries: int, initial_delay_ms: int) -> str
 function TestAbortFallbackChain(input: string) -> string {
   client AbortTestFallback
   prompt #"
-    This is a test for fallback chain cancellation.
-    Please fail so we test the fallback behavior.
+    Tell me a 200-word story about tigers.
+
     Input: {{ input }}
   "#
 }

@@ -488,7 +488,12 @@ impl WithStreamChat for OpenAIClient {
 }
 
 macro_rules! make_openai_client {
-    ($client:ident, $properties:ident, $provider:expr, dynamic) => {
+    ($client:ident, $properties:ident, $provider:expr, dynamic) => {{
+        let resolve_pdf_urls = if $provider == "openai-responses" {
+            ResolveMediaUrls::Never
+        } else {
+            ResolveMediaUrls::Always
+        };
         Ok(Self {
             name: $client.name.clone(),
             provider: $provider.into(),
@@ -506,7 +511,7 @@ macro_rules! make_openai_client {
                 max_one_system_prompt: false,
                 resolve_audio_urls: ResolveMediaUrls::Always,
                 resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Never,
+                resolve_pdf_urls,
                 resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: $properties.allowed_metadata.clone(),
             },
@@ -514,8 +519,13 @@ macro_rules! make_openai_client {
             retry_policy: $client.retry_policy.clone(),
             client: create_client()?,
         })
-    };
-    ($client:ident, $properties:ident, $provider:expr) => {
+    }};
+    ($client:ident, $properties:ident, $provider:expr) => {{
+        let resolve_pdf_urls = if $provider == "openai-responses" {
+            ResolveMediaUrls::Never
+        } else {
+            ResolveMediaUrls::Always
+        };
         Ok(Self {
             name: $client.name().into(),
             provider: $provider.into(),
@@ -533,7 +543,7 @@ macro_rules! make_openai_client {
                 max_one_system_prompt: false,
                 resolve_audio_urls: ResolveMediaUrls::Always,
                 resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Never,
+                resolve_pdf_urls,
                 resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: $properties.allowed_metadata.clone(),
             },
@@ -545,7 +555,7 @@ macro_rules! make_openai_client {
                 .map(|s| s.to_string()),
             client: create_client()?,
         })
-    };
+    }};
 }
 
 impl OpenAIClient {
@@ -714,8 +724,12 @@ impl ToProviderMessage for OpenAIClient {
                 match &media.content {
                     BamlMediaContent::Url(url_content) => {
                         // For URLs, we need to resolve them to base64 first
-                        anyhow::bail!(
-                            "BAML internal error (openai): Pdf URL are not supported by OpenAI use base64."
+                        content.insert(
+                            payload_key.into(),
+                            json!({
+                                "type": "input_file",
+                                "file_url": url_content.url
+                            }),
                         );
                     }
                     BamlMediaContent::Base64(b64_media) => {
