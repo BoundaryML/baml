@@ -1,11 +1,12 @@
 use baml_types::{TypeIR, TypeValue, LiteralValue};
+use baml_types::ir_type::UnionConstructor;
 use internal_baml_core::ir::{
     repr::IntermediateRepr,
     IRHelper,
 };
 use serde_json::{json, Value};
 use crate::internal::llm_client::primitive::openai::types::{Tool, ToolFunction};
-use crate::RuntimeContext;
+use crate::{RuntimeContext, BamlSrcReader};
 use std::collections::HashMap;
 
 pub struct ToolSchemaConverter<'a> {
@@ -337,12 +338,9 @@ mod test_tool_schema {
     
     fn create_test_context() -> (IntermediateRepr, RuntimeContext) {
         // Create minimal test IR and context
-        let ir = IntermediateRepr::default();
+        let ir = IntermediateRepr::create_empty();
         let ctx = RuntimeContext::new(
-            std::sync::Arc::new(internal_baml_core::BamlSrcReader::from_raw_parts(
-                vec![],
-                std::collections::HashMap::new(),
-            )),
+            std::sync::Arc::new(None), // BamlSrcReader is an Option
             std::collections::HashMap::new(),
             std::collections::HashMap::new(),
             None,
@@ -469,17 +467,17 @@ mod test_tool_schema {
         let mut converter = ToolSchemaConverter::new(&ir, &ctx);
         
         // String literal "success"
-        let literal_type = TypeIR::literal("success".into());
+        let literal_type = TypeIR::literal("success");
         let schema = converter.type_to_json_schema(&literal_type);
         assert_eq!(schema["const"], "success");
         
         // Int literal 42
-        let int_literal = TypeIR::literal(42i64.into());
+        let int_literal = TypeIR::literal(42i64);
         let schema = converter.type_to_json_schema(&int_literal);
         assert_eq!(schema["const"], 42);
         
         // Bool literal true
-        let bool_literal = TypeIR::literal(true.into());
+        let bool_literal = TypeIR::literal(true);
         let schema = converter.type_to_json_schema(&bool_literal);
         assert_eq!(schema["const"], true);
     }

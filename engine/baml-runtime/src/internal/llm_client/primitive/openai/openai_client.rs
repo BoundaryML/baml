@@ -6,7 +6,7 @@ use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-use internal_llm_client::{openai::ResolvedOpenAI, AllowedRoleMetadata, FinishReasonFilter};
+use internal_llm_client::{openai::ResolvedOpenAI, AllowedRoleMetadata, BamlMode, FinishReasonFilter, ToolChoice};
 use secrecy::ExposeSecret;
 use serde_json::json;
 
@@ -879,6 +879,8 @@ mod tests {
                 proxy_url: None,
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAIResponses,
+                baml_mode: BamlMode::TextSchema,
+                tool_choice: None,
             },
             client: reqwest::Client::new(),
         };
@@ -931,6 +933,8 @@ mod tests {
                 proxy_url: None,
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAI,
+                baml_mode: BamlMode::TextSchema,
+                tool_choice: None,
             },
             client: reqwest::Client::new(),
         };
