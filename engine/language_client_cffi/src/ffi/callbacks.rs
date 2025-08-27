@@ -127,7 +127,7 @@ pub fn safe_trigger_callback(
             }
             None => {
                 // IF YOU EVER CHANGE THIS THINK CAREFULLY.
-                // Almost definetily you should update ExposedError in engine/baml-runtime/src/errors.rs
+                // Almost definitely you should update ExposedError in engine/baml-runtime/src/errors.rs
                 // and then propagate that error.
                 send_error_to_callback(
                     id,
