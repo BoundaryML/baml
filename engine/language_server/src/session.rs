@@ -75,7 +75,6 @@ impl Session {
         position_encoding: PositionEncoding,
         global_settings: ClientSettings,
         workspace_folders: &[(Url, ClientSettings)],
-        runtime_handle: tokio::runtime::Handle,
         playground_port: u16,
         playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
         client_version: Option<String>,
@@ -477,15 +476,13 @@ mod tests {
         let global_settings = ClientSettings::default();
         let workspace_folders = vec![]; // Start with empty workspace
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let (playground_tx, _) = broadcast::channel(1000);
+        let (playground_tx, _) = broadcast::channel(1);
 
         Session::new(
             &client_capabilities,
             position_encoding,
             global_settings,
             &workspace_folders,
-            rt.handle().clone(),
             0,
             playground_tx,
             None, // No client_version for this test

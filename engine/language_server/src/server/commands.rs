@@ -54,7 +54,7 @@ impl CodeLensCommand for OpenBamlPanel {
     const COMMAND_ID: &'static str = "baml.openBamlPanel";
 
     fn code_lens_text(&self) -> String {
-        format!("▶ Open BAML Playground 💥")
+        "▶ Open BAML Playground 💥".to_string()
     }
 }
 
