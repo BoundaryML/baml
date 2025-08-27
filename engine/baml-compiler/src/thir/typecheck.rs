@@ -20,7 +20,7 @@
 use std::{borrow::Cow, sync::Arc};
 
 use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta, TypeValue};
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics, Span};
+use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::{
     hir::{self, dump::TypeDocumentRender, Hir},
@@ -1063,7 +1063,7 @@ fn is_assignable(
     match lhs {
         // base case: check variable mutability.
         // Since variable has been checked, info must exist.
-        thir::Expr::Var(name, meta) => ctx.vars[name].mut_var_info.is_some(),
+        thir::Expr::Var(name, _meta) => ctx.vars[name].mut_var_info.is_some(),
         thir::Expr::ArrayAccess { base, .. } | thir::Expr::FieldAccess { base, .. } => {
             is_assignable(base, rhs, diagnostics, ctx)
         }
@@ -1158,7 +1158,7 @@ pub fn typecheck_expression(
             thir::Expr::List(typed_items, (span.clone(), array_type))
         }
         hir::Expression::Map(entries, span) => {
-            let mut typed_entries = BamlMap::new();
+            let mut typed_entries = Vec::new();
 
             // Assume string keys for now
             let mut value_type = None;
@@ -1180,7 +1180,7 @@ pub fn typecheck_expression(
                 if value_type.is_none() {
                     value_type = typed_value.meta().1.clone();
                 }
-                typed_entries.insert(key, typed_value);
+                typed_entries.push((key, typed_value));
             }
 
             let map_type = value_type
