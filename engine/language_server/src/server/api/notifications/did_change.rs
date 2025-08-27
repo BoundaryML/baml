@@ -3,7 +3,6 @@ use std::{collections::HashMap, time::Instant};
 use lsp_types::{
     notification::DidChangeTextDocument, DidChangeTextDocumentParams, PublishDiagnosticsParams,
 };
-
 use playground_server::{FrontendMessage, PreSendToWasmMessage};
 
 use crate::{
@@ -66,8 +65,6 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
             .internal_error()?;
 
         // Broadcast update to playground clients
-        // #[cfg(feature = "playground-server")]
-        // if let Some(state) = &session.playground_state {
         {
             let project = project.lock();
             let files_map: std::collections::HashMap<String, String> = project
@@ -96,14 +93,6 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
                 ))
                 .unwrap();
         }
-        // let root_path = project.root_path().to_string_lossy().to_string();
-        // let state = state.clone();
-        // if let Some(runtime) = &session.playground_runtime {
-        //     runtime.spawn(async move {
-        //         let _ = broadcast_project_update(&state, &root_path, files_map).await;
-        //     });
-        // }
-        // }
 
         tracing::info!("publishing diagnostics");
 

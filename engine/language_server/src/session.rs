@@ -57,10 +57,6 @@ pub struct Session {
     pub baml_settings: BamlSettings,
 
     pub playground_tx: broadcast::Sender<PreSendToWasmMessage>,
-
-    /// The actual port that the playground server is running on (after availability check)
-    #[cfg(feature = "playground-server")]
-    pub playground_port: Option<u16>,
 }
 
 impl Clone for Session {
@@ -72,8 +68,6 @@ impl Clone for Session {
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
             baml_settings: self.baml_settings.clone(),
             playground_tx: self.playground_tx.clone(),
-            #[cfg(feature = "playground-server")]
-            playground_port: self.playground_port,
         }
     }
 }
@@ -135,8 +129,6 @@ impl Session {
                 baml_settings
             },
             playground_tx,
-            #[cfg(feature = "playground-server")]
-            playground_port: None,
         })
     }
 
@@ -168,22 +160,6 @@ impl Session {
                 false
             }
         }
-    }
-
-    /// Sets the actual playground port that the server determined after availability check
-    #[cfg(feature = "playground-server")]
-    pub fn set_session_playground_port(&mut self, port: u16) {
-        self.playground_port = Some(port);
-    }
-
-    /// Gets the actual playground port that the server is running on
-    #[cfg(feature = "playground-server")]
-    pub fn get_session_playground_port(&self) -> Option<u16> {
-        tracing::info!(
-            "Getting session playground port: {:?}",
-            self.playground_port
-        );
-        self.playground_port
     }
 
     /// Gets or creates a project for the given path.

@@ -4,8 +4,6 @@ use lsp_types::{
     self, request as req, GotoDefinitionParams, GotoDefinitionResponse, Location, Position, Range,
     Url,
 };
-// #[cfg(feature = "playground-server")]
-// use crate::playground::broadcast_function_change;
 use playground_server::{FrontendMessage, PreSendToWasmMessage};
 
 use crate::{
@@ -115,38 +113,19 @@ impl SyncRequestHandler for GotoDefinition {
                     .into_iter()
                     .find(|f| f.span.file_path == document_key.path().to_string_lossy())
                 {
-                    session
-                        .playground_tx
-                        .send(PreSendToWasmMessage::FrontendMessage(
-                            FrontendMessage::select_function {
-                                root_path: guard.root_path().to_string_lossy().to_string(),
-                                function_name: function.name.clone(),
-                            },
-                        ))
-                        .unwrap();
+                    if let Err(e) =
+                        session
+                            .playground_tx
+                            .send(PreSendToWasmMessage::FrontendMessage(
+                                FrontendMessage::select_function {
+                                    root_path: guard.root_path().to_string_lossy().to_string(),
+                                    function_name: function.name.clone(),
+                                },
+                            ))
+                    {
+                        tracing::warn!("Error forwarding function change to playground: {}", e);
+                    }
                 }
-                // #[cfg(feature = "playground-server")]
-                // if let Some(state) = &session.playground_state {
-                //     // Get the first function from the current file if available
-                //     if let Some(function) = guard
-                //         .list_functions()
-                //         .unwrap_or_default()
-                //         .into_iter()
-                //         .find(|f| f.span.file_path == document_key.path().to_string_lossy())
-                //     {
-                //         tracing::info!("Broadcasting function change for: {}", function.name);
-                //         let root_path = guard.root_path().to_string_lossy().to_string();
-                //         let state = state.clone();
-                //         let function_name = function.name.clone();
-                //         if let Some(runtime) = &session.playground_runtime {
-                //             runtime.spawn(async move {
-                //                 let _ =
-                //                     broadcast_function_change(&state, &root_path, function_name)
-                //                         .await;
-                //             });
-                //         }
-                //     }
-                // }
 
                 Ok(Some(goto_definition_response))
             }
