@@ -48,6 +48,7 @@ private const val PLACEHOLDER_HTML = """
       <body>
         <div class="spinner"></div>
         <h1>Starting BAML Playground…</h1>
+        <p>You may need to open a BAML file if this does not load.</p>
       </body>
     </html>
 """
@@ -72,13 +73,13 @@ class BamlToolWindowFactory : ToolWindowFactory {
                 addActionListener {
                     val currentTime = java.time.LocalDateTime.now()
                     val savedPort = project.getService(BamlGetPortService::class.java).port
-                    System.out.println("reload button clicked at ${currentTime}, port is ${savedPort}")
+                    println("playground reload at ${currentTime}, port is $savedPort")
                     if (savedPort != null) {
                         browser.loadURL(BamlIdeConfig.getPlaygroundUrl(savedPort))
                     } else {
                         browser.loadHTML("<p>Port not ready</p>")
                     }
-                    System.out.println("finished loading")
+                    println("playground reload done")
                 }
             }
 
@@ -86,7 +87,7 @@ class BamlToolWindowFactory : ToolWindowFactory {
             val loremButton = JButton("Lorem Ipsum").apply {
                 addActionListener {
                     val currentTime = java.time.LocalDateTime.now()
-                    System.out.println("lorem button clicked at ${currentTime}")
+                    println("lorem button clicked at ${currentTime}")
                     browser.loadHTML("""
                         <!DOCTYPE html>
                         <html>
@@ -144,47 +145,4 @@ class BamlToolWindowFactory : ToolWindowFactory {
     }
 
     override fun shouldBeAvailable(project: Project) = true
-
-    class BamlToolWindow(toolWindow: ToolWindow) {
-
-        private val browser = JBCefBrowser()
-
-        init {
-            browser.loadHTML(
-                PLACEHOLDER_HTML.trimIndent()
-            )
-
-        }
-
-        fun getContent(): JPanel {
-            return JPanel(BorderLayout()).apply {
-                add(browser.component, BorderLayout.CENTER)
-            }
-        }
-
-        // This approach doesn't work.
-        // We need to follow instructions here and implement resource loaders
-        // https://plugins.jetbrains.com/docs/intellij/embedded-browser-jcef.html#loading-resources-from-plugin-distribution
-        private fun loadHtmlFromResources(): String {
-            // Load the HTML file from the `resources/web-panel/index.html`
-            val stylesUri = javaClass.getResource("/web-panel/index.css")!!.toURI()
-            val scriptUri = javaClass.getResource("/web-panel/index.js")!!.toURI()
-
-            val htmlContent = """
-                          <!DOCTYPE html>
-                          <html lang="en">
-                            <head>
-                              <meta charset="UTF-8" />
-                              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                              <title>Hello World</title>
-                            </head>
-                            <body>
-                              <div id="root">Waiting for react (unimplemented)</div>
-                            </body>
-                          </html>
-            """.trimIndent()
-
-            return htmlContent;
-        }
-    }
 }
