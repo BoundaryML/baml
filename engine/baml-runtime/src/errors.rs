@@ -21,6 +21,7 @@ pub enum ExposedError {
         message: String,
         status_code: ErrorCode,
     },
+    AbortError,
 }
 
 impl std::error::Error for ExposedError {}
@@ -62,6 +63,9 @@ impl std::fmt::Display for ExposedError {
                     f,
                     "LLM client \"{client_name}\" failed with status code: {status_code}\nMessage: {message}"
                 )
+            }
+            ExposedError::AbortError => {
+                write!(f, "AbortError")
             }
         }
     }
@@ -112,6 +116,9 @@ impl IntoBamlError for &anyhow::Error {
                 } => baml_types::tracing::events::BamlError::ClientHttp {
                     message: Cow::Owned(message.clone()),
                     status_code: status_code.to_u16() as i32,
+                },
+                ExposedError::AbortError => baml_types::tracing::events::BamlError::Base {
+                    message: "AbortError".into(),
                 },
             };
         }

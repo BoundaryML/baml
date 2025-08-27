@@ -193,6 +193,7 @@ pub struct TripWire {
 
 impl TripWire {
     pub fn new(trip_wire: Option<stream_cancel::Tripwire>) -> Arc<Self> {
+        baml_log::error!("new:tripwire:init");
         Arc::new(Self {
             trip_wire,
             on_drop: None,
@@ -203,6 +204,7 @@ impl TripWire {
         trip_wire: Option<stream_cancel::Tripwire>,
         on_drop: Box<dyn Fn() + 'static + Send + Sync>,
     ) -> Arc<Self> {
+        baml_log::error!("new:dropable:tripwire:init");
         Arc::new(Self {
             trip_wire,
             on_drop: Some(on_drop),
@@ -217,7 +219,10 @@ impl TripWire {
 impl Drop for TripWire {
     fn drop(&mut self) {
         if let Some(on_drop) = self.on_drop.take() {
+            baml_log::error!("new:dropable:tripwire:called");
             on_drop();
+        } else {
+            baml_log::error!("new:dropable:tripwire:called:no_on_drop");
         }
     }
 }

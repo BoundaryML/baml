@@ -1,0 +1,38 @@
+TODO @greg: convert blocks with no return types to lambda terms
+TODO @greg: convert blocks with no return types to lambda terms
+TODO @greg: convert blocks with no return types to lambda terms
+TODO @greg: convert blocks with no return types to lambda terms
+=== RUN   TestAbortHandlerManualCancellation
+2025-08-27T01:21:56.371 [BAML ERROR] new:dropable:tripwire:init
+2025-08-27T01:21:56.472 [BAML ERROR] new:dropable:tripwire:called
+--- PASS: TestAbortHandlerManualCancellation (0.10s)
+=== RUN   TestAbortHandlerTimeoutCancellation
+2025-08-27T01:21:56.473 [BAML ERROR] new:dropable:tripwire:init
+2025-08-27T01:21:56.675 [BAML ERROR] new:dropable:tripwire:called
+--- PASS: TestAbortHandlerTimeoutCancellation (0.20s)
+=== RUN   TestAbortHandlerStreamingCancellation
+2025-08-27T01:21:56.676 [BAML ERROR] new:dropable:tripwire:init
+--- PASS: TestAbortHandlerStreamingCancellation (0.06s)
+2025-08-27T01:21:56.732 [BAML ERROR] new:dropable:tripwire:called
+=== RUN   TestAbortHandlerRetryChainCancellation
+2025-08-27T01:21:56.732 [BAML ERROR] new:dropable:tripwire:init
+2025-08-27T01:21:57.034 [BAML ERROR] new:dropable:tripwire:called
+--- PASS: TestAbortHandlerRetryChainCancellation (0.30s)
+=== RUN   TestAbortHandlerFallbackChainCancellation
+2025-08-27T01:21:57.035 [BAML ERROR] new:dropable:tripwire:init
+2025-08-27T01:21:57.186 [BAML ERROR] new:dropable:tripwire:called
+--- PASS: TestAbortHandlerFallbackChainCancellation (0.15s)
+=== RUN   TestAbortHandlerNoInterferenceWithNormalOperation
+2025-08-27T01:21:57.187 [BAML ERROR] new:dropable:tripwire:init
+2025-08-27T01:22:00.540 [BAML ERROR] new:dropable:tripwire:called
+--- PASS: TestAbortHandlerNoInterferenceWithNormalOperation (3.49s)
+=== RUN   TestAbortHandlerMultipleConcurrentCancellations
+2025-08-27T01:22:00.541 [BAML ERROR] new:dropable:tripwire:init
+2025-08-27T01:22:00.541 [BAML ERROR] new:dropable:tripwire:init
+2025-08-27T01:22:00.541 [BAML ERROR] new:dropable:tripwire:init
+2025-08-27T01:22:00.643 [BAML ERROR] new:dropable:tripwire:called
+2025-08-27T01:22:00.643 [BAML ERROR] new:dropable:tripwire:called
+2025-08-27T01:22:00.643 [BAML ERROR] new:dropable:tripwire:called
+--- PASS: TestAbortHandlerMultipleConcurrentCancellations (0.10s)
+PASS
+ok  	command-line-arguments	8.981s

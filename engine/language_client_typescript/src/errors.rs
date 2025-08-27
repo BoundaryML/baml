@@ -38,6 +38,7 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                 message,
                 status_code,
             } => throw_baml_client_http_error(client_name, message, status_code),
+            ExposedError::AbortError => throw_baml_abort_error(),
         }
     } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
         invalid_argument_error(&format!("{er}"))
@@ -125,6 +126,13 @@ fn throw_baml_client_http_error(
         "client_name": client_name,
         "message": format!("BamlError: BamlClientError: BamlClientHttpError: {}", message),
         "status_code": status_code.to_u16(),
+    });
+    napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
+}
+
+fn throw_baml_abort_error() -> napi::Error {
+    let error_json = serde_json::json!({
+        "type": "BamlAbortError",
     });
     napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
 }

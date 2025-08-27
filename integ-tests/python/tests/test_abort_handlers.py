@@ -58,6 +58,8 @@ async def test_streaming_cancellation():
     # Either it was cancelled or it stopped early after abort
     # The test succeeds if stream was interrupted (by exception or early stop)
     assert cancelled or abort_controller.aborted
+    # Delete the stream object
+    del stream
 
 def test_sync_cancellation():
     """Test abort in synchronous context"""

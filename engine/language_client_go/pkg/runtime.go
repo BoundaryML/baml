@@ -79,45 +79,24 @@ func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, enc
 	go func() {
 		<-ctx.Done()
 		// Send cancellation to Rust immediately when context is done
+		// This will trigger callback to send an error message
 		baml_go.CancelFunctionCall(callback_id)
-	}()
-	
-	return_channel := make(chan ResultCallback)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return_channel <- ResultCallback{
-					Error: ctx.Err(),
-				}
-				close(return_channel)
-				return
-			case result := <-callback:
-				// TODO: Handle the result
-				// error handling, type checking, etc.
-				return_channel <- result
-			}
-		}
 	}()
 
 	result, err := baml_go.CallFunctionFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
-		close(return_channel)
+		close(callback)
 		return nil, err
 	}
 
 	if result != nil {
 		result_str := (*string)(result)
-		close(return_channel)
+		close(callback)
 		return nil, errors.New(*result_str)
 	}
 
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case result := <-return_channel:
-		return &result, nil
-	}
+	cb_result := <-callback
+	return &cb_result, nil
 }
 
 func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName string, encoded_args []byte, onTick OnTickCallbackData) (<-chan ResultCallback, error) {

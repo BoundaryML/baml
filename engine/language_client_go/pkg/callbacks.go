@@ -95,11 +95,16 @@ func error_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.int
 		// Parse the content as a string
 		content_str := string(content_bytes)
 
-		// TODO: cast to the right error type
-		err := BamlError{Message: content_str}
-
 		// Send the error to the callback
-		callback.channel <- ResultCallback{Error: err}
+		if content_str == "AbortError" {
+			// Special handling for AbortError
+			callback.channel <- ResultCallback{Error: callback.ctx.Err()}
+		} else {
+			// TODO: cast to the right error type
+			err := BamlError{Message: content_str}
+			callback.channel <- ResultCallback{Error: err}
+		}
+
 
 		close(callback.channel)
 		callbackMutex.Lock()
@@ -138,19 +143,8 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 			res = ResultCallback{HasStreamData: true, StreamData: decoded_data}
 		}
 
-		force_close := false
-
-		select {
-		case <-callback.ctx.Done():
-			force_close = true
-			callback.channel <- ResultCallback{Error: callback.ctx.Err()}
-			// Cancellation is now handled early in runtime.go
-			break
-		case callback.channel <- res:
-			break
-		}
-
-		if isDone == 1 || force_close {
+		callback.channel <- res
+		if isDone == 1 {
 			close(callback.channel)
 			callbackMutex.Lock()
 			defer callbackMutex.Unlock()

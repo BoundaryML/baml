@@ -91,11 +91,16 @@ fn call_function_from_c_inner(
                 client_registry.as_ref(),
                 collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
                 env_vars,
-                tripwire,
+                tripwire.clone(),
             )
             .await;
 
         let (final_result, _) = result;
+        // This drop seems to be required due to timing issues accross ffi-boundaries
+        // We want to ensure we drop BEFORE any callbacks are made.
+        // If we don't do this explicitly, it will also auto-drop eventually.
+        drop(tripwire);
+
         safe_trigger_callback(id, true, final_result, runtime);
     });
 
@@ -259,8 +264,6 @@ fn call_function_stream_from_c_inner(
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
-    let tripwire = trip_wire::make_trip_wire(id);
-
     RUNTIME.spawn(async move {
         // Create the stream.run future
         let (final_result, _) = stream
@@ -273,6 +276,10 @@ fn call_function_stream_from_c_inner(
                 HashMap::new(),
             )
             .await;
+
+        // We should explicitly destruct the stream object
+        // BEFORE we send any data to the runtime.
+        drop(stream);
 
         safe_trigger_callback(id, true, final_result, runtime);
     });

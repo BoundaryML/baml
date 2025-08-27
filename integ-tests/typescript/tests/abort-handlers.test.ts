@@ -32,6 +32,7 @@ describe("Abort Handlers", () => {
       for await (const value of stream) {
         values.push(value);
       }
+      const _ = await stream.getFinalResponse();
     } catch (e) {
       aborted = true;
       // Expected - stream should be cancelled

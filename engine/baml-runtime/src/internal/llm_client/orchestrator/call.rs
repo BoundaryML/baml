@@ -82,7 +82,9 @@ pub async fn orchestrate(
                 results.push((
                     cancel_scope,
                     LLMResponse::Cancelled("Operation cancelled".to_string()),
-                    None,
+                    Some(Err(anyhow::anyhow!(
+                        crate::errors::ExposedError::AbortError
+                    ))),
                 ));
                 break;
             }

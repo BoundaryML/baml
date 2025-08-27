@@ -124,6 +124,8 @@ func TestAbortHandlerMultipleConcurrentCancellations(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		err := <-errChan
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "context canceled")
+		// When aborted, you should get the same error
+		// as the context
+		assert.Equal(t, err, ctx.Err())
 	}
 }

@@ -75,9 +75,11 @@ impl AbortController {
             }),
         )
     }
+}
 
-    pub fn get_id(&self) -> u32 {
-        self.id
+impl Drop for AbortController {
+    fn drop(&mut self) {
+        OPERATION_TRIGGERS.remove(&self.id);
     }
 }
 

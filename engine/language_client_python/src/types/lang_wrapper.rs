@@ -94,4 +94,13 @@ macro_rules! lang_wrapper {
             $($attr_name: $attr_type),*
         }
     };
+
+
+    ($name:ident, $type:ty, optional $(, $attr_name:ident : $attr_type:ty)*) => {
+        #[pyo3::prelude::pyclass(module = "baml_py.baml_py")]
+        pub struct $name {
+            pub(crate) inner: Option<$type>,
+            $($attr_name: $attr_type),*
+        }
+    };
 }
