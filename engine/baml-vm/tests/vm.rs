@@ -1826,8 +1826,7 @@ mod return_stmt {
 
                 fn main() -> int {
                     EarlyReturn(42)
-                }
-                "#,
+                }"#,
             function: "main",
             expected: VmExecState::Complete(Value::Int(1)),
         })
@@ -1899,6 +1898,97 @@ mod assert_stmt {
                 } "#,
             function: "assertNotOk",
             expected: RuntimeError::AssertionError.into(),
+        })
+    }
+}
+
+#[cfg(test)]
+mod maps {
+    use super::*;
+
+    #[test]
+    fn create_and_access() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"fn CreateMap() -> map<string, string> {
+    { hello "world" }
+}
+fn UseMap() -> string {
+    let map = CreateMap();
+    map["hello"]
+}"#,
+            function: todo!(),
+            expected: todo!(),
+        })
+    }
+
+    #[test]
+    fn access_no_key() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+fn CreateMap() -> map<string, string> {
+    { hello "world" }
+}
+
+fn UseMapNoKey() -> string {
+    let map = CreateMapJSON();
+    map["world"]
+}"#,
+            function: todo!(),
+            expected: todo!(),
+        })
+    }
+
+    #[test]
+    fn contains() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+fn CreateMapJSON() -> map<string, string> {
+    {"hello": "world"}
+}
+fn UseMapContains() -> string {
+    let map = CreateMapJSON();
+    if (map.contains("hello")) {
+        map["hello"]
+    } else {
+        "hi"
+    }
+}"#,
+            function: todo!(),
+            expected: todo!(),
+        })
+    }
+
+    #[test]
+    fn modify() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+fn EditMapKey() -> int {
+	let mut map = { hi 123 };
+
+	map["hi"] = 42 - 4;
+	map["hi"] += 4;
+
+	map["hi"]
+
+}"#,
+            function: todo!(),
+            expected: todo!(),
+        })
+    }
+
+    #[test]
+    fn len() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+fn Len() -> int {
+    let map = {
+        hi 123
+        it_works 456
+    };
+    map.len()
+}"#,
+            function: todo!(),
+            expected: todo!(),
         })
     }
 }
