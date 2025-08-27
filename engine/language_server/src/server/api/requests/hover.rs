@@ -40,15 +40,9 @@ impl SyncRequestHandler for Hover {
             .expect("Ensured that a project db exists");
 
         let document_key =
-            DocumentKey::from_url(project.lock().unwrap().root_path(), url).internal_error()?;
+            DocumentKey::from_url(project.lock().root_path(), url).internal_error()?;
 
-        let text_document_item = match project
-            .lock()
-            .unwrap()
-            .baml_project
-            .files
-            .get(&document_key)
-        {
+        let text_document_item = match project.lock().baml_project.files.get(&document_key) {
             None => {
                 tracing::warn!("*** HOVER: Failed to find doc {:?}", url);
                 Err(anyhow::anyhow!(
@@ -67,7 +61,7 @@ impl SyncRequestHandler for Hover {
         let position = params.text_document_position_params.position;
         // Just swallow the error here, we dont want hover failures to show error notifs for a user.
         let default_flags = vec!["beta".to_string()];
-        let hover = match project.lock().unwrap().handle_hover_request(
+        let hover = match project.lock().handle_hover_request(
             &text_document_item,
             &position,
             notifier,

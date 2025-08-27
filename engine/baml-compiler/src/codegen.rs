@@ -487,15 +487,33 @@ impl<'g> HirCompiler<'g> {
                 self.declare_mut(name);
             }
             thir::Statement::Assign { left, value, .. } => {
-                self.compile_expression(value);
+                match left {
+                    thir::Expr::Var(name, _) => {
+                        self.compile_expression(value);
+                        self.emit(Instruction::StoreVar(self.locals[name]));
+                    }
+                    thir::Expr::FieldAccess { base, field, meta: _ } => {
+                        // Get class name from type metadata
+                        let class_name = match base.meta().1.as_ref() {
+                            Some(TypeIR::Class { name, .. }) => name,
+                            _ => panic!("Field access on non-class type"),
+                        };
 
-                // TODO: Hanlde field & array accessors.
-                let name = match &left {
-                    thir::Expr::Var(name, _) => name,
-                    _ => panic!("left side of assignment is not an identifier: {left:?}"),
-                };
+                        // Resolve field index
+                        let Some(resolved_fields) = self.classes.get(class_name) else {
+                            panic!("undefined class: {class_name}");
+                        };
+                        let Some(&field_index) = resolved_fields.get(field) else {
+                            panic!("undefined field: {class_name}.{field}");
+                        };
 
-                self.emit(Instruction::StoreVar(self.locals[name]));
+                        // Generate bytecode: load base, load value, store field
+                        self.compile_expression(base);
+                        self.compile_expression(value);
+                        self.emit(Instruction::StoreField(field_index));
+                    }
+                    _ => panic!("Invalid left hand of assignment, only variables, instance fields and array elements can be assigned"),
+                }
             }
             thir::Statement::AssignOp {
                 left,
@@ -503,30 +521,58 @@ impl<'g> HirCompiler<'g> {
                 assign_op,
                 ..
             } => {
-                // TODO: Handle field & array accessors.
-                let name = match &left {
-                    thir::Expr::Var(name, _) => name,
-                    _ => panic!("left side of assignment is not an identifier: {left:?}"),
-                };
-
-                self.emit(Instruction::LoadVar(self.locals[name]));
-                self.compile_expression(value);
-
-                self.emit(match assign_op {
+                let binop = match assign_op {
                     hir::AssignOp::AddAssign => Instruction::BinOp(BinOp::Add),
                     hir::AssignOp::SubAssign => Instruction::BinOp(BinOp::Sub),
                     hir::AssignOp::MulAssign => Instruction::BinOp(BinOp::Mul),
                     hir::AssignOp::DivAssign => Instruction::BinOp(BinOp::Div),
                     hir::AssignOp::ModAssign => Instruction::BinOp(BinOp::Mod),
-
                     hir::AssignOp::BitAndAssign => Instruction::BinOp(BinOp::BitAnd),
                     hir::AssignOp::BitOrAssign => Instruction::BinOp(BinOp::BitOr),
                     hir::AssignOp::BitXorAssign => Instruction::BinOp(BinOp::BitXor),
                     hir::AssignOp::ShlAssign => Instruction::BinOp(BinOp::Shl),
                     hir::AssignOp::ShrAssign => Instruction::BinOp(BinOp::Shr),
-                });
+                };
 
-                self.emit(Instruction::StoreVar(self.locals[name]));
+                match left {
+                    thir::Expr::Var(name, _) => {
+                        self.emit(Instruction::LoadVar(self.locals[name]));
+                        self.compile_expression(value);
+                        self.emit(binop);
+                        self.emit(Instruction::StoreVar(self.locals[name]));
+                    }
+                    thir::Expr::FieldAccess { base, field, meta: _ } => {
+                        // Get class name from type metadata
+                        let class_name = match base.meta().1.as_ref() {
+                            Some(TypeIR::Class { name, .. }) => name,
+                            _ => panic!("Field access on non-class type"),
+                        };
+
+                        // Resolve field index
+                        let Some(resolved_fields) = self.classes.get(class_name) else {
+                            panic!("undefined class: {class_name}");
+                        };
+                        let Some(&field_index) = resolved_fields.get(field) else {
+                            panic!("undefined field: {class_name}.{field}");
+                        };
+
+                        // For obj.field += value, generate:
+                        // 1. Load object
+                        // 2. Copy object reference (Copy 0)
+                        // 3. Load field value
+                        // 4. Load value
+                        // 5. Apply operation
+                        // 6. Store back to field (uses copied object reference)
+
+                        self.compile_expression(base);
+                        self.emit(Instruction::Copy(0));  // Duplicate object reference
+                        self.emit(Instruction::LoadField(field_index));
+                        self.compile_expression(value);
+                        self.emit(binop);
+                        self.emit(Instruction::StoreField(field_index));
+                    }
+                    _ => panic!("Invalid left hand of assignment, only variables, instance fields and array elements can be assigned"),
+                }
             }
             thir::Statement::DeclareAndAssign { name, value, .. } => {
                 self.compile_expression(value);
@@ -849,31 +895,36 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::LoadArrayElement);
             }
 
-            thir::Expr::FieldAccess { base, field, .. } => match base.meta().1.as_ref() {
-                Some(TypeIR::Class {
-                    name: class_name, ..
-                }) => {
-                    let Some(class_index) = self.globals.get(class_name) else {
-                        panic!("undefined class: {class_name}");
-                    };
+            thir::Expr::FieldAccess { base, field, .. } => {
+                // First compile the base expression
+                self.compile_expression(base);
 
-                    let Some(resolved_fields) = self.classes.get(class_name) else {
-                        panic!("undefined class: {class_name}");
-                    };
+                // Now get the type of the base to resolve the field
+                match base.meta().1.as_ref() {
+                    Some(TypeIR::Class {
+                        name: class_name, ..
+                    }) => {
+                        let Some(_class_index) = self.globals.get(class_name) else {
+                            panic!("undefined class: {class_name}");
+                        };
 
-                    let Some(&field_index) = resolved_fields.get(field) else {
-                        panic!("undefined field: {class_name}.{field}");
-                    };
+                        let Some(resolved_fields) = self.classes.get(class_name) else {
+                            panic!("undefined class: {class_name}");
+                        };
 
-                    self.compile_expression(base);
-                    self.emit(Instruction::LoadField(field_index));
+                        let Some(&field_index) = resolved_fields.get(field) else {
+                            panic!("undefined field: {class_name}.{field}");
+                        };
+
+                        self.emit(Instruction::LoadField(field_index));
+                    }
+
+                    other => panic!(
+                        "field access must be on classes, but expr `{}` got: {other:?}",
+                        base.dump_str()
+                    ),
                 }
-
-                other => panic!(
-                    "field access must be on classes, but expr `{}` got: {other:?}",
-                    base.dump_str()
-                ),
-            },
+            }
 
             thir::Expr::Var(name, _) => {
                 if let Some(&index) = self.locals.get(name) {
@@ -965,6 +1016,13 @@ impl<'g> HirCompiler<'g> {
                 spread,
                 meta: _,
             } => {
+                // TODO: Long-term solution - Refactor AllocInstance to consume fields from stack
+                // like AllocArray does. This would eliminate the need for Copy/StoreField pattern
+                // and naturally handle nested construction. The approach would compile all field
+                // values onto the stack first, then AllocInstance(class, field_count) would
+                // consume them all at once, creating a fully initialized instance.
+                // See: Stack-Based AllocInstance approach in field_access_assignments_implementation.md
+
                 let Some(&class_index) = self.globals.get(class_name) else {
                     panic!("undefined class: {class_name}");
                 };
@@ -978,7 +1036,8 @@ impl<'g> HirCompiler<'g> {
                     global: class_index,
                 });
 
-                let instance_local_index = self.locals.len() + 1;
+                // All constructors now use Copy to access the instance
+                // The instance is always on the stack after AllocInstance
 
                 let mut defined_named_fields = std::collections::HashSet::new();
 
@@ -992,7 +1051,9 @@ impl<'g> HirCompiler<'g> {
                         panic!("undefined field: {class_name}.{field_name}");
                     };
 
-                    self.emit(Instruction::LoadVar(instance_local_index));
+                    // Instance is always on top of stack after AllocInstance
+                    // Copy it to work with it
+                    self.emit(Instruction::Copy(0));
                     self.compile_expression(value);
                     self.emit(Instruction::StoreField(field_index));
 
@@ -1006,20 +1067,15 @@ impl<'g> HirCompiler<'g> {
 
                     self.compile_expression(spread);
 
-                    // Pseudo local, user didn't declare it. + 2 because stack is:
+                    // Stack state after compiling spread:
+                    // [locals..., allocated_instance, spread_value]
+                    //                                       ^-- position 0 from top (Copy(0))
+                    //                    ^-- position 1 from top (Copy(1))
                     //
-                    // [a, b, c, allocated_instance, spread_local]
-                    //  ^  ^  ^         ^                    ^
-                    //  |  |  |         |                    |
-                    //  |  |  |         |                    +-- spread (+2)
-                    //  |  |  |         |
-                    //  +--+--+         +-- Not yet tracked (+1)
-                    //     |
-                    //     |
-                    //     +-- These are tracked locals.
-                    let spread_local_index = instance_local_index + 1;
+                    // We'll use Copy to access both values regardless of nesting level
+                    // This is simpler than calculating pseudo-local indices
 
-                    let mut pop_spread_local = false;
+                    let mut pop_tmp_spread_value = false;
 
                     // Not sorted cause of hashmap, tried using sorted map and
                     // it didn't work either, figure out what's going on.
@@ -1031,26 +1087,30 @@ impl<'g> HirCompiler<'g> {
 
                     for (field_name, field_index) in sorted_fields {
                         if !defined_named_fields.contains(field_name.as_str()) {
-                            // Now load allocated instance again:
-                            // [a, b, c, allocated_instance, spread_local, allocated_instance]
-                            self.emit(Instruction::LoadVar(instance_local_index));
+                            // Current stack: [locals..., allocated_instance, spread_value]
 
-                            // Load spread again:
-                            // [a, b, c, allocated_instance, spread_local, allocated_instance, spread_local]
-                            self.emit(Instruction::LoadVar(spread_local_index));
-                            // Load field:
-                            // [a, b, c, allocated_instance, spread_local, allocated_instance, field_value]
+                            // Copy instance from position 1 (under spread)
+                            // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance]
+                            self.emit(Instruction::Copy(1));
+
+                            // Copy spread from position 1 (now under instance copy)
+                            // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance, spread_value]
+                            self.emit(Instruction::Copy(1));
+
+                            // Load field from spread
+                            // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance, field_value]
                             self.emit(Instruction::LoadField(field_index));
-                            // Store field:
-                            // [a, b, c, allocated_instance, spread_local]
+
+                            // Store field to instance
+                            // Stack becomes: [locals..., allocated_instance, spread_value]
                             self.emit(Instruction::StoreField(field_index));
 
-                            pop_spread_local = true;
+                            pop_tmp_spread_value = true;
                         }
                     }
 
                     // Get rid of spread local, won't be used anymore.
-                    if pop_spread_local {
+                    if pop_tmp_spread_value {
                         self.emit(Instruction::Pop(1));
                     }
                 }
@@ -1391,6 +1451,7 @@ impl thir::Expr<(Span, Option<TypeIR>)> {
     /// check at some point that return values match the expected type. After
     /// that we should alreay have enough information to decide whether a block
     /// returns or not.
+    #[allow(dead_code)]
     fn produces_final_value(&self) -> bool {
         match self {
             // First call will happen on a block. Recurse on the final expression.
@@ -1925,10 +1986,10 @@ mod tests {
                 "main",
                 vec![
                     Instruction::AllocInstance(ObjectIndex::from_raw(2)),
-                    Instruction::LoadVar(1),
+                    Instruction::Copy(0),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
-                    Instruction::LoadVar(1),
+                    Instruction::Copy(0),
                     Instruction::LoadConst(1),
                     Instruction::StoreField(1),
                     Instruction::LoadVar(1),
@@ -1962,20 +2023,20 @@ mod tests {
                 "main",
                 vec![
                     Instruction::AllocInstance(ObjectIndex::from_raw(3)),
-                    Instruction::LoadVar(1),
+                    Instruction::Copy(0),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
-                    Instruction::LoadVar(1),
+                    Instruction::Copy(0),
                     Instruction::LoadConst(1),
                     Instruction::StoreField(1),
                     Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
-                    Instruction::LoadVar(1),
-                    Instruction::LoadVar(2),
+                    Instruction::Copy(1), // Copy instance from under spread
+                    Instruction::Copy(1), // Copy spread from under instance
                     Instruction::LoadField(2),
                     Instruction::StoreField(2),
-                    Instruction::LoadVar(1),
-                    Instruction::LoadVar(2),
+                    Instruction::Copy(1), // Copy instance from under spread
+                    Instruction::Copy(1), // Copy spread from under instance
                     Instruction::LoadField(3),
                     Instruction::StoreField(3),
                     Instruction::Pop(1),
@@ -2011,20 +2072,20 @@ mod tests {
                 "main",
                 vec![
                     Instruction::AllocInstance(ObjectIndex::from_raw(3)),
-                    Instruction::LoadVar(1),
+                    Instruction::Copy(0),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
-                    Instruction::LoadVar(1),
+                    Instruction::Copy(0),
                     Instruction::LoadConst(1),
                     Instruction::StoreField(1),
                     Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
-                    Instruction::LoadVar(1),
-                    Instruction::LoadVar(2),
+                    Instruction::Copy(1), // Copy instance from under spread
+                    Instruction::Copy(1), // Copy spread from under instance
                     Instruction::LoadField(2),
                     Instruction::StoreField(2),
-                    Instruction::LoadVar(1),
-                    Instruction::LoadVar(2),
+                    Instruction::Copy(1), // Copy instance from under spread
+                    Instruction::Copy(1), // Copy spread from under instance
                     Instruction::LoadField(3),
                     Instruction::StoreField(3),
                     Instruction::Pop(1),
@@ -3077,6 +3138,224 @@ mod tests {
                     Instruction::CmpOp(CmpOp::Eq),
                     Instruction::Assert,
                     Instruction::LoadConst(2), // 2
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn field_assignment_compound_add_bytecode() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                class Counter {
+                    value int
+                }
+
+                function incrementCounter(c: Counter) -> int {
+                    c.value += 10;
+                    c.value
+                }
+            ",
+            expected: vec![(
+                "incrementCounter",
+                vec![
+                    // c.value += 10
+                    Instruction::LoadVar(1),        // Load c
+                    Instruction::Copy(0),           // Duplicate c reference
+                    Instruction::LoadField(0),      // Load c.value
+                    Instruction::LoadConst(0),      // Load 10
+                    Instruction::BinOp(BinOp::Add), // Add
+                    Instruction::StoreField(0),     // Store back to c.value
+                    // c.value
+                    Instruction::LoadVar(1),   // Load c
+                    Instruction::LoadField(0), // Load c.value
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn nested_field_read_bytecode() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                class Inner {
+                    value int
+                }
+                class Outer {
+                    inner Inner
+                }
+
+                function main() -> int {
+                    let o = Outer { inner: Inner { value: 42 } };
+                    o.inner.value
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    // Create Outer { inner: Inner { value: 42 } }
+                    Instruction::AllocInstance(ObjectIndex::from_raw(3)), // Outer class
+                    Instruction::Copy(0),                                 // Copy Outer instance
+                    // Create Inner inline
+                    Instruction::AllocInstance(ObjectIndex::from_raw(2)), // Inner class
+                    Instruction::Copy(0),                                 // Copy Inner instance
+                    Instruction::LoadConst(0),                            // 42
+                    Instruction::StoreField(0),                           // Inner.value = 42
+                    Instruction::StoreField(0), // Outer.inner = Inner instance
+                    // o.inner.value
+                    Instruction::LoadVar(1),   // Load o
+                    Instruction::LoadField(0), // Load o.inner (returns Inner)
+                    Instruction::LoadField(0), // Load inner.value (returns 42)
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn nested_object_construction_bytecode() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                class Inner {
+                    x int
+                    y int
+                }
+                class Outer {
+                    inner Inner
+                    value int
+                }
+
+                function main() -> int {
+                    let o = Outer {
+                        inner: Inner { x: 10, y: 20 },
+                        value: 30
+                    };
+                    o.value
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    // Outer constructor
+                    Instruction::AllocInstance(ObjectIndex::from_raw(3)), // Outer
+                    Instruction::Copy(0),                                 // Copy Outer instance
+                    // Nested Inner construction
+                    Instruction::AllocInstance(ObjectIndex::from_raw(2)), // Inner
+                    Instruction::Copy(0),                                 // Copy Inner instance
+                    Instruction::LoadConst(0),                            // 10
+                    Instruction::StoreField(0),                           // x = 10
+                    Instruction::Copy(0),       // Copy Inner instance again
+                    Instruction::LoadConst(1),  // 20
+                    Instruction::StoreField(1), // y = 20
+                    Instruction::StoreField(0), // Outer.inner = Inner
+                    Instruction::Copy(0),       // Copy Outer instance
+                    Instruction::LoadConst(2),  // 30
+                    Instruction::StoreField(1), // Outer.value = 30
+                    // o.value
+                    Instruction::LoadVar(1),   // o
+                    Instruction::LoadField(1), // value
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn nested_field_assignment_bytecode() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                class Inner {
+                    value int
+                }
+                class Outer {
+                    inner Inner
+                }
+
+                function setNestedValue(i: Inner, o: Outer) -> int {
+                    o.inner.value = 99;
+                    o.inner.value
+                }
+            ",
+            expected: vec![(
+                "setNestedValue",
+                vec![
+                    // o.inner.value = 99
+                    Instruction::LoadVar(2),    // Load o
+                    Instruction::LoadField(0),  // Load o.inner (returns Inner object)
+                    Instruction::LoadConst(0),  // Load 99
+                    Instruction::StoreField(0), // Store to inner.value
+                    // o.inner.value
+                    Instruction::LoadVar(2),   // Load o
+                    Instruction::LoadField(0), // Load o.inner
+                    Instruction::LoadField(0), // Load inner.value
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn nested_field_assignment_compound_bytecode() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                class Inner {
+                    value int
+                }
+                class Outer {
+                    inner Inner
+                }
+
+                function incrementNestedValue(o: Outer) -> int {
+                    o.inner.value += 10;
+                    o.inner.value
+                }
+            ",
+            expected: vec![(
+                "incrementNestedValue",
+                vec![
+                    // o.inner.value += 10
+                    Instruction::LoadVar(1),        // Load o
+                    Instruction::LoadField(0),      // Load o.inner (returns Inner object)
+                    Instruction::Copy(0),           // Duplicate inner reference
+                    Instruction::LoadField(0),      // Load inner.value
+                    Instruction::LoadConst(0),      // Load 10
+                    Instruction::BinOp(BinOp::Add), // Add
+                    Instruction::StoreField(0),     // Store back to inner.value
+                    // o.inner.value
+                    Instruction::LoadVar(1),   // Load o
+                    Instruction::LoadField(0), // Load o.inner
+                    Instruction::LoadField(0), // Load inner.value
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn field_assignment_simple_bytecode() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                class Data {
+                    value int
+                }
+
+                function setDataValue(d: Data) -> int {
+                    d.value = 42;
+                    d.value
+                }
+            ",
+            expected: vec![(
+                "setDataValue",
+                vec![
+                    // d.value = 42
+                    Instruction::LoadVar(1),    // Load d
+                    Instruction::LoadConst(0),  // Load 42
+                    Instruction::StoreField(0), // Store to d.value
+                    // d.value
+                    Instruction::LoadVar(1),   // Load d
+                    Instruction::LoadField(0), // Load d.value
                     Instruction::Return,
                 ],
             )],

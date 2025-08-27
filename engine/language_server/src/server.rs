@@ -19,9 +19,10 @@ use lsp_types::{
     TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url,
     WorkspaceClientCapabilities, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
+use playground_server::{FrontendMessage, LangServerToWasmMessage, PreLangServerToWasmMessage};
 use schedule::Task;
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
+use tokio::sync::{broadcast, RwLock};
 
 use self::{
     connection::{Connection, ConnectionInitializer},
@@ -35,26 +36,31 @@ use crate::{
 
 pub mod api;
 pub mod client;
+mod commands;
 pub mod connection;
 mod schedule;
 
 pub(crate) use connection::ClientSender;
 
-#[cfg(not(feature = "playground-server"))]
 use crate::message::try_show_message;
-#[cfg(feature = "playground-server")]
-use crate::{
-    message::try_show_message,
-    playground::{PlaygroundServer, PlaygroundState},
-};
 
 pub type Result<T> = std::result::Result<T, api::Error>;
+
+pub(crate) struct ServerArgs {
+    pub tokio_runtime: tokio::runtime::Runtime,
+    pub broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
+    pub playground_rx: broadcast::Receiver<PreLangServerToWasmMessage>,
+    pub playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
+    pub playground_port: u16,
+    pub proxy_port: u16,
+}
 
 pub(crate) struct Server {
     pub connection: Connection,
     pub client_capabilities: ClientCapabilities,
-    pub worker_threads: NonZeroUsize,
     pub session: Session,
+    pub worker_threads: NonZeroUsize,
+    pub args: ServerArgs,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -62,14 +68,8 @@ struct PortNotificationParams {
     port: u16,
 }
 
-impl PortNotificationParams {
-    fn new(port: u16) -> Self {
-        PortNotificationParams { port }
-    }
-}
-
 impl Server {
-    pub fn new(worker_threads: NonZeroUsize) -> anyhow::Result<Self> {
+    pub fn new(worker_threads: NonZeroUsize, args: ServerArgs) -> anyhow::Result<Self> {
         let connection = ConnectionInitializer::stdio();
         let (id, init_params) = connection.initialize_start()?;
 
@@ -83,13 +83,14 @@ impl Server {
             crate::SERVER_NAME,
             crate::version(),
         )?;
-        Self::new_with_connection(worker_threads, connection, init_params)
+        Self::new_with_connection(worker_threads, connection, init_params, args)
     }
 
     pub fn new_with_connection(
         worker_threads: NonZeroUsize,
         connection: Connection,
         init_params: InitializeParams,
+        args: ServerArgs,
     ) -> anyhow::Result<Self> {
         crate::message::init_messenger(connection.make_sender());
 
@@ -173,35 +174,98 @@ impl Server {
             position_encoding,
             global_settings,
             &workspaces,
-            rt.handle().clone(),
+            args.playground_port,
+            args.playground_tx.clone(),
             client_version,
         )?;
 
         let client = client::Client::new(connection.make_sender());
         let notifier = client.notifier();
 
-        // Playground state is initialized here, but server startup is now external
-        #[cfg(feature = "playground-server")]
-        {
-            let playground_state = Arc::new(RwLock::new(PlaygroundState::new()));
-            session.playground_state = Some(playground_state.clone());
-            // Store the runtime in the session
-            session.playground_runtime = Some(rt);
-        }
         session.reload(Some(notifier))?;
 
-        let mut server = Self {
+        let server = Self {
             connection,
             worker_threads,
             session,
             client_capabilities,
+            args,
         };
-        #[cfg(feature = "playground-server")]
-        server.start_playground_server();
+
+        {
+            let lsp_sender = server.connection.make_sender();
+            let playground_tx = server.session.playground_tx.clone();
+            server.args.tokio_runtime.spawn(async move {
+                lsp_sender
+                    .send(Message::Notification(lsp_server::Notification::new(
+                        "baml/port".to_string(),
+                        serde_json::to_value(PortNotificationParams {
+                            port: server.args.playground_port,
+                        })
+                        .unwrap(),
+                    )))
+                    .unwrap();
+            });
+        }
+        {
+            let mut playground_rx = server.args.playground_rx.resubscribe();
+            let broadcast_tx = server.args.broadcast_tx.clone();
+            let session = server.session.clone();
+            server.args.tokio_runtime.spawn(async move {
+                tracing::info!("Starting playground rx loop");
+                while let Ok(msg) = playground_rx.recv().await {
+                    tracing::info!("playground rx loop: {:?}", msg);
+                    match msg {
+                        PreLangServerToWasmMessage::WasmIsInitialized => {
+                            tracing::info!("Received playground INITIALIZED request");
+                            let projects = session.baml_src_projects.lock();
+                            for (_, project) in projects.iter() {
+                                let project = project.lock();
+                                let files_map: std::collections::HashMap<String, String> = project
+                                    .baml_project
+                                    .files
+                                    .iter()
+                                    .map(|(path, doc)| {
+                                        let key = path.path().to_string_lossy().to_string();
+                                        // If there's an unsaved version, use it
+                                        let contents = project
+                                            .baml_project
+                                            .unsaved_files
+                                            .get(path)
+                                            .map(|unsaved| unsaved.contents.clone())
+                                            .unwrap_or_else(|| doc.contents.clone());
+                                        (key, contents)
+                                    })
+                                    .collect();
+                                broadcast_tx
+                                    .send(LangServerToWasmMessage::PlaygroundMessage(
+                                        FrontendMessage::add_project {
+                                            root_path: project
+                                                .root_path()
+                                                .to_string_lossy()
+                                                .to_string(),
+                                            files: files_map,
+                                        },
+                                    ))
+                                    .unwrap();
+                            }
+                        }
+                        PreLangServerToWasmMessage::FrontendMessage(msg) => {
+                            broadcast_tx
+                                .send(LangServerToWasmMessage::PlaygroundMessage(msg))
+                                .unwrap();
+                        }
+                    }
+                }
+                tracing::info!("Playground rx channel closed");
+            });
+        }
+
         Ok(server)
     }
 
     pub fn run(self) -> anyhow::Result<()> {
+        tracing::info!("BAML language server started inside hot reload lorem ipsum");
         // The new PanicInfoHook name requires MSRV >= 1.82
         #[allow(deprecated)]
         type PanicHook = Box<dyn Fn(&PanicInfo<'_>) + 'static + Sync + Send>;
@@ -245,12 +309,37 @@ impl Server {
             .ok();
         }));
 
+        std::thread::spawn(|| {
+            const DEADLOCK_WATCHDOG_INTERVAL: Duration = Duration::from_secs(10);
+            tracing::info!(
+                "Starting deadlock watchdog (will poll every {:?})",
+                DEADLOCK_WATCHDOG_INTERVAL
+            );
+            loop {
+                std::thread::sleep(DEADLOCK_WATCHDOG_INTERVAL);
+                // NB: this shows deadlocks detected since the _last_ check, not all current deadlocks.
+                let cycles = parking_lot::deadlock::check_deadlock();
+                if cycles.is_empty() {
+                    continue;
+                }
+                tracing::error!("Detected {} deadlocks since the last check:", cycles.len());
+                for (i, threads) in cycles.iter().enumerate() {
+                    tracing::error!("Deadlock {} of {}:", i + 1, cycles.len());
+                    for t in threads {
+                        tracing::error!("  Thread {:?}", t.thread_id());
+                        tracing::error!("  Backtrace:\n{:?}", t.backtrace());
+                    }
+                }
+            }
+        });
+
         event_loop_thread(move || {
             Self::event_loop(
                 &self.connection,
                 &self.client_capabilities,
                 self.session,
                 self.worker_threads,
+                self.args.broadcast_tx,
             )?;
             self.connection.close()?;
             Ok(())
@@ -266,6 +355,7 @@ impl Server {
         _client_capabilities: &ClientCapabilities,
         mut session: Session,
         worker_threads: NonZeroUsize,
+        broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
     ) -> anyhow::Result<()> {
         // Ensure we have a notifier for reload operations
         let client = client::Client::new(connection.make_sender());
@@ -277,9 +367,11 @@ impl Server {
         Self::try_register_capabilities(_client_capabilities, &mut scheduler);
 
         for msg in connection.incoming() {
+            tracing::info!("Received message: {:?}", msg);
             if connection.handle_shutdown(&msg)? {
                 break;
             }
+            // broadcast_tx.send(LangServerToWasmMessage::LspMessage(msg.clone()))?;
             let tasks = match msg {
                 Message::Request(req) => vec![api::request(req)],
                 Message::Notification(notification) => api::notification(notification),
@@ -305,7 +397,10 @@ impl Server {
             .and_then(|workspace| workspace.did_change_watched_files)
             .and_then(|watched_files| watched_files.dynamic_registration)
             .unwrap_or_default();
-        tracing::info!("*** dynamic_registration: {}", dynamic_registration);
+        tracing::info!(
+            "dynamic_registration ATTEMPT START HELLO AGAIN: {}",
+            dynamic_registration
+        );
         if dynamic_registration {
             // Register all dynamic capabilities here
 
@@ -351,6 +446,7 @@ impl Server {
         } else {
             tracing::warn!("LSP client does not support dynamic capability registration - automatic configuration reloading will not be available.");
         }
+        tracing::info!("dynamic_registration ATTEMPT END: {}", dynamic_registration);
     }
 
     pub fn find_best_position_encoding(
@@ -415,86 +511,6 @@ impl Server {
                 ..Default::default()
             }),
             ..Default::default()
-        }
-    }
-
-    #[cfg(feature = "playground-server")]
-    fn start_playground_server(&mut self) {
-        // Extract needed values to avoid borrowing conflicts
-        let playground_state = self.session.playground_state.clone();
-        let playground_runtime = self.session.playground_runtime.as_ref().is_some();
-
-        if let Some(playground_state) = playground_state {
-            if playground_runtime {
-                let mut playground_port =
-                    self.session.baml_settings.playground_port.unwrap_or(3030);
-                const MAX_PORT_ATTEMPTS: u16 = 100;
-                let starting_port = playground_port;
-                let mut attempts = 0;
-
-                // Determine the actual available port synchronously with a limit
-                loop {
-                    if attempts >= MAX_PORT_ATTEMPTS {
-                        tracing::error!(
-                            "Failed to find an available port after {} attempts starting from port {}. Playground server will not start.",
-                            MAX_PORT_ATTEMPTS,
-                            starting_port
-                        );
-                        return;
-                    }
-
-                    // Check if port is available before attempting to bind
-                    let port_available =
-                        { std::net::TcpListener::bind(("127.0.0.1", playground_port)).is_ok() };
-
-                    if port_available {
-                        break;
-                    } else {
-                        // Port is already in use, try next port
-                        attempts += 1;
-                        playground_port += 1;
-                        tracing::info!(
-                            "Port {} is in use, trying port {} (attempt {}/{})",
-                            playground_port - 1,
-                            playground_port,
-                            attempts,
-                            MAX_PORT_ATTEMPTS
-                        );
-                    }
-                }
-
-                // Port is available, store it in the session
-                self.session.set_session_playground_port(playground_port);
-                tracing::info!(
-                    "Successfully found available port {} after {} attempts",
-                    playground_port,
-                    attempts
-                );
-
-                // Now get the runtime and start the server
-                let rt = self.session.playground_runtime.as_ref().unwrap();
-                let session_arc = Arc::new(self.session.clone());
-                let playground_server =
-                    PlaygroundServer::new(playground_state.clone(), session_arc);
-                let sender = self.connection.make_sender();
-                let final_port = playground_port;
-
-                rt.spawn(async move {
-                    // Send LSP notification about the port
-                    let params = PortNotificationParams::new(final_port);
-                    let notification = lsp_server::Notification::new(
-                        "baml/port".to_string(),
-                        serde_json::to_value(params).unwrap(),
-                    );
-                    if let Err(e) = sender.send(Message::Notification(notification)) {
-                        tracing::error!("Failed to send port notification: {}", e);
-                    }
-
-                    if let Err(e) = playground_server.run(final_port).await {
-                        tracing::error!("Playground server error: {}", e);
-                    }
-                });
-            }
         }
     }
 }

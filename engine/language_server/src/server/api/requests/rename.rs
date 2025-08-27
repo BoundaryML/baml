@@ -44,8 +44,7 @@ impl SyncRequestHandler for Rename {
             .expect("Ensured that a project db exists");
 
         let res = {
-            let mut guard: std::sync::MutexGuard<'_, crate::baml_project::Project> =
-                project.lock().unwrap();
+            let mut guard = project.lock();
             let document_key =
                 DocumentKey::from_url(&PathBuf::from(guard.root_path()), &url).internal_error()?;
 

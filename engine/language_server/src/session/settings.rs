@@ -13,9 +13,6 @@ pub(crate) type WorkspaceSettingsMap = FxHashMap<Url, ClientSettings>;
 pub struct BamlSettings {
     pub(crate) cli_path: Option<String>,
     pub(crate) generate_code_on_save: Option<String>,
-    #[serde(default = "default_enable_playground")]
-    pub enable_playground: bool,
-    pub playground_port: Option<u16>,
     #[serde(default = "default_feature_flags")]
     pub(crate) feature_flags: Option<Vec<String>>,
     pub(crate) client_version: Option<String>,
@@ -26,8 +23,6 @@ impl Default for BamlSettings {
         BamlSettings {
             cli_path: None,
             generate_code_on_save: None,
-            enable_playground: false,
-            playground_port: None,
             feature_flags: Some(vec!["beta".to_string()]),
             client_version: None,
         }
@@ -45,10 +40,6 @@ impl BamlSettings {
     pub fn get_client_version(&self) -> Option<&str> {
         self.client_version.as_ref().map(AsRef::as_ref)
     }
-}
-
-fn default_enable_playground() -> bool {
-    true
 }
 
 fn default_feature_flags() -> Option<Vec<String>> {

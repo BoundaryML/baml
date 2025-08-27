@@ -11,6 +11,7 @@ members = [
   "baml-vm",
   "bstd",
   "cli",
+  "tools",
   "language_client_codegen",
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
@@ -23,6 +24,7 @@ members = [
   "sandbox",
   "llm-response-parser",
   "boundary-udf",
+  "playground-server",
 ]
 default-members = [
   "baml-compiler",
@@ -89,6 +91,7 @@ indoc = "2.0.5"
 internal-baml-codegen = { path = "language_client_codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }
 internal-baml-jinja = { path = "baml-lib/jinja-runtime" }
+playground-server = { path = "playground-server" }
 internal-llm-client = { path = "baml-lib/llm-client" }
 itertools = "0.14.0"
 jsonish = { path = "baml-lib/jsonish" }
@@ -151,7 +154,9 @@ thiserror = "2.0.12"
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 time = { version = "0.3.36", features = ["formatting"] }
+tracing = "0.1"
 tracing-core = { version = "0.1.31" }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 pin-project-lite = "0.2.14"
 url = "2.5.2"
 uuid = { version = "1.8.0", features = ["v4", "v7", "serde"] }

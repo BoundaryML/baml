@@ -47,6 +47,7 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
         let project = session
             .get_or_create_project(&path)
             .expect("Ensured that a project db exists");
+        let mut locked = project.lock();
 
         let default_flags = vec!["beta".to_string()];
         let effective_flags = session
@@ -56,9 +57,7 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
             .unwrap_or(&default_flags);
         let client_version = session.baml_settings.get_client_version();
 
-        let version = project
-            .lock()
-            .unwrap()
+        let version = locked
             .get_common_generator_version(effective_flags, client_version)
             .map_err(|msg| api::Error {
                 error: anyhow::anyhow!(msg),
@@ -70,12 +69,7 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
                 "baml_src_generator_version".to_string(),
                 BamlSrcVersionPayload {
                     version,
-                    root_path: project
-                        .lock()
-                        .unwrap()
-                        .root_path()
-                        .to_string_lossy()
-                        .to_string(),
+                    root_path: locked.root_path().to_string_lossy().to_string(),
                 },
             ),
         ));
@@ -86,7 +80,7 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
             .feature_flags
             .as_ref()
             .unwrap_or(&default_flags2);
-        project.lock().unwrap().run_generators_without_debounce(
+        locked.run_generators_without_debounce(
             effective_flags,
             |message| {
                 tracing::info!("About to notify client that generator has run.");
@@ -132,7 +126,7 @@ impl super::BackgroundDocumentNotificationHandler for DidSaveTextDocument {
                 .feature_flags
                 .as_ref()
                 .unwrap_or(&default_flags);
-            project.lock().unwrap().run_generators_without_debounce(
+            project.lock().run_generators_without_debounce(
                 effective_flags,
                 |message| {
                     tracing::info!("About to notify client that generator has run.");

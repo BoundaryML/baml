@@ -1,5 +1,5 @@
 use std::{
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -10,6 +10,7 @@ use lsp_types::{
     DidChangeTextDocumentParams, DocumentDiagnosticReport, DocumentDiagnosticReportResult,
     FullDocumentDiagnosticReport, RelatedFullDocumentDiagnosticReport,
 };
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -80,7 +81,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
             return Task::local(move |session, _notifier, requester, responder| {
                 let result: anyhow::Result<(serde_json::Value,)> = {
                     let mut all_functions = Vec::new();
-                    let projects = session.baml_src_projects.lock().unwrap();
+                    let projects = session.baml_src_projects.lock();
                     let default_flags = vec!["beta".to_string()];
                     let effective_flags = session
                         .baml_settings
@@ -91,7 +92,6 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                     for (_, project) in projects.iter() {
                         let functions = project
                             .lock()
-                            .unwrap()
                             .baml_project
                             .list_functions(effective_flags)
                             .iter()
@@ -145,7 +145,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                         .expect("Already checked for project's existence");
                     {
                         let default_flags = vec!["beta".to_string()];
-                        project.lock().unwrap().update_runtime(
+                        project.lock().update_runtime(
                             Some(notifier),
                             session
                                 .baml_settings
@@ -303,7 +303,7 @@ fn background_request_task<'a, R: traits::BackgroundDocumentRequestHandler>(
         };
         // info!(
         //     "session.projects.len(): {:?}",
-        //     session.baml_src_projects.lock().unwrap().len()
+        //     session.baml_src_projects.lock().len()
         // );
         let _db = session.get_or_create_project(&path).clone();
         if _db.is_none() {

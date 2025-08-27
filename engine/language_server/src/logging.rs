@@ -5,7 +5,7 @@
 //! `logFile` path can also be specified in the settings, and output will be directed there
 //! instead.
 use core::str;
-use std::{path::PathBuf, str::FromStr, sync::Arc};
+use std::{net::Ipv4Addr, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 
 use serde::Deserialize;
 use tracing::level_filters::LevelFilter;
@@ -17,7 +17,7 @@ use tracing_subscriber::{
 
 pub(crate) fn init_logging(_log_level: LogLevel, log_file: Option<&std::path::Path>) {
     // We can't have baml_log print to stdout or it will mess up the LSP communication protocol,
-    // which uses stdout/stderr for communication.
+    // which uses stdin/stdout for communication.
     let log_file = log_file
         .map(|path| {
             // this expands `logFile` so that tildes and environment variables

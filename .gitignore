@@ -167,6 +167,7 @@ jj-workflow.mdc
 # mise
 .mise.local.toml
 .mise.*.local.toml
+.claude/settings.local.json
 third_party
 
 baml_repl_history.txt

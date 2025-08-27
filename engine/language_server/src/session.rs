@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::Instant,
 };
 
@@ -12,6 +12,8 @@ use anyhow::{anyhow, Context};
 use index::DocumentController;
 use itertools::any;
 use lsp_types::{ClientCapabilities, TextDocumentContentChangeEvent, Url};
+use parking_lot::Mutex;
+use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
 use serde_json::Value;
 
 pub(crate) use self::{capabilities::ResolvedClientCapabilities, settings::AllSettings};
@@ -33,9 +35,6 @@ pub mod settings;
 
 use tokio::sync::{broadcast, RwLock};
 
-#[cfg(feature = "playground-server")]
-use crate::playground::PlaygroundState;
-
 /// The global state for the LSP
 #[derive(Debug)]
 pub struct Session {
@@ -52,28 +51,8 @@ pub struct Session {
 
     pub baml_settings: BamlSettings,
 
-    /// The actual port that the playground server is running on (after availability check)
-    #[cfg(feature = "playground-server")]
-    pub playground_port: Option<u16>,
-
-    #[cfg(feature = "playground-server")]
-    pub playground_state: Option<Arc<RwLock<PlaygroundState>>>,
-
-    /// Runtime for the playground server
-    #[cfg(feature = "playground-server")]
-    pub playground_runtime: Option<tokio::runtime::Runtime>,
-}
-
-impl Drop for Session {
-    fn drop(&mut self) {
-        #[cfg(feature = "playground-server")]
-        {
-            // Shutdown the playground runtime if it exists
-            if let Some(runtime) = self.playground_runtime.take() {
-                runtime.shutdown_timeout(std::time::Duration::from_secs(1));
-            }
-        }
-    }
+    pub playground_port: u16,
+    pub playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
 }
 
 impl Clone for Session {
@@ -84,12 +63,8 @@ impl Clone for Session {
             position_encoding: self.position_encoding,
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
             baml_settings: self.baml_settings.clone(),
-            #[cfg(feature = "playground-server")]
             playground_port: self.playground_port,
-            #[cfg(feature = "playground-server")]
-            playground_state: self.playground_state.clone(),
-            #[cfg(feature = "playground-server")]
-            playground_runtime: None, // Don't clone the runtime
+            playground_tx: self.playground_tx.clone(),
         }
     }
 }
@@ -100,7 +75,8 @@ impl Session {
         position_encoding: PositionEncoding,
         global_settings: ClientSettings,
         workspace_folders: &[(Url, ClientSettings)],
-        runtime_handle: tokio::runtime::Handle,
+        playground_port: u16,
+        playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
         client_version: Option<String>,
     ) -> anyhow::Result<Self> {
         let mut projects = HashMap::new();
@@ -149,12 +125,8 @@ impl Session {
                 tracing::info!("--- Session::new final baml_settings: {:?}", baml_settings);
                 baml_settings
             },
-            #[cfg(feature = "playground-server")]
-            playground_port: None,
-            #[cfg(feature = "playground-server")]
-            playground_state: None,
-            #[cfg(feature = "playground-server")]
-            playground_runtime: None,
+            playground_port,
+            playground_tx,
         })
     }
 
@@ -188,22 +160,6 @@ impl Session {
         }
     }
 
-    /// Sets the actual playground port that the server determined after availability check
-    #[cfg(feature = "playground-server")]
-    pub fn set_session_playground_port(&mut self, port: u16) {
-        self.playground_port = Some(port);
-    }
-
-    /// Gets the actual playground port that the server is running on
-    #[cfg(feature = "playground-server")]
-    pub fn get_session_playground_port(&self) -> Option<u16> {
-        tracing::info!(
-            "Getting session playground port: {:?}",
-            self.playground_port
-        );
-        self.playground_port
-    }
-
     /// Gets or creates a project for the given path.
     ///
     /// This is the primary method for working with projects, replacing the multiple
@@ -220,7 +176,7 @@ impl Session {
         let baml_src = find_top_level_parent(path.as_ref())?;
 
         // Lock once and perform all operations within this scope
-        let mut projects = self.baml_src_projects.lock().unwrap();
+        let mut projects = self.baml_src_projects.lock();
 
         // If project exists, return it
         if let Some(project) = projects.get(&baml_src) {
@@ -242,17 +198,11 @@ impl Session {
     }
 
     pub fn print_baml_projects(&self) {
-        let projects = self.baml_src_projects.lock().unwrap();
+        let projects = self.baml_src_projects.lock();
 
         let info_string = projects
             .iter()
-            .map(|(key, project)| {
-                format!(
-                    "{}: {:?}",
-                    key.display(),
-                    project.lock().unwrap().root_path()
-                )
-            })
+            .map(|(key, project)| format!("{}: {:?}", key.display(), project.lock().root_path()))
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -264,8 +214,10 @@ impl Session {
     }
 
     pub fn reload(&mut self, notifier: Option<Notifier>) -> anyhow::Result<()> {
+        // tracing::info!("skipping session reload");
+        // return Ok(());
         tracing::info!("Reloading session");
-        let mut baml_src_projects = self.baml_src_projects.lock().unwrap();
+        let mut baml_src_projects = self.baml_src_projects.lock();
 
         // Drop moved "baml_src" directories, otherwise the project_updates
         // code below will fail trying to read directories that no longer exist.
@@ -283,13 +235,12 @@ impl Session {
             .map(|(_project_root, project)| {
                 let files_map = project
                     .lock()
-                    .unwrap()
                     .baml_project
                     .load_files()
                     .map_err(|e| anyhow::anyhow!("Failed to load project files: {}", e))?;
                 {
                     let default_flags = vec!["beta".to_string()];
-                    project.lock().unwrap().update_runtime(
+                    project.lock().update_runtime(
                         notifier.clone(),
                         self.baml_settings
                             .feature_flags
@@ -323,17 +274,13 @@ impl Session {
         // Index all the files, except for the ones with unsaved changes.
         files.iter().for_each(|(file_url, file_contents)| {
             let text_document = TextDocument::new(file_contents.clone(), 0);
-            let document_is_unsaved = any(
-                self.baml_src_projects.lock().unwrap().iter(),
-                |(_, project)| {
-                    project
-                        .lock()
-                        .unwrap()
-                        .baml_project
-                        .unsaved_files
-                        .contains_key(file_url)
-                },
-            );
+            let document_is_unsaved = any(self.baml_src_projects.lock().iter(), |(_, project)| {
+                project
+                    .lock()
+                    .baml_project
+                    .unsaved_files
+                    .contains_key(file_url)
+            });
             if !document_is_unsaved {
                 self.open_text_document(file_url.clone(), text_document);
             }
@@ -345,8 +292,8 @@ impl Session {
 
     pub fn clear_unsaved_files(&mut self) {
         tracing::info!("Clearing unsaved files");
-        for (_folder, project) in self.baml_src_projects.lock().unwrap().iter_mut() {
-            project.lock().unwrap().baml_project.unsaved_files.clear();
+        for (_folder, project) in self.baml_src_projects.lock().iter_mut() {
+            project.lock().baml_project.unsaved_files.clear();
         }
     }
 
@@ -356,12 +303,11 @@ impl Session {
         let project = self.get_or_create_project(&file_path)?;
 
         let document_key =
-            DocumentKey::from_url(&project.lock().unwrap().baml_project.root_dir_name, &url)
-                .ok()?;
+            DocumentKey::from_url(&project.lock().baml_project.root_dir_name, &url).ok()?;
 
         Some(DocumentSnapshot {
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
-            document_ref: self.index.lock().unwrap().make_document_ref(document_key)?,
+            document_ref: self.index.lock().make_document_ref(document_key)?,
             position_encoding: self.position_encoding,
             session: Arc::new((*self).clone()),
         })
@@ -370,8 +316,7 @@ impl Session {
     /// Registers a text document at the provided `url`.
     /// If a document is already open here, it will be overwritten.
     pub(crate) fn open_text_document(&self, document_key: DocumentKey, document: TextDocument) {
-        let mut index = self.index.lock().unwrap();
-        index.open_text_document(document_key, document);
+        self.index.lock().open_text_document(document_key, document);
     }
 
     pub(crate) fn set_unsaved_file(
@@ -387,11 +332,10 @@ impl Session {
                 )
             }
         };
-        for (_folder, project) in self.baml_src_projects.lock().unwrap().iter_mut() {
+        for (_folder, project) in self.baml_src_projects.lock().iter_mut() {
             let text_document = TextDocument::new(new_contents.clone(), 0);
             project
                 .lock()
-                .unwrap()
                 .baml_project
                 .unsaved_files
                 .insert(document_key.clone(), text_document);
@@ -413,7 +357,7 @@ impl Session {
         let doc_key = key;
         let start_time = Instant::now();
         let doc_contents = {
-            let mut index = self.index.lock().unwrap();
+            let mut index = self.index.lock();
             index.update_text_document(key, content_changes, new_version, position_encoding)?;
 
             let doc_controller = index
@@ -430,20 +374,12 @@ impl Session {
         let start_time = Instant::now();
         self.baml_src_projects
             .lock()
-            .unwrap()
             .iter_mut()
             .try_for_each(|(_folder, project)| {
                 let text_document = TextDocument::new(doc_contents.clone(), 0);
-                if project
-                    .lock()
-                    .unwrap()
-                    .baml_project
-                    .files
-                    .contains_key(doc_key)
-                {
+                if project.lock().baml_project.files.contains_key(doc_key) {
                     project
                         .lock()
-                        .unwrap()
                         .baml_project
                         .unsaved_files
                         .insert(doc_key.clone(), text_document);
@@ -451,7 +387,7 @@ impl Session {
 
                     {
                         let default_flags = vec!["beta".to_string()];
-                        project.lock().unwrap().update_runtime(
+                        project.lock().update_runtime(
                             notifier.clone(),
                             self.baml_settings
                                 .feature_flags
@@ -470,7 +406,7 @@ impl Session {
     /// De-registers a document, specified by its key.
     /// Calling this multiple times for the same document is a logic error.
     pub(crate) fn close_document(&self, key: &DocumentKey) -> anyhow::Result<()> {
-        let mut index = self.index.lock().unwrap();
+        let mut index = self.index.lock();
         index.close_document(key)?;
         Ok(())
     }
@@ -540,14 +476,15 @@ mod tests {
         let global_settings = ClientSettings::default();
         let workspace_folders = vec![]; // Start with empty workspace
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (playground_tx, _) = broadcast::channel(1);
 
         Session::new(
             &client_capabilities,
             position_encoding,
             global_settings,
             &workspace_folders,
-            rt.handle().clone(),
+            0,
+            playground_tx,
             None, // No client_version for this test
         )
         .unwrap()
@@ -589,7 +526,7 @@ mod tests {
         // Verify it's the same project
         {
             let unwrapped_project = found_project.unwrap();
-            let project_guard = unwrapped_project.lock().unwrap();
+            let project_guard = unwrapped_project.lock();
             let found_root = project_guard.root_path();
             assert_eq!(
                 found_root, key2,

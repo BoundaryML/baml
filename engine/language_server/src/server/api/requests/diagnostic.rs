@@ -1,7 +1,4 @@
-use std::{
-    borrow::Cow,
-    sync::{Arc, Mutex},
-};
+use std::{borrow::Cow, sync::Arc};
 
 use lsp_types::{
     request::DocumentDiagnosticRequest, DocumentDiagnosticParams, DocumentDiagnosticReport,
@@ -9,6 +6,7 @@ use lsp_types::{
     RelatedFullDocumentDiagnosticReport, RelatedUnchangedDocumentDiagnosticReport,
     UnchangedDocumentDiagnosticReport, Url,
 };
+use parking_lot::Mutex;
 
 use crate::{
     baml_project::Project,

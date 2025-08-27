@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use baml_runtime::InternalRuntimeInterface;
@@ -10,6 +10,7 @@ use lsp_server::{ErrorCode, Notification, Request};
 use lsp_types::{
     notification::PublishDiagnostics, Diagnostic, DiagnosticSeverity, PublishDiagnosticsParams, Url,
 };
+use parking_lot::Mutex;
 
 use super::LSPResult;
 use crate::{
@@ -136,7 +137,7 @@ pub fn project_diagnostics(
         "project_diagnostics called with feature_flags: {:?}",
         feature_flags
     );
-    let mut guard = project.lock().unwrap();
+    let mut guard = project.lock();
     let root_path = PathBuf::from(guard.root_path());
     let fake_env = HashMap::new();
     let baml_diagnostics = match guard.baml_project.runtime(fake_env, feature_flags) {
@@ -324,7 +325,7 @@ pub fn file_diagnostics(
         file_url,
         feature_flags
     );
-    let mut guard = project.lock().unwrap();
+    let mut guard = project.lock();
     let root_path = PathBuf::from(guard.root_path());
     let fake_env = HashMap::new();
     let baml_diagnostics = match guard.baml_project.runtime(fake_env, feature_flags) {
