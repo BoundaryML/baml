@@ -47,7 +47,7 @@ use crate::message::try_show_message;
 pub type Result<T> = std::result::Result<T, api::Error>;
 
 pub(crate) struct ServerArgs {
-    pub tokio_handle: tokio::runtime::Handle,
+    pub tokio_runtime: tokio::runtime::Runtime,
     pub broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
     pub playground_rx: broadcast::Receiver<PreLangServerToWasmMessage>,
     pub playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
@@ -195,7 +195,7 @@ impl Server {
         {
             let lsp_sender = server.connection.make_sender();
             let playground_tx = server.session.playground_tx.clone();
-            server.args.tokio_handle.spawn(async move {
+            server.args.tokio_runtime.spawn(async move {
                 lsp_sender
                     .send(Message::Notification(lsp_server::Notification::new(
                         "baml/port".to_string(),
@@ -211,7 +211,7 @@ impl Server {
             let mut playground_rx = server.args.playground_rx.resubscribe();
             let broadcast_tx = server.args.broadcast_tx.clone();
             let session = server.session.clone();
-            server.args.tokio_handle.spawn(async move {
+            server.args.tokio_runtime.spawn(async move {
                 tracing::info!("Starting playground rx loop");
                 while let Ok(msg) = playground_rx.recv().await {
                     tracing::info!("playground rx loop: {:?}", msg);

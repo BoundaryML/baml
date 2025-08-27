@@ -85,7 +85,7 @@ pub fn run_server() -> anyhow::Result<()> {
     Server::new(
         worker_threads,
         ServerArgs {
-            tokio_handle: tokio_runtime.handle().clone(),
+            tokio_runtime,
             broadcast_tx,
             playground_rx,
             playground_tx: playground_tx.clone(),
