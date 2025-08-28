@@ -68,13 +68,13 @@ function NormalElseIfStmt(a: bool, b: bool) -> int {
 }
 
 function IterativeFibonacci(n: int) -> int {
-    let mut a = 0;
-    let mut b = 1;
+    let a = 0;
+    let b = 1;
 
     if (n == 0) {
         b
     } else {
-        let mut i = 1;
+        let i = 1;
         while (i <= n) {
             let c = a + b;
             a = b;
@@ -86,7 +86,7 @@ function IterativeFibonacci(n: int) -> int {
 }
 
 function SumArray(arr: int[]) -> int {
-    let mut sum = 0;
+    let sum = 0;
     for (a in arr) {
         sum += a;
     }
@@ -94,9 +94,9 @@ function SumArray(arr: int[]) -> int {
 }
 
 function SumFromTo(x: int, y: int) -> int {
-    let mut s = 0;
+    let s = 0;
 
-    for (let mut i = x; i <= y; i += 1) {
+    for (let i = x; i <= y; i += 1) {
         s += i;
     }
 
