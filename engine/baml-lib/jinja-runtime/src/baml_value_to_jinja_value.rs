@@ -84,7 +84,7 @@ impl IntoMiniJinjaValue for BamlValue {
     }
 }
 
-struct MinijinjaBamlMedia {
+pub(crate) struct MinijinjaBamlMedia {
     media: BamlMedia,
 }
 
@@ -134,6 +134,10 @@ impl minijinja::value::Object for MinijinjaBamlMedia {
             minijinja::ErrorKind::UnknownMethod,
             format!("BamlImage has no callable attribute '{args:#?}'"),
         ))
+    }
+
+    fn is_true(self: &Arc<Self>) -> bool {
+        true
     }
 
     fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

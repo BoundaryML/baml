@@ -7,6 +7,8 @@ mod output_format;
 mod test_enum_comparison;
 #[cfg(test)]
 mod test_enum_template;
+#[cfg(test)]
+mod test_media;
 use indexmap::IndexMap;
 use internal_baml_core::ir::{jinja_helpers::get_env, repr::IntermediateRepr};
 pub use output_format::types;
