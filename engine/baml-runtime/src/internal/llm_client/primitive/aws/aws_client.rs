@@ -1245,29 +1245,13 @@ impl WithChat for AwsClient {
                     latency: instant_start.elapsed(),
                     message: format!("{e:#?}"),
                     code: match e {
-                        SdkError::ConstructionFailure(_) => ErrorCode::Other(2),
+                        SdkError::ConstructionFailure(_) => ErrorCode::FailedToConnect,
                         SdkError::TimeoutError(_) => ErrorCode::Other(2),
-                        SdkError::DispatchFailure(_) => ErrorCode::Other(2),
+                        SdkError::DispatchFailure(_) => ErrorCode::FailedToConnect,
                         SdkError::ResponseError(e) => {
                             ErrorCode::UnsupportedResponse(e.raw().status().as_u16())
                         }
-                        SdkError::ServiceError(e) => {
-                            let status = e.raw().status();
-                            match status.as_u16() {
-                                400 => ErrorCode::InvalidAuthentication,
-                                403 => ErrorCode::NotSupported,
-                                429 => ErrorCode::RateLimited,
-                                500 => ErrorCode::ServerError,
-                                503 => ErrorCode::ServiceUnavailable,
-                                _ => {
-                                    if status.is_server_error() {
-                                        ErrorCode::ServerError
-                                    } else {
-                                        ErrorCode::Other(status.as_u16())
-                                    }
-                                }
-                            }
-                        }
+                        SdkError::ServiceError(e) => ErrorCode::from_u16(e.raw().status().as_u16()),
                         _ => ErrorCode::Other(2),
                     },
                 });

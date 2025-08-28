@@ -92,6 +92,9 @@ impl BamlError {
                     message: format!("Unexpected error from BAML: {err:?}"),
                 },
                 LLMResponse::LLMFailure(failed) => match &failed.code {
+                    crate::internal::llm_client::ErrorCode::FailedToConnect => Self::ClientError {
+                        message: format!("Failed to connect to the LLM provider: {err:?}"),
+                    },
                     crate::internal::llm_client::ErrorCode::Other(2) => Self::InternalError {
                         message: format!("Something went wrong with the LLM client: {err:?}"),
                     },

@@ -182,7 +182,11 @@ pub(crate) async fn build_and_log_outbound_request(
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
                 message: format!("Failed to build request: {e:#?}"),
-                code: ErrorCode::Other(2),
+                code: if e.is_connect() {
+                    ErrorCode::FailedToConnect
+                } else {
+                    ErrorCode::Other(2)
+                },
             }));
         }
     };
@@ -253,9 +257,12 @@ pub async fn execute_request(
                         )
                     }
                 },
-                code: e
-                    .status()
-                    .map_or(ErrorCode::Other(2), ErrorCode::from_status),
+                code: if e.is_connect() {
+                    ErrorCode::FailedToConnect
+                } else {
+                    e.status()
+                        .map_or(ErrorCode::Other(2), ErrorCode::from_status)
+                },
             }));
         }
     };

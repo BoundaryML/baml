@@ -298,7 +298,7 @@ describe("AWS Provider", () => {
         await b.TestAws("Dr. Pepper", { clientRegistry: cr });
       }).rejects.toMatchObject({
         name: "BamlClientHttpError",
-        status_code: 401,
+        status_code: 400,
         client_name: "DynamicAWSClient",
         message: expect.stringContaining(
           "BamlError: BamlClientError: BamlClientHttpError:",

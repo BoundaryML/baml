@@ -211,6 +211,12 @@ pub struct LLMErrorResponse {
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub enum ErrorCode {
+    // Failed to establish a connection
+    // Tends to happen when either (1) user enters the wrong connection details
+    // (e.g. wrong AWS region and therefore URL) or (2) in prod it's been
+    // chugging along and then the server provider goes hard down.
+    FailedToConnect,
+
     InvalidAuthentication, // 401
     NotSupported,          // 403
     RateLimited,           // 429
@@ -227,6 +233,7 @@ pub enum ErrorCode {
 impl std::fmt::Display for ErrorCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ErrorCode::FailedToConnect => f.write_str("Failed while establishing connection"),
             ErrorCode::InvalidAuthentication => f.write_str("InvalidAuthentication (401)"),
             ErrorCode::NotSupported => f.write_str("NotSupported (403)"),
             ErrorCode::RateLimited => f.write_str("RateLimited (429)"),
@@ -263,6 +270,10 @@ impl ErrorCode {
 
     pub fn to_u16(&self) -> u16 {
         match self {
+            // FAILED_TO_CONNECT maps to 2 because the internal callsites usually used ErrorCode::Other(2)
+            // for connection errors. It's unclear if this actually makes its way out to users in any
+            // meaningful way.
+            ErrorCode::FailedToConnect => 2,
             ErrorCode::InvalidAuthentication => 401,
             ErrorCode::NotSupported => 403,
             ErrorCode::RateLimited => 429,

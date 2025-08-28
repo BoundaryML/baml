@@ -123,9 +123,26 @@ impl FunctionResult {
     }
 
     fn format_err(&self, err: &anyhow::Error) -> ExposedError {
+        // panic!("format_err {:?}", err);
         if let Some(exposed_error) = err.downcast_ref::<ExposedError>() {
             return exposed_error.clone();
         }
+
+        if let LLMResponse::LLMFailure(err) = self.llm_response() {
+            if err.code == ErrorCode::FailedToConnect {
+                let actual_error = err.message.clone();
+                return ExposedError::ClientHttpError {
+                    client_name: match self.llm_response() {
+                        LLMResponse::Success(resp) => resp.client.clone(),
+                        LLMResponse::LLMFailure(err) => err.client.clone(),
+                        _ => "unknown".to_string(),
+                    },
+                    message: actual_error,
+                    status_code: ErrorCode::FailedToConnect,
+                };
+            }
+        }
+
         // Capture the actual error to preserve its details
         let actual_error = err.to_string();
         // TODO: HACK! Figure out why now connection errors dont get converted into ExposedError. Instead of converting to a validation error, check for connection errors here. We probably are missing a lot of other connection failures that should NOT be validation errors.
@@ -137,9 +154,10 @@ impl FunctionResult {
                     _ => "unknown".to_string(),
                 },
                 message: actual_error,
-                status_code: ErrorCode::ServiceUnavailable,
+                status_code: ErrorCode::FailedToConnect,
             };
         }
+
         ExposedError::ValidationError {
             prompt: match self.llm_response() {
                 LLMResponse::Success(resp) => resp.prompt.to_string(),
