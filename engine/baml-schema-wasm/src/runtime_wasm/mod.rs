@@ -1725,8 +1725,35 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
             let path = path.to_string();
             let get_baml_src_cb = get_baml_src_cb.clone();
             async move {
+                // Windows-specific hotfix: VSCode resolves relative paths relative to workspace root
+                // instead of BAML file location. For BAML files directly in baml_src/, prepend "baml_src/".
+                // Since WASM can't use cfg!(windows), we detect Windows by checking for backslashes in paths
+                // or by checking the user agent, but for simplicity, we'll check if the path contains backslashes.
+                let is_windows = web_sys::window()
+                    .and_then(|w| w.navigator().user_agent().ok())
+                    .map(|ua| ua.contains("Windows"))
+                    .unwrap_or(false);
+
+                let adjusted_path =
+                    if is_windows && (path.starts_with("../") || path.starts_with("./")) {
+                        let result = format!("baml_src/{}", path);
+                        web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(&format!(
+                            "WASM Windows path fix applied: '{}' → '{}'",
+                            path, result
+                        )));
+                        result
+                    } else {
+                        web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(&format!(
+                            "WASM path unchanged: '{}' (windows={}, relative={})",
+                            path,
+                            is_windows,
+                            path.starts_with("../") || path.starts_with("./")
+                        )));
+                        path.clone()
+                    };
+
                 let null = JsValue::NULL;
-                let Ok(read) = get_baml_src_cb.call1(&null, &JsValue::from(path.clone())) else {
+                let Ok(read) = get_baml_src_cb.call1(&null, &JsValue::from(adjusted_path)) else {
                     anyhow::bail!("readFileRef did not return a promise");
                 };
 
