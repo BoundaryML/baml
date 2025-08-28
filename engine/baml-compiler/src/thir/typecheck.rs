@@ -797,16 +797,7 @@ fn typecheck_statement(
                     field: _,
                     span: _,
                 } => {
-                    // For field access, check if self parameter is mutable
-                    if let hir::Expression::Identifier(name, _) = base.as_ref() {
-                        if name == "self" {
-                            match context.vars.get(name) {
-                                // All variables including self are mutable now
-                                _ => {} // No immutability check needed
-                            }
-                        }
-                    }
-                    // Type checking for the field assignment itself happens in codegen
+                    // TODO: Typecheck field access.
                 }
                 _ => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
@@ -889,16 +880,7 @@ fn typecheck_statement(
                     field: _,
                     span: _,
                 } => {
-                    // For field access, check if self parameter is mutable
-                    if let hir::Expression::Identifier(name, _) = base.as_ref() {
-                        if name == "self" {
-                            match context.vars.get(name) {
-                                // All variables including self are mutable now
-                                _ => {} // No immutability check needed
-                            }
-                        }
-                    }
-                    // Type checking for the field assignment itself happens in codegen
+                    // TODO: Typecheck field access.
                 }
                 _ => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
