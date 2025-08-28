@@ -5,7 +5,7 @@ use crate::baml_value_to_jinja_value::MinijinjaBamlMedia;
 
 #[test]
 fn test_media_value() {
-    // Test that enum compares to value name, not alias
+    // Test that a media object evaluates to the raw string representation
     let media_val = Value::from_object(MinijinjaBamlMedia::from(BamlMedia::url(
         baml_types::BamlMediaType::Image,
         "https://example.com/image.png".to_string(),
@@ -25,7 +25,7 @@ fn test_media_value() {
 
 #[test]
 fn test_media_comparison() {
-    // Test that enum compares to value name, not alias
+    // Test that a media object evaluates to true in boolean context
     let media_val = Value::from_object(MinijinjaBamlMedia::from(BamlMedia::url(
         baml_types::BamlMediaType::Image,
         "https://example.com/image.png".to_string(),
