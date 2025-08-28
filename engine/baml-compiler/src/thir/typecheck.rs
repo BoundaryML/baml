@@ -1975,7 +1975,9 @@ mod tests {
             .expect("Should have test_primitives function");
 
         // Check that the let statement has the correct inferred type
-        if let Some(thir::Statement::DeclareAndAssign { value, .. }) = test_fn.body.statements.first() {
+        if let Some(thir::Statement::DeclareAndAssign { value, .. }) =
+            test_fn.body.statements.first()
+        {
             assert!(value
                 .meta()
                 .1
@@ -1983,7 +1985,10 @@ mod tests {
                 .expect("a should be inferred")
                 .eq_up_to_span(&TypeIR::int()));
         } else {
-            panic!("Expected delcare and assign statement, got {:?}", test_fn.body.statements);
+            panic!(
+                "Expected delcare and assign statement, got {:?}",
+                test_fn.body.statements
+            );
         }
     }
 
@@ -2014,7 +2019,9 @@ mod tests {
             .expect("Should have test_call function");
 
         // Check that the let statement has a function call with the correct return type
-        if let Some(thir::Statement::DeclareAndAssign { value, .. }) = test_fn.body.statements.first() {
+        if let Some(thir::Statement::DeclareAndAssign { value, .. }) =
+            test_fn.body.statements.first()
+        {
             match value {
                 thir::Expr::Call { meta, .. } => {
                     assert!(meta
