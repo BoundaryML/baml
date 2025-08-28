@@ -10,13 +10,6 @@ fn AssignWrongType(x: int) -> int {
 
 // warning: Workflow functions are experimental, and will break in the future.
 //   -->  assign_wrong_type.baml:1
-//    |
-//    |
-//  1 | fn AssignWrongType(x: int) -> int {
-//    |
-
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  assign_wrong_type.baml:1
 //    | 
 //    | 
 //  1 | fn AssignWrongType(x: int) -> int {
