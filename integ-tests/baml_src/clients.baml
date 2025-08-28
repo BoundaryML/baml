@@ -64,6 +64,27 @@ client<llm> GPT35LegacyProvider {
   }
 }
 
+// Tool calling clients for testing
+client<llm> GPT4ToolCalling {
+  provider openai
+  options {
+    model "gpt-4o"
+    api_key env.OPENAI_API_KEY
+    baml_mode "tool_calling"
+    tool_choice "auto"
+  }
+}
+
+client<llm> GPT4ToolCallingRequired {
+  provider openai
+  options {
+    model "gpt-4o"
+    api_key env.OPENAI_API_KEY
+    baml_mode "tool_calling"
+    tool_choice "required"
+  }
+}
+
 
 client<llm> Ollama {
   provider ollama

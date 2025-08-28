@@ -319,6 +319,7 @@ impl ProviderStrategy {
                 if is_tool_calling {
                     // When using tools, remove the output_format field
                     body_obj.remove("output_format");
+                    body_obj.remove("baml_mode"); // Don't send baml_mode to OpenAI
 
                     // Add tools and tool_choice if configured
                     if let Some(tools) = properties.get("tools") {
@@ -327,6 +328,11 @@ impl ProviderStrategy {
 
                     if let Some(tool_choice) = properties.get("tool_choice") {
                         body_obj.insert("tool_choice".into(), tool_choice.clone());
+                    }
+                    
+                    // Enable parallel tool calls if tools are present
+                    if properties.get("tools").is_some() {
+                        body_obj.insert("parallel_tool_calls".into(), json!(true));
                     }
                 }
 

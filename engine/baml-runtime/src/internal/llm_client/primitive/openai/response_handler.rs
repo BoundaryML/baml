@@ -69,11 +69,17 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
     
     // Extract content from either regular message content or tool calls
     let content = if let Some(tool_calls) = &response.choices[0].message.tool_calls {
-        // If there are tool calls, extract the arguments from the first one
-        // In the future, we might want to handle multiple tool calls
         if !tool_calls.is_empty() {
-            // Return the function arguments directly - they should contain the structured output
-            tool_calls[0].function.arguments.clone()
+            if tool_calls.len() == 1 {
+                // Single tool call - return arguments directly
+                tool_calls[0].function.arguments.clone()
+            } else {
+                // Multiple tool calls - format as JSON array
+                let arguments: Vec<&str> = tool_calls.iter()
+                    .map(|call| call.function.arguments.as_str())
+                    .collect();
+                format!("[{}]", arguments.join(","))
+            }
         } else {
             // No tool calls found
             response.choices[0]
