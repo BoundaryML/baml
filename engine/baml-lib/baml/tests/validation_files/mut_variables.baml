@@ -7,7 +7,7 @@ fn DeclareMutableInFunction(x: int) -> int {
 	y
 }
 
-fn MutableInArg(mut x: int) -> int {
+fn MutableInArg(x: int) -> int {
 	x = 3;
 	x
 }
@@ -17,10 +17,21 @@ fn ErrorWhenAssigningToConst(x: int) -> int {
 	x
 }
 
-// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  mut_variables.baml:1
+//    | 
+//    | 
+//  1 | fn DeclareMutableInFunction(x: int) -> int {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
 //   -->  mut_variables.baml:10
 //    | 
 //  9 | 
-// 10 | fn MutableInArg(mut x: int) -> int {
-// 11 | x = 3;
+// 10 | fn MutableInArg(x: int) -> int {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  mut_variables.baml:15
+//    | 
+// 14 | 
+// 15 | fn ErrorWhenAssigningToConst(x: int) -> int {
 //    | 
