@@ -9,6 +9,7 @@ where
     M: MetaSuffix,
 {
     match ty {
+        TypeGeneric::Top(_) => f.write_str("ANY"),
         TypeGeneric::Enum { name, .. } => write!(f, "{name}"),
         TypeGeneric::Class { name, mode, .. } => match mode {
             crate::StreamingMode::NonStreaming => write!(f, "{name}"),

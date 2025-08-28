@@ -14,15 +14,20 @@ fn AssignWrongType(x: int) -> int {
 //    | 
 //  1 | fn AssignWrongType(x: int) -> int {
 //    | 
+<<<<<<< HEAD
 // warning: type for 'y' was inferred here
 //   -->  assign_wrong_type.baml:3
 //    | 
 //  2 | 
 //  3 | let y = 3;
 //    | 
-// error: Error validating: Cannot assign string to int
-//   -->  assign_wrong_type.baml:5
+=======
+>>>>>>> canary
+
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  assign_wrong_type.baml:17
 //    | 
-//  4 | 
-//  5 | y = "hello";
+// 16 | //    | 
+// 17 | <<<<<<< HEAD
+// 18 | // warning: type for 'y' was inferred here
 //    | 

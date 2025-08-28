@@ -26,7 +26,7 @@ BAML provides cancellation support for in-flight function calls across all langu
 // Manual cancellation
 const controller = new AbortController()
 const result = await b.FunctionName(input, {
-  abortSignal: controller.signal
+  signal: controller.signal
 })
 
 // Cancel operation
@@ -34,7 +34,7 @@ controller.abort()
 
 // Automatic timeout using AbortSignal.timeout()
 const result2 = await b.FunctionName(input, {
-  abortSignal: AbortSignal.timeout(5000) // 5 second timeout
+  signal: AbortSignal.timeout(5000) // 5 second timeout
 })
 
 // Check if aborted
@@ -144,7 +144,7 @@ Abort controllers work seamlessly with streaming responses:
     ```typescript
     const controller = new AbortController()
     const stream = b.stream.FunctionName(input, {
-      abortSignal: controller.signal
+      signal: controller.signal
     })
     
     try {
@@ -245,7 +245,7 @@ AbortController is not supported in Ruby.
     ```typescript
     // Modern approach using AbortSignal.timeout()
     const result = await b.ExtractData(input, {
-      abortSignal: AbortSignal.timeout(5000) // 5 second timeout
+      signal: AbortSignal.timeout(5000) // 5 second timeout
     })
     
     // Manual timeout implementation
@@ -263,7 +263,7 @@ AbortController is not supported in Ruby.
     
     // Usage
     const result2 = await withTimeout(
-      (signal) => b.ExtractData(input, { abortSignal: signal }),
+      (signal) => b.ExtractData(input, { signal }),
       5000 // 5 second timeout
     )
     ```
@@ -285,9 +285,9 @@ AbortController is not supported in Ruby.
     const controller = new AbortController()
     
     const operations = [
-      b.Operation1(input1, { abortSignal: controller.signal }),
-      b.Operation2(input2, { abortSignal: controller.signal }),
-      b.Operation3(input3, { abortSignal: controller.signal })
+      b.Operation1(input1, { signal: controller.signal }),
+      b.Operation2(input2, { signal: controller.signal }),
+      b.Operation3(input3, { signal: controller.signal })
     ]
     
     // Cancel all if any fails

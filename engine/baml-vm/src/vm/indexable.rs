@@ -29,7 +29,7 @@ macro_rules! impl_indexable_wrapper {
             }
         }
 
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         pub struct $index_name(pub(crate) usize);
 
         impl $name {
@@ -202,6 +202,11 @@ impl ObjectPool {
         };
 
         Ok(*index)
+    }
+
+    pub fn as_string(&self, value: &Value) -> Result<&String, InternalError> {
+        let index = self.as_object(value, ObjectType::String)?;
+        self[index].as_string()
     }
 
     /// Inspects the type of a value, including the [`ObjectType`] if the object reference is

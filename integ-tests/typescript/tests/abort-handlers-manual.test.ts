@@ -7,7 +7,7 @@ describe("Abort Handlers - Manual Testing", () => {
     const startTime = Date.now();
 
     const promise = b.FnFailRetryExponentialDelay(5, 100, {
-      abortSignal: controller.signal,
+      signal: controller.signal,
     });
 
     // Cancel after 250ms (should be during first or second retry)
@@ -37,21 +37,21 @@ describe("Abort Handlers - Manual Testing", () => {
         const controller = new AbortController();
         setTimeout(() => controller.abort(), 10);
         return b.FnFailRetryConstantDelay(5, 100, {
-          abortSignal: controller.signal,
+          signal: controller.signal,
         });
       })(),
       (async () => {
         const controller = new AbortController();
         setTimeout(() => controller.abort(), 20);
         return b.FnFailRetryConstantDelay(5, 100, {
-          abortSignal: controller.signal,
+          signal: controller.signal,
         });
       })(),
       (async () => {
         const controller = new AbortController();
         setTimeout(() => controller.abort(), 30);
         return b.FnFailRetryConstantDelay(5, 100, {
-          abortSignal: controller.signal,
+          signal: controller.signal,
         });
       })(),
     ]);
@@ -70,7 +70,7 @@ describe("Abort Handlers - Manual Testing", () => {
   it("cancels streaming operation and verifies no further events", async () => {
     const controller = new AbortController();
     const stream = b.stream.TestAbortFallbackChain("test streaming", {
-      abortSignal: controller.signal,
+      signal: controller.signal,
     });
 
     const events = [];
@@ -111,7 +111,7 @@ describe("Abort Handlers - Manual Testing", () => {
 
     // This should normally retry 5 times with 100ms delays
     const promise = b.FnFailRetryConstantDelay(5, 100, {
-      abortSignal: controller.signal,
+      signal: controller.signal,
     });
 
     // Cancel after first retry should have started
@@ -138,7 +138,7 @@ describe("Abort Handlers - Manual Testing", () => {
 
     try {
       const promise = b.ExtractName("My name is Bob and I live in Seattle", {
-        abortSignal: controller.signal,
+        signal: controller.signal,
       });
 
       // Cancel immediately
@@ -162,7 +162,7 @@ describe("Abort Handlers - Manual Testing", () => {
 
       const op = b
         .FnFailRetryConstantDelay(3, 50, {
-          abortSignal: controller.signal,
+          signal: controller.signal,
         })
         .catch(() => {}); // Ignore errors
 

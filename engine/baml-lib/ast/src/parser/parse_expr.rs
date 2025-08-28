@@ -300,7 +300,7 @@ fn check_parentheses_around(
     }
 }
 
-fn consume_if_rule<'src>(
+pub fn consume_if_rule<'src>(
     tokens: &mut pest::iterators::Pairs<'src, Rule>,
     rule: Rule,
 ) -> Option<Pair<'src>> {
@@ -311,7 +311,7 @@ fn consume_if_rule<'src>(
     }
 }
 
-fn consume_span_if_rule(
+pub fn consume_span_if_rule(
     tokens: &mut pest::iterators::Pairs<'_, Rule>,
     diagnostics: &Diagnostics,
     rule: Rule,

@@ -23,6 +23,8 @@ pub use union_type::UnionConstructor;
 /// The building block of IR types in BAML.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, Eq, Hash)]
 pub enum TypeGeneric<T> {
+    // Type that can be casted to any other. Used for generics that accept anything, e.g std::fetch_value.
+    Top(T),
     Primitive(TypeValue, T),
     Enum {
         name: String,
@@ -48,6 +50,41 @@ pub enum TypeGeneric<T> {
     Union(UnionTypeGeneric<T>, T),
 }
 
+impl TypeValue {
+    pub fn basename(&self) -> &'static str {
+        match self {
+            TypeValue::String => "string",
+            TypeValue::Int => "int",
+            TypeValue::Float => "float",
+            TypeValue::Bool => "bool",
+            TypeValue::Null => "null",
+            TypeValue::Media(_) => "media",
+        }
+    }
+}
+
+impl<T> TypeGeneric<T> {
+    pub fn basename(&self) -> &'static str {
+        match self {
+            TypeGeneric::Top(_) => "ANY",
+            TypeGeneric::Primitive(type_value, _) => type_value.basename(),
+            TypeGeneric::Enum { .. } => "enum",
+            TypeGeneric::Literal(lit, _) => match lit {
+                LiteralValue::String(_) => "string",
+                LiteralValue::Int(_) => "int",
+                LiteralValue::Bool(_) => "bool",
+            },
+            TypeGeneric::Class { .. } => "class",
+            TypeGeneric::List(_, _) => "list",
+            TypeGeneric::Map(_, _, _) => "map",
+            TypeGeneric::RecursiveTypeAlias { .. } => "type alias",
+            TypeGeneric::Tuple(_, _) => "tuple",
+            TypeGeneric::Arrow(_, _) => "function",
+            TypeGeneric::Union(_, _) => "union",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, strum::Display)]
 pub enum StreamingMode {
     NonStreaming,
@@ -64,6 +101,89 @@ pub struct UnionTypeGeneric<T> {
 pub type TypeIR = TypeGeneric<type_meta::IR>;
 pub type TypeNonStreaming = TypeGeneric<type_meta::NonStreaming>;
 pub type TypeStreaming = TypeGeneric<type_meta::Streaming>;
+
+/// Wrapper type that implements Display. Not implementing display directly for TypeIR because
+/// we may want multiple display modes.
+pub struct TypeIRDiagnosticRepr<'a>(&'a TypeIR);
+
+impl TypeIR {
+    pub fn diagnostic_repr(&self) -> TypeIRDiagnosticRepr<'_> {
+        TypeIRDiagnosticRepr(self)
+    }
+}
+
+impl std::fmt::Display for TypeIRDiagnosticRepr<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn repr_list<'a>(
+            f: &mut std::fmt::Formatter<'_>,
+            iter: impl IntoIterator<Item = &'a TypeIR>,
+            sep: &'static str,
+        ) -> std::fmt::Result {
+            let mut iter = iter.into_iter().map(TypeIRDiagnosticRepr);
+
+            if let Some(first) = iter.next() {
+                write!(f, "{first}")?;
+                for next in iter {
+                    write!(f, "{sep}{next}")?;
+                }
+            }
+
+            Ok(())
+        }
+
+        fn repr_tuple<'a>(
+            f: &mut std::fmt::Formatter<'_>,
+            iter: impl IntoIterator<Item = &'a TypeIR>,
+        ) -> std::fmt::Result {
+            f.write_str("(")?;
+
+            repr_list(f, iter, ", ")?;
+
+            f.write_str(")")
+        }
+
+        match self.0 {
+            TypeGeneric::Top(_) => f.write_str("ANY"),
+            TypeGeneric::Primitive(type_value, _) => f.write_str(type_value.basename()),
+            TypeGeneric::Enum { name, dynamic, .. } => write!(
+                f,
+                "enum `{name}`{}",
+                if *dynamic { " (dynamic)" } else { "" }
+            ),
+            TypeGeneric::Literal(literal_value, _) => f.write_str(match literal_value {
+                LiteralValue::String(_) => "string",
+                LiteralValue::Int(_) => "int",
+                LiteralValue::Bool(_) => "bool",
+            }),
+            TypeGeneric::Class { name, dynamic, .. } => {
+                write!(
+                    f,
+                    "class `{name}`{}",
+                    if *dynamic { " (dynamic)" } else { "" }
+                )
+            }
+            TypeGeneric::List(type_generic, _) => {
+                write!(f, "{}[]", type_generic.diagnostic_repr())
+            }
+            TypeGeneric::Map(key, value, _) => write!(
+                f,
+                "map<{}, {}>",
+                key.diagnostic_repr(),
+                value.diagnostic_repr()
+            ),
+            TypeGeneric::RecursiveTypeAlias { name, .. } => f.write_str(name),
+            TypeGeneric::Tuple(type_generics, _) => repr_tuple(f, type_generics),
+            TypeGeneric::Arrow(arrow_generic, _) => {
+                f.write_str("fn")?;
+                repr_tuple(f, &arrow_generic.param_types)?;
+                write!(f, " -> {}", arrow_generic.return_type.diagnostic_repr())
+            }
+            TypeGeneric::Union(union_type_generic, _) => {
+                repr_list(f, &union_type_generic.types, " | ")
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, Eq, Hash)]
 pub enum TypeValue {
@@ -403,7 +523,8 @@ impl<T> TypeGeneric<T> {
         }
 
         match self {
-            TypeGeneric::Primitive(..)
+            TypeGeneric::Top(_)
+            | TypeGeneric::Primitive(..)
             | TypeGeneric::Enum { .. }
             | TypeGeneric::Literal(..)
             | TypeGeneric::Class { .. }
@@ -441,6 +562,7 @@ impl<T> TypeGeneric<T> {
 
     pub fn set_meta(&mut self, meta: T) {
         match self {
+            TypeGeneric::Top(m) => *m = meta,
             TypeGeneric::Class { meta: m, .. } => *m = meta,
             TypeGeneric::Arrow(_, type_metadata_ir) => *type_metadata_ir = meta,
             TypeGeneric::Primitive(_, type_metadata_ir) => *type_metadata_ir = meta,
@@ -456,6 +578,7 @@ impl<T> TypeGeneric<T> {
 
     pub fn meta(&self) -> &T {
         match self {
+            TypeGeneric::Top(meta) => meta,
             TypeGeneric::Class { meta, .. } => meta,
             TypeGeneric::Arrow(_, type_metadata_ir) => type_metadata_ir,
             TypeGeneric::Primitive(_, type_metadata_ir) => type_metadata_ir,
@@ -474,6 +597,7 @@ impl<T> TypeGeneric<T> {
         F: Fn(&T) -> U + Copy,
     {
         match self {
+            TypeGeneric::Top(meta) => TypeGeneric::Top(f(meta)),
             TypeGeneric::Class {
                 meta,
                 name,
@@ -539,16 +663,17 @@ impl<T> TypeGeneric<T> {
 
     pub fn meta_mut(&mut self) -> &mut T {
         match self {
-            TypeGeneric::Class { meta, .. } => meta,
-            TypeGeneric::Arrow(_, type_metadata_ir) => type_metadata_ir,
-            TypeGeneric::Primitive(_, type_metadata_ir) => type_metadata_ir,
-            TypeGeneric::Enum { meta, .. } => meta,
-            TypeGeneric::Literal(_, type_metadata_ir) => type_metadata_ir,
-            TypeGeneric::List(_, type_metadata_ir) => type_metadata_ir,
-            TypeGeneric::Map(_, _, type_metadata_ir) => type_metadata_ir,
-            TypeGeneric::RecursiveTypeAlias { meta, .. } => meta,
-            TypeGeneric::Tuple(_, type_metadata_ir) => type_metadata_ir,
-            TypeGeneric::Union(_, type_metadata_ir) => type_metadata_ir,
+            TypeGeneric::Top(meta)
+            | TypeGeneric::Class { meta, .. }
+            | TypeGeneric::Arrow(_, meta)
+            | TypeGeneric::Primitive(_, meta)
+            | TypeGeneric::Enum { meta, .. }
+            | TypeGeneric::Literal(_, meta)
+            | TypeGeneric::List(_, meta)
+            | TypeGeneric::Map(_, _, meta)
+            | TypeGeneric::RecursiveTypeAlias { meta, .. }
+            | TypeGeneric::Tuple(_, meta)
+            | TypeGeneric::Union(_, meta) => meta,
         }
     }
 
@@ -619,7 +744,8 @@ impl<T> TypeGeneric<T> {
                 TypeGeneric::RecursiveTypeAlias { name, .. } => {
                     deps.insert(name.clone());
                 }
-                TypeGeneric::Primitive(_, _) | TypeGeneric::Literal(_, _) => {}
+                TypeGeneric::Top(_) | TypeGeneric::Primitive(_, _) | TypeGeneric::Literal(_, _) => {
+                }
             }
         }
         deps
@@ -680,7 +806,8 @@ impl<T> TypeGeneric<T> {
 
         match self {
             TypeGeneric::Class { mode, .. } => Ok(*mode),
-            TypeGeneric::Arrow(_, _)
+            TypeGeneric::Top(_)
+            | TypeGeneric::Arrow(_, _)
             | TypeGeneric::Primitive(_, _)
             | TypeGeneric::Enum { .. }
             | TypeGeneric::Literal(_, _) => Ok(StreamingMode::NonStreaming),
@@ -734,7 +861,8 @@ impl<Meta: std::hash::Hash + std::cmp::Eq> ToUnionName<Meta> for TypeGeneric<Met
                 set.extend(field_type1.find_union_types());
                 set
             }
-            T::Primitive(_, _)
+            T::Top(_)
+            | T::Primitive(_, _)
             | T::Enum { .. }
             | T::Literal(_, _)
             | T::Class { .. }
@@ -747,6 +875,7 @@ impl<Meta: std::hash::Hash + std::cmp::Eq> ToUnionName<Meta> for TypeGeneric<Met
     fn to_union_name(&self) -> String {
         use TypeGeneric as T;
         match self {
+            T::Top(_) => "ANY".to_string(),
             T::Primitive(type_value, _) => type_value.to_string(),
             T::Enum { name, .. } => name.to_string(),
             T::Literal(literal_value, _) => match literal_value {

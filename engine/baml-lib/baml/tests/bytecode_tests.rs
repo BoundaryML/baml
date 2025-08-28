@@ -113,9 +113,11 @@ fn get_bytecode_output(content: &str) -> Result<String, String> {
                     baml_vm::Object::Array(arr) => {
                         output.push_str(&format!("Array with {} elements\n", arr.len()));
                     }
-
                     baml_vm::Object::Future(_) => {
                         output.push_str("Future\n");
+                    }
+                    baml_vm::Object::Map(index_map) => {
+                        output.push_str(&format!("Map with {} elements\n", index_map.len()));
                     }
                 }
             }

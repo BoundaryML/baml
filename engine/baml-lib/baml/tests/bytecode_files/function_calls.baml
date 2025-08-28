@@ -54,3 +54,7 @@ function Nested(x: int) -> int {
 //
 // Class: std::Request with 3 fields
 // Function: std.Array.len
+//
+// Function: std.Map.len
+//
+// Function: std.Map.contains

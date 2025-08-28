@@ -101,11 +101,16 @@ arguments_list = { "(" ~ (NEWLINE?) ~ config_expression? ~ ("," ~ (NEWLINE?) ~ c
 // ######################################
 // Expressions & Functions
 // ######################################
-map_key   = { identifier | quoted_string_literal }
-map_entry = { (comment_block | empty_lines)* ~ map_key ~ (expression | ENTRY_CATCH_ALL)? ~ trailing_comment? }
+
+ident_map_entry = { identifier ~ !COLON ~ expression }
+// We'll make colon optional so that parser doesn't choke on missing ":"
+// This will make `ident <missing colon> expression` pass as a string key. We'll report inconsistencies
+// like this within the parser
+expr_map_entry = {  expression ~ COLON? ~ expression }
+
 
 splitter          = _{ ("," ~ NEWLINE?) | NEWLINE }
-map_expression    =  { "{" ~ empty_lines? ~ (map_entry ~ (splitter ~ map_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
+map_expression    =  { "{" ~ NEWLINE* ~ ((ident_map_entry | expr_map_entry) ~ splitter?)* ~ NEWLINE* ~ "}" }
 array_expression  =  { "[" ~ empty_lines? ~ ((expression | ARRAY_CATCH_ALL) ~ trailing_comment? ~ (splitter ~ (comment_block | empty_lines)* ~ (expression | ARRAY_CATCH_ALL) ~ trailing_comment?)*)? ~ (comment_block | empty_lines)* ~ splitter? ~ "]" }
 jinja_block_open  = _{ "{{" }
 jinja_block_close = _{ "}}" }
@@ -311,7 +316,7 @@ top_level_assignment = { stmt }
 expr_fn = { ("function" | "fn") ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_block }
 
 // Body of a function (including curly brackets).
-expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt | comment_block | empty_lines)* ~ expression? ~ NEWLINE? ~ BLOCK_CLOSE }
+expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt | comment_block | empty_lines)* ~ expression? ~ (comment_block | empty_lines)* ~ BLOCK_CLOSE }
 
 // Statement.
 stmt = {

@@ -1483,6 +1483,10 @@ fn get_dummy_value(
             Some(format!("({dummy},)"))
         }
         baml_runtime::TypeIR::Arrow(_, _) => None,
+        baml_runtime::TypeIR::Top(_) => panic!(
+            "TypeIR::Top should have been resolved by the compiler before code generation. \
+             This indicates a bug in the type resolution phase."
+        ),
     }
 }
 

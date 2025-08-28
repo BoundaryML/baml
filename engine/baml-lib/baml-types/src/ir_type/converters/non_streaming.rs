@@ -15,6 +15,7 @@ pub fn from_type_ir(r#type: &TypeIR, _lookup: &impl TypeLookups) -> TypeNonStrea
     };
 
     match r#type {
+        TypeIR::Top(_) => TypeNonStreaming::Top(meta),
         TypeIR::Primitive(type_value, _) => match type_value {
             TypeValue::Null => TypeNonStreaming::Primitive(TypeValue::Null, meta),
             TypeValue::Int => TypeNonStreaming::Primitive(TypeValue::Int, meta),

@@ -146,11 +146,36 @@ pub enum Instruction {
     /// executed.
     AllocArray(usize),
 
+    /// Builds a map and allocates it on the heap.
+    ///
+    /// Format `ALLOC_MAP n` where `n` is the number of entries in the map.
+    /// `n` keys are popped first and then `n` values are popped after that.
+    /// In total that's 2n stack required before the instruction is executed.
+    AllocMap(usize),
+
     /// Loads an element from an array at a given index.
     ///
     /// Format: `LOAD_ARRAY_ELEMENT` where the stack contains [array, index] and
     /// the result is the element at that index.
     LoadArrayElement,
+
+    /// Loads a value from a map at a given key.
+    ///
+    /// Format: `LOAD_MAP_ELEMENT` where the stack contains [map, key] and
+    /// the result is the value at that key.
+    LoadMapElement,
+
+    /// Stores a value into an array at a given index.
+    ///
+    /// Format: `STORE_ARRAY_ELEMENT` where the stack contains [array, index, value]
+    /// and stores the value at array[index].
+    StoreArrayElement,
+
+    /// Stores a value into a map at a given key.
+    ///
+    /// Format: `STORE_MAP_ELEMENT` where the stack contains [map, key, value]
+    /// and stores the value at map[key].
+    StoreMapElement,
 
     /// Builds an instance of a class and allocates it on the heap.
     ///
@@ -290,12 +315,16 @@ impl std::fmt::Display for Instruction {
             Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
             Instruction::LoadArrayElement => f.write_str("LOAD_ARRAY_ELEMENT"),
+            Instruction::LoadMapElement => f.write_str("LOAD_MAP_ELEMENT"),
+            Instruction::StoreArrayElement => f.write_str("STORE_ARRAY_ELEMENT"),
+            Instruction::StoreMapElement => f.write_str("STORE_MAP_ELEMENT"),
             Instruction::AllocInstance(i) => write!(f, "ALLOC_INSTANCE {i}"),
             Instruction::DispatchFuture(i) => write!(f, "DISPATCH_FUTURE {i}"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call(n) => write!(f, "CALL {n}"),
             Instruction::Return => f.write_str("RETURN"),
             Instruction::Assert => f.write_str("ASSERT"),
+            Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
         }
     }
 }

@@ -117,12 +117,6 @@ fn BreakContinue() -> int {
 // 21 | for (; i <= 10; i += 1) {
 //    | 
 // error: Error validating: Unknown variable i
-//   -->  loops/c_for.baml:21
-//    | 
-// 20 | 
-// 21 | for (; i <= 10; i += 1) {
-//    | 
-// error: Error validating: Unknown variable i
 //   -->  loops/c_for.baml:22
 //    | 
 // 21 | for (; i <= 10; i += 1) {

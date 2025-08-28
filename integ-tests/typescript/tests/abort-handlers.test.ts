@@ -6,7 +6,7 @@ describe("Abort Handlers", () => {
     const controller = new AbortController();
 
     const promise = b.FnFailRetryExponentialDelay(5, 100, {
-      abortSignal: controller.signal,
+      signal: controller.signal,
     });
 
     setTimeout(() => controller.abort(), 100);
@@ -19,7 +19,7 @@ describe("Abort Handlers", () => {
     const controller = new AbortController();
 
     const stream = b.stream.TestAbortFallbackChain("test", {
-      abortSignal: controller.signal,
+      signal: controller.signal,
     });
 
     setTimeout(() => {
@@ -30,7 +30,7 @@ describe("Abort Handlers", () => {
     let aborted = false;
     try {
       for await (const value of stream) {
-        values.push(value);
+        values.push({ timestamp: Date.now(), value });
       }
       const _ = await stream.getFinalResponse();
     } catch (e) {
@@ -40,13 +40,15 @@ describe("Abort Handlers", () => {
 
     // Should have stopped early due to cancellation
     expect(aborted).toBe(true);
-    expect(values.length).toBeLessThan(10);
+    const latestTimestamp = values[values.length - 1].timestamp;
+    const firstTimestamp = values[0].timestamp;
+    expect(latestTimestamp - firstTimestamp).toBeLessThan(1000);
   });
 
   it("timeout using AbortSignal.timeout", async () => {
     // Using the native AbortSignal.timeout() API
     const promise = b.FnFailRetryConstantDelay(5, 100, {
-      abortSignal: AbortSignal.timeout(200),
+      signal: AbortSignal.timeout(200),
     });
 
     await expect(promise).rejects.toThrow();
@@ -58,7 +60,7 @@ describe("Abort Handlers", () => {
     setTimeout(() => controller.abort("timeout"), 200);
 
     const promise = b.FnFailRetryConstantDelay(5, 100, {
-      abortSignal: controller.signal,
+      signal: controller.signal,
     });
 
     await expect(promise).rejects.toThrow();
@@ -70,7 +72,7 @@ describe("Abort Handlers", () => {
 
     await expect(
       b.ExtractName("John Doe", {
-        abortSignal: controller.signal,
+        signal: controller.signal,
       })
     ).rejects.toThrow(BamlAbortError);
   });

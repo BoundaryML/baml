@@ -60,7 +60,7 @@ pub struct Class<T> {
 pub enum Expr<T> {
     Value(BamlValueWithMeta<T>),
     List(Vec<Expr<T>>, T),
-    Map(BamlMap<String, Expr<T>>, T),
+    Map(Vec<(String, Expr<T>)>, T),
     Block(Box<Block<T>>, T),
     ClassConstructor {
         name: String,

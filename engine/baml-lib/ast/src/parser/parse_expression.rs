@@ -9,7 +9,12 @@ use super::{
     parse_identifier::parse_identifier,
     Rule,
 };
-use crate::{assert_correct_parser, ast::*, unreachable_rule};
+use crate::{
+    assert_correct_parser,
+    ast::*,
+    parser::parse_expr::{consume_if_rule, consume_span_if_rule},
+    unreachable_rule,
+};
 
 pub(crate) fn parse_expression(
     token: Pair<'_>,
@@ -252,88 +257,95 @@ fn parse_string_literal(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expre
 }
 
 fn parse_map(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
-    let mut entries: Vec<(Expression, Expression)> = vec![];
+    fn parse_expr_map_entry(
+        pair: Pair<'_>,
+        diagnostics: &mut Diagnostics,
+    ) -> Option<(Expression, Expression)> {
+        assert_correct_parser!(pair, Rule::expr_map_entry);
+
+        let mut inner = pair.into_inner();
+
+        let key_rule = inner.next()?;
+        let colon = consume_if_rule(&mut inner, Rule::COLON);
+        let value_rule = inner.next()?;
+
+        let key = parse_expression(key_rule, diagnostics)?;
+        let value = parse_expression(value_rule, diagnostics)?;
+
+        if colon.is_none() {
+            diagnostics.push_error(DatamodelError::new_validation_error(
+                "Missing colon between key expression & value expression",
+                Span {
+                    file: key.span().file.clone(),
+                    start: key.span().end,
+                    end: value.span().start,
+                },
+            ));
+        }
+
+        Some((key, value))
+    }
+
+    fn parse_ident_map_entry(
+        pair: Pair<'_>,
+        diagnostics: &mut Diagnostics,
+    ) -> Option<(Expression, Expression)> {
+        assert_correct_parser!(pair, Rule::ident_map_entry);
+
+        let mut inner = pair.into_inner();
+
+        let ident = parse_identifier(inner.next()?, diagnostics);
+
+        let value = parse_expression(inner.next()?, diagnostics)?;
+
+        Some((
+            Expression::StringValue(ident.to_string(), ident.span().clone()),
+            value,
+        ))
+    }
+
+    fn parse_map_entry(
+        pair: Pair<'_>,
+        diagnostics: &mut Diagnostics,
+    ) -> Option<(Expression, Expression)> {
+        match pair.as_rule() {
+            Rule::expr_map_entry => parse_expr_map_entry(pair, diagnostics),
+            Rule::ident_map_entry => parse_ident_map_entry(pair, diagnostics),
+            _ => unreachable_rule!(pair, Rule::map_expression),
+        }
+    }
+
     let span = token.as_span();
 
-    for current in token.into_inner() {
-        match current.as_rule() {
-            Rule::map_entry => {
-                if let Some(f) = parse_map_entry(current, diagnostics) {
-                    entries.push(f)
-                }
+    let mut inner = token
+        .into_inner()
+        .filter(|pair| !matches!(pair.as_rule(), Rule::NEWLINE));
+
+    // Option<(rule, span of inference)>
+    // We'll be reporting
+
+    let entries = if let Some(first) = inner.next() {
+        let first_rule = first.as_rule();
+
+        let first_entry = parse_map_entry(first, diagnostics).into_iter();
+
+        let rest_of_entries = inner.filter_map(|pair| {
+
+            if first_rule != pair.as_rule() {
+                diagnostics.push_error(DatamodelError::new_validation_error("Inconsistent use of key-value pair syntax. Consider using python-style if any of the keys is an identifier to avoid confusion", diagnostics.span(pair.as_span())));
             }
-            Rule::BLOCK_LEVEL_CATCH_ALL => {}
-            _ => parsing_catch_all(current, "map key value"),
-        }
-    }
+
+            parse_map_entry(pair, diagnostics)
+
+
+        });
+
+        first_entry.chain(rest_of_entries).collect()
+    } else {
+        Vec::new()
+    };
 
     Expression::Map(entries, diagnostics.span(span))
-}
-
-fn parse_map_entry(
-    token: Pair<'_>,
-    diagnostics: &mut Diagnostics,
-) -> Option<(Expression, Expression)> {
-    assert_correct_parser!(token, Rule::map_entry);
-
-    let mut key = None;
-    let mut value = None;
-    let token_span = token.as_span(); // Store the span before moving token
-
-    for current in token.into_inner() {
-        match current.as_rule() {
-            Rule::map_key => key = Some(parse_map_key(current, diagnostics)),
-            Rule::expression => value = parse_expression(current, diagnostics),
-            Rule::ENTRY_CATCH_ALL => {
-                diagnostics.push_error(
-                    internal_baml_diagnostics::DatamodelError::new_validation_error(
-                        "This map entry is missing a valid value or has an incorrect syntax.",
-                        diagnostics.span(token_span), // Use the stored span here
-                    ),
-                );
-                return None;
-            }
-            Rule::BLOCK_LEVEL_CATCH_ALL => {}
-            _ => parsing_catch_all(current, "dict entry"),
-        }
-    }
-
-    match (key, value) {
-        (Some(key), Some(value)) => Some((key, value)),
-        (Some(_), None) => {
-            diagnostics.push_error(
-                internal_baml_diagnostics::DatamodelError::new_validation_error(
-                    "This map entry is missing a valid value or has an incorrect syntax.",
-                    diagnostics.span(token_span), // Use the stored span here
-                ),
-            );
-            None
-        }
-        _ => None,
-    }
-}
-
-fn parse_map_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
-    assert_correct_parser!(token, Rule::map_key);
-
-    let span = diagnostics.span(token.as_span());
-    if let Some(current) = token.into_inner().next() {
-        return match current.as_rule() {
-            Rule::identifier => {
-                Expression::StringValue(parse_identifier(current, diagnostics).to_string(), span)
-            }
-            Rule::quoted_string_literal => Expression::StringValue(
-                current.into_inner().next().unwrap().as_str().to_string(),
-                span,
-            ),
-            Rule::unquoted_string_literal => Expression::StringValue(
-                current.into_inner().next().unwrap().as_str().to_string(),
-                span,
-            ),
-            _ => unreachable_rule!(current, Rule::map_key),
-        };
-    }
-    unreachable!("Encountered impossible map key during parsing")
 }
 
 pub fn parse_config_expression(

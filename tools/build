@@ -207,10 +207,10 @@ case "$_path" in
     command="${command} && uv run baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
     if [ "$_test_mode" -eq 1 ]; then
       #command="${command} && BAML_LOG=trace infisical run --env=test -- uv run python baml_example_tracing.py"
-      # command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=test -- uv run pytest -s tests/test_functions.py::test_streaming"
+      command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=dev -- uv run pytest -s"
       # command="${command} && BAML_LOG=debug,baml_runtime=trace  uv run pytest -s tests/test_functions.py::test_should_work_with_vertex_claude"
-      # command="${command} && BAML_LOG=info infisical run --env=test -- uv run pytest"
-      command="${command} && BAML_LOG=info  uv run pytest -s tests/test_dynamic_enum_request.py"
+      # command="${command} && BAML_LOG=info infisical run --env=dev -- uv run pytest"
+      # command="${command} && BAML_LOG=info  uv run pytest -s tests/test_dynamic_enum_request.py"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
@@ -233,7 +233,14 @@ case "$_path" in
     command="(cd ${_repo_root}/engine/language_client_typescript && pnpm build:debug)"
     command="${command} && pnpm baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
     if [ "$_test_mode" -eq 1 ]; then
-      command="${command} && infisical run -- pnpm integ-tests"
+      command="${command} && infisical run --env=dev -- pnpm integ-tests"
+      # command="${command} && infisical run -- pnpm integ-tests tests/modular.test.ts"
+      # command="${command} && infisical run -- pnpm integ-tests tests/prompt_renderer.test.ts"
+      # command="${command} && infisical run -- pnpm integ-tests tests/providers/openai.test.ts"
+      # command="${command} && infisical run -- pnpm integ-tests tests/logger.test.ts"
+      # command="${command} && infisical run -- pnpm integ-tests tests/type-aliases.test.ts"
+      # command="${command} && infisical run -- pnpm integ-tests tests/abort-handlers.test.ts"
+      # command="${command} && infisical run --env=dev -- pnpm integ-tests tests/providers/aws.test.ts"
       # command="${command} && BAML_LOG=${BAML_LOG}  infisical run -- pnpm test tests/integ-tests.test.ts"
       # command="${command} && BAML_LOG=${BAML_LOG} pnpm test tests/dynamic-enum-request.test.ts"
     fi
@@ -277,7 +284,7 @@ case "$_path" in
     command="(cd ${_repo_root}/engine/language_client_cffi && cargo make)"
 
     if [ "$_test_mode" -eq 1 ]; then
-      command="${command} && BAML_LIBRARY_PATH=${_repo_root}/engine/target/debug/libbaml_cffi.dylib infisical run --env=test -- go test"
+      command="${command} && BAML_LIBRARY_PATH=${_repo_root}/engine/target/debug/libbaml_cffi.dylib infisical run --env=test -- go test -timeout 0"
     fi
 
     if [ "$_watch_mode" -eq 1 ]; then
