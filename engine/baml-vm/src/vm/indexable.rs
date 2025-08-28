@@ -1,4 +1,4 @@
-use super::{InternalError, ObjectType, Type};
+use super::{InternalError, ObjectSlot, ObjectType, Type};
 use crate::{Object, Value};
 
 macro_rules! impl_indexable_wrapper {
@@ -182,44 +182,122 @@ macro_rules! impl_indexable_wrapper {
 
 impl_indexable_wrapper!(EvalStack, Value, StackIndex);
 impl_indexable_wrapper!(GlobalPool, Value, GlobalIndex);
-impl_indexable_wrapper!(ObjectPool, Object, ObjectIndex);
 
-impl ObjectPool {
-    /// If `value` is an object, returns a reference to the object.
-    /// - If `value` is not an object, throws [`InternalError::TypeError`].
-    /// - If `value` is an object but reference is not accessible, throws
-    ///   [`InternalError::InvalidObjectRef`].
-    pub fn as_object(
-        &self,
-        value: &Value,
-        object_type: ObjectType,
-    ) -> Result<ObjectIndex, InternalError> {
-        let Value::Object(index) = value else {
-            return Err(InternalError::TypeError {
-                expected: object_type.into(),
-                got: self.type_of(value),
-            });
-        };
+// ObjectIndex needs special handling for generational GC, so define it manually
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ObjectIndex {
+    pub index: usize,
+    pub generation: u32,
+}
 
-        Ok(*index)
+impl ObjectIndex {
+    /// Create a new ObjectIndex with the given index and generation.
+    pub fn new(index: usize, generation: u32) -> Self {
+        Self { index, generation }
     }
 
-    pub fn as_string(&self, value: &Value) -> Result<&String, InternalError> {
-        let index = self.as_object(value, ObjectType::String)?;
-        self[index].as_string()
-    }
-
-    /// Inspects the type of a value, including the [`ObjectType`] if the object reference is
-    /// valid.
-    pub fn type_of(&self, value: &Value) -> Type {
-        Type::of(value, |index| ObjectType::of(&self[index]))
-    }
-
-    pub fn insert(&mut self, value: Object) -> ObjectIndex {
-        self.push(value);
-        ObjectIndex::from_raw(self.0.len() - 1)
+    /// Pinky promise that the given index is safe to interpret.
+    pub fn from_raw(raw: usize) -> Self {
+        Self {
+            index: raw,
+            generation: 0,
+        }
     }
 }
+
+impl std::fmt::Display for ObjectIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.index, self.generation)
+    }
+}
+
+
+// ObjectPool wraps Vec<ObjectSlot> and provides safe access with generation validation
+#[derive(Clone, Default)]
+#[repr(transparent)]
+pub struct ObjectPool(pub(crate) Vec<ObjectSlot>);
+
+// Forward debug implementation
+impl std::fmt::Debug for ObjectPool {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+// deref(mut) for vec
+impl std::ops::Deref for ObjectPool {
+    type Target = Vec<ObjectSlot>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for ObjectPool {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl ObjectPool {
+    /// Create a new empty pool.
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    /// Create a new wrapper from a Vec of Objects (for backward compatibility).
+    pub fn from_vec(vec: Vec<Object>) -> Self {
+        let slots: Vec<ObjectSlot> = vec
+            .into_iter()
+            .map(|obj| ObjectSlot {
+                object: obj,
+                generation: 0,
+            })
+            .collect();
+        Self(slots)
+    }
+    
+    /// Create from existing slots.
+    pub fn from_slots(slots: Vec<ObjectSlot>) -> Self {
+        Self(slots)
+    }
+
+    /// Safe object access with generation validation.
+    pub fn get(&self, idx: ObjectIndex) -> Result<&Object, InternalError> {
+        match self.0.get(idx.index) {
+            Some(slot) => {
+                if slot.generation == idx.generation {
+                    match &slot.object {
+                        Object::Null => Err(InternalError::StaleObjectReference),
+                        obj => Ok(obj),
+                    }
+                } else {
+                    Err(InternalError::StaleObjectReference)
+                }
+            }
+            None => Err(InternalError::InvalidObjectRef(idx.index)),
+        }
+    }
+    
+    /// Safe mutable object access with generation validation.
+    pub fn get_mut(&mut self, idx: ObjectIndex) -> Result<&mut Object, InternalError> {
+        match self.0.get_mut(idx.index) {
+            Some(slot) => {
+                if slot.generation == idx.generation {
+                    match &mut slot.object {
+                        Object::Null => Err(InternalError::StaleObjectReference),
+                        obj => Ok(obj),
+                    }
+                } else {
+                    Err(InternalError::StaleObjectReference)
+                }
+            }
+            None => Err(InternalError::InvalidObjectRef(idx.index)),
+        }
+    }
+}
+
+
 
 impl EvalStack {
     pub fn ensure_pop(&mut self) -> Result<Value, InternalError> {

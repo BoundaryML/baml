@@ -15,12 +15,12 @@ impl Vm {
         // Arity is already checked by the VM.
 
         let expected = ObjectType::Array;
-        let ob_index = self.objects.as_object(&args[0], expected)?;
+        let ob_index = self.as_object(&args[0], expected)?;
 
-        let Object::Array(array) = &self.objects[ob_index] else {
+        let Object::Array(array) = self.objects.get(ob_index)? else {
             return Err(InternalError::TypeError {
                 expected: expected.into(),
-                got: ObjectType::of(&self.objects[ob_index]).into(),
+                got: ObjectType::of(self.objects.get(ob_index).unwrap_or(&Object::Null)).into(),
             }
             .into());
         };
@@ -35,12 +35,12 @@ impl Vm {
         // Arity is already checked by the VM.
 
         let expected = ObjectType::Map;
-        let ob_index = self.objects.as_object(&args[0], expected)?;
+        let ob_index = self.as_object(&args[0], expected)?;
 
-        let Object::Map(map) = &self.objects[ob_index] else {
+        let Object::Map(map) = self.objects.get(ob_index)? else {
             return Err(InternalError::TypeError {
                 expected: expected.into(),
-                got: ObjectType::of(&self.objects[ob_index]).into(),
+                got: ObjectType::of(self.objects.get(ob_index).unwrap_or(&Object::Null)).into(),
             }
             .into());
         };
@@ -52,17 +52,18 @@ impl Vm {
         // Arity is already checked by the VM.
 
         let expected = ObjectType::Map;
-        let ob_index = self.objects.as_object(&args[0], expected)?;
+        let ob_index = self.as_object(&args[0], expected)?;
 
-        let Object::Map(map) = &self.objects[ob_index] else {
+        let Object::Map(map) = self.objects.get(ob_index)? else {
             return Err(InternalError::TypeError {
                 expected: expected.into(),
-                got: ObjectType::of(&self.objects[ob_index]).into(),
+                got: ObjectType::of(self.objects.get(ob_index).unwrap_or(&Object::Null)).into(),
             }
             .into());
         };
 
-        let key = self.objects.as_string(&args[1])?;
+        let key_idx = self.as_object(&args[1], ObjectType::String)?;
+        let key = self.objects.get(key_idx)?.as_string()?;
 
         Ok(Value::Bool(map.contains_key(key)))
     }

@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 pub(super) mod indexable;
 
 use baml_types::BamlMap;
+use bitvec::prelude::*;
 use indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 
 use crate::{
@@ -108,6 +109,9 @@ impl std::fmt::Display for Instance {
 /// Read [`Vm::objects`] for more information.
 #[derive(Clone, Debug)]
 pub enum Object {
+    /// Stale variant for freed/uninitialized slots in the object pool.
+    Stale,
+
     /// Function object.
     Function(Function),
 
@@ -135,6 +139,14 @@ pub enum Object {
 
     Future(Future),
 }
+
+/// Object slot with generation tracking for GC.
+#[derive(Clone, Debug)]
+pub struct ObjectSlot {
+    pub object: Object,
+    pub generation: u32,
+}
+
 
 #[derive(Clone, Debug)]
 pub struct LlmFuture {
@@ -185,6 +197,7 @@ impl Object {
 impl std::fmt::Display for Object {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Object::Stale => write!(f, "<stale>"),
             Object::Function(function) => function.fmt(f),
             Object::Class(class) => class.fmt(f),
             Object::Instance(instance) => instance.fmt(f),
@@ -296,6 +309,7 @@ impl From<FutureType> for ObjectType {
 impl ObjectType {
     pub fn of(ob: &Object) -> Self {
         match ob {
+            Object::Stale => Self::Any,  // Stale can be any type
             Object::Function(func) => Self::Function(func.kind.into()),
             Object::Class(_) => Self::Class,
             Object::Instance(_) => Self::Instance,
@@ -388,6 +402,9 @@ pub enum InternalError {
 
     /// Instruction pointer is negative.
     NegativeInstructionPtr(isize),
+
+    /// Object reference has stale generation (freed object or generation mismatch).
+    StaleObjectReference,
 }
 
 /// Errors that can happen at runtime.
@@ -584,15 +601,29 @@ pub struct Vm {
     /// This stack only stores values.
     pub stack: EvalStack,
 
-    /// Object pool.
+    /// Object pool with generation tracking.
     ///
-    /// For now, since we don't have a garbage collector yet, this is basically
-    /// an arena of objects. **Every object** is allocated here and will be
-    /// destroyed when the lifetime of the [`Vm`] ends. Do not allocate objects
-    /// elsewhere since that will make adding a garbage collector harder.
+    /// For GC, we store objects in slots with generation counters.
+    /// **Every object** is allocated here and will be managed by GC.
+    /// Do not allocate objects elsewhere since that will break GC.
     /// Only allocate objects here and use indices to reference them, don't
     /// bother with Rust references because they will introduce lifetime issues.
     pub objects: ObjectPool,
+
+    /// Free list for reusing object slots.
+    ///
+    /// Contains indices of freed slots that can be reused.
+    pub free_list: VecDeque<ObjectIndex>,
+
+    /// Mark bits for garbage collection.
+    ///
+    /// One bit per object slot, used during mark phase.
+    pub mark_bits: BitVec,
+
+    /// Escaped futures that are held by the embedder.
+    ///
+    /// These are treated as GC roots.
+    pub escaped_futures: HashSet<ObjectIndex>,
 
     /// Global variables.
     ///
@@ -602,9 +633,8 @@ pub struct Vm {
     /// Offset of the first runtime allocated object.
     ///
     /// This is used to track the index of the first runtime allocated object.
-    /// When the embedder calls [`Vm::collect_garbage`] it will drop all values
-    /// after this offset.
-    pub runtime_allocs_offset: ObjectIndex,
+    /// Objects before this offset are compile-time and never collected.
+    pub runtime_allocs_offset: usize,
 }
 
 /// VM execution state.
@@ -645,25 +675,32 @@ impl Vm {
             objects, globals, ..
         }: BamlVmProgram,
     ) -> Self {
+        // ObjectPool already contains the objects
+        let num_objects = objects.len();
+        
         Self {
             frames: Vec::new(),
             stack: EvalStack(Vec::new()),
-            runtime_allocs_offset: ObjectIndex(objects.len()),
             objects,
+            free_list: VecDeque::new(),
+            mark_bits: BitVec::repeat(false, num_objects),
+            escaped_futures: HashSet::new(),
+            runtime_allocs_offset: num_objects,
             globals,
         }
     }
 
+
     /// Bootstraps the VM preparing the given function to run.
     pub fn set_entry_point(&mut self, function: ObjectIndex, args: &[Value]) {
         debug_assert!(
-            matches!(self.objects[function], Object::Function(_)),
+            matches!(self.objects.get(function).ok(), Some(Object::Function(_))),
             "expect function as entry point, got {:?}",
-            self.objects[function]
+            self.objects.get(function).ok()
         );
 
         // TODO: Run collect_garbage in codegen after each function call.
-        if self.objects.len() != self.runtime_allocs_offset.0 {
+        if self.objects.len() != self.runtime_allocs_offset {
             eprintln!("WARNING: garbage collection did not run before setting a new entry point");
         }
 
@@ -692,7 +729,7 @@ impl Vm {
     ///
     /// Returns [`InternalError::TypeError`] if the future is not pending, or not a future.
     pub fn pending_future(&self, future: ObjectIndex) -> Result<&LlmFuture, InternalError> {
-        match &self.objects[future] {
+        match self.objects.get(future)? {
             Object::Future(Future::Pending(llm_future)) => Ok(llm_future),
             other => Err(InternalError::TypeError {
                 expected: FutureType::Pending.into(),
@@ -706,10 +743,11 @@ impl Vm {
         future_index: ObjectIndex,
         value: Value,
     ) -> Result<(), InternalError> {
-        let Object::Future(future) = &mut self.objects[future_index] else {
+        let obj = self.objects.get_mut(future_index)?;
+        let Object::Future(future) = obj else {
             return Err(InternalError::TypeError {
                 expected: FutureType::Any.into(),
-                got: ObjectType::of(&self.objects[future_index]).into(),
+                got: ObjectType::of(obj).into(),
             });
         };
 
@@ -735,14 +773,47 @@ impl Vm {
     ///
     /// Everything allocated while the program run is dropped.
     pub fn collect_garbage(&mut self) {
-        self.objects.drain(self.runtime_allocs_offset..);
+        // For now, just a placeholder until we implement the full GC
+        // This will be replaced with the mark-sweep implementation
+        self.objects.truncate(self.runtime_allocs_offset);
+        self.mark_bits.truncate(self.runtime_allocs_offset);
+        self.free_list.clear();
     }
 
     /// Allocates an array on the heap and returns it to the caller.
     pub fn alloc_array(&mut self, values: Vec<Value>) -> Value {
-        let object = self.objects.len();
-        self.objects.push(Object::Array(values));
-        Value::Object(ObjectIndex(object))
+        let index = self.objects.len();
+        self.objects.push(ObjectSlot {
+            object: Object::Array(values),
+            generation: 0,
+        });
+        self.mark_bits.push(false);
+        Value::Object(ObjectIndex::from_raw(index))
+    }
+    
+    
+    // Helper methods for value type checking
+    pub(crate) fn as_object(
+        &self,
+        value: &Value,
+        object_type: ObjectType,
+    ) -> Result<ObjectIndex, InternalError> {
+        let Value::Object(index) = value else {
+            return Err(InternalError::TypeError {
+                expected: object_type.into(),
+                got: self.type_of(value),
+            });
+        };
+
+        Ok(*index)
+    }
+    
+    fn type_of(&self, value: &Value) -> Type {
+        Type::of(value, |index| {
+            self.objects.0.get(index.index)
+                .map(|slot| ObjectType::of(&slot.object))
+                .unwrap_or(ObjectType::Any)
+        })
     }
 
     /// Main VM execution loop.
@@ -758,10 +829,13 @@ impl Vm {
         // It's a similar trick to what we've implemented in the cycle detection
         // algorithm. Take a look at the `strong_connect` function in the
         // `tarjan.rs` file.
-        let Some(mut frame) = self.frames.last_mut() else {
+        let Some(frame) = self.frames.last().copied() else {
             // This should actually return "Void" or () like Rust.
             return Ok(VmExecState::Complete(Value::Null));
         };
+        
+        // Work with the local copy
+        let mut frame = frame;
 
         // Grab a reference to the function object. We do this before the loop
         // because there's no need to run this on every single iteration. Read
@@ -770,9 +844,13 @@ impl Vm {
         //
         // We do run into some issues/boilerplate, take a look at the impl of
         // `Instruction::AllocArray`. We can write a macro or something.
-        let mut function = self.objects[frame.function].as_function()?;
+        let mut function = self.objects.get(frame.function)?.as_function()?;
 
         loop {
+            // Update the frame in the stack at the beginning of each iteration
+            if let Some(last) = self.frames.last_mut() {
+                *last = frame;
+            }
             // Current instruction pointer.
             let instruction_ptr = frame.instruction_ptr;
 
@@ -846,12 +924,12 @@ impl Vm {
                 Instruction::LoadField(index) => {
                     let top = self.stack.ensure_pop()?;
 
-                    let reference = self.objects.as_object(&top, ObjectType::Instance)?;
+                    let reference = self.as_object(&top, ObjectType::Instance)?;
 
-                    let Object::Instance(instance) = &self.objects[reference] else {
+                    let Object::Instance(instance) = self.objects.get(reference)? else {
                         return Err(InternalError::TypeError {
                             expected: ObjectType::Instance.into(),
-                            got: ObjectType::of(&self.objects[reference]).into(),
+                            got: ObjectType::of(self.objects.get(reference).unwrap_or(&Object::Null)).into(),
                         }
                         .into());
                     };
@@ -860,15 +938,15 @@ impl Vm {
                     self.stack.push(instance.fields[index]);
                 }
                 Instruction::StoreField(index) => {
-                    let reference = self.objects.as_object(
+                    let reference = self.as_object(
                         &self.stack[self.stack.ensure_slot_from_top(1)?],
                         ObjectType::Instance,
                     )?;
 
-                    let Object::Instance(instance) = &mut self.objects[reference] else {
+                    let Object::Instance(instance) = self.objects.get_mut(reference)? else {
                         return Err(InternalError::TypeError {
                             expected: ObjectType::Instance.into(),
-                            got: ObjectType::of(&self.objects[reference]).into(),
+                            got: ObjectType::of(self.objects.get(reference).unwrap_or(&Object::Null)).into(),
                         }
                         .into());
                     };
@@ -880,7 +958,7 @@ impl Vm {
                     self.stack.ensure_pop()?;
 
                     // TODO: Borrow checker stuff.
-                    function = self.objects[frame.function].as_function()?;
+                    function = self.objects.get(frame.function)?.as_function()?;
                 }
                 Instruction::Pop(n) => {
                     let drain_range = StackIndex(self.stack.len() - n)..;
@@ -921,7 +999,7 @@ impl Vm {
                         other => {
                             return Err(VmError::from(InternalError::TypeError {
                                 expected: Type::Bool,
-                                got: self.objects.type_of(other),
+                                got: self.type_of(other),
                             }))
                         }
                     }
@@ -971,8 +1049,8 @@ impl Vm {
 
                         _ => {
                             return Err(VmError::from(InternalError::CannotApplyBinOp {
-                                left: self.objects.type_of(&left),
-                                right: self.objects.type_of(&right),
+                                left: self.type_of(&left),
+                                right: self.type_of(&right),
                                 op,
                             }));
                         }
@@ -1008,8 +1086,8 @@ impl Vm {
                             CmpOp::NotEq => left != right,
                             _ => {
                                 return Err(VmError::from(InternalError::CannotApplyCmpOp {
-                                    left: self.objects.type_of(&left),
-                                    right: self.objects.type_of(&right),
+                                    left: self.type_of(&left),
+                                    right: self.type_of(&right),
                                     op,
                                 }))
                             }
@@ -1028,7 +1106,7 @@ impl Vm {
                         _ => {
                             return Err(VmError::from(InternalError::CannotApplyUnaryOp {
                                 op,
-                                value: self.objects.type_of(&value),
+                                value: self.type_of(&value),
                             }));
                         }
                     };
@@ -1041,15 +1119,20 @@ impl Vm {
                     let array = self.stack.drain(drain_range).collect();
 
                     // Allocate it on the heap.
-                    self.objects.push(Object::Array(array));
+                    let index = self.objects.len();
+                    self.objects.push(ObjectSlot {
+                        object: Object::Array(array),
+                        generation: 0,
+                    });
+                    self.mark_bits.push(false);
 
                     // Push the array object on top of the stack.
                     self.stack
-                        .push(Value::Object(ObjectIndex(self.objects.len() - 1)));
+                        .push(Value::Object(ObjectIndex::from_raw(index)));
 
                     // objects.push() above might've reallocated the vector so
                     // borrow checker complains. Restore the reference.
-                    function = self.objects[frame.function].as_function()?;
+                    function = self.objects.get(frame.function)?.as_function()?;
                 }
                 Instruction::LoadArrayElement => {
                     // Stack should contain [array, index]
@@ -1057,12 +1140,12 @@ impl Vm {
                     let index_value = self.stack.ensure_pop()?;
                     let array_value = self.stack.ensure_pop()?;
 
-                    let array_ob_index = self.objects.as_object(&array_value, ObjectType::Array)?;
+                    let array_ob_index = self.as_object(&array_value, ObjectType::Array)?;
 
-                    let Object::Array(array) = &self.objects[array_ob_index] else {
+                    let Object::Array(array) = self.objects.get(array_ob_index)? else {
                         return Err(VmError::from(InternalError::TypeError {
                             expected: ObjectType::Array.into(),
-                            got: ObjectType::of(&self.objects[array_ob_index]).into(),
+                            got: ObjectType::of(self.objects.get(array_ob_index).unwrap_or(&Object::Null)).into(),
                         }));
                     };
 
@@ -1077,7 +1160,7 @@ impl Vm {
                         _ => {
                             return Err(InternalError::TypeError {
                                 expected: Type::Int,
-                                got: self.objects.type_of(&index_value),
+                                got: self.type_of(&index_value),
                             }
                             .into());
                         }
@@ -1115,18 +1198,18 @@ impl Vm {
                     let key_value = self.stack.ensure_pop()?;
                     let map_value = self.stack.ensure_pop()?;
 
-                    let map_index = self.objects.as_object(&map_value, ObjectType::Map)?;
+                    let map_index = self.as_object(&map_value, ObjectType::Map)?;
 
-                    let Object::Map(map) = &self.objects[map_index] else {
+                    let Object::Map(map) = self.objects.get(map_index)? else {
                         return Err(VmError::from(InternalError::TypeError {
                             expected: ObjectType::Map.into(),
-                            got: ObjectType::of(&self.objects[map_index]).into(),
+                            got: ObjectType::of(self.objects.get(map_index).unwrap_or(&Object::Null)).into(),
                         }));
                     };
 
                     // Get the string key from the objects pool
-                    let key_index = self.objects.as_object(&key_value, ObjectType::String)?;
-                    let key = self.objects[key_index].as_string()?;
+                    let key_index = self.as_object(&key_value, ObjectType::String)?;
+                    let key = self.objects.get(key_index)?.as_string()?;
 
                     // Look up the value in the map
                     let value = map.get(key).copied().ok_or(RuntimeError::NoSuchKeyInMap)?;
@@ -1155,12 +1238,12 @@ impl Vm {
                     let index_value = self.stack.ensure_pop()?;
                     let array_value = self.stack.ensure_pop()?;
 
-                    let array_ob_index = self.objects.as_object(&array_value, ObjectType::Array)?;
+                    let array_ob_index = self.as_object(&array_value, ObjectType::Array)?;
 
-                    let Object::Array(array) = &mut self.objects[array_ob_index] else {
+                    let Object::Array(array) = self.objects.get_mut(array_ob_index)? else {
                         return Err(VmError::from(InternalError::TypeError {
                             expected: ObjectType::Array.into(),
-                            got: ObjectType::of(&self.objects[array_ob_index]).into(),
+                            got: ObjectType::of(self.objects.get(array_ob_index).unwrap_or(&Object::Null)).into(),
                         }));
                     };
 
@@ -1175,7 +1258,7 @@ impl Vm {
                         _ => {
                             return Err(InternalError::TypeError {
                                 expected: Type::Int,
-                                got: self.objects.type_of(&index_value),
+                                got: self.type_of(&index_value),
                             }
                             .into());
                         }
@@ -1193,7 +1276,7 @@ impl Vm {
                     array[index] = value;
 
                     // Restore function reference after mutable borrow of self.objects
-                    function = self.objects[frame.function].as_function()?;
+                    function = self.objects.get(frame.function)?.as_function()?;
                 }
                 Instruction::StoreMapElement => {
                     // StoreMapElement Instruction
@@ -1217,15 +1300,15 @@ impl Vm {
                     let map_value = self.stack.ensure_pop()?;
 
                     // Get the string key from the objects pool.
-                    let key_index = self.objects.as_object(&key_value, ObjectType::String)?;
-                    let key = self.objects[key_index].as_string()?.clone();
+                    let key_index = self.as_object(&key_value, ObjectType::String)?;
+                    let key = self.objects.get(key_index)?.as_string()?.clone();
 
-                    let map_index = self.objects.as_object(&map_value, ObjectType::Map)?;
+                    let map_index = self.as_object(&map_value, ObjectType::Map)?;
 
-                    let Object::Map(map) = &mut self.objects[map_index] else {
+                    let Object::Map(map) = self.objects.get_mut(map_index)? else {
                         return Err(VmError::from(InternalError::TypeError {
                             expected: ObjectType::Map.into(),
-                            got: ObjectType::of(&self.objects[map_index]).into(),
+                            got: ObjectType::of(self.objects.get(map_index).unwrap_or(&Object::Null)).into(),
                         }));
                     };
 
@@ -1233,13 +1316,13 @@ impl Vm {
                     map.insert(key, value);
 
                     // borrow check
-                    function = self.objects[frame.function].as_function()?;
+                    function = self.objects.get(frame.function)?.as_function()?;
                 }
                 Instruction::AllocInstance(index) => {
-                    let Object::Class(class) = &self.objects[index] else {
+                    let Object::Class(class) = self.objects.get(index)? else {
                         return Err(InternalError::TypeError {
                             expected: ObjectType::Class.into(),
-                            got: ObjectType::of(&self.objects[index]).into(),
+                            got: ObjectType::of(self.objects.get(index).unwrap_or(&Object::Null)).into(),
                         }
                         .into());
                     };
@@ -1249,17 +1332,22 @@ impl Vm {
                     fields.resize(class.field_names.len(), Value::Null);
 
                     // Allocate an instance of the class.
-                    self.objects.push(Object::Instance(Instance {
-                        class: index,
-                        fields,
-                    }));
+                    let obj_index = self.objects.len();
+                    self.objects.push(ObjectSlot {
+                        object: Object::Instance(Instance {
+                            class: index,
+                            fields,
+                        }),
+                        generation: 0,
+                    });
+                    self.mark_bits.push(false);
 
                     // Push the instance object on top of the stack.
                     self.stack
-                        .push(Value::Object(ObjectIndex(self.objects.len() - 1)));
+                        .push(Value::Object(ObjectIndex::from_raw(obj_index)));
 
                     // borrow check.
-                    function = self.objects[frame.function].as_function()?;
+                    function = self.objects.get(frame.function)?.as_function()?;
                 }
                 Instruction::DispatchFuture(arg_count) => {
                     let args_offset = self.stack.ensure_slot_from_top(arg_count)?;
@@ -1267,14 +1355,13 @@ impl Vm {
                     let expected_type = FunctionType::Llm;
 
                     let index = self
-                        .objects
                         .as_object(&self.stack[args_offset], expected_type.into())?;
 
                     // Can't call a function if it's not a function ¯\_(ツ)_/¯
-                    let Object::Function(llm_function) = &self.objects[index] else {
+                    let Object::Function(llm_function) = self.objects.get(index)? else {
                         return Err(InternalError::TypeError {
                             expected: expected_type.into(),
-                            got: ObjectType::of(&self.objects[index]).into(),
+                            got: ObjectType::of(self.objects.get(index).unwrap_or(&Object::Null)).into(),
                         }
                         .into());
                     };
@@ -1307,9 +1394,13 @@ impl Vm {
                     };
 
                     // Allocate the future.
-                    let object_index = self
-                        .objects
-                        .insert(Object::Future(Future::Pending(llm_future)));
+                    let idx = self.objects.len();
+                    self.objects.push(ObjectSlot {
+                        object: Object::Future(Future::Pending(llm_future)),
+                        generation: 0,
+                    });
+                    self.mark_bits.push(false);
+                    let object_index = ObjectIndex::from_raw(idx);
 
                     // Now leave the future on top of the stack.
                     self.stack.push(Value::Object(object_index));
@@ -1323,13 +1414,12 @@ impl Vm {
                     let wanted_type = FutureType::Any;
 
                     let index = self
-                        .objects
                         .as_object(&self.stack[value], wanted_type.into())?;
 
-                    let Object::Future(awaiting) = &self.objects[index] else {
+                    let Object::Future(awaiting) = self.objects.get(index)? else {
                         return Err(VmError::from(InternalError::TypeError {
                             expected: wanted_type.into(),
-                            got: ObjectType::of(&self.objects[index]).into(),
+                            got: ObjectType::of(self.objects.get(index).unwrap_or(&Object::Null)).into(),
                         }));
                     };
 
@@ -1365,13 +1455,13 @@ impl Vm {
 
                     let function_type = FunctionType::Callable;
 
-                    let index = self.objects.as_object(local, function_type.into())?;
+                    let index = self.as_object(local, function_type.into())?;
 
                     // Can't call a function if it's not a function ¯\_(ツ)_/¯
-                    let Object::Function(callee) = &self.objects[index] else {
+                    let Object::Function(callee) = self.objects.get(index)? else {
                         return Err(InternalError::TypeError {
                             expected: function_type.into(),
-                            got: ObjectType::of(&self.objects[index]).into(),
+                            got: ObjectType::of(self.objects.get(index).unwrap_or(&Object::Null)).into(),
                         }
                         .into());
                     };
@@ -1411,8 +1501,8 @@ impl Vm {
                             //
                             // We use `ObjectIndex` constructor directly because we know it's a
                             // valid reference (we are executing instructions inside of it).
-                            frame = self.frames.last_mut().expect("last_mut() was pushed above");
-                            function = self.objects[frame.function].as_function()?;
+                            frame = self.frames.last().copied().expect("last() was pushed above");
+                            function = self.objects.get(frame.function)?.as_function()?;
                         }
 
                         FunctionKind::Exec => {
@@ -1424,13 +1514,13 @@ impl Vm {
                             });
 
                             // Point to next frame.
-                            frame = self.frames.last_mut().expect("last_mut() was pushed above");
+                            frame = self.frames.last().copied().expect("last() was pushed above");
 
                             // Grab function ref. We do this to avoid running this
                             // code at the beginning of each iteration since it's
                             // totaly unnecessary. The function only changes when the
                             // frame changes.
-                            function = self.objects[frame.function].as_function()?;
+                            function = self.objects.get(frame.function)?.as_function()?;
                         }
 
                         FunctionKind::Llm => {
@@ -1455,7 +1545,7 @@ impl Vm {
                     self.frames.pop();
 
                     // If there are no more frames, we're done.
-                    let Some(previous_frame) = self.frames.last_mut() else {
+                    let Some(previous_frame) = self.frames.last().copied() else {
                         return self
                             .stack
                             .ensure_pop()
@@ -1469,7 +1559,7 @@ impl Vm {
                     // Point to the previous frame's function. Read the
                     // implementation of `Instruction::Call` above this one for
                     // more information about this piece.
-                    function = self.objects[frame.function].as_function()?;
+                    function = self.objects.get(frame.function)?.as_function()?;
                 }
                 Instruction::Assert => {
                     let value = self.stack.pop().ok_or(RuntimeError::AssertionError)?;
@@ -1477,7 +1567,7 @@ impl Vm {
                     let Value::Bool(condition_result) = value else {
                         return Err(InternalError::TypeError {
                             expected: Type::Bool,
-                            got: self.objects.type_of(&value),
+                            got: self.type_of(&value),
                         }
                         .into());
                     };
@@ -1502,16 +1592,17 @@ impl Vm {
                         // branches which is not ideal for performance. Might want to consider this
                         // in map accesses.
                         let keys = self.stack[idx_of_last_key..].iter().map(|k| {
-                            let ob_index = self.objects.as_object(k, ObjectType::String)?;
-
-                            self.objects[ob_index].as_string().cloned()
+                            self.as_object(k, ObjectType::String).ok()
+                                .and_then(|ob_index| self.objects.get(ob_index).ok())
+                                .and_then(|obj| obj.as_string().ok())
+                                .cloned()
                         });
 
                         let pairs = values
                             .zip(keys)
-                            .map(|(val, key_res)| key_res.map(|k| (k, val)));
+                            .filter_map(|(val, key_opt)| key_opt.map(|k| (k, val)));
 
-                        let map = pairs.collect::<Result<BamlMap<_, _>, _>>()?;
+                        let map = pairs.collect::<BamlMap<_, _>>();
 
                         // drain & drop the drain so that vec is empty.
                         self.stack.drain(end_of_values..);
@@ -1522,12 +1613,18 @@ impl Vm {
                         BamlMap::new()
                     };
 
-                    let ob_index = self.objects.insert(Object::Map(map));
+                    let idx = self.objects.len();
+                    self.objects.push(ObjectSlot {
+                        object: Object::Map(map),
+                        generation: 0,
+                    });
+                    self.mark_bits.push(false);
+                    let ob_index = ObjectIndex::from_raw(idx);
 
                     self.stack.push(Value::Object(ob_index));
 
                     // borrow check.
-                    function = self.objects[frame.function].as_function()?;
+                    function = self.objects.get(frame.function)?.as_function()?;
                 }
             }
         }
