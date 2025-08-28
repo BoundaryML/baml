@@ -35,27 +35,10 @@ fn ContinueNested() -> int {
     }
 }
 
-// warning: Workflow functions are experimental, and will break in the future.
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
 //   -->  loops/continue.baml:1
 //    | 
 //    | 
 //  1 | fn Factorial(mut limit: int) -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/continue.baml:23
-//    | 
-// 22 | 
-// 23 | fn ContinueOutsideLoop() -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/continue.baml:30
-//    | 
-// 29 | 
-// 30 | fn ContinueNested() -> int {
-//    | 
-// error: Error validating: 'continue' cannot be used outside of a loop
-//   -->  loops/continue.baml:25
-//    | 
-// 24 | 
-// 25 |     continue;
+//  2 | 
 //    | 

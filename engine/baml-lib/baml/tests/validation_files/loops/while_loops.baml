@@ -34,15 +34,10 @@ fn Foo() -> int {
     3
 }
 
-// warning: Workflow functions are experimental, and will break in the future.
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
 //   -->  loops/while_loops.baml:1
 //    | 
 //    | 
 //  1 | fn GCD(mut a: int, mut b: int) -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/while_loops.baml:14
-//    | 
-// 13 | 
-// 14 | fn Foo() -> int {
+//  2 | 
 //    | 
