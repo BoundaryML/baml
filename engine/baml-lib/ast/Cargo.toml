@@ -44,4 +44,4 @@ debug_parser = []
 # This feature is activated when running graph visualization in engine/baml-lib/baml
 # to compare output against snapshots.
 graph-vis-tests = []
-default = ["debug_parser"]
+#default = ["debug_parser"]

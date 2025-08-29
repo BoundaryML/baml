@@ -14,7 +14,7 @@ fn AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript: stri
     # Generate Content
 
     ## Video Summarization
-    let summary = if transcript {
+    let summary = if (transcript) {
         ### Generate Summary
 
         #### Create Summary Text
@@ -47,7 +47,7 @@ fn AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript: stri
     }
 
     # Prepare Pull Request
-    let pr_status = if summary {
+    let pr_status = if (summary) {
         ### Create GitHub PR
         let pr = CreatePR(video_id, summary);
         pr_status
