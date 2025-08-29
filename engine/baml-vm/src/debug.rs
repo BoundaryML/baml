@@ -90,11 +90,11 @@ pub fn display_instruction(
                 break 'field String::from("(ERROR: value not an object)");
             };
 
-            let Ok(Object::Instance(instance)) = objects.get(reference) else {
+            let Object::Instance(instance) = &objects[reference] else {
                 break 'field String::from("(ERROR: value not an instance)");
             };
 
-            let Ok(Object::Class(class)) = objects.get(instance.class) else {
+            let Object::Class(class) = &objects[instance.class] else {
                 break 'field String::from("(ERROR: class not found)");
             };
 
@@ -142,17 +142,16 @@ pub fn display_value(value: &Value, objects: &ObjectPool) -> String {
 }
 
 fn display_object(objects: &ObjectPool, index: ObjectIndex) -> String {
-    match objects.get(index).ok() {
+    match &objects[index] {
         // This one's a bit tricky to print.
-        Some(Object::Instance(instance)) => match objects.get(instance.class).ok() {
-            Some(Object::Class(class)) => format!("<{} instance>", class.name),
+        Object::Instance(instance) => match &objects[instance.class] {
+            Object::Class(class) => format!("<{} instance>", class.name),
             // This will most likely never happen, but we're trying not
             // to panic.
-            other => format!("<{other:?} instance>"),
+            other => format!("<{other} instance>"),
         },
 
-        Some(other) => other.to_string(),
-        None => String::from("<invalid object>"),
+        other => other.to_string(),
     }
 }
 
