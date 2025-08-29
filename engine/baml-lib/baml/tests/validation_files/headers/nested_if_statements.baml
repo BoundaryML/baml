@@ -1,12 +1,12 @@
 # Main Function
 fn NestedIfStatements() -> string {
     ## If statement 1
-    let e = if true {
+    let e = if (true) {
 
         ### If statement 2.1
-        let z = if true {
+        let z = if (true) {
             ### If statement 3.1
-            let a = if true {
+            let a = if (true) {
                 ### True
                 12
             } else {
@@ -17,7 +17,7 @@ fn NestedIfStatements() -> string {
             242
         } else {
             ### If statement 3.2
-            let a = if true {
+            let a = if (true) {
                 ### True
                 12
             } else {
@@ -30,9 +30,9 @@ fn NestedIfStatements() -> string {
         2
     } else {
         ### If statement 2.2
-        let z = if true {
+        let z = if (true) {
             ### If statement 3.1
-            let a = if true {
+            let a = if (true) {
                 ### True
                 12
             } else {
@@ -43,7 +43,7 @@ fn NestedIfStatements() -> string {
             242
         } else {
             ### If statement 3.2
-            let a = if true {
+            let a = if (true) {
                 ### True
                 12
             } else {

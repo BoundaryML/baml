@@ -1,12 +1,7 @@
----
-config:
-  layout: elk
----
-
-flowchart LR
-  subgraph sg0["Top Container"]
-    direction LR
-    n0["Only Child"]
-  end
-%%__BAML_SPANMAP__={"n0":{"file_path":"/Users/egor/Documents/boundary/baml-main/baml/engine/baml-lib/baml/tests/validation_files/headers/top_level_not_flattened.baml","start_line":2,"start":4,"end_line":3,"end":0}}
+flowchart TD
+  n0["Top Container"]
+  n1["Only Child"]
+  n0 --> n1
+%%__BAML_SPANMAP__={"n0":{"file_path":"../baml/tests/validation_files/headers/top_level_not_flattened.baml","start_line":0,"start":0,"end_line":1,"end":0},"n1":{"file_path":"../baml/tests/validation_files/headers/top_level_not_flattened.baml","start_line":2,"start":4,"end_line":3,"end":0}}
   click n0 call bamlMermaidNodeClick() "Go to source"
+  click n1 call bamlMermaidNodeClick() "Go to source"

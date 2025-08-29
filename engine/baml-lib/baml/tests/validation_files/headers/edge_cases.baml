@@ -60,7 +60,7 @@ fn HeadersInComplexNesting() -> string {
     let result = {
         ## Inside Block Expression
         
-        let inner = if true {
+        let inner = if (true) {
             ### Inside If True
             
             let deep = {

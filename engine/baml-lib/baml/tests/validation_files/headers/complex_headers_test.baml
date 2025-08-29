@@ -15,7 +15,7 @@ fn ComplexHeaderTest() -> string {
         let processed = 2;
         
         ### Validation
-        let z = if true {
+        let z = if (true) {
 
             # Markdown Header tester in statement
             let hello = "Hello";

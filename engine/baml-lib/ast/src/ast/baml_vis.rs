@@ -9,6 +9,7 @@ const MAX_CHILDREN_TO_FLATTEN: usize = 1;
 // Toggle: render function call nodes (e.g., SummarizeVideo, CreatePR) alongside headers.
 const SHOW_CALL_NODES: bool = false;
 
+use baml_types::BamlMap;
 use internal_baml_diagnostics::SerializedSpan;
 use serde_json;
 
@@ -119,7 +120,8 @@ struct GraphBuilder<'a> {
     nested_targets: HashSet<Hid>,
     header_entry: HashMap<Hid, String>,
     header_exits: HashMap<Hid, Vec<String>>,
-    span_map: HashMap<String, SerializedSpan>,
+    // we're going to need stable iteration in snapshot tests.
+    span_map: BamlMap<String, SerializedSpan>,
     call_node_cache: HashMap<(Hid, String), String>,
 }
 
@@ -140,7 +142,7 @@ impl<'a> GraphBuilder<'a> {
             nested_targets: HashSet::new(),
             header_entry: HashMap::new(),
             header_exits: HashMap::new(),
-            span_map: HashMap::new(),
+            span_map: BamlMap::new(),
             call_node_cache: HashMap::new(),
         };
         b.precompute();
@@ -203,7 +205,7 @@ impl<'a> GraphBuilder<'a> {
         out
     }
 
-    fn build(mut self) -> (Graph, HashMap<String, SerializedSpan>) {
+    fn build(mut self) -> (Graph, BamlMap<String, SerializedSpan>) {
         let mut tops: Vec<(String, usize, usize, ScopeId)> = Vec::new();
         let mut seen_scopes: HashSet<ScopeId> = HashSet::new();
         for h in &self.index.headers {
@@ -544,8 +546,8 @@ impl MermaidRenderer {
         graph: &Graph,
         direction: Direction,
         use_fancy: bool,
-        #[cfg(feature = "graph-vis-tests")] mut span_map: HashMap<String, SerializedSpan>,
-        #[cfg(not(feature = "graph-vis-tests"))] span_map: HashMap<String, SerializedSpan>,
+        #[cfg(feature = "graph-vis-tests")] mut span_map: BamlMap<String, SerializedSpan>,
+        #[cfg(not(feature = "graph-vis-tests"))] span_map: BamlMap<String, SerializedSpan>,
     ) -> String {
         let mut out: Vec<String> = Vec::new();
         // out.push("---".to_string());
@@ -572,14 +574,14 @@ impl MermaidRenderer {
             }
         }
 
-        let mut children_by_parent: HashMap<Option<String>, Vec<&Cluster>> = HashMap::new();
+        let mut children_by_parent: BamlMap<Option<String>, Vec<&Cluster>> = BamlMap::new();
         for c in &graph.clusters {
             children_by_parent
                 .entry(c.parent.clone())
                 .or_default()
                 .push(c);
         }
-        let mut nodes_by_cluster: HashMap<Option<String>, Vec<&Node>> = HashMap::new();
+        let mut nodes_by_cluster: BamlMap<Option<String>, Vec<&Node>> = BamlMap::new();
         for n in &graph.nodes {
             nodes_by_cluster
                 .entry(n.cluster.clone())
@@ -590,8 +592,8 @@ impl MermaidRenderer {
         fn emit(
             out: &mut Vec<String>,
             cluster: Option<&Cluster>,
-            children_by_parent: &HashMap<Option<String>, Vec<&Cluster>>,
-            nodes_by_cluster: &HashMap<Option<String>, Vec<&Node>>,
+            children_by_parent: &BamlMap<Option<String>, Vec<&Cluster>>,
+            nodes_by_cluster: &BamlMap<Option<String>, Vec<&Node>>,
             use_fancy: bool,
             indent: usize,
         ) {

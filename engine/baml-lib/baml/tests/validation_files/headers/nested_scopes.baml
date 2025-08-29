@@ -3,7 +3,7 @@ fn NestedScopes() -> string {
     let x = "hello";
     
     ## First Section
-    let z = if x == "hello" {
+    let z = if (x == "hello") {
         ### Inside If Block
         let y = "world";
         x + " " + y
