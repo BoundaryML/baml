@@ -544,7 +544,8 @@ impl MermaidRenderer {
         graph: &Graph,
         direction: Direction,
         use_fancy: bool,
-        mut span_map: HashMap<String, SerializedSpan>,
+        #[cfg(feature = "graph-vis-tests")] mut span_map: HashMap<String, SerializedSpan>,
+        #[cfg(not(feature = "graph-vis-tests"))] span_map: HashMap<String, SerializedSpan>,
     ) -> String {
         let mut out: Vec<String> = Vec::new();
         // out.push("---".to_string());

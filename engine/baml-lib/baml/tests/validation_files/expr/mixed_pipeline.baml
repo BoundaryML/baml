@@ -16,20 +16,8 @@ client<llm> GPT4o {
 }
 
 // warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/mixed_pipeline.baml:1
-//    | 
-//    | 
-//  1 | function LLM(x: int) -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
 //   -->  expr/mixed_pipeline.baml:6
 //    | 
 //  5 | 
 //  6 | function UseLLM(x: int) -> int {
-//    | 
-// error: Error validating: Type mismatch in lambda: string vs int
-//   -->  expr/mixed_pipeline.baml:2
-//    | 
-//  1 | function LLM(x: int) -> int {
-//  2 |     client GPT4o
 //    | 

@@ -70,18 +70,6 @@ test TestMakePoem() {
 }
 
 // warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/expr_full.baml:1
-//    | 
-//    | 
-//  1 | function MakePoem(length: int) -> string {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/expr_full.baml:6
-//    | 
-//  5 | 
-//  6 | function CombinePoems(poem1: string, poem2: string) -> string {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
 //   -->  expr/expr_full.baml:26
 //    | 
 // 25 | 

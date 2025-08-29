@@ -705,7 +705,7 @@ impl<T: Clone> Statement<T> {
             Statement::Return { expr, span: _ } => {
                 format!("return {}", expr.dump_str())
             }
-            Statement::Expression { expr, span: _ } => expr.dump_str().to_string(),
+            Statement::Expression { expr, span: _ } => expr.dump_str(),
             Statement::SemicolonExpression { expr, span: _ } => expr.dump_str().to_string(),
             Statement::While {
                 condition,

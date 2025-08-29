@@ -88,15 +88,7 @@ pub fn parse_top_level_assignment(
         Stmt::Return(ReturnStmt { span, .. }) => {
             only_let_stmt("return statements", span, diagnostics)
         }
- 
-        Stmt::Expression(es) => {
-             diagnostics.push_error(DatamodelError::new_static(
-                 "expressions are not allowed at top level, only let statements are allowed",
-                es.span.clone(),
-             ));
- 
-             None
-        }
+
         Stmt::Assert(AssertStmt { span, .. }) => {
             only_let_stmt("assert statements", span, diagnostics)
         }
@@ -426,7 +418,7 @@ fn parse_statement_inner_rule(
                     identifier,
                     is_mutable,
                     expr: body,
-                     span: span.clone(),
+                    span: span.clone(),
                     annotations: vec![],
                 })
             })
@@ -463,12 +455,13 @@ fn parse_statement_inner_rule(
                 span: span.clone(),
             })
         }),
-        Rule::expr_block => parse_expr_block(stmt_token, diagnostics)
-            .map(|expr_block| Stmt::Expression(ExprStmt {
+        Rule::expr_block => parse_expr_block(stmt_token, diagnostics).map(|expr_block| {
+            Stmt::Expression(ExprStmt {
                 expr: Expression::ExprBlock(expr_block, span.clone()),
                 annotations: vec![],
                 span: span.clone(),
-            })),
+            })
+        }),
         _ => {
             diagnostics.push_error(DatamodelError::new_static("Expected statement", span));
             None
@@ -697,7 +690,7 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
             stmts.push(Stmt::Expression(ExprStmt {
                 expr: expr.clone(),
                 annotations: vec![],
-                span: expr.span().clone()
+                span: expr.span().clone(),
             }));
         }
 
