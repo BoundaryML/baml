@@ -6,7 +6,7 @@ use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-use internal_llm_client::{openai::ResolvedOpenAI, AllowedRoleMetadata, BamlMode, FinishReasonFilter, ToolChoice};
+use internal_llm_client::{openai::ResolvedOpenAI, AllowedRoleMetadata, FinishReasonFilter};
 use secrecy::ExposeSecret;
 use serde_json::json;
 
@@ -306,33 +306,6 @@ impl ProviderStrategy {
                     }
                     either::Either::Right(messages) => {
                         body_obj.extend(chat_converter.chat_to_message(messages)?);
-                    }
-                }
-
-                // Check if we're in tool_calling mode
-                let is_tool_calling = properties
-                    .get("baml_mode")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s == "tool_calling")
-                    .unwrap_or(false);
-
-                if is_tool_calling {
-                    // When using tools, remove the output_format field
-                    body_obj.remove("output_format");
-                    body_obj.remove("baml_mode"); // Don't send baml_mode to OpenAI
-
-                    // Add tools and tool_choice if configured
-                    if let Some(tools) = properties.get("tools") {
-                        body_obj.insert("tools".into(), tools.clone());
-                    }
-
-                    if let Some(tool_choice) = properties.get("tool_choice") {
-                        body_obj.insert("tool_choice".into(), tool_choice.clone());
-                    }
-                    
-                    // Enable parallel tool calls if tools are present
-                    if properties.get("tools").is_some() {
-                        body_obj.insert("parallel_tool_calls".into(), json!(true));
                     }
                 }
 
@@ -885,8 +858,6 @@ mod tests {
                 proxy_url: None,
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAIResponses,
-                baml_mode: BamlMode::TextSchema,
-                tool_choice: None,
             },
             client: reqwest::Client::new(),
         };
@@ -939,8 +910,6 @@ mod tests {
                 proxy_url: None,
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAI,
-                baml_mode: BamlMode::TextSchema,
-                tool_choice: None,
             },
             client: reqwest::Client::new(),
         };

@@ -66,62 +66,29 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
     }
 
     let usage = response.usage.as_ref();
-    
-    // Extract content from either regular message content or tool calls
-    let content = if let Some(tool_calls) = &response.choices[0].message.tool_calls {
-        if !tool_calls.is_empty() {
-            if tool_calls.len() == 1 {
-                // Single tool call - return arguments directly
-                tool_calls[0].function.arguments.clone()
-            } else {
-                // Multiple tool calls - format as JSON array
-                let arguments: Vec<&str> = tool_calls.iter()
-                    .map(|call| call.function.arguments.as_str())
-                    .collect();
-                format!("[{}]", arguments.join(","))
-            }
-        } else {
-            // No tool calls found
-            response.choices[0]
-                .message
-                .content
-                .as_ref()
-                .map_or("", |s| s.as_str())
-                .to_string()
-        }
-    } else {
-        // No tool_calls field, use regular content
-        response.choices[0]
-            .message
-            .content
-            .as_ref()
-            .map_or("", |s| s.as_str())
-            .to_string()
-    };
-    
-    // Determine finish reason - tool_calls means the model called a tool
-    let finish_reason = response.choices.first()
-        .and_then(|c| c.finish_reason.clone())
-        .or_else(|| {
-            // If we have tool_calls, the finish reason should be "tool_calls"
-            if response.choices[0].message.tool_calls.is_some() {
-                Some("tool_calls".to_string())
-            } else {
-                None
-            }
-        });
 
     LLMResponse::Success(LLMCompleteResponse {
         client: client.context().name.to_string(),
         prompt: to_prompt(prompt),
-        content,
+        content: response.choices[0]
+            .message
+            .content
+            .as_ref()
+            .map_or("", |s| s.as_str())
+            .to_string(),
         start_time: system_now,
         latency: instant_now.elapsed(),
         model: response.model,
         request_options: client.request_options().clone(),
         metadata: LLMCompleteResponseMetadata {
-            baml_is_complete: finish_reason.as_ref().is_some_and(|f| f == "stop" || f == "tool_calls"),
-            finish_reason,
+            baml_is_complete: match response.choices.first() {
+                Some(c) => c.finish_reason.as_ref().is_some_and(|f| f == "stop"),
+                None => false,
+            },
+            finish_reason: match response.choices.first() {
+                Some(c) => c.finish_reason.clone(),
+                None => None,
+            },
             prompt_tokens: usage.map(|u| u.prompt_tokens),
             output_tokens: usage.map(|u| u.completion_tokens),
             total_tokens: usage.map(|u| u.total_tokens),
@@ -163,29 +130,13 @@ pub fn scan_openai_chat_completion_stream(
         })?;
 
     if let Some(choice) = event.choices.first() {
-        // Handle regular content
         if let Some(content) = choice.delta.content.as_ref() {
             inner.content += content.as_str();
         }
-        
-        // Handle tool calls in streaming
-        if let Some(tool_calls) = &choice.delta.tool_calls {
-            // Tool calls come in chunks during streaming
-            // We need to accumulate the function arguments
-            for tool_call in tool_calls {
-                if let Some(function) = &tool_call.function {
-                    if let Some(arguments) = &function.arguments {
-                        // Append the arguments chunk to content
-                        inner.content += arguments.as_str();
-                    }
-                }
-            }
-        }
-        
         inner.model = event.model;
         inner.metadata.finish_reason = choice.finish_reason.clone();
         inner.metadata.baml_is_complete =
-            choice.finish_reason.as_ref().is_some_and(|s| s == "stop" || s == "tool_calls");
+            choice.finish_reason.as_ref().is_some_and(|s| s == "stop");
     }
     inner.latency = instant_now.elapsed();
     if let Some(usage) = event.usage.as_ref() {
