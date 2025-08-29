@@ -557,7 +557,9 @@ impl MermaidDiagramGenerator {
                 self.connect(&expr_id, &inner_id, Some("expr"));
                 expr_id
             }
-            Expression::MethodCall{ receiver, method, .. } => {
+            Expression::MethodCall {
+                receiver, method, ..
+            } => {
                 let label = format!("Method: {}.{}", receiver, method);
                 let expr_id = self.get_node_id_with_class(&key, &label, "expressionNode");
                 let receiver_id = self.visit_expression(receiver);
@@ -707,25 +709,25 @@ impl MermaidDiagramGenerator {
             Stmt::CForLoop(c_for_stmt) => {
                 let label = "C-For Loop".to_string();
                 let stmt_id = self.get_node_id_with_class(&key, &label, "statementNode");
-                
+
                 // Visit init statement if present
                 if let Some(init_stmt) = &c_for_stmt.init_stmt {
                     let init_id = self.visit_stmt(init_stmt, 0);
                     self.connect(&stmt_id, &init_id, Some("init"));
                 }
-                
+
                 // Visit condition if present
                 if let Some(condition) = &c_for_stmt.condition {
                     let condition_id = self.visit_expression(condition);
                     self.connect(&stmt_id, &condition_id, Some("condition"));
                 }
-                
+
                 // Visit after statement if present
                 if let Some(after_stmt) = &c_for_stmt.after_stmt {
                     let after_id = self.visit_stmt(after_stmt, 0);
                     self.connect(&stmt_id, &after_id, Some("after"));
                 }
-                
+
                 let body_id = self.visit_expression_block(&c_for_stmt.body);
                 self.connect(&stmt_id, &body_id, Some("body"));
                 stmt_id
@@ -733,7 +735,7 @@ impl MermaidDiagramGenerator {
             Stmt::WhileLoop(while_stmt) => {
                 let label = "While Loop".to_string();
                 let stmt_id = self.get_node_id_with_class(&key, &label, "statementNode");
-                
+
                 let condition_id = self.visit_expression(&while_stmt.condition);
                 let body_id = self.visit_expression_block(&while_stmt.body);
                 self.connect(&stmt_id, &condition_id, Some("condition"));
