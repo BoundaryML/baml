@@ -49,12 +49,6 @@ wheels = [
 ]
 
 [[package]]
-name = "assertpy"
-version = "1.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/4f/39/720b5d4463612a40a166d00999cbb715fce3edaf08a9a7588ba5985699ec/assertpy-1.1.tar.gz", hash = "sha256:acc64329934ad71a3221de185517a43af33e373bb44dc05b5a9b174394ef4833", size = 25421, upload-time = "2020-07-19T14:39:02.462Z" }
-
-[[package]]
 name = "blinker"
 version = "1.8.2"
 source = { registry = "https://pypi.org/simple" }
@@ -791,7 +785,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
-    { name = "assertpy" },
     { name = "boto3" },
     { name = "flask" },
     { name = "flask-httpauth" },
@@ -805,7 +798,6 @@ dependencies = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "python-dotenv" },
-    { name = "pytruth" },
     { name = "requests" },
     { name = "ruff" },
 ]
@@ -819,7 +811,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=0.49.0,<0.50.0" },
-    { name = "assertpy" },
     { name = "boto3", specifier = ">=1.37.37" },
     { name = "flask", specifier = ">=3.0.3" },
     { name = "flask-httpauth", specifier = ">=4.8.0" },
@@ -833,7 +824,6 @@ requires-dist = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "python-dotenv" },
-    { name = "pytruth", specifier = ">=1.1.0" },
     { name = "requests" },
     { name = "ruff" },
 ]
@@ -842,19 +832,6 @@ requires-dist = [
 dev = [
     { name = "ruff", specifier = ">=0.9.10" },
     { name = "types-assertpy" },
-]
-
-[[package]]
-name = "pytruth"
-version = "1.1.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "six" },
-    { name = "wheel" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/24/61/2fc9a9cc1144c9123c053741cbf3f19e9213cdf658fef5f993b025e44c29/pytruth-1.1.0.tar.gz", hash = "sha256:fecef037f620ac3d6b369b65d7f3a7615238f5c857bbe858562516a6355af32c", size = 48433, upload-time = "2020-02-28T18:49:18.53Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/26/cc/2680dbc4f6d9b9993098c87fcd5390a9dde49d8a6d3b882c9617defecb59/pytruth-1.1.0-py2.py3-none-any.whl", hash = "sha256:c778f84a7f6f4941c902836484638f40613f2eb239b9b53b7f4c01b40aee255a", size = 45175, upload-time = "2020-02-28T18:49:16.909Z" },
 ]
 
 [[package]]
@@ -1089,15 +1066,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d4/f9/0ba83eaa0df9b9e9d1efeb2ea351d0677c37d41ee5d0f91e98423c7281c9/werkzeug-3.0.6.tar.gz", hash = "sha256:a8dd59d4de28ca70471a34cba79bed5f7ef2e036a76b3ab0835474246eb41f8d", size = 805170, upload-time = "2024-10-25T18:52:31.688Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6c/69/05837f91dfe42109203ffa3e488214ff86a6d68b2ed6c167da6cdc42349b/werkzeug-3.0.6-py3-none-any.whl", hash = "sha256:1bc0c2310d2fbb07b1dd1105eba2f7af72f322e1e455f2f93c993bee8c8a5f17", size = 227979, upload-time = "2024-10-25T18:52:30.129Z" },
-]
-
-[[package]]
-name = "wheel"
-version = "0.45.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/8a/98/2d9906746cdc6a6ef809ae6338005b3f21bb568bea3165cfc6a243fdc25c/wheel-0.45.1.tar.gz", hash = "sha256:661e1abd9198507b1409a20c02106d9670b2576e916d58f520316666abca6729", size = 107545, upload-time = "2024-11-23T00:18:23.513Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0b/2c/87f3254fd8ffd29e4c02732eee68a83a1d3c346ae39bc6822dcbcb697f2b/wheel-0.45.1-py3-none-any.whl", hash = "sha256:708e7481cc80179af0e556bbf0cc00b8444c7321e2700b8d8580231d13017248", size = 72494, upload-time = "2024-11-23T00:18:21.207Z" },
 ]
 
 [[package]]

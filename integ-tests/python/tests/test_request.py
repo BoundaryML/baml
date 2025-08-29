@@ -1,5 +1,4 @@
 import pytest
-from baml_py import Image, Audio, Pdf
 from ..baml_client import b
 from ..baml_client.sync_client import b as sync_b
 
