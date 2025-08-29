@@ -546,8 +546,7 @@ impl MermaidRenderer {
         graph: &Graph,
         direction: Direction,
         use_fancy: bool,
-        #[cfg(feature = "graph-vis-tests")] mut span_map: BamlMap<String, SerializedSpan>,
-        #[cfg(not(feature = "graph-vis-tests"))] span_map: BamlMap<String, SerializedSpan>,
+        span_map: BamlMap<String, SerializedSpan>,
     ) -> String {
         let mut out: Vec<String> = Vec::new();
         // out.push("---".to_string());
@@ -677,28 +676,6 @@ impl MermaidRenderer {
         }
         // Click lines disabled for tests
         if !span_map.is_empty() {
-            #[cfg(feature = "graph-vis-tests")]
-            {
-                // We need a directory that is inside the repo so that
-                // we don't get a personal folder name.
-                // Manifest dir is based on root (/), so we'll use that.
-                // We get env! at compile time.
-                let manifest_dir = env!("CARGO_MANIFEST_DIR");
-
-                // in testing, we want the snapshots to have a relative path,
-                // so that it can be consistent across machines.
-                let cur_path = std::path::Path::new(&manifest_dir);
-
-                for span in span_map.values_mut() {
-                    // find the route from `cur_path` to `span_path`.
-                    let span_path = std::path::Path::new(&span.file_path);
-
-                    let final_path = relative_path_ignoring_symlinks(cur_path, span_path);
-
-                    span.file_path = final_path.to_string_lossy().to_string();
-                }
-            }
-
             if let Ok(json) = serde_json::to_string(&span_map) {
                 out.push(format!("%%__BAML_SPANMAP__={json}"));
             }
@@ -710,43 +687,6 @@ impl MermaidRenderer {
         }
         out.join("\n")
     }
-}
-
-/// Creates a path that directs how to go from `from` to `to`, only lexically (without checking the
-/// file system). It inserts `../` where required.
-#[cfg(feature = "graph-vis-tests")]
-fn relative_path_ignoring_symlinks(
-    from: &std::path::Path,
-    to: &std::path::Path,
-) -> std::path::PathBuf {
-    use std::path::{Component, Path};
-
-    // we want to get the parent dir of the file.
-    let mut to_components = to
-        .parent()
-        .into_iter()
-        .flat_map(Path::components)
-        .peekable();
-    let mut dir_components = from.components().peekable();
-    // cut common prefix.
-    loop {
-        let both_peek = (to_components.peek(), dir_components.peek());
-
-        if matches!(both_peek, (Some(a), Some(b)) if a == b) {
-            _ = to_components.next();
-            _ = dir_components.next();
-        } else {
-            break;
-        }
-    }
-    // The number of components left in `dir_components` says how many `../`'s we
-    // need.
-    // After it, the remaining source components should go.
-    let prev_dirs = std::iter::repeat_n(Component::ParentDir, dir_components.count());
-    let parent_dir_components = prev_dirs.chain(to_components);
-    let filename = to.file_name().map(Component::Normal);
-    let full_components = parent_dir_components.chain(filename);
-    std::path::PathBuf::from_iter(full_components)
 }
 
 #[inline]

@@ -1054,7 +1054,6 @@ dependencies = [
  "env_logger",
  "expect-test",
  "indoc",
- "internal-baml-ast",
  "internal-baml-core",
  "itertools 0.14.0",
  "pretty_assertions",

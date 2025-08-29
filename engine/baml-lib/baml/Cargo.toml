@@ -29,4 +29,3 @@ either.workspace = true
 strip-ansi-escapes.workspace = true
 baml-compiler = { path = "../../baml-compiler" }
 baml-vm = { path = "../../baml-vm" }
-internal-baml-ast = { path = "../ast", features = [ "graph-vis-tests" ] }

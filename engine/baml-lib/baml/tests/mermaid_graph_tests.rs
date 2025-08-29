@@ -39,8 +39,15 @@ fn headers_mermaid_snapshots() {
         // Parse defensively; let panic message print so it is visible, but keep the test running
         let path_clone = path.clone();
         let res = std::panic::catch_unwind(|| {
-            let baml = fs::read_to_string(&path_clone).unwrap();
-            let src = SourceFile::new_allocated(path_clone.clone(), baml.clone().into());
+            let baml = fs::read_to_string(&path).unwrap();
+            // Use relative path for consistent snapshots across machines
+            let manifest_dir = env!("CARGO_MANIFEST_DIR");
+            let cur_path = Path::new(&manifest_dir);
+            let relative_path = relative_path_ignoring_symlinks(cur_path, &path);
+            let src = SourceFile::new_allocated(
+                relative_path.to_string_lossy().to_string().into(),
+                baml.clone().into(),
+            );
             parse(Path::new("."), &src)
         });
 
@@ -229,6 +236,42 @@ fn strip_ansi(input: &str) -> String {
         out.push(c);
     }
     out
+}
+
+/// Creates a path that directs how to go from `from` to `to`, only lexically (without checking the
+/// file system). It inserts `../` where required.
+fn relative_path_ignoring_symlinks(
+    from: &std::path::Path,
+    to: &std::path::Path,
+) -> std::path::PathBuf {
+    use std::path::{Component, Path};
+
+    // we want to get the parent dir of the file.
+    let mut to_components = to
+        .parent()
+        .into_iter()
+        .flat_map(Path::components)
+        .peekable();
+    let mut dir_components = from.components().peekable();
+    // cut common prefix.
+    loop {
+        let both_peek = (to_components.peek(), dir_components.peek());
+
+        if matches!(both_peek, (Some(a), Some(b)) if a == b) {
+            _ = to_components.next();
+            _ = dir_components.next();
+        } else {
+            break;
+        }
+    }
+    // The number of components left in `dir_components` says how many `../`'s we
+    // need.
+    // After it, the remaining source components should go.
+    let prev_dirs = std::iter::repeat_n(Component::ParentDir, dir_components.count());
+    let parent_dir_components = prev_dirs.chain(to_components);
+    let filename = to.file_name().map(Component::Normal);
+    let full_components = parent_dir_components.chain(filename);
+    std::path::PathBuf::from_iter(full_components)
 }
 
 // verbose mode removed for simplicity; panics print naturally and we tag the file in output
