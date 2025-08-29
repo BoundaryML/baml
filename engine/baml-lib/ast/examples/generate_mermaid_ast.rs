@@ -23,15 +23,12 @@ fn main() {
     // Check if file exists and has .baml extension
     let path = Path::new(baml_file_path);
     if !path.exists() {
-        eprintln!("Error: File '{}' does not exist", baml_file_path);
+        eprintln!("Error: File '{baml_file_path}' does not exist");
         std::process::exit(1);
     }
 
     if path.extension().and_then(|s| s.to_str()) != Some("baml") {
-        eprintln!(
-            "Error: File '{}' does not have a .baml extension",
-            baml_file_path
-        );
+        eprintln!("Error: File '{baml_file_path}' does not have a .baml extension");
         std::process::exit(1);
     }
 
@@ -39,7 +36,7 @@ fn main() {
     let baml_source = match fs::read_to_string(path) {
         Ok(content) => content,
         Err(err) => {
-            eprintln!("Error reading file '{}': {}", baml_file_path, err);
+            eprintln!("Error reading file '{baml_file_path}': {err}");
             std::process::exit(1);
         }
     };
@@ -63,7 +60,7 @@ fn main() {
                 baml_file_path,
                 if use_fancy { "enabled" } else { "disabled" }
             );
-            println!("{}", mermaid_diagram);
+            println!("{mermaid_diagram}");
 
             // You can copy the output and paste it into any Mermaid renderer
             println!("\nTo visualize this diagram:");
@@ -73,7 +70,7 @@ fn main() {
             println!("4. View the rendered AST diagram!");
         }
         Err(err) => {
-            eprintln!("Failed to parse BAML source: {:?}", err);
+            eprintln!("Failed to parse BAML source: {err:?}");
             std::process::exit(1);
         }
     }

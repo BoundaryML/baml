@@ -607,7 +607,7 @@ impl MermaidRenderer {
                     c.id,
                     escape_label(&c.label)
                 ));
-                out.push(format!("{}  direction LR", indent_str));
+                out.push(format!("{indent_str}  direction LR"));
             }
             if let Some(nodes) = nodes_by_cluster.get(&key_opt) {
                 for n in nodes {
@@ -657,7 +657,7 @@ impl MermaidRenderer {
                 }
             }
             if cluster.is_some() {
-                out.push(format!("{}end", indent_str));
+                out.push(format!("{indent_str}end"));
             }
         }
         emit(
@@ -700,12 +700,11 @@ impl MermaidRenderer {
             }
 
             if let Ok(json) = serde_json::to_string(&span_map) {
-                out.push(format!("%%__BAML_SPANMAP__={}", json));
+                out.push(format!("%%__BAML_SPANMAP__={json}"));
             }
             for rep_id in span_map.keys() {
                 out.push(format!(
-                    "  click {} call bamlMermaidNodeClick() \"Go to source\"",
-                    rep_id
+                    "  click {rep_id} call bamlMermaidNodeClick() \"Go to source\""
                 ));
             }
         }

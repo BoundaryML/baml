@@ -101,7 +101,7 @@ impl MermaidDiagramGenerator {
             };
 
             self.content
-                .push(format!("    {}[\"{}\"]; ", id, escaped_label));
+                .push(format!("    {id}[\"{escaped_label}\"]; "));
             id
         }
     }
@@ -127,12 +127,11 @@ impl MermaidDiagramGenerator {
             };
 
             self.content
-                .push(format!("    {}[\"{}\"]; ", id, escaped_label));
+                .push(format!("    {id}[\"{escaped_label}\"]; "));
 
             // Apply CSS class only if styling is enabled
             if self.use_styling {
-                self.content
-                    .push(format!("    class {} {};", id, css_class));
+                self.content.push(format!("    class {id} {css_class};"));
             }
             id
         }
@@ -144,21 +143,20 @@ impl MermaidDiagramGenerator {
             let escaped_label = label.replace('"', "&quot;");
             if self.use_styling {
                 self.content.push(format!(
-                    "    {} -->|\"<b style='color:#4a148c'>{}</b>\"| {};",
-                    from, escaped_label, to
+                    "    {from} -->|\"<b style='color:#4a148c'>{escaped_label}</b>\"| {to};"
                 ));
             } else {
                 self.content
-                    .push(format!("    {} -->|\"{}\"| {};", from, escaped_label, to));
+                    .push(format!("    {from} -->|\"{escaped_label}\"| {to};"));
             }
         } else {
-            self.content.push(format!("    {} --> {};", from, to));
+            self.content.push(format!("    {from} --> {to};"));
         }
     }
 
     /// Visit the root AST node
     fn visit_ast(&mut self, ast: &Ast) {
-        let ast_key = format!("ast_{:p}", ast);
+        let ast_key = format!("ast_{ast:p}");
         let ast_id = self.get_node_id_with_class(&ast_key, "AST Root", "typeNode");
 
         for (idx, top) in ast.tops.iter().enumerate() {
@@ -169,7 +167,7 @@ impl MermaidDiagramGenerator {
 
     /// Visit a top-level AST node
     fn visit_top(&mut self, top: &Top, index: usize) -> String {
-        let top_key = format!("top_{}_{:p}", index, top);
+        let top_key = format!("top_{index}_{top:p}");
 
         match top {
             Top::Enum(type_expr) => {
@@ -254,7 +252,7 @@ impl MermaidDiagramGenerator {
 
     /// Visit a type expression block (enum or class)
     fn visit_type_expression_block(&mut self, type_expr: &TypeExpressionBlock) -> String {
-        let key = format!("type_expr_{:p}", type_expr);
+        let key = format!("type_expr_{type_expr:p}");
         let label = format!("TypeExpr<br/>name: {}", type_expr.name.name());
         let type_expr_id = self.get_node_id_with_class(&key, &label, "typeNode");
 
@@ -281,7 +279,7 @@ impl MermaidDiagramGenerator {
 
     /// Visit a value expression block (function, client, etc.)
     fn visit_value_expression_block(&mut self, value_expr: &ValueExprBlock) -> String {
-        let key = format!("value_expr_{:p}", value_expr);
+        let key = format!("value_expr_{value_expr:p}");
         let label = format!(
             "ValueExpr<br/>name: {}<br/>type: {:?}",
             value_expr.name.name(),
@@ -318,12 +316,12 @@ impl MermaidDiagramGenerator {
 
     /// Visit block arguments
     fn visit_block_args(&mut self, block_args: &BlockArgs) -> String {
-        let key = format!("block_args_{:p}", block_args);
+        let key = format!("block_args_{block_args:p}");
         let label = "BlockArgs";
         let block_args_id = self.get_node_id(&key, label);
 
         for (idx, (identifier, block_arg)) in block_args.args.iter().enumerate() {
-            let arg_key = format!("block_arg_{}_{:p}", idx, block_arg);
+            let arg_key = format!("block_arg_{idx}_{block_arg:p}");
             let arg_label = format!(
                 "Arg: {}<br/>type: {}",
                 identifier.name(),
@@ -338,7 +336,7 @@ impl MermaidDiagramGenerator {
 
     /// Visit a field with FieldType
     fn visit_field_type(&mut self, field: &Field<FieldType>, index: usize) -> String {
-        let key = format!("field_type_{}_{:p}", index, field);
+        let key = format!("field_type_{index}_{field:p}");
         let mut label = format!("Field: {}", field.name.name());
 
         if let Some(field_type) = &field.expr {
@@ -358,7 +356,7 @@ impl MermaidDiagramGenerator {
 
     /// Visit a field with Expression
     fn visit_field_expression(&mut self, field: &Field<Expression>, index: usize) -> String {
-        let key = format!("field_expr_{}_{:p}", index, field);
+        let key = format!("field_expr_{index}_{field:p}");
         let label = format!("Field: {}", field.name.name());
         let field_id = self.get_node_id_with_class(&key, &label, "fieldNode");
 
@@ -379,7 +377,7 @@ impl MermaidDiagramGenerator {
 
     /// Visit an attribute
     fn visit_attribute(&mut self, attr: &Attribute, index: usize) -> String {
-        let key = format!("attr_{}_{:p}", index, attr);
+        let key = format!("attr_{index}_{attr:p}");
         let label = format!("@{}", attr.name.name());
         let attr_id = self.get_node_id_with_class(&key, &label, "attributeNode");
 
@@ -394,7 +392,7 @@ impl MermaidDiagramGenerator {
 
     /// Visit an arguments list
     fn visit_arguments_list(&mut self, args: &ArgumentsList) -> String {
-        let key = format!("args_{:p}", args);
+        let key = format!("args_{args:p}");
         let label = "Arguments";
         let args_id = self.get_node_id(&key, label);
 
@@ -408,7 +406,7 @@ impl MermaidDiagramGenerator {
 
     /// Visit an argument
     fn visit_argument(&mut self, arg: &Argument, index: usize) -> String {
-        let key = format!("arg_{}_{:p}", index, arg);
+        let key = format!("arg_{index}_{arg:p}");
         let label = "Argument";
         let arg_id = self.get_node_id(&key, label);
 
@@ -420,15 +418,15 @@ impl MermaidDiagramGenerator {
 
     /// Visit an expression
     fn visit_expression(&mut self, expr: &Expression) -> String {
-        let key = format!("expr_{:p}", expr);
+        let key = format!("expr_{expr:p}");
 
         let expr_id = match expr {
             Expression::BoolValue(val, _) => {
-                let label = format!("Bool: {}", val);
+                let label = format!("Bool: {val}");
                 self.get_node_id_with_class(&key, &label, "valueNode")
             }
             Expression::NumericValue(val, _) => {
-                let label = format!("Number: {}", val);
+                let label = format!("Number: {val}");
                 self.get_node_id_with_class(&key, &label, "valueNode")
             }
             Expression::StringValue(val, _) => {
@@ -441,7 +439,7 @@ impl MermaidDiagramGenerator {
             }
             Expression::RawStringValue(raw) => {
                 let preview = raw.value().chars().take(30).collect::<String>();
-                let label = format!("RawString: \"{}...\"", preview);
+                let label = format!("RawString: \"{preview}...\"");
                 self.get_node_id_with_class(&key, &label, "valueNode")
             }
             Expression::ClassConstructor(constructor, _) => {
@@ -456,7 +454,7 @@ impl MermaidDiagramGenerator {
                 let expr_id = self.get_node_id_with_class(&key, &label, "expressionNode");
                 for (idx, expr) in exprs.iter().enumerate() {
                     let child_id = self.visit_expression(expr);
-                    self.connect(&expr_id, &child_id, Some(&format!("item_{}", idx)));
+                    self.connect(&expr_id, &child_id, Some(&format!("item_{idx}")));
                 }
                 expr_id
             }
@@ -466,13 +464,13 @@ impl MermaidDiagramGenerator {
                 for (idx, (key_expr, value_expr)) in map.iter().enumerate() {
                     let key_id = self.visit_expression(key_expr);
                     let value_id = self.visit_expression(value_expr);
-                    self.connect(&expr_id, &key_id, Some(&format!("key_{}", idx)));
-                    self.connect(&expr_id, &value_id, Some(&format!("value_{}", idx)));
+                    self.connect(&expr_id, &key_id, Some(&format!("key_{idx}")));
+                    self.connect(&expr_id, &value_id, Some(&format!("value_{idx}")));
                 }
                 expr_id
             }
             Expression::JinjaExpressionValue(jinja, _) => {
-                let label = format!("Jinja: {}", jinja);
+                let label = format!("Jinja: {jinja}");
                 self.get_node_id(&key, &label)
             }
             Expression::Lambda(args, body, _) => {
@@ -489,7 +487,7 @@ impl MermaidDiagramGenerator {
                 let expr_id = self.get_node_id(&key, &label);
                 for (idx, arg) in app.args.iter().enumerate() {
                     let arg_id = self.visit_expression(arg);
-                    self.connect(&expr_id, &arg_id, Some(&format!("arg_{}", idx)));
+                    self.connect(&expr_id, &arg_id, Some(&format!("arg_{idx}")));
                 }
                 expr_id
             }
@@ -514,7 +512,7 @@ impl MermaidDiagramGenerator {
                 expr_id
             }
             Expression::UnaryOperation { operator, expr, .. } => {
-                let label = format!("Unary: {}", operator);
+                let label = format!("Unary: {operator}");
                 let expr_id = self.get_node_id(&key, &label);
                 let child_id = self.visit_expression(expr);
                 self.connect(&expr_id, &child_id, Some("expr"));
@@ -542,7 +540,7 @@ impl MermaidDiagramGenerator {
                 right,
                 ..
             } => {
-                let label = format!("Binary: {}", operator);
+                let label = format!("Binary: {operator}");
                 let expr_id = self.get_node_id_with_class(&key, &label, "expressionNode");
                 let left_id = self.visit_expression(left);
                 let right_id = self.visit_expression(right);
@@ -560,7 +558,7 @@ impl MermaidDiagramGenerator {
             Expression::MethodCall {
                 receiver, method, ..
             } => {
-                let label = format!("Method: {}.{}", receiver, method);
+                let label = format!("Method: {receiver}.{method}");
                 let expr_id = self.get_node_id_with_class(&key, &label, "expressionNode");
                 let receiver_id = self.visit_expression(receiver);
                 self.connect(&expr_id, &receiver_id, Some("receiver"));
@@ -573,7 +571,7 @@ impl MermaidDiagramGenerator {
 
     /// Visit a class constructor
     fn visit_class_constructor(&mut self, constructor: &ClassConstructor) -> String {
-        let key = format!("constructor_{:p}", constructor);
+        let key = format!("constructor_{constructor:p}");
         let label = format!("ClassConstructor: {}", constructor.class_name.name());
         let constructor_id = self.get_node_id(&key, &label);
 
@@ -591,7 +589,7 @@ impl MermaidDiagramGenerator {
         field: &ClassConstructorField,
         index: usize,
     ) -> String {
-        let key = format!("constructor_field_{}_{:p}", index, field);
+        let key = format!("constructor_field_{index}_{field:p}");
         let (label, expr) = match field {
             ClassConstructorField::Named(name, expr) => (format!("Field: {}", name.name()), expr),
             ClassConstructorField::Spread(expr) => ("Spread".to_string(), expr),
@@ -606,7 +604,7 @@ impl MermaidDiagramGenerator {
 
     /// Visit an expression block
     fn visit_expression_block(&mut self, block: &ExpressionBlock) -> String {
-        let key = format!("expr_block_{:p}", block);
+        let key = format!("expr_block_{block:p}");
         let label = "ExpressionBlock";
         let block_id = self.get_node_id(&key, label);
 
@@ -633,7 +631,7 @@ impl MermaidDiagramGenerator {
 
     /// Visit a header
     fn visit_header(&mut self, header: &Header, index: usize) -> String {
-        let key = format!("header_{}_{:p}", index, header);
+        let key = format!("header_{index}_{header:p}");
         let label = if self.use_styling {
             format!("<b>{}</b><br/><b>Level:</b> {}", header.title, header.level)
         } else {
@@ -644,7 +642,7 @@ impl MermaidDiagramGenerator {
 
     /// Visit a statement
     fn visit_stmt(&mut self, stmt: &Stmt, index: usize) -> String {
-        let key = format!("stmt_{}_{:p}", index, stmt);
+        let key = format!("stmt_{index}_{stmt:p}");
 
         match stmt {
             Stmt::Let(let_stmt) => {
@@ -689,7 +687,7 @@ impl MermaidDiagramGenerator {
                 stmt_id
             }
             Stmt::Assign(assign_stmt) => {
-                let label = format!("Assign: {}", assign_stmt.expr.to_string());
+                let label = format!("Assign: {}", assign_stmt.expr);
                 let stmt_id = self.get_node_id_with_class(&key, &label, "statementNode");
                 let expr_id = self.visit_expression(&assign_stmt.expr);
                 self.connect(&stmt_id, &expr_id, Some("value"));
@@ -698,8 +696,7 @@ impl MermaidDiagramGenerator {
             Stmt::AssignOp(assign_op_stmt) => {
                 let label = format!(
                     "AssignOp: {} {}",
-                    assign_op_stmt.expr.to_string(),
-                    assign_op_stmt.assign_op
+                    assign_op_stmt.expr, assign_op_stmt.assign_op
                 );
                 let stmt_id = self.get_node_id_with_class(&key, &label, "statementNode");
                 let expr_id = self.visit_expression(&assign_op_stmt.expr);
@@ -776,7 +773,7 @@ impl MermaidDiagramGenerator {
 
     /// Visit an assignment
     fn visit_assignment(&mut self, assignment: &Assignment) -> String {
-        let key = format!("assignment_{:p}", assignment);
+        let key = format!("assignment_{assignment:p}");
         let label = format!("Assignment: {}", assignment.identifier().name());
         let assignment_id = self.get_node_id(&key, &label);
 
@@ -788,14 +785,14 @@ impl MermaidDiagramGenerator {
 
     /// Visit a field type value
     fn visit_field_type_value(&mut self, field_type: &FieldType) -> String {
-        let key = format!("field_type_value_{:p}", field_type);
+        let key = format!("field_type_value_{field_type:p}");
         let label = format!("Type: {}", field_type.name());
         self.get_node_id(&key, &label)
     }
 
     /// Visit a top-level assignment
     fn visit_top_level_assignment(&mut self, assignment: &TopLevelAssignment) -> String {
-        let key = format!("top_assignment_{:p}", assignment);
+        let key = format!("top_assignment_{assignment:p}");
         let label = format!("Assignment: {}", assignment.stmt.identifier.name());
         let assignment_id = self.get_node_id_with_class(&key, &label, "statementNode");
 
@@ -807,7 +804,7 @@ impl MermaidDiagramGenerator {
 
     /// Visit an expression function
     fn visit_expr_fn(&mut self, expr_fn: &ExprFn) -> String {
-        let key = format!("expr_fn_{:p}", expr_fn);
+        let key = format!("expr_fn_{expr_fn:p}");
         let label = format!("ExprFn: {}", expr_fn.name.name());
         let expr_fn_id = self.get_node_id_with_class(&key, &label, "functionNode");
 
@@ -836,7 +833,7 @@ impl MermaidDiagramGenerator {
 
     /// Visit a template string
     fn visit_template_string(&mut self, template: &TemplateString) -> String {
-        let key = format!("template_{:p}", template);
+        let key = format!("template_{template:p}");
         let label = format!("TemplateString: {}", template.identifier().name());
         let template_id = self.get_node_id(&key, &label);
 

@@ -538,15 +538,12 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
 
     // First pass: collect all headers
     for item in &items {
-        match item.as_rule() {
-            Rule::mdx_header => {
-                let header = parse_header(item.clone(), diagnostics);
-                if let Some(header) = header {
-                    let header_arc = std::sync::Arc::new(header);
-                    all_headers_in_block.push(header_arc.clone());
-                }
+        if item.as_rule() == Rule::mdx_header {
+            let header = parse_header(item.clone(), diagnostics);
+            if let Some(header) = header {
+                let header_arc = std::sync::Arc::new(header);
+                all_headers_in_block.push(header_arc.clone());
             }
-            _ => {}
         }
     }
 
@@ -568,12 +565,11 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
             Rule::stmt => {
                 let maybe_stmt = parse_statement(item, diagnostics);
                 if let Some(mut stmt) = maybe_stmt {
-                    // Bind only the headers that were declared since the last statement
-                    bind_headers_to_statement(&mut stmt, &headers_since_last_stmt);
+                    // Clear headers since last statement & get an iterator for the current ones.
+                    // Better wrt mem::take() since it keeps Vec's allocation.
+                    let header_drain = headers_since_last_stmt.drain(..);
+                    bind_headers_to_statement(&mut stmt, header_drain);
                     stmts.push(stmt);
-
-                    // Clear headers since last statement
-                    headers_since_last_stmt.clear();
                 }
             }
             Rule::expression => {
@@ -785,16 +781,19 @@ fn normalize_headers(headers: &mut Vec<std::sync::Arc<Header>>) {
 }
 
 /// Bind pending headers to a statement based on scope rules
-fn bind_headers_to_statement(stmt: &mut Stmt, pending_headers: &Vec<std::sync::Arc<Header>>) {
+fn bind_headers_to_statement(
+    stmt: &mut Stmt,
+    pending_headers: impl IntoIterator<Item = std::sync::Arc<Header>>,
+) {
     match stmt {
         Stmt::Let(let_stmt) => {
-            let_stmt.annotations.extend(pending_headers.clone());
+            let_stmt.annotations.extend(pending_headers);
         }
         Stmt::ForLoop(for_stmt) => {
-            for_stmt.annotations.extend(pending_headers.clone());
+            for_stmt.annotations.extend(pending_headers);
         }
         Stmt::Expression(es) => {
-            es.annotations.extend(pending_headers.clone());
+            es.annotations.extend(pending_headers);
         }
         Stmt::Assign(_) => {
             // Assignments do not carry annotations

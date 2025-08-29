@@ -14,7 +14,7 @@ fn main() {
     let contents = match std::fs::read_to_string(&path) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("Failed to read {}: {}", input_path, e);
+            eprintln!("Failed to read {input_path}: {e}");
             std::process::exit(1);
         }
     };
@@ -34,5 +34,5 @@ fn main() {
 
     // Nicely styled header graph
     let mermaid = BamlVisDiagramGenerator::generate_with_styling(&ast, true);
-    println!("{}", mermaid);
+    println!("{mermaid}");
 }

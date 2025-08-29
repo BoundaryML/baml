@@ -679,20 +679,20 @@ mod tests {
                 let expr = parse_expr_block(pair, &mut diagnostics);
                 match expr {
                     Some(expr_block) => {
-                        println!("✓ Successfully parsed expression block: {:?}", expr_block)
+                        println!("✓ Successfully parsed expression block: {expr_block:?}")
                     }
                     None => println!("✗ Failed to parse expression block"),
                 }
             }
-            Err(e) => println!("✗ Parse error: {:?}", e),
+            Err(e) => println!("✗ Parse error: {e:?}"),
         }
 
         println!("Diagnostics:");
         for error in diagnostics.errors() {
-            println!("  Error: {:?}", error);
+            println!("  Error: {error:?}");
         }
         for warning in diagnostics.warnings() {
-            println!("  Warning: {:?}", warning);
+            println!("  Warning: {warning:?}");
         }
     }
 
@@ -756,14 +756,14 @@ fn ForLoopWithHeaders() -> int {
                 }
             }
             Err(e) => {
-                println!("✗ Parse error: {:?}", e);
+                println!("✗ Parse error: {e:?}");
                 return;
             }
         }
 
         println!("Diagnostics errors: {}", diagnostics.errors().len());
         for error in diagnostics.errors() {
-            println!("  Error: {:?}", error);
+            println!("  Error: {error:?}");
         }
     }
 }

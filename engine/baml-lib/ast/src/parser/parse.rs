@@ -99,10 +99,8 @@ pub fn parse(root_path: &Path, source: &SourceFile) -> Result<(Ast, Diagnostics)
                     Rule::expr_fn => {
                         if let Some(mut expr_fn) = parse_expr_fn(current, &mut diagnostics) {
                             // Bind pending headers to this function
-                            expr_fn.annotations = pending_headers
-                                .drain(..)
-                                .map(|h| std::sync::Arc::new(h))
-                                .collect();
+                            expr_fn.annotations =
+                                pending_headers.drain(..).map(std::sync::Arc::new).collect();
                             top_level_definitions.push(Top::ExprFn(expr_fn));
                         }
                     }
@@ -130,10 +128,8 @@ pub fn parse(root_path: &Path, source: &SourceFile) -> Result<(Ast, Diagnostics)
                         match val_expr {
                             Ok(mut val) => {
                                 // Bind pending headers to all value expression blocks (function, client, test, generator, retry_policy)
-                                val.annotations = pending_headers
-                                    .drain(..)
-                                    .map(|h| std::sync::Arc::new(h))
-                                    .collect();
+                                val.annotations =
+                                    pending_headers.drain(..).map(std::sync::Arc::new).collect();
                                 top_level_definitions.push(match val.block_type {
                                     ValueExprBlockType::Function => Top::Function(val),
                                     ValueExprBlockType::Test => Top::TestCase(val),

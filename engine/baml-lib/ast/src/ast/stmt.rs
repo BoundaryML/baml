@@ -322,7 +322,7 @@ impl Stmt {
             | Stmt::Return(ReturnStmt { span, .. })
             | Stmt::Break(span)
             | Stmt::Continue(span)
-            | Stmt::Assert(AssertStmt { span, .. }) => &span,
+            | Stmt::Assert(AssertStmt { span, .. }) => span,
 
             Stmt::Expression(es) => &es.span,
             Stmt::Semicolon(expr) => expr.span(),
