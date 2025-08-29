@@ -49,12 +49,6 @@ wheels = [
 ]
 
 [[package]]
-name = "assertpy"
-version = "1.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/4f/39/720b5d4463612a40a166d00999cbb715fce3edaf08a9a7588ba5985699ec/assertpy-1.1.tar.gz", hash = "sha256:acc64329934ad71a3221de185517a43af33e373bb44dc05b5a9b174394ef4833", size = 25421, upload-time = "2020-07-19T14:39:02.462Z" }
-
-[[package]]
 name = "blinker"
 version = "1.8.2"
 source = { registry = "https://pypi.org/simple" }
@@ -727,6 +721,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pyhamcrest"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/16/3f/f286caba4e64391a8dc9200e6de6ce0d07471e3f718248c3276843b7793b/pyhamcrest-2.1.0.tar.gz", hash = "sha256:c6acbec0923d0cb7e72c22af1926f3e7c97b8e8d69fc7498eabacaf7c975bd9c", size = 60538, upload-time = "2023-10-22T15:47:28.255Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0c/71/1b25d3797a24add00f6f8c1bb0ac03a38616e2ec6606f598c1d50b0b0ffb/pyhamcrest-2.1.0-py3-none-any.whl", hash = "sha256:f6913d2f392e30e0375b3ecbd7aee79e5d1faa25d345c8f4ff597665dcac2587", size = 54555, upload-time = "2023-10-22T15:47:25.08Z" },
+]
+
+[[package]]
 name = "pytest"
 version = "8.3.3"
 source = { registry = "https://pypi.org/simple" }
@@ -782,7 +785,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
-    { name = "assertpy" },
     { name = "boto3" },
     { name = "flask" },
     { name = "flask-httpauth" },
@@ -792,6 +794,7 @@ dependencies = [
     { name = "pip" },
     { name = "psutil" },
     { name = "pydantic" },
+    { name = "pyhamcrest" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "python-dotenv" },
@@ -808,7 +811,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=0.49.0,<0.50.0" },
-    { name = "assertpy" },
     { name = "boto3", specifier = ">=1.37.37" },
     { name = "flask", specifier = ">=3.0.3" },
     { name = "flask-httpauth", specifier = ">=4.8.0" },
@@ -818,6 +820,7 @@ requires-dist = [
     { name = "pip", specifier = ">=25.1.1" },
     { name = "psutil" },
     { name = "pydantic", specifier = ">=2.10.6" },
+    { name = "pyhamcrest", specifier = ">=2.1.0" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "python-dotenv" },

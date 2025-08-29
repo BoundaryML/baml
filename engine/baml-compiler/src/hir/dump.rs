@@ -155,7 +155,7 @@ impl Statement {
                 .append(RcDoc::space())
                 .append(value.to_doc())
                 .append(RcDoc::text(";")),
-            Statement::DeclareAndAssign { name, value, .. } => RcDoc::text("var")
+            Statement::DeclareAndAssign { name, value, .. } => RcDoc::text("let")
                 .append(RcDoc::space())
                 .append(RcDoc::text(name.clone()))
                 .append(RcDoc::space())

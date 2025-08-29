@@ -1,7 +1,7 @@
 fn SumToTen() -> int {
-	let mut s = 0;
+	let s = 0;
 
-	for (let mut i = 1; i <= 10; i += 1) {
+	for (let i = 1; i <= 10; i += 1) {
 		s += i;
 	}
 
@@ -16,7 +16,7 @@ fn InfiniteFor() -> int {
 
 // should error everywhere `i` is used.
 fn NoIteratorDeclared() -> int {
-	let mut s = 0;
+	let s = 0;
 
 	for (; i <= 10; i += 1) {
 		s += i;
@@ -27,9 +27,9 @@ fn NoIteratorDeclared() -> int {
 
 // should be fine
 fn LoopHeaderScope() -> int {
-	let mut s = 0;
+	let s = 0;
 
-	for (let mut i = 0; i <= 10; s += i) {
+	for (let i = 0; i <= 10; s += i) {
 	}
 
 	s
@@ -37,9 +37,9 @@ fn LoopHeaderScope() -> int {
 
 // should error in `i += x` (no `x` in scope)
 fn LoopHeaderScopeUnavailable() -> int {
-	let mut s = 0;
+	let s = 0;
 
-	for (let mut i = 0; i <= 10; i += x) {
+	for (let i = 0; i <= 10; i += x) {
 		let x = 1;
 	}
 
@@ -52,7 +52,7 @@ fn BreakContinue() -> int {
 		break;
 		continue;
 	}
-	
+
 	0
 }
 
@@ -102,7 +102,7 @@ fn BreakContinue() -> int {
 //   -->  loops/c_for.baml:42
 //    | 
 // 41 | 
-// 42 | for (let mut i = 0; i <= 10; i += x) {
+// 42 | for (let i = 0; i <= 10; i += x) {
 //    | 
 // error: Error validating: Unknown variable i
 //   -->  loops/c_for.baml:21
@@ -126,5 +126,5 @@ fn BreakContinue() -> int {
 //   -->  loops/c_for.baml:42
 //    | 
 // 41 | 
-// 42 | for (let mut i = 0; i <= 10; i += x) {
+// 42 | for (let i = 0; i <= 10; i += x) {
 //    | 

@@ -5,6 +5,7 @@ use super::{Expression, ExpressionBlock, Identifier, Span};
 #[derive(Debug, Clone)]
 pub struct LetStmt {
     pub identifier: Identifier,
+    /// Always true after mut keyword removal
     pub is_mutable: bool,
     pub expr: Expression,
     pub span: Span,

@@ -1,4 +1,4 @@
-fn GCD(mut a: int, mut b: int) -> int {
+fn GCD(a: int, b: int) -> int {
 
 	while (a != b) {
 	   if (a > b) {

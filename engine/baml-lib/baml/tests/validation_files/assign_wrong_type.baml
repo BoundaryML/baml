@@ -1,6 +1,6 @@
 fn AssignWrongType(x: int) -> int {
 
-	let mut y = 3;
+	let y = 3;
 
 	y = "hello";
 

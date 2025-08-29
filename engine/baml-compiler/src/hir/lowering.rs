@@ -244,7 +244,7 @@ fn lower_fn_args(input: &ast::BlockArgs) -> Vec<Parameter> {
         .iter()
         .map(|(name, param)| Parameter {
             name: name.to_string(),
-            is_mutable: param.is_mutable,
+            is_mutable: param.is_mutable, // Will always be true from parser after mut keyword removal
             r#type: type_ir_from_ast(&param.field_type),
             span: name.span().clone(),
         })

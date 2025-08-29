@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.206.1](https://github.com/boundaryml/baml/compare/0.206.0..0.206.1) - 2025-08-28
+
+### Bugfix
+
+- vscode extension is broken (#2387) - ([i43e4f72](https://github.com/BoundaryML/baml/commit/43e4f72effeb8ec48c40681dc129ba3ce9124288)) - hellovai
+- media types in jinja should evaluate to true in jinja bool conversions (#2384) - ([d25d3eb](https://github.com/boundaryml/baml/commit/d25d3ebce21ab6157dd760dfcde217e711229191)) - hellovai
+
 ## [0.206.0](https://github.com/boundaryml/baml/compare/0.205.0..0.206.0) - 2025-08-27
 
 ### Bug Fixes

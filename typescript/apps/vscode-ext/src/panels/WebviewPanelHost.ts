@@ -593,10 +593,26 @@ export class WebviewPanelHost {
             // relpath will be 'baml_src://path/to-image.png'
             const relpath = vscodeMessage.path;
 
-            // NB(san): this is a violation of the "never URI.parse rule"
-            // (see https://www.notion.so/gloochat/windows-uri-treatment-fe87b22abebb4089945eb8cd1ad050ef)
-            // but this relpath is already a file URI, it seems...
-            const uriPath = Uri.parse(relpath);
+            let uriPath: Uri;
+            if (relpath.includes('://')) {
+              // It's already a URI, parse it directly
+              uriPath = Uri.parse(relpath);
+              console.log('GET_WEBVIEW_URI: Parsed as URI', { relpath, uriPath: uriPath.fsPath });
+            } else if (relpath.startsWith('/') || relpath.match(/^[A-Za-z]:/)) {
+              // It's an absolute path (Unix: starts with /, Windows: starts with C:)
+              uriPath = Uri.file(relpath);
+              console.log('GET_WEBVIEW_URI: Parsed as absolute path', { relpath, resolvedPath: uriPath.fsPath });
+            } else {
+              // It's a relative path, resolve it against workspace root
+              const workspaceFolders = vscode.workspace.workspaceFolders;
+              const workspaceUri = workspaceFolders?.[0]?.uri ?? Uri.parse("nonsense");
+              uriPath = Uri.joinPath(workspaceUri, relpath);
+              console.log('GET_WEBVIEW_URI: Resolved relative path', { 
+                relpath, 
+                workspaceUri: workspaceUri.fsPath, 
+                resolvedPath: uriPath.fsPath 
+              });
+            }
             const uri = this._panel.webview.asWebviewUri(uriPath).toString();
 
             console.log('GET_WEBVIEW_URI', {

@@ -1,10 +1,10 @@
-fn Factorial(mut limit: int) -> int {
+fn Factorial(limit: int) -> int {
 
-	let mut result = 1;
+	let result = 1;
 
 
     // used to make the loop break without relying on `break` implementation.
-    let mut should_continue = true;
+    let should_continue = true;
 	while (should_continue) {
 		result = result * limit;
 		limit = limit - 1;
@@ -39,7 +39,7 @@ fn ContinueNested() -> int {
 //   -->  loops/continue.baml:1
 //    | 
 //    | 
-//  1 | fn Factorial(mut limit: int) -> int {
+//  1 | fn Factorial(limit: int) -> int {
 //    | 
 // warning: Workflow functions are experimental, and will break in the future.
 //   -->  loops/continue.baml:23

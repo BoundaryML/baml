@@ -1,6 +1,6 @@
-fn Factorial(mut limit: int) -> int {
+fn Factorial(limit: int) -> int {
 
-	let mut result = 1;
+	let result = 1;
 
 
 	while (true) {
@@ -22,7 +22,7 @@ fn OutsideLoop() -> int {
 }
 
 fn Nested() -> int {
-    let mut a = 5;
+    let a = 5;
     while (true) {
         while (true) {
             a = a + 1;
@@ -38,7 +38,7 @@ fn Nested() -> int {
 //   -->  loops/break.baml:1
 //    | 
 //    | 
-//  1 | fn Factorial(mut limit: int) -> int {
+//  1 | fn Factorial(limit: int) -> int {
 //    | 
 // warning: Workflow functions are experimental, and will break in the future.
 //   -->  loops/break.baml:17

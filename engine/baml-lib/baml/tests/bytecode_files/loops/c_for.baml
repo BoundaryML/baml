@@ -1,7 +1,7 @@
 fn SumToTen() -> int {
-	let mut s = 0;
+	let s = 0;
 
-	for (let mut i = 1; i <= 10; i += 1) {
+	for (let i = 1; i <= 10; i += 1) {
 		s += i;
 	}
 
@@ -9,9 +9,9 @@ fn SumToTen() -> int {
 }
 
 fn AfterWithBreakContinue() -> int {
-	let mut s = 0;
+	let s = 0;
 
-	for (let mut i = 0; ; s += i) {
+	for (let i = 0; ; s += i) {
 		i += 1;
 		if (i > 10) {
 			break;
@@ -26,7 +26,7 @@ fn AfterWithBreakContinue() -> int {
 
 
 fn OnlyCond() -> int {
-	let mut s = 0;
+	let s = 0;
 
 	for (; false;) {
 	}
@@ -34,9 +34,9 @@ fn OnlyCond() -> int {
 	s
 }
 
- 
+
 fn Nothing() -> int {
-	let mut s = 0;
+	let s = 0;
 
 	for (;;) {
 		break;

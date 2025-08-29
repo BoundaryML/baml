@@ -165,7 +165,8 @@ pub fn typecheck_returning_context<'a>(
                 param.name.clone(),
                 VarInfo {
                     ty: param.r#type.clone(),
-                    mut_var_info: param.is_mutable.then(|| MutableVarInfo {
+                    // Always add MutableVarInfo since all variables are mutable now
+                    mut_var_info: Some(MutableVarInfo {
                         ty_infer_span: Some(param.span.clone()),
                     }),
                 },
@@ -233,7 +234,8 @@ pub fn typecheck_returning_context<'a>(
                                     param.name.clone(),
                                     VarInfo {
                                         ty: param.r#type.clone(),
-                                        mut_var_info: param.is_mutable.then(|| MutableVarInfo {
+                                        // Always add MutableVarInfo since all variables are mutable now
+                                        mut_var_info: Some(MutableVarInfo {
                                             ty_infer_span: Some(param.span.clone()),
                                         }),
                                     },
@@ -680,7 +682,10 @@ fn typecheck_statement(
                     name.clone(),
                     VarInfo {
                         ty: inferred_type,
-                        mut_var_info: None,
+                        // All variables are mutable now
+                        mut_var_info: Some(MutableVarInfo {
+                            ty_infer_span: Some(span.clone()),
+                        }),
                     },
                 );
             } else {
@@ -690,7 +695,10 @@ fn typecheck_statement(
                     name.clone(),
                     VarInfo {
                         ty: TypeIR::int(),
-                        mut_var_info: None,
+                        // All variables are mutable now
+                        mut_var_info: Some(MutableVarInfo {
+                            ty_infer_span: Some(span.clone()),
+                        }),
                     },
                 );
             }
@@ -2014,7 +2022,9 @@ mod tests {
             .expect("Should have test_primitives function");
 
         // Check that the let statement has the correct inferred type
-        if let Some(thir::Statement::Let { value, .. }) = test_fn.body.statements.first() {
+        if let Some(thir::Statement::DeclareAndAssign { value, .. }) =
+            test_fn.body.statements.first()
+        {
             assert!(value
                 .meta()
                 .1
@@ -2022,7 +2032,10 @@ mod tests {
                 .expect("a should be inferred")
                 .eq_up_to_span(&TypeIR::int()));
         } else {
-            panic!("Expected let statement");
+            panic!(
+                "Expected delcare and assign statement, got {:?}",
+                test_fn.body.statements
+            );
         }
     }
 
@@ -2053,7 +2066,9 @@ mod tests {
             .expect("Should have test_call function");
 
         // Check that the let statement has a function call with the correct return type
-        if let Some(thir::Statement::Let { value, .. }) = test_fn.body.statements.first() {
+        if let Some(thir::Statement::DeclareAndAssign { value, .. }) =
+            test_fn.body.statements.first()
+        {
             match value {
                 thir::Expr::Call { meta, .. } => {
                     assert!(meta

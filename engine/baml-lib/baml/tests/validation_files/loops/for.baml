@@ -1,5 +1,5 @@
 fn Sum(xs: int[]) -> int {
-	let mut result = 0;
+	let result = 0;
 
 	for (x in xs) {
 		result += x;
@@ -9,7 +9,7 @@ fn Sum(xs: int[]) -> int {
 }
 
 fn SumBadType(xs: string[]) -> int {
-	let mut result = 0;
+	let result = 0;
 
 	for (x in xs) {
 		// should complain about int vs. string.
@@ -21,7 +21,7 @@ fn SumBadType(xs: string[]) -> int {
 
 // NOTE: `let mut b: string = ""` is not supported yet, so the variable is declared
 // as an argument instead.
-fn SumUnknownType(xs: int, mut b: string) -> int {
+fn SumUnknownType(xs: int, b: string) -> int {
 
 
 	// this should error in `xs` saying it's not an array.
@@ -53,7 +53,7 @@ fn SumUnknownType(xs: int, mut b: string) -> int {
 //   -->  loops/for.baml:24
 //    | 
 // 23 | // as an argument instead.
-// 24 | fn SumUnknownType(xs: int, mut b: string) -> int {
+// 24 | fn SumUnknownType(xs: int, b: string) -> int {
 //    | 
 // error: Error validating: Cannot assign string to int
 //   -->  loops/for.baml:16

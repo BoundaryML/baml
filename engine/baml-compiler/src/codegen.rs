@@ -1538,7 +1538,7 @@ impl thir::Expr<(Span, Option<TypeIR>)> {
     /// But false for this one:
     ///
     /// ```ignore
-    /// let mut a = 0;
+    /// let a = 0;
     /// if a == 0 {
     ///     a = 1;
     /// } else {
@@ -2309,14 +2309,14 @@ mod tests {
             source: r#"
                 fn DeclareMutableInFunction(x: int) -> int {
 
-                    let mut y = 3;
+                    let y = 3;
 
                     y = 5;
 
                     y
                 }
 
-                fn MutableInArg(mut x: int) -> int {
+                fn MutableInArg(x: int) -> int {
                     x = 3;
                     x
                 }
@@ -2425,7 +2425,7 @@ mod tests {
         assert_compiles(Program {
             source: r#"
                 fn main() -> int {
-                    let mut x = 1;
+                    let x = 1;
                     x += 2;
                     x
                 }
@@ -2449,7 +2449,7 @@ mod tests {
     fn while_loop_gcd() -> anyhow::Result<()> {
         assert_compiles(Program {
             source: r#"
-                fn GCD(mut a: int, mut b: int) -> int {
+                fn GCD(a: int, b: int) -> int {
                     while (a != b) {
                         if (a > b) {
                             a = a - b;
@@ -2500,7 +2500,7 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main() -> int {
-                    let mut a = 1;
+                    let a = 1;
 
                     {
                         let b = 2;
@@ -2549,7 +2549,7 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main() -> int {
-                    let mut a = 1;
+                    let a = 1;
 
                     while (a < 5) {
                         a += 1;
@@ -2596,8 +2596,8 @@ mod tests {
     fn break_factorial() -> anyhow::Result<()> {
         assert_compiles(Program {
             source: r#"
-                fn Factorial(mut limit: int) -> int {
-                    let mut result = 1;
+                fn Factorial(limit: int) -> int {
+                    let result = 1;
 
                     while (true) {
                         if (limit == 0) {
@@ -2613,7 +2613,7 @@ mod tests {
             expected: vec![(
                 "Factorial",
                 vec![
-                    // let mut result = 1;
+                    // let result = 1;
                     Instruction::LoadConst(0),
                     // while true { ... }
                     Instruction::LoadConst(1),
@@ -2653,11 +2653,11 @@ mod tests {
     fn continue_factorial() -> anyhow::Result<()> {
         assert_compiles(Program {
             source: r#"
-                fn Factorial(mut limit: int) -> int {
-                    let mut result = 1;
+                fn Factorial(limit: int) -> int {
+                    let result = 1;
 
                     // used to make the loop break without relying on `break` implementation.
-                    let mut should_continue = true;
+                    let should_continue = true;
                     while (should_continue) {
                         result = result * limit;
                         limit = limit - 1;
@@ -2675,9 +2675,9 @@ mod tests {
             expected: vec![(
                 "Factorial",
                 vec![
-                    // let mut result = 1;
+                    // let result = 1;
                     Instruction::LoadConst(0),
-                    // let mut should_continue = true;
+                    // let should_continue = true;
                     Instruction::LoadConst(1),
                     // while should_continue { ... }
                     Instruction::LoadVar(3),
@@ -2762,7 +2762,7 @@ mod tests {
         assert_compiles(Program {
             source: r#"
                 fn Nested() -> int {
-                    let mut a = 5;
+                    let a = 5;
                     while (true) {
                         while (true) {
                             a = a + 1;
@@ -2836,7 +2836,7 @@ mod tests {
         assert_compiles(Program {
             source: r#"
                 fn Sum(xs: int[]) -> int {
-                    let mut result = 0;
+                    let result = 0;
 
                     for (x in xs) {
                         result += x;
@@ -2886,7 +2886,7 @@ mod tests {
         assert_compiles(Program {
             source: r#"
                 fn ForWithBreak(xs: int[]) -> int {
-                    let mut result = 0;
+                    let result = 0;
 
                     for (x in xs) {
                         if (x > 10) {
@@ -2948,7 +2948,7 @@ mod tests {
         assert_compiles(Program {
             source: r#"
                 fn ForWithContinue(xs: int[]) -> int {
-                    let mut result = 0;
+                    let result = 0;
 
                     for (x in xs) {
                         if (x > 10) {
@@ -3011,7 +3011,7 @@ mod tests {
             source: r#"
                 fn NestedFor(as: int[], bs: int[]) -> int {
 
-                    let mut result = 0;
+                    let result = 0;
 
                     for (a in as) {
                         for (b in bs) {
@@ -3590,7 +3590,7 @@ fn UseMapContains() -> string {
             assert_compiles(Program {
                 source: r#"
 fn EditMapKey() -> int {
-	let mut map = { hi 123 };
+	let map = { hi 123 };
 
 	map["hi"] = 42 - 4;
 	map["hi"] += 4;

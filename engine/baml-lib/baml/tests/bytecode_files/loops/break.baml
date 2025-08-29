@@ -1,6 +1,6 @@
-fn Factorial(mut limit: int) -> int {
+fn Factorial(limit: int) -> int {
 
-	let mut result = 1;
+	let result = 1;
 
 
 	while (true) {
@@ -15,7 +15,7 @@ fn Factorial(mut limit: int) -> int {
 }
 
 fn Nested() -> int {
-    let mut a = 5;
+    let a = 5;
     while (true) {
         while (true) {
             a = a + 1;

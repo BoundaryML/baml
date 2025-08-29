@@ -40,7 +40,7 @@ pub(crate) fn parse_named_argument_list(
 
         let mut name = None;
         let mut r#type = None;
-        let mut is_mutable = false;
+        let is_mutable = true; // Always mutable now after mut keyword removal
         let mut is_self = false;
         for arg in named_arg.into_inner() {
             match arg.as_rule() {
@@ -53,7 +53,6 @@ pub(crate) fn parse_named_argument_list(
 
                     name = Some(ident);
                 }
-                Rule::MUT_KEYWORD => is_mutable = true,
                 Rule::COLON => {}
                 Rule::field_type | Rule::field_type_chain => {
                     match parse_function_arg(arg, is_mutable, diagnostics) {

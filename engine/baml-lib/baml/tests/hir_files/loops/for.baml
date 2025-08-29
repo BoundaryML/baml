@@ -1,5 +1,5 @@
 fn Sum(xs: int[]) -> int {
-	let mut result = 0;
+	let result = 0;
 
 	for (x in xs) {
 		result += x;
@@ -9,7 +9,7 @@ fn Sum(xs: int[]) -> int {
 }
 
 // function Sum(xs) {
-//   var result = 0;
+//   let result = 0;
 //   for x in xs {
 //   result += x;
 //   }

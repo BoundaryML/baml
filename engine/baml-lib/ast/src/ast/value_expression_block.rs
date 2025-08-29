@@ -51,6 +51,7 @@ pub struct BlockArg {
     /// We could make `field_type` a `Option<FieldType>` but requires too much
     /// refactoring at this point.
     pub is_self: bool,
+    /// Always true after mut keyword removal
     pub is_mutable: bool,
 
     /// The location of this field in the text representation.

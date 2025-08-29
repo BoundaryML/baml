@@ -138,16 +138,7 @@ impl ProviderStrategy {
                         json!(prompt)
                     }
                     either::Either::Right(messages) => {
-                        // Check if we have any non-text content (multimodal)
-                        let has_media = messages.iter().any(|msg| {
-                            msg.parts
-                                .iter()
-                                .any(|part| !matches!(part, ChatMessagePart::Text(_)))
-                        });
-
-                        if has_media {
-                            // Use structured array format for multimodal content
-                            let structured_messages: Result<Vec<_>> = messages
+                        let structured_messages: Result<Vec<_>> = messages
                                 .iter()
                                 .map(|msg| {
                                     // Convert message parts to Responses API format
@@ -268,28 +259,7 @@ impl ProviderStrategy {
                                     }))
                                 })
                                 .collect();
-                            json!(structured_messages?)
-                        } else {
-                            // For text-only content, we can use either string or structured format
-                            // Let's use string format for simplicity when there's only text
-                            let text_content = messages
-                                .iter()
-                                .map(|msg| {
-                                    let content_text = msg
-                                        .parts
-                                        .iter()
-                                        .filter_map(|part| match part {
-                                            ChatMessagePart::Text(text) => Some(text.as_str()),
-                                            _ => None,
-                                        })
-                                        .collect::<Vec<_>>()
-                                        .join(" ");
-                                    format!("{}: {}", msg.role, content_text)
-                                })
-                                .collect::<Vec<_>>()
-                                .join("\n");
-                            json!(text_content)
-                        }
+                        json!(structured_messages?)
                     }
                 };
                 body.insert("input".into(), input);

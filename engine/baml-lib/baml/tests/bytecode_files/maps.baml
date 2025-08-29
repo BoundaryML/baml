@@ -17,7 +17,7 @@ fn UseMapNoKey() -> string {
 }
 
 fn EditMapKey() -> int {
-	let mut map = { hi 123 };
+	let map = { hi 123 };
 
 	map["hi"] = 42 - 4;
 	map["hi"] += 4;
