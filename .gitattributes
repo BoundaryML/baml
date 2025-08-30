@@ -4,4 +4,4 @@
 **/baml_client/inlinedbaml.go binary
 **/baml_client/** merge=baml_client
 **/baml_client/** linguist-generated=true
-engine/playground-server/tests/repro1/baml_src/describe_pet_large_file.baml filter=lfs diff=lfs merge=lfs -text
+engine/playground-server/tests/repro1/baml_src/*.lfs.baml filter=lfs diff=lfs merge=lfs -text
