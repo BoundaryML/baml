@@ -667,8 +667,7 @@ impl BamlRuntimeExt for BamlRuntime {
                                 .functions
                                 .iter()
                                 .find(|f| f.elem.name() == tc.function().name())
-                                .map(|f| f.attributes.span.as_ref())
-                                .flatten()
+                                .and_then(|f| f.attributes.span.as_ref())
                                 .map(|span| span.into());
 
                             BamlFunctionTestCasePair {
@@ -857,8 +856,7 @@ impl BamlRuntimeExt for BamlRuntime {
                     .functions
                     .iter()
                     .find(|f| f.elem.name() == tc.function().name())
-                    .map(|f| f.attributes.span.as_ref())
-                    .flatten()
+                    .and_then(|f| f.attributes.span.as_ref())
                     .map(|span| span.into());
                 BamlFunctionTestCasePair {
                     name: tc.test_case().name.clone(),
