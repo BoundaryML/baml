@@ -65,6 +65,9 @@ impl SyncRequestHandler for CodeLens {
 
         let mk_range = |span: &BamlSpan| {
             Range::new(
+                // TODO(sam): I'm pretty sure there's a bug here - Position I believe is line number and
+                // character index _within_ the line, not the byte index corresponding to the start.
+                // But it doesn't make a difference for vscode, so not going to fix it right now.
                 Position::new(span.start_line as u32, span.start as u32),
                 Position::new(span.end_line as u32, span.end as u32),
             )
@@ -143,7 +146,7 @@ impl SyncRequestHandler for CodeLens {
             .collect();
 
         function_lenses.extend(test_case_lenses);
-        tracing::info!("Function lenses: {:?}", function_lenses);
+        tracing::debug!("Function lenses: {:#?}", function_lenses);
         Ok(Some(function_lenses))
     }
 }

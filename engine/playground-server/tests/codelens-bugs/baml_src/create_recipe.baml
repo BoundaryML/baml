@@ -4,15 +4,6 @@ function CreateRecipeVariations(
   client "openai/gpt-4o-mini"
   prompt #"
     Create a recipe based on the given description and multiple variations
-          × × × 
-          × × × × 
-          × × × 
-          × × × 
-          × × × × 
-          × × × 
-          × × × 
-          × × × × 
-          × × × 
   "#
 }
 
