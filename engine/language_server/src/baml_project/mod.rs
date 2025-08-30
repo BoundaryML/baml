@@ -411,7 +411,7 @@ impl BamlProject {
 }
 
 pub trait BamlRuntimeExt {
-    fn list_testcases(&self) -> Vec<BamlFunctionTestCasePair>;
+    fn list_function_test_pairs(&self) -> Vec<BamlFunctionTestCasePair>;
 
     fn search_for_symbol(&self, symbol: &str) -> Option<SymbolLocation>;
     fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation>;
@@ -662,6 +662,14 @@ impl BamlRuntimeExt for BamlRuntime {
                                 Some(span) => span.into(),
                                 None => BamlSpan::default(),
                             };
+                            let function_name_span = tc
+                                .test_case()
+                                .functions
+                                .iter()
+                                .find(|f| f.elem.name() == tc.function().name())
+                                .map(|f| f.attributes.span.as_ref())
+                                .flatten()
+                                .map(|span| span.into());
 
                             BamlFunctionTestCasePair {
                                 name: tc.test_case().name.clone(),
@@ -678,6 +686,7 @@ impl BamlRuntimeExt for BamlRuntime {
                                         name: f.name().to_string(),
                                     }
                                 },
+                                function_name_span,
                             }
                         })
                         .collect(),
@@ -785,7 +794,7 @@ impl BamlRuntimeExt for BamlRuntime {
 
         None
     }
-    fn list_testcases(&self) -> Vec<BamlFunctionTestCasePair> {
+    fn list_function_test_pairs(&self) -> Vec<BamlFunctionTestCasePair> {
         let ctx = self.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
 
         let ctx = ctx.create_ctx_with_default();
@@ -843,6 +852,14 @@ impl BamlRuntimeExt for BamlRuntime {
                     None => BamlSpan::default(),
                 };
 
+                let function_name_span = tc
+                    .test_case()
+                    .functions
+                    .iter()
+                    .find(|f| f.elem.name() == tc.function().name())
+                    .map(|f| f.attributes.span.as_ref())
+                    .flatten()
+                    .map(|span| span.into());
                 BamlFunctionTestCasePair {
                     name: tc.test_case().name.clone(),
                     inputs: params,
@@ -857,6 +874,7 @@ impl BamlRuntimeExt for BamlRuntime {
                             name: f.name().to_string(),
                         }
                     },
+                    function_name_span,
                 }
             })
             .collect()
@@ -1129,7 +1147,7 @@ impl Project {
     /// Returns a list of test cases from the WASM runtime.
     pub fn list_function_test_pairs(&self) -> Result<Vec<BamlFunctionTestCasePair>, &str> {
         if let Ok(runtime) = self.runtime() {
-            Ok(runtime.list_testcases())
+            Ok(runtime.list_function_test_pairs())
         } else {
             Err("BAML Generate failed. Project has errors.")
         }

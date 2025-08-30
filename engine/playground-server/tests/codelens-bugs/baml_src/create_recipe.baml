@@ -1,32 +1,54 @@
-function CreateRecipeVariations(
+
+template_string MyPrompt2(description: string) #"
+  {{ description }}
+        × × × 
+        × × × 
+        × × × × 
+        × × × 
+        × × × 
+        × × × 
+        × × × × 
+        × × × 
+        × × × 
+        × × × 
+        × × × × 
+        × × × 
+        × × × 
+        × × × 
+        × × × × 
+        × × × 
+        × × × 
+        × × × 
+        × × × × 
+        × × × 
+        × × × 
+        × × × 
+        × × × × 
+        × × × 
+"#
+function PredictAlpha(
   description: string,
 ) -> string {
   client "openai/gpt-4o-mini"
-  prompt #"
-    tell me about alpha
-  "#
+  prompt #" predict alpha "#
 }
 
-function CreateRecipeVariations2(
+function TellMeAboutBeta(
   description: string,
 ) -> string {
   client "openai/gpt-4o-mini"
-  prompt #"
-    tell me about beta
-  "#
+  prompt #" tell me about beta "#
 }
 
-function CreateRecipeVariations3(
+function DoGammaThings(
   description: string,
 ) -> string {
   client "openai/gpt-4o-mini"
-  prompt #"
-    tell me about gamma
-  "#
+  prompt #" do gamma things "#
 }
 
 test create_test1 {
-  functions [CreateRecipeVariations, CreateRecipeVariations2, CreateRecipeVariations3]
+  functions [PredictAlpha, TellMeAboutBeta, DoGammaThings]
   args {
     description #"
      description
@@ -35,7 +57,7 @@ test create_test1 {
 }
 
 test create_test2 {
-  functions [CreateRecipeVariations]
+  functions [PredictAlpha]
   args {
     description #"
       Create a recipe for a vegetarian meal.
@@ -48,16 +70,8 @@ test create_test2 {
   }
 }
 
-template_string MyPrompt2(description: string) #"
-  {{ description }}
-          × × × 
-          × × × 
-          × × × × 
-          × × × 
-"#
-
 test create_test3 {
-  functions [CreateRecipeVariations]
+  functions [PredictAlpha]
   args {
     description #"
       Create a recipe for a vegetarian meal.
@@ -71,7 +85,7 @@ test create_test3 {
 }
 
 test create_test4 {
-  functions [CreateRecipeVariations]
+  functions [PredictAlpha]
   args {
     description #"
       Create a recipe for a vegetarian meal.
@@ -93,7 +107,7 @@ template_string MyPrompt3(description: string) #"
 "#
 
 test create_test5 {
-  functions [CreateRecipeVariations]
+  functions [PredictAlpha]
   args {
     description #"
       Create a recipe for a vegetarian meal.
@@ -102,7 +116,7 @@ test create_test5 {
 }
 
 test create_test6 {
-  functions [CreateRecipeVariations]
+  functions [PredictAlpha]
   args {
     description #"
       Create a recipe for a vegetarian meal.
