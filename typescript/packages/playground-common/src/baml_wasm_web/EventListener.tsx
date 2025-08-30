@@ -281,9 +281,10 @@ export const EventListener: React.FC = () => {
         case 'samtest_update_project':
           if (content?.root_path) {
             console.debug('samtest_update_project', content.root_path);
-            debouncedSetBamlFileMap(
-              {...bamlFileMap, ...content.files}
-            );
+            debouncedSetBamlFileMap((bamlFileMap) => ({
+              ...bamlFileMap,
+              ...content.files,
+            }));
           }
           break;
 
