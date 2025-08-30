@@ -143,7 +143,7 @@ impl TestExecutor for BamlRuntime {
         let func_test_pairs = {
             let ir = &self.inner.ir;
             // Regular LLM function tests
-            let from_fn_tests = ir.walk_tests().filter_map(|node_pair| {
+            let from_fn_tests = ir.walk_function_test_pairs().filter_map(|node_pair| {
                 let (function_name, test_name) = node_pair.name();
                 if args.includes(function_name, test_name) {
                     Some((function_name.to_string(), test_name.to_string()))
@@ -206,7 +206,7 @@ impl TestExecutor for BamlRuntime {
         let selected_tests = {
             let ir = &self.inner.ir;
             // Regular LLM function tests
-            let from_fn_tests = ir.walk_tests().filter_map(|node_pair| {
+            let from_fn_tests = ir.walk_function_test_pairs().filter_map(|node_pair| {
                 let (function_name, test_name) = node_pair.name();
                 if args.includes(function_name, test_name) {
                     node_pair.span().map(|s| {

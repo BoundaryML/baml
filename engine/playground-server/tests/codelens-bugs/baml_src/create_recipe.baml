@@ -3,21 +3,33 @@ function CreateRecipeVariations(
 ) -> string {
   client "openai/gpt-4o-mini"
   prompt #"
-    Create a recipe based on the given description and multiple variations
+    tell me about alpha
+  "#
+}
+
+function CreateRecipeVariations2(
+  description: string,
+) -> string {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    tell me about beta
+  "#
+}
+
+function CreateRecipeVariations3(
+  description: string,
+) -> string {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    tell me about gamma
   "#
 }
 
 test create_test1 {
-  functions [CreateRecipeVariations]
+  functions [CreateRecipeVariations, CreateRecipeVariations2, CreateRecipeVariations3]
   args {
     description #"
-      Create a recipe for a vegetarian meal.
-
-      Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
-      tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
-      veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea
-      commodo consequat. Duis aute irure dolor in reprehenderit in voluptate
-      velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat
+     description
     "#
   }
 }

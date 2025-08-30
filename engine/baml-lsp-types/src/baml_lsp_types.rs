@@ -41,19 +41,19 @@ pub struct BamlParam {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BamlTestCase {
+pub struct BamlFunctionTestCasePair {
     pub name: String,
     pub inputs: Vec<BamlParam>,
     pub error: Option<String>,
     pub span: BamlSpan,
-    pub parent_functions: Vec<BamlParentFunction>,
+    pub function: BamlParentFunction,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BamlFunction {
     pub name: String,
     pub span: BamlSpan,
-    pub test_cases: Vec<BamlTestCase>,
+    pub test_cases: Vec<BamlFunctionTestCasePair>,
     pub test_snippet: String,
     pub signature: String,
 }

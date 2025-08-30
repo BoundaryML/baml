@@ -772,7 +772,7 @@ impl IntermediateRepr {
         self.expr_fns.iter().map(|e| Walker { ir: self, item: e })
     }
 
-    pub fn walk_tests(
+    pub fn walk_function_test_pairs(
         &self,
     ) -> impl Iterator<Item = Walker<'_, (&Node<Function>, &Node<TestCase>)>> {
         self.functions.iter().flat_map(move |f| {

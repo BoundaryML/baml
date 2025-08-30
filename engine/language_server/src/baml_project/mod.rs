@@ -11,8 +11,8 @@ use std::{
 
 use anyhow::Context;
 use baml_lsp_types::{
-    BamlFunction, BamlGeneratorConfig, BamlParam, BamlParentFunction, BamlSpan, BamlTestCase,
-    SymbolLocation,
+    BamlFunction, BamlFunctionTestCasePair, BamlGeneratorConfig, BamlParam, BamlParentFunction,
+    BamlSpan, SymbolLocation,
 };
 use baml_runtime::{
     // internal::llm_client::LLMResponse,
@@ -411,19 +411,7 @@ impl BamlProject {
 }
 
 pub trait BamlRuntimeExt {
-    fn list_testcases(&self) -> Vec<BamlTestCase>;
-
-    fn get_testcase_from_position(
-        &self,
-        parent_function: BamlFunction,
-        cursor_idx: usize,
-    ) -> Option<BamlTestCase>;
-
-    fn get_function_of_testcase(
-        &self,
-        file_name: &str,
-        cursor_idx: usize,
-    ) -> Option<BamlParentFunction>;
+    fn list_testcases(&self) -> Vec<BamlFunctionTestCasePair>;
 
     fn search_for_symbol(&self, symbol: &str) -> Option<SymbolLocation>;
     fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation>;
@@ -675,28 +663,21 @@ impl BamlRuntimeExt for BamlRuntime {
                                 None => BamlSpan::default(),
                             };
 
-                            BamlTestCase {
+                            BamlFunctionTestCasePair {
                                 name: tc.test_case().name.clone(),
                                 inputs: params,
                                 error,
                                 span: wasm_span,
-                                parent_functions: tc
-                                    .test_case()
-                                    .functions
-                                    .iter()
-                                    .map(|f| {
-                                        let (start, end) = f
-                                            .attributes
-                                            .span
-                                            .as_ref()
-                                            .map_or((0, 0), |f| (f.start, f.end));
-                                        BamlParentFunction {
-                                            start,
-                                            end,
-                                            name: f.elem.name().to_string(),
-                                        }
-                                    })
-                                    .collect(),
+                                function: {
+                                    let f = tc.function();
+                                    let (start, end) =
+                                        f.span().map_or((0, 0), |f| (f.start, f.end));
+                                    BamlParentFunction {
+                                        start,
+                                        end,
+                                        name: f.name().to_string(),
+                                    }
+                                },
                             }
                         })
                         .collect(),
@@ -804,7 +785,7 @@ impl BamlRuntimeExt for BamlRuntime {
 
         None
     }
-    fn list_testcases(&self) -> Vec<BamlTestCase> {
+    fn list_testcases(&self) -> Vec<BamlFunctionTestCasePair> {
         let ctx = self.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
 
         let ctx = ctx.create_ctx_with_default();
@@ -812,7 +793,7 @@ impl BamlRuntimeExt for BamlRuntime {
 
         self.inner
             .ir
-            .walk_tests()
+            .walk_function_test_pairs()
             .map(|tc| {
                 let params = match tc.test_case_params(&ctx) {
                     Ok(params) => Ok(params
@@ -862,73 +843,23 @@ impl BamlRuntimeExt for BamlRuntime {
                     None => BamlSpan::default(),
                 };
 
-                BamlTestCase {
+                BamlFunctionTestCasePair {
                     name: tc.test_case().name.clone(),
                     inputs: params,
                     error,
                     span: wasm_span,
-                    parent_functions: tc
-                        .test_case()
-                        .functions
-                        .iter()
-                        .map(|f| {
-                            let (start, end) = f
-                                .attributes
-                                .span
-                                .as_ref()
-                                .map_or((0, 0), |f| (f.start, f.end));
-                            BamlParentFunction {
-                                start,
-                                end,
-                                name: f.elem.name().to_string(),
-                            }
-                        })
-                        .collect(),
+                    function: {
+                        let f = tc.function();
+                        let (start, end) = f.span().map_or((0, 0), |f| (f.start, f.end));
+                        BamlParentFunction {
+                            start,
+                            end,
+                            name: f.name().to_string(),
+                        }
+                    },
                 }
             })
             .collect()
-    }
-
-    fn get_testcase_from_position(
-        &self,
-        parent_function: BamlFunction,
-        cursor_idx: usize,
-    ) -> Option<BamlTestCase> {
-        let testcases = parent_function.test_cases;
-        for testcase in testcases {
-            let span = testcase.clone().span;
-
-            if span.file_path.as_str() == (parent_function.span.file_path)
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
-            {
-                return Some(testcase);
-            }
-        }
-        None
-    }
-
-    fn get_function_of_testcase(
-        &self,
-        file_name: &str,
-        cursor_idx: usize,
-    ) -> Option<BamlParentFunction> {
-        let testcases = self.list_testcases();
-
-        for tc in testcases {
-            let span = tc.span;
-            if span.file_path.as_str().ends_with(file_name)
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
-            {
-                let first_function = tc
-                    .parent_functions
-                    .iter()
-                    .find(|f| f.start <= cursor_idx && cursor_idx <= f.end)
-                    .cloned();
-
-                return first_function;
-            }
-        }
-        None
     }
 }
 
@@ -1196,7 +1127,7 @@ impl Project {
     }
 
     /// Returns a list of test cases from the WASM runtime.
-    pub fn list_testcases(&self) -> Result<Vec<BamlTestCase>, &str> {
+    pub fn list_function_test_pairs(&self) -> Result<Vec<BamlFunctionTestCasePair>, &str> {
         if let Ok(runtime) = self.runtime() {
             Ok(runtime.list_testcases())
         } else {

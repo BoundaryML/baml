@@ -122,26 +122,23 @@ impl SyncRequestHandler for CodeLens {
         // `list_testcases`, but I'm not sure how this behavior interacts with VSCode so for
         // now I'm leaving this as-is.
         let test_case_lenses: Vec<lsp_types::CodeLens> = project_lock
-            .list_testcases()
+            .list_function_test_pairs()
             .unwrap_or_default()
             .iter()
             .filter(|testcase| doc_matches(&testcase.span, &project_lock))
-            .flat_map(|testcase| {
+            .map(|testcase| {
                 let project_id = project_lock.root_path().to_string_lossy().to_string();
-                let range = mk_range(&testcase.span);
-                testcase.parent_functions.iter().map(move |parent_func| {
-                    let command = RunBamlTest {
+                lsp_types::CodeLens {
+                    range: mk_range(&testcase.span),
+                    command: RunBamlTest {
                         project_id: project_id.clone(),
                         test_case_name: testcase.name.clone(),
-                        function_name: parent_func.name.clone(),
+                        function_name: testcase.function.name.clone(),
                         show_tests: true,
-                    };
-                    lsp_types::CodeLens {
-                        range,
-                        command: command.to_lsp_command(),
-                        data: None,
                     }
-                })
+                    .to_lsp_command(),
+                    data: None,
+                }
             })
             .collect();
 
