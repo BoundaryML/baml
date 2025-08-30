@@ -301,7 +301,7 @@ function SimulateDisruption(
 }
 
 // Test case with complex nested supply chain
-test AnalyzeSupplyChain {
+test supply_chain_simple1 {
   functions [AnalyzeSupplyChain]
   args {
     request {
@@ -385,6 +385,594 @@ test AnalyzeSupplyChain {
             {
               id "smartphone_main_board"
               name "Smartphone Main Board"
+              category "electronics"
+              components [
+                {
+                  id "microprocessor_a1"
+                  name "High-Performance Microprocessor"
+                  category "semiconductor"
+                  components []
+                  raw_materials ["silicon", "rare_earth_metals"]
+                  lead_time_days 45
+                  quality_requirements []
+                  alternative_products []
+                }
+              ]
+              raw_materials ["pcb", "copper", "gold"]
+              lead_time_days 21
+              quality_requirements []
+              alternative_products []
+              unit_cost 89.25
+            }
+          ]
+          contracts []
+          risk_factors []
+          financial_health {
+            credit_rating "BBB+"
+            cash_flow_stability "stable"
+            payment_history_score 0.88
+          }
+          capacity_info {
+            current_utilization_percent 92.0
+            maximum_capacity 500000
+            scalability_factor 1.1
+            seasonal_variations {}
+          }
+          certifications ["ISO9001"]
+          backup_suppliers []
+        }
+      ]
+      analysis_type "risk_assessment"
+      disruption_scenarios [
+        {
+          name "Taiwan Strait Disruption"
+          description "Geopolitical tensions disrupt shipping lanes and semiconductor production in Taiwan"
+          affected_locations [
+            {
+              country "Taiwan"
+              region "Hsinchu"
+              stability_index 0.3
+            }
+          ]
+          affected_suppliers ["tier2_semiconductors"]
+          impact_duration_days 90
+          severity_multiplier 0.6
+          cascading_effects true
+        }
+      ]
+      // constraints {
+      //   max_cost_increase_percent 15.0
+      //   required_service_level 0.95
+      //   certification_requirements ["ISO9001"]
+      // }
+      time_horizon_days 365
+    }
+  }
+}
+test supply_chain_simple2 {
+  functions [AnalyzeSupplyChain]
+  args {
+    request {
+      network [
+        {
+          id "tier1_electronics"
+          name "ElectroTech Manufacturing"
+          tier 1
+          location {
+            country "China"
+            region "Guangdong"
+            city "Shenzhen"
+            stability_index 0.85
+          }
+          suppliers [
+            {
+              id "tier2_semiconductors"
+              name "ChipCorp"
+              tier 2
+              location {
+                country "Taiwan"
+                region "Hsinchu"
+                stability_index 0.75
+              }
+              suppliers []
+              customers []
+              products [
+                {
+                  id "microprocessor_a1"
+                  name "High-Performance Microprocessor"
+                  category "semiconductor"
+                  components []
+                  raw_materials ["silicon", "rare_earth_metals"]
+                  lead_time_days 45
+                  quality_requirements [
+                    {
+                      standard "ISO9001"
+                      requirement_level "mandatory"
+                      certification_body "ISO"
+                    }
+                  ]
+                  alternative_products []
+                  unit_cost 125.50
+                }
+              ]
+              contracts []
+              risk_factors [
+                {
+                  id "geopolitical_tension"
+                  type "geopolitical"
+                  severity 0.7
+                  probability 0.4
+                  description "US-China trade tensions affecting semiconductor supply"
+                  affected_locations []
+                  cascade_potential 0.8
+                  mitigation_strategies ["diversify_suppliers", "increase_inventory"]
+                }
+              ]
+              financial_health {
+                credit_rating "A-"
+                annual_revenue 2500000000
+                debt_to_equity_ratio 0.35
+                cash_flow_stability "stable"
+                payment_history_score 0.92
+              }
+              capacity_info {
+                current_utilization_percent 87.5
+                maximum_capacity 1000000
+                scalability_factor 1.2
+                seasonal_variations {
+                  Q4 1.15
+                  Q1 0.95
+                }
+              }
+              certifications ["ISO9001", "ISO14001"]
+              backup_suppliers []
+            }
+          ]
+          customers []
+          products [
+            {
+              id "smartphone_main_board"
+              name "Smartphone Main Board"
+              category "electronics"
+              components [
+                {
+                  id "microprocessor_a1"
+                  name "High-Performance Microprocessor"
+                  category "semiconductor"
+                  components []
+                  raw_materials ["silicon", "rare_earth_metals"]
+                  lead_time_days 45
+                  quality_requirements []
+                  alternative_products []
+                }
+              ]
+              raw_materials ["pcb", "copper", "gold"]
+              lead_time_days 21
+              quality_requirements []
+              alternative_products []
+              unit_cost 89.25
+            }
+          ]
+          contracts []
+          risk_factors []
+          financial_health {
+            credit_rating "BBB+"
+            cash_flow_stability "stable"
+            payment_history_score 0.88
+          }
+          capacity_info {
+            current_utilization_percent 92.0
+            maximum_capacity 500000
+            scalability_factor 1.1
+            seasonal_variations {}
+          }
+          certifications ["ISO9001"]
+          backup_suppliers []
+        }
+      ]
+      analysis_type "risk_assessment"
+      disruption_scenarios [
+        {
+          name "Taiwan Strait Disruption"
+          description "Geopolitical tensions disrupt shipping lanes and semiconductor production in Taiwan"
+          affected_locations [
+            {
+              country "Taiwan"
+              region "Hsinchu"
+              stability_index 0.3
+            }
+          ]
+          affected_suppliers ["tier2_semiconductors"]
+          impact_duration_days 90
+          severity_multiplier 0.6
+          cascading_effects true
+        }
+      ]
+      // constraints {
+      //   max_cost_increase_percent 15.0
+      //   required_service_level 0.95
+      //   certification_requirements ["ISO9001"]
+      // }
+      time_horizon_days 365
+    }
+  }
+}
+test supply_chain_simple3 {
+  functions [AnalyzeSupplyChain]
+  args {
+    request {
+      network [
+        {
+          id "tier1_electronics"
+          name "ElectroTech Manufacturing"
+          tier 1
+          location {
+            country "China"
+            region "Guangdong"
+            city "Shenzhen"
+            stability_index 0.85
+          }
+          suppliers [
+            {
+              id "tier2_semiconductors"
+              name "ChipCorp"
+              tier 2
+              location {
+                country "Taiwan"
+                region "Hsinchu"
+                stability_index 0.75
+              }
+              suppliers []
+              customers []
+              products [
+                {
+                  id "microprocessor_a1"
+                  name "High-Performance Microprocessor"
+                  category "semiconductor"
+                  components []
+                  raw_materials ["silicon", "rare_earth_metals"]
+                  lead_time_days 45
+                  quality_requirements [
+                    {
+                      standard "ISO9001"
+                      requirement_level "mandatory"
+                      certification_body "ISO"
+                    }
+                  ]
+                  alternative_products []
+                  unit_cost 125.50
+                }
+              ]
+              contracts []
+              risk_factors [
+                {
+                  id "geopolitical_tension"
+                  type "geopolitical"
+                  severity 0.7
+                  probability 0.4
+                  description "US-China trade tensions affecting semiconductor supply"
+                  affected_locations []
+                  cascade_potential 0.8
+                  mitigation_strategies ["diversify_suppliers", "increase_inventory"]
+                }
+              ]
+              financial_health {
+                credit_rating "A-"
+                annual_revenue 2500000000
+                debt_to_equity_ratio 0.35
+                cash_flow_stability "stable"
+                payment_history_score 0.92
+              }
+              capacity_info {
+                current_utilization_percent 87.5
+                maximum_capacity 1000000
+                scalability_factor 1.2
+                seasonal_variations {
+                  Q4 1.15
+                  Q1 0.95
+                }
+              }
+              certifications ["ISO9001", "ISO14001"]
+              backup_suppliers []
+            }
+          ]
+          customers []
+          products [
+            {
+              id "smartphone_main_board"
+              name "Smartphone Main Board"
+              category "electronics"
+              components [
+                {
+                  id "microprocessor_a1"
+                  name "High-Performance Microprocessor"
+                  category "semiconductor"
+                  components []
+                  raw_materials ["silicon", "rare_earth_metals"]
+                  lead_time_days 45
+                  quality_requirements []
+                  alternative_products []
+                }
+              ]
+              raw_materials ["pcb", "copper", "gold"]
+              lead_time_days 21
+              quality_requirements []
+              alternative_products []
+              unit_cost 89.25
+            }
+          ]
+          contracts []
+          risk_factors []
+          financial_health {
+            credit_rating "BBB+"
+            cash_flow_stability "stable"
+            payment_history_score 0.88
+          }
+          capacity_info {
+            current_utilization_percent 92.0
+            maximum_capacity 500000
+            scalability_factor 1.1
+            seasonal_variations {}
+          }
+          certifications ["ISO9001"]
+          backup_suppliers []
+        }
+      ]
+      analysis_type "risk_assessment"
+      disruption_scenarios [
+        {
+          name "Taiwan Strait Disruption"
+          description "Geopolitical tensions disrupt shipping lanes and semiconductor production in Taiwan"
+          affected_locations [
+            {
+              country "Taiwan"
+              region "Hsinchu"
+              stability_index 0.3
+            }
+          ]
+          affected_suppliers ["tier2_semiconductors"]
+          impact_duration_days 90
+          severity_multiplier 0.6
+          cascading_effects true
+        }
+      ]
+      // constraints {
+      //   max_cost_increase_percent 15.0
+      //   required_service_level 0.95
+      //   certification_requirements ["ISO9001"]
+      // }
+      time_horizon_days 365
+    }
+  }
+}
+test supply_chain_simple4 {
+  functions [AnalyzeSupplyChain]
+  args {
+    request {
+      network [
+        {
+          id "tier1_electronics"
+          name "ElectroTech Manufacturing"
+          tier 1
+          location {
+            country "China"
+            region "Guangdong"
+            city "Shenzhen"
+            stability_index 0.85
+          }
+          suppliers [
+            {
+              id "tier2_semiconductors"
+              name "ChipCorp"
+              tier 2
+              location {
+                country "Taiwan"
+                region "Hsinchu"
+                stability_index 0.75
+              }
+              suppliers []
+              customers []
+              products [
+                {
+                  id "microprocessor_a1"
+                  name "High-Performance Microprocessor"
+                  category "semiconductor"
+                  components []
+                  raw_materials ["silicon", "rare_earth_metals"]
+                  lead_time_days 45
+                  quality_requirements [
+                    {
+                      standard "ISO9001"
+                      requirement_level "mandatory"
+                      certification_body "ISO"
+                    }
+                  ]
+                  alternative_products []
+                  unit_cost 125.50
+                }
+              ]
+              contracts []
+              risk_factors [
+                {
+                  id "geopolitical_tension"
+                  type "geopolitical"
+                  severity 0.7
+                  probability 0.4
+                  description "US-China trade tensions affecting semiconductor supply"
+                  affected_locations []
+                  cascade_potential 0.8
+                  mitigation_strategies ["diversify_suppliers", "increase_inventory"]
+                }
+              ]
+              financial_health {
+                credit_rating "A-"
+                annual_revenue 2500000000
+                debt_to_equity_ratio 0.35
+                cash_flow_stability "stable"
+                payment_history_score 0.92
+              }
+              capacity_info {
+                current_utilization_percent 87.5
+                maximum_capacity 1000000
+                scalability_factor 1.2
+                seasonal_variations {
+                  Q4 1.15
+                  Q1 0.95
+                }
+              }
+              certifications ["ISO9001", "ISO14001"]
+              backup_suppliers []
+            }
+          ]
+          customers []
+          products [
+            {
+              id "smartphone_main_board"
+              name #"
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+                smartphone main board
+              "#
               category "electronics"
               components [
                 {

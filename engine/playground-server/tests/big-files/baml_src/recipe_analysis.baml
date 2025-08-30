@@ -153,33 +153,6 @@ function AnalyzeRecipes(request: RecipeAnalysisRequest) -> RecipeAnalysisResult 
   "#
 }
 
-// Function to create recipe variations
-function CreateRecipeVariations(
-  base_recipe: Recipe,
-  variation_goals: string[]  // ["make_vegetarian", "reduce_calories", "quick_version"]
-) -> RecipeFamily {
-  client "openai/gpt-4o-mini"
-  prompt #"
-    Create variations of the given recipe for different dietary needs and preferences.
-    
-    ## Base Recipe
-    {{ base_recipe }}
-    
-    ## Variation Goals
-    {{ variation_goals }}
-    
-    For each variation goal:
-    1. Identify necessary ingredient substitutions
-    2. Modify cooking steps if needed
-    3. Maintain the essence of the original dish
-    4. Explain the changes and their benefits
-    5. Consider cascading changes (if you change one thing, what else needs to change?)
-    
-    Create a family of related recipes with clear relationships between them.
-    
-    {{ ctx.output_format }}
-  "#
-}
 
 // Test case
 test AnalyzeRecipes {
