@@ -113,8 +113,8 @@ export const isConnectedAtom = atom(true);
 // We don't use ASTContext.provider because we should the default value of the context
 export const EventListener: React.FC = () => {
   const updateCursor = useSetAtom(updateCursorAtom)
-  const setFiles = useSetAtom(filesAtom)
-  const debouncedSetFiles = useDebounceCallback(setFiles, 50, true)
+  const [bamlFileMap, setBamlFileMap] = useAtom(filesAtom)
+  const debouncedSetBamlFileMap = useDebounceCallback(setBamlFileMap, 50, true)
   const setFlashRanges = useSetAtom(flashRangesAtom)
   const setIsConnected = useSetAtom(isConnectedAtom)
   const isVSCodeWebview = vscode.isVscode()
@@ -195,6 +195,13 @@ export const EventListener: React.FC = () => {
             };
           }
         | {
+            command: 'sam_update_project';
+            content: {
+              root_path: string;
+              files: Record<string, string>;
+            };
+          }
+        | {
             command: 'remove_project';
             content: {
               root_path: string;
@@ -260,13 +267,22 @@ export const EventListener: React.FC = () => {
         case 'add_project':
           if (content?.root_path) {
             console.debug('add_project', content.root_path);
-            debouncedSetFiles(
+            debouncedSetBamlFileMap(
               Object.fromEntries(
                 Object.entries(content.files).map(([name, content]) => [
                   name,
                   content,
                 ]),
               ),
+            );
+          }
+          break;
+
+        case 'sam_update_project':
+          if (content?.root_path) {
+            console.debug('sam_update_project', content.root_path);
+            debouncedSetBamlFileMap(
+              {...bamlFileMap, ...content.files}
             );
           }
           break;
@@ -303,7 +319,7 @@ export const EventListener: React.FC = () => {
           break;
 
         case 'remove_project':
-          setFiles({});
+          setBamlFileMap({});
           break;
 
         case 'run_test':
