@@ -12,7 +12,7 @@ pub enum FrontendMessage {
         root_path: String,
         files: HashMap<String, String>,
     },
-    sam_update_project {
+    samtest_update_project {
         root_path: String,
         files: HashMap<String, String>,
     },

@@ -195,7 +195,7 @@ export const EventListener: React.FC = () => {
             };
           }
         | {
-            command: 'sam_update_project';
+            command: 'samtest_update_project';
             content: {
               root_path: string;
               files: Record<string, string>;
@@ -278,9 +278,9 @@ export const EventListener: React.FC = () => {
           }
           break;
 
-        case 'sam_update_project':
+        case 'samtest_update_project':
           if (content?.root_path) {
-            console.debug('sam_update_project', content.root_path);
+            console.debug('samtest_update_project', content.root_path);
             debouncedSetBamlFileMap(
               {...bamlFileMap, ...content.files}
             );

@@ -142,10 +142,10 @@ pub async fn run_server() -> anyhow::Result<()> {
                         // tracing::info!("Sending playground message: {:?}", playground_message);
                         // let _ = broadcast_tx.send(playground_message);
                         // loop {
-                        //     tracing::info!("Sending sam_update_project {}", chrono::Local::now());
+                        //     tracing::info!("Sending samtest_update_project {}", chrono::Local::now());
                         //     if let Err(e) =
                         //         broadcast_tx.send(LangServerToWasmMessage::PlaygroundMessage(
-                        //             FrontendMessage::sam_update_project {
+                        //             FrontendMessage::samtest_update_project {
                         //                 root_path: PROJECT_DIR.to_string(),
                         //                 files: vec![(
                         //                     "test.baml".to_string(),
@@ -188,9 +188,9 @@ pub async fn run_server() -> anyhow::Result<()> {
             //     });
             // tracing::info!("Sending playground message: {:?}", playground_message);
             // let _ = broadcast_tx.send(playground_message);
-            tracing::info!("Sending sam_update_project {}", chrono::Local::now());
+            tracing::info!("Sending samtest_update_project {}", chrono::Local::now());
             if let Err(e) = broadcast_tx.send(LangServerToWasmMessage::PlaygroundMessage(
-                FrontendMessage::sam_update_project {
+                FrontendMessage::samtest_update_project {
                     root_path: PROJECT_DIR.to_string(),
                     files: vec![("test.baml".to_string(), "// comment\n".to_string())]
                         .into_iter()
