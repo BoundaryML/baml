@@ -178,7 +178,7 @@ pub fn builtin_schemas() -> IndexMap<TypeName, TypeOpenApi> {
                                     ),
                                     ("primary".to_string(), type_string()),
                                 ]),
-                                required: IndexSet::from_iter(vec!["client_registry".to_string()]),
+                                required: IndexSet::from_iter(vec!["clients".to_string()]),
                                 additional_properties: AdditionalProperties::Closed,
                             },
                             meta: OpenApiMeta::default(),
