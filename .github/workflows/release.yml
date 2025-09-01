@@ -114,11 +114,11 @@ jobs:
     if: ${{ startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: "3.8"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           pattern: wheels-*
           path: dist
@@ -145,7 +145,7 @@ jobs:
     if: ${{ startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
       - name: Setup Node.js
@@ -153,7 +153,7 @@ jobs:
         with:
           registry-url: "https://registry.npmjs.org"
           npm-token: ${{ secrets.NPM_TOKEN }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           pattern: bindings-*
           path: engine/language_client_typescript/artifacts
@@ -169,7 +169,7 @@ jobs:
   #   if: ${{ startsWith(github.ref, 'refs/tags/') }}
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v5
 
   #     - uses: rubygems/configure-rubygems-credentials@main
   #       with:
@@ -178,7 +178,7 @@ jobs:
 
   #     - uses: jdx/mise-action@v2
 
-  #     - uses: actions/download-artifact@v4
+  #     - uses: actions/download-artifact@v5
   #       with:
   #         pattern: gem-*
   #         path: engine/language_client_ruby/pkg/
@@ -198,7 +198,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
       - name: Setup Node.js
@@ -207,7 +207,7 @@ jobs:
           install_dependencies: false
           npm-token: ${{ secrets.NPM_TOKEN }}
       - name: Download VSIX artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: baml-vscode-vsix-*
           path: vsix-artifacts
@@ -225,7 +225,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
       - name: Setup Node.js
@@ -234,7 +234,7 @@ jobs:
           install_dependencies: false
           npm-token: ${{ secrets.NPM_TOKEN }}
       - name: Download VSIX artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: baml-vscode-vsix-*
           path: vsix-artifacts
@@ -252,13 +252,13 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
       - name: Setup Java
         uses: ./.github/actions/setup-java
       - name: Download extension zips
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: baml-jetbrains-zip-*
           path: ./jetbrains/build/distributions/
@@ -277,21 +277,21 @@ jobs:
     needs: [all-builds, determine-version]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Download all baml-cli artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: baml-cli-*
           path: cli-artifacts
           merge-multiple: true
       - name: Download all libbaml-cffi artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: libbaml-cffi-*
           path: cffi-artifacts
           merge-multiple: true
       - name: Download playground artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: playground-dist-*
           path: playground-artifacts

@@ -84,7 +84,7 @@ jobs:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Check GLIBC version for Linux targets (skip musl targets)
       - name: Check GLIBC version

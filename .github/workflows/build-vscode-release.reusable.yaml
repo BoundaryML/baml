@@ -49,7 +49,7 @@ jobs:
             rust-target: aarch64-unknown-linux-musl
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -81,7 +81,7 @@ jobs:
           echo "Determined artifact name for ${{ matrix.code-target }}: ${ARTIFACT_NAME}"
 
       - name: Download specific CLI artifact for ${{ matrix.code-target }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: baml-cli-${{ matrix.rust-target }}
           path: cli-artifact-${{ matrix.code-target }}

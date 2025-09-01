@@ -20,7 +20,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -58,7 +58,7 @@ jobs:
         working-directory: engine
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24
+        uses: codecov/codecov-action@fdcc8476540edceab3de004e990f80d881c6cc00
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: engine/lcov.info
