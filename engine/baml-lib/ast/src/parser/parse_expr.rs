@@ -54,7 +54,7 @@ pub fn parse_expr_fn(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<e
         // Even if the return type is missing, still create the ExprFn to prevent fallback to LLM function parsing
         (None, Some(body)) => {
             // Create a dummy return type to allow parsing to continue
-            use crate::ast::{FieldArity, FieldType, Identifier, Span};
+            use crate::ast::{FieldType, FieldArity, Identifier, Span};
             let dummy_return_type = FieldType::Symbol(
                 FieldArity::Required,
                 Identifier::Local("UnknownType".to_string(), Span::fake()),
