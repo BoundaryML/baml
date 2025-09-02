@@ -640,6 +640,7 @@ pub struct BamlVmProgram {
     pub objects: ObjectPool,
     pub globals: GlobalPool,
     pub resolved_function_names: HashMap<String, (ObjectIndex, FunctionKind)>,
+    pub resolved_class_names: HashMap<String, ObjectIndex>,
 }
 
 impl Vm {
@@ -743,9 +744,24 @@ impl Vm {
 
     /// Allocates an array on the heap and returns it to the caller.
     pub fn alloc_array(&mut self, values: Vec<Value>) -> Value {
-        let object = self.objects.len();
-        self.objects.push(Object::Array(values));
-        Value::Object(ObjectIndex(object))
+        Value::Object(self.objects.insert(Object::Array(values)))
+    }
+
+    pub fn alloc_map(&mut self, values: BamlMap<String, Value>) -> Value {
+        Value::Object(self.objects.insert(Object::Map(values)))
+    }
+
+    pub fn alloc_string(&mut self, s: String) -> Value {
+        Value::Object(self.objects.insert(Object::String(s)))
+    }
+
+    /// TODO: Seems to low level for an embedder, provide an API that takes
+    /// class name and mapping of field name => value instead.
+    pub fn alloc_instance(&mut self, class: ObjectIndex, fields: Vec<Value>) -> Value {
+        Value::Object(
+            self.objects
+                .insert(Object::Instance(Instance { class, fields })),
+        )
     }
 
     /// Main VM execution loop.

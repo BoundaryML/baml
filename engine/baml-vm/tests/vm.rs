@@ -67,6 +67,7 @@ fn setup_and_exec_program(
         objects,
         globals,
         resolved_function_names,
+        resolved_class_names,
     } = baml_compiler::compile(&ast)?;
     let (target_function_index, _) = resolved_function_names[function];
     let mut vm = Vm {

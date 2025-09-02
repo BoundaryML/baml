@@ -202,19 +202,30 @@ fn compile_thir_to_bytecode(
         globals.push(Value::Object(object_index));
     }
 
-    let resolved_function_names = objects
-        .iter()
-        .enumerate()
-        .filter_map(|(i, obj)| match obj {
-            Object::Function(f) => Some((f.name.clone(), (ObjectIndex::from_raw(i), f.kind))),
-            _ => None,
-        })
-        .collect();
+    let mut resolved_class_names = HashMap::new();
+    let mut resolved_function_names = HashMap::new();
+
+    // TODO: Unify in resolved_globals instead.
+    for object in &objects {
+        match object {
+            Object::Class(c) => {
+                resolved_class_names.insert(c.name.clone(), ObjectIndex::from_raw(objects.len()));
+            }
+            Object::Function(f) => {
+                resolved_function_names.insert(
+                    f.name.clone(),
+                    (ObjectIndex::from_raw(objects.len()), f.kind),
+                );
+            }
+            _ => continue,
+        }
+    }
 
     Ok(BamlVmProgram {
         objects,
         globals,
         resolved_function_names,
+        resolved_class_names,
     })
 }
 
