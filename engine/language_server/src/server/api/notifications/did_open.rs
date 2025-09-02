@@ -83,7 +83,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             let client_version = session.baml_settings.get_client_version();
 
             let generator_version = locked.get_common_generator_version();
-            send_generator_version(&notifier, &*locked, generator_version.as_ref().ok());
+            send_generator_version(&notifier, &locked, generator_version.as_ref().ok());
         } else {
             tracing::error!("Failed to get or create project for path: {:?}", file_path);
             show_err_msg!("Failed to get or create project for path: {:?}", file_path);

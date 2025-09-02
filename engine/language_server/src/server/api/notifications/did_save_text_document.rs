@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use lsp_types::{self as types, notification as notif, request::Request, ConfigurationParams};
 
 use crate::{
-    baml_project::{common_version_up_to_patch, BamlProject},
+    baml_project::{common_version_up_to_patch, Project},
     server::{
         api::{self, notifications::baml_src_version::BamlSrcVersionPayload, ResultExt},
         client::{Notifier, Requester},
@@ -72,9 +72,8 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
 
         let generator_version = locked.get_common_generator_version();
 
-        let project: &BamlProject = &*locked;
         let opt_version = generator_version.as_ref().ok();
-        send_generator_version(&notifier, project, opt_version);
+        send_generator_version(&notifier, &locked, opt_version);
 
         // Make sure to check all available versions againt each other, & generate only if there's
         // no errors.
@@ -122,7 +121,7 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
 /// If there's no generation version to be used, the notification won't be sent.
 pub(crate) fn send_generator_version(
     notifier: &Notifier,
-    project: &BamlProject,
+    project: &Project,
     opt_version: Option<&impl ToOwned<Owned = String>>,
 ) {
     if let Some(version) = opt_version.map(ToOwned::to_owned) {
