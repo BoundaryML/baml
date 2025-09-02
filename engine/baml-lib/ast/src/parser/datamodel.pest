@@ -306,17 +306,47 @@ NEG = { "-" } // NOTE: Can't reuse SUB here. Read this: https://docs.rs/pest/lat
 // e.g. top-level
 //   - `let x = go(1,2)`
 //   - `let z = { let b = 2; [b, 3] }
-top_level_assignment = { stmt }
+top_level_assignment = { top_level_stmt }
+
+// Top-level statement - more forgiving with semicolons like expr_stmt
+top_level_stmt = {
+    (
+        let_expr
+        | assign_op_stmt  
+        | assign_stmt
+    )
+    ~ SEMICOLON?
+    ~ NEWLINE?
+}
 
 // Regular function.
 // e.g.:
 // function foo(x:int, y: bool?) -> string {
 //   go(x,y)
 // }
-expr_fn = { ("function" | "fn") ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_block }
+expr_fn = { ("function" | "fn") ~ identifier ~ named_argument_list ~ ARROW ~ field_type_chain ~ expr_block }
 
 // Body of a function (including curly brackets).
-expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (mdx_header | stmt | comment_block | empty_lines)* ~ expression? ~ (comment_block | empty_lines)* ~ BLOCK_CLOSE }
+expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (mdx_header | expr_stmt | stmt | comment_block | empty_lines)* ~ expression? ~ (comment_block | empty_lines)* ~ BLOCK_CLOSE }
+
+// Statement inside expression function - more forgiving with semicolons
+expr_stmt = {
+    (
+        (
+            BREAK_KEYWORD
+            | CONTINUE_KEYWORD
+            | let_expr
+            | return_stmt
+            | assert_stmt
+            | assign_op_stmt
+            | assign_stmt
+            | expression
+        )
+        ~ SEMICOLON?
+    )
+    ~ trailing_comment?
+    ~ NEWLINE?
+}
 
 // Headers can include any characters except a newline; do not use unquoted_string_literal restrictions
 mdx_header = { WHITESPACE* ~ "#"+ ~ WHITESPACE* ~ (!NEWLINE ~ ANY)* ~ NEWLINE? }
