@@ -12,7 +12,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use baml_compiler::{self};
 use baml_ids::FunctionCallId;
 use baml_types::{tracing::events::HTTPRequest, BamlMap, BamlValue, BamlValueWithMeta, Completion};
@@ -214,18 +214,25 @@ impl BamlAsyncVmRuntime {
         // compiler produced objects betweeen VMs. We know they are read only.
         let mut vm = Vm::new(self.program.clone());
 
-        // TODO: We can't assume arg ordering here is correct, figure out why.
-        let args = Vec::from_iter(expr_fn.elem.inputs().iter().map(|(name, _)| {
-            let Some(param) = params.get(name) else {
-                panic!("missing parameter: {name}");
-            };
+        // TODO: We can't assume ordering of `params` is correct, figure out why.
+        let args = match expr_fn
+            .elem
+            .inputs()
+            .iter()
+            .map(|(name, _)| {
+                let Some(param) = params.get(name) else {
+                    anyhow::bail!("missing parameter: {name}");
+                };
 
-            let vm_value =
                 try_vm_value_from_baml_value(&mut vm, &self.program.resolved_class_names, param)
-                    .unwrap_or_else(|e| panic!("failed to convert baml arg to vm value: {e}"));
-
-            vm_value
-        }));
+                    .context("failed to convert baml argument to vm value")
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .context("failed to convert baml args to vm values")
+        {
+            Ok(args) => args,
+            Err(e) => return (Err(e), current_call_id),
+        };
 
         vm.set_entry_point(*function_index, &args);
 
@@ -240,14 +247,19 @@ impl BamlAsyncVmRuntime {
                     let mut fulfilled = false;
 
                     while let Ok((ready_idx, (result, call_id))) = futures_rx.try_recv() {
-                        let vm_value = vm_value_from_function_result(
+                        let vm_value = match vm_value_from_function_result(
                             &mut vm,
                             &self.program.resolved_class_names,
                             result,
-                        );
+                        ) {
+                            Ok(vm_value) => vm_value,
+                            Err(e) => break 'mainloop Err(e),
+                        };
 
                         if let Err(e) = vm.fulfil_future(ready_idx, vm_value) {
-                            break 'mainloop Err(e.into());
+                            break 'mainloop Err(
+                                anyhow::Error::from(e).context("failed to fulfil VM future")
+                            );
                         }
 
                         if ready_idx == idx {
@@ -259,19 +271,34 @@ impl BamlAsyncVmRuntime {
                     // Tokio take care of it.
                     while !fulfilled {
                         // TODO: Handle errors.
-                        let (ready_idx, (result, call_id)) = futures_rx
-                            .recv()
-                            .await
-                            .expect("failed to receive result from channel");
+                        let (ready_idx, (result, call_id)) = match futures_rx.recv().await {
+                            Some(result) => result,
 
-                        let vm_value = vm_value_from_function_result(
+                            // This should not happen because VM will never close the channel.
+                            None => {
+                                break 'mainloop Err(anyhow!(
+                                    "failed to receive function result from futures channel (channel closed)"
+                                ))
+                            }
+                        };
+
+                        let vm_value = match vm_value_from_function_result(
                             &mut vm,
                             &self.program.resolved_class_names,
                             result,
-                        );
+                        ) {
+                            Ok(vm_value) => vm_value,
+                            Err(e) => {
+                                break 'mainloop Err(
+                                    e.context("failed to convert function result to vm value")
+                                )
+                            }
+                        };
 
                         if let Err(e) = vm.fulfil_future(ready_idx, vm_value) {
-                            break 'mainloop Err(e.into());
+                            break 'mainloop Err(
+                                anyhow::Error::from(e).context("failed to fulfil VM future")
+                            );
                         }
 
                         // After this one we don't have to wait for more futures
@@ -286,7 +313,11 @@ impl BamlAsyncVmRuntime {
                 Ok(VmExecState::ScheduleFuture(idx)) => {
                     let pending_future = match vm.pending_future(idx) {
                         Ok(f) => f,
-                        Err(e) => break Err(e.into()),
+                        Err(e) => {
+                            break 'mainloop Err(
+                                anyhow::Error::from(e).context("failed to get pending future")
+                            )
+                        }
                     };
 
                     let llm_fn = self
@@ -342,7 +373,7 @@ impl BamlAsyncVmRuntime {
 
                             // TODO: Handle panic somehow.
                             futures_tx.send((idx, result)).unwrap_or_else(|e| {
-                                panic!("failed to send result to channel: {e}")
+                                panic!("failed to send LLM function result to futures channel: {e}")
                             });
                         }
                     };
@@ -380,7 +411,7 @@ impl BamlAsyncVmRuntime {
                 Ok(VmExecState::Complete(value)) => break Ok(value),
 
                 // VM error, stop execution.
-                Err(e) => break Err(e),
+                Err(e) => break Err(e.into()),
             }
         };
 
@@ -692,22 +723,19 @@ fn vm_value_from_function_result(
     vm: &mut Vm,
     resolved_class_names: &HashMap<String, ObjectIndex>,
     result: anyhow::Result<FunctionResult>,
-) -> baml_vm::Value {
-    let fn_result = result.unwrap_or_else(|e| panic!("failed to get function result: {e}"));
+) -> anyhow::Result<baml_vm::Value> {
+    let fn_result = result.context("failed to get function result")?;
 
-    // TODO: I don't know what the fuck this is.
+    // TODO: Return type of .parsed() sucks.
     let baml_value = fn_result
         .parsed()
         .as_ref()
-        .unwrap()
+        .ok_or_else(|| anyhow!("no parsed result available from function call"))?
         .as_ref()
-        .unwrap()
+        .map_err(|e| anyhow!("error parsing function result: {e}"))?
         .clone()
         .0
         .value();
 
-    let vm_value = try_vm_value_from_baml_value(vm, resolved_class_names, &baml_value)
-        .unwrap_or_else(|e| panic!("failed to convert result to vm value: {e}"));
-
-    vm_value
+    try_vm_value_from_baml_value(vm, resolved_class_names, &baml_value)
 }

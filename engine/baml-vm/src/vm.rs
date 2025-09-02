@@ -247,6 +247,17 @@ pub enum Type {
     Object(ObjectType),
 }
 
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Int => write!(f, "int"),
+            Type::Float => write!(f, "float"),
+            Type::Bool => write!(f, "bool"),
+            Type::Object(object_type) => write!(f, "{object_type}"),
+        }
+    }
+}
+
 /// Object type lattice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ObjectType {
@@ -262,6 +273,21 @@ pub enum ObjectType {
     Future(FutureType),
 }
 
+impl std::fmt::Display for ObjectType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ObjectType::Any => write!(f, "any"),
+            ObjectType::Instance => write!(f, "instance"),
+            ObjectType::Array => write!(f, "array"),
+            ObjectType::Map => write!(f, "map"),
+            ObjectType::Function(function_type) => write!(f, "{function_type}"),
+            ObjectType::Class => write!(f, "class"),
+            ObjectType::Future(future_type) => write!(f, "{future_type}"),
+            ObjectType::String => write!(f, "string"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FunctionType {
     /// Top of function type lattice: represents all function types.
@@ -270,12 +296,32 @@ pub enum FunctionType {
     Llm,
 }
 
+impl std::fmt::Display for FunctionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FunctionType::Any => write!(f, "any"),
+            FunctionType::Callable => write!(f, "callable"),
+            FunctionType::Llm => write!(f, "llm"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FutureType {
     /// Top of future type lattice: represents all future types.
     Any,
     Pending,
     Ready,
+}
+
+impl std::fmt::Display for FutureType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FutureType::Any => write!(f, "any"),
+            FutureType::Pending => write!(f, "pending"),
+            FutureType::Ready => write!(f, "ready"),
+        }
+    }
 }
 
 impl From<&Future> for FutureType {
@@ -439,7 +485,52 @@ impl std::fmt::Display for VmError {
     }
 }
 
+impl std::fmt::Display for InternalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Internal VM Erorr: ")?;
+
+        match self {
+            InternalError::InvalidArgumentCount { expected, got } => {
+                write!(
+                    f,
+                    "invalid argument count: expected {expected} arguments, got {got}"
+                )
+            }
+            InternalError::UnexpectedEmptyStack => write!(f, "unexpected empty eval stack"),
+            InternalError::NotEnoughItemsOnStack(count) => {
+                write!(f, "not enough items on stack: {count}")
+            }
+            InternalError::InvalidObjectRef(index) => {
+                write!(f, "invalid object reference: {index}")
+            }
+            InternalError::TypeError { expected, got } => {
+                write!(f, "type error: expected {expected}, got {got}")
+            }
+            InternalError::CannotApplyBinOp { left, right, op } => {
+                write!(f, "cannot apply binary operation: {left} {op} {right}")
+            }
+            InternalError::CannotApplyCmpOp { left, right, op } => {
+                write!(f, "cannot apply comparison operation: {left} {op} {right}")
+            }
+            InternalError::CannotApplyUnaryOp { op, value } => {
+                write!(f, "cannot apply unary operation: {op} {value}")
+            }
+            InternalError::ArrayIndexOutOfBounds { index, length } => {
+                write!(f, "array index out of bounds: {index} of {length}")
+            }
+            InternalError::ArrayIndexIsNegative(index) => {
+                write!(f, "array index is negative: {index}")
+            }
+            InternalError::NegativeInstructionPtr(ptr) => {
+                write!(f, "negative instruction pointer: {ptr}")
+            }
+        }
+    }
+}
+
 impl std::error::Error for VmError {}
+
+impl std::error::Error for InternalError {}
 
 /// Call frame.
 ///
