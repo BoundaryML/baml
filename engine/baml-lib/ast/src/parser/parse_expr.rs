@@ -54,7 +54,7 @@ pub fn parse_expr_fn(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<e
         // Even if the return type is missing, still create the ExprFn to prevent fallback to LLM function parsing
         (None, Some(body)) => {
             // Create a dummy return type to allow parsing to continue
-            use crate::ast::{FieldType, FieldArity, Identifier, Span};
+            use crate::ast::{FieldArity, FieldType, Identifier, Span};
             let dummy_return_type = FieldType::Symbol(
                 FieldArity::Required,
                 Identifier::Local("UnknownType".to_string(), Span::fake()),
@@ -90,13 +90,13 @@ pub fn parse_top_level_assignment(
     };
 
     let stmt_token = tokens.next()?;
-    let stmt_result = if stmt_token.as_rule() == Rule::top_level_stmt {
+    let parsed_stmt = if stmt_token.as_rule() == Rule::top_level_stmt {
         parse_top_level_statement(stmt_token, diagnostics)
     } else {
         parse_statement(stmt_token, diagnostics)
     };
-    
-    match stmt_result? {
+
+    match parsed_stmt? {
         Stmt::Let(stmt) => Some(TopLevelAssignment { stmt }),
         Stmt::Assign(stmt) => only_let_stmt("assignments", stmt.span, diagnostics),
         Stmt::AssignOp(stmt) => only_let_stmt("assignments", stmt.span, diagnostics),
@@ -361,7 +361,7 @@ pub fn parse_top_level_statement(token: Pair<'_>, diagnostics: &mut Diagnostics)
             }
         }
         _ => {
-            // For top-level statements, emit semicolon error but don't fail parsing
+            // For top_level_stmt, emit semicolon error but don't fail parsing
             if matches!(
                 stmt,
                 Some(Stmt::Let(_) | Stmt::Assign(_) | Stmt::AssignOp(_))
@@ -377,8 +377,8 @@ pub fn parse_top_level_statement(token: Pair<'_>, diagnostics: &mut Diagnostics)
     stmt
 }
 
-pub fn parse_expr_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
-    assert_correct_parser!(token, Rule::expr_stmt);
+pub fn parse_expr_body_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
+    assert_correct_parser!(token, Rule::expr_body_stmt);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
 
@@ -391,7 +391,7 @@ pub fn parse_expr_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> O
             }
         }
         _ => {
-            // For expr_stmt, emit semicolon error but don't fail parsing
+            // For expr_body_stmt, emit semicolon error but don't fail parsing
             if matches!(
                 stmt,
                 Some(Stmt::Let(_) | Stmt::Assign(_) | Stmt::AssignOp(_))
@@ -429,6 +429,7 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
                     "Statement must end with a semicolon.",
                     span,
                 ));
+                // Don't set stmt to None - keep the parsed statement even with the error
             }
         }
     }
@@ -657,10 +658,9 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
                     stmts.push(stmt);
                 }
             }
-            Rule::expr_stmt => {
-                let maybe_stmt = parse_expr_statement(item, diagnostics);
+            Rule::expr_body_stmt => {
+                let maybe_stmt = parse_expr_body_statement(item, diagnostics);
                 if let Some(mut stmt) = maybe_stmt {
-                    // Clear headers since last statement & get an iterator for the current ones.
                     let header_drain = headers_since_last_stmt.drain(..);
                     bind_headers_to_statement(&mut stmt, header_drain);
                     stmts.push(stmt);

@@ -22,6 +22,7 @@ dependencies = [
     "boto3>=1.37.37",
     "pip>=25.1.1",
     "pyhamcrest>=2.1.0",
+    "assertpy>=1.1",
 ]
 
 [dependency-groups]

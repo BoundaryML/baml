@@ -1,7 +1,27 @@
-[1;91merror[0m: [1mError validating: This line is invalid. It does not start with any known Baml schema keyword.[0m
-  [1;94m-->[0m  [4mtests/validation_files/headers/invalid.baml:11[0m
-[1;94m   | [0m
-[1;94m10 | [0m
-[1;94m11 | [0m[1;91mfn MixedOnSameLine() -> string {[0m
-[1;94m12 | [0m    let x = "hello" ## Inline Header // Should fail
-[1;94m   | [0m
+error: Statement must end with a semicolon.
+  -->  tests/validation_files/headers/invalid.baml:12
+   | 
+11 | fn MixedOnSameLine() -> string {
+12 |     let x = "hello" ## Inline Header // Should fail
+   | 
+error: Statement must end with a semicolon.
+  -->  tests/validation_files/headers/invalid.baml:18
+   | 
+17 |     #No Space After Hash // Should potentially fail depending on grammar rules
+18 |     let x = "test"
+19 |     x
+   | 
+error: Statement must end with a semicolon.
+  -->  tests/validation_files/headers/invalid.baml:25
+   | 
+24 |     // Empty header title - this should fail
+25 |     let x = "test"
+26 |     ##
+   | 
+error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+  -->  tests/validation_files/headers/invalid.baml:32
+   | 
+31 | // Test headers in places they shouldn't parse
+32 | fn HeaderInExpression() -> string {
+33 |     let x = "start" + # Middle Header // Should fail
+   |
