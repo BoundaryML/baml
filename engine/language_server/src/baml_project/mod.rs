@@ -1255,84 +1255,80 @@ impl Project {
     /// Checks if all generators use the same major.minor version.
     /// Returns Ok(()) if they do,
     /// otherwise returns an Err with a descriptive message.
-    pub fn get_common_generator_version(
-        &self,
-        feature_flags: &[String],
-        client_version: Option<&str>,
-    ) -> anyhow::Result<String> {
-        let runtime_version = env!("CARGO_PKG_VERSION");
-
+    pub fn get_common_generator_version(&self) -> anyhow::Result<String> {
         // list generators. If we can't get the runtime, we'll error out.
         let generators = self
             .runtime()?
             .codegen_generators()
             .map(|gen| gen.version.as_str());
 
-        // add runtime version on top since that's what we want to compare with.
-        let gen_version_strings = [runtime_version]
-            .into_iter()
-            .chain(client_version)
-            .chain(generators);
+        common_version_up_to_patch(generators)
+    }
+}
 
-        let mut major_minor_versions = std::collections::HashMap::new();
-        let mut highest_patch_by_major_minor = std::collections::HashMap::new();
+/// Given a set of SemVer version strings, match them to the same `major.minor`, returning
+/// an error otherwise.
+pub fn common_version_up_to_patch<'a>(
+    gen_version_strings: impl IntoIterator<Item = &'a str>,
+) -> anyhow::Result<String> {
+    let mut major_minor_versions = std::collections::HashMap::new();
+    let mut highest_patch_by_major_minor = std::collections::HashMap::new();
 
-        // Track major.minor versions and find highest patch for each
-        for version_str in gen_version_strings {
-            if let Ok(version) = semver::Version::parse(version_str) {
-                let major_minor = format!("{}.{}", version.major, version.minor);
+    // Track major.minor versions and find highest patch for each
+    for version_str in gen_version_strings {
+        if let Ok(version) = semver::Version::parse(version_str) {
+            let major_minor = format!("{}.{}", version.major, version.minor);
 
-                // Track generators with this major.minor
-                major_minor_versions
-                    .entry(major_minor.clone())
-                    .or_insert_with(Vec::new)
-                    .push(version_str);
+            // Track generators with this major.minor
+            major_minor_versions
+                .entry(major_minor.clone())
+                .or_insert_with(Vec::new)
+                .push(version_str);
 
-                // Track highest patch version for this major.minor
-                highest_patch_by_major_minor
-                    .entry(major_minor)
-                    .and_modify(|highest_patch: &mut u64| {
-                        if version.patch > *highest_patch {
-                            *highest_patch = version.patch;
-                        }
-                    })
-                    .or_insert(version.patch);
-            } else {
-                tracing::warn!("Invalid semver version in generator: {}", version_str);
-                // Consider how to handle invalid versions - for now, we ignore them for the check
-            }
-        }
-
-        // If there's more than one major.minor version, return an error
-        if major_minor_versions.len() > 1 {
-            let versions_str = major_minor_versions
-                .keys()
-                .map(|v| format!("'{v}'"))
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            let message = anyhow::anyhow!(
-                "Multiple generator major.minor versions detected: {versions_str}. Major and minor versions must match across all generators."
-            );
-            Err(message)
-        // If there's only one major.minor version, return it with the highest patch
-        } else if let Some((version, _)) = major_minor_versions.iter().next() {
-            if let Some(highest_patch) = highest_patch_by_major_minor.get(version) {
-                // Parse the version string to create a proper semver::Version
-                if let Ok(mut v) = Version::parse(&format!("{version}.0")) {
-                    // Update with the highest patch version
-                    v.patch = *highest_patch;
-                    Ok(v.to_string())
-                } else {
-                    Ok(format!("{version}.{highest_patch}"))
-                }
-            } else {
-                Ok(version.clone())
-            }
-        // Fallback to the runtime version if no valid versions were found
+            // Track highest patch version for this major.minor
+            highest_patch_by_major_minor
+                .entry(major_minor)
+                .and_modify(|highest_patch: &mut u64| {
+                    if version.patch > *highest_patch {
+                        *highest_patch = version.patch;
+                    }
+                })
+                .or_insert(version.patch);
         } else {
-            Err(anyhow::anyhow!("No valid generator versions found"))
+            tracing::warn!("Invalid semver version in generator: {}", version_str);
+            // Consider how to handle invalid versions - for now, we ignore them for the check
         }
+    }
+
+    // If there's more than one major.minor version, return an error
+    if major_minor_versions.len() > 1 {
+        let versions_str = major_minor_versions
+            .keys()
+            .map(|v| format!("'{v}'"))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let message = anyhow::anyhow!(
+            "Multiple major.minor versions detected: {versions_str}. Major and minor versions must match across all generators."
+        );
+        Err(message)
+    // If there's only one major.minor version, return it with the highest patch
+    } else if let Some((version, _)) = major_minor_versions.into_iter().next() {
+        if let Some(highest_patch) = highest_patch_by_major_minor.get(&version) {
+            // Parse the version string to create a proper semver::Version
+            if let Ok(mut v) = Version::parse(&format!("{version}.0")) {
+                // Update with the highest patch version
+                v.patch = *highest_patch;
+                Ok(v.to_string())
+            } else {
+                Ok(format!("{version}.{highest_patch}"))
+            }
+        } else {
+            Ok(version)
+        }
+    // Fallback to the runtime version if no valid versions were found
+    } else {
+        Err(anyhow::anyhow!("No valid generator versions found"))
     }
 }
 
