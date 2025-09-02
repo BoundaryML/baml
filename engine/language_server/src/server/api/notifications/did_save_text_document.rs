@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use lsp_types::{self as types, notification as notif, request::Request, ConfigurationParams};
 
 use crate::{
-    baml_project::common_version_up_to_patch,
+    baml_project::{common_version_up_to_patch, BamlProject},
     server::{
         api::{self, notifications::baml_src_version::BamlSrcVersionPayload, ResultExt},
         client::{Notifier, Requester},
@@ -62,6 +62,7 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
         // - generators -> if they don't resolve to the same major/minor, then we'll error for now.
         // - LSP client (vscode extension)
         // - LSP server (CLI binary)
+        //
         // Upon baml_src_generator_version notification, LSP client will replace the server version
         // with the given version.
         // If there's no generation version to be used, the notification won't be sent.
@@ -71,17 +72,9 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
 
         let generator_version = locked.get_common_generator_version();
 
-        if let Some(version) = generator_version.as_ref().ok().cloned() {
-            let _ = notifier.0.send(lsp_server::Message::Notification(
-                lsp_server::Notification::new(
-                    "baml_src_generator_version".to_string(),
-                    BamlSrcVersionPayload {
-                        version,
-                        root_path: locked.root_path().to_string_lossy().to_string(),
-                    },
-                ),
-            ));
-        }
+        let project: &BamlProject = &*locked;
+        let opt_version = generator_version.as_ref().ok();
+        send_generator_version(&notifier, project, opt_version);
 
         // Make sure to check all available versions againt each other, & generate only if there's
         // no errors.
@@ -121,6 +114,27 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
         );
 
         Ok(())
+    }
+}
+
+/// Upon `baml_src_generator_version` notification, LSP client will replace the server version
+/// with the given version.
+/// If there's no generation version to be used, the notification won't be sent.
+pub(crate) fn send_generator_version(
+    notifier: &Notifier,
+    project: &BamlProject,
+    opt_version: Option<&impl ToOwned<Owned = String>>,
+) {
+    if let Some(version) = opt_version.map(ToOwned::to_owned) {
+        let _ = notifier.0.send(lsp_server::Message::Notification(
+            lsp_server::Notification::new(
+                "baml_src_generator_version".to_string(),
+                BamlSrcVersionPayload {
+                    version,
+                    root_path: project.root_path().to_string_lossy().to_string(),
+                },
+            ),
+        ));
     }
 }
 
