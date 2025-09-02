@@ -241,7 +241,7 @@ impl BamlAsyncVmRuntime {
             (anyhow::Result<FunctionResult>, FunctionCallId),
         )>();
 
-        let result = 'mainloop: loop {
+        let vm_result = 'mainloop: loop {
             match vm.exec() {
                 Ok(VmExecState::Await(idx)) => {
                     let mut fulfilled = false;
@@ -428,14 +428,14 @@ impl BamlAsyncVmRuntime {
             }
         };
 
-        let vm_exec_value = match result {
+        let vm_value = match vm_result {
             Ok(vm_value) => vm_value,
             Err(e) => {
                 return (Err(e.context("VM execution failed")), current_call_id);
             }
         };
 
-        let baml_value = match try_baml_value_from_vm_value(&vm, &vm_exec_value) {
+        let baml_value = match try_baml_value_from_vm_value(&vm, &vm_value) {
             Ok(baml_value) => baml_value,
             Err(e) => {
                 return (
