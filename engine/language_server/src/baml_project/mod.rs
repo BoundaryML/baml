@@ -1266,7 +1266,7 @@ impl Project {
     }
 }
 
-/// Given a set of SemVer version strings, match them to the same `major.minor`, returning
+/// Given a set of SemVer version strings, match them to the same `major.minor`, returning an error otherwise. Invalid semver strings are ignored for the check.
 /// an error otherwise.
 pub fn common_version_up_to_patch<'a>(
     gen_version_strings: impl IntoIterator<Item = &'a str>,
