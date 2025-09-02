@@ -36,24 +36,6 @@ fn BadValueReturn(x: int) -> string {
    return 1;
 }
 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  tests/return.baml:1
-//    | 
-//    | 
-//  1 | fn EarlyReturn(x: int) -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  tests/return.baml:7
-//    | 
-//  6 | 
-//  7 | fn WithStack(x: int) -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  tests/return.baml:34
-//    | 
-// 33 | 
-// 34 | fn BadValueReturn(x: int) -> string {
-//    | 
 // error: Expected a string value, but received int value `1`.
 //   -->  tests/return.baml:36
 //    | 

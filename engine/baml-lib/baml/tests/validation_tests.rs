@@ -17,7 +17,8 @@ const TESTS_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/validation_
 fn parse_schema_fail_on_diagnostics(file: impl Into<SourceFile>) -> Result<(), String> {
     let path = PathBuf::from("./unknown");
     let file = file.into();
-    let schema = baml_lib::validate(&path, vec![file], FeatureFlags::new());
+    let feature_flags = FeatureFlags::from_vec(vec!["beta".to_string()]).unwrap();
+    let schema = baml_lib::validate(&path, vec![file], feature_flags);
 
     match (schema.diagnostics.warnings(), schema.diagnostics.errors()) {
         ([], []) => {

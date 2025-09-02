@@ -37,24 +37,6 @@ fn SumUnknownType(xs: int, b: string) -> int {
 	0
 }
 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/for.baml:1
-//    | 
-//    | 
-//  1 | fn Sum(xs: int[]) -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/for.baml:11
-//    | 
-// 10 | 
-// 11 | fn SumBadType(xs: string[]) -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/for.baml:24
-//    | 
-// 23 | // as an argument instead.
-// 24 | fn SumUnknownType(xs: int, b: string) -> int {
-//    | 
 // error: Error validating: Cannot assign string to int
 //   -->  loops/for.baml:16
 //    | 
