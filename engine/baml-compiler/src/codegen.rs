@@ -206,16 +206,13 @@ fn compile_thir_to_bytecode(
     let mut resolved_function_names = HashMap::new();
 
     // TODO: Unify in resolved_globals instead.
-    for object in &objects {
+    for (i, object) in objects.iter().enumerate() {
         match object {
             Object::Class(c) => {
-                resolved_class_names.insert(c.name.clone(), ObjectIndex::from_raw(objects.len()));
+                resolved_class_names.insert(c.name.clone(), ObjectIndex::from_raw(i));
             }
             Object::Function(f) => {
-                resolved_function_names.insert(
-                    f.name.clone(),
-                    (ObjectIndex::from_raw(objects.len()), f.kind),
-                );
+                resolved_function_names.insert(f.name.clone(), (ObjectIndex::from_raw(i), f.kind));
             }
             _ => continue,
         }
