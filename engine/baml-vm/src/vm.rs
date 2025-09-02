@@ -407,6 +407,9 @@ pub enum RuntimeError {
 
     /// Map does not contain the requested key.
     NoSuchKeyInMap,
+
+    /// Right hand side of division operation is zero.
+    DivisionByZero { left: Value, right: Value },
 }
 
 /// Any kind of virtual machine error.
@@ -815,10 +818,12 @@ impl Vm {
                     let value = &function.bytecode.constants[index];
                     self.stack.push(*value);
                 }
+
                 Instruction::LoadVar(index) => {
                     let value = self.stack[frame.locals_offset + index];
                     self.stack.push(value);
                 }
+
                 Instruction::StoreVar(index) => {
                     // Consume the value. There are some intricacies when it
                     // comes to consuming the value or not, mainly, should this
@@ -833,16 +838,19 @@ impl Vm {
 
                     self.stack[frame.locals_offset + index] = value;
                 }
+
                 Instruction::LoadGlobal(index) => {
                     let value = &self.globals[index];
                     self.stack.push(*value);
                 }
+
                 Instruction::StoreGlobal(index) => {
                     // Consume the value. Read impl of Instruction::StoreVar.
                     let value = self.stack.ensure_pop()?;
 
                     self.globals[index] = value;
                 }
+
                 Instruction::LoadField(index) => {
                     let top = self.stack.ensure_pop()?;
 
@@ -859,6 +867,7 @@ impl Vm {
                     // Push the value on top of the stack.
                     self.stack.push(instance.fields[index]);
                 }
+
                 Instruction::StoreField(index) => {
                     let reference = self.objects.as_object(
                         &self.stack[self.stack.ensure_slot_from_top(1)?],
@@ -882,15 +891,18 @@ impl Vm {
                     // TODO: Borrow checker stuff.
                     function = self.objects[frame.function].as_function()?;
                 }
+
                 Instruction::Pop(n) => {
                     let drain_range = StackIndex(self.stack.len() - n)..;
                     self.stack.drain(drain_range);
                 }
+
                 Instruction::Copy(offset) => {
                     let index = self.stack.ensure_slot_from_top(offset)?;
                     let value = self.stack[index];
                     self.stack.push(value);
                 }
+
                 Instruction::PopReplace(n) => {
                     let value = self.stack.ensure_pop()?;
 
@@ -901,12 +913,14 @@ impl Vm {
                     // Push the value back on top of the stack.
                     self.stack.push(value);
                 }
+
                 Instruction::Jump(offset) => {
                     // Reassign the frame's IP to the new instruction.
                     // Remember that offset can be negative here, so even though
                     // we're adding it can still jump backwards.
                     frame.instruction_ptr = instruction_ptr + offset;
                 }
+
                 Instruction::JumpIfFalse(offset) => {
                     match &self.stack[self.stack.ensure_stack_top()?] {
                         // Reassign only if the top of the stack is false.
@@ -926,6 +940,7 @@ impl Vm {
                         }
                     }
                 }
+
                 Instruction::BinOp(op) => {
                     let right = self.stack.ensure_pop()?;
 
@@ -933,6 +948,14 @@ impl Vm {
 
                     let result = match (left, right) {
                         (Value::Int(left), Value::Int(right)) => Value::Int(match op {
+                            BinOp::Div if right == 0 => {
+                                return Err(RuntimeError::DivisionByZero {
+                                    left: Value::Int(left),
+                                    right: Value::Int(right),
+                                }
+                                .into());
+                            }
+
                             BinOp::Add => left + right,
                             BinOp::Sub => left - right,
                             BinOp::Mul => left * right,
@@ -948,6 +971,14 @@ impl Vm {
 
                         (Value::Float(left), Value::Float(right)) => {
                             Value::Float(match op {
+                                BinOp::Div if right == 0.0 => {
+                                    return Err(RuntimeError::DivisionByZero {
+                                        left: Value::Float(left),
+                                        right: Value::Float(right),
+                                    }
+                                    .into());
+                                }
+
                                 BinOp::Add => left + right,
                                 BinOp::Sub => left - right,
                                 BinOp::Mul => left * right,
@@ -980,6 +1011,7 @@ impl Vm {
 
                     self.stack.push(result);
                 }
+
                 Instruction::CmpOp(op) => {
                     let right = self.stack.ensure_pop()?;
                     let left = self.stack.ensure_pop()?;
@@ -1018,6 +1050,7 @@ impl Vm {
 
                     self.stack.push(result);
                 }
+
                 Instruction::UnaryOp(op) => {
                     let value = self.stack.ensure_pop()?;
 
@@ -1035,6 +1068,7 @@ impl Vm {
 
                     self.stack.push(result);
                 }
+
                 Instruction::AllocArray(size) => {
                     // Pop all the elements from the stack and create an array.
                     let drain_range = StackIndex(self.stack.len() - size)..;
@@ -1051,6 +1085,7 @@ impl Vm {
                     // borrow checker complains. Restore the reference.
                     function = self.objects[frame.function].as_function()?;
                 }
+
                 Instruction::LoadArrayElement => {
                     // Stack should contain [array, index]
                     // Pop the index first, then the array
@@ -1094,6 +1129,7 @@ impl Vm {
                     // Push the element onto the stack
                     self.stack.push(array[index]);
                 }
+
                 Instruction::LoadMapElement => {
                     // LoadMapElement Instruction
                     //
@@ -1134,6 +1170,7 @@ impl Vm {
                     // Push the value onto the stack
                     self.stack.push(value);
                 }
+
                 Instruction::StoreArrayElement => {
                     // StoreArrayElement Instruction
                     //
@@ -1195,6 +1232,7 @@ impl Vm {
                     // Restore function reference after mutable borrow of self.objects
                     function = self.objects[frame.function].as_function()?;
                 }
+
                 Instruction::StoreMapElement => {
                     // StoreMapElement Instruction
                     //
@@ -1235,6 +1273,7 @@ impl Vm {
                     // borrow check
                     function = self.objects[frame.function].as_function()?;
                 }
+
                 Instruction::AllocInstance(index) => {
                     let Object::Class(class) = &self.objects[index] else {
                         return Err(InternalError::TypeError {
@@ -1261,6 +1300,7 @@ impl Vm {
                     // borrow check.
                     function = self.objects[frame.function].as_function()?;
                 }
+
                 Instruction::DispatchFuture(arg_count) => {
                     let args_offset = self.stack.ensure_slot_from_top(arg_count)?;
 
@@ -1317,6 +1357,7 @@ impl Vm {
                     // Yield control flow back to the embedder.
                     return Ok(VmExecState::ScheduleFuture(object_index));
                 }
+
                 Instruction::Await => {
                     let value = self.stack.ensure_stack_top()?;
 
@@ -1347,6 +1388,7 @@ impl Vm {
                         }
                     }
                 }
+
                 Instruction::Call(arg_count) => {
                     // Function calls are pushed onto the stack like this:
                     //
@@ -1442,6 +1484,7 @@ impl Vm {
                         }
                     }
                 }
+
                 Instruction::Return => {
                     // Pop the result from the eval stack.
                     let result = self.stack.ensure_pop()?;
@@ -1471,6 +1514,7 @@ impl Vm {
                     // more information about this piece.
                     function = self.objects[frame.function].as_function()?;
                 }
+
                 Instruction::Assert => {
                     let value = self.stack.pop().ok_or(RuntimeError::AssertionError)?;
 
@@ -1486,6 +1530,7 @@ impl Vm {
                         return Err(RuntimeError::AssertionError.into());
                     }
                 }
+
                 Instruction::AllocMap(n) => {
                     let map = if n > 0 {
                         let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1)?;
