@@ -320,25 +320,38 @@ impl BamlAsyncVmRuntime {
                         }
                     };
 
-                    let llm_fn = self
+                    let llm_fn = match self
                         .llm_runtime
                         .inner
                         .ir()
                         .find_function(&pending_future.llm_function)
-                        .unwrap_or_else(|_| {
-                            panic!("LLM function not found: {}", pending_future.llm_function)
-                        });
+                    {
+                        Ok(f) => f,
+                        Err(e) => {
+                            break 'mainloop Err(e.context(format!(
+                                "Failed scheduling LLM future: {}",
+                                pending_future.llm_function
+                            )))
+                        }
+                    };
 
-                    let llm_args = pending_future
+                    let llm_args = match pending_future
                         .args
                         .iter()
                         .map(|v| try_baml_value_from_vm_value(&vm, v))
                         .collect::<Result<Vec<_>, _>>()
-                        .unwrap_or_else(|e| panic!("failed to convert vm args to baml values: {e}"))
-                        .into_iter()
-                        .zip(llm_fn.inputs().iter().map(|(name, _)| name.to_owned()))
-                        .map(|(arg, param_name)| (param_name, arg))
-                        .collect::<BamlMap<_, _>>();
+                    {
+                        Ok(args) => args,
+                        Err(e) => {
+                            break 'mainloop Err(
+                                e.context("failed to convert VM args to baml values")
+                            )
+                        }
+                    }
+                    .into_iter()
+                    .zip(llm_fn.inputs().iter().map(|(name, _)| name.to_owned()))
+                    .map(|(arg, param_name)| (param_name, arg))
+                    .collect::<BamlMap<_, _>>();
 
                     let future = {
                         let llm_runtime = Arc::clone(&self.llm_runtime);
@@ -415,11 +428,22 @@ impl BamlAsyncVmRuntime {
             }
         };
 
-        let baml_value = try_baml_value_from_vm_value(
-            &vm,
-            &result.unwrap_or_else(|e| panic!("failed to get vm result: {e}")),
-        )
-        .unwrap_or_else(|e| panic!("failed to convert vm result to baml value: {e}"));
+        let vm_exec_value = match result {
+            Ok(vm_value) => vm_value,
+            Err(e) => {
+                return (Err(e.context("VM execution failed")), current_call_id);
+            }
+        };
+
+        let baml_value = match try_baml_value_from_vm_value(&vm, &vm_exec_value) {
+            Ok(baml_value) => baml_value,
+            Err(e) => {
+                return (
+                    Err(e.context("failed to convert vm result to baml value")),
+                    current_call_id,
+                );
+            }
+        };
 
         let response_baml_value = ResponseBamlValue(BamlValueWithMeta::with_const_meta(
             &baml_value,
