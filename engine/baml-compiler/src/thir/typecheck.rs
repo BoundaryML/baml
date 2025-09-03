@@ -986,23 +986,23 @@ fn typecheck_assignment(
     context: &mut TypeContext<'_>,
     diagnostics: &mut Diagnostics,
 ) {
-    if !is_assignable(lhs, diagnostics, context) {
-        // Only report assignment errors for variables that actually exist.
-        // Unknown variables should only show "unknown variable" errors, not assignment errors.
-        let should_report_assignment_error = match lhs {
-            thir::Expr::Var(name, _) => context.vars.contains_key(name),
-            _ => true, // For non-variables (array access, field access), always report
-        };
+    // if !is_assignable(lhs, diagnostics, context) {
+    //     // Only report assignment errors for variables that actually exist.
+    //     // Unknown variables should only show "unknown variable" errors, not assignment errors.
+    //     let should_report_assignment_error = match lhs {
+    //         thir::Expr::Var(name, _) => context.vars.contains_key(name),
+    //         _ => true, // For non-variables (array access, field access), always report
+    //     };
 
-        if should_report_assignment_error {
-            diagnostics.push_error(DatamodelError::new_validation_error(
-                // perf: `new_validation_error` could accept Cow / into cow directly and
-                // avoid copy here.
-                assign_error(lhs).as_ref(),
-                assignment_span.clone(),
-            ));
-        }
-    }
+    //     if should_report_assignment_error {
+    //         diagnostics.push_error(DatamodelError::new_validation_error(
+    //             // perf: `new_validation_error` could accept Cow / into cow directly and
+    //             // avoid copy here.
+    //             assign_error(lhs).as_ref(),
+    //             assignment_span.clone(),
+    //         ));
+    //     }
+    // }
 
     let rhs_type = &rhs.meta().1;
     if let (Some(left_type), Some(val_type)) = (lhs.meta().1.as_ref(), rhs_type) {
