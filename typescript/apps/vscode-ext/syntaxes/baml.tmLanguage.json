@@ -221,7 +221,7 @@
     },
     "function_declaration": {
       "comment": "Function declaration",
-      "begin": "(function)\\s+(\\w+)",
+      "begin": "(function|fn)\\s+(\\w+)",
       "beginCaptures": {
         "1": {
           "name": "storage.type.declaration.function"
@@ -448,6 +448,15 @@
         },
         {
           "include": "#let_declaration"
+        },
+        {
+          "include": "#for_in_loop"
+        },
+        {
+          "include": "#for_c_loop"
+        },
+        {
+          "include": "#assignment_statement"
         },
         {
           "include": "#function_declaration"
@@ -1210,6 +1219,204 @@
           "include": "#comment"
         }
       ]
+    },
+    "for_in_loop": {
+      "comment": "For-in loop",
+      "begin": "(for)\\s*\\(\\s*(\\w+)\\s+(in)\\s+",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.for"
+        },
+        "2": {
+          "name": "variable.other.readwrite.iterator"
+        },
+        "3": {
+          "name": "keyword.control.in"
+        }
+      },
+      "end": "\\}",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#array_literal"
+        },
+        {
+          "include": "#function_application"
+        },
+        {
+          "include": "#expression_body"
+        }
+      ]
+    },
+    "for_c_loop": {
+      "comment": "C-style for loop",
+      "begin": "(for)\\s*\\(\\s*",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.for"
+        }
+      },
+      "end": "\\}",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#let_declaration"
+        },
+        {
+          "include": "#binary_operators"
+        },
+        {
+          "include": "#increment_operators"
+        },
+        {
+          "include": "#expression_body"
+        }
+      ]
+    },
+    "assignment_statement": {
+      "comment": "Assignment with operators",
+      "begin": "(\\w+)\\s*([+\\-*/]?=)",
+      "beginCaptures": {
+        "1": {
+          "name": "variable.other.readwrite"
+        },
+        "2": {
+          "name": "keyword.operator.assignment"
+        }
+      },
+      "end": ";?",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#expression"
+        }
+      ]
+    },
+    "array_literal": {
+      "begin": "\\[",
+      "end": "\\]",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#constant_numeric"
+        },
+        {
+          "include": "#string_literal"
+        },
+        {
+          "include": "#expression"
+        }
+      ]
+    },
+    "binary_operators": {
+      "match": "(<|>|<=|>=|==|!=|&&|\\|\\||[+\\-*/])",
+      "name": "keyword.operator.binary"
+    },
+    "increment_operators": {
+      "match": "(\\+\\+|--)",
+      "name": "keyword.operator.increment"
+    },
+    "expression": {
+      "patterns": [
+        {
+          "include": "#constant_numeric"
+        },
+        {
+          "include": "#string_literal"
+        },
+        {
+          "include": "#function_application"
+        },
+        {
+          "include": "#object_construction"
+        },
+        {
+          "include": "#method_call"
+        },
+        {
+          "include": "#binary_operators"
+        }
+      ]
+    },
+    "expression_body": {
+      "begin": "\\{",
+      "end": "(?=\\})",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#let_declaration"
+        },
+        {
+          "include": "#assignment_statement"
+        },
+        {
+          "include": "#for_in_loop"
+        },
+        {
+          "include": "#for_c_loop"
+        },
+        {
+          "include": "#expression"
+        }
+      ]
+    },
+    "object_construction": {
+      "comment": "Object construction ClassName { ... }",
+      "begin": "(\\w+)\\s*\\{",
+      "beginCaptures": {
+        "1": {
+          "name": "entity.name.type.constructor"
+        }
+      },
+      "end": "\\}",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#object_field"
+        }
+      ]
+    },
+    "object_field": {
+      "comment": "field_name: value",
+      "begin": "(\\w+)\\s*:",
+      "beginCaptures": {
+        "1": {
+          "name": "variable.other.readwrite.field"
+        }
+      },
+      "end": "(?=,|\\})",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#expression"
+        }
+      ]
+    },
+    "method_call": {
+      "comment": "obj.method()",
+      "match": "(\\w+)\\.(\\w+)\\s*\\(",
+      "captures": {
+        "1": {
+          "name": "variable.other.readwrite.object"
+        },
+        "2": {
+          "name": "entity.name.function.method"
+        }
+      }
     }
   },
   "scopeName": "source.baml"
