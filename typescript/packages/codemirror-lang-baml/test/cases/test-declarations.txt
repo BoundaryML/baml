@@ -24,7 +24,7 @@ Baml(Decl(TestDecl(
   IdentifierDecl,
   "{",
   ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ListValue("[", IdentifierDecl, "]"))),
-  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ConfigMap("{", ConfigTupleValue(IdentifierDecl, ConfigValueExpr(PromptExpr(Document))), "}"))),
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ConfigMap("{", ConfigTupleValue(IdentifierDecl, ConfigValueExpr(PromptExpr(PromptExprContents))), "}"))),
   "}"
 )))
 

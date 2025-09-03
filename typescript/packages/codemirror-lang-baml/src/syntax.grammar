@@ -64,13 +64,6 @@ FunctionValueExpr {
   IdentifierDecl "(" (FunctionValueExpr ("," FunctionValueExpr)*)? ")"
 }
 
-ClassConstructor {
-  IdentifierDecl "{" (ClassConstructorField ("," ClassConstructorField)*)? "}"
-}
-
-ClassConstructorField {
-  IdentifierDecl ":" FunctionValueExpr
-}
 FunctionTupleValue { (ClientKeyword | PromptKeyword) FunctionValueAtom }
 
 ConfigValueExpr { LiteralDecl | PromptExpr | UnquotedString | ListValue | ConfigMap }

@@ -37,7 +37,7 @@ template_string MyPrompt() #"
 Baml(Decl(TemplateStringDecl(
   IdentifierDecl,
   FunctionArgs,
-  PromptExpr(Document)
+  PromptExpr(PromptExprContents)
 )))
 
 # Retry policy declaration
