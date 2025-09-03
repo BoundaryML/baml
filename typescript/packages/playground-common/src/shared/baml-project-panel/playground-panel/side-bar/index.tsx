@@ -43,7 +43,7 @@ export function TestingSidebar() {
   const [openCollapsibles, setOpenCollapsibles] = React.useState<Set<string>>(
     new Set(),
   );
-  const runBamlTests = useRunBamlTests();
+  const { runTests: runBamlTests } = useRunBamlTests();
   const selectedItem = useAtomValue(selectedItemAtom);
 
   const filteredFunctions = functions.filter(

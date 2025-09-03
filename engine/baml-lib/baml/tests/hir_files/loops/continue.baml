@@ -1,15 +1,15 @@
-fn Factorial(mut limit: int) -> int {
+fn Factorial(limit: int) -> int {
 
-	let mut result = 1;
+	let result = 1;
 
 
     // used to make the loop break without relying on `break` implementation.
-    let mut should_continue = true;
-	while should_continue {
+    let should_continue = true;
+	while (should_continue) {
 		result = result * limit;
 		limit = limit - 1;
 
-        if limit != 0 {
+        if (limit != 0) {
             continue;
         } else {
             should_continue = false;
@@ -21,16 +21,16 @@ fn Factorial(mut limit: int) -> int {
 }
 
 fn ContinueNested() -> int {
-    while true {
-        while true {
+    while (true) {
+        while (true) {
             continue;
         }
     }
 }
 
 // function Factorial(limit) {
-//   var result = 1;
-//   var should_continue = true;
+//   let result = 1;
+//   let should_continue = true;
 //   while should_continue {
 //   result = result * limit;
 //     limit = limit - 1;
@@ -40,7 +40,8 @@ fn ContinueNested() -> int {
 //     should_continue = false;
 //     } 
 //   }
-//   return result;
+//
+//   result
 // }
 //
 // function ContinueNested() {

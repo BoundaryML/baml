@@ -1,4 +1,5 @@
 from .baml_py import (
+    BamlAbortError,
     BamlError,
     BamlClientError,
     BamlInvalidArgumentError,
@@ -11,6 +12,7 @@ from .internal_monkeypatch import (
 
 
 __all__ = [
+    "BamlAbortError",
     "BamlError",
     "BamlClientError",
     "BamlClientHttpError",

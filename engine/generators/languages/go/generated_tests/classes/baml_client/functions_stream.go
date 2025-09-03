@@ -76,51 +76,39 @@ func (*stream) ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, o
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ConsumeSimpleClass", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "ConsumeSimpleClass", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.SimpleClass, types.SimpleClass])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.SimpleClass)
+				channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.SimpleClass)
-					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.SimpleClass)
-					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.SimpleClass)
+				channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -158,51 +146,39 @@ func (*stream) MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (<-c
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeSimpleClass", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeSimpleClass", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.SimpleClass, types.SimpleClass])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.SimpleClass)
+				channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.SimpleClass)
-					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.SimpleClass)
-					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.SimpleClass)
+				channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }

@@ -73,42 +73,34 @@ fn call_function_from_c_inner(
     } = BamlFunctionArguments::from_c_buffer(encoded_args, length)?;
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
+    let tripwire = trip_wire::make_trip_wire(id);
 
     // Spawn an async task to await the future and call the callback when done.
     // Ensure that a Tokio runtime is running in your application.
     let rt = RUNTIME.clone();
     rt.spawn(async move {
-        let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async {
-            // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
-            let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
-            runtime
-                .call_function(
-                    func_name,
-                    &kwargs,
-                    &ctx,
-                    type_builder.as_ref(),
-                    client_registry.as_ref(),
-                    collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
-                    env_vars,
-                )
-                .await
-        })) {
-            Ok(future) => future.await,
-            Err(panic_info) => {
-                // Handle the panic case - create an error result
-                let error_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                    format!("Function panicked: {s}")
-                } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                    format!("Function panicked: {s}")
-                } else {
-                    "Function panicked with unknown error".to_string()
-                };
-
-                (Err(anyhow::anyhow!(error_msg)), Default::default())
-            }
-        };
+        // Create a future for the call_function
+        // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
+        let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
+        let result = runtime
+            .call_function(
+                func_name,
+                &kwargs,
+                &ctx,
+                type_builder.as_ref(),
+                client_registry.as_ref(),
+                collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
+                env_vars,
+                tripwire.clone(),
+            )
+            .await;
 
         let (final_result, _) = result;
+        // This drop seems to be required due to timing issues accross ffi-boundaries
+        // We want to ensure we drop BEFORE any callbacks are made.
+        // If we don't do this explicitly, it will also auto-drop eventually.
+        drop(tripwire);
+
         safe_trigger_callback(id, true, final_result, runtime);
     });
 
@@ -250,6 +242,7 @@ fn call_function_stream_from_c_inner(
         type_builder,
     } = BamlFunctionArguments::from_c_buffer(encoded_args, length)?;
 
+    let tripwire = trip_wire::make_trip_wire(id);
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
     // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
     let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
@@ -261,6 +254,7 @@ fn call_function_stream_from_c_inner(
         client_registry.as_ref(),
         collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
         env_vars,
+        tripwire,
     ) {
         Ok(stream) => stream,
         Err(e) => {
@@ -271,37 +265,21 @@ fn call_function_stream_from_c_inner(
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
     RUNTIME.spawn(async move {
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async move {
-            stream
-                .run(
-                    Some(|| on_tick(id)),
-                    Some(|r| on_event(id, r, runtime)),
-                    &ctx,
-                    None,
-                    None,
-                    HashMap::new(),
-                )
-                .await
-        }));
+        // Create the stream.run future
+        let (final_result, _) = stream
+            .run(
+                Some(|| on_tick(id)),
+                Some(|r| on_event(id, r, runtime)),
+                &ctx,
+                None,
+                None,
+                HashMap::new(),
+            )
+            .await;
 
-        let final_result = match result {
-            Ok(future) => {
-                let (stream_result, _) = future.await;
-                stream_result
-            }
-            Err(panic_info) => {
-                // Handle the panic case - create an error result
-                let error_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                    format!("Stream function panicked: {s}")
-                } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                    format!("Stream function panicked: {s}")
-                } else {
-                    "Stream function panicked with unknown error".to_string()
-                };
-
-                Err(anyhow::anyhow!(error_msg))
-            }
-        };
+        // We should explicitly destruct the stream object
+        // BEFORE we send any data to the runtime.
+        drop(stream);
 
         safe_trigger_callback(id, true, final_result, runtime);
     });
@@ -316,4 +294,11 @@ fn on_tick(id: u32) {
 
 fn on_event(id: u32, result: FunctionResult, runtime: &BamlRuntime) {
     safe_trigger_callback(id, false, Ok(result), runtime);
+}
+
+/// Cancel a function call by its ID
+#[no_mangle]
+pub extern "C" fn cancel_function_call(id: u32) -> *const libc::c_void {
+    trip_wire::cancel(id);
+    std::ptr::null()
 }

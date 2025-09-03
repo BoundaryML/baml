@@ -1,0 +1,17 @@
+flowchart TD
+  n0["Basic test"]
+  subgraph sg0["This is a named statement"]
+    direction LR
+    n1{"This is a named statement"}
+    class n1 decisionNode;
+    n2["Then Statement"]
+    n3["Else Statement"]
+  end
+  n1 --> n2
+  n1 --> n3
+  n0 --> n1
+%%__BAML_SPANMAP__={"n0":{"file_path":"tests/validation_files/headers/basic_if.baml","start_line":1,"start":0,"end_line":2,"end":0},"n1":{"file_path":"tests/validation_files/headers/basic_if.baml","start_line":5,"start":4,"end_line":6,"end":0},"n2":{"file_path":"tests/validation_files/headers/basic_if.baml","start_line":7,"start":8,"end_line":8,"end":0},"n3":{"file_path":"tests/validation_files/headers/basic_if.baml","start_line":10,"start":8,"end_line":11,"end":0}}
+  click n0 call bamlMermaidNodeClick() "Go to source"
+  click n1 call bamlMermaidNodeClick() "Go to source"
+  click n2 call bamlMermaidNodeClick() "Go to source"
+  click n3 call bamlMermaidNodeClick() "Go to source"

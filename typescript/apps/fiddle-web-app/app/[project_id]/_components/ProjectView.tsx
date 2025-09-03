@@ -96,7 +96,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   };
 
   return (
-    <div className="flex relative flex-col w-full h-full main-panel overflow-x-clip overflow-y-auto">
+    <div className="flex relative flex-col w-full h-full main-panel overflow-x-hidden overflow-y-hidden">
       <ErrorBoundaryWrapper message="Error loading project">
         <div className="absolute bottom-0 right-4 z-50">
           <EventListener />
@@ -148,7 +148,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                     </Editable>
                   </div>
 
-                  <div className="flex pl-1 w-full h-full tour-editor dark:bg-muted/70">
+                  <div className="flex pl-1 w-full h-full tour-editor dark:bg-muted/70 overflow-hidden">
                     <ScrollArea className="w-full h-full">
                       {activeFileName && (
                         <CodeMirrorViewer
@@ -170,8 +170,10 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
 
                 {!isMobile && (
                   <ResizablePanel defaultSize={50} className="tour-playground">
-                    <div className="flex flex-col h-full overflow-y-auto">
-                      <PlaygroundView />
+                    <div className="flex flex-col h-full overflow-hidden">
+                      <div className="flex-1 min-h-0 overflow-hidden">
+                        <PlaygroundView />
+                      </div>
                     </div>
                   </ResizablePanel>
                 )}
@@ -202,7 +204,7 @@ export const FunctionSelectorProvider = () => {
 };
 
 export const ProjectSidebar = () => (
-  <div className="w-64 h-full dark:bg-[#020309] bg-muted">
+  <div className="w-64 h-full dark:bg-[#020309] bg-muted overflow-hidden">
     <div className="flex flex-row justify-center items-center pt-4 w-full">
       <a
         href={'/'}
@@ -218,12 +220,14 @@ export const ProjectSidebar = () => (
       </a>
     </div>
 
-    <div className="pb-4 h-full">
+    <div className="pb-4 h-full overflow-hidden">
       <div className="px-2 pt-4 w-full text-xs font-normal text-center uppercase text-muted-foreground">
         project files
       </div>
-      <div className="flex flex-col pb-8 w-full h-full tour-file-view">
-        <FileViewer />
+      <div className="flex flex-col pb-8 w-full h-full min-h-0 tour-file-view">
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <FileViewer />
+        </div>
       </div>
     </div>
   </div>

@@ -4,13 +4,18 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_expr::{
-        parse_expr_block, parse_fn_app, parse_for_loop, parse_generic_fn_app, parse_if_expression,
+        parse_expr_block, parse_expr_fn, parse_fn_app, parse_generic_fn_app, parse_if_expression,
         parse_lambda,
     },
     parse_identifier::parse_identifier,
     Rule,
 };
-use crate::{assert_correct_parser, ast::*, unreachable_rule};
+use crate::{
+    assert_correct_parser,
+    ast::*,
+    parser::parse_expr::{consume_if_rule, consume_span_if_rule},
+    unreachable_rule,
+};
 
 pub(crate) fn parse_expression(
     token: Pair<'_>,
@@ -41,6 +46,7 @@ pub(crate) fn parse_expression(
         .op(Op::prefix(Rule::NOT))
         .op(Op::prefix(Rule::NEG))
         .op(Op::postfix(Rule::array_accessor))
+        .op(Op::postfix(Rule::method_call))
         .op(Op::postfix(Rule::field_accessor));
 
     let span = diagnostics.span(token.as_span());
@@ -64,6 +70,7 @@ pub(crate) fn parse_expression(
                 Rule::NOT => UnaryOperator::Not,
                 _ => unreachable_rule!(operator, Rule::prefix_operator),
             };
+
             right.map(|right| Expression::UnaryOperation {
                 operator,
                 expr: Box::new(right),
@@ -79,10 +86,24 @@ pub(crate) fn parse_expression(
 
                     Expression::ArrayAccess(Box::new(left), Box::new(index), span.clone())
                 }
+
                 Rule::field_accessor => {
                     let field = parse_identifier(operator.into_inner().next()?, diagnostics);
 
                     Expression::FieldAccess(Box::new(left), field, span.clone())
+                }
+
+                Rule::method_call => {
+                    match parse_fn_app(operator.into_inner().next()?, diagnostics)? {
+                        Expression::App(fn_call) => Expression::MethodCall {
+                            receiver: Box::new(left),
+                            method: fn_call.name,
+                            args: fn_call.args,
+                            span: span.clone(),
+                        },
+
+                        _ => unreachable!("expected function call when parsing method call"),
+                    }
                 }
                 _ => unreachable_rule!(operator, Rule::postfix_operator),
             })
@@ -165,7 +186,7 @@ fn parse_primary_expression(
         Rule::BLOCK_LEVEL_CATCH_ALL => {
             diagnostics.push_error(
                 internal_baml_diagnostics::DatamodelError::new_validation_error(
-                    "This is not a valid expression.",
+                    "This is not a valid expression!",
                     span,
                 ),
             );
@@ -237,88 +258,95 @@ fn parse_string_literal(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expre
 }
 
 fn parse_map(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
-    let mut entries: Vec<(Expression, Expression)> = vec![];
+    fn parse_expr_map_entry(
+        pair: Pair<'_>,
+        diagnostics: &mut Diagnostics,
+    ) -> Option<(Expression, Expression)> {
+        assert_correct_parser!(pair, Rule::expr_map_entry);
+
+        let mut inner = pair.into_inner();
+
+        let key_rule = inner.next()?;
+        let colon = consume_if_rule(&mut inner, Rule::COLON);
+        let value_rule = inner.next()?;
+
+        let key = parse_expression(key_rule, diagnostics)?;
+        let value = parse_expression(value_rule, diagnostics)?;
+
+        if colon.is_none() {
+            diagnostics.push_error(DatamodelError::new_validation_error(
+                "Missing colon between key expression & value expression",
+                Span {
+                    file: key.span().file.clone(),
+                    start: key.span().end,
+                    end: value.span().start,
+                },
+            ));
+        }
+
+        Some((key, value))
+    }
+
+    fn parse_ident_map_entry(
+        pair: Pair<'_>,
+        diagnostics: &mut Diagnostics,
+    ) -> Option<(Expression, Expression)> {
+        assert_correct_parser!(pair, Rule::ident_map_entry);
+
+        let mut inner = pair.into_inner();
+
+        let ident = parse_identifier(inner.next()?, diagnostics);
+
+        let value = parse_expression(inner.next()?, diagnostics)?;
+
+        Some((
+            Expression::StringValue(ident.to_string(), ident.span().clone()),
+            value,
+        ))
+    }
+
+    fn parse_map_entry(
+        pair: Pair<'_>,
+        diagnostics: &mut Diagnostics,
+    ) -> Option<(Expression, Expression)> {
+        match pair.as_rule() {
+            Rule::expr_map_entry => parse_expr_map_entry(pair, diagnostics),
+            Rule::ident_map_entry => parse_ident_map_entry(pair, diagnostics),
+            _ => unreachable_rule!(pair, Rule::map_expression),
+        }
+    }
+
     let span = token.as_span();
 
-    for current in token.into_inner() {
-        match current.as_rule() {
-            Rule::map_entry => {
-                if let Some(f) = parse_map_entry(current, diagnostics) {
-                    entries.push(f)
-                }
+    let mut inner = token
+        .into_inner()
+        .filter(|pair| !matches!(pair.as_rule(), Rule::NEWLINE));
+
+    // Option<(rule, span of inference)>
+    // We'll be reporting
+
+    let entries = if let Some(first) = inner.next() {
+        let first_rule = first.as_rule();
+
+        let first_entry = parse_map_entry(first, diagnostics).into_iter();
+
+        let rest_of_entries = inner.filter_map(|pair| {
+
+            if first_rule != pair.as_rule() {
+                diagnostics.push_error(DatamodelError::new_validation_error("Inconsistent use of key-value pair syntax. Consider using python-style if any of the keys is an identifier to avoid confusion", diagnostics.span(pair.as_span())));
             }
-            Rule::BLOCK_LEVEL_CATCH_ALL => {}
-            _ => parsing_catch_all(current, "map key value"),
-        }
-    }
+
+            parse_map_entry(pair, diagnostics)
+
+
+        });
+
+        first_entry.chain(rest_of_entries).collect()
+    } else {
+        Vec::new()
+    };
 
     Expression::Map(entries, diagnostics.span(span))
-}
-
-fn parse_map_entry(
-    token: Pair<'_>,
-    diagnostics: &mut Diagnostics,
-) -> Option<(Expression, Expression)> {
-    assert_correct_parser!(token, Rule::map_entry);
-
-    let mut key = None;
-    let mut value = None;
-    let token_span = token.as_span(); // Store the span before moving token
-
-    for current in token.into_inner() {
-        match current.as_rule() {
-            Rule::map_key => key = Some(parse_map_key(current, diagnostics)),
-            Rule::expression => value = parse_expression(current, diagnostics),
-            Rule::ENTRY_CATCH_ALL => {
-                diagnostics.push_error(
-                    internal_baml_diagnostics::DatamodelError::new_validation_error(
-                        "This map entry is missing a valid value or has an incorrect syntax.",
-                        diagnostics.span(token_span), // Use the stored span here
-                    ),
-                );
-                return None;
-            }
-            Rule::BLOCK_LEVEL_CATCH_ALL => {}
-            _ => parsing_catch_all(current, "dict entry"),
-        }
-    }
-
-    match (key, value) {
-        (Some(key), Some(value)) => Some((key, value)),
-        (Some(_), None) => {
-            diagnostics.push_error(
-                internal_baml_diagnostics::DatamodelError::new_validation_error(
-                    "This map entry is missing a valid value or has an incorrect syntax.",
-                    diagnostics.span(token_span), // Use the stored span here
-                ),
-            );
-            None
-        }
-        _ => None,
-    }
-}
-
-fn parse_map_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
-    assert_correct_parser!(token, Rule::map_key);
-
-    let span = diagnostics.span(token.as_span());
-    if let Some(current) = token.into_inner().next() {
-        return match current.as_rule() {
-            Rule::identifier => {
-                Expression::StringValue(parse_identifier(current, diagnostics).to_string(), span)
-            }
-            Rule::quoted_string_literal => Expression::StringValue(
-                current.into_inner().next().unwrap().as_str().to_string(),
-                span,
-            ),
-            Rule::unquoted_string_literal => Expression::StringValue(
-                current.into_inner().next().unwrap().as_str().to_string(),
-                span,
-            ),
-            _ => unreachable_rule!(current, Rule::map_key),
-        };
-    }
-    unreachable!("Encountered impossible map key during parsing")
 }
 
 pub fn parse_config_expression(
@@ -597,7 +625,7 @@ mod tests {
     use pest::{consumes_to, parses_to, Parser};
 
     use super::{
-        super::{BAMLParser, Rule},
+        super::{parse_expr::parse_expr_block, BAMLParser, Rule},
         *,
     };
 
@@ -617,6 +645,125 @@ mod tests {
         match expr {
             Expression::JinjaExpressionValue(JinjaExpression(s), _) => assert_eq!(s, "1 + 1"),
             _ => panic!("Expected JinjaExpression, got {expr:?}"),
+        }
+    }
+
+    #[test]
+    fn test_mdx_header_parsing() {
+        println!("\n=== Testing MDX Header Parsing ===");
+
+        let input = r#"{
+            # Level 1 Header
+            let x = "hello";
+            
+            ## Level 2 Header
+            let y = "world";
+
+            ########### Level 11 Header
+            
+            ### Level 3 Headers
+            x + y
+        }"#;
+
+        let root_path = "test_file.baml";
+        let source = SourceFile::new_static(root_path.into(), input);
+        let mut diagnostics = Diagnostics::new(root_path.into());
+        diagnostics.set_source(&source);
+
+        println!("Parsing expression block with mdx headers...");
+
+        let pair_result = BAMLParser::parse(Rule::expr_block, input);
+        match pair_result {
+            Ok(mut pairs) => {
+                let pair = pairs.next().unwrap();
+                let expr = parse_expr_block(pair, &mut diagnostics);
+                match expr {
+                    Some(expr_block) => {
+                        println!("✓ Successfully parsed expression block: {expr_block:?}")
+                    }
+                    None => println!("✗ Failed to parse expression block"),
+                }
+            }
+            Err(e) => println!("✗ Parse error: {e:?}"),
+        }
+
+        println!("Diagnostics:");
+        for error in diagnostics.errors() {
+            println!("  Error: {error:?}");
+        }
+        for warning in diagnostics.warnings() {
+            println!("  Warning: {warning:?}");
+        }
+    }
+
+    #[test]
+    fn test_complex_header_hierarchy() {
+        println!("\n=== Testing Complex Header Hierarchy ===");
+
+        let input = r#"# Loop Processing
+fn ForLoopWithHeaders() -> int {
+    let items = [1, 2, 3, 4, 5];
+    let result = 0;
+    
+    ## Main Loop
+    for (item in items) {
+        ### Item Processing
+        let processed = item * 2;
+        
+        #### Accumulation
+        result = result + processed;
+    }
+    
+    ## Final Result
+    result
+}"#;
+
+        let root_path = "test_file.baml";
+        let source = SourceFile::new_static(root_path.into(), input);
+        let mut diagnostics = Diagnostics::new(root_path.into());
+        diagnostics.set_source(&source);
+
+        println!("Parsing function with complex header hierarchy...");
+
+        let pair_result = BAMLParser::parse(Rule::schema, input);
+        match pair_result {
+            Ok(mut pairs) => {
+                let schema_pair = pairs.next().unwrap();
+                println!("✓ Successfully parsed schema");
+
+                // Look for expr_fn within the schema
+                for item in schema_pair.into_inner() {
+                    match item.as_rule() {
+                        Rule::expr_fn => {
+                            let expr_fn = parse_expr_fn(item, &mut diagnostics);
+                            match expr_fn {
+                                Some(expr_fn) => {
+                                    println!(
+                                        "✓ Found and parsed function: {}",
+                                        expr_fn.name.name()
+                                    );
+                                }
+                                None => println!("✗ Failed to parse function"),
+                            }
+                        }
+                        Rule::comment_block => {
+                            println!("✓ Found top-level comment block");
+                        }
+                        _ => {
+                            println!("Found other item: {:?}", item.as_rule());
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                println!("✗ Parse error: {e:?}");
+                return;
+            }
+        }
+
+        println!("Diagnostics errors: {}", diagnostics.errors().len());
+        for error in diagnostics.errors() {
+            println!("  Error: {error:?}");
         }
     }
 }

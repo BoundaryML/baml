@@ -135,7 +135,38 @@ export class BamlClientHttpError extends Error {
   }
 }
 
-export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientFinishReasonError
+export class BamlAbortError extends Error {
+  public readonly reason?: any
+
+  constructor(message: string, reason?: any) {
+    super(message)
+    this.name = 'BamlAbortError'
+    this.reason = reason
+
+    Object.setPrototypeOf(this, BamlAbortError.prototype)
+  }
+
+  toJSON(): string {
+    return JSON.stringify(
+      {
+        name: this.name,
+        message: this.message,
+        reason: this.reason,
+      },
+      null,
+      2,
+    )
+  }
+
+  static from(error: Error): BamlAbortError | undefined {
+    if (error.message.includes('BamlAbortError') || error.message.includes('Operation was aborted') || error.message.includes('Operation cancelled')) {
+      return new BamlAbortError(error.message)
+    }
+    return undefined
+  }
+}
+
+export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientFinishReasonError | BamlAbortError
 
 function isError(error: unknown): error is Error {
   if (typeof error === 'string') {
@@ -157,6 +188,11 @@ function isError(error: unknown): error is Error {
 function createBamlErrorUnsafe(error: unknown): BamlErrors | Error {
   if (!isError(error)) {
     return new Error(String(error))
+  }
+
+  const bamlAbortError = BamlAbortError.from(error)
+  if (bamlAbortError) {
+    return bamlAbortError
   }
 
   const bamlClientHttpError = BamlClientHttpError.from(error)
@@ -182,7 +218,8 @@ export function isBamlError(error: unknown): error is BamlErrors {
   if (
     (error as any).type === 'BamlClientHttpError' ||
     (error as any).type === 'BamlValidationError' ||
-    (error as any).type === 'BamlClientFinishReasonError'
+    (error as any).type === 'BamlClientFinishReasonError' ||
+    (error as any).type === 'BamlAbortError'
   ) {
     return true
   }
@@ -190,7 +227,8 @@ export function isBamlError(error: unknown): error is BamlErrors {
   if (
     (error as any).name === 'BamlClientHttpError' ||
     (error as any).name === 'BamlValidationError' ||
-    (error as any).name === 'BamlClientFinishReasonError'
+    (error as any).name === 'BamlClientFinishReasonError' ||
+    (error as any).name === 'BamlAbortError'
   ) {
     return true
   }
@@ -198,7 +236,8 @@ export function isBamlError(error: unknown): error is BamlErrors {
   return (
     error instanceof BamlClientHttpError ||
     error instanceof BamlValidationError ||
-    error instanceof BamlClientFinishReasonError
+    error instanceof BamlClientFinishReasonError ||
+    error instanceof BamlAbortError
   )
 }
 

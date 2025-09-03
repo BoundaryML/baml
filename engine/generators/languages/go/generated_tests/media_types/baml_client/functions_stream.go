@@ -76,51 +76,39 @@ func (*stream) TestMediaArrayInputs(ctx context.Context, imageArray []types.Imag
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMediaArrayInputs", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMediaArrayInputs", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.MediaArrayAnalysisResult)
+				channel <- StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.MediaArrayAnalysisResult)
-					channel <- StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.MediaArrayAnalysisResult)
-					channel <- StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.MediaArrayAnalysisResult)
+				channel <- StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -158,51 +146,39 @@ func (*stream) TestMediaInput(ctx context.Context, media types.Union4AudioOrImag
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMediaInput", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMediaInput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.MediaAnalysisResult)
+				channel <- StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.MediaAnalysisResult)
-					channel <- StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.MediaAnalysisResult)
-					channel <- StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.MediaAnalysisResult)
+				channel <- StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }

@@ -1,7 +1,7 @@
-fn GCD(mut a: int, mut b: int) -> int {
+fn GCD(a: int, b: int) -> int {
 
-	while a != b {
-	   if a > b {
+	while (a != b) {
+	   if (a > b) {
 	   	a = a - b;
 	   } else {
 	   	b = b - a;
@@ -19,7 +19,8 @@ fn GCD(mut a: int, mut b: int) -> int {
 //     b = b - a;
 //     } 
 //   }
-//   return a;
+//
+//   a
 // }
 //
 // class std::Request {

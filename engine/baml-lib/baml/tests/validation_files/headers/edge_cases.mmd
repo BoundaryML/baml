@@ -1,0 +1,176 @@
+flowchart TD
+  n0["你好世界"]
+  n1["Émojis 🎉🎊"]
+  n2["Special «Characters» ™"]
+  n3["Level 1"]
+  n4["Level 2"]
+  n5["Level 3"]
+  n6["Level 4"]
+  n7["Level 5"]
+  n8["Level 6"]
+  n9["Level 7 - More than 6 levels"]
+  n10["Level 8"]
+  n11["Level 9"]
+  n12["Extra Spaces Before Title"]
+  n13["Mixed Tabs And Spaces"]
+  n14["All Tabs"]
+  n15["Trailing Spaces"]
+  n16["Multiple  Spaces  Between  Words"]
+  n17["Header Before Comment"]
+  n18["Header After Comment"]
+  n19["Header After Doc Comment"]
+  n26["Back to Function Level"]
+  n27["Header-With-Dashes"]
+  n28["Header_With_Underscores"]
+  n29["Header.With.Dots"]
+  n30["Header/With/Slashes"]
+  n31["Header\With\Backslashes"]
+  n32["Header|With|Pipes"]
+  n33["First Header"]
+  n34["Second Header"]
+  n45["Final Section"]
+  n46["This Is An Extremely Long Header Title That Goes On And On And On And Contains Many Words To Test How The Parser Handles Very Long Header Titles That Might Span Multiple Lines In Some Editors But Should Still Be Parsed As A Single Header"]
+  n47["Another Long Title With Special Characters !@#$%^&*()_+-=[]{}|;':&quot;,./<>? And Numbers 1234567890"]
+  n48["Just Headers"]
+  n49["No Code"]
+  n50["Only Documentation"]
+  n51["Pure Annotation"]
+  n52["No Expressions"]
+  n53["Until The End"]
+  subgraph sg0["Main Function"]
+    direction LR
+    n25["Back to Block Level"]
+    subgraph sg1["Inside Block Expression"]
+      direction LR
+      n20{"Inside Block Expression"}
+      class n20 decisionNode;
+      n21["Inside If True"]
+      n22["Very Deep Block"]
+      n23["Back to If Level"]
+      n24["Inside Else"]
+    end
+  end
+  subgraph sg2["Third Header"]
+    direction LR
+    n35["Subsection A"]
+    n36["Subsection B"]
+    n37["Subsection C"]
+  end
+  subgraph sg3["Before Let"]
+    direction LR
+    n42["Before For"]
+    n43["Inside For"]
+    n44["After For"]
+    subgraph sg4["After Let"]
+      direction LR
+      n41["After If"]
+      subgraph sg5["Before If"]
+        direction LR
+        n38{"Before If"}
+        class n38 decisionNode;
+        n39["Inside If"]
+        n40["Inside Else"]
+      end
+    end
+  end
+  n1 --> n2
+  n0 --> n1
+  n10 --> n11
+  n9 --> n10
+  n8 --> n9
+  n7 --> n8
+  n6 --> n7
+  n5 --> n6
+  n4 --> n5
+  n3 --> n4
+  n13 --> n14
+  n12 --> n13
+  n15 --> n16
+  n14 --> n15
+  n18 --> n19
+  n17 --> n18
+  n21 --> n22
+  n22 --> n23
+  n20 --> n21
+  n20 --> n24
+  n22 --> n25
+  n24 --> n25
+  n25 --> n26
+  n31 --> n32
+  n30 --> n31
+  n29 --> n30
+  n28 --> n29
+  n27 --> n28
+  n33 --> n34
+  n35 --> n36
+  n36 --> n37
+  n34 --> n35
+  n38 --> n39
+  n38 --> n40
+  n39 --> n41
+  n40 --> n41
+  n42 --> n43
+  n41 --> n42
+  n43 --> n44
+  n44 --> n45
+  n46 --> n47
+  n52 --> n53
+  n51 --> n52
+  n50 --> n51
+  n49 --> n50
+  n48 --> n49
+%%__BAML_SPANMAP__={"n0":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":3,"start":4,"end_line":4,"end":0},"n1":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":6,"start":4,"end_line":7,"end":0},"n2":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":9,"start":4,"end_line":10,"end":0},"n3":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":15,"start":4,"end_line":16,"end":0},"n4":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":16,"start":4,"end_line":17,"end":0},"n5":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":17,"start":4,"end_line":18,"end":0},"n6":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":18,"start":4,"end_line":19,"end":0},"n7":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":19,"start":4,"end_line":20,"end":0},"n8":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":20,"start":4,"end_line":21,"end":0},"n9":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":21,"start":4,"end_line":22,"end":0},"n10":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":22,"start":4,"end_line":23,"end":0},"n11":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":23,"start":4,"end_line":24,"end":0},"n12":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":29,"start":4,"end_line":30,"end":0},"n13":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":30,"start":4,"end_line":31,"end":0},"n14":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":31,"start":4,"end_line":32,"end":0},"n15":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":35,"start":4,"end_line":36,"end":0},"n16":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":36,"start":4,"end_line":37,"end":0},"n17":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":42,"start":4,"end_line":43,"end":0},"n18":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":48,"start":4,"end_line":49,"end":0},"n19":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":51,"start":4,"end_line":52,"end":0},"n20":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":60,"start":8,"end_line":61,"end":0},"n21":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":63,"start":12,"end_line":64,"end":0},"n22":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":66,"start":16,"end_line":67,"end":0},"n23":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":70,"start":12,"end_line":71,"end":0},"n24":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":73,"start":12,"end_line":74,"end":0},"n25":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":77,"start":8,"end_line":78,"end":0},"n26":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":81,"start":4,"end_line":82,"end":0},"n27":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":86,"start":4,"end_line":87,"end":0},"n28":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":87,"start":4,"end_line":88,"end":0},"n29":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":88,"start":4,"end_line":89,"end":0},"n30":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":89,"start":4,"end_line":90,"end":0},"n31":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":90,"start":4,"end_line":91,"end":0},"n32":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":91,"start":4,"end_line":92,"end":0},"n33":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":97,"start":4,"end_line":98,"end":0},"n34":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":98,"start":4,"end_line":99,"end":0},"n35":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":101,"start":4,"end_line":102,"end":0},"n36":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":102,"start":4,"end_line":103,"end":0},"n37":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":103,"start":4,"end_line":104,"end":0},"n38":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":113,"start":4,"end_line":114,"end":0},"n39":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":115,"start":8,"end_line":116,"end":0},"n40":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":118,"start":8,"end_line":119,"end":0},"n41":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":121,"start":4,"end_line":122,"end":0},"n42":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":123,"start":4,"end_line":124,"end":0},"n43":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":125,"start":8,"end_line":126,"end":0},"n44":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":128,"start":4,"end_line":129,"end":0},"n45":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":130,"start":4,"end_line":131,"end":0},"n46":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":135,"start":4,"end_line":136,"end":0},"n47":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":137,"start":4,"end_line":138,"end":0},"n48":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":143,"start":4,"end_line":144,"end":0},"n49":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":144,"start":4,"end_line":145,"end":0},"n50":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":145,"start":4,"end_line":146,"end":0},"n51":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":146,"start":4,"end_line":147,"end":0},"n52":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":147,"start":4,"end_line":148,"end":0},"n53":{"file_path":"tests/validation_files/headers/edge_cases.baml","start_line":148,"start":4,"end_line":149,"end":0}}
+  click n0 call bamlMermaidNodeClick() "Go to source"
+  click n1 call bamlMermaidNodeClick() "Go to source"
+  click n2 call bamlMermaidNodeClick() "Go to source"
+  click n3 call bamlMermaidNodeClick() "Go to source"
+  click n4 call bamlMermaidNodeClick() "Go to source"
+  click n5 call bamlMermaidNodeClick() "Go to source"
+  click n6 call bamlMermaidNodeClick() "Go to source"
+  click n7 call bamlMermaidNodeClick() "Go to source"
+  click n8 call bamlMermaidNodeClick() "Go to source"
+  click n9 call bamlMermaidNodeClick() "Go to source"
+  click n10 call bamlMermaidNodeClick() "Go to source"
+  click n11 call bamlMermaidNodeClick() "Go to source"
+  click n12 call bamlMermaidNodeClick() "Go to source"
+  click n13 call bamlMermaidNodeClick() "Go to source"
+  click n14 call bamlMermaidNodeClick() "Go to source"
+  click n15 call bamlMermaidNodeClick() "Go to source"
+  click n16 call bamlMermaidNodeClick() "Go to source"
+  click n17 call bamlMermaidNodeClick() "Go to source"
+  click n18 call bamlMermaidNodeClick() "Go to source"
+  click n19 call bamlMermaidNodeClick() "Go to source"
+  click n20 call bamlMermaidNodeClick() "Go to source"
+  click n21 call bamlMermaidNodeClick() "Go to source"
+  click n22 call bamlMermaidNodeClick() "Go to source"
+  click n23 call bamlMermaidNodeClick() "Go to source"
+  click n24 call bamlMermaidNodeClick() "Go to source"
+  click n25 call bamlMermaidNodeClick() "Go to source"
+  click n26 call bamlMermaidNodeClick() "Go to source"
+  click n27 call bamlMermaidNodeClick() "Go to source"
+  click n28 call bamlMermaidNodeClick() "Go to source"
+  click n29 call bamlMermaidNodeClick() "Go to source"
+  click n30 call bamlMermaidNodeClick() "Go to source"
+  click n31 call bamlMermaidNodeClick() "Go to source"
+  click n32 call bamlMermaidNodeClick() "Go to source"
+  click n33 call bamlMermaidNodeClick() "Go to source"
+  click n34 call bamlMermaidNodeClick() "Go to source"
+  click n35 call bamlMermaidNodeClick() "Go to source"
+  click n36 call bamlMermaidNodeClick() "Go to source"
+  click n37 call bamlMermaidNodeClick() "Go to source"
+  click n38 call bamlMermaidNodeClick() "Go to source"
+  click n39 call bamlMermaidNodeClick() "Go to source"
+  click n40 call bamlMermaidNodeClick() "Go to source"
+  click n41 call bamlMermaidNodeClick() "Go to source"
+  click n42 call bamlMermaidNodeClick() "Go to source"
+  click n43 call bamlMermaidNodeClick() "Go to source"
+  click n44 call bamlMermaidNodeClick() "Go to source"
+  click n45 call bamlMermaidNodeClick() "Go to source"
+  click n46 call bamlMermaidNodeClick() "Go to source"
+  click n47 call bamlMermaidNodeClick() "Go to source"
+  click n48 call bamlMermaidNodeClick() "Go to source"
+  click n49 call bamlMermaidNodeClick() "Go to source"
+  click n50 call bamlMermaidNodeClick() "Go to source"
+  click n51 call bamlMermaidNodeClick() "Go to source"
+  click n52 call bamlMermaidNodeClick() "Go to source"
+  click n53 call bamlMermaidNodeClick() "Go to source"

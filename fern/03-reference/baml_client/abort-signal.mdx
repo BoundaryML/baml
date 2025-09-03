@@ -1,0 +1,350 @@
+---
+title: "AbortSignal / Timeouts"
+description: "API reference for cancelling BAML function calls"
+---
+
+## Overview
+
+BAML provides cancellation support for in-flight function calls across all language clients. In TypeScript, this uses the modern AbortSignal API, while other languages use their native patterns.
+
+## Language Support
+
+| Language | Implementation | Import |
+|----------|---------------|---------|
+| TypeScript | `AbortSignal` API | Built-in (Node.js 15+) |
+| Python | Custom `AbortController` | `from baml_py import AbortController` |
+| Go | `context.Context` | Built-in |
+| Ruby | Not supported | - |
+
+## API Reference
+
+<Tabs>
+  <Tab title="TypeScript" language="typescript">
+### TypeScript
+
+```typescript
+// Manual cancellation
+const controller = new AbortController()
+const result = await b.FunctionName(input, {
+  signal: controller.signal
+})
+
+// Cancel operation
+controller.abort()
+
+// Automatic timeout using AbortSignal.timeout()
+const result2 = await b.FunctionName(input, {
+  signal: AbortSignal.timeout(5000) // 5 second timeout
+})
+
+// Check if aborted
+if (controller.signal.aborted) {
+  // Handle aborted state
+}
+```
+
+#### AbortController Properties
+
+- `signal: AbortSignal` - Read-only signal that indicates if the controller has been aborted
+
+#### AbortController Methods
+
+- `abort(reason?: any): void` - Cancels the associated operation(s) with an optional reason
+
+#### AbortSignal Static Methods
+
+- `AbortSignal.timeout(delay: number): AbortSignal` - Creates a signal that automatically aborts after the specified delay in milliseconds
+
+</Tab>
+
+<Tab title="Python" language="python">
+### Python
+
+```python
+from baml_py import AbortController
+
+# Create controller
+controller = AbortController()
+# or create a controller with a timeout
+controller_with_timeout = AbortController(timeout_ms=5000)
+
+# Pass to function call
+result = await b.FunctionName(
+    input,
+    baml_options={"abort_controller": controller}
+)
+
+# Cancel operation
+controller.abort()
+
+# Check if aborted
+if controller.aborted:
+    # Handle aborted state
+```
+
+#### Properties
+
+- `aborted: bool` - Returns `True` if the controller has been aborted
+
+#### Methods
+- `__init__(timeout_ms: Optional[int] = None)` - Constructs a controller with the defined timeout if provided. The timeout only starts once handed off to a BAML function.
+- `abort(reason: Any = None) -> None` - Cancels the associated operation(s) with an optional reason
+
+</Tab>
+
+<Tab title="Go" language="go">
+### Go
+
+```go
+import "context"
+
+// Create cancellable context
+ctx, cancel := context.WithCancel(context.Background())
+
+// Pass context to function call
+result, err := b.FunctionName(ctx, input)
+
+// Cancel operation
+cancel()
+
+// Check if cancelled
+select {
+case <-ctx.Done():
+    // Context was cancelled
+default:
+    // Still active
+}
+```
+
+#### Context Functions
+
+- `context.WithCancel(parent Context) (ctx Context, cancel CancelFunc)` - Creates a cancellable context
+- `context.WithTimeout(parent Context, timeout Duration) (Context, CancelFunc)` - Creates a context with timeout
+- `context.WithDeadline(parent Context, deadline Time) (Context, CancelFunc)` - Creates a context with deadline
+
+</Tab>
+
+<Tab title="Ruby" language="ruby">
+### Ruby
+
+**AbortController is not currently supported in the Ruby client.**
+
+If you need cancellation support in Ruby, please [contact us](/contact) to discuss your use case.
+
+</Tab>
+
+</Tabs>
+
+## Integration with Streaming
+
+Abort controllers work seamlessly with streaming responses:
+
+<Tabs>
+  <Tab title="TypeScript" language="typescript">
+    ```typescript
+    const controller = new AbortController()
+    const stream = b.stream.FunctionName(input, {
+      signal: controller.signal
+    })
+    
+    try {
+      for await (const chunk of stream) {
+        // Process chunk
+        if (someCondition) {
+          controller.abort() // Stops the stream
+          break
+        }
+      }
+    } catch (error) {
+      if (error instanceof BamlAbortError) {
+        console.log('Stream was aborted:', error.reason)
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Python" language="python">
+    ```python
+    controller = AbortController()
+    stream = b.stream.FunctionName(
+        input,
+        baml_options={"abort_controller": controller}
+    )
+    
+    async for chunk in stream:
+        # Process chunk
+        if some_condition:
+            controller.abort()  # Stops the stream
+            break
+    ```
+  </Tab>
+  
+  <Tab title="Go" language="go">
+    ```go
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+    
+    stream := b.StreamFunctionName(ctx, input)
+    
+    for chunk := range stream {
+        // Process chunk
+        if someCondition {
+            cancel() // Stops the stream
+            break
+        }
+    }
+    ```
+  </Tab>
+  
+</Tabs>
+
+## Error Types
+
+When an operation is aborted, language-specific errors are thrown:
+
+- **TypeScript**: `BamlAbortError`
+- **Python**: `BamlAbortError`
+- **Go**: `context.Canceled` or `context.DeadlineExceeded`
+- **Ruby**: Not supported
+
+See [BamlAbortError](/ref/baml_client/errors/baml-abort-error) for detailed error handling information.
+
+## Thread Safety
+
+<Note>
+Abort controllers are thread-safe and can be safely shared across multiple operations or threads.
+</Note>
+
+<Tabs>
+<Tab title="TypeScript" language="typescript">
+The Node.js `AbortController` is thread-safe by design.
+</Tab>
+
+<Tab title="Python" language="python">
+The BAML `AbortController` implementation is thread-safe and can be used across multiple async tasks.
+
+</Tab>
+
+<Tab title="Go" language="go">
+Go's `context.Context` is designed for concurrent use and is safe to pass to multiple goroutines.
+</Tab>
+
+<Tab title="Ruby" language="ruby">
+AbortController is not supported in Ruby.
+
+</Tab>
+
+</Tabs>
+
+## Examples
+
+### Basic Timeout Implementation
+
+<Tabs>
+  <Tab title="TypeScript" language="typescript">
+    ```typescript
+    // Modern approach using AbortSignal.timeout()
+    const result = await b.ExtractData(input, {
+      signal: AbortSignal.timeout(5000) // 5 second timeout
+    })
+    
+    // Manual timeout implementation
+    function withTimeout<T>(
+      operation: (signal: AbortSignal) => Promise<T>,
+      timeoutMs: number
+    ): Promise<T> {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+      
+      return operation(controller.signal).finally(() => {
+        clearTimeout(timeoutId)
+      })
+    }
+    
+    // Usage
+    const result2 = await withTimeout(
+      (signal) => b.ExtractData(input, { signal }),
+      5000 // 5 second timeout
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Python" language="python">
+    ```python
+      controller = AbortController(timeout_ms=timeout_seconds * 1000)
+      b.ExtractData(input, baml_options={"abort_controller": controller})
+    ```
+  </Tab>
+</Tabs>
+
+### Cancelling Multiple Operations
+
+<Tabs>
+  <Tab title="TypeScript" language="typescript">
+    ```typescript
+    const controller = new AbortController()
+    
+    const operations = [
+      b.Operation1(input1, { signal: controller.signal }),
+      b.Operation2(input2, { signal: controller.signal }),
+      b.Operation3(input3, { signal: controller.signal })
+    ]
+    
+    // Cancel all if any fails
+    try {
+      const results = await Promise.all(operations)
+    } catch (error) {
+      controller.abort() // Cancel remaining operations
+      throw error
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Python" language="python">
+    ```python
+    controller = AbortController()
+    
+    operations = [
+        b.Operation1(input1, baml_options={"abort_controller": controller}),
+        b.Operation2(input2, baml_options={"abort_controller": controller}),
+        b.Operation3(input3, baml_options={"abort_controller": controller})
+    ]
+    
+    # Cancel all if any fails
+    try:
+        results = await asyncio.gather(*operations)
+    except Exception as e:
+        controller.abort()  # Cancel remaining operations
+        raise
+    ```
+  </Tab>
+
+  <Tab title="Go" language="go">
+    ```go
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+
+    errChan := make(chan error, 3)
+    
+    // Start multiple concurrent operations
+    for i := 0; i < 3; i++ {
+      go func(idx int) {
+        _, err := b.Operation1(ctx, input)
+        errChan <- err
+      }(i)
+    }
+    
+    // Cancel all operations after 100ms
+    time.Sleep(100 * time.Millisecond)
+    cancel()
+	
+    ```
+  </Tab>
+</Tabs>
+
+## Related Documentation
+
+- [User Guide: Abort Controllers](/guide/baml-basics/abort-signal) - Learn how to use abort controllers
+- [Error Handling](/guide/baml-basics/error-handling) - Handle cancellation errors
+- [Streaming](/guide/baml-basics/streaming) - Cancel streaming operations
+- [withOptions](/ref/baml_client/with-options) - Set default abort controllers

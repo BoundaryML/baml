@@ -58,12 +58,9 @@ const clearFlashingEffect = StateEffect.define<void>();
 const flashingMark = Decoration.mark({
   attributes: {
     style: `
-      color: #00FF00;
-      font-weight: bold;
       background-color: transparent;
-      text-decoration: none;
-      text-shadow: 0 0 4px #00FF00, 0 0 6px #00FF00;
-      animation: pulseGlow 1s ease-in-out infinite alternate;
+      animation: flashGlow 800ms cubic-bezier(0.4, 0, 0.2, 1) 1;
+      will-change: text-shadow;
     `,
   },
 });
@@ -72,15 +69,10 @@ const flashingMark = Decoration.mark({
 if (typeof document !== 'undefined') {
   const style = document.createElement('style');
   style.textContent = `
-    @keyframes pulseGlow {
-      from {
-        color: #005500;
-        text-shadow: 0 0 2px #005500, 0 0 3px #005500;
-      }
-      to {
-        color: #00FF00;
-        text-shadow: 0 0 4px #00FF00, 0 0 6px #00FF00;
-      }
+    @keyframes flashGlow {
+      0% { text-shadow: 0 0 0 rgba(255, 235, 59, 0); }
+      50% { text-shadow: 0 0 3px rgba(255, 235, 59, 0.85), 0 0 8px rgba(255, 235, 59, 0.75), 0 0 14px rgba(255, 235, 59, 0.6); }
+      100% { text-shadow: 0 0 0 rgba(255, 235, 59, 0); }
     }
   `;
   document.head.appendChild(style);
@@ -145,24 +137,38 @@ export const CodeMirrorViewer = ({
   const ref = useRef<ReactCodeMirrorRef>({});
   const store = useStore();
   const flashRanges = useAtomValue(flashRangesAtom);
+  const diagnostics = useAtomValue(CodeMirrorDiagnosticsAtom);
 
   useEffect(() => {
     console.log('flashRanges updated: ', flashRanges);
     if (!ref.current.view) return;
     const view = ref.current.view;
-    // TODO: Filter by filename?
-    const convertedRanges = flashRanges.map((range) => ({
+    // Only show/act on ranges that correspond to the currently open file
+    const relevantRanges = flashRanges.filter(
+      (range) => range.filePath === fileContent.id,
+    );
+    const convertedRanges = relevantRanges.map((range) => ({
       from: view.state.doc.line(range.startLine + 1).from + range.startCol,
       to: view.state.doc.line(range.endLine + 1).from + range.endCol,
     }));
-    console.log('convertedRanges: ', convertedRanges);
-    view?.dispatch({
+    // Update flashing decorations
+    view.dispatch({
       effects: [
         clearFlashingEffect.of(),
         addFlashingEffect.of(convertedRanges),
       ],
     });
-  }, [flashRanges]);
+    // Select and center the first range in the viewport
+    const first = convertedRanges[0];
+    if (first !== undefined) {
+      view.dispatch({
+        selection: { anchor: first.from, head: first.to },
+        effects: [EditorView.scrollIntoView(first.from, { y: 'center' })],
+      });
+    }
+
+  }, [flashRanges, fileContent.id]);
+
 
   const makeLinter = useCallback(() => {
     if (lang === 'baml') {
@@ -198,7 +204,7 @@ export const CodeMirrorViewer = ({
       // );
     }
     return [];
-  }, [store, lang]);
+  }, [store, lang, CodeMirrorDiagnosticsAtom]);
 
   const compartment = useMemo(() => new Compartment(), []);
 
@@ -388,7 +394,7 @@ export const CodeMirrorViewer = ({
         effects: compartment.reconfigure([makeLinter()]),
       });
     }
-  }, [fileContent.code, lang, makeLinter, compartment]);
+  }, [fileContent.code, lang, makeLinter, compartment, diagnostics]);
 
   const handleReset = () => {
     // setActualFileContent(file_content);

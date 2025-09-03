@@ -479,6 +479,10 @@ impl OutputFormatContent {
                 TypeIR::Map(_, _, _) => Some(String::from("Answer in JSON using this schema:\n")),
                 TypeIR::Tuple(_, _) => None,
                 TypeIR::Arrow(_, _) => None, // TODO: Error? Arrow shouldn't appear here.
+                TypeIR::Top(_) => panic!(
+                    "TypeGeneric::Top should have been resolved by the compiler before code generation. \
+                     This indicates a bug in the type resolution phase."
+                ),
             }
         }
 
@@ -762,6 +766,10 @@ impl OutputFormatContent {
                     "Arrow type is not supported in LLM function outputs",
                 ))
             }
+            TypeIR::Top(_) => panic!(
+                "TypeIR::Top should have been resolved by the compiler before code generation. \
+                 This indicates a bug in the type resolution phase."
+            ),
         })
     }
 

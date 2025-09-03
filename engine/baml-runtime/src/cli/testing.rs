@@ -118,7 +118,10 @@ pub enum TestRunResult {
 }
 
 impl TestArgs {
-    pub async fn run(&self) -> Result<TestRunResult> {
+    pub async fn run(
+        &self,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
+    ) -> Result<TestRunResult> {
         let from = BamlRuntime::parse_baml_src_path(&self.from)?;
 
         if self.dotenv {
@@ -128,7 +131,7 @@ impl TestArgs {
         }
 
         let env_vars = std::env::vars().collect::<HashMap<String, String>>();
-        let runtime = BamlRuntime::from_directory(&from, env_vars.clone())?;
+        let runtime = BamlRuntime::from_directory(&from, env_vars.clone(), feature_flags)?;
         let runtime = std::sync::Arc::new(runtime);
 
         let test_execution_args = TestFilter::from(

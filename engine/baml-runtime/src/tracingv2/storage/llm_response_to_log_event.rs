@@ -36,15 +36,15 @@ pub fn make_trace_event_for_response(
             None,
             client_stack,
         ),
-        LLMResponse::UserFailure(e) | LLMResponse::InternalFailure(e) => {
-            LoggedLLMResponse::new_failure(
-                request_id.clone(),
-                e.to_string(),
-                None,
-                None,
-                client_stack,
-            )
-        }
+        LLMResponse::UserFailure(e)
+        | LLMResponse::InternalFailure(e)
+        | LLMResponse::Cancelled(e) => LoggedLLMResponse::new_failure(
+            request_id.clone(),
+            e.to_string(),
+            None,
+            None,
+            client_stack,
+        ),
     };
     TraceEventWithMeta::new_llm_response(call_stack, Arc::new(response))
 }

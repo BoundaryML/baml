@@ -34,7 +34,11 @@ fn build_validation_tests() {
 
     let mut out_file = out_file("validation_tests.rs");
 
-    for schema_path in &all_schemas {
+    // Only generate tests for .baml files, and skip custom headers fixtures (covered by mermaid_headers.rs)
+    for schema_path in all_schemas
+        .iter()
+        .filter(|p| p.ends_with(".baml") && !p.starts_with("/headers/"))
+    {
         let test_name = test_name(schema_path);
         let file_path = schema_path.trim_start_matches('/');
         writeln!(

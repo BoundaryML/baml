@@ -1,5 +1,5 @@
 use internal_baml_diagnostics::DatamodelError; // Add this line
-use internal_baml_diagnostics::Diagnostics;
+use internal_baml_diagnostics::{Diagnostics, Span};
 
 use super::{
     helpers::{parsing_catch_all, Pair},
@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{
     assert_correct_parser,
-    ast::{BlockArg, BlockArgs, Identifier, WithName, WithSpan},
+    ast::{BlockArg, BlockArgs, FieldArity, FieldType, Identifier, WithName, WithSpan},
     parser::Rule,
 };
 
@@ -27,27 +27,31 @@ pub(crate) fn parse_named_argument_list(
         if matches!(named_arg.as_rule(), Rule::SPACER_TEXT) {
             continue;
         }
-        if named_arg.as_rule() == Rule::named_argument || named_arg.as_rule() == Rule::openParan {
+        if named_arg.as_rule() == Rule::named_argument || named_arg.as_rule() == Rule::openParen {
             // TODO: THIS IS SUSPECT
             assert_correct_parser!(named_arg, named_arg.as_rule());
         }
         // TODO: THIS IS SUSPECT
         // assert_correct_parser!(named_arg, Rule::named_argument);
 
-        if named_arg.as_rule() == Rule::openParan || named_arg.as_rule() == Rule::closeParan {
+        if named_arg.as_rule() == Rule::openParen || named_arg.as_rule() == Rule::closeParen {
             continue;
         }
 
         let mut name = None;
         let mut r#type = None;
-        let mut is_mutable = false;
+        let is_mutable = true; // Always mutable now after mut keyword removal
+        let mut is_self = false;
         for arg in named_arg.into_inner() {
             match arg.as_rule() {
                 Rule::identifier => {
-                    name = Some(parse_identifier(arg, diagnostics));
-                }
-                Rule::MUT_KEYWORD => {
-                    is_mutable = true;
+                    let ident = parse_identifier(arg, diagnostics);
+
+                    if ident.name() == "self" {
+                        is_self = true;
+                    }
+
+                    name = Some(ident);
                 }
                 Rule::COLON => {}
                 Rule::field_type | Rule::field_type_chain => {
@@ -58,6 +62,31 @@ pub(crate) fn parse_named_argument_list(
                 }
                 _ => parsing_catch_all(arg, "named_argument_list"),
             }
+        }
+
+        if is_self {
+            if !args.is_empty() {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    "self must be the first parameter",
+                    name.as_ref()
+                        .map(|ident| ident.span().to_owned())
+                        .unwrap_or(Span::fake()),
+                ));
+            }
+
+            r#type = Some(BlockArg {
+                is_mutable,
+                is_self,
+                span: name
+                    .as_ref()
+                    .map(|ident| ident.span().to_owned())
+                    .unwrap_or(Span::fake()),
+                field_type: FieldType::Symbol(
+                    FieldArity::Required,
+                    Identifier::Local("Self".to_string(), Span::fake()),
+                    None,
+                ),
+            });
         }
 
         match (name, r#type) {
@@ -97,6 +126,7 @@ pub fn parse_function_arg(
     match parse_field_type_chain(pair, diagnostics) {
         Some(ftype) => Ok(BlockArg {
             is_mutable,
+            is_self: false, // Handled in parse_named_argument_list
             span,
             field_type: ftype,
         }),

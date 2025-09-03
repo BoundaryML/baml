@@ -1,15 +1,18 @@
 function simpleIf() -> string {
-    let x = if true { "yes" } else { "no" };
+    let x = if (true) { "yes" } else { "no" };
     x
 }
 
 // function simpleIf() {
 //   let x = if true {
-//   "yes"
+//   
+//     "yes"
 //   } else {
-//   "no"
+//   
+//     "no"
 //   } ;
-//   return x;
+//
+//   x
 // }
 //
 // class std::Request {

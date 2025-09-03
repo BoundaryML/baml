@@ -114,7 +114,7 @@ def main(
     os.chdir(repo_root)
 
     # Pull latest tags
-    run("git pull --tags")
+    run("git fetch origin --tags")
 
     # Check git status
     if run("git diff --quiet", check=False).returncode != 0:
@@ -194,12 +194,12 @@ def main(
     )
 
     # Run bundle install for Ruby client to update Gemfile.lock version of baml.
-    if ruby or bump_all:
-        c.print("Installing Ruby dependencies...", style="blue")
-        ruby_client_dir = os.path.join(repo_root, "engine/language_client_ruby")
-        os.chdir(ruby_client_dir)
-        run("bundle install")
-        c.print("Ruby dependencies installed successfully.", style="green")
+    # if ruby or bump_all:
+    #     c.print("Installing Ruby dependencies...", style="blue")
+    #     ruby_client_dir = os.path.join(repo_root, "engine/language_client_ruby")
+    #     os.chdir(ruby_client_dir)
+    #     run("bundle install")
+    #     c.print("Ruby dependencies installed successfully.", style="green")
 
     os.chdir(repo_root)
     new_version = get_current_version()

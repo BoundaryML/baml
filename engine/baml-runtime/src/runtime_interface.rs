@@ -28,11 +28,15 @@ use crate::{
 
 pub(crate) trait RuntimeConstructor {
     #[cfg(not(target_arch = "wasm32"))]
-    fn from_directory(dir: &std::path::Path) -> Result<InternalBamlRuntime>;
+    fn from_directory(
+        dir: &std::path::Path,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
+    ) -> Result<InternalBamlRuntime>;
 
     fn from_file_content<T: AsRef<str>>(
         root_path: &str,
         files: &HashMap<T, T>,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
     ) -> Result<InternalBamlRuntime>;
 }
 
@@ -116,6 +120,9 @@ pub trait InternalRuntimeInterface {
         client_name: &ClientSpec,
         ctx: &RuntimeContext,
     ) -> Result<Vec<OrchestratorNode>>;
+
+    /// send a mermaid graph of the function graph
+    fn function_graph(&self, function_name: &str, ctx: &RuntimeContext) -> Result<String>;
 
     fn get_function<'ir>(&'ir self, function_name: &str) -> Result<FunctionWalker<'ir>>;
     fn get_expr_function<'ir>(

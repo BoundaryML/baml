@@ -1,10 +1,11 @@
 //! A stateful LSP implementation that calls into the Ruff API.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 // use crate::baml_project::ProjectDatabase;
 use lsp_types::notification::Notification as LSPNotification;
 use lsp_types::request::Request;
+use parking_lot::Mutex;
 
 use super::notifications::DidSaveTextDocument;
 use crate::{

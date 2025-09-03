@@ -81,6 +81,37 @@ const main = async () => {
 }
 ```
 
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/myproject/baml_client"
+    "example.com/myproject/baml_client/types"
+)
+
+func getWeather(city string, timeOfDay string) {
+    // Your weather API implementation
+}
+
+func main() {
+    ctx := context.Background()
+    
+    weatherInfo, err := b.UseTool(ctx, "What's the weather like in San Francisco?")
+    if err != nil {
+        panic(err)
+    }
+    
+    fmt.Printf("%+v\n", weatherInfo)
+    fmt.Printf("City: %s\n", weatherInfo.City)
+    fmt.Printf("Time of Day: %s\n", weatherInfo.TimeOfDay)
+    
+    getWeather(weatherInfo.City, weatherInfo.TimeOfDay)
+}
+```
+
 ```ruby Ruby
 require_relative "baml_client/client"
 
@@ -178,6 +209,42 @@ const main = async () => {
 main()
 ```
 
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/myproject/baml_client"
+    "example.com/myproject/baml_client/types"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    tool, err := b.UseTool(ctx, "What's the weather like in San Francisco?")
+    if err != nil {
+        panic(err)
+    }
+    
+    fmt.Printf("%+v\n", tool)
+    
+    // Go generates As{TypeName}() methods for union types
+    // Method names correspond to the actual union variant names
+    if weatherAPI := tool.AsWeatherAPI(); weatherAPI != nil {
+        fmt.Println("Weather API called:")
+        fmt.Printf("City: %s\n", weatherAPI.City)
+        fmt.Printf("Time of Day: %s\n", weatherAPI.TimeOfDay)
+    } else if otherAPI := tool.AsMyOtherAPI(); otherAPI != nil {
+        fmt.Println("MyOtherAPI called:")
+        // Handle MyOtherAPI specific attributes here
+    } else {
+        fmt.Println("Unknown tool type")
+    }
+}
+```
+
 ```ruby Ruby
 require_relative "baml_client/client"
 
@@ -264,6 +331,42 @@ const main = async () => {
 }
 
 main()
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/myproject/baml_client"
+    "example.com/myproject/baml_client/types"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    tools, err := b.UseTool(ctx, "What's the weather like in San Francisco and New York?")
+    if err != nil {
+        panic(err)
+    }
+    
+    fmt.Printf("%+v\n", tools)
+    
+    for _, tool := range tools {
+        if weatherAPI := tool.AsWeatherAPI(); weatherAPI != nil {
+            fmt.Println("Weather API called:")
+            fmt.Printf("City: %s\n", weatherAPI.City)
+            fmt.Printf("Time of Day: %s\n", weatherAPI.TimeOfDay)
+        } else if otherAPI := tool.AsMyOtherAPI(); otherAPI != nil {
+            fmt.Println("MyOtherAPI called:")
+            // Handle MyOtherAPI specific attributes here
+        } else {
+            fmt.Println("Unknown tool type")
+        }
+    }
+}
 ```
 
 ```ruby Ruby
@@ -548,6 +651,101 @@ async function main() {
 
 main();
 
+```
+
+```go toolAgent.go
+package main
+
+import (
+    "bufio"
+    "context"
+    "fmt"
+    "os"
+    "strings"
+    
+    b "example.com/myproject/baml_client"
+    "example.com/myproject/baml_client/types"
+)
+
+func handleWeather(weather *types.WeatherAPI) string {
+    // Simulate weather API call
+    return fmt.Sprintf("The weather in %s at %s is sunny.", weather.City, weather.Time)
+}
+
+func handleCalculator(calc *types.CalculatorAPI) string {
+    numbers := calc.Numbers
+    var result float64
+    
+    switch calc.Operation {
+    case "add":
+        result = 0
+        for _, n := range numbers {
+            result += n
+        }
+    case "subtract":
+        if len(numbers) > 0 {
+            result = numbers[0]
+            for _, n := range numbers[1:] {
+                result -= n
+            }
+        }
+    case "multiply":
+        result = 1
+        for _, n := range numbers {
+            result *= n
+        }
+    case "divide":
+        if len(numbers) > 0 {
+            result = numbers[0]
+            for _, n := range numbers[1:] {
+                if n != 0 {
+                    result /= n
+                }
+            }
+        }
+    default:
+        return "Unknown operation."
+    }
+    
+    return fmt.Sprintf("The result is %.2f", result)
+}
+
+func main() {
+    ctx := context.Background()
+    fmt.Println("Agent started! Type 'exit' to quit.")
+    
+    scanner := bufio.NewScanner(os.Stdin)
+    
+    for {
+        fmt.Print("You: ")
+        if !scanner.Scan() {
+            break
+        }
+        
+        input := scanner.Text()
+        if strings.ToLower(input) == "exit" {
+            break
+        }
+        
+        // Call the BAML function to select tool
+        toolResponse, err := b.SelectTool(ctx, input)
+        if err != nil {
+            fmt.Printf("Error: %v\n", err)
+            continue
+        }
+        
+        // Handle the tool response using generated As methods
+        if weatherAPI := toolResponse.AsWeatherAPI(); weatherAPI != nil {
+            result := handleWeather(weatherAPI)
+            fmt.Printf("Agent (Weather): %s\n", result)
+        } else if calcAPI := toolResponse.AsCalculatorAPI(); calcAPI != nil {
+            result := handleCalculator(calcAPI)
+            fmt.Printf("Agent (Calculator): %s\n", result)
+        } else {
+            fmt.Println("Agent: Sorry, I couldn't handle that input.")
+        }
+    }
+}
 ```
 
 </CodeGroup>

@@ -110,7 +110,7 @@ function createTree(filePaths: string[]): TreeNode[] {
 }
 
 const FileViewer = () => {
-  const { width, height = 200, ref } = useResizeObserver();
+  const { width, height, ref } = useResizeObserver();
   const editorFiles = useAtomValue(currentEditorFilesAtom);
   const setFiles = useSetAtom(filesAtom);
   const treeRef = useRef<TreeApi<any> | null>(null);
@@ -143,7 +143,7 @@ const FileViewer = () => {
   );
 
   return (
-    <div className="flex flex-col pl-2 w-full h-full overflow-x-clip">
+    <div className="flex flex-col pl-2 w-full h-full overflow-x-clip overflow-y-hidden">
       <div className="folderFileActions">{createFileFolder}</div>
       {/* <input
         type="text"
@@ -152,7 +152,7 @@ const FileViewer = () => {
         value={term}
         onChange={(e) => setTerm(e.target.value)}
       /> */}
-      <div ref={ref} className="flex flex-col h-full">
+      <div ref={ref} className="flex flex-col h-full min-h-0">
         <Tree
           className="truncate"
           ref={treeRef}
@@ -293,7 +293,7 @@ const FileViewer = () => {
               });
             }
           }}
-          height={height}
+          height={height && height > 0 ? height : 600}
           searchTerm={term}
           searchMatch={(node, term) =>
             node.data.name.toLowerCase().includes(term.toLowerCase())

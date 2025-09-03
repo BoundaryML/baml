@@ -1,15 +1,15 @@
-fn Factorial(mut limit: int) -> int {
+fn Factorial(limit: int) -> int {
 
-	let mut result = 1;
+	let result = 1;
 
 
     // used to make the loop break without relying on `break` implementation.
-    let mut should_continue = true;
-	while should_continue {
+    let should_continue = true;
+	while (should_continue) {
 		result = result * limit;
 		limit = limit - 1;
 
-        if limit != 0 {
+        if (limit != 0) {
             continue;
         } else {
             should_continue = false;
@@ -21,11 +21,11 @@ fn Factorial(mut limit: int) -> int {
 }
 
 fn ContinueNested() -> int {
-    while true {
-        while false {
+    while (true) {
+        while (false) {
             continue;
         }
-        if false {
+        if (false) {
             continue;
         }
     }
@@ -56,7 +56,7 @@ fn ContinueNested() -> int {
 //      15   CMP_OP !=           
 //      16   JUMP_IF_FALSE +4    (to 20)
 //      17   POP 1               
-//      18   JUMP -16            (to 2)
+//      18   JUMP +5             (to 23)
 //      19   JUMP +4             (to 23)
 //      20   POP 1               
 //
@@ -76,14 +76,14 @@ fn ContinueNested() -> int {
 // 24   3    LOAD_CONST 1        (false)
 //      4    JUMP_IF_FALSE +4    (to 8)
 //      5    POP 1               
-//      6    JUMP -3             (to 3)
+//      6    JUMP +1             (to 7)
 //      7    JUMP -4             (to 3)
 //      8    POP 1               
 //
 // 27   9    LOAD_CONST 2        (false)
 //      10   JUMP_IF_FALSE +4    (to 14)
 //      11   POP 1               
-//      12   JUMP -12            (to 0)
+//      12   JUMP +3             (to 15)
 //      13   JUMP +2             (to 15)
 //      14   POP 1               
 //      15   JUMP -15            (to 0)
@@ -93,3 +93,8 @@ fn ContinueNested() -> int {
 //      18   RETURN              
 //
 // Class: std::Request with 3 fields
+// Function: std.Array.len
+//
+// Function: std.Map.len
+//
+// Function: std.Map.contains

@@ -106,7 +106,8 @@ impl Pass2Repr {
             | TypeGeneric::Literal(.., meta) => {
                 meta.streaming_behavior.done = true;
             }
-            TypeGeneric::Primitive(
+            TypeGeneric::Top(_)
+            | TypeGeneric::Primitive(
                 TypeValue::String | TypeValue::Media(..) | TypeValue::Null,
                 ..,
             )
@@ -517,6 +518,10 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     meta: (span.clone(), None), // Type will be inferred later
                 })
             }
+            // TODO: impl this (needs to compile, can't panic).
+            ast::Expression::MethodCall { span, .. } => {
+                Ok(Expr::Atom(BamlValueWithMeta::Null((span.clone(), None))))
+            }
             ast::Expression::BinaryOperation {
                 left,
                 operator,
@@ -767,7 +772,7 @@ impl IntermediateRepr {
         self.expr_fns.iter().map(|e| Walker { ir: self, item: e })
     }
 
-    pub fn walk_tests(
+    pub fn walk_function_test_pairs(
         &self,
     ) -> impl Iterator<Item = Walker<'_, (&Node<Function>, &Node<TestCase>)>> {
         self.functions.iter().flat_map(move |f| {
@@ -2785,7 +2790,8 @@ pub fn make_test_ir_and_diagnostics(
 
     let path: PathBuf = "fake_file.baml".into();
     let source_file: SourceFile = (path.clone(), source_code).into();
-    let validated_schema: ValidatedSchema = validate(&path, vec![source_file]);
+    let validated_schema: ValidatedSchema =
+        validate(&path, vec![source_file], crate::FeatureFlags::new());
     let diagnostics = validated_schema.diagnostics;
     let ir = IntermediateRepr::from_parser_database(
         &validated_schema.db,
@@ -2807,7 +2813,8 @@ fn make_test_ir_and_diagnostics_from_dir(
 
     use crate::{validate, ValidatedSchema};
 
-    let validated_schema: ValidatedSchema = validate(root_dir, source_code);
+    let validated_schema: ValidatedSchema =
+        validate(root_dir, source_code, crate::FeatureFlags::new());
     let diagnostics = validated_schema.diagnostics;
     let ir = IntermediateRepr::from_parser_database(
         &validated_schema.db,

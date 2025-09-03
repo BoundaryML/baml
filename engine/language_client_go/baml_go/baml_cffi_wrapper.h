@@ -37,6 +37,9 @@ Buffer WrapCallObjectMethodFunction(const void *runtime, const char *encoded_arg
 void SetCallFunctionParseFromCFn(void *fn);
 const void *WrapCallFunctionParseFromC(const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id);
 
+void SetCancelFunctionCallFn(void *fn);
+void WrapCancelFunctionCall(uint32_t id);
+
 void SetFreeBufferFn(void *fn);
 void WrapFreeBuffer(Buffer buffer);
 

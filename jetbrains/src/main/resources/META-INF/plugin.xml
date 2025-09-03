@@ -13,7 +13,7 @@
     <actions>
         <action
                 id="baml.openBamlPanel"
-                class="com.boundaryml.jetbrains_ext.OpenBamlPlaygroundAction"
+                class="com.boundaryml.jetbrains_ext.BamlPlaygroundAction"
                 text="Open BAML Playground"
                 description="Opens an interactive playground for running and testing BAML code."
                 icon="/icons/baml-lamb-light-mode.svg"
@@ -21,7 +21,7 @@
         </action>
         <action
                 id="baml.runBamlTest"
-                class="com.boundaryml.jetbrains_ext.RunBamlTestAction"
+                class="com.boundaryml.jetbrains_ext.BamlPlaygroundAction"
                 text="Run BAML Test"
                 description="Opens the BAML playground and runs the specified test."
                 icon="/icons/baml-lamb-light-mode.svg"
@@ -31,7 +31,7 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow
-                id="BAML Playground"
+                id="BAML Playground (beta)"
                 factoryClass="com.boundaryml.jetbrains_ext.BamlToolWindowFactory"
                 icon="/icons/baml-lamb-light-mode.svg"
         />

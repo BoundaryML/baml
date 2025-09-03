@@ -93,6 +93,7 @@ impl<'a> InterfaceFieldType<'a> {
                 InterfaceFieldType::RecursiveTypeAlias(name.as_str())
             }
             TypeIR::Arrow(_, _) => InterfaceFieldType::Unknown,
+            TypeIR::Top(_) => InterfaceFieldType::Unknown,
         }
     }
 }

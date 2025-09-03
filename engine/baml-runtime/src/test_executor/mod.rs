@@ -19,7 +19,7 @@ use regex::Regex;
 pub use test_execution_args::TestFilter;
 use tokio::sync::{Mutex, MutexGuard};
 
-use crate::{BamlRuntime, TestResponse, TestStatus};
+use crate::{BamlRuntime, TestResponse, TestStatus, TripWire};
 
 pub enum TestRunStatus {
     /// No tests were selected.
@@ -143,7 +143,7 @@ impl TestExecutor for BamlRuntime {
         let func_test_pairs = {
             let ir = &self.inner.ir;
             // Regular LLM function tests
-            let from_fn_tests = ir.walk_tests().filter_map(|node_pair| {
+            let from_fn_tests = ir.walk_function_test_pairs().filter_map(|node_pair| {
                 let (function_name, test_name) = node_pair.name();
                 if args.includes(function_name, test_name) {
                     Some((function_name.to_string(), test_name.to_string()))
@@ -206,7 +206,7 @@ impl TestExecutor for BamlRuntime {
         let selected_tests = {
             let ir = &self.inner.ir;
             // Regular LLM function tests
-            let from_fn_tests = ir.walk_tests().filter_map(|node_pair| {
+            let from_fn_tests = ir.walk_function_test_pairs().filter_map(|node_pair| {
                 let (function_name, test_name) = node_pair.name();
                 if args.includes(function_name, test_name) {
                     node_pair.span().map(|s| {
@@ -284,14 +284,18 @@ impl TestExecutor for BamlRuntime {
                         test_name.clone(),
                         TestExecutionStatus::Running,
                     ));
+                    let on_tick = if false { Some(|| {}) } else { None };
+                    let on_event = if false { Some(|_| {}) } else { None };
                     let (result, _) = runtime
                         .run_test(
                             &function_name,
                             &test_name,
                             &ctx_manager,
-                            Some(|_| {}),
+                            on_event,
                             None,
                             env_vars,
+                            TripWire::new(None), // No tripwire for test executor,
+                            on_tick,
                         )
                         .await;
                     let duration = start_instant.elapsed();

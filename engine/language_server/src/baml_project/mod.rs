@@ -11,8 +11,8 @@ use std::{
 
 use anyhow::Context;
 use baml_lsp_types::{
-    BamlFunction, BamlGeneratorConfig, BamlParam, BamlParentFunction, BamlSpan, BamlTestCase,
-    SymbolLocation,
+    BamlFunction, BamlFunctionTestCasePair, BamlGeneratorConfig, BamlParam, BamlParentFunction,
+    BamlSpan, SymbolLocation,
 };
 use baml_runtime::{
     // internal::llm_client::LLMResponse,
@@ -92,8 +92,8 @@ impl BamlProject {
         }
     }
 
-    pub fn list_functions(&mut self) -> Vec<BamlFunction> {
-        let runtime = self.runtime(HashMap::new());
+    pub fn list_functions(&mut self, feature_flags: &[String]) -> Vec<BamlFunction> {
+        let runtime = self.runtime(HashMap::new(), feature_flags);
         if let Ok(runtime) = runtime {
             runtime.list_functions()
         } else {
@@ -145,6 +145,7 @@ impl BamlProject {
     pub fn run_generators_native(
         &mut self,
         no_version_check: Option<bool>,
+        feature_flags: &[String],
     ) -> Result<Vec<GenerateOutput>, anyhow::Error> {
         let env = std::env::vars().collect();
         let all_files = self
@@ -157,7 +158,7 @@ impl BamlProject {
             .collect();
         let start_time = Instant::now();
 
-        let runtime = self.runtime(env);
+        let runtime = self.runtime(env, feature_flags);
         if let Err(e) = runtime {
             if e.has_errors() {
                 tracing::error!("Failed to run codegen: {:?}", e);
@@ -288,8 +289,11 @@ impl BamlProject {
         Ok(workspace_files)
     }
 
-    pub fn list_generators(&mut self) -> Result<Vec<BamlGeneratorConfig>, &str> {
-        let runtime = self.runtime(HashMap::new());
+    pub fn list_generators(
+        &mut self,
+        feature_flags: &[String],
+    ) -> Result<Vec<BamlGeneratorConfig>, &str> {
+        let runtime = self.runtime(HashMap::new(), feature_flags);
         if let Ok(runtime) = runtime {
             Ok(runtime.list_generators())
         } else {
@@ -300,6 +304,7 @@ impl BamlProject {
     pub fn runtime(
         &mut self,
         env_vars: HashMap<String, String>,
+        feature_flags: &[String],
     ) -> Result<BamlRuntime, Diagnostics> {
         let mut all_files_for_hash = self.files.iter().collect::<Vec<_>>();
 
@@ -321,6 +326,12 @@ impl BamlProject {
         for (k, v) in &sorted_env_vars {
             k.hash(&mut hasher);
             v.hash(&mut hasher);
+        }
+        // Include feature flags in the cache hash
+        let mut sorted_flags = feature_flags.to_vec();
+        sorted_flags.sort();
+        for flag in &sorted_flags {
+            flag.hash(&mut hasher);
         }
         let current_hash = hasher.finish();
 
@@ -345,10 +356,31 @@ impl BamlProject {
             .map(|(k, v)| (k.unchecked_to_string(), v.contents.clone()))
             .collect::<HashMap<_, _>>();
 
+        // Convert feature flags to FeatureFlags struct
+        tracing::info!(
+            "BamlProject::runtime called with feature_flags: {:?}",
+            feature_flags
+        );
+        let feature_flags_struct =
+            match internal_baml_core::FeatureFlags::from_vec(feature_flags.to_vec()) {
+                Ok(flags) => {
+                    tracing::info!(
+                        "Successfully converted feature flags to FeatureFlags struct: {:?}",
+                        flags
+                    );
+                    flags
+                }
+                Err(errors) => {
+                    tracing::warn!("Invalid feature flags: {:?}, using empty flags", errors);
+                    internal_baml_core::FeatureFlags::new()
+                }
+            };
+
         let result = BamlRuntime::from_file_content(
             &self.root_dir_name.to_string_lossy(),
             &files_for_runtime,
             env_vars,
+            feature_flags_struct,
         )
         .map_err(|e| match e.downcast::<DiagnosticsError>() {
             Ok(e) => e,
@@ -358,6 +390,8 @@ impl BamlProject {
             }
         });
 
+        // NOTE: consider using RefCell/RwLock/Mutex separately on this so we can have
+        // &self & reduce critical sections as much as possible.
         self.cached_runtime = Some((current_hash, result.clone()));
 
         result
@@ -377,19 +411,7 @@ impl BamlProject {
 }
 
 pub trait BamlRuntimeExt {
-    fn list_testcases(&self) -> Vec<BamlTestCase>;
-
-    fn get_testcase_from_position(
-        &self,
-        parent_function: BamlFunction,
-        cursor_idx: usize,
-    ) -> Option<BamlTestCase>;
-
-    fn get_function_of_testcase(
-        &self,
-        file_name: &str,
-        cursor_idx: usize,
-    ) -> Option<BamlParentFunction>;
+    fn list_function_test_pairs(&self) -> Vec<BamlFunctionTestCasePair>;
 
     fn search_for_symbol(&self, symbol: &str) -> Option<SymbolLocation>;
     fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation>;
@@ -640,29 +662,30 @@ impl BamlRuntimeExt for BamlRuntime {
                                 Some(span) => span.into(),
                                 None => BamlSpan::default(),
                             };
+                            let function_name_span = tc
+                                .test_case()
+                                .functions
+                                .iter()
+                                .find(|f| f.elem.name() == tc.function().name())
+                                .and_then(|f| f.attributes.span.as_ref())
+                                .map(|span| span.into());
 
-                            BamlTestCase {
+                            BamlFunctionTestCasePair {
                                 name: tc.test_case().name.clone(),
                                 inputs: params,
                                 error,
                                 span: wasm_span,
-                                parent_functions: tc
-                                    .test_case()
-                                    .functions
-                                    .iter()
-                                    .map(|f| {
-                                        let (start, end) = f
-                                            .attributes
-                                            .span
-                                            .as_ref()
-                                            .map_or((0, 0), |f| (f.start, f.end));
-                                        BamlParentFunction {
-                                            start,
-                                            end,
-                                            name: f.elem.name().to_string(),
-                                        }
-                                    })
-                                    .collect(),
+                                function: {
+                                    let f = tc.function();
+                                    let (start, end) =
+                                        f.span().map_or((0, 0), |f| (f.start, f.end));
+                                    BamlParentFunction {
+                                        start,
+                                        end,
+                                        name: f.name().to_string(),
+                                    }
+                                },
+                                function_name_span,
                             }
                         })
                         .collect(),
@@ -770,7 +793,7 @@ impl BamlRuntimeExt for BamlRuntime {
 
         None
     }
-    fn list_testcases(&self) -> Vec<BamlTestCase> {
+    fn list_function_test_pairs(&self) -> Vec<BamlFunctionTestCasePair> {
         let ctx = self.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
 
         let ctx = ctx.create_ctx_with_default();
@@ -778,7 +801,7 @@ impl BamlRuntimeExt for BamlRuntime {
 
         self.inner
             .ir
-            .walk_tests()
+            .walk_function_test_pairs()
             .map(|tc| {
                 let params = match tc.test_case_params(&ctx) {
                     Ok(params) => Ok(params
@@ -828,73 +851,31 @@ impl BamlRuntimeExt for BamlRuntime {
                     None => BamlSpan::default(),
                 };
 
-                BamlTestCase {
+                let function_name_span = tc
+                    .test_case()
+                    .functions
+                    .iter()
+                    .find(|f| f.elem.name() == tc.function().name())
+                    .and_then(|f| f.attributes.span.as_ref())
+                    .map(|span| span.into());
+                BamlFunctionTestCasePair {
                     name: tc.test_case().name.clone(),
                     inputs: params,
                     error,
                     span: wasm_span,
-                    parent_functions: tc
-                        .test_case()
-                        .functions
-                        .iter()
-                        .map(|f| {
-                            let (start, end) = f
-                                .attributes
-                                .span
-                                .as_ref()
-                                .map_or((0, 0), |f| (f.start, f.end));
-                            BamlParentFunction {
-                                start,
-                                end,
-                                name: f.elem.name().to_string(),
-                            }
-                        })
-                        .collect(),
+                    function: {
+                        let f = tc.function();
+                        let (start, end) = f.span().map_or((0, 0), |f| (f.start, f.end));
+                        BamlParentFunction {
+                            start,
+                            end,
+                            name: f.name().to_string(),
+                        }
+                    },
+                    function_name_span,
                 }
             })
             .collect()
-    }
-
-    fn get_testcase_from_position(
-        &self,
-        parent_function: BamlFunction,
-        cursor_idx: usize,
-    ) -> Option<BamlTestCase> {
-        let testcases = parent_function.test_cases;
-        for testcase in testcases {
-            let span = testcase.clone().span;
-
-            if span.file_path.as_str() == (parent_function.span.file_path)
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
-            {
-                return Some(testcase);
-            }
-        }
-        None
-    }
-
-    fn get_function_of_testcase(
-        &self,
-        file_name: &str,
-        cursor_idx: usize,
-    ) -> Option<BamlParentFunction> {
-        let testcases = self.list_testcases();
-
-        for tc in testcases {
-            let span = tc.span;
-            if span.file_path.as_str().ends_with(file_name)
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
-            {
-                let first_function = tc
-                    .parent_functions
-                    .iter()
-                    .find(|f| f.start <= cursor_idx && cursor_idx <= f.end)
-                    .cloned();
-
-                return first_function;
-            }
-        }
-        None
     }
 }
 
@@ -943,9 +924,9 @@ impl Project {
     }
 
     /// Iterates over all generators and prints error messages if version mismatches are found.
-    pub fn check_version_on_save(&self) -> Option<String> {
+    pub fn check_version_on_save(&self, feature_flags: &[String]) -> Option<String> {
         let mut first_error_message = None;
-        if let Ok(generators) = self.list_generators() {
+        if let Ok(generators) = self.list_generators(&[]) {
             for gen in generators.iter() {
                 if let Some(message) = self.check_version(gen, false) {
                     if first_error_message.is_none() {
@@ -959,8 +940,8 @@ impl Project {
     }
 
     /// Returns true if any generator produces TypeScript output.
-    pub fn is_typescript_generator_present(&self) -> bool {
-        if let Ok(generators) = self.list_generators() {
+    pub fn is_typescript_generator_present(&self, feature_flags: &[String]) -> bool {
+        if let Ok(generators) = self.list_generators(&[]) {
             generators
                 .iter()
                 .any(|g| g.output_type.to_lowercase() == "typescript")
@@ -973,7 +954,11 @@ impl Project {
     /// Reads all files from the WASM project, builds a map from file URIs to file content,
     /// invokes diagnostics, and calls the success callback.
     /// TODO: Consider pushing diagnostics here.
-    pub fn update_runtime(&mut self, runtime_notifier: Option<Notifier>) -> anyhow::Result<()> {
+    pub fn update_runtime(
+        &mut self,
+        runtime_notifier: Option<Notifier>,
+        feature_flags: &[String],
+    ) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let fake_env_vars: HashMap<String, String> = HashMap::new();
         let _no_version_check = false;
@@ -1000,7 +985,7 @@ impl Project {
                 )))?;
         }
 
-        let runtime = self.baml_project.runtime(fake_env_vars);
+        let runtime = self.baml_project.runtime(fake_env_vars, feature_flags);
         self.current_runtime = runtime.clone().ok();
         if runtime.is_ok() {
             self.last_successful_runtime = runtime.ok();
@@ -1028,6 +1013,7 @@ impl Project {
     //     }
     //     Ok(())
     // }
+    //
 
     /// Retrieves a reference to the current runtime or the last successful one.
     pub fn runtime(&self) -> anyhow::Result<&BamlRuntime> {
@@ -1096,9 +1082,10 @@ impl Project {
         doc: &TextDocumentItem,
         position: &Position,
         notifier: Notifier,
+        feature_flags: &[String],
     ) -> anyhow::Result<Option<Hover>> {
         // Force runtime update before handling hover
-        self.update_runtime(Some(notifier))
+        self.update_runtime(Some(notifier), feature_flags)
             .map_err(|e| anyhow::anyhow!("Failed to update runtime: {e}"))?;
 
         let word = get_word_at_position(&doc.text, position);
@@ -1156,16 +1143,19 @@ impl Project {
     }
 
     /// Returns a list of test cases from the WASM runtime.
-    pub fn list_testcases(&self) -> Result<Vec<BamlTestCase>, &str> {
+    pub fn list_function_test_pairs(&self) -> Result<Vec<BamlFunctionTestCasePair>, &str> {
         if let Ok(runtime) = self.runtime() {
-            Ok(runtime.list_testcases())
+            Ok(runtime.list_function_test_pairs())
         } else {
             Err("BAML Generate failed. Project has errors.")
         }
     }
 
     /// Returns a list of generator configurations.
-    pub fn list_generators(&self) -> Result<Vec<BamlGeneratorConfig>, &str> {
+    pub fn list_generators(
+        &self,
+        feature_flags: &[String],
+    ) -> Result<Vec<BamlGeneratorConfig>, &str> {
         if let Some(ref runtime) = self.current_runtime {
             Ok(runtime.list_generators())
         } else {
@@ -1216,13 +1206,17 @@ impl Project {
     /// Runs generators without debouncing.
     /// (This async method simulates generator file generation and then calls one of the provided callbacks.)
     // #[cfg(feature = "async")]
-    pub fn run_generators_without_debounce<F, E>(&mut self, on_success: F, on_error: E)
-    where
+    pub fn run_generators_without_debounce<F, E>(
+        &mut self,
+        feature_flags: &[String],
+        on_success: F,
+        on_error: E,
+    ) where
         F: Fn(String) + Send,
         E: Fn(String) + Send,
     {
         let start = Instant::now();
-        match self.baml_project.run_generators_native(None) {
+        match self.baml_project.run_generators_native(None, feature_flags) {
             Ok(generators) => {
                 let mut generated_file_count = 0;
                 for gen in generators {
@@ -1259,79 +1253,82 @@ impl Project {
     // }
 
     /// Checks if all generators use the same major.minor version.
-    /// Returns Ok(()) if they do (or if there are no generators),
+    /// Returns Ok(()) if they do,
     /// otherwise returns an Err with a descriptive message.
-    pub fn get_common_generator_version(&self) -> Result<String, String> {
-        let runtime_version = env!("CARGO_PKG_VERSION");
+    pub fn get_common_generator_version(&self) -> anyhow::Result<String> {
+        // list generators. If we can't get the runtime, we'll error out.
+        let generators = self
+            .runtime()?
+            .codegen_generators()
+            .map(|gen| gen.version.as_str());
 
-        let generators = match self.list_generators() {
-            Ok(gens) => gens,
-            Err(_) => return Ok(runtime_version.to_string()), // Return cargo pkg version if error listing generators
-        };
+        common_version_up_to_patch(generators)
+    }
+}
 
-        if generators.is_empty() {
-            return Ok(runtime_version.to_string());
-        }
+/// Given a set of SemVer version strings, match them to the same `major.minor`, returning an error otherwise. Invalid semver strings are ignored for the check.
+/// an error otherwise.
+pub fn common_version_up_to_patch<'a>(
+    gen_version_strings: impl IntoIterator<Item = &'a str>,
+) -> anyhow::Result<String> {
+    let mut major_minor_versions = std::collections::HashMap::new();
+    let mut highest_patch_by_major_minor = std::collections::HashMap::new();
 
-        let mut major_minor_versions = std::collections::HashMap::new();
-        let mut highest_patch_by_major_minor = std::collections::HashMap::new();
+    // Track major.minor versions and find highest patch for each
+    for version_str in gen_version_strings {
+        if let Ok(version) = semver::Version::parse(version_str) {
+            let major_minor = format!("{}.{}", version.major, version.minor);
 
-        // Track major.minor versions and find highest patch for each
-        for gen in &generators {
-            if let Ok(version) = semver::Version::parse(&gen.version) {
-                let major_minor = format!("{}.{}", version.major, version.minor);
+            // Track generators with this major.minor
+            major_minor_versions
+                .entry(major_minor.clone())
+                .or_insert_with(Vec::new)
+                .push(version_str);
 
-                // Track generators with this major.minor
-                major_minor_versions
-                    .entry(major_minor.clone())
-                    .or_insert_with(Vec::new)
-                    .push(gen.clone());
-
-                // Track highest patch version for this major.minor
-                highest_patch_by_major_minor
-                    .entry(major_minor)
-                    .and_modify(|highest_patch: &mut u64| {
-                        if version.patch > *highest_patch {
-                            *highest_patch = version.patch;
-                        }
-                    })
-                    .or_insert(version.patch);
-            } else {
-                tracing::warn!("Invalid semver version in generator: {}", gen.version);
-                // Consider how to handle invalid versions - for now, we ignore them for the check
-            }
-        }
-
-        // If there's more than one major.minor version, return an error
-        if major_minor_versions.len() > 1 {
-            let versions_str = major_minor_versions
-                .keys()
-                .map(|v| format!("'{v}'"))
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            let message = format!(
-                "Multiple generator major.minor versions detected: {versions_str}. Major and minor versions must match across all generators."
-            );
-            Err(message)
-        // If there's only one major.minor version, return it with the highest patch
-        } else if let Some((version, _)) = major_minor_versions.iter().next() {
-            if let Some(highest_patch) = highest_patch_by_major_minor.get(version) {
-                // Parse the version string to create a proper semver::Version
-                if let Ok(mut v) = Version::parse(&format!("{version}.0")) {
-                    // Update with the highest patch version
-                    v.patch = *highest_patch;
-                    Ok(v.to_string())
-                } else {
-                    Ok(format!("{version}.{highest_patch}"))
-                }
-            } else {
-                Ok(version.clone())
-            }
-        // Fallback to the runtime version if no valid versions were found
+            // Track highest patch version for this major.minor
+            highest_patch_by_major_minor
+                .entry(major_minor)
+                .and_modify(|highest_patch: &mut u64| {
+                    if version.patch > *highest_patch {
+                        *highest_patch = version.patch;
+                    }
+                })
+                .or_insert(version.patch);
         } else {
-            Err("No valid generator versions found".to_string())
+            tracing::warn!("Invalid semver version in generator: {}", version_str);
+            // Consider how to handle invalid versions - for now, we ignore them for the check
         }
+    }
+
+    // If there's more than one major.minor version, return an error
+    if major_minor_versions.len() > 1 {
+        let versions_str = major_minor_versions
+            .keys()
+            .map(|v| format!("'{v}'"))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let message = anyhow::anyhow!(
+            "Multiple major.minor versions detected: {versions_str}. Major and minor versions must match across all generators."
+        );
+        Err(message)
+    // If there's only one major.minor version, return it with the highest patch
+    } else if let Some((version, _)) = major_minor_versions.into_iter().next() {
+        if let Some(highest_patch) = highest_patch_by_major_minor.get(&version) {
+            // Parse the version string to create a proper semver::Version
+            if let Ok(mut v) = Version::parse(&format!("{version}.0")) {
+                // Update with the highest patch version
+                v.patch = *highest_patch;
+                Ok(v.to_string())
+            } else {
+                Ok(format!("{version}.{highest_patch}"))
+            }
+        } else {
+            Ok(version)
+        }
+    // Fallback to the runtime version if no valid versions were found
+    } else {
+        Err(anyhow::anyhow!("No valid generator versions found"))
     }
 }
 
@@ -1429,6 +1426,10 @@ fn get_dummy_value(
             Some(format!("({dummy},)"))
         }
         baml_runtime::TypeIR::Arrow(_, _) => None,
+        baml_runtime::TypeIR::Top(_) => panic!(
+            "TypeIR::Top should have been resolved by the compiler before code generation. \
+             This indicates a bug in the type resolution phase."
+        ),
     }
 }
 

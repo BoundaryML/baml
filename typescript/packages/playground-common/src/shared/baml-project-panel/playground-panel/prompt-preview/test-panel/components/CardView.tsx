@@ -43,7 +43,7 @@ interface TestResultProps {
 const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
   const response = useAtomValue(testCaseResponseAtom(testId))
   const displayResponse = historicalResponse || response
-  const runBamlTests = useRunBamlTests()
+  const { runTests: runBamlTests } = useRunBamlTests()
   const setSelectedItem = useSetAtom(selectedItemAtom)
   const selectedItem = useAtomValue(selectedItemAtom)
   const cardRef = useRef<HTMLDivElement>(null)
