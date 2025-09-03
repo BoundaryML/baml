@@ -1,4 +1,4 @@
-@top Baml { (MdxHeader | Decl)* }
+@top Baml { Decl* }
 
 Decl { ClassDecl | EnumDecl | FunctionDecl | ClientDecl | RetryPolicyDecl | TemplateStringDecl | TestDecl | TypeAliasDecl | TypeBuilderDecl | LetDecl }
 
@@ -71,7 +71,7 @@ FunctionValueExpr {
 }
 
 ObjectConstructor {
-  IdentifierDecl!ObjectConstruct "{" (ObjectField ("," ObjectField)*)? "}"
+  IdentifierDecl!ObjectConstruct "{" (ObjectField ("," ObjectField)* ","?)? "}"
 }
 
 ObjectField {
@@ -119,10 +119,6 @@ AssignmentOperator { "+=" | "-=" | "*=" | "/=" | "=" }
 BinaryOperator { "+" | "-" | "*" | "/" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||" }
 MethodCall { "." IdentifierDecl "(" FunctionArgs ")" }
 
-MdxHeader { 
-  MdxHeaderToken MdxHeaderContent?
-}
-
 @tokens {
 
   @precedence {
@@ -133,9 +129,6 @@ MdxHeader {
   }
   @precedence {
     MapIdentifier, TypeBuilderKeyword, ClientKeyword, PromptKeyword, LetKeyword, FnKeyword, ForKeyword, InKeyword, SelfKeyword, BooleanLiteral, IdentifierDecl, UnquotedAttributeValue
-  }
-  @precedence {
-    MdxHeaderToken, MdxHeaderContent, whitespace
   }
 
   LetKeyword { "let" }
@@ -152,8 +145,6 @@ MdxHeader {
 
   NumericLiteral { $[0-9]+ ("." $[0-9]+)? }
   BooleanLiteral { "true" | "false" }
-  MdxHeaderToken { "#"+ }
-  MdxHeaderContent { $[^\r\n]+ }
 
   QuotedString { '"' QuotedStringChar* '"' }
   UnquotedString { UnquotedStringChar+ }
@@ -176,7 +167,7 @@ MdxHeader {
 }
 
 @skip {
-  whitespace | MultilineComment | TrailingComment
+  whitespace
 }
 
 @skip {} {
