@@ -156,3 +156,93 @@ Baml(Decl(FunctionDecl(
   FunctionValueExpr(FunctionValueAtom(IdentifierDecl)),
   "}"
 )))
+
+# Complex expression function with loops and object construction
+
+let x = 1;
+
+function Foo(x: int, y: int) -> int {
+  for (y in [1,2,3]) {
+    x += 1;
+  }
+  for (let i = 0; i < 10; i++) {
+    x += 2;
+  }
+
+  let r = Receipt {
+    establishment_name: "Pizzaria la Rocca",
+    date: "2025-09-03",
+    total: 20,
+    currency: "USD",
+    items: [],
+  };
+
+  let z = r.foo();
+  
+  10
+}
+
+==>
+
+Baml(
+  Decl(LetDecl(
+    LetKeyword,
+    IdentifierDecl,
+    FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))
+  )),
+  Decl(FunctionDecl(
+    IdentifierDecl,
+    FunctionArgs(
+      FunctionArg(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)))),
+      FunctionArg(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))
+    ),
+    TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
+    "{",
+    ForStatement(
+      ForKeyword,
+      IdentifierDecl,
+      InKeyword,
+      FunctionValueExpr(ListValue("[", LiteralDecl(NumericLiteral), LiteralDecl(NumericLiteral), LiteralDecl(NumericLiteral), "]")),
+      "{",
+      AssignmentStatement(IdentifierDecl, "+=", FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))),
+      "}"
+    ),
+    ForStatement(
+      ForKeyword,
+      LetKeyword,
+      IdentifierDecl,
+      FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))),
+      IdentifierDecl,
+      "<",
+      FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))),
+      IdentifierDecl,
+      "++",
+      "{",
+      AssignmentStatement(IdentifierDecl, "+=", FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))),
+      "}"
+    ),
+    LetDecl(
+      LetKeyword,
+      IdentifierDecl,
+      FunctionValueExpr(
+        ObjectConstructor(
+          IdentifierDecl,
+          "{",
+          ObjectField(IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(QuotedString)))),
+          ObjectField(IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(QuotedString)))),
+          ObjectField(IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))),
+          ObjectField(IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(QuotedString)))),
+          ObjectField(IdentifierDecl, FunctionValueExpr(ListValue("[", "]"))),
+          "}"
+        )
+      )
+    ),
+    LetDecl(
+      LetKeyword,
+      IdentifierDecl,
+      FunctionValueExpr(FunctionValueAtom(IdentifierDecl), MethodCall(IdentifierDecl, FunctionArgs))
+    ),
+    FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))),
+    "}"
+  ))
+)
