@@ -159,16 +159,21 @@ Baml(Decl(FunctionDecl(
 
 # Complex expression function with loops and object construction
 
+## Initial Setup
 let x = 1;
 
 function Foo(x: int, y: int) -> int {
+  # Loop Processing
   for (y in [1,2,3]) {
+    ## Increment Counter
     x += 1;
   }
   for (let i = 0; i < 10; i++) {
+    ## Double Increment  
     x += 2;
   }
 
+  # Object Construction
   let r = Receipt {
     establishment_name: "Pizzaria la Rocca",
     date: "2025-09-03",
@@ -177,6 +182,7 @@ function Foo(x: int, y: int) -> int {
     items: [],
   };
 
+  ## Method Call
   let z = r.foo();
   
   10
@@ -185,6 +191,8 @@ function Foo(x: int, y: int) -> int {
 ==>
 
 Baml(
+  MdxHeader(MdxHeaderToken, MdxHeaderContent),
+  MdxHeader(MdxHeaderToken, MdxHeaderContent),
   Decl(LetDecl(
     LetKeyword,
     IdentifierDecl,
@@ -198,29 +206,32 @@ Baml(
     ),
     TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
     "{",
+    MdxHeader(MdxHeaderToken, MdxHeaderContent),
     ForStatement(
       ForKeyword,
-      IdentifierDecl,
-      InKeyword,
-      FunctionValueExpr(ListValue("[", LiteralDecl(NumericLiteral), LiteralDecl(NumericLiteral), LiteralDecl(NumericLiteral), "]")),
+      ForInLoop(
+        IdentifierDecl,
+        InKeyword,
+        FunctionValueExpr(ListValue("[", FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))), FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))), FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))), "]"))
+      ),
       "{",
+      MdxHeader(MdxHeaderToken, MdxHeaderContent),
       AssignmentStatement(IdentifierDecl, "+=", FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))),
       "}"
     ),
     ForStatement(
       ForKeyword,
-      LetKeyword,
-      IdentifierDecl,
-      FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))),
-      IdentifierDecl,
-      "<",
-      FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))),
-      IdentifierDecl,
-      "++",
+      ForCLoop(
+        CForInit(LetKeyword, IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))),
+        CForCondition(FunctionValueExpr(FunctionValueAtom(IdentifierDecl), BinaryOperator, FunctionValueAtom(LiteralDecl(NumericLiteral)))),
+        CForUpdate(IdentifierDecl)
+      ),
       "{",
+      MdxHeader(MdxHeaderToken, MdxHeaderContent),
       AssignmentStatement(IdentifierDecl, "+=", FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))),
       "}"
     ),
+    MdxHeader(MdxHeaderToken, MdxHeaderContent),
     LetDecl(
       LetKeyword,
       IdentifierDecl,
@@ -237,6 +248,7 @@ Baml(
         )
       )
     ),
+    MdxHeader(MdxHeaderToken, MdxHeaderContent),
     LetDecl(
       LetKeyword,
       IdentifierDecl,
