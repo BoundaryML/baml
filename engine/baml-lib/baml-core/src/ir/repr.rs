@@ -312,7 +312,7 @@ fn convert_function_body(
         .expr
         .map(|e| e.repr(db))
         .unwrap_or_else(|| {
-            eprintln!("TODO @greg: convert blocks with no return types to lambda terms");
+            // eprintln!("TODO @greg: convert blocks with no return types to lambda terms");
             // Placeholder just to allow compilation.
             Ok(Expr::Atom(BamlValueWithMeta::Null((Span::fake(), None))))
         })
