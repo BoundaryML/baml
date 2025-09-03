@@ -56,16 +56,21 @@ test CallGptTest {
 
 // Expression function with fn keyword
 fn ModernFunction(x: int) -> int {
+  # Main Processing Section
+  
+  ## Loop Processing
   // For-in loop
   for (item in [1, 2, 3]) {
     item += 1;
   }
   
+  ### Advanced Loop Example
   // C-style for loop
   for (let i = 0; i < 10; i++) {
     i += 2;
   }
   
+  ## Object Operations
   // Object construction with fields
   let receipt = Receipt {
     establishment_name: "Pizzaria la Rocca",
@@ -74,15 +79,18 @@ fn ModernFunction(x: int) -> int {
     currency: "USD",
   };
   
+  ### Method Invocation
   // Method call
   let result = receipt.calculate();
   
+  ## Mathematical Operations
   // Assignment operators
   result += 5;
   result -= 2;
   result *= 3;
   result /= 4;
   
+  ## Final Result Processing
   // Binary operators
   if (result > 10 && result < 100) {
     result

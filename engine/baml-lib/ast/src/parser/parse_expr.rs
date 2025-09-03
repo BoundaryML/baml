@@ -51,6 +51,24 @@ pub fn parse_expr_fn(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<e
             span,
             annotations: vec![],
         }),
+        // Even if the return type is missing, still create the ExprFn to prevent fallback to LLM function parsing
+        (None, Some(body)) => {
+            // Create a dummy return type to allow parsing to continue
+            use crate::ast::{FieldArity, FieldType, Identifier, Span};
+            let dummy_return_type = FieldType::Symbol(
+                FieldArity::Required,
+                Identifier::Local("UnknownType".to_string(), Span::fake()),
+                None,
+            );
+            Some(ExprFn {
+                name,
+                args,
+                return_type: Some(dummy_return_type),
+                body,
+                span,
+                annotations: vec![],
+            })
+        }
         _ => None,
     }
 }
@@ -71,12 +89,12 @@ pub fn parse_top_level_assignment(
         None
     };
 
-     let stmt_token = tokens.next()?;
+    let stmt_token = tokens.next()?;
     let parsed_stmt = if stmt_token.as_rule() == Rule::top_level_stmt {
-         parse_top_level_statement(stmt_token, diagnostics)
-     } else {
-         parse_statement(stmt_token, diagnostics)
-     };
+        parse_top_level_statement(stmt_token, diagnostics)
+    } else {
+        parse_statement(stmt_token, diagnostics)
+    };
 
     match parsed_stmt? {
         Stmt::Let(stmt) => Some(TopLevelAssignment { stmt }),
@@ -329,66 +347,66 @@ pub fn consume_span_if_rule(
     consume_if_rule(tokens, rule).map(|rule| diagnostics.span(rule.as_span()))
 }
 
- pub fn parse_top_level_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
-     assert_correct_parser!(token, Rule::top_level_stmt);
-     let span = diagnostics.span(token.as_span());
-     let mut tokens = token.into_inner();
- 
-     let mut stmt = parse_statement_inner_rule(tokens.next()?, span.clone(), diagnostics);
- 
-     match tokens.next() {
-         Some(maybe_semicolon) if maybe_semicolon.as_str() == ";" => {
-             if let Some(Stmt::Expression(es)) = stmt {
-                 stmt = Some(Stmt::Semicolon(es.expr));
-             }
-         }
-         _ => {
-             // For top_level_stmt, emit semicolon error but don't fail parsing
-             if matches!(
-                 stmt,
-                 Some(Stmt::Let(_) | Stmt::Assign(_) | Stmt::AssignOp(_))
-             ) {
-                 diagnostics.push_error(DatamodelError::new_static(
-                     "Statement must end with a semicolon.",
-                     span,
-                 ));
-             }
-         }
-     }
- 
-     stmt
- }
- 
+pub fn parse_top_level_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
+    assert_correct_parser!(token, Rule::top_level_stmt);
+    let span = diagnostics.span(token.as_span());
+    let mut tokens = token.into_inner();
+
+    let mut stmt = parse_statement_inner_rule(tokens.next()?, span.clone(), diagnostics);
+
+    match tokens.next() {
+        Some(maybe_semicolon) if maybe_semicolon.as_str() == ";" => {
+            if let Some(Stmt::Expression(es)) = stmt {
+                stmt = Some(Stmt::Semicolon(es.expr));
+            }
+        }
+        _ => {
+            // For top_level_stmt, emit semicolon error but don't fail parsing
+            if matches!(
+                stmt,
+                Some(Stmt::Let(_) | Stmt::Assign(_) | Stmt::AssignOp(_))
+            ) {
+                diagnostics.push_error(DatamodelError::new_static(
+                    "Statement must end with a semicolon.",
+                    span,
+                ));
+            }
+        }
+    }
+
+    stmt
+}
+
 pub fn parse_expr_body_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
     assert_correct_parser!(token, Rule::expr_body_stmt);
-     let span = diagnostics.span(token.as_span());
-     let mut tokens = token.into_inner();
- 
-     let mut stmt = parse_statement_inner_rule(tokens.next()?, span.clone(), diagnostics);
- 
-     match tokens.next() {
-         Some(maybe_semicolon) if maybe_semicolon.as_str() == ";" => {
-             if let Some(Stmt::Expression(es)) = stmt {
-                 stmt = Some(Stmt::Semicolon(es.expr));
-             }
-         }
-         _ => {
-             // For expr_body_stmt, emit semicolon error but don't fail parsing
-             if matches!(
-                 stmt,
-                 Some(Stmt::Let(_) | Stmt::Assign(_) | Stmt::AssignOp(_))
-             ) {
-                 diagnostics.push_error(DatamodelError::new_static(
-                     "Statement must end with a semicolon.",
-                     span,
-                 ));
-             }
-         }
-     }
- 
-     stmt
- }
- 
+    let span = diagnostics.span(token.as_span());
+    let mut tokens = token.into_inner();
+
+    let mut stmt = parse_statement_inner_rule(tokens.next()?, span.clone(), diagnostics);
+
+    match tokens.next() {
+        Some(maybe_semicolon) if maybe_semicolon.as_str() == ";" => {
+            if let Some(Stmt::Expression(es)) = stmt {
+                stmt = Some(Stmt::Semicolon(es.expr));
+            }
+        }
+        _ => {
+            // For expr_body_stmt, emit semicolon error but don't fail parsing
+            if matches!(
+                stmt,
+                Some(Stmt::Let(_) | Stmt::Assign(_) | Stmt::AssignOp(_))
+            ) {
+                diagnostics.push_error(DatamodelError::new_static(
+                    "Statement must end with a semicolon.",
+                    span,
+                ));
+            }
+        }
+    }
+
+    stmt
+}
+
 pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
     assert_correct_parser!(token, Rule::stmt);
     let span = diagnostics.span(token.as_span());
@@ -642,13 +660,13 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
             }
             Rule::expr_body_stmt => {
                 let maybe_stmt = parse_expr_body_statement(item, diagnostics);
-                 if let Some(mut stmt) = maybe_stmt {
-                     // Clear headers since last statement & get an iterator for the current ones.
-                     let header_drain = headers_since_last_stmt.drain(..);
-                     bind_headers_to_statement(&mut stmt, header_drain);
-                     stmts.push(stmt);
-                 }
-             }
+                if let Some(mut stmt) = maybe_stmt {
+                    // Clear headers since last statement & get an iterator for the current ones.
+                    let header_drain = headers_since_last_stmt.drain(..);
+                    bind_headers_to_statement(&mut stmt, header_drain);
+                    stmts.push(stmt);
+                }
+            }
             Rule::expression => {
                 let maybe_expr = parse_expression(item, diagnostics);
                 if let Some(parsed_expr) = maybe_expr {

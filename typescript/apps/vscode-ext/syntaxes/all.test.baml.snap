@@ -306,6 +306,17 @@
 #                             ^^^ source.baml storage.type.baml
 #                                ^ source.baml
 #                                 ^ source.baml
+>  # Main Processing Section
+#^^ source.baml
+#  ^ source.baml punctuation.definition.heading.markdown
+#   ^ source.baml
+#    ^^^^^^^^^^^^^^^^^^^^^^^ source.baml entity.name.section.markdown.h1
+>  
+>  ## Loop Processing
+#^^ source.baml
+#  ^^ source.baml punctuation.definition.heading.markdown
+#    ^ source.baml
+#     ^^^^^^^^^^^^^^^ source.baml entity.name.section.markdown.h2
 >  // For-in loop
 #^^ source.baml
 #  ^^^^^^^^^^^^^^ source.baml comment.line
@@ -338,6 +349,11 @@
 #^^ source.baml
 #  ^ source.baml
 >  
+>  ### Advanced Loop Example
+#^^ source.baml
+#  ^^^ source.baml punctuation.definition.heading.markdown
+#     ^ source.baml
+#      ^^^^^^^^^^^^^^^^^^^^^ source.baml entity.name.section.markdown.h3
 >  // C-style for loop
 #^^ source.baml
 #  ^^^^^^^^^^^^^^^^^^^ source.baml comment.line
@@ -372,6 +388,11 @@
 #^^ source.baml
 #  ^ source.baml
 >  
+>  ## Object Operations
+#^^ source.baml
+#  ^^ source.baml punctuation.definition.heading.markdown
+#    ^ source.baml
+#     ^^^^^^^^^^^^^^^^^ source.baml entity.name.section.markdown.h2
 >  // Object construction with fields
 #^^ source.baml
 #  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ source.baml comment.line
@@ -396,6 +417,11 @@
 #  ^ source.baml
 #   ^ source.baml
 >  
+>  ### Method Invocation
+#^^ source.baml
+#  ^^^ source.baml punctuation.definition.heading.markdown
+#     ^ source.baml
+#      ^^^^^^^^^^^^^^^^^ source.baml entity.name.section.markdown.h3
 >  // Method call
 #^^ source.baml
 #  ^^^^^^^^^^^^^^ source.baml comment.line
@@ -412,6 +438,11 @@
 #                                 ^ source.baml
 #                                  ^ source.baml
 >  
+>  ## Mathematical Operations
+#^^ source.baml
+#  ^^ source.baml punctuation.definition.heading.markdown
+#    ^ source.baml
+#     ^^^^^^^^^^^^^^^^^^^^^^^ source.baml entity.name.section.markdown.h2
 >  // Assignment operators
 #^^ source.baml
 #  ^^^^^^^^^^^^^^^^^^^^^^^ source.baml comment.line
@@ -440,6 +471,11 @@
 #         ^^ source.baml keyword.operator.assignment
 #           ^^^^ source.baml
 >  
+>  ## Final Result Processing
+#^^ source.baml
+#  ^^ source.baml punctuation.definition.heading.markdown
+#    ^ source.baml
+#     ^^^^^^^^^^^^^^^^^^^^^^^ source.baml entity.name.section.markdown.h2
 >  // Binary operators
 #^^ source.baml
 #  ^^^^^^^^^^^^^^^^^^^ source.baml comment.line

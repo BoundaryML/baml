@@ -444,6 +444,9 @@
           "include": "#comment"
         },
         {
+          "include": "#markdown_header"
+        },
+        {
           "include": "#block_attribute"
         },
         {
@@ -1354,6 +1357,9 @@
           "include": "#comment"
         },
         {
+          "include": "#markdown_header"
+        },
+        {
           "include": "#let_declaration"
         },
         {
@@ -1417,6 +1423,77 @@
           "name": "entity.name.function.method"
         }
       }
+    },
+    "markdown_header": {
+      "comment": "Markdown headers # ## ###",
+      "patterns": [
+        {
+          "match": "^\\s*(#{6})\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown.h6"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(#{5})\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown.h5"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(#{4})\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown.h4"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(#{3})\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown.h3"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(#{2})\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown.h2"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(#{1})\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown.h1"
+            }
+          }
+        }
+      ]
     }
   },
   "scopeName": "source.baml"
