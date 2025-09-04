@@ -260,7 +260,7 @@ CONTINUE_KEYWORD     = { "continue" }
 SEMICOLON = { ";" }
 COLON = { ":" }
 COMMA = { "," }
-INVALID_STARTING_CHAR = { "." | "$" }
+INVALID_STMT_STARTING_CHAR = { !ASCII_ALPHA ~ !WHITESPACE ~ !NEWLINE ~ !BLOCK_OPEN ~ !comment ~ ANY }
 
 // #################################################
 // Operators
@@ -335,7 +335,7 @@ expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (mdx_header | expr_body_stmt | stmt | com
 // More forgiving statement rule for function bodies - only for statements that commonly miss semicolons
 expr_body_stmt = {
     (
-        INVALID_STARTING_CHAR* ~
+        INVALID_STMT_STARTING_CHAR* ~
         (
             let_expr
             | assign_op_stmt
@@ -352,6 +352,7 @@ mdx_header = { WHITESPACE* ~ "#"+ ~ WHITESPACE* ~ (!NEWLINE ~ ANY)* ~ NEWLINE? }
 
 // Statement.
 stmt = {
+    INVALID_STMT_STARTING_CHAR* ~
     (
         for_loop
         | while_loop

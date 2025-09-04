@@ -19,6 +19,10 @@ function ModernFunction(x: int) -> int {
    
   // Method call
   .let result = receipt.calculate();
+
+  ^if (true) {
+    return 1;
+  }
    
   // Assignment operators
   result += 5.0;
@@ -34,3 +38,20 @@ function ModernFunction(x: int) -> int {
     0
   }
 }
+
+// error: Invalid statement
+//   -->  expr/extra_dot.baml:21
+//    | 
+// 20 |   // Method call
+// 21 |   .let result = receipt.calculate();
+// 22 | 
+//    | 
+// error: Invalid statement
+//   -->  expr/extra_dot.baml:23
+//    | 
+// 22 | 
+// 23 |   ^if (true) {
+// 24 |     return 1;
+// 25 |   }
+// 26 |    
+//    | 

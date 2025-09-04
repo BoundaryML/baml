@@ -443,7 +443,7 @@ fn parse_statement_inner_rule(
     diagnostics: &mut Diagnostics,
 ) -> Option<Stmt> {
     match stmt_token.as_rule() {
-        Rule::INVALID_STARTING_CHAR => {
+        Rule::INVALID_STMT_STARTING_CHAR => {
             diagnostics.push_error(DatamodelError::new_static("Invalid statement", span));
             None
         }
