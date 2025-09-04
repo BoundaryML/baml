@@ -1,6 +1,6 @@
 @top Baml { Decl* }
 
-Decl { ClassDecl | EnumDecl | FunctionDecl | ClientDecl | RetryPolicyDecl | TemplateStringDecl | TestDecl | TypeAliasDecl | TypeBuilderDecl | LetDecl }
+Decl { ClassDecl | EnumDecl | FunctionDecl | ClientDecl | RetryPolicyDecl | TemplateStringDecl | TestDecl | TypeAliasDecl | TypeBuilderDecl | LetDecl | TrailingComment | MultilineComment }
 
 ClassDecl { "class" IdentifierDecl "{" (TrailingComment | MultilineComment | BlockAttribute | ClassField)* "}" }
 
@@ -26,10 +26,10 @@ ComplexTypeExpr {
   SimpleTypeExpr
 }
 MapTypeExpr { MapIdentifier "<" ComplexTypeExpr "," ComplexTypeExpr ">"}
-ListTypeExpr { ComplexTypeExpr"[]" }
-OptionalTypeExpr { ComplexTypeExpr"?" }
+ListTypeExpr { ComplexTypeExpr "[]" }
+OptionalTypeExpr { ComplexTypeExpr "?" }
 SimpleTypeExpr { ListTypeExpr | OptionalTypeExpr | MapTypeExpr!MapOverIdentifier | IdentifierDecl | LiteralDecl }
-UnionTypeExpr { TypeExpr!TypeUnion"|"TypeExpr }
+UnionTypeExpr { TypeExpr!TypeUnion "|" TypeExpr }
 
 @precedence {
   TypeUnion @left
@@ -128,7 +128,7 @@ MethodCall { "." IdentifierDecl "(" FunctionArgs ")" }
     TrailingComment, ".", "/"
   }
   @precedence {
-    MapIdentifier, TypeBuilderKeyword, ClientKeyword, PromptKeyword, LetKeyword, FnKeyword, ForKeyword, InKeyword, SelfKeyword, BooleanLiteral, IdentifierDecl, UnquotedAttributeValue
+    TrailingComment, MultilineComment, MapIdentifier, TypeBuilderKeyword, ClientKeyword, PromptKeyword, LetKeyword, FnKeyword, ForKeyword, InKeyword, SelfKeyword, BooleanLiteral, IdentifierDecl, UnquotedAttributeValue
   }
 
   LetKeyword { "let" }

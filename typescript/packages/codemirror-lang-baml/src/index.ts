@@ -66,6 +66,10 @@ export const BAMLLanguage = LRLanguage.define({
         'FunctionArg/IdentifierDecl': t.variableName,
 
         'ClassField/IdentifierDecl': t.propertyName,
+        
+        // Constructor styling to match class declarations
+        'ObjectConstructor/IdentifierDecl': t.typeName,
+        'ObjectField/IdentifierDecl': t.propertyName,
         NumericLiteral: t.number,
         QuotedString: t.string,
         UnquotedString: t.string,
