@@ -3656,4 +3656,60 @@ fn Len() -> int {
             })
         }
     }
+
+    mod enums {
+        use super::*;
+
+        #[test]
+        fn return_enum_variant() -> anyhow::Result<()> {
+            assert_compiles(Program {
+                source: r#"
+                    enum Shape {
+                        Square
+                        Rectangle
+                        Circle
+                    }
+
+                    fn main() -> Shape {
+                        Shape.Rectangle
+                    }
+                "#,
+                expected: vec![(
+                    "main",
+                    vec![
+                        Instruction::LoadConst(0),
+                        Instruction::AllocVariant(ObjectIndex::from_raw(3)),
+                        Instruction::Return,
+                    ],
+                )],
+            })
+        }
+
+        #[test]
+        fn assign_enum_variant() -> anyhow::Result<()> {
+            assert_compiles(Program {
+                source: r#"
+                    enum Shape {
+                        Square
+                        Rectangle
+                        Circle
+                    }
+
+                    fn main() -> Shape {
+                        let s = Shape.Rectangle;
+                        s
+                    }
+                "#,
+                expected: vec![(
+                    "main",
+                    vec![
+                        Instruction::LoadConst(0),
+                        Instruction::AllocVariant(ObjectIndex::from_raw(3)),
+                        Instruction::LoadVar(1),
+                        Instruction::Return,
+                    ],
+                )],
+            })
+        }
+    }
 }
