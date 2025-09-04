@@ -52,8 +52,10 @@ BlockAttribute {
 
 FunctionDecl {
   ("function" | FnKeyword) IdentifierDecl (MethodTarget)? "(" FunctionArgs ")" ("->" TypeExpr)?
-  "{" (TrailingComment | MultilineComment | FunctionTupleValue | LetDecl | FunctionValueExpr | ForStatement | AssignmentStatement)* "}"
+  "{" (FunctionTupleValue | Statement)* "}"
 }
+
+Statement { TrailingComment | MultilineComment | LetDecl | FunctionValueExpr | ForStatement | AssignmentStatement | IfStatement | WhileStatement }
 FunctionArgs { (FunctionArg ",")* FunctionArg? }
 FunctionArg {
   (SelfKeyword | IdentifierDecl) (":" TypeExpr)?
@@ -105,7 +107,7 @@ LetDecl { LetKeyword IdentifierDecl "=" FunctionValueExpr ";"? }  // Semicolons 
 
 // New rules for advanced expression syntax
 ForStatement { 
-  ForKeyword "(" (ForInLoop | ForCLoop) ")" "{" (TrailingComment | MultilineComment | LetDecl | FunctionValueExpr | ForStatement | AssignmentStatement)* "}"
+  ForKeyword "(" (ForInLoop | ForCLoop) ")" "{" Statement* "}"
 }
 ForInLoop { IdentifierDecl InKeyword FunctionValueExpr }
 ForCLoop { CForInit? ";" CForCondition? ";" CForUpdate? }
@@ -115,6 +117,17 @@ CForUpdate { IdentifierDecl "++" }
 
 AssignmentStatement { IdentifierDecl AssignmentOperator FunctionValueExpr ";"? }
 AssignmentOperator { "+=" | "-=" | "*=" | "/=" | "=" }
+
+IfStatement { 
+  IfKeyword "(" FunctionValueExpr ")" "{" Statement* "}" (ElseIfClause)* (ElseClause)?
+}
+
+ElseIfClause { ElseKeyword IfKeyword "(" FunctionValueExpr ")" "{" Statement* "}" }
+ElseClause { ElseKeyword "{" Statement* "}" }
+
+WhileStatement { 
+  WhileKeyword "(" FunctionValueExpr ")" "{" Statement* "}"
+}
 
 BinaryOperator { "+" | "-" | "*" | "/" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||" }
 MethodCall { "." IdentifierDecl "(" FunctionArgs ")" }
@@ -128,13 +141,16 @@ MethodCall { "." IdentifierDecl "(" FunctionArgs ")" }
     TrailingComment, ".", "/"
   }
   @precedence {
-    TrailingComment, MultilineComment, MapIdentifier, TypeBuilderKeyword, ClientKeyword, PromptKeyword, LetKeyword, FnKeyword, ForKeyword, InKeyword, SelfKeyword, BooleanLiteral, IdentifierDecl, UnquotedAttributeValue
+    TrailingComment, MultilineComment, MapIdentifier, TypeBuilderKeyword, ClientKeyword, PromptKeyword, LetKeyword, FnKeyword, ForKeyword, InKeyword, IfKeyword, ElseKeyword, WhileKeyword, SelfKeyword, BooleanLiteral, IdentifierDecl, UnquotedAttributeValue
   }
 
   LetKeyword { "let" }
   FnKeyword { "fn" }
   ForKeyword { "for" }
   InKeyword { "in" }
+  IfKeyword { "if" }
+  ElseKeyword { "else" }
+  WhileKeyword { "while" }
   SelfKeyword { "self" }
   ClientKeyword { "client" }
   PromptKeyword { "prompt" }
