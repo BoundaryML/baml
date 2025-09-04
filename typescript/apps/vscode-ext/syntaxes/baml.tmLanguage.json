@@ -350,7 +350,7 @@
     "type_definition": {
       "patterns": [
         {
-          "match": "\\b(bool|int|float|string|null|image|audio)\\b",
+          "match": "\\b(bool|int|float|string|null|image|audio|pdf)\\b",
           "name": "storage.type.baml"
         },
         {
