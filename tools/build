@@ -167,7 +167,7 @@ case "$_path" in
       # command="cargo test ${command}"
       command="cd ${_repo_root}/engine/baml-lib/baml && UPDATE_EXPECT=1 cargo nextest run enum_comparison_edge_cases enum_string_comparison"
     else
-      command="cargo build ${command}"
+      command="cargo build"
     fi
 
     if [ "$_watch_mode" -eq 1 ]; then

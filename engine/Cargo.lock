@@ -5200,6 +5200,7 @@ dependencies = [
  "baml-types",
  "base64 0.21.7",
  "bytes",
+ "chrono",
  "crossbeam",
  "dirs 5.0.1",
  "flate2",
@@ -5232,6 +5233,7 @@ dependencies = [
  "tracing-log",
  "tracing-subscriber",
  "url",
+ "walkdir",
  "webbrowser 0.8.15",
 ]
 

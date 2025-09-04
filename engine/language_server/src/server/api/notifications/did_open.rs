@@ -7,7 +7,10 @@ use crate::{
     server::{
         api::{
             diagnostics::publish_session_lsp_diagnostics,
-            notifications::baml_src_version::BamlSrcVersionPayload,
+            notifications::{
+                baml_src_version::BamlSrcVersionPayload,
+                did_save_text_document::send_generator_version,
+            },
             traits::{NotificationHandler, SyncNotificationHandler},
             ResultExt,
         },
@@ -78,22 +81,9 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
                 .as_ref()
                 .unwrap_or(&default_flags);
             let client_version = session.baml_settings.get_client_version();
-            if let Ok(version) =
-                locked.get_common_generator_version(effective_flags, client_version)
-            {
-                notifier
-                    .0
-                    .send(lsp_server::Message::Notification(
-                        lsp_server::Notification::new(
-                            "baml_src_generator_version".to_string(),
-                            BamlSrcVersionPayload {
-                                version,
-                                root_path: locked.root_path().to_string_lossy().to_string(),
-                            },
-                        ),
-                    ))
-                    .internal_error()?;
-            }
+
+            let generator_version = locked.get_common_generator_version();
+            send_generator_version(&notifier, &locked, generator_version.as_ref().ok());
         } else {
             tracing::error!("Failed to get or create project for path: {:?}", file_path);
             show_err_msg!("Failed to get or create project for path: {:?}", file_path);

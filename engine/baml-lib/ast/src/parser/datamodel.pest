@@ -302,11 +302,24 @@ NEG = { "-" } // NOTE: Can't reuse SUB here. Read this: https://docs.rs/pest/lat
 // BAML Expressions
 // #################################################
 
-// Constant applicative form.
-// e.g. top-level
+// Top-level variable declarations. e.g.:
 //   - `let x = go(1,2)`
 //   - `let z = { let b = 2; [b, 3] }
-top_level_assignment = { stmt }
+// Although operators and variable updates are allowed by the grammar,
+// they are ruled out later by the parser.
+top_level_assignment = { top_level_stmt }
+
+// More forgiving statement rule for top-level - similar to expr_body_stmt but more restrictive
+top_level_stmt = {
+    (
+        let_expr
+        | assign_op_stmt
+        | assign_stmt
+    )
+    ~ SEMICOLON?
+    ~ trailing_comment?
+    ~ NEWLINE?
+}
 
 // Regular function.
 // e.g.:
@@ -316,7 +329,21 @@ top_level_assignment = { stmt }
 expr_fn = { ("function" | "fn") ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_block }
 
 // Body of a function (including curly brackets).
-expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (mdx_header | stmt | comment_block | empty_lines)* ~ expression? ~ (comment_block | empty_lines)* ~ BLOCK_CLOSE }
+expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (mdx_header | expr_body_stmt | stmt | comment_block | empty_lines)* ~ expression? ~ (comment_block | empty_lines)* ~ BLOCK_CLOSE }
+
+// More forgiving statement rule for function bodies - only for statements that commonly miss semicolons
+expr_body_stmt = {
+    (
+        (
+            let_expr
+            | assign_op_stmt
+            | assign_stmt
+        )
+        ~ SEMICOLON?
+    )
+    ~ trailing_comment?
+    ~ NEWLINE?
+}
 
 // Headers can include any characters except a newline; do not use unquoted_string_literal restrictions
 mdx_header = { WHITESPACE* ~ "#"+ ~ WHITESPACE* ~ (!NEWLINE ~ ANY)* ~ NEWLINE? }

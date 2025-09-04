@@ -1055,7 +1055,8 @@ impl WasmRuntime {
                     },
                     test_snippet: snippet,
                     test_cases: f
-                        .walk_tests()
+                        .ir
+                        .walk_function_test_pairs()
                         .map(|tc| {
                             let params = match tc.test_case_params(&ctx) {
                                 Ok(params) => Ok(params
@@ -1465,7 +1466,7 @@ impl WasmRuntime {
         self.runtime
             .internal()
             .ir()
-            .walk_tests()
+            .walk_function_test_pairs()
             .map(|tc| {
                 let params = match tc.test_case_params(&ctx) {
                     Ok(params) => Ok(params

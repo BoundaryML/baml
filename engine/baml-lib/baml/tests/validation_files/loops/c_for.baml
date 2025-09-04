@@ -56,42 +56,6 @@ fn BreakContinue() -> int {
 	0
 }
 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/c_for.baml:1
-//    | 
-//    | 
-//  1 | fn SumToTen() -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/c_for.baml:11
-//    | 
-// 10 | 
-// 11 | fn InfiniteFor() -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/c_for.baml:18
-//    | 
-// 17 | // should error everywhere `i` is used.
-// 18 | fn NoIteratorDeclared() -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/c_for.baml:29
-//    | 
-// 28 | // should be fine
-// 29 | fn LoopHeaderScope() -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/c_for.baml:39
-//    | 
-// 38 | // should error in `i += x` (no `x` in scope)
-// 39 | fn LoopHeaderScopeUnavailable() -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/c_for.baml:49
-//    | 
-// 48 | 
-// 49 | fn BreakContinue() -> int {
-//    | 
 // error: Unknown variable i
 //   -->  loops/c_for.baml:22
 //    | 
