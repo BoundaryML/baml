@@ -8,7 +8,7 @@
 #                ^^ source.baml
 >  inner string
 #^^ source.baml
-#  ^^^^^ source.baml variable.other.readwrite.interface
+#  ^^^^^ source.baml variable.other.readwrite
 #       ^ source.baml
 #        ^^^^^^ source.baml storage.type.baml
 >}
@@ -28,52 +28,52 @@
 >
 >  field int
 #^^ source.baml
-#  ^^^^^ source.baml variable.other.readwrite.interface
+#  ^^^^^ source.baml variable.other.readwrite
 #       ^ source.baml
 #        ^^^ source.baml storage.type.baml
 >  field null
 #^^ source.baml
-#  ^^^^^ source.baml variable.other.readwrite.interface
+#  ^^^^^ source.baml variable.other.readwrite
 #       ^ source.baml
 #        ^^^^ source.baml storage.type.baml
 >  field string
 #^^ source.baml
-#  ^^^^^ source.baml variable.other.readwrite.interface
+#  ^^^^^ source.baml variable.other.readwrite
 #       ^ source.baml
 #        ^^^^^^ source.baml storage.type.baml
 >  field bool
 #^^ source.baml
-#  ^^^^^ source.baml variable.other.readwrite.interface
+#  ^^^^^ source.baml variable.other.readwrite
 #       ^ source.baml
 #        ^^^^ source.baml storage.type.baml
 >  field float
 #^^ source.baml
-#  ^^^^^ source.baml variable.other.readwrite.interface
+#  ^^^^^ source.baml variable.other.readwrite
 #       ^ source.baml
 #        ^^^^^ source.baml storage.type.baml
 >  field OtherClass
 #^^ source.baml
-#  ^^^^^ source.baml variable.other.readwrite.interface
+#  ^^^^^ source.baml variable.other.readwrite
 #       ^ source.baml
 #        ^^^^^^^^^^ source.baml support.type
 >
 >  field OtherClass?
 #^^ source.baml
-#  ^^^^^ source.baml variable.other.readwrite.interface
+#  ^^^^^ source.baml variable.other.readwrite
 #       ^ source.baml
 #        ^^^^^^^^^^ source.baml support.type
 #                  ^ source.baml keyword.control.baml
 >
 >  field string[]
 #^^ source.baml
-#  ^^^^^ source.baml variable.other.readwrite.interface
+#  ^^^^^ source.baml variable.other.readwrite
 #       ^ source.baml
 #        ^^^^^^ source.baml storage.type.baml
 #              ^^ source.baml keyword.control.baml
 >
 >  field (int | string | OtherClass)
 #^^ source.baml
-#  ^^^^^ source.baml variable.other.readwrite.interface
+#  ^^^^^ source.baml variable.other.readwrite
 #       ^ source.baml
 #        ^ source.baml keyword.control
 #         ^^^ source.baml storage.type.baml
@@ -88,7 +88,7 @@
 #                                  ^ source.baml keyword.control
 >  field (int | string | OtherClass)[]
 #^^ source.baml
-#  ^^^^^ source.baml variable.other.readwrite.interface
+#  ^^^^^ source.baml variable.other.readwrite
 #       ^ source.baml
 #        ^ source.baml keyword.control
 #         ^^^ source.baml storage.type.baml
@@ -104,7 +104,7 @@
 #                                   ^^ source.baml keyword.control
 >  field (int | string | OtherClass)?
 #^^ source.baml
-#  ^^^^^ source.baml variable.other.readwrite.interface
+#  ^^^^^ source.baml variable.other.readwrite
 #       ^ source.baml
 #        ^ source.baml keyword.control
 #         ^^^ source.baml storage.type.baml
@@ -121,7 +121,7 @@
 >
 >  field map<string, string>
 #^^ source.baml
-#  ^^^^^ source.baml variable.other.readwrite.interface
+#  ^^^^^ source.baml variable.other.readwrite
 #       ^ source.baml
 #        ^^^ source.baml storage.type.baml
 #           ^ source.baml
@@ -131,7 +131,7 @@
 #                          ^ source.baml
 >  field map<string, OtherClass>
 #^^ source.baml
-#  ^^^^^ source.baml variable.other.readwrite.interface
+#  ^^^^^ source.baml variable.other.readwrite
 #       ^ source.baml
 #        ^^^ source.baml storage.type.baml
 #           ^ source.baml
@@ -141,7 +141,7 @@
 #                              ^ source.baml
 >  field map<string, map<string, string>>
 #^^ source.baml
-#  ^^^^^ source.baml variable.other.readwrite.interface
+#  ^^^^^ source.baml variable.other.readwrite
 #       ^ source.baml
 #        ^^^ source.baml storage.type.baml
 #           ^ source.baml
@@ -162,7 +162,7 @@
 #        ^ source.baml
 #         ^^^^^^^ source.baml entity.name.function
 #                ^ source.baml
-#                 ^^^^^ source.baml function.params variable.other.readwrite.function_name
+#                 ^^^^^ source.baml function.params variable.other.readwrite
 #                      ^ source.baml function.params
 #                       ^ source.baml function.params
 #                        ^^^^^^ source.baml function.params storage.type.baml
@@ -212,7 +212,7 @@
 #        ^ source.baml
 #         ^^^^^^^^^^ source.baml entity.name.function
 #                   ^ source.baml
-#                    ^^^^^ source.baml function.params variable.other.readwrite.function_name
+#                    ^^^^^ source.baml function.params variable.other.readwrite
 #                         ^ source.baml function.params
 #                          ^ source.baml function.params
 #                           ^^^^^^ source.baml function.params storage.type.baml
@@ -295,7 +295,7 @@
 #  ^ source.baml
 #   ^^^^^^^^^^^^^^ source.baml entity.name.function
 #                 ^ source.baml
-#                  ^ source.baml function.params variable.other.readwrite.function_name
+#                  ^ source.baml function.params variable.other.readwrite
 #                   ^ source.baml function.params
 #                    ^ source.baml function.params
 #                     ^^^ source.baml function.params storage.type.baml
@@ -324,7 +324,7 @@
 #^^ source.baml
 #  ^^^ source.baml keyword.control.for
 #     ^^ source.baml
-#       ^^^^ source.baml variable.other.readwrite.iterator
+#       ^^^^ source.baml variable.other.readwrite
 #           ^ source.baml
 #            ^^ source.baml keyword.control.in
 #              ^ source.baml
@@ -403,15 +403,39 @@
 #      ^^^^^^^ source.baml variable.other.readwrite
 #             ^ source.baml
 #              ^ source.baml keyword.operator.assignment
-#               ^^^^^^^^^^ source.baml
+#               ^ source.baml
+#                ^^^^^^^ source.baml entity.name.type
+#                       ^^ source.baml
 >    establishment_name: "Pizzaria la Rocca",
-#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ source.baml
+#^^^^ source.baml
+#    ^^^^^^^^^^^^^^^^^^ source.baml variable.other.readwrite.interface
+#                      ^ source.baml
+#                       ^ source.baml
+#                        ^^^^^^^^^^^^^^^^^^^ source.baml string.quoted.double
+#                                           ^^ source.baml
 >    date: "2025-09-03",
-#^^^^^^^^^^^^^^^^^^^^^^^^ source.baml
+#^^^^ source.baml
+#    ^^^^ source.baml variable.other.readwrite.interface
+#        ^ source.baml
+#         ^ source.baml
+#          ^^^^^^^^^^^^ source.baml string.quoted.double
+#                      ^^ source.baml
 >    total: 25.50,
-#^^^^^^^^^^^^^^^^^^ source.baml
+#^^^^ source.baml
+#    ^^^^^ source.baml variable.other.readwrite.interface
+#         ^ source.baml
+#          ^ source.baml
+#           ^^ source.baml constant.numeric
+#             ^ source.baml
+#              ^^ source.baml constant.numeric
+#                ^^ source.baml
 >    currency: "USD",
-#^^^^^^^^^^^^^^^^^^^^^ source.baml
+#^^^^ source.baml
+#    ^^^^^^^^ source.baml variable.other.readwrite.interface
+#            ^ source.baml
+#             ^ source.baml
+#              ^^^^^ source.baml string.quoted.double
+#                   ^^ source.baml
 >  };
 #^^ source.baml
 #  ^ source.baml
@@ -480,17 +504,35 @@
 #^^ source.baml
 #  ^^^^^^^^^^^^^^^^^^^ source.baml comment.line
 >  if (result > 10 && result < 100) {
-#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ source.baml
+#^^ source.baml
+#  ^^ source.baml keyword.control.if
+#    ^^ source.baml
+#      ^^^^^^^ source.baml
+#             ^ source.baml keyword.operator.binary
+#              ^ source.baml
+#               ^^ source.baml constant.numeric
+#                 ^ source.baml
+#                  ^^ source.baml keyword.operator.binary
+#                    ^^^^^^^^ source.baml
+#                            ^ source.baml keyword.operator.binary
+#                             ^ source.baml
+#                              ^^^ source.baml constant.numeric
+#                                 ^^ source.baml
+#                                   ^ source.baml
 >    result
 #^^^^^^^^^^^ source.baml
 >  } else {
 #^^ source.baml
 #  ^ source.baml
-#   ^^^^^^^^ source.baml
+#   ^ source.baml
+#    ^^^^ source.baml keyword.control.else
+#        ^ source.baml
+#         ^^ source.baml
 >    0
 #^^^^^^ source.baml
 >  }
-#^^^^ source.baml
+#^^ source.baml
+#  ^ source.baml
 >}
 #^^ source.baml
 >
@@ -515,9 +557,20 @@
 #      ^^^ source.baml variable.other.readwrite
 #         ^ source.baml
 #          ^ source.baml keyword.operator.assignment
-#           ^^^^^^^^^^^ source.baml
+#           ^ source.baml
+#            ^^^^^^^^ source.baml entity.name.type
+#                    ^^ source.baml
 #                      ^ source.baml
-#                       ^^^^^^^^^^^^^^^^^^^^^ source.baml
+#                       ^^ source.baml variable.other.readwrite.interface
+#                         ^ source.baml
+#                          ^ source.baml
+#                           ^^ source.baml constant.numeric
+#                             ^^ source.baml
+#                               ^^^^ source.baml variable.other.readwrite.interface
+#                                   ^ source.baml
+#                                    ^ source.baml
+#                                     ^^^^^^ source.baml string.quoted.double
+#                                           ^ source.baml
 #                                            ^ source.baml
 #                                             ^ source.baml
 >  let value = obj.getValue();
