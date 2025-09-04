@@ -98,6 +98,38 @@ impl std::fmt::Display for Instance {
     }
 }
 
+/// Runtime class representation.
+#[derive(Clone, Debug)]
+pub struct Enum {
+    /// Enum name.
+    pub name: String,
+
+    /// Enum variant names. Debug info, VM doesn't need this.
+    pub variant_names: Vec<String>,
+}
+
+/// Same as [`Instance`] but for enums.
+#[derive(Clone, Debug)]
+pub struct Variant {
+    /// Locate the enum.
+    pub enm: ObjectIndex,
+
+    /// Index of the variant in the ordered list of variants.
+    pub index: usize,
+}
+
+impl std::fmt::Display for Variant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<variant of {}>", self.enm)
+    }
+}
+
+impl std::fmt::Display for Enum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<enum {}>", self.name)
+    }
+}
+
 /// Any data that the Baml program can reference and is allocated on heap.
 ///
 /// [`Vm`] should own objects and give references to them to the running Baml
@@ -116,6 +148,12 @@ pub enum Object {
 
     /// Class instance object.
     Instance(Instance),
+
+    /// Enum object.
+    Enum(Enum),
+
+    /// Enum value object.
+    Variant(Variant),
 
     /// Heap allocated string.
     ///
@@ -188,6 +226,8 @@ impl std::fmt::Display for Object {
             Object::Function(function) => function.fmt(f),
             Object::Class(class) => class.fmt(f),
             Object::Instance(instance) => instance.fmt(f),
+            Object::Enum(enm) => enm.fmt(f),
+            Object::Variant(value) => value.fmt(f),
             Object::String(string) => string.fmt(f),
             Object::Array(array) => write!(f, "{array:?}"),
             Object::Map(map) => write!(f, "{map:?}"),
@@ -270,6 +310,8 @@ pub enum ObjectType {
     Function(FunctionType),
     Class,
     String,
+    Enum,
+    Variant,
     Future(FutureType),
 }
 
@@ -282,6 +324,8 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Map => write!(f, "map"),
             ObjectType::Function(function_type) => write!(f, "{function_type}"),
             ObjectType::Class => write!(f, "class"),
+            ObjectType::Enum => write!(f, "enum"),
+            ObjectType::Variant => write!(f, "variant"),
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
             ObjectType::String => write!(f, "string"),
         }
@@ -345,6 +389,8 @@ impl ObjectType {
             Object::Function(func) => Self::Function(func.kind.into()),
             Object::Class(_) => Self::Class,
             Object::Instance(_) => Self::Instance,
+            Object::Enum(_) => Self::Enum,
+            Object::Variant(_) => Self::Enum,
             Object::String(_) => Self::String,
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
@@ -1403,6 +1449,51 @@ impl Vm {
                     // Push the instance object on top of the stack.
                     self.stack
                         .push(Value::Object(ObjectIndex(self.objects.len() - 1)));
+
+                    // borrow check.
+                    function = self.objects[frame.function].as_function()?;
+                }
+
+                // TODO: Contains a lot of typechecking, we know at compile time
+                // that all this stuff is right. Should do something about it.
+                Instruction::AllocVariant(enum_index) => {
+                    let Object::Enum(enm) = &self.objects[enum_index] else {
+                        return Err(InternalError::TypeError {
+                            expected: ObjectType::Enum.into(),
+                            got: ObjectType::of(&self.objects[enum_index]).into(),
+                        }
+                        .into());
+                    };
+
+                    let variant = self.stack.ensure_pop()?;
+
+                    let Value::Int(variant_index) = variant else {
+                        return Err(InternalError::TypeError {
+                            expected: Type::Int,
+                            got: self.objects.type_of(&variant),
+                        }
+                        .into());
+                    };
+
+                    if variant_index < 0 {
+                        return Err(InternalError::ArrayIndexIsNegative(variant_index).into());
+                    }
+
+                    if variant_index as usize >= enm.variant_names.len() {
+                        return Err(InternalError::ArrayIndexOutOfBounds {
+                            index: variant_index as usize,
+                            length: enm.variant_names.len(),
+                        }
+                        .into());
+                    }
+
+                    let object_index = self.objects.insert(Object::Variant(Variant {
+                        enm: enum_index,
+                        index: variant_index as usize,
+                    }));
+
+                    // Push the variant object on top of the stack.
+                    self.stack.push(Value::Object(object_index));
 
                     // borrow check.
                     function = self.objects[frame.function].as_function()?;

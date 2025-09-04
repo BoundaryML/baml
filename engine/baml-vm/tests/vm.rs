@@ -2007,3 +2007,75 @@ fn Len() -> int {
         })
     }
 }
+
+#[cfg(test)]
+mod enums {
+    use super::*;
+
+    #[test]
+    fn return_enum_variant() -> anyhow::Result<()> {
+        assert_vm_executes_with_inspection(
+            Program {
+                source: r#"
+                    enum Shape {
+                        Square
+                        Rectangle
+                        Circle
+                    }
+
+                    fn main() -> Shape {
+                        Shape.Rectangle
+                    }
+                "#,
+                function: "main",
+                expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(7))),
+            },
+            |vm| {
+                let Object::Variant(variant) = &vm.objects[ObjectIndex::from_raw(7)] else {
+                    panic!(
+                        "expected Variant, got {:?}",
+                        &vm.objects[ObjectIndex::from_raw(7)]
+                    );
+                };
+
+                assert_eq!(variant.index, 1);
+
+                Ok(())
+            },
+        )
+    }
+
+    #[test]
+    fn assign_enum_variant() -> anyhow::Result<()> {
+        assert_vm_executes_with_inspection(
+            Program {
+                source: r#"
+                    enum Shape {
+                        Square
+                        Rectangle
+                        Circle
+                    }
+
+                    fn main() -> Shape {
+                        let s = Shape.Rectangle;
+                        s
+                    }
+                "#,
+                function: "main",
+                expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(7))),
+            },
+            |vm| {
+                let Object::Variant(variant) = &vm.objects[ObjectIndex::from_raw(7)] else {
+                    panic!(
+                        "expected Variant, got {:?}",
+                        &vm.objects[ObjectIndex::from_raw(7)]
+                    );
+                };
+
+                assert_eq!(variant.index, 1);
+
+                Ok(())
+            },
+        )
+    }
+}
