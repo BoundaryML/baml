@@ -581,12 +581,20 @@ impl BamlRuntimeExt for BamlRuntime {
 }}
 "#,
                     name = f.name(),
-                    args = f
-                        .inputs()
-                        .iter()
-                        .filter_map(|(k, t)| get_dummy_field(2, k, t))
-                        .collect::<Vec<_>>()
-                        .join("\n")
+                    args = {
+                        // Convert baml_runtime::TypeIR inputs to baml_types::TypeIR
+                        let params = f
+                            .inputs()
+                            .iter()
+                            .map(|(k, runtime_type)| {
+                                // Convert runtime TypeIR to internal TypeIR using the walker's type method
+                                (k.clone(), runtime_type.clone())
+                            })
+                            .collect::<indexmap::IndexMap<String, _>>();
+
+                        // Use the IR's get_dummy_args method
+                        self.inner.ir.get_dummy_args(2, true, &params)
+                    }
                 );
 
                 let wasm_span = match f.span() {
@@ -598,12 +606,21 @@ impl BamlRuntimeExt for BamlRuntime {
                     name: f.name().to_string(),
                     span: wasm_span,
                     signature: {
-                        let inputs = f
-                            .inputs()
-                            .iter()
-                            .filter_map(|(k, t)| get_dummy_field(2, k, t))
-                            .collect::<Vec<_>>()
-                            .join(",");
+                        let inputs = {
+                            let params = f
+                                .inputs()
+                                .iter()
+                                .map(|(k, runtime_type)| (k.clone(), runtime_type.clone()))
+                                .collect::<indexmap::IndexMap<String, _>>();
+
+                            self.inner
+                                .ir
+                                .get_dummy_args(2, false, &params)
+                                .split('\n')
+                                .map(|line| line.trim().to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        };
 
                         format!("({}) -> {}", inputs, f.output())
                     },
