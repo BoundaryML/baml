@@ -44,37 +44,6 @@ impl From<Errors> for napi::Error {
     }
 }
 
-// use the FromNapiValue implementation for serde_json::Number here
-// https://github.com/napi-rs/napi-rs/blob/b2239fd880fa40fa98d206d8f31aec1bb8a0ce12/crates/napi/src/bindgen_runtime/js_values/serde.rs#L147
-#[allow(dead_code)]
-fn from_napi_number(env: Env, napi_val: JsNumber) -> Result<BamlValue> {
-    let n = unsafe { f64::from_napi_value(env.raw(), napi_val.raw())? };
-    // Try to auto-convert to integers
-    let n = if n.trunc() == n {
-        if n >= 0.0f64 && n <= u32::MAX as f64 {
-            // This can be represented as u32
-            Some(BamlValue::Int(n as i64))
-        } else if n < 0.0f64 && n >= i32::MIN as f64 {
-            Some(BamlValue::Int(n as i64))
-        } else {
-            // must be a float
-            Some(BamlValue::Float(n))
-        }
-    } else {
-        // must be a float
-        Some(BamlValue::Float(n))
-    };
-
-    let n = n.ok_or_else(|| {
-        Error::new(
-            Status::InvalidArg,
-            "Unexpected JsNumber type, expected int or float".to_owned(),
-        )
-    })?;
-
-    Ok(n)
-}
-
 pub fn js_object_to_baml_value(env: Env, kwargs: JsObject) -> napi::Result<BamlValue> {
     if kwargs.is_array()? || kwargs.is_typedarray()? || kwargs.is_dataview()? {
         let len = kwargs.get_array_length()?;

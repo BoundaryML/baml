@@ -4,17 +4,9 @@ use std::{
 };
 
 use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
-use napi::bindgen_prelude::JavaScriptClassExt;
 use napi::{
-    bindgen_prelude::*,
-    Env,
-    JsBoolean,
-    /* JsNull, */ JsNumber,
-    JsObject,
-    JsString, /* JsUndefined, */
-    Result,
-    //    JsUnknown, Result,
-    Unknown,
+    bindgen_prelude::{JavaScriptClassExt, *},
+    Env, JsBoolean, JsNumber, JsObject, JsString, Result, Unknown,
 };
 use napi_derive::napi;
 use serde_json::Value as JsonValue;
@@ -176,7 +168,7 @@ impl FunctionLog {
     }
 
     #[napi(getter, ts_return_type = "(LLMCall | LLMStreamCall)[]")]
-    pub fn calls<'a>(&self, env: &'a Env) -> Result<Array<'a>> {
+    pub fn calls<'e>(&self, env: &'e Env) -> Result<Array<'e>> {
         let calls = self.inner.lock().unwrap().calls();
         let mut js_array = env.create_array(calls.len() as u32)?;
 
@@ -186,14 +178,14 @@ impl FunctionLog {
                     let llm_call = LLMCall {
                         inner: inner.clone(),
                     };
-                    let js_value = llm_call.into_instance(&env)?;
+                    let js_value = llm_call.into_instance(env)?;
                     js_array.set(i as u32, js_value)?;
                 }
                 baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(inner) => {
                     let stream_call = LLMStreamCall {
                         inner: inner.clone(),
                     };
-                    let js_value = LLMStreamCall::into_instance(stream_call, &env)?;
+                    let js_value = LLMStreamCall::into_instance(stream_call, env)?;
                     js_array.set(i as u32, js_value)?;
                 }
             };
@@ -209,8 +201,7 @@ impl FunctionLog {
     }
 
     #[napi(getter)]
-    //    pub fn selected_call<'a>(&self, env: &'a Env) -> Result<JsUnknown<'a>> {
-    pub fn selected_call<'a>(&self, env: &'a Env) -> Result<Unknown<'a>> {
+    pub fn selected_call<'e>(&self, env: &'e Env) -> Result<Unknown<'e>> {
         let calls = self.inner.lock().unwrap().calls();
         let found = calls.into_iter().find_map(|call| match call {
             baml_runtime::tracingv2::storage::storage::LLMCallKind::Basic(inner) => {
@@ -495,28 +486,20 @@ impl LLMStreamCall {
     }
 }
 
-//pub fn serde_value_to_js<'a>(env: &'a Env, value: &JsonValue) -> Result<JsUnknown<'a>> {
-pub fn serde_value_to_js<'a>(env: &'a Env, value: &JsonValue) -> Result<Unknown<'a>> {
+pub fn serde_value_to_js<'e>(env: &'e Env, value: &JsonValue) -> Result<Unknown<'e>> {
     match value {
         // v2: env.get_null()?.into_unknown()
         JsonValue::Null => Ok(env.to_js_value(&Option::<()>::None)?),
-        //        JsonValue::Bool(b) => Ok(env.get_boolean(*b)?.into_unknown(env)),
         JsonValue::Bool(b) => Ok(env.get_boolean(*b)?.into_unknown()),
         JsonValue::Number(num) => {
             if let Some(i) = num.as_i64() {
-                //                Ok(env.create_int64(i)?.into_unknown(env))
-                //                Ok(env.create_int64(i)?.into_unknown()?)
                 Ok(env.create_int64(i)?.into_unknown(env)?)
             } else if let Some(f) = num.as_f64() {
-                //                Ok(env.create_double(f)?.into_unknown(env))
-                //                Ok(env.create_double(f)?.into_unknown()?)
                 Ok(env.create_double(f)?.into_unknown(env)?)
             } else {
                 Err(Error::from_reason("Could not convert number to i64 or f64"))
             }
         }
-        //        JsonValue::String(s) => Ok(env.create_string(s)?.into_unknown(env)),
-        //        JsonValue::String(s) => Ok(env.create_string(s)?.into_unknown()?),
         JsonValue::String(s) => Ok(env.create_string(s)?.into_unknown(env)?),
         JsonValue::Array(arr) => {
             let mut js_array = env.create_array_with_length(arr.len())?;
@@ -524,7 +507,6 @@ pub fn serde_value_to_js<'a>(env: &'a Env, value: &JsonValue) -> Result<Unknown<
                 let js_value = serde_value_to_js(env, elem)?;
                 js_array.set_element(i as u32, js_value)?;
             }
-            //            Ok(js_array.into_unknown(env))
             Ok(js_array.into_unknown())
         }
         JsonValue::Object(obj) => {
@@ -533,7 +515,6 @@ pub fn serde_value_to_js<'a>(env: &'a Env, value: &JsonValue) -> Result<Unknown<
                 let js_value = serde_value_to_js(env, v)?;
                 js_obj.set_named_property(k, js_value)?;
             }
-            //            Ok(js_obj.into_unknown(env))
             Ok(js_obj.into_unknown())
         }
     }

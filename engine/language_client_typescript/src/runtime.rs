@@ -433,11 +433,11 @@ impl BamlRuntime {
         // configure runtime callback
         let result = if let Some(cb_ref) = &self.callback {
             let cb = cb_ref.borrow_back(&env)?;
-            let mut tsfn = cb
+            let mut thread_safe_fn = cb
                 .build_threadsafe_function()
                 .build_callback(|ctx: ThreadSafeCallContext<BamlLogEvent>| Ok(ctx.value))?;
             // allow node to exit if this is the only ref
-            let _ = tsfn.unref(&env);
+            let _ = thread_safe_fn.unref(&env);
 
             let rust_cb = Box::new(move |event: LogEvent| {
                 let js_evt = BamlLogEvent {
@@ -452,7 +452,7 @@ impl BamlRuntime {
                     start_time: event.start_time,
                 };
 
-                let status = tsfn.call(js_evt, ThreadsafeFunctionCallMode::Blocking);
+                let status = thread_safe_fn.call(js_evt, ThreadsafeFunctionCallMode::Blocking);
                 if status != napi::Status::Ok {
                     log::error!("Error calling log_event callback: {status:?}");
                 }
@@ -483,6 +483,9 @@ impl BamlRuntime {
     }
 }
 
+// TODO: This is probably no longer necessary since dropping FunctionRef
+// automatically unrefs the Node callback. Fix the macro that creates the
+// wrapper to remove custom_finalize.
 impl ObjectFinalize for BamlRuntime {
     fn finalize(self, _env: Env) -> napi::Result<()> {
         // dropping self also drops any FunctionRef callbacks

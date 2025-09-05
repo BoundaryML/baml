@@ -1,4 +1,4 @@
-use napi::{bindgen_prelude::Env, JsArrayBuffer, JsObject, Unknown, NapiValue};
+use napi::{bindgen_prelude::Env, JsArrayBuffer, JsObject, NapiValue, Unknown};
 use napi_derive::napi;
 
 use super::log_collector::serde_value_to_js;
@@ -76,7 +76,7 @@ impl HTTPBody {
     }
 
     #[napi(ts_return_type = "any")]
-    pub fn json<'a>(&self, env: &'a Env) -> napi::Result<Unknown<'a>> {
-        serde_value_to_js(&env, &self.inner.json().map_err(from_anyhow_error)?)
+    pub fn json<'e>(&self, env: &'e Env) -> napi::Result<Unknown<'e>> {
+        serde_value_to_js(env, &self.inner.json().map_err(from_anyhow_error)?)
     }
 }

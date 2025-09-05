@@ -4,8 +4,10 @@ use std::{collections::BTreeMap, ops::Deref};
 // We use NAPI-RS to expose Rust functionality to JavaScript/TypeScript
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::{ir_type::UnionConstructor, BamlValue};
-use napi::bindgen_prelude::JavaScriptClassExt;
-use napi::{bindgen_prelude::Array, Env};
+use napi::{
+    bindgen_prelude::{Array, JavaScriptClassExt},
+    Env,
+};
 use napi_derive::napi;
 
 // Create TypeScript-compatible wrappers for our Rust types
@@ -197,18 +199,6 @@ impl EnumBuilder {
         self.inner.lock().unwrap().upsert_value(&name).into()
     }
 
-    /*
-    #[napi]
-    pub fn alias(&self, alias: Option<&str>) -> Self {
-        self.inner.lock().unwrap().with_meta(
-            "alias",
-            alias.map_or(baml_types::BamlValue::Null, |s| {
-                BamlValue::String(s.to_string())
-            }),
-        );
-        self.inner.clone().into()
-    }
-    */
     #[napi]
     pub fn alias(&self, alias: Option<String>) -> Self {
         self.inner.lock().unwrap().with_meta(
@@ -226,18 +216,6 @@ impl EnumBuilder {
 
 #[napi]
 impl EnumValueBuilder {
-    /*
-    #[napi]
-    pub fn alias(&self, alias: Option<&str>) -> Self {
-        self.inner.lock().unwrap().with_meta(
-            "alias",
-            alias.map_or(baml_types::BamlValue::Null, |s| {
-                BamlValue::String(s.to_string())
-            }),
-        );
-        self.inner.clone().into()
-    }
-    */
     #[napi]
     pub fn alias(&self, alias: Option<String>) -> Self {
         self.inner.lock().unwrap().with_meta(
@@ -256,18 +234,6 @@ impl EnumValueBuilder {
         self.inner.clone().into()
     }
 
-    /*
-    #[napi]
-    pub fn description(&self, description: Option<&str>) -> Self {
-        self.inner.lock().unwrap().with_meta(
-            "description",
-            description.map_or(baml_types::BamlValue::Null, |s| {
-                BamlValue::String(s.to_string())
-            }),
-        );
-        self.inner.clone().into()
-    }
-    */
     #[napi]
     pub fn description(&self, description: Option<String>) -> Self {
         self.inner.lock().unwrap().with_meta(
@@ -281,7 +247,7 @@ impl EnumValueBuilder {
 #[napi]
 impl ClassBuilder {
     #[napi]
-    pub fn list_properties<'a>(&self, env: &'a Env) -> napi::Result<Array<'a>> {
+    pub fn list_properties<'e>(&self, env: &'e Env) -> napi::Result<Array<'e>> {
         let properties = self
             .inner
             .lock()
@@ -295,7 +261,7 @@ impl ClassBuilder {
         for (i, (name, prop_builder)) in properties.enumerate() {
             let mut tuple = env.create_array(2)?;
             tuple.set(0, env.create_string(&name)?)?;
-            tuple.set(1, prop_builder.into_instance(&env)?)?;
+            tuple.set(1, prop_builder.into_instance(env)?)?;
             js_array.set(i as u32, tuple)?;
         }
 
@@ -334,30 +300,6 @@ impl ClassPropertyBuilder {
         self.inner.clone().into()
     }
 
-    /*
-    #[napi]
-    pub fn get_type(&self) -> napi::Result<FieldType> {
-        self.inner
-            .lock()
-            .unwrap()
-            .r#type()
-            .map(FieldType::from)
-            .ok_or_else(|| crate::errors::from_anyhow_error(anyhow::anyhow!(
-                "attempted to read a property that has no defined type, this is likely an internal bug"
-            )))
-    }
-
-    #[napi]
-    pub fn alias(&self, alias: Option<&str>) -> Self {
-        self.inner.lock().unwrap().with_meta(
-            "alias",
-            alias.map_or(baml_types::BamlValue::Null, |s| {
-                BamlValue::String(s.to_string())
-            }),
-        );
-        self.inner.clone().into()
-    }
-    */
     #[napi]
     pub fn alias(&self, alias: Option<String>) -> Self {
         self.inner.lock().unwrap().with_meta(
@@ -367,18 +309,6 @@ impl ClassPropertyBuilder {
         self.inner.clone().into()
     }
 
-    /*
-    #[napi]
-    pub fn description(&self, description: Option<&str>) -> Self {
-        self.inner.lock().unwrap().with_meta(
-            "description",
-            description.map_or(baml_types::BamlValue::Null, |s| {
-                BamlValue::String(s.to_string())
-            }),
-        );
-        self.inner.clone().into()
-    }
-    */
     #[napi]
     pub fn description(&self, description: Option<String>) -> Self {
         self.inner.lock().unwrap().with_meta(
