@@ -3,8 +3,8 @@ use std::sync::Arc;
 use baml_runtime::TripWire;
 use dashmap::DashMap;
 use napi::{
-    bindgen_prelude::{Function, ToNapiValue},
-    Env, JsFunction, JsObject, Unknown,
+    bindgen_prelude::{Function, JsObjectValue, Object, ToNapiValue},
+    Env, Unknown,
 };
 use once_cell::sync::Lazy;
 use stream_cancel::Trigger;
@@ -19,8 +19,8 @@ static OPERATION_ID_COUNTER: Lazy<std::sync::atomic::AtomicU32> =
 /// Convert a JavaScript AbortSignal to a Rust cancellation mechanism
 /// Returns (operation_id, tripwire) where operation_id is used to track the operation
 pub fn js_abort_signal_to_rust_tripwire(
-    env: Env,
-    signal: Option<JsObject>,
+    env: &Env,
+    signal: Option<Object>,
 ) -> napi::Result<Arc<baml_runtime::TripWire>> {
     let Some(signal) = signal else {
         return Ok(TripWire::new(None));
@@ -62,7 +62,7 @@ pub fn js_abort_signal_to_rust_tripwire(
     // signal.addEventListener('abort', callback)
     let add_event_listener: Function = signal.get_named_property("addEventListener")?;
     add_event_listener.apply(
-        signal.into_unknown(),
+        signal.into_unknown(&env),
         [
             env.create_string("abort")?.into_unknown(&env)?,
             callback.into_unknown(&env)?,

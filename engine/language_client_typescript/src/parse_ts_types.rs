@@ -1,8 +1,5 @@
 use baml_types::{BamlMap, BamlValue};
-use napi::{
-    bindgen_prelude::*, JsBoolean, JsDate, JsExternal, JsNumber, JsObject, JsString, NapiRaw,
-    Unknown,
-};
+use napi::{bindgen_prelude::*, JsDate, JsExternal, JsNumber, JsString, Unknown};
 
 use crate::types::{audio::BamlAudio, image::BamlImage, pdf::BamlPdf, video::BamlVideo};
 
@@ -44,7 +41,7 @@ impl From<Errors> for napi::Error {
     }
 }
 
-pub fn js_object_to_baml_value(env: Env, kwargs: JsObject) -> napi::Result<BamlValue> {
+pub fn js_object_to_baml_value(env: &Env, kwargs: Object) -> napi::Result<BamlValue> {
     if kwargs.is_array()? || kwargs.is_typedarray()? || kwargs.is_dataview()? {
         let len = kwargs.get_array_length()?;
         let mut args = Vec::with_capacity(len as usize);
@@ -67,7 +64,7 @@ pub fn js_object_to_baml_value(env: Env, kwargs: JsObject) -> napi::Result<BamlV
         Ok(BamlValue::List(args))
     } else if kwargs.is_date()? {
         let date: JsDate =
-            unsafe { JsDate::from_napi_value(env.raw(), kwargs.into_unknown().raw())? };
+            unsafe { JsDate::from_napi_value(env.raw(), kwargs.into_unknown(&env)?.raw())? };
         let timestamp = date.value_of()?;
         // TODO: Convert timestamp to a DateTime
         Ok(BamlValue::Float(timestamp))
@@ -114,7 +111,7 @@ pub fn js_object_to_baml_value(env: Env, kwargs: JsObject) -> napi::Result<BamlV
 }
 
 pub fn jsunknown_to_baml_value(
-    env: Env,
+    env: &Env,
     item: Unknown,
     skip_unsupported: bool,
 ) -> napi::Result<Option<BamlValue>> {
@@ -149,7 +146,7 @@ pub fn jsunknown_to_baml_value(
             BamlValue::String(s)
         }
         ValueType::Object => {
-            let obj: JsObject = unsafe { JsObject::from_napi_value(env.raw(), item.raw())? };
+            let obj: Object = unsafe { Object::from_napi_value(env.raw(), item.raw())? };
             js_object_to_baml_value(env, obj)?
         }
         ValueType::Undefined | ValueType::Null => BamlValue::Null,
@@ -171,13 +168,14 @@ pub fn jsunknown_to_baml_value(
         }
         ValueType::External => {
             let external = unsafe { JsExternal::from_napi_value(env.raw(), item.raw())? };
-            if let Ok(img) = env.get_value_external::<BamlImage>(&external) {
+
+            if let Ok(img) = external.get_value::<BamlImage>() {
                 BamlValue::Media(img.inner.clone())
-            } else if let Ok(audio) = env.get_value_external::<BamlAudio>(&external) {
+            } else if let Ok(audio) = external.get_value::<BamlAudio>() {
                 BamlValue::Media(audio.inner.clone())
-            } else if let Ok(pdf) = env.get_value_external::<BamlPdf>(&external) {
+            } else if let Ok(pdf) = external.get_value::<BamlPdf>() {
                 BamlValue::Media(pdf.inner.clone())
-            } else if let Ok(video) = env.get_value_external::<BamlVideo>(&external) {
+            } else if let Ok(video) = external.get_value::<BamlVideo>() {
                 BamlValue::Media(video.inner.clone())
             } else {
                 if skip_unsupported {

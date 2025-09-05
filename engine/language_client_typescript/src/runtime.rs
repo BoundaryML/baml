@@ -7,9 +7,9 @@ use baml_runtime::{
 use baml_types::BamlValue;
 use internal_baml_core::feature_flags::FeatureFlags;
 use napi::{
-    bindgen_prelude::{Function, FunctionRef, ObjectFinalize, Undefined},
+    bindgen_prelude::{Function, FunctionRef, Object, ObjectFinalize, Promise, PromiseRaw, Undefined},
     threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode},
-    Env, JsObject,
+    Env,
 };
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
@@ -106,19 +106,19 @@ impl BamlRuntime {
     }
 
     #[napi(ts_return_type = "Promise<FunctionResult>")]
-    pub fn call_function(
+    pub fn call_function<'e>(
         &self,
-        env: Env,
+        env: &'e Env,
         function_name: String,
-        #[napi(ts_arg_type = "{ [name: string]: any }")] args: JsObject,
+        #[napi(ts_arg_type = "{ [name: string]: any }")] args: Object,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
-        signal: Option<JsObject>, // NEW: AbortSignal parameter
-    ) -> napi::Result<JsObject> {
-        let args = parse_ts_types::js_object_to_baml_value(env, args)?;
+        signal: Option<Object>, // NEW: AbortSignal parameter
+    ) -> napi::Result<PromiseRaw<'e, FunctionResult>> {
+        let args = parse_ts_types::js_object_to_baml_value(&env, args)?;
 
         if !args.is_map() {
             return Err(invalid_argument_error(&format!(
@@ -129,7 +129,7 @@ impl BamlRuntime {
         let args_map = args.as_map_owned().unwrap();
 
         // Convert AbortSignal to Tripwire
-        let tripwire = js_abort_signal_to_rust_tripwire(env, signal)?;
+        let tripwire = js_abort_signal_to_rust_tripwire(&env, signal)?;
 
         let baml_runtime = self.inner.clone();
         let ctx_mng = ctx.inner.clone();
@@ -161,7 +161,7 @@ impl BamlRuntime {
                 .map_err(from_anyhow_error)
         };
 
-        env.execute_tokio_future(fut, |&mut _, data| Ok(data))
+        env.spawn_future(fut)
     }
 
     #[napi]
@@ -169,16 +169,16 @@ impl BamlRuntime {
         &self,
         env: Env,
         function_name: String,
-        #[napi(ts_arg_type = "{ [name: string]: any }")] args: JsObject,
+        #[napi(ts_arg_type = "{ [name: string]: any }")] args: Object,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
-        signal: Option<JsObject>, // NEW: AbortSignal parameter (sync doesn't actually use it)
+        signal: Option<Object>, // NEW: AbortSignal parameter (sync doesn't actually use it)
     ) -> napi::Result<FunctionResult> {
-        let args = parse_ts_types::js_object_to_baml_value(env, args)?;
-        let tripwire = js_abort_signal_to_rust_tripwire(env, signal)?;
+        let args = parse_ts_types::js_object_to_baml_value(&env, args)?;
+        let tripwire = js_abort_signal_to_rust_tripwire(&env, signal)?;
 
         if !args.is_map() {
             return Err(invalid_argument_error(&format!(
@@ -214,17 +214,17 @@ impl BamlRuntime {
         &self,
         env: Env,
         function_name: String,
-        #[napi(ts_arg_type = "{ [name: string]: any }")] args: JsObject,
+        #[napi(ts_arg_type = "{ [name: string]: any }")] args: Object,
         #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<Function<FunctionResult, ()>>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
-        signal: Option<JsObject>, // NEW: AbortSignal parameter
+        signal: Option<Object>, // NEW: AbortSignal parameter
         #[napi(ts_arg_type = "(() => void) | undefined")] on_tick: Option<Function<(), ()>>,
     ) -> napi::Result<FunctionResultStream> {
-        let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
+        let args: BamlValue = parse_ts_types::js_object_to_baml_value(&env, args)?;
         if !args.is_map() {
             return Err(invalid_argument_error(&format!(
                 "Expected a map of arguments, got: {}",
@@ -233,7 +233,7 @@ impl BamlRuntime {
         }
         let args_map = args.as_map_owned().unwrap();
 
-        let tripwire = js_abort_signal_to_rust_tripwire(env, signal)?;
+        let tripwire = js_abort_signal_to_rust_tripwire(&env, signal)?;
 
         let ctx = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
@@ -280,17 +280,17 @@ impl BamlRuntime {
         &self,
         env: Env,
         function_name: String,
-        #[napi(ts_arg_type = "{ [name: string]: any }")] args: JsObject,
+        #[napi(ts_arg_type = "{ [name: string]: any }")] args: Object,
         #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<Function<FunctionResult, ()>>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
-        signal: Option<JsObject>, // NEW: AbortSignal parameter
+        signal: Option<Object>, // NEW: AbortSignal parameter
         #[napi(ts_arg_type = "(() => void) | undefined")] on_tick: Option<Function<(), ()>>,
     ) -> napi::Result<FunctionResultStream> {
-        let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
+        let args: BamlValue = parse_ts_types::js_object_to_baml_value(&env, args)?;
         if !args.is_map() {
             return Err(invalid_argument_error(&format!(
                 "Expected a map of arguments, got: {}",
@@ -306,7 +306,7 @@ impl BamlRuntime {
             .into_iter()
             .map(|c| c.inner.clone())
             .collect::<Vec<_>>();
-        let tripwire = js_abort_signal_to_rust_tripwire(env, signal)?;
+        let tripwire = js_abort_signal_to_rust_tripwire(&env, signal)?;
         let stream = self
             .inner
             .stream_function(
@@ -341,17 +341,17 @@ impl BamlRuntime {
     }
 
     #[napi(ts_return_type = "Promise<HTTPRequest>")]
-    pub fn build_request(
+    pub fn build_request<'e>(
         &self,
-        env: Env,
+        env: &'e Env,
         function_name: String,
-        #[napi(ts_arg_type = "{ [name: string]: any }")] args: JsObject,
+        #[napi(ts_arg_type = "{ [name: string]: any }")] args: Object,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         stream: bool,
         env_vars: HashMap<String, String>,
-    ) -> napi::Result<JsObject> {
+    ) -> napi::Result<PromiseRaw<'e, HTTPRequest>> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
         if !args.is_map() {
@@ -383,7 +383,7 @@ impl BamlRuntime {
                 .map_err(from_anyhow_error)
         };
 
-        env.execute_tokio_future(fut, |&mut _, data| Ok(data))
+        env.spawn_future(fut)
     }
 
     #[napi]
@@ -391,14 +391,14 @@ impl BamlRuntime {
         &self,
         env: Env,
         function_name: String,
-        #[napi(ts_arg_type = "{ [name: string]: any }")] args: JsObject,
+        #[napi(ts_arg_type = "{ [name: string]: any }")] args: Object,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         stream: bool,
         env_vars: HashMap<String, String>,
     ) -> napi::Result<HTTPRequest> {
-        let args = parse_ts_types::js_object_to_baml_value(env, args)?;
+        let args = parse_ts_types::js_object_to_baml_value(&env, args)?;
 
         if !args.is_map() {
             return Err(invalid_argument_error(&format!(

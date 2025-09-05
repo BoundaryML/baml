@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use napi::{Env, JsUndefined};
+use napi::Env;
 use napi_derive::napi;
 
 mod abort_controller;

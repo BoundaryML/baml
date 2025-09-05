@@ -1,4 +1,7 @@
-use napi::{bindgen_prelude::Env, JsArrayBuffer, JsObject, NapiValue, Unknown};
+use napi::{
+    bindgen_prelude::{ArrayBuffer, Env, JsObjectValue, Object},
+    Unknown,
+};
 use napi_derive::napi;
 
 use super::log_collector::serde_value_to_js;
@@ -47,8 +50,8 @@ impl HTTPRequest {
     }
 
     #[napi(getter)]
-    pub fn headers(&self, env: Env) -> napi::Result<JsObject> {
-        let mut obj = env.create_object()?;
+    pub fn headers(&self, env: &Env) -> napi::Result<Object> {
+        let mut obj = Object::new(env)?;
         for (k, v) in self.inner.headers() {
             obj.set_named_property(k, v)?;
         }
@@ -59,12 +62,11 @@ impl HTTPRequest {
 #[napi]
 impl HTTPBody {
     #[napi]
-    pub fn raw(&self, env: Env) -> napi::Result<JsArrayBuffer> {
+    pub fn raw<'e>(&self, env: &'e Env) -> napi::Result<ArrayBuffer<'e>> {
         // TODO: Avoid clone by using unsafe `env.create_arraybuffer_with_borrowed_data`
         // (documentation says the borrowed data can be mutated so it doesn't
         // look trivial to implement).
-        env.create_arraybuffer_with_data(self.inner.raw().to_vec())
-            .map(napi::JsArrayBufferValue::into_raw)
+        ArrayBuffer::from_data(env, self.inner.raw().to_vec())
     }
 
     #[napi]

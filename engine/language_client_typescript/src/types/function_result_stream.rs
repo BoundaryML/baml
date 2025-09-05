@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use napi::{
-    bindgen_prelude::{ObjectFinalize, Function, FunctionRef, Undefined},
+    bindgen_prelude::{Function, FunctionRef, Object, ObjectFinalize, PromiseRaw, Undefined},
     threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode},
-    Env, JsObject,
+    Env
 };
 use napi_derive::napi;
 
@@ -62,7 +62,7 @@ impl FunctionResultStream {
     }
 
     #[napi(ts_return_type = "Promise<FunctionResult>")]
-    pub fn done(&mut self, env: Env, rctx: &RuntimeContextManager) -> napi::Result<JsObject> {
+    pub fn done<'e>(&mut self, env: &'e Env, rctx: &RuntimeContextManager) -> napi::Result<PromiseRaw<'e, FunctionResult>> {
         let Some(inner) = self.inner.take() else {
             return Err(napi::Error::from_reason("Stream already finished"));
         };
@@ -126,7 +126,7 @@ impl FunctionResultStream {
             res.0.map(FunctionResult::from).map_err(from_anyhow_error)
         };
 
-        env.execute_tokio_future(fut, |&mut _, data| Ok(data))
+        env.spawn_future(fut)
     }
 }
 
