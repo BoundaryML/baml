@@ -83,6 +83,24 @@ impl BamlAsyncInterpreterRuntime {
         &self.llm_runtime.inner
     }
 
+    pub fn disassemble(&self, function_name: &str) {
+        // The interpreter doesn't use bytecode, so we just print the THIR representation
+        if let Some(expr_fn) = self
+            .thir_program
+            .expr_functions
+            .iter()
+            .find(|f| f.name == function_name)
+        {
+            println!("THIR for expression function '{}':", function_name);
+            println!("{}", expr_fn.body.dump_str());
+        } else {
+            println!(
+                "Function '{}' not found or is not an expression function",
+                function_name
+            );
+        }
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_directory<T: AsRef<str>>(
         path: &std::path::Path,
