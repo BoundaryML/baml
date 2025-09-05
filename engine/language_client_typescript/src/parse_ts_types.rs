@@ -64,7 +64,7 @@ pub fn js_object_to_baml_value(env: &Env, kwargs: Object) -> napi::Result<BamlVa
         Ok(BamlValue::List(args))
     } else if kwargs.is_date()? {
         let date: JsDate =
-            unsafe { JsDate::from_napi_value(env.raw(), kwargs.into_unknown(&env)?.raw())? };
+            unsafe { JsDate::from_napi_value(env.raw(), kwargs.into_unknown(env)?.raw())? };
         let timestamp = date.value_of()?;
         // TODO: Convert timestamp to a DateTime
         Ok(BamlValue::Float(timestamp))
@@ -125,7 +125,7 @@ pub fn jsunknown_to_baml_value(
         ValueType::Number => {
             let n: f64 = unsafe { f64::from_napi_value(env.raw(), item.raw())? };
             // Try to auto-convert to integers
-            let n = if n.trunc() == n {
+            if n.trunc() == n {
                 if n >= 0.0f64 && n <= u32::MAX as f64 {
                     // This can be represented as u32
                     BamlValue::Int(n as i64)
@@ -138,8 +138,7 @@ pub fn jsunknown_to_baml_value(
             } else {
                 // must be a float
                 BamlValue::Float(n)
-            };
-            n
+            }
         }
         ValueType::String => {
             let s: String = unsafe { String::from_napi_value(env.raw(), item.raw())? };

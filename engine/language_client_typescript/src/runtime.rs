@@ -28,11 +28,13 @@ use crate::{
     },
 };
 
+type LogEventCallbackArgs = FnArgs<(Option<Error>, BamlLogEvent)>;
+
 crate::lang_wrapper!(BamlRuntime,
     CoreRuntime,
     clone_safe,
     custom_finalize,
-    callback: Option<FunctionRef<FnArgs<(Option<Error>, BamlLogEvent)>, ()>> = None
+    callback: Option<FunctionRef<LogEventCallbackArgs, ()>> = None
 );
 
 #[napi(object)]
@@ -475,7 +477,7 @@ impl BamlRuntime {
         &mut self,
         env: Env,
         #[napi(ts_arg_type = "undefined | ((err: any, param: BamlLogEvent) => void)")] func: Option<
-            Function<FnArgs<(Option<Error>, BamlLogEvent)>, ()>,
+            Function<LogEventCallbackArgs, ()>,
         >,
     ) -> napi::Result<Undefined> {
         // drop any previous callback automatically
@@ -512,10 +514,7 @@ impl BamlRuntime {
                 start_time: event.start_time,
             };
 
-            let status = thread_safe_fn.call(
-                (None, js_evt),
-                ThreadsafeFunctionCallMode::Blocking,
-            );
+            let status = thread_safe_fn.call((None, js_evt), ThreadsafeFunctionCallMode::Blocking);
             if status != napi::Status::Ok {
                 log::error!("Error calling log_event callback: {status:?}");
             }
