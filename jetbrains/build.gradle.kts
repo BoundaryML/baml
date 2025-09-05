@@ -144,6 +144,11 @@ tasks {
         }
         into("src/main/resources/textmate")
     }
+    
+    // Configure the runIde task to auto-open integ-tests directory
+    runIde {
+        args = listOf("${layout.projectDirectory}/../integ-tests/baml_src")
+    }
 }
 
 intellijPlatformTesting {
