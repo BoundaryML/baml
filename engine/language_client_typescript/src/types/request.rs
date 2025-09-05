@@ -50,7 +50,7 @@ impl HTTPRequest {
     }
 
     #[napi(getter)]
-    pub fn headers(&self, env: &Env) -> napi::Result<Object> {
+    pub fn headers(&self, env: &Env) -> napi::Result<Object<'_>> {
         let mut obj = Object::new(env)?;
         for (k, v) in self.inner.headers() {
             obj.set_named_property(k, v)?;

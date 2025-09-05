@@ -27,7 +27,7 @@ impl HTTPResponse {
     }
 
     #[napi(getter)]
-    pub fn headers(&self, env: &Env) -> napi::Result<Object> {
+    pub fn headers(&self, env: &Env) -> napi::Result<Object<'_>> {
         let mut obj = Object::new(env)?;
         if let Some(headers) = self.inner.headers() {
             for (k, v) in headers {
