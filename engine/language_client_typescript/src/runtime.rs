@@ -7,7 +7,11 @@ use baml_runtime::{
 use baml_types::BamlValue;
 use internal_baml_core::feature_flags::FeatureFlags;
 use napi::{
-    bindgen_prelude::{FnArgs, Function, FunctionRef, Object, ObjectFinalize, Promise, PromiseRaw, Undefined}, threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode}, Env, Error
+    bindgen_prelude::{
+        FnArgs, Function, FunctionRef, Object, ObjectFinalize, Promise, PromiseRaw, Undefined,
+    },
+    threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode},
+    Env, Error,
 };
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
@@ -28,7 +32,7 @@ crate::lang_wrapper!(BamlRuntime,
     CoreRuntime,
     clone_safe,
     custom_finalize,
-    callback: Option<FunctionRef<FnArgs<(Error, BamlLogEvent)>, ()>> = None
+    callback: Option<FunctionRef<FnArgs<(Option<Error>, BamlLogEvent)>, ()>> = None
 );
 
 #[napi(object)]
@@ -213,7 +217,9 @@ impl BamlRuntime {
         env: Env,
         function_name: String,
         #[napi(ts_arg_type = "{ [name: string]: any }")] args: Object,
-        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<Function<FnArgs<(Error, FunctionResult)>, ()>>,
+        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<
+            Function<FnArgs<(Error, FunctionResult)>, ()>,
+        >,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
@@ -279,7 +285,9 @@ impl BamlRuntime {
         env: Env,
         function_name: String,
         #[napi(ts_arg_type = "{ [name: string]: any }")] args: Object,
-        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<Function<FnArgs<(Error, FunctionResult)>, ()>>,
+        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<
+            Function<FnArgs<(Error, FunctionResult)>, ()>,
+        >,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
@@ -466,7 +474,9 @@ impl BamlRuntime {
     pub fn set_log_event_callback(
         &mut self,
         env: Env,
-        #[napi(ts_arg_type = "undefined | ((err: any, param: BamlLogEvent) => void)")] func: Option<Function<FnArgs<(Error, BamlLogEvent)>, ()>>,
+        #[napi(ts_arg_type = "undefined | ((err: any, param: BamlLogEvent) => void)")] func: Option<
+            Function<FnArgs<(Option<Error>, BamlLogEvent)>, ()>,
+        >,
     ) -> napi::Result<Undefined> {
         // drop any previous callback automatically
         self.callback = match func {
@@ -475,16 +485,19 @@ impl BamlRuntime {
         };
 
         let Some(cb_ref) = &self.callback else {
-            return self.inner
+            return self
+                .inner
                 .set_log_event_callback(None)
                 .map_err(from_anyhow_error);
         };
 
         // configure runtime callback
         let cb = cb_ref.borrow_back(&env)?;
-        let thread_safe_fn = cb
-            .build_threadsafe_function()
-            .build_callback(|ctx: ThreadSafeCallContext<BamlLogEvent>| Ok(ctx.value))?;
+        let thread_safe_fn = cb.build_threadsafe_function().build_callback(
+            |ctx: ThreadSafeCallContext<(Option<Error>, BamlLogEvent)>| {
+                Ok(FnArgs::from((Option::<Error>::None, ctx.value)))
+            },
+        )?;
 
         let rust_cb = Box::new(move |event: LogEvent| {
             let js_evt = BamlLogEvent {
@@ -499,18 +512,19 @@ impl BamlRuntime {
                 start_time: event.start_time,
             };
 
-            let status = thread_safe_fn.call(js_evt, ThreadsafeFunctionCallMode::Blocking);
+            let status = thread_safe_fn.call(
+                (None, js_evt),
+                ThreadsafeFunctionCallMode::Blocking,
+            );
             if status != napi::Status::Ok {
                 log::error!("Error calling log_event callback: {status:?}");
             }
             Ok(())
         });
 
-
         self.inner
             .set_log_event_callback(Some(rust_cb))
             .map_err(from_anyhow_error)
-
     }
 
     #[napi]

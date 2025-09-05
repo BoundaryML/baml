@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
 use napi::{
-    bindgen_prelude::{Error, FnArgs, Function, FunctionRef, Object, ObjectFinalize, PromiseRaw, Undefined},
+    bindgen_prelude::{
+        Error, FnArgs, Function, FunctionRef, Object, ObjectFinalize, PromiseRaw, Undefined,
+    },
     threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode},
-    Env
+    Env,
 };
 use napi_derive::napi;
 
@@ -62,7 +64,11 @@ impl FunctionResultStream {
     }
 
     #[napi(ts_return_type = "Promise<FunctionResult>")]
-    pub fn done<'e>(&mut self, env: &'e Env, rctx: &RuntimeContextManager) -> napi::Result<PromiseRaw<'e, FunctionResult>> {
+    pub fn done<'e>(
+        &mut self,
+        env: &'e Env,
+        rctx: &RuntimeContextManager,
+    ) -> napi::Result<PromiseRaw<'e, FunctionResult>> {
         let Some(inner) = self.inner.take() else {
             return Err(napi::Error::from_reason("Stream already finished"));
         };
@@ -70,20 +76,37 @@ impl FunctionResultStream {
         let on_event = match &self.callback {
             Some(cb_ref) => {
                 let cb = cb_ref.borrow_back(env)?;
-                let thread_safe_fn = cb
-                    .build_threadsafe_function()
-                    .build_callback(|ctx: ThreadSafeCallContext<FnArgs<(Option<Error>, Option<baml_runtime::FunctionResult>)>>| {
+                // Prepare for some confusing control flow here:
+                // This thing is Rust wrapper over a JS function that essentially
+                // maps Rust objects to JS objects before the JS function is called.
+                let thread_safe_fn = cb.build_threadsafe_function().build_callback(
+                    |ctx: ThreadSafeCallContext<
+                        FnArgs<(Option<Error>, Option<baml_runtime::FunctionResult>)>,
+                    >| {
                         // TODO: These parameters are annoying, figure out if we can do Result<FunctionResult>.
                         match ctx.value.data {
-                            (None, Some(event)) => Ok(FnArgs::from((None, Some(FunctionResult::from(event))))),
+                            (None, Some(event)) => {
+                                Ok(FnArgs::from((None, Some(FunctionResult::from(event)))))
+                            }
                             (Some(error), None) => Ok(FnArgs::from((Some(error), None))),
-                            (Some(error), Some(event)) => Ok(FnArgs::from((Some(error), Some(FunctionResult::from(event))))),
+                            (Some(error), Some(event)) => Ok(FnArgs::from((
+                                Some(error),
+                                Some(FunctionResult::from(event)),
+                            ))),
                             (None, None) => Ok(FnArgs::from((None, None))),
                         }
-                    })?;
+                    },
+                )?;
 
+                // Now this thing is the actual call to the Rust wrapper. We call
+                // this with objects coming from pure Rust. For some reason we
+                // have to match the JS expected types so that's why I'm using
+                // FnArgs.
                 Some(move |event: baml_runtime::FunctionResult| {
-                    let status = thread_safe_fn.call(FnArgs::from((None, Some(event))), ThreadsafeFunctionCallMode::Blocking);
+                    let status = thread_safe_fn.call(
+                        FnArgs::from((None, Some(event))),
+                        ThreadsafeFunctionCallMode::Blocking,
+                    );
                     if status != napi::Status::Ok {
                         log::error!("Error calling on_event callback: {status:?}");
                     }
@@ -97,9 +120,7 @@ impl FunctionResultStream {
                 let tick_cb = tick_cb_ref.borrow_back(env)?;
                 let thread_safe_fn = tick_cb
                     .build_threadsafe_function()
-                    .build_callback( |_ctx: ThreadSafeCallContext<()>| {
-                        Ok(())
-                    })?;
+                    .build_callback(|_ctx: ThreadSafeCallContext<()>| Ok(()))?;
 
                 Some(move || {
                     let res = thread_safe_fn.call((), ThreadsafeFunctionCallMode::Blocking);

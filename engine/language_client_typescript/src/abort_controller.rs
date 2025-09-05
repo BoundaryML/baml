@@ -3,7 +3,7 @@ use std::sync::Arc;
 use baml_runtime::TripWire;
 use dashmap::DashMap;
 use napi::{
-    bindgen_prelude::{Function, JsObjectValue, Object, ToNapiValue},
+    bindgen_prelude::{FnArgs, Function, JsObjectValue, JsValuesTupleIntoVec, Object, ToNapiValue},
     Env, Unknown,
 };
 use once_cell::sync::Lazy;
@@ -60,14 +60,12 @@ pub fn js_abort_signal_to_rust_tripwire(
         })?;
 
     // signal.addEventListener('abort', callback)
-    let add_event_listener: Function = signal.get_named_property("addEventListener")?;
+    let add_event_listener: Function<FnArgs<(napi::JsString, Function<(), ()>)>> =
+        signal.get_named_property("addEventListener")?;
+
     add_event_listener.apply(
-        signal.into_unknown(&env),
-        [
-            env.create_string("abort")?.into_unknown(&env)?,
-            callback.into_unknown(&env)?,
-        ]
-        .into_unknown(&env)?,
+        signal.into_unknown(env)?,
+        FnArgs::from((env.create_string("abort")?, callback)),
     )?;
 
     Ok(tripwire)
