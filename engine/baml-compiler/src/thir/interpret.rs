@@ -1846,4 +1846,493 @@ mod tests {
 
         println!("✅ All Fibonacci tests passed!");
     }
+
+    #[tokio::test]
+    async fn test_bool_to_int_with_if_else() {
+        let thir = empty_thir();
+
+        // Test if (true) { 1 } else { 0 }
+        let if_expr_true = Expr::If(
+            Arc::new(Expr::Value(BamlValueWithMeta::Bool(true, meta()))),
+            Arc::new(Expr::Value(BamlValueWithMeta::Int(1, meta()))),
+            Some(Arc::new(Expr::Value(BamlValueWithMeta::Int(0, meta())))),
+            meta(),
+        );
+
+        let result = super::interpret_thir(
+            thir.clone(),
+            if_expr_true,
+            mock_llm_function,
+            BamlMap::new(),
+        )
+        .await
+        .unwrap();
+
+        match result {
+            BamlValueWithMeta::Int(actual, _) => {
+                assert_eq!(actual, 1, "if (true) should return 1, got {actual}");
+            }
+            v => panic!("Expected int result for if (true), got {v:?}"),
+        }
+
+        // Test if (false) { 1 } else { 0 }
+        let if_expr_false = Expr::If(
+            Arc::new(Expr::Value(BamlValueWithMeta::Bool(false, meta()))),
+            Arc::new(Expr::Value(BamlValueWithMeta::Int(1, meta()))),
+            Some(Arc::new(Expr::Value(BamlValueWithMeta::Int(0, meta())))),
+            meta(),
+        );
+
+        let result = super::interpret_thir(
+            thir.clone(),
+            if_expr_false,
+            mock_llm_function,
+            BamlMap::new(),
+        )
+        .await
+        .unwrap();
+
+        match result {
+            BamlValueWithMeta::Int(actual, _) => {
+                assert_eq!(actual, 0, "if (false) should return 0, got {actual}");
+            }
+            v => panic!("Expected int result for if (false), got {v:?}"),
+        }
+
+        println!("✅ Bool to int if-else tests passed!");
+    }
+
+    #[tokio::test]
+    async fn test_if_else_with_function_equivalent() {
+        // Test the exact same pattern as BoolToIntWithIfElse function
+        // function BoolToIntWithIfElse(b: bool) -> int {
+        //     if (b) { 1 } else { 0 }
+        // }
+
+        use crate::thir::{Block, ExprFunction, Parameter};
+        use baml_types::ir_type::TypeIR;
+
+        let function_body = Block {
+            env: BamlMap::new(),
+            statements: vec![],
+            trailing_expr: Some(Expr::If(
+                Arc::new(Expr::Var("b".to_string(), meta())),
+                Arc::new(Expr::Value(BamlValueWithMeta::Int(1, meta()))),
+                Some(Arc::new(Expr::Value(BamlValueWithMeta::Int(0, meta())))),
+                meta(),
+            )),
+            ty: Some(TypeIR::int()),
+            span: internal_baml_diagnostics::Span::fake(),
+        };
+
+        let bool_to_int_function = ExprFunction {
+            name: "BoolToIntWithIfElse".to_string(),
+            parameters: vec![Parameter {
+                name: "b".to_string(),
+                r#type: TypeIR::bool(),
+                span: internal_baml_diagnostics::Span::fake(),
+            }],
+            return_type: TypeIR::int(),
+            body: function_body,
+            span: internal_baml_diagnostics::Span::fake(),
+        };
+
+        let mut thir = empty_thir();
+        thir.expr_functions.push(bool_to_int_function);
+
+        // Test with true
+        let call_true = Expr::Call {
+            func: Arc::new(Expr::Var("BoolToIntWithIfElse".to_string(), meta())),
+            type_args: vec![],
+            args: vec![Expr::Value(BamlValueWithMeta::Bool(true, meta()))],
+            meta: meta(),
+        };
+
+        let result =
+            super::interpret_thir(thir.clone(), call_true, mock_llm_function, BamlMap::new())
+                .await
+                .unwrap();
+
+        match result {
+            BamlValueWithMeta::Int(actual, _) => {
+                assert_eq!(
+                    actual, 1,
+                    "BoolToIntWithIfElse(true) should return 1, got {actual}"
+                );
+            }
+            v => panic!("Expected int result for BoolToIntWithIfElse(true), got {v:?}"),
+        }
+
+        // Test with false
+        let call_false = Expr::Call {
+            func: Arc::new(Expr::Var("BoolToIntWithIfElse".to_string(), meta())),
+            type_args: vec![],
+            args: vec![Expr::Value(BamlValueWithMeta::Bool(false, meta()))],
+            meta: meta(),
+        };
+
+        let result =
+            super::interpret_thir(thir.clone(), call_false, mock_llm_function, BamlMap::new())
+                .await
+                .unwrap();
+
+        match result {
+            BamlValueWithMeta::Int(actual, _) => {
+                assert_eq!(
+                    actual, 0,
+                    "BoolToIntWithIfElse(false) should return 0, got {actual}"
+                );
+            }
+            v => panic!("Expected int result for BoolToIntWithIfElse(false), got {v:?}"),
+        }
+
+        println!("✅ BoolToIntWithIfElse function tests passed!");
+    }
+
+    #[tokio::test]
+    async fn test_store_fn_call_in_local_var() {
+        // Test the exact same pattern as StoreFnCallInLocalVar function
+        // function StoreFnCallInLocalVar(n: int) -> int {
+        //     let result = ReturnNumber(n);
+        //     
+        //     result
+        // }
+
+        use crate::thir::{Block, ExprFunction, Parameter, Statement};
+        use baml_types::ir_type::TypeIR;
+
+        // Create ReturnNumber function: function ReturnNumber(n: int) -> int { n }
+        let return_number_body = Block {
+            env: BamlMap::new(),
+            statements: vec![],
+            trailing_expr: Some(Expr::Var("n".to_string(), meta())),
+            ty: Some(TypeIR::int()),
+            span: internal_baml_diagnostics::Span::fake(),
+        };
+
+        let return_number_function = ExprFunction {
+            name: "ReturnNumber".to_string(),
+            parameters: vec![Parameter {
+                name: "n".to_string(),
+                r#type: TypeIR::int(),
+                span: internal_baml_diagnostics::Span::fake(),
+            }],
+            return_type: TypeIR::int(),
+            body: return_number_body,
+            span: internal_baml_diagnostics::Span::fake(),
+        };
+
+        // Create StoreFnCallInLocalVar function
+        let store_fn_call_body = Block {
+            env: BamlMap::new(),
+            statements: vec![Statement::Let {
+                name: "result".to_string(),
+                value: Expr::Call {
+                    func: Arc::new(Expr::Var("ReturnNumber".to_string(), meta())),
+                    type_args: vec![],
+                    args: vec![Expr::Var("n".to_string(), meta())],
+                    meta: meta(),
+                },
+                span: internal_baml_diagnostics::Span::fake(),
+            }],
+            trailing_expr: Some(Expr::Var("result".to_string(), meta())),
+            ty: Some(TypeIR::int()),
+            span: internal_baml_diagnostics::Span::fake(),
+        };
+
+        let store_fn_call_function = ExprFunction {
+            name: "StoreFnCallInLocalVar".to_string(),
+            parameters: vec![Parameter {
+                name: "n".to_string(),
+                r#type: TypeIR::int(),
+                span: internal_baml_diagnostics::Span::fake(),
+            }],
+            return_type: TypeIR::int(),
+            body: store_fn_call_body,
+            span: internal_baml_diagnostics::Span::fake(),
+        };
+
+        let mut thir = empty_thir();
+        thir.expr_functions.push(return_number_function);
+        thir.expr_functions.push(store_fn_call_function);
+
+        // Test with value 42
+        let call_expr = Expr::Call {
+            func: Arc::new(Expr::Var("StoreFnCallInLocalVar".to_string(), meta())),
+            type_args: vec![],
+            args: vec![Expr::Value(BamlValueWithMeta::Int(42, meta()))],
+            meta: meta(),
+        };
+
+        let result =
+            super::interpret_thir(thir.clone(), call_expr, mock_llm_function, BamlMap::new())
+                .await
+                .unwrap();
+
+        match result {
+            BamlValueWithMeta::Int(actual, _) => {
+                assert_eq!(
+                    actual, 42,
+                    "StoreFnCallInLocalVar(42) should return 42, got {actual}"
+                );
+            }
+            v => panic!("Expected int result for StoreFnCallInLocalVar(42), got {v:?}"),
+        }
+
+        println!("✅ StoreFnCallInLocalVar function test passed!");
+    }
+
+    #[tokio::test]
+    async fn test_declare_and_assign_exactly_like_thir() {
+        // Test exactly what the THIR compiler is generating:
+        // { var result <- If a { {  Number(1) } } If b { {  Number(2) } } {  Number(3) } result }
+        //
+        // This should be equivalent to:
+        // function AssignElseIfExpr(a: bool, b: bool) -> int {
+        //     let result = if (a) { 1 } else if (b) { 2 } else { 3 };
+        //     result
+        // }
+
+        use crate::thir::{Block, ExprFunction, Parameter, Statement};
+        use baml_types::ir_type::TypeIR;
+
+        // Create the exact THIR structure that the compiler generates
+        let assign_else_if_body = Block {
+            env: BamlMap::new(),
+            statements: vec![Statement::DeclareAndAssign {
+                name: "result".to_string(),
+                value: Expr::If(
+                    Arc::new(Expr::Var("a".to_string(), meta())),
+                    Arc::new(Expr::Value(BamlValueWithMeta::Int(1, meta()))),
+                    Some(Arc::new(Expr::If(
+                        Arc::new(Expr::Var("b".to_string(), meta())),
+                        Arc::new(Expr::Value(BamlValueWithMeta::Int(2, meta()))),
+                        Some(Arc::new(Expr::Value(BamlValueWithMeta::Int(3, meta())))),
+                        meta(),
+                    ))),
+                    meta(),
+                ),
+                span: internal_baml_diagnostics::Span::fake(),
+            }],
+            trailing_expr: Some(Expr::Var("result".to_string(), meta())),
+            ty: Some(TypeIR::int()),
+            span: internal_baml_diagnostics::Span::fake(),
+        };
+
+        let assign_else_if_function = ExprFunction {
+            name: "AssignElseIfExpr".to_string(),
+            parameters: vec![
+                Parameter {
+                    name: "a".to_string(),
+                    r#type: TypeIR::bool(),
+                    span: internal_baml_diagnostics::Span::fake(),
+                },
+                Parameter {
+                    name: "b".to_string(),
+                    r#type: TypeIR::bool(),
+                    span: internal_baml_diagnostics::Span::fake(),
+                },
+            ],
+            return_type: TypeIR::int(),
+            body: assign_else_if_body,
+            span: internal_baml_diagnostics::Span::fake(),
+        };
+
+        let mut thir = empty_thir();
+        thir.expr_functions.push(assign_else_if_function);
+
+        // Test with (true, false) - should return 1
+        let call_expr = Expr::Call {
+            func: Arc::new(Expr::Var("AssignElseIfExpr".to_string(), meta())),
+            type_args: vec![],
+            args: vec![
+                Expr::Value(BamlValueWithMeta::Bool(true, meta())),
+                Expr::Value(BamlValueWithMeta::Bool(false, meta())),
+            ],
+            meta: meta(),
+        };
+
+        let result =
+            super::interpret_thir(thir.clone(), call_expr, mock_llm_function, BamlMap::new())
+                .await
+                .unwrap();
+
+        match result {
+            BamlValueWithMeta::Int(actual, _) => {
+                assert_eq!(
+                    actual, 1,
+                    "AssignElseIfExpr(true, false) should return 1, got {actual}"
+                );
+            }
+            v => panic!("Expected int result for AssignElseIfExpr(true, false), got {v:?}"),
+        }
+
+        println!("✅ DeclareAndAssign THIR test passed!");
+    }
+
+    #[tokio::test]
+    async fn test_compile_real_baml_to_thir() {
+        // Test compiling real BAML code to see what THIR is actually generated
+        use crate::hir::Hir;
+        use crate::thir::typecheck::typecheck;
+        use internal_baml_diagnostics::Diagnostics;
+        use internal_baml_parser_database::{parse_and_diagnostics};
+
+        let baml_code = r#"
+            function AssignElseIfExpr(a: bool, b: bool) -> int {
+                let result = if (a) {
+                    1
+                } else if (b) {
+                    2
+                } else {
+                    3
+                };
+
+                result
+            }
+        "#;
+
+        // Parse BAML code to AST
+        let (db, parse_diagnostics) = parse_and_diagnostics(baml_code)
+            .expect("Failed to parse BAML code");
+        
+        if parse_diagnostics.has_errors() {
+            let errors = parse_diagnostics.to_pretty_string();
+            panic!("Parse errors: {errors}");
+        }
+        
+        let ast = db.ast().clone();
+
+        // Convert AST to HIR
+        let hir = Hir::from_ast(&ast);
+
+        // Convert HIR to THIR
+        let mut diagnostics = Diagnostics::new("test".into());
+        let thir = typecheck(&hir, &mut diagnostics);
+
+        if diagnostics.has_errors() {
+            let errors = diagnostics.to_pretty_string();
+            panic!("Compilation errors: {errors}");
+        }
+
+        // Find the AssignElseIfExpr function
+        let function = thir
+            .expr_functions
+            .iter()
+            .find(|f| f.name == "AssignElseIfExpr")
+            .expect("Function not found");
+
+        // Print the actual THIR structure
+        println!("Actual THIR: {}", function.body.dump_str());
+
+        // Test the function
+        let call_expr = Expr::Call {
+            func: Arc::new(Expr::Var("AssignElseIfExpr".to_string(), meta())),
+            type_args: vec![],
+            args: vec![
+                Expr::Value(BamlValueWithMeta::Bool(true, meta())),
+                Expr::Value(BamlValueWithMeta::Bool(false, meta())),
+            ],
+            meta: meta(),
+        };
+
+        let result =
+            super::interpret_thir(thir.clone(), call_expr, mock_llm_function, BamlMap::new())
+                .await;
+
+        match result {
+            Ok(BamlValueWithMeta::Int(actual, _)) => {
+                assert_eq!(
+                    actual, 1,
+                    "AssignElseIfExpr(true, false) should return 1, got {actual}"
+                );
+                println!("✅ Real BAML compilation test passed!");
+            }
+            Ok(v) => panic!("Expected int result, got {v:?}"),
+            Err(e) => {
+                println!("❌ Real BAML compilation test failed with error: {e}");
+                // This might be the actual bug we need to fix
+                panic!("Function failed to execute: {e}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_debug_bool_to_int_with_if_else() {
+        // Debug the BoolToIntWithIfElse function that's returning None
+        use crate::hir::Hir;
+        use crate::thir::typecheck::typecheck;
+        use internal_baml_diagnostics::Diagnostics;
+        use internal_baml_parser_database::{parse_and_diagnostics};
+
+        let baml_code = r#"
+            function BoolToIntWithIfElse(b: bool) -> int {
+                if (b) { 1 } else { 0 }
+            }
+        "#;
+
+        // Parse and compile BAML code
+        let (db, parse_diagnostics) = parse_and_diagnostics(baml_code)
+            .expect("Failed to parse BAML code");
+        
+        if parse_diagnostics.has_errors() {
+            let errors = parse_diagnostics.to_pretty_string();
+            panic!("Parse errors: {errors}");
+        }
+        
+        let ast = db.ast().clone();
+        let hir = Hir::from_ast(&ast);
+        let mut diagnostics = Diagnostics::new("test".into());
+        let thir = typecheck(&hir, &mut diagnostics);
+
+        if diagnostics.has_errors() {
+            let errors = diagnostics.to_pretty_string();
+            panic!("Compilation errors: {errors}");
+        }
+
+        // Find the function and debug its structure
+        let function = thir
+            .expr_functions
+            .iter()
+            .find(|f| f.name == "BoolToIntWithIfElse")
+            .expect("Function not found");
+
+        println!("Function THIR: {}", function.body.dump_str());
+        println!("Statements count: {}", function.body.statements.len());
+        println!("Has trailing expr: {}", function.body.trailing_expr.is_some());
+
+        if let Some(trailing_expr) = &function.body.trailing_expr {
+            println!("Trailing expr: {}", trailing_expr.dump_str());
+        }
+
+        // Test with true
+        let call_expr = Expr::Call {
+            func: Arc::new(Expr::Var("BoolToIntWithIfElse".to_string(), meta())),
+            type_args: vec![],
+            args: vec![
+                Expr::Value(BamlValueWithMeta::Bool(true, meta())),
+            ],
+            meta: meta(),
+        };
+
+        let result = super::interpret_thir(thir.clone(), call_expr, mock_llm_function, BamlMap::new())
+            .await;
+
+        match result {
+            Ok(value) => {
+                println!("Result: {value:?}");
+                match value {
+                    BamlValueWithMeta::Int(actual, _) => {
+                        assert_eq!(actual, 1, "Expected 1, got {actual}");
+                    }
+                    _ => panic!("Expected int result, got {value:?}"),
+                }
+            }
+            Err(e) => {
+                panic!("Function failed: {e}");
+            }
+        }
+
+        println!("✅ BoolToIntWithIfElse debug test passed!");
+    }
 }

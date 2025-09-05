@@ -256,8 +256,26 @@ impl BamlAsyncInterpreterRuntime {
             }
         };
 
-        // Get the function body expression
-        let function_expr = if expr_fn.body.trailing_expr.is_some() {
+        // Choose execution strategy based on function body structure
+        let function_expr = if expr_fn.body.statements.len() == 1 && expr_fn.body.trailing_expr.is_none() {
+            // Special case: Single expression statement (e.g., if-else as the only thing in function)
+            // This happens when BAML functions are just a single expression
+            match &expr_fn.body.statements[0] {
+                baml_compiler::thir::Statement::Expression { expr, .. } => expr.clone(),
+                _ => {
+                    // Single non-expression statement - execute as block
+                    baml_compiler::thir::Expr::Block(
+                        Box::new(expr_fn.body.clone()),
+                        (
+                            internal_baml_diagnostics::Span::fake(),
+                            Some(output_type.clone()),
+                        ),
+                    )
+                }
+            }
+        } else if !expr_fn.body.statements.is_empty() {
+            // Function has multiple statements or statements + trailing expr
+            // Execute the entire function body as a block to ensure all statements run
             baml_compiler::thir::Expr::Block(
                 Box::new(expr_fn.body.clone()),
                 (
@@ -265,8 +283,12 @@ impl BamlAsyncInterpreterRuntime {
                     Some(output_type.clone()),
                 ),
             )
+        } else if let Some(trailing_expr) = &expr_fn.body.trailing_expr {
+            // Function has no statements, only a trailing expression
+            // Execute the trailing expression directly
+            trailing_expr.clone()
         } else {
-            // If no trailing expression, create a null expression
+            // Function has no statements and no trailing expression - return null
             baml_compiler::thir::Expr::Value(BamlValueWithMeta::Null((
                 internal_baml_diagnostics::Span::fake(),
                 Some(output_type.clone()),
