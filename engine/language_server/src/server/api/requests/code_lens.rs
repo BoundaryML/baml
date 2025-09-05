@@ -2,6 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use baml_lsp_types::BamlSpan;
 use baml_runtime::InternalRuntimeInterface;
+use itertools::Itertools;
 use lsp_types::{request, CodeLensParams, Command, Position, Range};
 
 use crate::{
@@ -12,6 +13,7 @@ use crate::{
             ResultExt,
         },
         client::{Notifier, Requester},
+        commands::{CodeLensCommand, OpenBamlPanel, RunBamlTest},
         Result,
     },
     DocumentKey, Session,
@@ -45,7 +47,15 @@ impl SyncRequestHandler for CodeLens {
             .get_or_create_project(&path)
             .expect("Ensured that a project db exists");
         let fake_env = HashMap::new();
-        let baml_diagnostics = match project.lock().unwrap().baml_project.runtime(fake_env) {
+        let default_flags = vec!["beta".to_string()];
+        let baml_diagnostics = match project.lock().baml_project.runtime(
+            fake_env,
+            session
+                .baml_settings
+                .feature_flags
+                .as_ref()
+                .unwrap_or(&default_flags),
+        ) {
             Ok(runtime) => runtime.internal().diagnostics().clone(),
             Err(err) => err,
         };
@@ -56,12 +66,15 @@ impl SyncRequestHandler for CodeLens {
 
         let mk_range = |span: &BamlSpan| {
             Range::new(
+                // TODO(sam): I'm pretty sure there's a bug here - Position I believe is line number and
+                // character index _within_ the line, not the byte index corresponding to the start.
+                // But it doesn't make a difference for vscode, so not going to fix it right now.
                 Position::new(span.start_line as u32, span.start as u32),
                 Position::new(span.end_line as u32, span.end as u32),
             )
         };
 
-        let project_lock = project.lock().unwrap();
+        let project_lock = project.lock();
 
         let doc_matches = |span: &BamlSpan, project_lock: &Project| {
             let absolute_file = DocumentKey::from_url(project_lock.root_path(), &url);
@@ -89,18 +102,14 @@ impl SyncRequestHandler for CodeLens {
             .filter(|func| doc_matches(&func.span, &project_lock))
             .map(|func| {
                 let range = mk_range(&func.span);
-                let command = Command::new(
-                    "▶ Open Playground ✨".to_string(),
-                    "baml.openBamlPanel".to_string(),
-                    Some(vec![serde_json::json!({
-                        "projectId": project_lock.root_path(),
-                        "functionName": func.name.clone(),
-                        "showTests": true,
-                    })]),
-                );
+                let command = OpenBamlPanel {
+                    project_id: project_lock.root_path().to_string_lossy().to_string(),
+                    function_name: func.name.clone(),
+                    show_tests: true,
+                };
                 lsp_types::CodeLens {
                     range,
-                    command: Some(command),
+                    command: command.to_lsp_command(),
                     data: None,
                 }
             })
@@ -108,70 +117,47 @@ impl SyncRequestHandler for CodeLens {
 
         tracing::info!("Function lenses calculated");
 
-        // Uncomment this to broadcast function change using code lens
-        // if let Some(state) = &session.playground_state {
-        //     // Get the first function from the lenses if available
-        //     if let Some(first_function) = function_lenses.first() {
-        //         if let Some(command) = &first_function.command {
-        //             if let Some(args) = &command.arguments {
-        //                 if let Some(function_name) =
-        //                     args[0].get("functionName").and_then(|v| v.as_str())
-        //                 {
-        //                     tracing::info!("Broadcasting function change for: {}", function_name);
-        //                     let root_path = project_lock.root_path().to_string_lossy().to_string();
-        //                     let state = state.clone();
-        //                     let function_name = function_name.to_string();
-        //                     if let Some(runtime) = &session.playground_runtime {
-        //                         runtime.spawn(async move {
-        //                             let _ = crate::playground::broadcast_function_change(
-        //                                 &state,
-        //                                 &root_path,
-        //                                 function_name,
-        //                             )
-        //                             .await;
-        //                         });
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
-
+        // TODO(sam): there is a bug in here, where for a `test` block which test N functions,
+        // we generate N^2 "Test {function}" code lenses, even though we should only generate N
+        // such lenses. The reason is that we probably do some preemptive denormalization in
+        // `list_testcases`, but I'm not sure how this behavior interacts with VSCode so for
+        // now I'm leaving this as-is.
         let test_case_lenses: Vec<lsp_types::CodeLens> = project_lock
-            .list_testcases()
+            .list_function_test_pairs()
             .unwrap_or_default()
             .iter()
             .filter(|testcase| doc_matches(&testcase.span, &project_lock))
             .map(|testcase| {
-                let range = mk_range(&testcase.span);
-                let command_name = if testcase.parent_functions.len() > 1 {
-                    format!("▶ Run for {} 💥 ", testcase.parent_functions[0].name)
-                } else {
-                    "▶ Run Test 💥".to_string()
-                };
-                let command = Command::new(
-                    command_name,
-                    "baml.runBamlTest".to_string(),
-                    Some(vec![serde_json::json!({
-                        "projectId": project_lock.root_path(),
-                        "testCaseName": testcase.name.clone(),
-                        "functionName": testcase.parent_functions[0].name.clone(),
-                        "showTests": true,
-                    })]),
-                );
-                lsp_types::CodeLens {
-                    range,
-                    command: Some(command),
-                    data: None,
-                }
+                let project_id = project_lock.root_path().to_string_lossy().to_string();
+                (
+                    testcase.function_name_span.as_ref(),
+                    lsp_types::CodeLens {
+                        range: mk_range(&testcase.span),
+                        command: RunBamlTest {
+                            project_id: project_id.clone(),
+                            test_case_name: testcase.name.clone(),
+                            function_name: testcase.function.name.clone(),
+                            show_tests: true,
+                        }
+                        .to_lsp_command(),
+                        data: None,
+                    },
+                )
             })
+            .sorted_by_key(|(span, _)| span.map_or(None, |span| Some(span.start)))
+            .map(|(_, codelens)| codelens)
             .collect();
 
         function_lenses.extend(test_case_lenses);
+        function_lenses.sort_by_key(|lens| lens.range.start);
+        tracing::debug!("Function lenses: {:#?}", function_lenses);
         Ok(Some(function_lenses))
     }
 }
 
+/// This is a no-op request that LSP4IJ (the Jetbrains language server client we use)
+/// uses to translate `CodeLens` requests into `ExecuteCommand` requests. This doesn't
+/// add any value for us, so we just implement this RPC as a reflector/proxy.
 pub struct CodeLensResolve;
 
 impl RequestHandler for CodeLensResolve {

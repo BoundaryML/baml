@@ -1,70 +1,72 @@
 """
 Baml VM / compiler / expression functions tests.
+
+Important: No LLM calls here, this will run in CI.
 """
 
-import pytest
-
-from ..baml_client import b
-from ..baml_client.sync_client import b as sync_b
+from ..baml_client.sync_client import b
 from ..baml_client.runtime import disassemble
 
 
 def test_return_one():
-    assert sync_b.ReturnOne() == 1
+    assert b.ReturnOne() == 1
 
 
 def test_return_number():
-    assert sync_b.ReturnNumber(42) == 42
+    assert b.ReturnNumber(42) == 42
 
 
 def test_call_return_one():
-    assert sync_b.CallReturnOne() == 1
+    assert b.CallReturnOne() == 1
 
 
 def test_chained_calls():
-    assert sync_b.ChainedCalls() == 1
+    assert b.ChainedCalls() == 1
 
 
 def test_store_fn_call_in_local_var():
-    assert sync_b.StoreFnCallInLocalVar(42) == 42
+    assert b.StoreFnCallInLocalVar(42) == 42
 
 
 def test_bool_to_int_with_if_else():
-    assert sync_b.BoolToIntWithIfElse(True) == 1
-    assert sync_b.BoolToIntWithIfElse(False) == 0
+    assert b.BoolToIntWithIfElse(True) == 1
+    assert b.BoolToIntWithIfElse(False) == 0
 
 
 def test_return_else_if_expr():
-    disassemble(sync_b.ReturnElseIfExpr)
-    assert sync_b.ReturnElseIfExpr(True, False) == 1
-    assert sync_b.ReturnElseIfExpr(False, True) == 2
-    assert sync_b.ReturnElseIfExpr(False, False) == 3
+    disassemble(b.ReturnElseIfExpr)
+    assert b.ReturnElseIfExpr(True, False) == 1
+    assert b.ReturnElseIfExpr(False, True) == 2
+    assert b.ReturnElseIfExpr(False, False) == 3
 
 
 def test_assign_else_if_expr():
-    disassemble(sync_b.AssignElseIfExpr)
-    assert sync_b.AssignElseIfExpr(True, False) == 1
-    assert sync_b.AssignElseIfExpr(False, True) == 2
-    assert sync_b.AssignElseIfExpr(False, False) == 3
+    disassemble(b.AssignElseIfExpr)
+    assert b.AssignElseIfExpr(True, False) == 1
+    assert b.AssignElseIfExpr(False, True) == 2
+    assert b.AssignElseIfExpr(False, False) == 3
 
 
 def test_normal_else_if_stmt():
-    disassemble(sync_b.NormalElseIfStmt)
-    assert sync_b.NormalElseIfStmt(True, False) == 0
+    disassemble(b.NormalElseIfStmt)
+    assert b.NormalElseIfStmt(True, False) == 0
+
+def test_iterative_fibonacci():
+    assert b.IterativeFibonacci(0) == 1
+    assert b.IterativeFibonacci(1) == 1
+    assert b.IterativeFibonacci(2) == 1
+    assert b.IterativeFibonacci(3) == 2
+    assert b.IterativeFibonacci(4) == 3
+    assert b.IterativeFibonacci(5) == 5
+    assert b.IterativeFibonacci(6) == 8
+    assert b.IterativeFibonacci(7) == 13
+    assert b.IterativeFibonacci(8) == 21
+
+def test_sum_array():
+    assert b.SumArray([1, 2, 3]) == 6
+    assert b.SumArray([1, 2, 3, 4, 5]) == 15
+    assert b.SumArray([]) == 0
 
 
-@pytest.mark.asyncio
-async def test_llm_call_in_expr_fn():
-    assert await b.ReturnNumberCallingLlm(42) == 42
-
-
-@pytest.mark.asyncio
-async def test_store_llm_call_in_local_var():
-    assert await b.StoreLlmCallInLocalVar(42) == 42
-
-
-@pytest.mark.asyncio
-async def test_bool_to_int_with_if_else_calling_llm():
-    disassemble(b.BoolToIntWithIfElseCallingLlm)
-    assert await b.BoolToIntWithIfElseCallingLlm(True) == 1
-    assert await b.BoolToIntWithIfElseCallingLlm(False) == 0
+def test_sum_from_to():
+    assert b.SumFromTo(1, 10) == 55

@@ -15,15 +15,15 @@ unused_imports = "allow"
 internal-baml-diagnostics = { path = "../diagnostics" }
 baml-types = { path = "../baml-types" }
 bstd.workspace = true
-log = "0.4.20"
+log.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 anyhow.workspace = true
 
-pest = "2.8.1"
-pest_derive = "2.8.1"
-either = "1.8.1"
-test-log = "0.2.16"
+pest.workspace = true
+pest_derive.workspace = true
+either.workspace = true
+test-log.workspace = true
 pretty = { workspace = true }
 regex.workspace = true
 
@@ -31,6 +31,14 @@ regex.workspace = true
 pretty_assertions.workspace = true
 unindent = "0.2.3"
 
+[[example]]
+name = "generate_mermaid_ast"
+path = "examples/generate_mermaid_ast.rs"
+
+[[example]]
+name = "generate_mermaid_headers"
+path = "examples/generate_mermaid_headers.rs"
+
 [features]
 debug_parser = []
-# default = ["debug_parser"]
+#default = ["debug_parser"]

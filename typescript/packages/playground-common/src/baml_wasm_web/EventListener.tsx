@@ -113,8 +113,8 @@ export const isConnectedAtom = atom(true);
 // We don't use ASTContext.provider because we should the default value of the context
 export const EventListener: React.FC = () => {
   const updateCursor = useSetAtom(updateCursorAtom)
-  const setFiles = useSetAtom(filesAtom)
-  const debouncedSetFiles = useDebounceCallback(setFiles, 50, true)
+  const [bamlFileMap, setBamlFileMap] = useAtom(filesAtom)
+  const debouncedSetBamlFileMap = useDebounceCallback(setBamlFileMap, 50, true)
   const setFlashRanges = useSetAtom(flashRangesAtom)
   const setIsConnected = useSetAtom(isConnectedAtom)
   const isVSCodeWebview = vscode.isVscode()
@@ -123,7 +123,7 @@ export const EventListener: React.FC = () => {
   const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)
   const setBamlConfig = useSetAtom(bamlConfig)
   const [bamlCliVersion, setBamlCliVersion] = useAtom(bamlCliVersionAtom)
-  const runBamlTests = useRunBamlTests()
+  const { runTests: runBamlTests } = useRunBamlTests()
   const wasm = useAtomValue(wasmAtom)
   useEffect(() => {
     if (wasm) {
@@ -195,6 +195,13 @@ export const EventListener: React.FC = () => {
             };
           }
         | {
+            command: 'samtest_update_project';
+            content: {
+              root_path: string;
+              files: Record<string, string>;
+            };
+          }
+        | {
             command: 'remove_project';
             content: {
               root_path: string;
@@ -246,18 +253,21 @@ export const EventListener: React.FC = () => {
           }
         | {
             command: 'run_test';
-            content: { test_name: string };
+            content: {
+              function_name: string;
+              test_name: string;
+            };
           }
       >,
     ) => {
       const { command, content } = event.data;
-      console.debug('command', command);
+      console.debug('EventListener handling command', {command, content});
 
       switch (command) {
         case 'add_project':
           if (content?.root_path) {
             console.debug('add_project', content.root_path);
-            debouncedSetFiles(
+            debouncedSetBamlFileMap(
               Object.fromEntries(
                 Object.entries(content.files).map(([name, content]) => [
                   name,
@@ -265,6 +275,16 @@ export const EventListener: React.FC = () => {
                 ]),
               ),
             );
+          }
+          break;
+
+        case 'samtest_update_project':
+          if (content?.root_path) {
+            console.debug('samtest_update_project', content.root_path);
+            debouncedSetBamlFileMap((bamlFileMap) => ({
+              ...bamlFileMap,
+              ...content.files,
+            }));
           }
           break;
 
@@ -300,18 +320,16 @@ export const EventListener: React.FC = () => {
           break;
 
         case 'remove_project':
-          setFiles({});
+          setBamlFileMap({});
           break;
 
         case 'run_test':
-          if (selectedFunc) {
-            setSelectedTestcase(content.test_name);
-            runBamlTests([
-              { functionName: selectedFunc, testName: content.test_name },
-            ]);
-          } else {
-            console.error('No function selected');
-          }
+          console.debug('run_test', content);
+          setSelectedFunction(content.function_name);
+          setSelectedTestcase(content.test_name);
+          runBamlTests([
+            { functionName: content.function_name, testName: content.test_name },
+          ]);
           // run([content.test_name])
           // setShowTests(true)
           // setClientGraph(false)

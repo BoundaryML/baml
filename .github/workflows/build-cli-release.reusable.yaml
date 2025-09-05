@@ -14,7 +14,7 @@ on:
         required: false
   push:
     branches:
-      - protoc-fix
+      - sam/mise-protoc-gen-go
 env:
   MACOSX_DEPLOYMENT_TARGET: "10.13"
   # Turbo remote caching
@@ -82,18 +82,10 @@ jobs:
       - name: Setup Go
         uses: ./.github/actions/setup-go
 
-      - name: Install protoc-gen-go into .cargo/bin
-        shell: bash
-        run: |
-          # The cross-compile environment sanitizes the PATH, so we install the plugin
-          # directly into a directory that is guaranteed to be in the PATH for cargo.
-          # We also create a symlink from the go/bin to the cargo/bin for consistency.
-          mkdir -p .cargo/bin
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-          go install golang.org/x/tools/cmd/goimports@latest
-          cp "$HOME/go/bin/protoc-gen-go" ".cargo/bin/"
-          echo "Installed protoc-gen-go into .cargo/bin:"
-          ls -la .cargo/bin
+
+      - uses: jdx/mise-action@v2
+        with:
+          install_args: "protoc-gen-go"
 
       - name: Test protoc-gen-go availability
         id: protoc_gen_go_setup

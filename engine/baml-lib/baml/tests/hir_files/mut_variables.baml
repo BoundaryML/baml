@@ -1,26 +1,28 @@
 fn DeclareMutableInFunction(x: int) -> int {
 
-	let mut y = 3;
+	let y = 3;
 
 	y = 5;
 
 	y
 }
 
-fn MutableInArg(mut x: int) -> int {
+fn MutableInArg(x: int) -> int {
 	x = 3;
 	x
 }
 
 // function DeclareMutableInFunction(x) {
-//   var y = 3;
+//   let y = 3;
 //   y = 5;
-//   return y;
+//
+//   y
 // }
 //
 // function MutableInArg(x) {
 //   x = 3;
-//   return x;
+//
+//   x
 // }
 //
 // class std::Request {

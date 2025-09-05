@@ -33,6 +33,7 @@ pub fn load_test_ir(file_content: &str) -> IntermediateRepr {
             PathBuf::from("./baml_src/example.baml"),
             file_content.to_string(),
         ))],
+        internal_baml_core::FeatureFlags::new(),
     );
     match schema.diagnostics.to_result() {
         Ok(_) => {}
@@ -297,6 +298,10 @@ fn relevant_data_models<'a>(
             TypeIR::Literal(_, _) => {}
             TypeIR::Primitive(_, _) => {}
             TypeIR::Arrow(_, _) => {}
+            TypeIR::Top(_) => panic!(
+                "TypeIR::Top should have been resolved by the compiler before code generation. \
+                 This indicates a bug in the type resolution phase."
+            ),
         }
     }
 

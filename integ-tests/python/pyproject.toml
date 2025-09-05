@@ -6,7 +6,6 @@ authors = [{ name = "None" }]
 requires-python = "~=3.9"
 readme = "README.md"
 dependencies = [
-    "assertpy",
     "flask-httpauth>=4.8.0",
     "flask>=3.0.3",
     "maturin",
@@ -22,6 +21,8 @@ dependencies = [
     "google-genai (>=1.5.0,<2.0.0)",
     "boto3>=1.37.37",
     "pip>=25.1.1",
+    "pyhamcrest>=2.1.0",
+    "assertpy>=1.1",
 ]
 
 [dependency-groups]

@@ -15,7 +15,9 @@ use internal_baml_core::ir::ir_hasher;
 use serde::Serialize;
 
 use super::InternalBamlRuntime;
-use crate::{internal::ir_features::WithInternal, tracingv2::publisher::TypeLookup};
+use crate::{
+    internal::ir_features::WithInternal, tracingv2::publisher::rpc_converters::TypeLookup,
+};
 
 /// Type alias for a value with its dependencies
 pub type WithDependency<T> = (Arc<T>, Arc<Vec<Arc<BamlTypeId>>>);

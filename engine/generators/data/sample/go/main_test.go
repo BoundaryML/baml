@@ -86,7 +86,7 @@ func TestOnTickStream(t *testing.T) {
 
 	onTick, lastThinking, tickCount := getOnTick()
 
-	result, err := b.Stream.Foo(ctx, 8192, b.WithExperimentalOnTick(onTick))
+	result, err := b.Stream.Foo(ctx, 8192, b.WithOnTick(onTick))
 	if err != nil {
 		t.Fatalf("Error in Foo: %v", err)
 	}

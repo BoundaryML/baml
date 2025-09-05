@@ -50,6 +50,8 @@ export {
   BamlLogEvent,
   Collector,
   FunctionLog,
+  LlmCall,
+  LlmStreamCall,
   Usage,
   HTTPRequest,
   HTTPResponse,

@@ -106,6 +106,18 @@ export async function resolveCliPath(
     `Resolving CLI path for version: ${requestedVersion}`,
   );
 
+  // Check if baml.cliPath is configured in user settings
+  const { BAML_CONFIG_SINGLETON, refreshBamlConfigSingleton } = await import('../bamlConfig');
+  refreshBamlConfigSingleton();
+  
+  const configuredCliPath = BAML_CONFIG_SINGLETON.config?.cliPath;
+  if (configuredCliPath) {
+    bamlOutputChannel.appendLine(
+      `Using configured CLI path from baml.cliPath: ${configuredCliPath}`,
+    );
+    return configuredCliPath;
+  }
+
   const packageJson = await import('../../../../package.json');
   const bundledVersion = packageJson.version as string;
 

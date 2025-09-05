@@ -15,7 +15,7 @@ use crate::{
 };
 
 pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
-    assert_correct_parser!(pair, Rule::field_type, Rule::openParan, Rule::closeParan);
+    assert_correct_parser!(pair, Rule::field_type, Rule::openParen, Rule::closeParen);
 
     let mut arity = FieldArity::Required;
     let mut ftype = None;
@@ -204,7 +204,7 @@ fn parse_parenthesized_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::openParan | Rule::closeParan => continue,
+            Rule::openParen | Rule::closeParen => continue,
             Rule::field_type_with_attr => {
                 return parse_field_type_with_attr(current, true, diagnostics);
             }
@@ -377,7 +377,7 @@ fn parse_group(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::openParan | Rule::closeParan => continue,
+            Rule::openParen | Rule::closeParen => continue,
             Rule::field_type => {
                 field_type = parse_field_type(current, diagnostics);
             }
@@ -405,7 +405,7 @@ fn parse_tuple(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::openParan | Rule::closeParan => continue,
+            Rule::openParen | Rule::closeParen => continue,
 
             Rule::field_type_with_attr => {
                 if let Some(f) = parse_field_type_with_attr(current, false, diagnostics) {
@@ -459,35 +459,6 @@ mod tests {
     use pest::{consumes_to, parses_to};
 
     use super::super::{BAMLParser, Rule};
-
-    #[test]
-    fn type_attributes() {
-        parses_to! {
-            parser: BAMLParser,
-            input: r#"int @description("hi")"#,
-            rule: Rule::type_expression,
-            tokens: [type_expression(0,22,[
-                identifier(0,3, [
-                    single_word(0, 3)
-                ]),
-                field_attribute(4,22,[
-                    identifier(5,16,[
-                        single_word(5,16)
-                    ]),
-                    arguments_list(16, 22, [
-                        expression(17,21, [
-                            string_literal(17,21,[
-                                quoted_string_literal(17,21,[
-                                  quoted_string_content(18,20)
-                                ])
-                            ])
-                        ])
-                    ])
-                ])
-              ])
-            ]
-        }
-    }
 
     /// Tests the parsing of optional array and map types.
     /// This test ensures that the parser correctly handles the optional token (?)

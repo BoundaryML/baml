@@ -20,23 +20,23 @@ function ReturnArray() -> int[] {
 }
 
 // function ReturnInt() {
-//   return 42;
+//   42
 // }
 //
 // function ReturnString() {
-//   return "Hello World";
+//   "Hello World"
 // }
 //
 // function ReturnBool() {
-//   return true;
+//   true
 // }
 //
 // function ReturnFloat() {
-//   return 3.14;
+//   3.14
 // }
 //
 // function ReturnArray() {
-//   return [1, 2, 3, 4, 5];
+//   [1, 2, 3, 4, 5]
 // }
 //
 // class std::Request {

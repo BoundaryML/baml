@@ -1,0 +1,17 @@
+flowchart TD
+  n0["Top Level"]
+  subgraph sg0["First Section"]
+    direction LR
+    n1{"First Section"}
+    class n1 decisionNode;
+    n2["Inside If Block"]
+    n3["Inside Else Block"]
+  end
+  n1 --> n2
+  n1 --> n3
+  n0 --> n1
+%%__BAML_SPANMAP__={"n0":{"file_path":"tests/validation_files/headers/nested_scopes.baml","start_line":1,"start":4,"end_line":2,"end":0},"n1":{"file_path":"tests/validation_files/headers/nested_scopes.baml","start_line":4,"start":4,"end_line":5,"end":0},"n2":{"file_path":"tests/validation_files/headers/nested_scopes.baml","start_line":6,"start":8,"end_line":7,"end":0},"n3":{"file_path":"tests/validation_files/headers/nested_scopes.baml","start_line":10,"start":8,"end_line":11,"end":0}}
+  click n0 call bamlMermaidNodeClick() "Go to source"
+  click n1 call bamlMermaidNodeClick() "Go to source"
+  click n2 call bamlMermaidNodeClick() "Go to source"
+  click n3 call bamlMermaidNodeClick() "Go to source"

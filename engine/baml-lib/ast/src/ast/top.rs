@@ -2,7 +2,7 @@ use super::{
     assignment::Assignment,
     expr::{ExprFn, TopLevelAssignment},
     traits::WithSpan,
-    Identifier, Span, TemplateString, TypeExpressionBlock, ValueExprBlock, WithIdentifier,
+    Header, Identifier, Span, TemplateString, TypeExpressionBlock, ValueExprBlock, WithIdentifier,
 };
 
 /// Enum for distinguishing between top-level entries

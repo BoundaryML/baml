@@ -1,5 +1,5 @@
 schema = {
-    SOI ~ (expr_fn | top_level_assignment | value_expression_block | type_expression_block | template_declaration | type_alias | comment_block | raw_string_literal | empty_lines | CATCH_ALL)* ~ EOI
+    SOI ~ (mdx_header | expr_fn | top_level_assignment | value_expression_block | type_expression_block | template_declaration | type_alias | comment_block | raw_string_literal | empty_lines | CATCH_ALL)* ~ EOI
 }
 
 // ######################################
@@ -11,7 +11,7 @@ type_expression_block = { identifier ~ identifier ~ named_argument_list? ~ BLOCK
 dynamic_type_expression_block = { identifier ~ type_expression_block }
 
 type_expression_contents = {
-    (type_expression | block_attribute | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
+    (expr_fn | type_expression | block_attribute | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 type_expression          = {
     identifier ~ field_type_chain? ~ (NEWLINE? ~ (field_attribute | trailing_comment))* ~ NEWLINE?
@@ -27,7 +27,7 @@ field_type_with_attr = { field_type ~ (NEWLINE? ~ (field_attribute | trailing_co
 value_expression_keyword  = { FUNCTION_KEYWORD | TEST_KEYWORD | CLIENT_KEYWORD | RETRY_POLICY_KEYWORD | GENERATOR_KEYWORD }
 value_expression_block    = { value_expression_keyword ~ identifier ~ named_argument_list? ~ ARROW? ~ field_type_chain? ~ SPACER_TEXT ~ BLOCK_OPEN ~ value_expression_contents ~ BLOCK_CLOSE }
 value_expression_contents = {
-    (type_builder_block | value_expression | comment_block | block_attribute | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
+    (mdx_header | stmt | type_builder_block | value_expression | comment_block | block_attribute | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 value_expression          = { identifier ~ config_expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
 
@@ -49,9 +49,9 @@ ARROW = { SPACER_TEXT ~ "->" ~ SPACER_TEXT }
 assignment           = { "=" }
 template_declaration = { TEMPLATE_KEYWORD ~ identifier ~ assignment? ~ named_argument_list? ~ raw_string_literal }
 
-named_argument = { MUT_KEYWORD? ~ identifier ~ ((COLON ~ field_type_chain) | COLON)? }
+named_argument = { identifier ~ ((COLON ~ field_type_chain) | COLON)? }
 // Be forgiving and allow trailing comma
-named_argument_list = { openParan ~ SPACER_TEXT ~ named_argument? ~ ("," ~ SPACER_TEXT ~ named_argument)* ~ ","? ~ SPACER_TEXT ~ closeParan }
+named_argument_list = { openParen ~ SPACER_TEXT ~ named_argument? ~ ("," ~ SPACER_TEXT ~ named_argument)* ~ ","? ~ SPACER_TEXT ~ closeParen }
 
 // ######################################
 // Attributes
@@ -72,16 +72,16 @@ array_notation = { base_type_without_array ~ array_suffix+ ~ optional_token? }
 
 map = { "map" ~ "<" ~ field_type ~ "," ~ field_type ~ ">" ~ optional_token? }
 
-openParan  = { "(" }
-closeParan = { ")" }
-group      = { openParan ~ field_type ~ (field_attribute)* ~ closeParan }
-tuple      = { openParan ~ field_type_with_attr ~ ("," ~ field_type_with_attr)+ ~ closeParan }
+openParen  = { "(" }
+closeParen = { ")" }
+group      = { openParen ~ field_type ~ (field_attribute)* ~ closeParen }
+tuple      = { openParen ~ field_type_with_attr ~ ("," ~ field_type_with_attr)+ ~ closeParen }
 
 base_type_without_array = { map | path_identifier | identifier | group | tuple }
 
 non_union = { array_notation | map | path_identifier | identifier | group | tuple | literal_type }
 
-parenthesized_type = { openParan ~ field_type_with_attr ~ closeParan }
+parenthesized_type = { openParen ~ field_type_with_attr ~ closeParen }
 
 path_identifier       =  { single_word ~ ("." ~ single_word)+ }
 identifier            =  { namespaced_identifier | single_word }
@@ -96,16 +96,21 @@ type_alias = { identifier ~ identifier ~ assignment ~ field_type_with_attr }
 // ######################################
 // Arguments
 // ######################################
-arguments_list = { "(" ~ (NEWLINE?) ~ expression? ~ ("," ~ (NEWLINE?) ~ expression)? ~ (NEWLINE?) ~ ")" }
+arguments_list = { "(" ~ (NEWLINE?) ~ config_expression? ~ ("," ~ (NEWLINE?) ~ config_expression)? ~ (NEWLINE?) ~ ")" }
 
 // ######################################
 // Expressions & Functions
 // ######################################
-map_key   = { identifier | quoted_string_literal }
-map_entry = { (comment_block | empty_lines)* ~ map_key ~ (expression | ENTRY_CATCH_ALL)? ~ trailing_comment? }
+
+ident_map_entry = { identifier ~ !COLON ~ expression }
+// We'll make colon optional so that parser doesn't choke on missing ":"
+// This will make `ident <missing colon> expression` pass as a string key. We'll report inconsistencies
+// like this within the parser
+expr_map_entry = {  expression ~ COLON? ~ expression }
+
 
 splitter          = _{ ("," ~ NEWLINE?) | NEWLINE }
-map_expression    =  { "{" ~ empty_lines? ~ (map_entry ~ (splitter ~ map_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
+map_expression    =  { "{" ~ NEWLINE* ~ ((ident_map_entry | expr_map_entry) ~ splitter?)* ~ NEWLINE* ~ "}" }
 array_expression  =  { "[" ~ empty_lines? ~ ((expression | ARRAY_CATCH_ALL) ~ trailing_comment? ~ (splitter ~ (comment_block | empty_lines)* ~ (expression | ARRAY_CATCH_ALL) ~ trailing_comment?)*)? ~ (comment_block | empty_lines)* ~ splitter? ~ "]" }
 jinja_block_open  = _{ "{{" }
 jinja_block_close = _{ "}}" }
@@ -119,17 +124,18 @@ expression =  {
     ~ (infix_operator ~ prefix_operator* ~ primary_expression ~ postfix_operator*)*
 }
 
-postfix_operator = _{ array_accessor | field_accessor }
+postfix_operator = _{ array_accessor | method_call | field_accessor }
 infix_operator = _{ AND | OR | EQ | NEQ | LTEQ | GTEQ | BIT_SHL | BIT_SHR | BIT_AND | BIT_OR | BIT_XOR | LT | GT | ADD | SUB | MUL | DIV | MOD }
 prefix_operator = _{ NOT | NEG }
 
 array_accessor = { "[" ~ expression ~ "]" }
 field_accessor = { "." ~ identifier }
+method_call    = { "." ~ fn_app }
 
 primary_expression = {
+    if_expression |
     generic_fn_app |
     fn_app |
-    if_expression |
     lambda |
     jinja_expression |
     map_expression |
@@ -249,30 +255,33 @@ TYPE_BUILDER_KEYWORD = { "type_builder" }
 CLIENT_KEYWORD       = { "client<llm>" | "client" }
 GENERATOR_KEYWORD    = { "generator" }
 RETRY_POLICY_KEYWORD = { "retry_policy" }
-MUT_KEYWORD          = { "mut" }
 BREAK_KEYWORD        = { "break" }
 CONTINUE_KEYWORD     = { "continue" }
 SEMICOLON = { ";" }
 COLON = { ":" }
 COMMA = { "," }
+INVALID_STMT_STARTING_CHAR = { !ASCII_ALPHA ~ !WHITESPACE ~ !NEWLINE ~ !BLOCK_OPEN ~ !comment ~ ANY }
 
 // #################################################
 // Operators
 // #################################################
 
+// NOTE: ~ !"=" is needed to allow assignments like `a += 1`
+// If not used, PEST assumes this is an addition and right hand side is "= 1".
+
 // Arithmetic
-ADD = { "+" }
-SUB = { "-" }
-MUL = { "*" }
-DIV = { "/" }
-MOD = { "%" }
+ADD = { "+" ~ !"=" }
+SUB = { "-" ~ !"=" }
+MUL = { "*" ~ !"=" }
+DIV = { "/" ~ !"=" }
+MOD = { "%" ~ !"=" }
 
 // Bitwise
-BIT_AND = { "&" }
-BIT_OR = { "|" }
-BIT_XOR = { "^" }
-BIT_SHL = { "<<" }
-BIT_SHR = { ">>" }
+BIT_AND = { "&" ~ !"=" }
+BIT_OR = { "|" ~ !"=" }
+BIT_XOR = { "^" ~ !"=" }
+BIT_SHL = { "<<" ~ !"=" }
+BIT_SHR = { ">>" ~ !"=" }
 
 // Comparison
 EQ = { "==" }
@@ -294,11 +303,24 @@ NEG = { "-" } // NOTE: Can't reuse SUB here. Read this: https://docs.rs/pest/lat
 // BAML Expressions
 // #################################################
 
-// Constant applicative form.
-// e.g. top-level
+// Top-level variable declarations. e.g.:
 //   - `let x = go(1,2)`
 //   - `let z = { let b = 2; [b, 3] }
-top_level_assignment = { stmt }
+// Although operators and variable updates are allowed by the grammar,
+// they are ruled out later by the parser.
+top_level_assignment = { top_level_stmt }
+
+// More forgiving statement rule for top-level - similar to expr_body_stmt but more restrictive
+top_level_stmt = {
+    (
+        let_expr
+        | assign_op_stmt
+        | assign_stmt
+    )
+    ~ SEMICOLON?
+    ~ trailing_comment?
+    ~ NEWLINE?
+}
 
 // Regular function.
 // e.g.:
@@ -308,30 +330,68 @@ top_level_assignment = { stmt }
 expr_fn = { ("function" | "fn") ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_block }
 
 // Body of a function (including curly brackets).
-expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt | comment_block | empty_lines)* ~ expression? ~ NEWLINE? ~ BLOCK_CLOSE }
+expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (mdx_header | expr_body_stmt | stmt | comment_block | empty_lines)* ~ expression? ~ (comment_block | empty_lines)* ~ BLOCK_CLOSE }
+
+// More forgiving statement rule for function bodies - only for statements that commonly miss semicolons
+expr_body_stmt = {
+    (
+        INVALID_STMT_STARTING_CHAR* ~
+        (
+            let_expr
+            | assign_op_stmt
+            | assign_stmt
+        )
+        ~ SEMICOLON?
+    )
+    ~ trailing_comment?
+    ~ NEWLINE?
+}
+
+// Headers can include any characters except a newline; do not use unquoted_string_literal restrictions
+mdx_header = { WHITESPACE* ~ "#"+ ~ WHITESPACE* ~ (!NEWLINE ~ ANY)* ~ NEWLINE? }
 
 // Statement.
-// TODO: Most language allow any arbitrary expression as a statement. For example,
-// you should be able to do this:
-//
-// let x = 1;
-// 2 + 2;  // Random expression as a statement.
-//
-// For now we only allow function calls, most other expressions don't make sense
-// at least at first glance, but imagine something like
-//
-// call_func(1) + call_func(2);
-//
-// With operator overloading (implicit function call) + side effects.
-//
-// Just allow any expr and fix the parser.
-stmt = { (((let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app | BREAK_KEYWORD | CONTINUE_KEYWORD) ~ SEMICOLON) | for_loop | if_expression | while_loop) ~ trailing_comment? ~ NEWLINE? }
+stmt = {
+    INVALID_STMT_STARTING_CHAR* ~
+    (
+        for_loop
+        | while_loop
+        | if_expression
+        | (
+            (
+                BREAK_KEYWORD
+                | CONTINUE_KEYWORD
+                | let_expr
+                | return_stmt
+                | assert_stmt
+                | assign_op_stmt
+                | assign_stmt
+                | expression
+            )
+            ~ SEMICOLON
+        )
+        | expr_block
+    )
+    ~ trailing_comment?
+    ~ NEWLINE?
+}
 
 // Let-binding statement.
-let_expr = { "let" ~ MUT_KEYWORD? ~ identifier ~ "=" ~ expression }
+let_expr = { "let" ~ identifier ~ "=" ~ expression }
 
-assign_stmt = { identifier ~ "=" ~ expression }
-assign_op_stmt = { identifier ~ assign_op ~ expression }
+// NOTE: Needs to supports things like `object.getter().field[x + y] = value`,
+// so can't be just `identifier ~ "=" ~ expression`.
+//
+// Though having expression as LHS is also tricky since we need to make sure
+// that `a += 1` is not treaded as `a` + `= 1` (addition, infix operator).
+// This is solved by forcing infix operators like `+` to not be followed by `=`.
+//
+// Another solution if this fails at some point is having an assignable_expression
+// rule with no infix operators:
+//
+// assignable_expression = { prefix_operator* ~ primary_expression ~ postfix_operator* }
+assign_stmt = { expression ~ "=" ~ expression }
+assign_op_stmt = { expression ~ assign_op ~ expression }
 
 assign_op = _{ BIT_SHL_ASSIGN | BIT_SHR_ASSIGN | ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | MOD_ASSIGN | BIT_AND_ASSIGN | BIT_OR_ASSIGN | BIT_XOR_ASSIGN }
 
@@ -352,17 +412,40 @@ fn_args = { expression? ~ ("," ~ expression)* }
 fn_app = { identifier ~ "(" ~ fn_args ~ ")" }
 
 // If expression.
-if_expression = { "if" ~ expression ~ expr_block ~ ( "else" ~ (expr_block | if_expression) )? }
+if_expression = { "if" ~ condition_and_block ~ ( "else" ~ (expr_block | if_expression) )? }
 
-while_loop = { "while" ~  expression ~  expr_block  }
+// like <expression>, but will avoid consuming `{` in a class_constructor if there are no more blocks.
+// the lookahead match these cases:
+// - `ident { } { ...` -> `class_constructor` (as expression)
+// - `ident { ...`     -> consume only `identifier` (will have to be manually converted to expression)
+// ` otherwise, not a problematic class_constructor ->  we can have expression.
+// This allows the parser to continue even in the case of missing a right parentheses
+block_aware_tail_expression = { (&class_constructor ~ (&"{" ~ expression | identifier)) | expression }
 
+condition_and_block = _{ openParen? ~  block_aware_tail_expression ~ closeParen? ~ expr_block }
+
+while_loop = { "while" ~ condition_and_block }
 
 
 // For loop, e.g.
-// for (r in resumes) {
+// for r in resumes {
 //   ExtractResume(x)
 // }
-for_loop = { "for" ~ "(" ~ identifier ~ "in" ~ expression ~ ")" ~ expr_block }
+for_loop = { "for" ~ openParen? ~ (iterator_for_loop | c_for_loop) ~ closeParen? ~ expr_block }
+iterator_for_loop = { identifier ~ "in" ~ block_aware_tail_expression }
+c_for_loop = { c_for_init_stmt? ~ ";" ~ expression? ~ ";" ~ c_for_after_stmt?  }
+// NOTE: let_expr ... list copied from `stmt` rule, discarding nonsensical stmts
+c_for_init_stmt = { let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app }
+// same as above but without `let`.
+c_for_after_stmt = {  block_aware_assign_op_stmt | block_aware_assign_stmt | fn_app | generic_fn_app }
+
+// statements with a block-aware tail expression. Read `block_aware_tail_expression` for more info.
+block_aware_assign_op_stmt = { expression ~ assign_op ~ block_aware_tail_expression }
+block_aware_assign_stmt = { expression ~ "=" ~ block_aware_tail_expression }
+
+return_stmt = { "return" ~ expression? }
+
+assert_stmt = { "assert" ~ expression }
 
 // Anonymous function.
 lambda = { named_argument_list ~ "=>" ~ expression }

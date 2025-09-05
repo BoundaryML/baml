@@ -8,7 +8,7 @@ use std::fmt;
 use baml_types::JinjaExpression;
 use bstd::dedent;
 
-use super::{app::App, ArgumentsList, Identifier, Stmt, WithName, WithSpan};
+use super::{app::App, ArgumentsList, Header, Identifier, Stmt, WithName, WithSpan};
 use crate::ast::Span;
 
 #[derive(Debug, Clone)]
@@ -130,6 +130,12 @@ pub enum Expression {
     ArrayAccess(Box<Expression>, Box<Expression>, Span),
     /// Field access, e.g. `obj.field`
     FieldAccess(Box<Expression>, Identifier, Span),
+    MethodCall {
+        receiver: Box<Expression>,
+        method: Identifier,
+        args: Vec<Expression>,
+        span: Span,
+    },
     /// Any form of binary operation.
     BinaryOperation {
         left: Box<Expression>,
@@ -295,6 +301,21 @@ impl fmt::Display for Expression {
             },
             Expression::ArrayAccess(base, index, _span) => write!(f, "{base}[{index}]"),
             Expression::FieldAccess(base, field, _span) => write!(f, "{base}.{}", field.name()),
+            Expression::MethodCall {
+                receiver,
+                method,
+                args,
+                ..
+            } => {
+                write!(
+                    f,
+                    "{receiver}.{method}({})",
+                    args.iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
             Expression::BinaryOperation {
                 left,
                 operator,
@@ -424,6 +445,7 @@ impl Expression {
             Self::If(_, _, _, span) => span,
             Self::ArrayAccess(_, _, span) => span,
             Self::FieldAccess(_, _, span) => span,
+            Self::MethodCall { span, .. } => span,
             Self::BinaryOperation { span, .. } => span,
             Self::UnaryOperation { span, .. } => span,
             Self::Paren(_, span) => span,
@@ -458,6 +480,7 @@ impl Expression {
             Expression::If(_, _, _, _) => "if_expression",
             Expression::ArrayAccess(_, _, _) => "array_access",
             Expression::FieldAccess(_, _, _) => "field_access",
+            Expression::MethodCall { .. } => "method_call",
             Expression::BinaryOperation { .. } => "binary_operation",
             Expression::UnaryOperation { .. } => "unary_operation",
             Expression::Paren(_, _) => "parenthesized_expression",
@@ -563,6 +586,28 @@ impl Expression {
                 field1.assert_eq_up_to_span(field2);
             }
             (FieldAccess(_, _, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (
+                MethodCall {
+                    receiver,
+                    method,
+                    args,
+                    ..
+                },
+                MethodCall {
+                    receiver: receiver2,
+                    method: method2,
+                    args: args2,
+                    ..
+                },
+            ) => {
+                receiver.assert_eq_up_to_span(receiver2);
+                method.assert_eq_up_to_span(method2);
+                assert_eq!(args.len(), args2.len());
+                for (arg1, arg2) in args.iter().zip(args2.iter()) {
+                    arg1.assert_eq_up_to_span(arg2);
+                }
+            }
+            (MethodCall { .. }, _) => panic!("Types do not match: {self:?} and {other:?}"),
             (
                 BinaryOperation {
                     left,
@@ -691,6 +736,7 @@ impl Expression {
             Expression::If(_, _, _, _) => None,
             Expression::ArrayAccess(_, _, _) => None,
             Expression::FieldAccess(_, _, _) => None,
+            Expression::MethodCall { .. } => None,
             Expression::BinaryOperation { .. } => None,
             Expression::UnaryOperation { .. } => None,
             Expression::Paren(_, _) => None,
@@ -756,6 +802,8 @@ impl ClassConstructorField {
 pub struct ExpressionBlock {
     pub stmts: Vec<Stmt>,
     pub expr: Option<Box<Expression>>,
+    /// Headers that apply to the final expression
+    pub expr_headers: Vec<std::sync::Arc<Header>>,
 }
 
 // TODO: How do we indent the inner statements?

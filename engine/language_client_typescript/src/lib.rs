@@ -3,6 +3,7 @@ use std::str::FromStr;
 use napi::{Env, JsUndefined};
 use napi_derive::napi;
 
+mod abort_controller;
 mod errors;
 mod parse_ts_types;
 mod runtime;

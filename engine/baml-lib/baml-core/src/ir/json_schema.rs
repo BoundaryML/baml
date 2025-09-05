@@ -147,6 +147,7 @@ impl WithJsonSchema for Walker<'_, &Class> {
 impl WithJsonSchema for TypeIR {
     fn json_schema(&self) -> serde_json::Value {
         match self {
+            TypeIR::Top(_) => panic!("should not get top after typecheck!"),
             TypeIR::Class { name, .. } | TypeIR::Enum { name, .. } => json!({
                 "$ref": format!("#/definitions/{}", name),
             }),

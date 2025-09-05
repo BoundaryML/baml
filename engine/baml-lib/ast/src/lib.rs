@@ -3,7 +3,7 @@
 #![deny(rust_2018_idioms, unsafe_code)]
 #![allow(clippy::derive_partial_eq_without_eq)]
 
-pub use self::parser::{parse, parse_type_builder_contents_from_str};
+pub use self::parser::{parse, parse_standalone_expression, parse_type_builder_contents_from_str};
 
 /// The AST data structure. It aims to faithfully represent the syntax of a Prisma Schema, with
 /// source span information.
@@ -12,6 +12,7 @@ pub mod ast;
 mod formatter;
 mod parser;
 
+pub use ast::{BamlVisDiagramGenerator, MermaidDiagramGenerator};
 pub use formatter::{format_schema, FormatOptions};
 
 /// Transform the input string into a valid (quoted and escaped) PSL string literal.

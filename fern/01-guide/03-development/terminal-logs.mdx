@@ -9,6 +9,35 @@ To enable logging, set the `BAML_LOG` environment variable:
 BAML_LOG=info
 ```
 
+<CodeBlocks>
+
+```go Go
+// Set logging level in Go application
+os.Setenv("BAML_LOG", "info")
+
+// Or run with environment variable:
+// BAML_LOG=info go run main.go
+```
+
+```python Python
+# Set logging level in Python
+import os
+os.environ["BAML_LOG"] = "info"
+
+# Or run with environment variable:
+# BAML_LOG=info python main.py
+```
+
+```typescript TypeScript
+// Set logging level in TypeScript/JavaScript
+process.env.BAML_LOG = "info";
+
+// Or run with environment variable:
+// BAML_LOG=info node main.js
+```
+
+</CodeBlocks>
+
 | Level | Description |
 |-------|-------------|
 | `error` | Fatal errors by BAML |
@@ -33,3 +62,40 @@ BOUNDARY_MAX_LOG_CHUNK_CHARS=3000
 ```
 
 This will truncate each part in a log entry to 3000 characters.
+
+<CodeBlocks>
+
+```go Go
+// Set log truncation in Go application
+os.Setenv("BOUNDARY_MAX_LOG_CHUNK_CHARS", "3000")
+
+// Example with both logging and truncation
+func main() {
+    // Configure logging
+    os.Setenv("BAML_LOG", "info")
+    os.Setenv("BOUNDARY_MAX_LOG_CHUNK_CHARS", "3000")
+    
+    // Your application code here
+}
+```
+
+```python Python
+# Set log truncation in Python
+import os
+os.environ["BOUNDARY_MAX_LOG_CHUNK_CHARS"] = "3000"
+
+# Example with both logging and truncation
+os.environ["BAML_LOG"] = "info"
+os.environ["BOUNDARY_MAX_LOG_CHUNK_CHARS"] = "3000"
+```
+
+```typescript TypeScript
+// Set log truncation in TypeScript/JavaScript
+process.env.BOUNDARY_MAX_LOG_CHUNK_CHARS = "3000";
+
+// Example with both logging and truncation
+process.env.BAML_LOG = "info";
+process.env.BOUNDARY_MAX_LOG_CHUNK_CHARS = "3000";
+```
+
+</CodeBlocks>

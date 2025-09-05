@@ -7,7 +7,8 @@ use pest::Parser;
 
 use super::{
     parse_assignment::parse_assignment,
-    parse_expr::{parse_expr_fn, parse_top_level_assignment},
+    parse_expr::{parse_expr_fn, parse_header, parse_top_level_assignment},
+    parse_expression::parse_expression,
     parse_template_string::parse_template_string,
     parse_type_expression_block::parse_type_expression_block,
     parse_value_expression_block::parse_value_expression_block,
@@ -27,6 +28,25 @@ fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) 
     // Recursively print inner pairs with increased indentation
     for inner_pair in pair.into_inner() {
         pretty_print(inner_pair, indent_level + 1);
+    }
+}
+
+/// Parse a standalone BAML expression.
+pub fn parse_standalone_expression(
+    input: &str,
+    diagnostics: &mut Diagnostics,
+) -> anyhow::Result<Expression> {
+    let datamodel_result = BAMLParser::parse(Rule::expression, input);
+    match datamodel_result {
+        Ok(mut datamodel_wrapped) => {
+            let datamodel = datamodel_wrapped.next().unwrap();
+            let expression =
+                parse_expression(datamodel, diagnostics).expect("parse_expression failed");
+            Ok(expression)
+        }
+        Err(err) => {
+            panic!("BAMLParser failed: Handle this error: {err:?}");
+        }
     }
 }
 
@@ -61,11 +81,14 @@ pub fn parse(root_path: &Path, source: &SourceFile) -> Result<(Ast, Diagnostics)
             let mut top_level_definitions = Vec::new();
 
             let mut pending_block_comment = None;
+            let mut pending_headers: Vec<Header> = Vec::new();
             let mut pairs = datamodel.into_inner().peekable();
 
             while let Some(current) = pairs.next() {
                 match current.as_rule() {
                     Rule::top_level_assignment => {
+                        // Clear pending headers since assignments don't support headers
+                        pending_headers.clear();
                         if let Some(top_level_assignment) =
                             parse_top_level_assignment(current, &mut diagnostics)
                         {
@@ -74,11 +97,16 @@ pub fn parse(root_path: &Path, source: &SourceFile) -> Result<(Ast, Diagnostics)
                         }
                     }
                     Rule::expr_fn => {
-                        if let Some(expr_fn) = parse_expr_fn(current, &mut diagnostics) {
+                        if let Some(mut expr_fn) = parse_expr_fn(current, &mut diagnostics) {
+                            // Bind pending headers to this function
+                            expr_fn.annotations =
+                                pending_headers.drain(..).map(std::sync::Arc::new).collect();
                             top_level_definitions.push(Top::ExprFn(expr_fn));
                         }
                     }
                     Rule::type_expression_block => {
+                        // Clear pending headers since type expressions don't support headers
+                        pending_headers.clear();
                         let type_expr = parse_type_expression_block(
                             current,
                             pending_block_comment.take(),
@@ -98,13 +126,18 @@ pub fn parse(root_path: &Path, source: &SourceFile) -> Result<(Ast, Diagnostics)
                             &mut diagnostics,
                         );
                         match val_expr {
-                            Ok(val) => top_level_definitions.push(match val.block_type {
-                                ValueExprBlockType::Function => Top::Function(val),
-                                ValueExprBlockType::Test => Top::TestCase(val),
-                                ValueExprBlockType::Client => Top::Client(val),
-                                ValueExprBlockType::RetryPolicy => Top::RetryPolicy(val),
-                                ValueExprBlockType::Generator => Top::Generator(val),
-                            }),
+                            Ok(mut val) => {
+                                // Bind pending headers to all value expression blocks (function, client, test, generator, retry_policy)
+                                val.annotations =
+                                    pending_headers.drain(..).map(std::sync::Arc::new).collect();
+                                top_level_definitions.push(match val.block_type {
+                                    ValueExprBlockType::Function => Top::Function(val),
+                                    ValueExprBlockType::Test => Top::TestCase(val),
+                                    ValueExprBlockType::Client => Top::Client(val),
+                                    ValueExprBlockType::RetryPolicy => Top::RetryPolicy(val),
+                                    ValueExprBlockType::Generator => Top::Generator(val),
+                                });
+                            }
                             Err(e) => diagnostics.push_error(e),
                         }
                     }
@@ -133,6 +166,11 @@ pub fn parse(root_path: &Path, source: &SourceFile) -> Result<(Ast, Diagnostics)
                         diagnostics.span(current.as_span()),
                     ));
                         break;
+                    }
+                    Rule::mdx_header => {
+                        if let Some(header) = parse_header(current, &mut diagnostics) {
+                            pending_headers.push(header);
+                        }
                     }
                     Rule::comment_block => {
                         match pairs.peek().map(|b| b.as_rule()) {
@@ -448,7 +486,7 @@ mod tests {
                 dbg!(&x.stmt);
                 assert_eq!(x.stmt.identifier.name(), "x");
                 match &x.stmt.expr {
-                    Expression::ExprBlock(ExpressionBlock { stmts, expr }, _) => {
+                    Expression::ExprBlock(ExpressionBlock { stmts, expr, .. }, _) => {
                         assert_eq!(stmts.len(), 1);
                         assert_eq!(stmts[0].identifier().name(), "y");
                         assert!(expr.as_ref().is_some());

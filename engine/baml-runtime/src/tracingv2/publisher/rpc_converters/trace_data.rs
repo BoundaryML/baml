@@ -7,14 +7,14 @@ use baml_types::{
     type_meta, HasType,
 };
 
-use super::{IntoRpcEvent, TypeLookup};
+use super::{IRRpcState, IntoRpcEvent};
 
 impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
     for baml_types::tracing::events::FunctionStart<T>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::TraceData<'a> {
         baml_rpc::runtime_api::TraceData::FunctionStart {
             function_display_name: self.name.clone(),
@@ -55,7 +55,7 @@ impl<'a, T: HasType<type_meta::NonStreaming>>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> Option<baml_rpc::runtime_api::BamlFunctionStart> {
         if self.function_type == FunctionType::BamlLlm {
             lookup
@@ -78,7 +78,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::EvaluationContext>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::EvaluationContext {
         baml_rpc::runtime_api::EvaluationContext {
             tags: self
@@ -95,7 +95,7 @@ impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, baml_rpc::runtime
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::TraceData<'a> {
         let end = match self {
             baml_types::tracing::events::FunctionEnd::Success(baml_value_with_meta) => {
@@ -119,7 +119,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::IntermediateData<'a> {
         baml_rpc::runtime_api::IntermediateData::LLMRequest {
             client_name: self.client_name.clone(),
@@ -139,7 +139,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::LLMChatMessage<'a>>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::LLMChatMessage<'a> {
         baml_rpc::runtime_api::LLMChatMessage {
             role: self.role.clone(),
@@ -157,7 +157,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::LLMChatMessagePart<'a>>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::LLMChatMessagePart<'a> {
         match self {
             baml_types::tracing::events::LLMChatMessagePart::Text(t) => {
@@ -182,7 +182,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::LLMUsage>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::LLMUsage {
         baml_rpc::runtime_api::LLMUsage {
             input_tokens: self.input_tokens,
@@ -197,7 +197,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::HTTPBody<'a>>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::HTTPBody<'a> {
         baml_rpc::runtime_api::HTTPBody {
             raw: Cow::Borrowed(self.raw()),
@@ -210,7 +210,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::IntermediateData<'a> {
         baml_rpc::runtime_api::IntermediateData::RawLLMRequest {
             http_request_id: self.id.to_string(),
@@ -227,7 +227,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::IntermediateData<'a> {
         baml_rpc::runtime_api::IntermediateData::RawLLMResponse {
             http_request_id: self.request_id.to_string(),
@@ -248,7 +248,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::IntermediateData<'a> {
         baml_rpc::runtime_api::IntermediateData::RawLLMResponseStream {
             http_request_id: self.request_id.to_string(),
@@ -264,7 +264,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::IntermediateData<'a> {
         baml_rpc::runtime_api::IntermediateData::LLMResponse {
             client_stack: self.client_stack.clone(),

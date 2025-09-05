@@ -53,6 +53,11 @@ const void *call_function_stream_from_c(const void *runtime,
                                         uintptr_t length,
                                         uint32_t id);
 
+/**
+ * Cancel a function call by its ID
+ */
+const void *cancel_function_call(uint32_t id);
+
 struct Buffer call_object_constructor(const char *encoded_args, uintptr_t length);
 
 void free_buffer(struct Buffer buf);

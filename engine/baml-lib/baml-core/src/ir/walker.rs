@@ -45,6 +45,18 @@ impl<'a> Walker<'a, &'a ExprFunctionNode> {
     ) -> Option<Walker<'a, (&'a ExprFunctionNode, &'a TestCase)>> {
         self.walk_tests().find(|t| t.item.1.elem.name == test_name)
     }
+
+    pub fn graph(&self) -> String {
+        // example mermaid graph
+        r#"
+        graph TD
+            A[Function] --> B[Function]
+            B --> C[Function]
+            C --> D[Function]
+            D --> E[Function]
+        "#
+        .to_string()
+    }
 }
 
 impl<'a> Walker<'a, &'a FunctionNode> {

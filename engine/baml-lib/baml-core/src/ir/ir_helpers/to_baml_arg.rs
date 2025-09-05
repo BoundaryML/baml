@@ -47,6 +47,92 @@ impl ArgCoercer {
         let metadata = field_type.meta();
 
         let value = match field_type {
+            TypeIR::Top(_) => {
+                // For Top type, we accept any value and convert it to the appropriate type
+                match value {
+                    BamlValue::String(s) => {
+                        Ok(BamlValueWithMeta::String(s.clone(), TypeIR::string()))
+                    }
+                    BamlValue::Int(i) => Ok(BamlValueWithMeta::Int(*i, TypeIR::int())),
+                    BamlValue::Float(f) => Ok(BamlValueWithMeta::Float(*f, TypeIR::float())),
+                    BamlValue::Bool(b) => Ok(BamlValueWithMeta::Bool(*b, TypeIR::bool())),
+                    BamlValue::Map(index_map) => {
+                        let mut pairs = index_map.into_iter();
+
+                        let (map, first_type) = 'build_map: {
+                            let Some((first_key, first_val)) = pairs.next() else {
+                                break 'build_map (BamlMap::new(), TypeIR::Top(Default::default()));
+                            };
+
+                            // coerce first value to top, inferring the map type.
+                            let first_val = self.coerce_arg(ir, field_type, first_val, scope)?;
+
+                            let first_type = first_val.meta().clone();
+
+                            // coerce rest to first value's type.
+                            let rest = pairs.map(|(k, v)| {
+                                self.coerce_arg(ir, &first_type, v, scope)
+                                    .map(|v| (k.clone(), v))
+                            });
+
+                            let chained =
+                                [Ok((first_key.clone(), first_val))].into_iter().chain(rest);
+
+                            (chained.collect::<Result<_, _>>()?, first_type)
+                        };
+
+                        Ok(BamlValueWithMeta::Map(
+                            map,
+                            TypeIR::Map(
+                                Box::new(TypeIR::string()),
+                                Box::new(first_type),
+                                Default::default(),
+                            ),
+                        ))
+                    }
+                    BamlValue::List(baml_values) => {
+                        // Convert the list values recursively using with_const_meta
+                        let converted_list = BamlValueWithMeta::with_const_meta(
+                            &BamlValue::List(baml_values.clone()),
+                            TypeIR::string(),
+                        );
+                        if let BamlValueWithMeta::List(list_values, _) = converted_list {
+                            Ok(BamlValueWithMeta::List(
+                                list_values,
+                                TypeIR::list(TypeIR::string()),
+                            ))
+                        } else {
+                            unreachable!()
+                        }
+                    }
+                    BamlValue::Media(baml_media) => Ok(BamlValueWithMeta::Media(
+                        baml_media.clone(),
+                        TypeIR::image(),
+                    )),
+                    BamlValue::Enum(name, value) => Ok(BamlValueWithMeta::Enum(
+                        name.clone(),
+                        value.clone(),
+                        TypeIR::r#enum("Any"),
+                    )),
+                    BamlValue::Class(name, index_map) => {
+                        // Convert the class fields recursively using with_const_meta
+                        let converted_class = BamlValueWithMeta::with_const_meta(
+                            &BamlValue::Class(name.clone(), index_map.clone()),
+                            TypeIR::string(),
+                        );
+                        if let BamlValueWithMeta::Class(_, class_fields, _) = converted_class {
+                            Ok(BamlValueWithMeta::Class(
+                                name.clone(),
+                                class_fields,
+                                TypeIR::class("Any"),
+                            ))
+                        } else {
+                            unreachable!()
+                        }
+                    }
+                    BamlValue::Null => Ok(BamlValueWithMeta::Null(TypeIR::null())),
+                }
+            }
             TypeIR::Primitive(t, _) => match (t, value) {
                 (TypeValue::String, BamlValue::String(v)) => {
                     Ok(BamlValueWithMeta::String(v.clone(), TypeIR::string()))

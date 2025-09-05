@@ -4,9 +4,8 @@ use lsp_types::{
     self, request as req, GotoDefinitionParams, GotoDefinitionResponse, Location, Position, Range,
     Url,
 };
+use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
 
-#[cfg(feature = "playground-server")]
-use crate::playground::broadcast_function_change;
 use crate::{
     baml_project::{position_utils::get_word_at_position, trim_line, BamlRuntimeExt},
     server::{
@@ -48,18 +47,25 @@ impl SyncRequestHandler for GotoDefinition {
         let project = session
             .get_or_create_project(&path)
             .expect("Ensured that a project db exists");
-        project
-            .lock()
-            .unwrap()
-            .update_runtime(Some(notifier))
-            .internal_error()?;
+        {
+            let default_flags = vec!["beta".to_string()];
+            project.lock().update_runtime(
+                Some(notifier),
+                session
+                    .baml_settings
+                    .feature_flags
+                    .as_ref()
+                    .unwrap_or(&default_flags),
+            )
+        }
+        .internal_error()?;
 
         let document_key = DocumentKey::from_url(
-            &project.lock().unwrap().baml_project.root_dir_name,
+            &project.lock().baml_project.root_dir_name,
             &params.text_document_position_params.text_document.uri,
         )
         .internal_error()?;
-        let guard = project.lock().unwrap();
+        let guard = project.lock();
         let doc = guard
             .baml_project
             .files
@@ -101,26 +107,23 @@ impl SyncRequestHandler for GotoDefinition {
                 });
 
                 // Broadcast function change to playground clients
-                #[cfg(feature = "playground-server")]
-                if let Some(state) = &session.playground_state {
-                    // Get the first function from the current file if available
-                    if let Some(function) = guard
-                        .list_functions()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .find(|f| f.span.file_path == document_key.path().to_string_lossy())
+                if let Some(function) = guard
+                    .list_functions()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .find(|f| f.span.file_path == document_key.path().to_string_lossy())
+                {
+                    if let Err(e) =
+                        session
+                            .playground_tx
+                            .send(PreLangServerToWasmMessage::FrontendMessage(
+                                FrontendMessage::select_function {
+                                    root_path: guard.root_path().to_string_lossy().to_string(),
+                                    function_name: function.name.clone(),
+                                },
+                            ))
                     {
-                        tracing::info!("Broadcasting function change for: {}", function.name);
-                        let root_path = guard.root_path().to_string_lossy().to_string();
-                        let state = state.clone();
-                        let function_name = function.name.clone();
-                        if let Some(runtime) = &session.playground_runtime {
-                            runtime.spawn(async move {
-                                let _ =
-                                    broadcast_function_change(&state, &root_path, function_name)
-                                        .await;
-                            });
-                        }
+                        tracing::warn!("Error forwarding function change to playground: {}", e);
                     }
                 }
 

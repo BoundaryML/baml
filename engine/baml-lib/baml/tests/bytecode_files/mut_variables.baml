@@ -1,13 +1,13 @@
 fn DeclareMutableInFunction(x: int) -> int {
 
-	let mut y = 3;
+	let y = 3;
 
 	y = 5;
 
 	y
 }
 
-fn MutableInArg(mut x: int) -> int {
+fn MutableInArg(x: int) -> int {
 	x = 3;
 	x
 }
@@ -29,3 +29,8 @@ fn MutableInArg(mut x: int) -> int {
 //      3   RETURN         
 //
 // Class: std::Request with 3 fields
+// Function: std.Array.len
+//
+// Function: std.Map.len
+//
+// Function: std.Map.contains

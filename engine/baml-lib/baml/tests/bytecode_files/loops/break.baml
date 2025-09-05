@@ -1,10 +1,10 @@
-fn Factorial(mut limit: int) -> int {
+fn Factorial(limit: int) -> int {
 
-	let mut result = 1;
+	let result = 1;
 
 
-	while true {
-		if limit == 0 {
+	while (true) {
+		if (limit == 0) {
 			break;
 		}
 		result = result * limit;
@@ -15,9 +15,9 @@ fn Factorial(mut limit: int) -> int {
 }
 
 fn Nested() -> int {
-    let mut a = 5;
-    while true {
-        while true {
+    let a = 5;
+    while (true) {
+        while (true) {
             a = a + 1;
             break;
         }
@@ -90,3 +90,8 @@ fn Nested() -> int {
 //      22   RETURN              
 //
 // Class: std::Request with 3 fields
+// Function: std.Array.len
+//
+// Function: std.Map.len
+//
+// Function: std.Map.contains

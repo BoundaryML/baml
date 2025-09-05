@@ -3,9 +3,8 @@ use std::{collections::HashMap, time::Instant};
 use lsp_types::{
     notification::DidChangeTextDocument, DidChangeTextDocumentParams, PublishDiagnosticsParams,
 };
+use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
 
-#[cfg(feature = "playground-server")]
-use crate::playground::broadcast_project_update;
 use crate::{
     server::{
         api::{
@@ -54,7 +53,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
 
         let project = project.unwrap();
         let document_key =
-            DocumentKey::from_url(project.lock().unwrap().root_path(), &url).internal_error()?;
+            DocumentKey::from_url(project.lock().root_path(), &url).internal_error()?;
 
         session
             .update_text_document(
@@ -66,9 +65,8 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
             .internal_error()?;
 
         // Broadcast update to playground clients
-        #[cfg(feature = "playground-server")]
-        if let Some(state) = &session.playground_state {
-            let project = project.lock().unwrap();
+        {
+            let project = project.lock();
             let files_map: std::collections::HashMap<String, String> = project
                 .baml_project
                 .files
@@ -85,18 +83,41 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
                     (key, contents)
                 })
                 .collect();
-            let root_path = project.root_path().to_string_lossy().to_string();
-            let state = state.clone();
-            if let Some(runtime) = &session.playground_runtime {
-                runtime.spawn(async move {
-                    let _ = broadcast_project_update(&state, &root_path, files_map).await;
-                });
-            }
+            session
+                .playground_tx
+                .send(PreLangServerToWasmMessage::FrontendMessage(
+                    FrontendMessage::add_project {
+                        root_path: project.root_path().to_string_lossy().to_string(),
+                        files: files_map,
+                    },
+                ))
+                .unwrap();
         }
 
         tracing::info!("publishing diagnostics");
 
-        publish_diagnostics(&notifier, project, Some(params.text_document.version))?;
+        let default_flags = vec!["beta".to_string()];
+        let effective_flags = session
+            .baml_settings
+            .feature_flags
+            .as_ref()
+            .unwrap_or(&default_flags);
+        tracing::info!(
+            "did_change: session feature_flags: {:?}, effective_flags: {:?}",
+            session
+                .baml_settings
+                .feature_flags
+                .as_ref()
+                .unwrap_or(&default_flags),
+            &effective_flags
+        );
+        publish_diagnostics(
+            &notifier,
+            project,
+            Some(params.text_document.version),
+            effective_flags,
+            session,
+        )?;
 
         let elapsed = start_time_total.elapsed();
         tracing::info!("didchange total took {:?}ms", elapsed.as_millis());

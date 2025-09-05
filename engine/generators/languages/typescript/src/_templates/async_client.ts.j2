@@ -1,5 +1,5 @@
-import type { BamlRuntime, FunctionResult, BamlCtxManager, ClientRegistry, Image, Audio, Pdf, Video, Collector } from "@boundaryml/baml"
-import { toBamlError, BamlStream, type HTTPRequest } from "@boundaryml/baml"
+import type { BamlRuntime, FunctionResult, BamlCtxManager, ClientRegistry, Image, Audio, Pdf, Video, FunctionLog, HTTPRequest } from "@boundaryml/baml"
+import { toBamlError, BamlStream, BamlAbortError, Collector } from "@boundaryml/baml"
 import type { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types"
 import type { partial_types } from "./partial_types"
 import type * as types from "./types"
@@ -16,11 +16,15 @@ import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DI
  */
 export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
+type TickReason = "Unknown";
+
 type BamlCallOptions = {
   tb?: TypeBuilder
   clientRegistry?: ClientRegistry
   collector?: Collector | Collector[]
   env?: Record<string, string | undefined>
+  signal?: AbortSignal
+  onTick?: (reason: TickReason, log: FunctionLog | null) => void
 }
 
 export class BamlAsyncClient {
@@ -77,6 +81,24 @@ export class BamlAsyncClient {
   ): Promise<{{func.return_type.serialize_type(pkg)}}> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const signal = options.signal;
+      
+      if (signal?.aborted) {
+        throw new BamlAbortError('Operation was aborted', signal.reason);
+      }
+      
+      // Check if onTick is provided - route through streaming if so
+      if (options.onTick) {
+        const stream = this.stream.{{ func.name }}(
+          {% for (name, arg_type) in func.args -%}
+          {{name}},
+          {%- endfor %}
+          __baml_options__
+        );
+        
+        return await stream.getFinalResponse();
+      }
+      
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -94,6 +116,7 @@ export class BamlAsyncClient {
         options.clientRegistry,
         collector,
         env,
+        signal,
       )
       return raw.parsed(false) as {{func.return_type.serialize_type(pkg)}}
     } catch (error) {
@@ -119,11 +142,37 @@ class BamlStreamClient {
       {% for (name, arg_type) in func.args -%}
       {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
       {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
+      __baml_options__?: BamlCallOptions
   ): BamlStream<{{ func.stream_return_type.serialize_type(pkg) }}, {{ func.return_type.serialize_type(pkg) }}> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const signal = options.signal;
+      
+      if (signal?.aborted) {
+        throw new BamlAbortError('Operation was aborted', signal.reason);
+      }
+      
+      let collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      
+      let onTickWrapper: (() => void) | undefined;
+      
+      // Create collector and wrap onTick if provided
+      if (options.onTick) {
+        const tickCollector = new Collector("on-tick-collector");
+        collector = [...collector, tickCollector];
+        
+        onTickWrapper = () => {
+          const log = tickCollector.last;
+          if (log) {
+            try {
+              options.onTick!("Unknown", log);
+            } catch (error) {
+              console.error("Error in onTick callback for {{func.name}}", error);
+            }
+          }
+        };
+      }
+
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
@@ -141,12 +190,15 @@ class BamlStreamClient {
         options.clientRegistry,
         collector,
         env,
+        signal,
+        onTickWrapper,
       )
       return new BamlStream<{{ func.stream_return_type.serialize_type(pkg) }}, {{ func.return_type.serialize_type(pkg) }}>(
         raw,
         (a): {{ func.stream_return_type.serialize_type(pkg) }} => a,
         (a): {{ func.return_type.serialize_type(pkg) }} => a,
         this.ctxManager.cloneContext(),
+        options.signal,
       )
     } catch (error) {
       throw toBamlError(error);

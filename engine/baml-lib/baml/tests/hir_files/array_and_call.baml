@@ -5,17 +5,29 @@ function Helper(x: int) -> int {
 function TestArray() -> int[] {
     let arr = [1, 2, 3];
     let result = Helper(42);
-    [arr, result]
+    [arr[0], result]
+}
+
+function ArrayAccess() -> int {
+    let arr = [1, 2, 3];
+    arr[1]
 }
 
 // function Helper(x) {
-//   return x;
+//   x
 // }
 //
 // function TestArray() {
 //   let arr = [1, 2, 3];
 //   let result = Helper(42);
-//   return [arr, result];
+//
+//   [arr[0], result]
+// }
+//
+// function ArrayAccess() {
+//   let arr = [1, 2, 3];
+//
+//   arr[1]
 // }
 //
 // class std::Request {

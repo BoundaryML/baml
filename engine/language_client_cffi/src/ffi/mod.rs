@@ -2,6 +2,7 @@ pub mod callbacks;
 pub mod functions;
 pub mod objects;
 pub mod runtime;
+pub(crate) mod trip_wire;
 pub mod utils;
 pub mod value;
 

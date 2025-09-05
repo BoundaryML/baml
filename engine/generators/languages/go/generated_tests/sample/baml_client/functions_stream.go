@@ -76,51 +76,39 @@ func (*stream) Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "Bar", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "Bar", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.Union2ExampleOrExample2)
+				channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.Union2ExampleOrExample2)
-					channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.Union2ExampleOrExample2)
-					channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.Union2ExampleOrExample2)
+				channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -158,51 +146,39 @@ func (*stream) Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "Foo", encoded, callOpts.onTick)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "Foo", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					// channel closed for some reason
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.Union2ExampleOrExample2)
+				channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
-						IsError: true,
-						Error:   result.Error,
-					}
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := (result.Data).(types.Union2ExampleOrExample2)
-					channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := (result.StreamData).(stream_types.Union2ExampleOrExample2)
-					channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.Union2ExampleOrExample2)
+				channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }

@@ -132,30 +132,137 @@ impl ProviderStrategy {
                 // Start with all properties passed through
                 let mut body = properties.clone();
 
-                // Convert prompt/messages to single input string
                 let input = match prompt {
-                    either::Either::Left(prompt) => prompt.clone(),
+                    either::Either::Left(prompt) => {
+                        // For simple string prompts, pass directly as string
+                        json!(prompt)
+                    }
                     either::Either::Right(messages) => {
-                        // Convert messages to a simple text representation
-                        messages
-                            .iter()
-                            .map(|msg| {
-                                let content_text = msg
-                                    .parts
-                                    .iter()
-                                    .filter_map(|part| match part {
-                                        ChatMessagePart::Text(text) => Some(text.as_str()),
-                                        _ => None,
-                                    })
-                                    .collect::<Vec<_>>()
-                                    .join(" ");
-                                format!("{}: {}", msg.role, content_text)
-                            })
-                            .collect::<Vec<_>>()
-                            .join("\n")
+                        let structured_messages: Result<Vec<_>> = messages
+                                .iter()
+                                .map(|msg| {
+                                    // Convert message parts to Responses API format
+                                    let content_parts: Result<Vec<_>> = msg
+                                        .parts
+                                        .iter()
+                                        .map(|part| match part {
+                                            ChatMessagePart::Text(text) => {
+                                                Ok(json!({
+                                                    "type": "input_text",
+                                                    "text": text
+                                                }))
+                                            }
+                                            ChatMessagePart::Media(media) => {
+                                                match media.media_type {
+                                                    baml_types::BamlMediaType::Image => {
+                                                        let image_url = match &media.content {
+                                                            baml_types::BamlMediaContent::Url(url_content) => url_content.url.clone(),
+                                                            baml_types::BamlMediaContent::Base64(b64_media) => {
+                                                                format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
+                                                            }
+                                                            baml_types::BamlMediaContent::File(_) => {
+                                                                anyhow::bail!("BAML internal error (openai-responses): image file should have been resolved, not processed directly.");
+                                                            }
+                                                        };
+                                                        Ok(json!({
+                                                            "type": "input_image",
+                                                            "image_url": image_url
+                                                        }))
+                                                    }
+                                                    baml_types::BamlMediaType::Audio => {
+                                                        match &media.content {
+                                                            baml_types::BamlMediaContent::Base64(b64_media) => {
+                                                                let mime_type = media.mime_type_as_ok()?;
+                                                                let format = mime_type
+                                                                    .strip_prefix("audio/")
+                                                                    .unwrap_or(&mime_type);
+                                                                Ok(json!({
+                                                                    "type": "input_audio",
+                                                                    "input_audio": {
+                                                                        "data": b64_media.base64,
+                                                                        "format": format
+                                                                    }
+                                                                }))
+                                                            }
+                                                            _ => {
+                                                                anyhow::bail!("BAML internal error (openai-responses): audio must be base64 encoded for Responses API");
+                                                            }
+                                                        }
+                                                    }
+                                                    baml_types::BamlMediaType::Pdf => {
+                                                        match &media.content {
+                                                            baml_types::BamlMediaContent::Url(url_content) => {
+                                                                Ok(json!({
+                                                                    "type": "input_file",
+                                                                    "file_url": url_content.url
+                                                                }))
+                                                            }
+                                                            baml_types::BamlMediaContent::File(file_content) => {
+                                                                anyhow::bail!("BAML internal error (openai-responses): Local PDF files are not supported by OpenAI Responses API - use file_url for remote files or upload file and use file_id. File path: {:?}", file_content.relpath);
+                                                            }
+                                                            baml_types::BamlMediaContent::Base64(b64_media) => {
+                                                                Ok(json!({
+                                                                    "type": "input_file",
+                                                                    "file_url": format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
+                                                                }))
+                                                            }
+                                                        }
+                                                    }
+                                                    baml_types::BamlMediaType::Video => {
+                                                        anyhow::bail!("BAML internal error (openai-responses): video is not yet supported by OpenAI Responses API");
+                                                    }
+                                                }
+                                            }
+                                            ChatMessagePart::WithMeta(inner_part, _meta) => {
+                                                // Recursively handle the inner part, ignoring metadata for now
+                                                match inner_part.as_ref() {
+                                                    ChatMessagePart::Text(text) => {
+                                                        Ok(json!({
+                                                            "type": "input_text",
+                                                            "text": text
+                                                        }))
+                                                    }
+                                                    ChatMessagePart::Media(media) => {
+                                                        // Handle media same as above - could refactor into helper function
+                                                        match media.media_type {
+                                                            baml_types::BamlMediaType::Image => {
+                                                                let image_url = match &media.content {
+                                                                    baml_types::BamlMediaContent::Url(url_content) => url_content.url.clone(),
+                                                                    baml_types::BamlMediaContent::Base64(b64_media) => {
+                                                                        format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
+                                                                    }
+                                                                    baml_types::BamlMediaContent::File(_) => {
+                                                                        anyhow::bail!("BAML internal error (openai-responses): image file should have been resolved, not processed directly.");
+                                                                    }
+                                                                };
+                                                                Ok(json!({
+                                                                    "type": "input_image",
+                                                                    "image_url": image_url
+                                                                }))
+                                                            }
+                                                            _ => {
+                                                                anyhow::bail!("BAML internal error (openai-responses): nested WithMeta media types other than images not yet supported");
+                                                            }
+                                                        }
+                                                    }
+                                                    _ => {
+                                                        anyhow::bail!("BAML internal error (openai-responses): nested WithMeta parts not supported");
+                                                    }
+                                                }
+                                            }
+                                        })
+                                        .collect();
+
+                                    Ok(json!({
+                                        "role": msg.role,
+                                        "content": content_parts?
+                                    }))
+                                })
+                                .collect();
+                        json!(structured_messages?)
                     }
                 };
-                body.insert("input".into(), json!(input));
+                body.insert("input".into(), input);
 
                 Ok(json!(body))
             }
@@ -351,7 +458,12 @@ impl WithStreamChat for OpenAIClient {
 }
 
 macro_rules! make_openai_client {
-    ($client:ident, $properties:ident, $provider:expr, dynamic) => {
+    ($client:ident, $properties:ident, $provider:expr, dynamic) => {{
+        let resolve_pdf_urls = if $provider == "openai-responses" {
+            ResolveMediaUrls::Never
+        } else {
+            ResolveMediaUrls::Always
+        };
         Ok(Self {
             name: $client.name.clone(),
             provider: $provider.into(),
@@ -369,7 +481,7 @@ macro_rules! make_openai_client {
                 max_one_system_prompt: false,
                 resolve_audio_urls: ResolveMediaUrls::Always,
                 resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Always,
+                resolve_pdf_urls,
                 resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: $properties.allowed_metadata.clone(),
             },
@@ -377,8 +489,13 @@ macro_rules! make_openai_client {
             retry_policy: $client.retry_policy.clone(),
             client: create_client()?,
         })
-    };
-    ($client:ident, $properties:ident, $provider:expr) => {
+    }};
+    ($client:ident, $properties:ident, $provider:expr) => {{
+        let resolve_pdf_urls = if $provider == "openai-responses" {
+            ResolveMediaUrls::Never
+        } else {
+            ResolveMediaUrls::Always
+        };
         Ok(Self {
             name: $client.name().into(),
             provider: $provider.into(),
@@ -396,7 +513,7 @@ macro_rules! make_openai_client {
                 max_one_system_prompt: false,
                 resolve_audio_urls: ResolveMediaUrls::Always,
                 resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Always,
+                resolve_pdf_urls,
                 resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: $properties.allowed_metadata.clone(),
             },
@@ -408,7 +525,7 @@ macro_rules! make_openai_client {
                 .map(|s| s.to_string()),
             client: create_client()?,
         })
-    };
+    }};
 }
 
 impl OpenAIClient {
@@ -577,8 +694,12 @@ impl ToProviderMessage for OpenAIClient {
                 match &media.content {
                     BamlMediaContent::Url(url_content) => {
                         // For URLs, we need to resolve them to base64 first
-                        anyhow::bail!(
-                            "BAML internal error (openai): Pdf URL are not supported by OpenAI use base64."
+                        content.insert(
+                            payload_key.into(),
+                            json!({
+                                "type": "input_file",
+                                "file_url": url_content.url
+                            }),
                         );
                     }
                     BamlMediaContent::Base64(b64_media) => {

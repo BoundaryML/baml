@@ -1,8 +1,9 @@
-import { History, RefreshCw } from 'lucide-react'
+import { History, RefreshCw, Square } from 'lucide-react'
 
 import { useAtomValue } from 'jotai'
 import { useAtom } from 'jotai'
 import {  selectedHistoryIndexAtom, testHistoryAtom, TestHistoryEntry } from '../atoms'
+import { areTestsRunningAtom } from '../../../atoms'
 import { useRunBamlTests } from '../test-runner'
 import { ViewSelector } from './ViewSelector'
 import { Tooltip, TooltipTrigger } from '@baml/ui/tooltip'
@@ -74,7 +75,8 @@ const getHistoryButtonColor = (tests: TestHistoryEntry[], isSelected: boolean) =
 export const TestMenu = () => {
   const [selectedHistoryIndex, setSelectedHistoryIndex] = useAtom(selectedHistoryIndexAtom)
   const testHistory = useAtomValue(testHistoryAtom)
-  const runBamlTests = useRunBamlTests()
+  const areTestsRunning = useAtomValue(areTestsRunningAtom)
+  const { runTests: runBamlTests, cancelTests } = useRunBamlTests()
   if (testHistory.length === 0) {
     return (
       <div className='flex justify-end items-center pr-2 mb-3 space-x-2'>
@@ -171,6 +173,26 @@ export const TestMenu = () => {
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+
+        {areTestsRunning && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant='ghost'
+                  size='icon'
+                  className='w-6 h-6'
+                  onClick={cancelTests}
+                >
+                  <Square className='h-3.5 w-3.5' />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Cancel running tests</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
 
         <ViewSelector />
       </div>

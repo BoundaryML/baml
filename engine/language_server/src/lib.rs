@@ -4,17 +4,18 @@ use std::num::NonZeroUsize;
 
 use anyhow::Context;
 pub use edit::{DocumentKey, PositionEncoding, TextDocument};
+use playground_server::{LangServerToWasmMessage, PreLangServerToWasmMessage};
 pub use session::{ClientSettings, DocumentQuery, DocumentSnapshot, Session};
+use tokio::sync::broadcast;
 
-use crate::server::Server;
+use crate::server::{Server, ServerArgs};
 
 #[macro_use]
 mod message;
 
+pub mod cors_bypass_proxy;
 pub mod edit;
 pub mod logging;
-#[cfg(feature = "playground-server")]
-pub mod playground;
 pub mod server;
 pub mod session;
 #[cfg(test)]
@@ -33,6 +34,47 @@ pub(crate) fn version() -> &'static str {
 }
 
 pub fn run_server() -> anyhow::Result<()> {
+    let tokio_runtime = tokio::runtime::Runtime::new()?;
+
+    let (broadcast_tx, broadcast_rx) = broadcast::channel(1000);
+    let (playground_tx, playground_rx) = broadcast::channel(1000);
+
+    let port_config = playground_server::PortConfiguration {
+        base_port: 3700,
+        max_attempts: 100,
+    };
+    let port_picks = tokio_runtime.block_on(playground_server::pick_ports(port_config))?;
+
+    {
+        let playground_tx = playground_tx.clone();
+        tokio_runtime.spawn(futures::future::join(
+            async move {
+                eprintln!("Playground server started");
+                let server = playground_server::PlaygroundServer {
+                    app_state: playground_server::AppState {
+                        broadcast_rx,
+                        playground_tx: playground_tx.clone(),
+                        playground_port: port_picks.playground_port,
+                        proxy_port: port_picks.proxy_port,
+                    },
+                };
+                let fut = server.run(port_picks.playground_listener).await;
+                eprintln!("Playground server finished");
+                fut
+            },
+            cors_bypass_proxy::ProxyServer {}.run(port_picks.proxy_listener),
+        ));
+    }
+
+    eprintln!(
+        "Playground started on: http://localhost:{}",
+        port_picks.playground_port
+    );
+    eprintln!(
+        "Proxy started on: http://localhost:{}",
+        port_picks.proxy_port
+    );
+
     let four = NonZeroUsize::new(4).unwrap();
 
     // by default, we set the number of worker threads to `num_cpus`, with a maximum of 4.
@@ -40,10 +82,19 @@ pub fn run_server() -> anyhow::Result<()> {
         .unwrap_or(four)
         .max(four);
 
-    Server::new(worker_threads)
-        .context("Failed to start server")?
-        .run()
-        .context("Failed to run server")?;
-
+    Server::new(
+        worker_threads,
+        ServerArgs {
+            tokio_runtime,
+            broadcast_tx,
+            playground_rx,
+            playground_tx: playground_tx.clone(),
+            playground_port: port_picks.playground_port,
+            proxy_port: port_picks.proxy_port,
+        },
+    )
+    .context("Failed to start server")?
+    .run()
+    .context("Failed to run server")?;
     Ok(())
 }

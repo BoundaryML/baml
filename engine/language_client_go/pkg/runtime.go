@@ -74,46 +74,40 @@ func CreateRuntime(
 
 func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, encoded_args []byte, onTick OnTickCallbackData) (*ResultCallback, error) {
 	callback_id, callback := create_unique_id(ctx, onTick)
-	return_channel := make(chan ResultCallback)
+	
+	// Monitor context for early cancellation
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return_channel <- ResultCallback{
-					Error: ctx.Err(),
-				}
-				close(return_channel)
-				return
-			case result := <-callback:
-				// TODO: Handle the result
-				// error handling, type checking, etc.
-				return_channel <- result
-			}
-		}
+		<-ctx.Done()
+		// Send cancellation to Rust immediately when context is done
+		// This will trigger callback to send an error message
+		baml_go.CancelFunctionCall(callback_id)
 	}()
 
 	result, err := baml_go.CallFunctionFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
-		close(return_channel)
+		close(callback)
 		return nil, err
 	}
 
 	if result != nil {
 		result_str := (*string)(result)
-		close(return_channel)
+		close(callback)
 		return nil, errors.New(*result_str)
 	}
 
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case result := <-return_channel:
-		return &result, nil
-	}
+	cb_result := <-callback
+	return &cb_result, nil
 }
 
 func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName string, encoded_args []byte, onTick OnTickCallbackData) (<-chan ResultCallback, error) {
 	callback_id, callback := create_unique_id(ctx, onTick)
+	
+	// Monitor context for early cancellation
+	go func() {
+		<-ctx.Done()
+		// Send cancellation to Rust immediately when context is done
+		baml_go.CancelFunctionCall(callback_id)
+	}()
 
 	result, err := baml_go.CallFunctionStreamFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
@@ -130,6 +124,13 @@ func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName strin
 
 func (r *BamlRuntime) CallFunctionParse(ctx context.Context, functionName string, encoded_args []byte) (any, error) {
 	callback_id, callback := create_unique_id(ctx, nil)
+	
+	// Monitor context for early cancellation
+	go func() {
+		<-ctx.Done()
+		// Send cancellation to Rust immediately when context is done
+		baml_go.CancelFunctionCall(callback_id)
+	}()
 
 	result, err := baml_go.CallFunctionParseFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {

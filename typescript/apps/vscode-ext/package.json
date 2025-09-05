@@ -2,7 +2,7 @@
   "name": "baml-extension",
   "displayName": "Baml",
   "description": "BAML is a DSL for AI applications.",
-  "version": "0.204.0",
+  "version": "0.206.1",
   "publisher": "Boundary",
   "packageManager": "pnpm@9.12.0",
   "repository": "https://github.com/BoundaryML/baml",
@@ -77,6 +77,16 @@
           "type": "string",
           "default": "",
           "description": "Command to run to get environment variables."
+        },
+        "baml.featureFlags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["beta", "display_all_warnings"]
+          },
+          "uniqueItems": true,
+          "default": [],
+          "markdownDescription": "Enable experimental BAML features. **Beta** enables experimental features and suppresses experimental warnings."
         }
       }
     },
@@ -158,8 +168,8 @@
     "vscode:publish": "vsce publish --no-dependencies",
     "clean": "git clean -xdf baml-*.vsix .turbo dist out node_modules",
     "typecheck": "tsc --noEmit --emitDeclarationOnly false",
-    "test:syntaxes": "vscode-tmgrammar-snap --config ../package.json all.test.baml",
-    "update-test:syntaxes": "pnpm test:syntaxes -- --updateSnapshot"
+    "test:syntaxes": "vscode-tmgrammar-snap --config package.json syntaxes/all.test.baml",
+    "update-test:syntaxes": "vscode-tmgrammar-snap --config package.json syntaxes/all.test.baml --updateSnapshot"
   },
   "dependencies": {
     "@aws-sdk/credential-providers": "3.830.0",

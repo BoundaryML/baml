@@ -12,6 +12,7 @@ create_exception!(baml_py, BamlError, pyo3::exceptions::PyException);
 // A note on custom exceptions https://github.com/PyO3/pyo3/issues/295
 create_exception!(baml_py, BamlInvalidArgumentError, BamlError);
 create_exception!(baml_py, BamlClientError, BamlError);
+create_exception!(baml_py, BamlAbortError, BamlError);
 
 // Define the BamlValidationError/BamlClientHttpError/BamlClientFinishReasonError exception with additional fields
 // can't use extends=PyException yet https://github.com/PyO3/pyo3/discussions/3838
@@ -69,6 +70,10 @@ pub fn errors(parent_module: &Bound<'_, PyModule>) -> PyResult<()> {
         "BamlClientError",
         parent_module.py().get_type::<BamlClientError>(),
     )?;
+    parent_module.add(
+        "BamlAbortError",
+        parent_module.py().get_type::<BamlAbortError>(),
+    )?;
 
     Ok(())
 }
@@ -107,6 +112,9 @@ impl BamlError {
                     message.clone(),
                     status_code.to_u16(),
                 ),
+                ExposedError::AbortError => {
+                    PyErr::new::<BamlAbortError, _>("AbortError".to_string())
+                }
             }
         } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
             PyErr::new::<BamlInvalidArgumentError, _>(format!("Invalid argument: {er}"))
@@ -142,6 +150,9 @@ impl BamlError {
                 LLMResponse::InternalFailure(_) => PyErr::new::<BamlClientError, _>(format!(
                     "Something went wrong with the LLM client: {err}"
                 )),
+                LLMResponse::Cancelled(msg) => {
+                    PyErr::new::<BamlAbortError, _>(format!("Operation was aborted: {msg}"))
+                }
             }
         } else {
             PyErr::new::<BamlError, _>(format!("{err:?}"))

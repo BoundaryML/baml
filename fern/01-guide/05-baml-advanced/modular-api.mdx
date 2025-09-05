@@ -62,6 +62,23 @@ def run
   puts resume
 end
 ```
+
+```go Go
+import (
+    "context"
+    "fmt"
+    b "example.com/baml_client"
+)
+
+func main() {
+    ctx := context.Background()
+    resume, err := b.ExtractResume(ctx, "John Doe | Software Engineer | BSc in CS", nil)
+    if err != nil {
+        panic(fmt.Sprintf("Failed to extract resume: %v", err))
+    }
+    fmt.Printf("Resume: %+v\n", resume)
+}
+```
 </CodeBlocks>
 
 However, sometimes we may want to execute a function without so much abstraction
@@ -151,6 +168,26 @@ def run
   puts parsed
 end
 ```
+
+```go Go
+import (
+    "context"
+    "fmt"
+    b "example.com/baml_client"
+)
+
+func main() {
+    // The request api is not yet available in Go, but you can use the parse api.
+
+    ctx := context.Background()
+    parsed, err := b.Parse.ExtractResume("John Doe | Software Engineer | BSc in CS")
+    if err != nil {
+        panic(fmt.Sprintf("Failed to parse response: %v", err))
+    }
+    // The parsed type is the same as the high-level API.
+    fmt.Printf("Parsed: %+v\n", parsed)
+}
+```
 </CodeBlocks>
 
 Note that `request.body.json()` returns an object (dict in Python, hash in Ruby)
@@ -172,6 +209,10 @@ const res = await fetch(req.url, {
 
 ```ruby Ruby
 req.body = baml_req.body.raw.pack("C*")
+```
+
+```go Go
+// Go modular API coming soon!
 ```
 </CodeBlocks>
 

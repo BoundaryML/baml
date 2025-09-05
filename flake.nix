@@ -52,8 +52,8 @@
         buildInputs = (with pkgs; [
           cmake
           git
-	  go
-	  gotools
+	        go
+	        gotools
           openssl
           pkg-config
           lld_17
@@ -62,10 +62,10 @@
           ruby.devEnv
           maturin
           pnpm
-	  protoc-gen-go
+	        protoc-gen-go
           vsce # VSCode extension packaging tool
           toolchain
-          nodejs
+          pkgs-unstable.nodejs_20
           nodePackages.typescript
           pkgs-unstable.uv
           pkgs-unstable.flatbuffers
@@ -107,6 +107,16 @@
           rustPlatform.buildRustPackage ({
               inherit pname version;
               src = ./engine;
+              filter = path: type: 
+                  let baseName = baseNameOf path; in
+                  !pkgs.lib.hasInfix "target" path &&
+                  !pkgs.lib.hasInfix ".git" path &&
+                  !pkgs.lib.hasInfix ".jj" path &&
+                  !pkgs.lib.hasInfix ".so" path &&
+                  !pkgs.lib.hasInfix ".node" path &&
+                  !pkgs.lib.hasInfix "node_modules" path &&
+                  baseName != "result";
+              
               LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
               BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
                 "-I${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/headers "
@@ -199,7 +209,7 @@
           packages.tsLib = bamlRustPackage {
             pname = "baml-ts";
             buildType = "debug";
-            nativeBuildInputsExtra = [ pkgs.nodejs pkgs.napi-rs-cli pkgs.pnpm ];
+            nativeBuildInputsExtra = [ pkgs-unstable.nodejs_20 pkgs.napi-rs-cli pkgs.pnpm ];
             buildPhase = ''
               # Build the CLI
               echo "Building the CLI"
@@ -302,7 +312,7 @@
             npmDepsHash = "sha256-p7AxgJSqngcwHwKsjF6u+fS0E27KY6/ulGIIRlZLsFU=";
             forceEmptyCache = true;
 
-            buildInputs = [ pkgs.nodejs ];
+            buildInputs = [ pkgs-unstable.nodejs_20 ];
 
             # Configure npm to use temporary directories
             NPM_CONFIG_CACHE = "./tmp/npm";
@@ -329,7 +339,7 @@
             PATH="${clang}/bin:$PATH";
             RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
             LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
-            UV_PYTHON = "${pythonEnv}/bin/python3";
+            # UV_PYTHON = "${pythonEnv}/bin/python3"; // This doesn't work with maturin.
             BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
               "" # Rely on default includes provided by stdenv.cc + libclang
             else

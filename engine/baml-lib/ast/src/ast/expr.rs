@@ -4,8 +4,8 @@ use baml_types::{TypeValue, UnresolvedValue};
 use internal_baml_diagnostics::Diagnostics;
 
 use crate::ast::{
-    ArgumentsList, BlockArgs, Expression, ExpressionBlock, FieldType, Identifier, LetStmt, Span,
-    Stmt,
+    ArgumentsList, BlockArgs, Expression, ExpressionBlock, FieldType, Header, Identifier, LetStmt,
+    Span, Stmt,
 };
 
 /// A function definition.
@@ -16,6 +16,7 @@ pub struct ExprFn {
     pub return_type: Option<FieldType>,
     pub body: ExpressionBlock,
     pub span: Span,
+    pub annotations: Vec<std::sync::Arc<Header>>,
 }
 
 /// A top-level binding.

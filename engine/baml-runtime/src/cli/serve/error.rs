@@ -78,6 +78,9 @@ impl BamlError {
                     message: message.to_string(),
                     status_code: status_code.to_u16(),
                 },
+                ExposedError::AbortError => Self::InternalError {
+                    message: "AbortError".into(),
+                },
             }
         } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
             Self::InvalidArgument {
@@ -109,6 +112,9 @@ impl BamlError {
                 },
                 LLMResponse::InternalFailure(_) => Self::InternalError {
                     message: format!("Something went wrong with the LLM client: {err}"),
+                },
+                LLMResponse::Cancelled(msg) => Self::InternalError {
+                    message: format!("Operation cancelled: {msg}"),
                 },
             }
         } else {
