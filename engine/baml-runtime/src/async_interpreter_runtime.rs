@@ -145,6 +145,7 @@ impl BamlAsyncInterpreterRuntime {
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
         cancel_tripwire: Arc<TripWire>,
+        tags: Option<&HashMap<String, String>>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         // Check if this is an expression function
         let expr_fn = self
@@ -164,6 +165,7 @@ impl BamlAsyncInterpreterRuntime {
                     tb,
                     cb,
                     collectors,
+                    None, // TODO: tags?
                     env_vars,
                     cancel_tripwire,
                 )
@@ -175,7 +177,15 @@ impl BamlAsyncInterpreterRuntime {
             .llm_runtime
             .tracer_wrapper
             .get_or_create_tracer(&env_vars)
-            .start_call(&function_name, ctx, params, true, false, collectors.clone())
+            .start_call(
+                &function_name,
+                ctx,
+                params,
+                true,
+                false,
+                collectors.clone(),
+                tags,
+            )
             .curr_call_id();
 
         let output_type = expr_fn.return_type.clone();
@@ -231,6 +241,7 @@ impl BamlAsyncInterpreterRuntime {
                         tb.as_ref(),
                         cb.as_ref(),
                         None, // TODO: collectors not supported yet
+                        tags.map(|t| t.clone()),
                         env_vars,
                         cancel_tripwire,
                     )
@@ -257,43 +268,44 @@ impl BamlAsyncInterpreterRuntime {
         };
 
         // Choose execution strategy based on function body structure
-        let function_expr = if expr_fn.body.statements.len() == 1 && expr_fn.body.trailing_expr.is_none() {
-            // Special case: Single expression statement (e.g., if-else as the only thing in function)
-            // This happens when BAML functions are just a single expression
-            match &expr_fn.body.statements[0] {
-                baml_compiler::thir::Statement::Expression { expr, .. } => expr.clone(),
-                _ => {
-                    // Single non-expression statement - execute as block
-                    baml_compiler::thir::Expr::Block(
-                        Box::new(expr_fn.body.clone()),
-                        (
-                            internal_baml_diagnostics::Span::fake(),
-                            Some(output_type.clone()),
-                        ),
-                    )
+        let function_expr =
+            if expr_fn.body.statements.len() == 1 && expr_fn.body.trailing_expr.is_none() {
+                // Special case: Single expression statement (e.g., if-else as the only thing in function)
+                // This happens when BAML functions are just a single expression
+                match &expr_fn.body.statements[0] {
+                    baml_compiler::thir::Statement::Expression { expr, .. } => expr.clone(),
+                    _ => {
+                        // Single non-expression statement - execute as block
+                        baml_compiler::thir::Expr::Block(
+                            Box::new(expr_fn.body.clone()),
+                            (
+                                internal_baml_diagnostics::Span::fake(),
+                                Some(output_type.clone()),
+                            ),
+                        )
+                    }
                 }
-            }
-        } else if !expr_fn.body.statements.is_empty() {
-            // Function has multiple statements or statements + trailing expr
-            // Execute the entire function body as a block to ensure all statements run
-            baml_compiler::thir::Expr::Block(
-                Box::new(expr_fn.body.clone()),
-                (
+            } else if !expr_fn.body.statements.is_empty() {
+                // Function has multiple statements or statements + trailing expr
+                // Execute the entire function body as a block to ensure all statements run
+                baml_compiler::thir::Expr::Block(
+                    Box::new(expr_fn.body.clone()),
+                    (
+                        internal_baml_diagnostics::Span::fake(),
+                        Some(output_type.clone()),
+                    ),
+                )
+            } else if let Some(trailing_expr) = &expr_fn.body.trailing_expr {
+                // Function has no statements, only a trailing expression
+                // Execute the trailing expression directly
+                trailing_expr.clone()
+            } else {
+                // Function has no statements and no trailing expression - return null
+                baml_compiler::thir::Expr::Value(BamlValueWithMeta::Null((
                     internal_baml_diagnostics::Span::fake(),
                     Some(output_type.clone()),
-                ),
-            )
-        } else if let Some(trailing_expr) = &expr_fn.body.trailing_expr {
-            // Function has no statements, only a trailing expression
-            // Execute the trailing expression directly
-            trailing_expr.clone()
-        } else {
-            // Function has no statements and no trailing expression - return null
-            baml_compiler::thir::Expr::Value(BamlValueWithMeta::Null((
-                internal_baml_diagnostics::Span::fake(),
-                Some(output_type.clone()),
-            )))
-        };
+                )))
+            };
 
         // Execute the interpreter
         let result = interpret_thir(
@@ -301,6 +313,7 @@ impl BamlAsyncInterpreterRuntime {
             function_expr,
             llm_handler,
             extra_bindings,
+            env_vars,
         )
         .await;
 
@@ -337,6 +350,7 @@ impl BamlAsyncInterpreterRuntime {
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
         cancel_tripwire: Arc<TripWire>,
+        tags: Option<&HashMap<String, String>>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         self.async_runtime.block_on(self.call_function(
             function_name,
@@ -347,6 +361,7 @@ impl BamlAsyncInterpreterRuntime {
             collectors,
             env_vars,
             cancel_tripwire,
+            tags,
         ))
     }
 
@@ -360,6 +375,7 @@ impl BamlAsyncInterpreterRuntime {
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
         cancel_tripwire: Arc<TripWire>,
+        tags: Option<&HashMap<String, String>>,
     ) -> anyhow::Result<FunctionResultStream> {
         self.llm_runtime.stream_function(
             function_name,
@@ -369,6 +385,7 @@ impl BamlAsyncInterpreterRuntime {
             cb,
             collectors,
             env_vars,
+            tags.map(|t| t.clone()),
             cancel_tripwire,
         )
     }

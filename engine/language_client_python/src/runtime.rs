@@ -226,8 +226,8 @@ impl BamlRuntime {
                     cb.as_ref(),
                     Some(collector_list),
                     env_vars,
-                    tags,
                     tripwire,
+                    tags.as_ref(),
                 )
                 .await;
 
@@ -289,8 +289,8 @@ impl BamlRuntime {
                     cb.as_ref(),
                     Some(collector_list),
                     env_vars,
-                    tags,
                     tripwire,
+                    tags.as_ref(),
                 )
             })
         });
@@ -347,8 +347,8 @@ impl BamlRuntime {
                 cb.map(|cb| cb.inner.clone()).as_ref(),
                 Some(collector_list),
                 env_vars.clone(),
-                tags,
                 tripwire,
+                tags.as_ref(),
             )
             .map_err(BamlError::from_anyhow)?;
 
@@ -409,8 +409,8 @@ impl BamlRuntime {
                 cb.map(|cb| cb.inner.clone()).as_ref(),
                 Some(collector_list),
                 env_vars.clone(),
-                tags,
                 tripwire,
+                tags.as_ref(),
             )
             .map_err(BamlError::from_anyhow)?;
 
