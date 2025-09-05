@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use napi::{
-    bindgen_prelude::{Function, FunctionRef, Object, ObjectFinalize, PromiseRaw, Error, Undefined},
+    bindgen_prelude::{Error, FnArgs, Function, FunctionRef, Object, ObjectFinalize, PromiseRaw, Undefined},
     threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode},
     Env
 };
@@ -16,7 +16,7 @@ crate::lang_wrapper!(
     custom_finalize,
     no_from,
     optional,
-    callback: Option<FunctionRef<(Error, FunctionResult), ()>>,
+    callback: Option<FunctionRef<FnArgs<(Error, FunctionResult)>, ()>>,
     on_tick: Option<FunctionRef<(), ()>>,
     tb: Option<baml_runtime::type_builder::TypeBuilder>,
     cb: Option<baml_runtime::client_registry::ClientRegistry>,
@@ -26,7 +26,7 @@ crate::lang_wrapper!(
 impl FunctionResultStream {
     pub(crate) fn new(
         inner: baml_runtime::FunctionResultStream,
-        event: Option<FunctionRef<(Error, FunctionResult), ()>>,
+        event: Option<FunctionRef<FnArgs<(Error, FunctionResult)>, ()>>,
         on_tick: Option<FunctionRef<(), ()>>,
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
@@ -49,7 +49,7 @@ impl FunctionResultStream {
         &mut self,
         env: Env,
         #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")]
-        func: Option<Function<(Error, FunctionResult), ()>>,
+        func: Option<Function<FnArgs<(Error, FunctionResult)>, ()>>,
     ) -> napi::Result<Undefined> {
         if let Some(func) = func {
             let new_ref = func.create_ref()?;
@@ -69,7 +69,7 @@ impl FunctionResultStream {
 
         let on_event = match &self.callback {
             Some(cb_ref) => {
-                let cb = cb_ref.borrow_back(&env)?;
+                let cb = cb_ref.borrow_back(env)?;
                 let thread_safe_fn = cb
                     .build_threadsafe_function()
                     .build_callback(|ctx: ThreadSafeCallContext<baml_runtime::FunctionResult>| {
@@ -88,7 +88,7 @@ impl FunctionResultStream {
 
         let on_tick_callback = match &self.on_tick {
             Some(tick_cb_ref) => {
-                let tick_cb = tick_cb_ref.borrow_back(&env)?;
+                let tick_cb = tick_cb_ref.borrow_back(env)?;
                 let thread_safe_fn = tick_cb
                     .build_threadsafe_function()
                     .build_callback( |_ctx: ThreadSafeCallContext<()>| {

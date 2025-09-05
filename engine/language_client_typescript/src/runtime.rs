@@ -7,9 +7,7 @@ use baml_runtime::{
 use baml_types::BamlValue;
 use internal_baml_core::feature_flags::FeatureFlags;
 use napi::{
-    bindgen_prelude::{Function, FunctionRef, Object, ObjectFinalize, Promise, PromiseRaw, Undefined},
-    threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode}, Error,
-    Env,
+    bindgen_prelude::{FnArgs, Function, FunctionRef, Object, ObjectFinalize, Promise, PromiseRaw, Undefined}, threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode}, Env, Error
 };
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
@@ -30,7 +28,7 @@ crate::lang_wrapper!(BamlRuntime,
     CoreRuntime,
     clone_safe,
     custom_finalize,
-    callback: Option<FunctionRef<BamlLogEvent, ()>> = None
+    callback: Option<FunctionRef<FnArgs<(Error, BamlLogEvent)>, ()>> = None
 );
 
 #[napi(object)]
@@ -118,7 +116,7 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
         signal: Option<Object>, // NEW: AbortSignal parameter
     ) -> napi::Result<PromiseRaw<'e, FunctionResult>> {
-        let args = parse_ts_types::js_object_to_baml_value(&env, args)?;
+        let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
         if !args.is_map() {
             return Err(invalid_argument_error(&format!(
@@ -129,7 +127,7 @@ impl BamlRuntime {
         let args_map = args.as_map_owned().unwrap();
 
         // Convert AbortSignal to Tripwire
-        let tripwire = js_abort_signal_to_rust_tripwire(&env, signal)?;
+        let tripwire = js_abort_signal_to_rust_tripwire(env, signal)?;
 
         let baml_runtime = self.inner.clone();
         let ctx_mng = ctx.inner.clone();
@@ -215,7 +213,7 @@ impl BamlRuntime {
         env: Env,
         function_name: String,
         #[napi(ts_arg_type = "{ [name: string]: any }")] args: Object,
-        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<Function<(Error, FunctionResult), ()>>,
+        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<Function<FnArgs<(Error, FunctionResult)>, ()>>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
@@ -281,7 +279,7 @@ impl BamlRuntime {
         env: Env,
         function_name: String,
         #[napi(ts_arg_type = "{ [name: string]: any }")] args: Object,
-        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<Function<(Error, FunctionResult), ()>>,
+        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<Function<FnArgs<(Error, FunctionResult)>, ()>>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
@@ -468,7 +466,7 @@ impl BamlRuntime {
     pub fn set_log_event_callback(
         &mut self,
         env: Env,
-        #[napi(ts_arg_type = "undefined | ((err: any, param: BamlLogEvent) => void)")] func: Option<Function<BamlLogEvent, ()>>,
+        #[napi(ts_arg_type = "undefined | ((err: any, param: BamlLogEvent) => void)")] func: Option<Function<FnArgs<(Error, BamlLogEvent)>, ()>>,
     ) -> napi::Result<Undefined> {
         // drop any previous callback automatically
         self.callback = match func {
@@ -484,11 +482,9 @@ impl BamlRuntime {
 
         // configure runtime callback
         let cb = cb_ref.borrow_back(&env)?;
-        let mut thread_safe_fn = cb
+        let thread_safe_fn = cb
             .build_threadsafe_function()
             .build_callback(|ctx: ThreadSafeCallContext<BamlLogEvent>| Ok(ctx.value))?;
-        // allow node to exit if this is the only ref
-        let _ = thread_safe_fn.unref(&env);
 
         let rust_cb = Box::new(move |event: LogEvent| {
             let js_evt = BamlLogEvent {
@@ -509,6 +505,7 @@ impl BamlRuntime {
             }
             Ok(())
         });
+
 
         self.inner
             .set_log_event_callback(Some(rust_cb))
