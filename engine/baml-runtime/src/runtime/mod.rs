@@ -79,6 +79,9 @@ impl InternalBamlRuntime {
         schema.diagnostics.to_result()?;
 
         let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
+        ir.validate_test_args(&mut schema.diagnostics);
+        schema.diagnostics.to_result()?;
+
         Ok(InternalBamlRuntime {
             ir: Arc::new(ir),
             db: schema.db,
@@ -106,6 +109,8 @@ impl InternalBamlRuntime {
         schema.diagnostics.to_result()?;
 
         let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
+        ir.validate_test_args(&mut schema.diagnostics);
+        schema.diagnostics.to_result()?;
 
         Ok(Self {
             ir: Arc::new(ir),
