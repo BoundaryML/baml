@@ -72,12 +72,18 @@ impl FunctionResultStream {
                 let cb = cb_ref.borrow_back(env)?;
                 let thread_safe_fn = cb
                     .build_threadsafe_function()
-                    .build_callback(|ctx: ThreadSafeCallContext<baml_runtime::FunctionResult>| {
-                        Ok(FunctionResult::from(ctx.value))
+                    .build_callback(|ctx: ThreadSafeCallContext<FnArgs<(Option<Error>, Option<baml_runtime::FunctionResult>)>>| {
+                        // TODO: These parameters are annoying, figure out if we can do Result<FunctionResult>.
+                        match ctx.value.data {
+                            (None, Some(event)) => Ok(FnArgs::from((None, Some(FunctionResult::from(event))))),
+                            (Some(error), None) => Ok(FnArgs::from((Some(error), None))),
+                            (Some(error), Some(event)) => Ok(FnArgs::from((Some(error), Some(FunctionResult::from(event))))),
+                            (None, None) => Ok(FnArgs::from((None, None))),
+                        }
                     })?;
 
                 Some(move |event: baml_runtime::FunctionResult| {
-                    let status = thread_safe_fn.call(event, ThreadsafeFunctionCallMode::Blocking);
+                    let status = thread_safe_fn.call(FnArgs::from((None, Some(event))), ThreadsafeFunctionCallMode::Blocking);
                     if status != napi::Status::Ok {
                         log::error!("Error calling on_event callback: {status:?}");
                     }
