@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use napi::{
-    bindgen_prelude::{Function, FunctionRef, Object, ObjectFinalize, PromiseRaw, Undefined},
+    bindgen_prelude::{Function, FunctionRef, Object, ObjectFinalize, PromiseRaw, Error, Undefined},
     threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode},
     Env
 };
@@ -16,7 +16,7 @@ crate::lang_wrapper!(
     custom_finalize,
     no_from,
     optional,
-    callback: Option<FunctionRef<FunctionResult, ()>>,
+    callback: Option<FunctionRef<(Error, FunctionResult), ()>>,
     on_tick: Option<FunctionRef<(), ()>>,
     tb: Option<baml_runtime::type_builder::TypeBuilder>,
     cb: Option<baml_runtime::client_registry::ClientRegistry>,
@@ -26,7 +26,7 @@ crate::lang_wrapper!(
 impl FunctionResultStream {
     pub(crate) fn new(
         inner: baml_runtime::FunctionResultStream,
-        event: Option<FunctionRef<FunctionResult, ()>>,
+        event: Option<FunctionRef<(Error, FunctionResult), ()>>,
         on_tick: Option<FunctionRef<(), ()>>,
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
@@ -49,7 +49,7 @@ impl FunctionResultStream {
         &mut self,
         env: Env,
         #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")]
-        func: Option<Function<FunctionResult, ()>>,
+        func: Option<Function<(Error, FunctionResult), ()>>,
     ) -> napi::Result<Undefined> {
         if let Some(func) = func {
             let new_ref = func.create_ref()?;

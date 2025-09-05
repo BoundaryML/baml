@@ -8,7 +8,7 @@ use baml_types::BamlValue;
 use internal_baml_core::feature_flags::FeatureFlags;
 use napi::{
     bindgen_prelude::{Function, FunctionRef, Object, ObjectFinalize, Promise, PromiseRaw, Undefined},
-    threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode},
+    threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode}, Error,
     Env,
 };
 use napi_derive::napi;
@@ -215,7 +215,7 @@ impl BamlRuntime {
         env: Env,
         function_name: String,
         #[napi(ts_arg_type = "{ [name: string]: any }")] args: Object,
-        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<Function<FunctionResult, ()>>,
+        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<Function<(Error, FunctionResult), ()>>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
@@ -281,7 +281,7 @@ impl BamlRuntime {
         env: Env,
         function_name: String,
         #[napi(ts_arg_type = "{ [name: string]: any }")] args: Object,
-        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<Function<FunctionResult, ()>>,
+        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<Function<(Error, FunctionResult), ()>>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
@@ -476,46 +476,44 @@ impl BamlRuntime {
             None => None,
         };
 
-        // configure runtime callback
-        let result = if let Some(cb_ref) = &self.callback {
-            let cb = cb_ref.borrow_back(&env)?;
-            let mut thread_safe_fn = cb
-                .build_threadsafe_function()
-                .build_callback(|ctx: ThreadSafeCallContext<BamlLogEvent>| Ok(ctx.value))?;
-            // allow node to exit if this is the only ref
-            let _ = thread_safe_fn.unref(&env);
-
-            let rust_cb = Box::new(move |event: LogEvent| {
-                let js_evt = BamlLogEvent {
-                    metadata: LogEventMetadata {
-                        event_id: event.metadata.event_id,
-                        parent_id: event.metadata.parent_id,
-                        root_event_id: event.metadata.root_event_id,
-                    },
-                    prompt: event.prompt,
-                    raw_output: event.raw_output,
-                    parsed_output: event.parsed_output,
-                    start_time: event.start_time,
-                };
-
-                let status = thread_safe_fn.call(js_evt, ThreadsafeFunctionCallMode::Blocking);
-                if status != napi::Status::Ok {
-                    log::error!("Error calling log_event callback: {status:?}");
-                }
-                Ok(())
-            });
-
-            self.inner
-                .set_log_event_callback(Some(rust_cb))
-                .map_err(from_anyhow_error)
-        } else {
-            self.inner
+        let Some(cb_ref) = &self.callback else {
+            return self.inner
                 .set_log_event_callback(None)
-                .map_err(from_anyhow_error)
+                .map_err(from_anyhow_error);
         };
 
-        result?;
-        Ok(())
+        // configure runtime callback
+        let cb = cb_ref.borrow_back(&env)?;
+        let mut thread_safe_fn = cb
+            .build_threadsafe_function()
+            .build_callback(|ctx: ThreadSafeCallContext<BamlLogEvent>| Ok(ctx.value))?;
+        // allow node to exit if this is the only ref
+        let _ = thread_safe_fn.unref(&env);
+
+        let rust_cb = Box::new(move |event: LogEvent| {
+            let js_evt = BamlLogEvent {
+                metadata: LogEventMetadata {
+                    event_id: event.metadata.event_id,
+                    parent_id: event.metadata.parent_id,
+                    root_event_id: event.metadata.root_event_id,
+                },
+                prompt: event.prompt,
+                raw_output: event.raw_output,
+                parsed_output: event.parsed_output,
+                start_time: event.start_time,
+            };
+
+            let status = thread_safe_fn.call(js_evt, ThreadsafeFunctionCallMode::Blocking);
+            if status != napi::Status::Ok {
+                log::error!("Error calling log_event callback: {status:?}");
+            }
+            Ok(())
+        });
+
+        self.inner
+            .set_log_event_callback(Some(rust_cb))
+            .map_err(from_anyhow_error)
+
     }
 
     #[napi]
