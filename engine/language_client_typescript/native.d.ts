@@ -70,6 +70,7 @@ export declare class ClassBuilder {
 
 export declare class ClassPropertyBuilder {
   setType(fieldType: FieldType): ClassPropertyBuilder
+  getType(): FieldType
   alias(alias?: string | undefined | null): ClassPropertyBuilder
   description(description?: string | undefined | null): ClassPropertyBuilder
 }

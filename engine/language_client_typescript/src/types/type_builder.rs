@@ -301,6 +301,18 @@ impl ClassPropertyBuilder {
     }
 
     #[napi]
+    pub fn get_type(&self) -> napi::Result<FieldType> {
+        self.inner
+            .lock()
+            .unwrap()
+            .r#type()
+            .map(FieldType::from)
+            .ok_or_else(|| crate::errors::from_anyhow_error(anyhow::anyhow!(
+                "attempted to read a property that has no defined type, this is likely an internal bug"
+            )))
+    }
+
+    #[napi]
     pub fn alias(&self, alias: Option<String>) -> Self {
         self.inner.lock().unwrap().with_meta(
             "alias",
