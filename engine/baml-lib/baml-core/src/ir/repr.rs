@@ -1002,8 +1002,19 @@ impl IntermediateRepr {
             function.inputs.iter().map(|(name, _)| name).collect();
         let test_args: HashSet<&String> = test.args.keys().collect();
 
-        // Find missing required arguments
-        let missing_args: Vec<&String> = function_inputs.difference(&test_args).copied().collect();
+        // Find missing required arguments (filter out optional/nullable types)
+        let missing_args: Vec<&String> = function_inputs
+            .difference(&test_args)
+            .filter(|name| {
+                function
+                    .inputs
+                    .iter()
+                    .find(|(input_name, _)| *input_name == name.to_string())
+                    .map(|(_, type_ir)| !type_ir.is_optional())
+                    .unwrap_or(false)
+            })
+            .copied()
+            .collect();
 
         // Handle missing arguments
         if !missing_args.is_empty() {
