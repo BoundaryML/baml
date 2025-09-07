@@ -17,7 +17,7 @@ use internal_baml_ast::ast::{
     self, Attribute, FieldArity, SubType, ValExpId, WithAttributes, WithIdentifier, WithName,
     WithSpan,
 };
-use internal_baml_diagnostics::{Diagnostics, Span};
+use internal_baml_diagnostics::{DatamodelWarning, Diagnostics, Span};
 use internal_baml_parser_database::{
     walkers::{
         ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, ExprFnWalker,
@@ -953,8 +953,6 @@ impl IntermediateRepr {
     pub fn validate_test_args(&self, diagnostics: &mut Diagnostics) {
         use std::collections::HashSet;
 
-        use internal_baml_diagnostics::DatamodelWarning;
-
         use crate::ir::ir_helpers::IRHelper;
 
         // Validate LLM function tests
@@ -1027,8 +1025,8 @@ impl IntermediateRepr {
                     .collect();
                 let example_args = self.get_dummy_args(1, true, &params_map);
 
-                diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Test '{}' is missing required arguments for function '{}'. Add an args block like:\n\nargs {{\n{}\n}}",
+                diagnostics.push_warning(DatamodelWarning::new(
+                    format!("Test '{}' is missing required arguments for function '{}'. Add an args block like:\n\nargs {{\n{}\n}}",
                              test.name, function.name, example_args),
                     test_span.clone(),
                 ));
@@ -1046,8 +1044,8 @@ impl IntermediateRepr {
                     .collect();
                 let missing_examples = self.get_dummy_args(0, false, &missing_params_map);
 
-                diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!(
+                diagnostics.push_warning(DatamodelWarning::new(
+                    format!(
                         "Test '{}' is missing required arguments for function '{}': {}",
                         test.name,
                         function.name,
