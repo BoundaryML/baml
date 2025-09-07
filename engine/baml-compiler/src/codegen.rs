@@ -2270,7 +2270,7 @@ mod tests {
                     [i]
                 };
 
-                [a, h]
+                0
             }
         "#)?;
 
@@ -2822,7 +2822,7 @@ mod tests {
                     Instruction::LoadConst(1),
                     Instruction::LoadConst(2),
                     Instruction::AllocArray(3),
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
                     Instruction::LoadVar(1),
                     // call with one argument (self)
                     Instruction::Call(1),
@@ -2851,7 +2851,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -2904,7 +2904,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -2966,7 +2966,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -3028,7 +3028,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
                     Instruction::LoadVar(4),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -3045,7 +3045,7 @@ mod tests {
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(6),
                     Instruction::LoadVar(2),
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
                     Instruction::LoadVar(8),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -3541,17 +3541,18 @@ fn UseMapNoKey() -> string {
         fn contains() -> anyhow::Result<()> {
             assert_compiles(Program {
                 source: r#"
-fn CreateMapJSON() -> map<string, string> {
-    {"hello": "world"}
-}
-fn UseMapContains() -> string {
-    let map = CreateMapJSON();
-    if (map.contains("hello")) {
-        map["hello"]
-    } else {
-        "hi"
-    }
-}"#,
+                    fn CreateMapJSON() -> map<string, string> {
+                        {"hello": "world"}
+                    }
+                    fn UseMapContains() -> string {
+                        let map = CreateMapJSON();
+                        if (map.contains("hello")) {
+                            map["hello"]
+                        } else {
+                            "hi"
+                        }
+                    }
+                "#,
                 expected: vec![
                     (
                         "CreateMapJSON",
@@ -3567,7 +3568,7 @@ fn UseMapContains() -> string {
                         vec![
                             Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                             Instruction::Call(0),
-                            Instruction::LoadGlobal(GlobalIndex::from_raw(5)),
+                            Instruction::LoadGlobal(GlobalIndex::from_raw(6)),
                             Instruction::LoadVar(1),
                             Instruction::LoadConst(0),
                             Instruction::Call(2),
@@ -3590,15 +3591,16 @@ fn UseMapContains() -> string {
         fn modify() -> anyhow::Result<()> {
             assert_compiles(Program {
                 source: r#"
-fn EditMapKey() -> int {
-	let map = { hi 123 };
+                    fn EditMapKey() -> int {
+                        let map = { hi 123 };
 
-	map["hi"] = 42 - 4;
-	map["hi"] += 4;
+                        map["hi"] = 42 - 4;
+                        map["hi"] += 4;
 
-	map["hi"]
+                        map["hi"]
 
-}"#,
+                    }
+                "#,
                 expected: vec![(
                     "EditMapKey",
                     vec![
@@ -3632,13 +3634,14 @@ fn EditMapKey() -> int {
         fn len() -> anyhow::Result<()> {
             assert_compiles(Program {
                 source: r#"
-fn Len() -> int {
-    let map = {
-        hi 123
-        it_works 456
-    };
-    map.len()
-}"#,
+                    fn Len() -> int {
+                        let map = {
+                            hi 123
+                            it_works 456
+                        };
+                        map.len()
+                    }
+                "#,
                 expected: vec![(
                     "Len",
                     vec![
@@ -3647,7 +3650,7 @@ fn Len() -> int {
                         Instruction::LoadConst(2),
                         Instruction::LoadConst(3),
                         Instruction::AllocMap(2),
-                        Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
+                        Instruction::LoadGlobal(GlobalIndex::from_raw(4)),
                         Instruction::LoadVar(1),
                         Instruction::Call(1),
                         Instruction::Return,

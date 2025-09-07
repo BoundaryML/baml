@@ -281,15 +281,15 @@ fn array_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(5))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(6))),
         },
         |vm| {
             dbg!(&vm.objects);
 
-            let Object::Array(array) = &vm.objects[ObjectIndex::from_raw(5)] else {
+            let Object::Array(array) = &vm.objects[ObjectIndex::from_raw(6)] else {
                 panic!(
                     "expected Array, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(5)]
+                    &vm.objects[ObjectIndex::from_raw(6)]
                 );
             };
 
@@ -317,13 +317,13 @@ fn class_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(6))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(7))),
         },
         |vm| {
-            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(6)] else {
+            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(7)] else {
                 panic!(
                     "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(6)]
+                    &vm.objects[ObjectIndex::from_raw(7)]
                 );
             };
 
@@ -357,13 +357,13 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(7))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(8))),
         },
         |vm| {
-            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(7)] else {
+            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(8)] else {
                 panic!(
                     "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(7)]
+                    &vm.objects[ObjectIndex::from_raw(8)]
                 );
             };
 
