@@ -28,16 +28,34 @@ export function atomWithHash<Value>(
   // Use base64 encoding for serialization
   const serialize =
     options?.serialize ||
-    ((val: Value) => window.btoa(encodeURIComponent(JSON.stringify(val))));
+    ((val: Value) => {
+      if (typeof window !== 'undefined' && window.btoa) {
+        return window.btoa(encodeURIComponent(JSON.stringify(val)));
+      }
+      // Fallback for SSR - return base64 encoded string using Buffer
+      return Buffer.from(encodeURIComponent(JSON.stringify(val))).toString('base64');
+    });
   // Use base64 decoding for deserialization
   const deserialize =
     options?.deserialize ||
-    ((str: string) =>
-      safeJSONParse(initialValue)(decodeURIComponent(window.atob(str))));
+    ((str: string) => {
+      if (typeof window !== 'undefined' && window.atob) {
+        return safeJSONParse(initialValue)(decodeURIComponent(window.atob(str)));
+      }
+      // Fallback for SSR - decode using Buffer
+      try {
+        return safeJSONParse(initialValue)(decodeURIComponent(Buffer.from(str, 'base64').toString()));
+      } catch (e) {
+        return initialValue;
+      }
+    });
 
   const subscribe =
     options?.subscribe ||
     ((callback) => {
+      if (typeof window === 'undefined') {
+        return () => {};
+      }
       window.addEventListener('hashchange', callback);
       return () => {
         window.removeEventListener('hashchange', callback);
@@ -46,15 +64,19 @@ export function atomWithHash<Value>(
 
   const setHashOption = options?.setHash;
   let setHash = (searchParams: string) => {
-    window.location.hash = searchParams;
+    if (typeof window !== 'undefined') {
+      window.location.hash = searchParams;
+    }
   };
   if (setHashOption === 'replaceState') {
     setHash = (searchParams) => {
-      window.history.replaceState(
-        window.history.state,
-        '',
-        `${window.location.pathname}${window.location.search}#${searchParams}`,
-      );
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(
+          window.history.state,
+          '',
+          `${window.location.pathname}${window.location.search}#${searchParams}`,
+        );
+      }
     };
   }
   if (typeof setHashOption === 'function') {
@@ -93,7 +115,9 @@ export function atomWithHash<Value>(
         typeof update === 'function'
           ? (update as (prev: Value) => Value | typeof RESET)(get(valueAtom))
           : update;
-      const searchParams = new URLSearchParams(window.location.hash.slice(1));
+      const searchParams = new URLSearchParams(
+        typeof window !== 'undefined' ? window.location.hash.slice(1) : ''
+      );
       if (nextValue === RESET) {
         set(strAtom, null);
         searchParams.delete(key);

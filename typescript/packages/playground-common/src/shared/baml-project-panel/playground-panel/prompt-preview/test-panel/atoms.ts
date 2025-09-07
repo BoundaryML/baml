@@ -1,5 +1,6 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
+import { sessionStore } from '../../../../../baml_wasm_web/JotaiProvider';
 import type { TestState } from '../../atoms';
 
 export interface TestHistoryEntry {
@@ -21,4 +22,5 @@ export const selectedHistoryIndexAtom = atom<number>(0);
 export const isParallelTestsEnabledAtom = atomWithStorage<boolean>(
   'runTestsInParallel',
   true,
+  sessionStore,
 );

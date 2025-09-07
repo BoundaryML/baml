@@ -1,3 +1,4 @@
+import '../lib/polyfills';
 import '@baml/ui/globals.css';
 import { Toaster } from '@baml/ui/sonner';
 import type { Metadata, Viewport } from 'next';

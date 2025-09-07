@@ -1,5 +1,6 @@
 import { atom } from 'jotai'
 import { atomWithStorage } from 'jotai/utils'
+import { sessionStore } from '../../../../../../baml_wasm_web/JotaiProvider'
 
 export enum TestPanelViewType {
   TABULAR = 'tabular',
@@ -16,10 +17,10 @@ export interface TabularViewConfig {
   showDuration: boolean
 }
 
-export const testPanelViewTypeAtom = atomWithStorage<TestPanelViewType>('testPanelViewType', TestPanelViewType.TABULAR)
+export const testPanelViewTypeAtom = atomWithStorage<TestPanelViewType>('testPanelViewType', TestPanelViewType.TABULAR, sessionStore)
 export const tabularViewConfigAtom = atomWithStorage<TabularViewConfig>('tabularViewConfig', {
   showInputs: true,
   showModel: false,
   responseViewType: 'parsed',
   showDuration: false,
-})
+}, sessionStore)

@@ -1,3 +1,4 @@
+'use client';
 import { Input } from '@baml/ui/input';
 import { cn } from '@baml/ui/lib/utils';
 import type React from 'react';
