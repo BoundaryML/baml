@@ -162,10 +162,10 @@
 #        ^ source.baml
 #         ^^^^^^^ source.baml entity.name.function
 #                ^ source.baml
-#                 ^^^^^ source.baml variable.other.readwrite
-#                      ^ source.baml
-#                       ^ source.baml
-#                        ^^^^^^ source.baml storage.type.baml
+#                 ^^^^^ source.baml function.params variable.other.readwrite
+#                      ^ source.baml function.params
+#                       ^ source.baml function.params
+#                        ^^^^^^ source.baml function.params storage.type.baml
 #                              ^ source.baml
 #                               ^ source.baml
 #                                ^^ source.baml keyword.control.baml.arrow
@@ -212,10 +212,10 @@
 #        ^ source.baml
 #         ^^^^^^^^^^ source.baml entity.name.function
 #                   ^ source.baml
-#                    ^^^^^ source.baml variable.other.readwrite
-#                         ^ source.baml
-#                          ^ source.baml
-#                           ^^^^^^ source.baml storage.type.baml
+#                    ^^^^^ source.baml function.params variable.other.readwrite
+#                         ^ source.baml function.params
+#                          ^ source.baml function.params
+#                           ^^^^^^ source.baml function.params storage.type.baml
 #                                 ^ source.baml
 #                                  ^ source.baml
 #                                   ^^ source.baml keyword.control.baml.arrow
@@ -270,16 +270,323 @@
 #                    ^ source.baml
 >  args {
 #^^ source.baml
-#  ^^^^ source.baml variable.other.readwrite
+#  ^^^^ source.baml variable.other.readwrite.nested_key
 #      ^^ source.baml
 >    input "hello"
 #^^^^ source.baml variable.other.readwrite.nested
-#    ^^^^^ source.baml variable.other.readwrite.nested variable.other.readwrite
+#    ^^^^^ source.baml variable.other.readwrite.nested variable.other.readwrite.key_string_pair
 #         ^ source.baml variable.other.readwrite.nested
-#          ^^^^^^^ source.baml variable.other.readwrite.nested string.quoted.double
+#          ^ source.baml variable.other.readwrite.nested string.quoted.double
+#           ^^^^^ source.baml variable.other.readwrite.nested string.quoted.double
+#                ^ source.baml variable.other.readwrite.nested string.quoted.double
 >  }
 #^^ source.baml variable.other.readwrite.nested
 #  ^ source.baml
+>}
+#^ source.baml
+>
+>// Test new language features
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ source.baml comment.line
+>
+>// Expression function with fn keyword
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ source.baml comment.line
+>fn ModernFunction(x: int) -> int {
+#^^ source.baml storage.type.declaration.function
+#  ^ source.baml
+#   ^^^^^^^^^^^^^^ source.baml entity.name.function
+#                 ^ source.baml
+#                  ^ source.baml function.params variable.other.readwrite
+#                   ^ source.baml function.params
+#                    ^ source.baml function.params
+#                     ^^^ source.baml function.params storage.type.baml
+#                        ^ source.baml
+#                         ^ source.baml
+#                          ^^ source.baml keyword.control.baml.arrow
+#                            ^ source.baml
+#                             ^^^ source.baml storage.type.baml
+#                                ^ source.baml
+#                                 ^ source.baml
+>  # Main Processing Section
+#^^ source.baml
+#  ^ source.baml punctuation.definition.heading.markdown
+#   ^ source.baml
+#    ^^^^^^^^^^^^^^^^^^^^^^^ source.baml entity.name.section.markdown.h1
+>  
+>  ## Loop Processing
+#^^ source.baml
+#  ^^ source.baml punctuation.definition.heading.markdown
+#    ^ source.baml
+#     ^^^^^^^^^^^^^^^ source.baml entity.name.section.markdown.h2
+>  // For-in loop
+#^^ source.baml
+#  ^^^^^^^^^^^^^^ source.baml comment.line
+>  for (item in [1, 2, 3]) {
+#^^ source.baml
+#  ^^^ source.baml keyword.control.for
+#     ^^ source.baml
+#       ^^^^ source.baml variable.other.readwrite
+#           ^ source.baml
+#            ^^ source.baml keyword.control.in
+#              ^ source.baml
+#               ^ source.baml
+#                ^ source.baml constant.numeric
+#                 ^^ source.baml
+#                   ^ source.baml constant.numeric
+#                    ^^ source.baml
+#                      ^ source.baml constant.numeric
+#                       ^ source.baml
+#                        ^^ source.baml
+#                          ^ source.baml
+>    item += 1;
+#^^^^ source.baml
+#    ^^^^ source.baml variable.other.readwrite
+#        ^ source.baml
+#         ^^ source.baml keyword.operator.assignment
+#           ^ source.baml
+#            ^ source.baml constant.numeric
+#             ^^ source.baml
+>  }
+#^^ source.baml
+#  ^ source.baml
+>  
+>  ### Advanced Loop Example
+#^^ source.baml
+#  ^^^ source.baml punctuation.definition.heading.markdown
+#     ^ source.baml
+#      ^^^^^^^^^^^^^^^^^^^^^ source.baml entity.name.section.markdown.h3
+>  // C-style for loop
+#^^ source.baml
+#  ^^^^^^^^^^^^^^^^^^^ source.baml comment.line
+>  for (let i = 0; i < 10; i++) {
+#^^ source.baml
+#  ^^^ source.baml keyword.control.for
+#     ^^ source.baml
+#       ^^^ source.baml storage.type.declaration.let
+#          ^ source.baml
+#           ^ source.baml variable.other.readwrite
+#            ^ source.baml
+#             ^ source.baml keyword.operator.assignment
+#              ^ source.baml
+#               ^ source.baml constant.numeric
+#                ^ source.baml
+#                 ^^^ source.baml
+#                    ^ source.baml keyword.operator.binary
+#                     ^^^^^^ source.baml
+#                           ^ source.baml keyword.operator.binary
+#                            ^ source.baml keyword.operator.binary
+#                             ^^ source.baml
+#                               ^ source.baml
+>    i += 2;
+#^^^^ source.baml
+#    ^ source.baml variable.other.readwrite
+#     ^ source.baml
+#      ^^ source.baml keyword.operator.assignment
+#        ^ source.baml
+#         ^ source.baml constant.numeric
+#          ^^ source.baml
+>  }
+#^^ source.baml
+#  ^ source.baml
+>  
+>  ## Object Operations
+#^^ source.baml
+#  ^^ source.baml punctuation.definition.heading.markdown
+#    ^ source.baml
+#     ^^^^^^^^^^^^^^^^^ source.baml entity.name.section.markdown.h2
+>  // Object construction with fields
+#^^ source.baml
+#  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ source.baml comment.line
+>  let receipt = Receipt {
+#^^ source.baml
+#  ^^^ source.baml storage.type.declaration.let
+#     ^ source.baml
+#      ^^^^^^^ source.baml variable.other.readwrite
+#             ^ source.baml
+#              ^ source.baml keyword.operator.assignment
+#               ^ source.baml
+#                ^^^^^^^ source.baml entity.name.type
+#                       ^^ source.baml
+>    establishment_name: "Pizzaria la Rocca",
+#^^^^ source.baml
+#    ^^^^^^^^^^^^^^^^^^ source.baml variable.other.readwrite.interface
+#                      ^ source.baml
+#                       ^ source.baml
+#                        ^^^^^^^^^^^^^^^^^^^ source.baml string.quoted.double
+#                                           ^^ source.baml
+>    date: "2025-09-03",
+#^^^^ source.baml
+#    ^^^^ source.baml variable.other.readwrite.interface
+#        ^ source.baml
+#         ^ source.baml
+#          ^^^^^^^^^^^^ source.baml string.quoted.double
+#                      ^^ source.baml
+>    total: 25.50,
+#^^^^ source.baml
+#    ^^^^^ source.baml variable.other.readwrite.interface
+#         ^ source.baml
+#          ^ source.baml
+#           ^^ source.baml constant.numeric
+#             ^ source.baml
+#              ^^ source.baml constant.numeric
+#                ^^ source.baml
+>    currency: "USD",
+#^^^^ source.baml
+#    ^^^^^^^^ source.baml variable.other.readwrite.interface
+#            ^ source.baml
+#             ^ source.baml
+#              ^^^^^ source.baml string.quoted.double
+#                   ^^ source.baml
+>  };
+#^^ source.baml
+#  ^ source.baml
+#   ^ source.baml
+>  
+>  ### Method Invocation
+#^^ source.baml
+#  ^^^ source.baml punctuation.definition.heading.markdown
+#     ^ source.baml
+#      ^^^^^^^^^^^^^^^^^ source.baml entity.name.section.markdown.h3
+>  // Method call
+#^^ source.baml
+#  ^^^^^^^^^^^^^^ source.baml comment.line
+>  let result = receipt.calculate();
+#^^ source.baml
+#  ^^^ source.baml storage.type.declaration.let
+#     ^ source.baml
+#      ^^^^^^ source.baml variable.other.readwrite
+#            ^ source.baml
+#             ^ source.baml keyword.operator.assignment
+#              ^^^^^^^^^ source.baml
+#                       ^^^^^^^^^ source.baml entity.name.function
+#                                ^ source.baml
+#                                 ^ source.baml
+#                                  ^ source.baml
+>  
+>  ## Mathematical Operations
+#^^ source.baml
+#  ^^ source.baml punctuation.definition.heading.markdown
+#    ^ source.baml
+#     ^^^^^^^^^^^^^^^^^^^^^^^ source.baml entity.name.section.markdown.h2
+>  // Assignment operators
+#^^ source.baml
+#  ^^^^^^^^^^^^^^^^^^^^^^^ source.baml comment.line
+>  result += 5;
+#^^ source.baml
+#  ^^^^^^ source.baml variable.other.readwrite
+#        ^ source.baml
+#         ^^ source.baml keyword.operator.assignment
+#           ^^^^ source.baml
+>  result -= 2;
+#^^ source.baml
+#  ^^^^^^ source.baml variable.other.readwrite
+#        ^ source.baml
+#         ^^ source.baml keyword.operator.assignment
+#           ^^^^ source.baml
+>  result *= 3;
+#^^ source.baml
+#  ^^^^^^ source.baml variable.other.readwrite
+#        ^ source.baml
+#         ^^ source.baml keyword.operator.assignment
+#           ^^^^ source.baml
+>  result /= 4;
+#^^ source.baml
+#  ^^^^^^ source.baml variable.other.readwrite
+#        ^ source.baml
+#         ^^ source.baml keyword.operator.assignment
+#           ^^^^ source.baml
+>  
+>  ## Final Result Processing
+#^^ source.baml
+#  ^^ source.baml punctuation.definition.heading.markdown
+#    ^ source.baml
+#     ^^^^^^^^^^^^^^^^^^^^^^^ source.baml entity.name.section.markdown.h2
+>  // Binary operators
+#^^ source.baml
+#  ^^^^^^^^^^^^^^^^^^^ source.baml comment.line
+>  if (result > 10 && result < 100) {
+#^^ source.baml
+#  ^^ source.baml keyword.control.if
+#    ^^ source.baml
+#      ^^^^^^^ source.baml
+#             ^ source.baml keyword.operator.binary
+#              ^ source.baml
+#               ^^ source.baml constant.numeric
+#                 ^ source.baml
+#                  ^^ source.baml keyword.operator.binary
+#                    ^^^^^^^^ source.baml
+#                            ^ source.baml keyword.operator.binary
+#                             ^ source.baml
+#                              ^^^ source.baml constant.numeric
+#                                 ^^ source.baml
+#                                   ^ source.baml
+>    result
+#^^^^^^^^^^^ source.baml
+>  } else {
+#^^ source.baml
+#  ^ source.baml
+#   ^ source.baml
+#    ^^^^ source.baml keyword.control.else
+#        ^ source.baml
+#         ^^ source.baml
+>    0
+#^^^^^^ source.baml
+>  }
+#^^ source.baml
+#  ^ source.baml
+>}
+#^^ source.baml
+>
+>// Traditional function keyword still works
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ source.baml comment.line
+>function TraditionalFunction() -> string {
+#^^^^^^^^ source.baml storage.type.declaration.function
+#        ^ source.baml
+#         ^^^^^^^^^^^^^^^^^^^ source.baml entity.name.function
+#                            ^ source.baml
+#                             ^ source.baml
+#                              ^ source.baml
+#                               ^^ source.baml keyword.control.baml.arrow
+#                                 ^ source.baml
+#                                  ^^^^^^ source.baml storage.type.baml
+#                                        ^ source.baml
+#                                         ^ source.baml
+>  let obj = MyObject { id: 42, name: "test" };
+#^^ source.baml
+#  ^^^ source.baml storage.type.declaration.let
+#     ^ source.baml
+#      ^^^ source.baml variable.other.readwrite
+#         ^ source.baml
+#          ^ source.baml keyword.operator.assignment
+#           ^ source.baml
+#            ^^^^^^^^ source.baml entity.name.type
+#                    ^^ source.baml
+#                      ^ source.baml
+#                       ^^ source.baml variable.other.readwrite.interface
+#                         ^ source.baml
+#                          ^ source.baml
+#                           ^^ source.baml constant.numeric
+#                             ^^ source.baml
+#                               ^^^^ source.baml variable.other.readwrite.interface
+#                                   ^ source.baml
+#                                    ^ source.baml
+#                                     ^^^^^^ source.baml string.quoted.double
+#                                           ^ source.baml
+#                                            ^ source.baml
+#                                             ^ source.baml
+>  let value = obj.getValue();
+#^^ source.baml
+#  ^^^ source.baml storage.type.declaration.let
+#     ^ source.baml
+#      ^^^^^ source.baml variable.other.readwrite
+#           ^ source.baml
+#            ^ source.baml keyword.operator.assignment
+#             ^^^^^ source.baml
+#                  ^^^^^^^^ source.baml entity.name.function
+#                          ^ source.baml
+#                           ^ source.baml
+#                            ^ source.baml
+>  value
+#^^^^^^^^ source.baml
 >}
 #^ source.baml
 >

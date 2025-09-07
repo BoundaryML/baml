@@ -23,6 +23,7 @@ baml-lsp-types = { path = "../baml-lsp-types" }
 internal-baml-core = { path = "../baml-lib/baml-core" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 internal-baml-codegen = { workspace = true }
+itertools.workspace = true
 crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
 ignore = { version = "0.4.22" }
 parking_lot = { version = "0.12", features = ["deadlock_detection"] }
@@ -71,7 +72,6 @@ serde-wasm-bindgen = "0.4"
 crossbeam-channel = "0.5.14"
 filetime = "0.2.25"
 simple-logging = "2.0.2"
-itertools = "0.14.0"
 url.workspace = true
 
 tokio = { version = "1.36", features = ["full", "tracing"] }

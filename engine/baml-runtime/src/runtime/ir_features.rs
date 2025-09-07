@@ -18,6 +18,6 @@ impl WithInternal for InternalBamlRuntime {
     }
 
     fn walk_tests(&self) -> impl Iterator<Item = TestCaseWalker<'_>> {
-        self.ir().walk_tests()
+        self.ir().walk_function_test_pairs()
     }
 }

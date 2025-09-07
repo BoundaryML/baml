@@ -119,7 +119,7 @@
           "begin": "(\\w+)",
           "beginCaptures": {
             "1": {
-              "name": "variable.other.readwrite.interface"
+              "name": "variable.other.readwrite"
             }
           },
           "end": "(?=$|\\n|@|\\}|/)",
@@ -154,7 +154,7 @@
           "begin": "(\\w+)",
           "beginCaptures": {
             "1": {
-              "name": "variable.other.readwrite.interface"
+              "name": "variable.other.readwrite"
             }
           },
           "end": "(?=$|\\n|@|\\}|/)",
@@ -221,7 +221,7 @@
     },
     "function_declaration": {
       "comment": "Function declaration",
-      "begin": "(function)\\s+(\\w+)",
+      "begin": "(function|fn)\\s+(\\w+)",
       "beginCaptures": {
         "1": {
           "name": "storage.type.declaration.function"
@@ -312,6 +312,9 @@
           "include": "#function_application"
         },
         {
+          "include": "#object_construction"
+        },
+        {
           "include": "#function_body"
         }
       ]
@@ -335,7 +338,7 @@
           "match": "(\\w+)\\s*:",
           "captures": {
             "1": {
-              "name": "variable.other.readwrite.function_name"
+              "name": "variable.other.readwrite"
             }
           }
         },
@@ -347,7 +350,7 @@
     "type_definition": {
       "patterns": [
         {
-          "match": "\\b(bool|int|float|string|null|image|audio)\\b",
+          "match": "\\b(bool|int|float|string|null|image|audio|pdf)\\b",
           "name": "storage.type.baml"
         },
         {
@@ -444,13 +447,34 @@
           "include": "#comment"
         },
         {
+          "include": "#markdown_header"
+        },
+        {
           "include": "#block_attribute"
         },
         {
           "include": "#let_declaration"
         },
         {
-          "include": "#function_declaration"
+          "include": "#for_in_loop"
+        },
+        {
+          "include": "#for_c_loop"
+        },
+        {
+          "include": "#if_statement"
+        },
+        {
+          "include": "#else_clause"
+        },
+        {
+          "include": "#while_statement"
+        },
+        {
+          "include": "#assignment_statement"
+        },
+        {
+          "include": "#object_construction"
         },
         {
           "comment": "Function client properties",
@@ -1208,6 +1232,356 @@
         },
         {
           "include": "#comment"
+        }
+      ]
+    },
+    "for_in_loop": {
+      "comment": "For-in loop",
+      "begin": "(for)\\s*\\(\\s*(\\w+)\\s+(in)\\s+",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.for"
+        },
+        "2": {
+          "name": "variable.other.readwrite"
+        },
+        "3": {
+          "name": "keyword.control.in"
+        }
+      },
+      "end": "\\}",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#array_literal"
+        },
+        {
+          "include": "#function_application"
+        },
+        {
+          "include": "#expression_body"
+        }
+      ]
+    },
+    "for_c_loop": {
+      "comment": "C-style for loop",
+      "begin": "(for)\\s*\\(\\s*",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.for"
+        }
+      },
+      "end": "\\}",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#let_declaration"
+        },
+        {
+          "include": "#binary_operators"
+        },
+        {
+          "include": "#increment_operators"
+        },
+        {
+          "include": "#expression_body"
+        }
+      ]
+    },
+    "if_statement": {
+      "comment": "If-else statement",
+      "begin": "(if)\\s*\\(",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.if"
+        }
+      },
+      "end": "(?<=\\})",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#binary_operators"
+        },
+        {
+          "include": "#expression"
+        },
+        {
+          "include": "#expression_body"
+        },
+        {
+          "include": "#else_clause"
+        }
+      ]
+    },
+    "else_clause": {
+      "comment": "Else clause",
+      "match": "(else)\\s*(if)?",
+      "captures": {
+        "1": {
+          "name": "keyword.control.else"
+        },
+        "2": {
+          "name": "keyword.control.if"
+        }
+      }
+    },
+    "while_statement": {
+      "comment": "While loop",
+      "begin": "(while)\\s*\\(",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.while"
+        }
+      },
+      "end": "\\}",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#binary_operators"
+        },
+        {
+          "include": "#expression"
+        },
+        {
+          "include": "#expression_body"
+        }
+      ]
+    },
+    "assignment_statement": {
+      "comment": "Assignment with operators",
+      "begin": "(\\w+)\\s*([+\\-*/]?=)",
+      "beginCaptures": {
+        "1": {
+          "name": "variable.other.readwrite"
+        },
+        "2": {
+          "name": "keyword.operator.assignment"
+        }
+      },
+      "end": ";?",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#expression"
+        }
+      ]
+    },
+    "array_literal": {
+      "begin": "\\[",
+      "end": "\\]",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#constant_numeric"
+        },
+        {
+          "include": "#string_literal"
+        },
+        {
+          "include": "#expression"
+        }
+      ]
+    },
+    "binary_operators": {
+      "match": "(<|>|<=|>=|==|!=|&&|\\|\\||[+\\-*/])",
+      "name": "keyword.operator.binary"
+    },
+    "increment_operators": {
+      "match": "(\\+\\+|--)",
+      "name": "keyword.operator.increment"
+    },
+    "expression": {
+      "patterns": [
+        {
+          "include": "#constant_numeric"
+        },
+        {
+          "include": "#string_literal"
+        },
+        {
+          "include": "#array_literal"
+        },
+        {
+          "include": "#function_application"
+        },
+        {
+          "include": "#object_construction"
+        },
+        {
+          "include": "#method_call"
+        },
+        {
+          "include": "#binary_operators"
+        }
+      ]
+    },
+    "expression_body": {
+      "begin": "\\{",
+      "end": "(?=\\})",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#markdown_header"
+        },
+        {
+          "include": "#let_declaration"
+        },
+        {
+          "include": "#assignment_statement"
+        },
+        {
+          "include": "#for_in_loop"
+        },
+        {
+          "include": "#for_c_loop"
+        },
+        {
+          "include": "#if_statement"
+        },
+        {
+          "include": "#else_clause"
+        },
+        {
+          "include": "#while_statement"
+        },
+        {
+          "include": "#object_construction"
+        },
+        {
+          "include": "#expression"
+        }
+      ]
+    },
+    "object_construction": {
+      "comment": "Object construction ClassName { ... }",
+      "begin": "(\\w+)\\s*\\{",
+      "beginCaptures": {
+        "1": {
+          "name": "entity.name.type"
+        }
+      },
+      "end": "\\}",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#object_field"
+        }
+      ]
+    },
+    "object_field": {
+      "comment": "field_name: value",
+      "begin": "(\\w+)\\s*:",
+      "beginCaptures": {
+        "1": {
+          "name": "variable.other.readwrite.interface"
+        }
+      },
+      "end": "(?=,|\\})",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#expression"
+        }
+      ]
+    },
+    "method_call": {
+      "comment": "obj.method()",
+      "match": "(\\w+)\\.(\\w+)\\s*\\(",
+      "captures": {
+        "1": {
+          "name": "variable.other.readwrite"
+        },
+        "2": {
+          "name": "entity.name.function.method"
+        }
+      }
+    },
+    "markdown_header": {
+      "comment": "Markdown headers # ## ###",
+      "patterns": [
+        {
+          "match": "^\\s*(#{6})\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown.h6"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(#{5})\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown.h5"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(#{4})\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown.h4"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(#{3})\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown.h3"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(#{2})\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown.h2"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(#{1})\\s+(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown.h1"
+            }
+          }
         }
       ]
     }

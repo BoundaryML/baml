@@ -25,6 +25,7 @@ pub(crate) fn parse_assignment(pair: Pair<'_>, diagnostics: &mut Diagnostics) ->
     let mut identifier: Option<Identifier> = None;
     let mut field_type: Option<FieldType> = None;
 
+    let raw_txt = pair.as_str();
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::identifier => {
@@ -66,7 +67,7 @@ pub(crate) fn parse_assignment(pair: Pair<'_>, diagnostics: &mut Diagnostics) ->
             span: diagnostics.span(span),
         },
 
-        _ => panic!("Encountered impossible type_alias declaration during parsing"),
+        _ => panic!("Encountered impossible type_alias declaration during parsing: {raw_txt}"),
     }
 }
 

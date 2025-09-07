@@ -106,7 +106,8 @@ Baml(Decl(FunctionDecl(
   LetDecl(LetKeyword, IdentifierDecl, FunctionValueExpr(FunctionValueAtom(IdentifierDecl))),
   TrailingComment,
   TrailingComment,
-  FunctionValueExpr(FunctionValueAtom(IdentifierDecl, TrailingComment)),
+  FunctionValueExpr(FunctionValueAtom(IdentifierDecl)),
+  TrailingComment,
   "}"
 )))
 
@@ -153,6 +154,164 @@ Baml(Decl(FunctionDecl(
   LetDecl(LetKeyword, IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))),
   TrailingComment,
   TrailingComment,
+  FunctionValueExpr(FunctionValueAtom(IdentifierDecl)),
+  "}"
+)))
+
+# For-in loop test
+
+function TestForIn() -> int {
+  for (item in [1,2,3]) {
+    item += 1;
+  }
+  5
+}
+
+==>
+
+Baml(Decl(FunctionDecl(
+  IdentifierDecl,
+  FunctionArgs,
+  TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
+  "{",
+  ForStatement(
+    ForKeyword,
+    ForInLoop(
+      IdentifierDecl,
+      InKeyword,
+      FunctionValueExpr(FunctionValueAtom(ListValue("[", FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))), FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))), FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))), "]")))
+    ),
+    "{",
+    AssignmentStatement(IdentifierDecl, AssignmentOperator, FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))),
+    "}"
+  ),
+  FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))),
+  "}"
+)))
+
+# C-style for loop test
+
+function TestCFor() -> int {
+  for (let i = 0; i < 10; i++) {
+    i += 2;
+  }
+  5
+}
+
+==>
+
+Baml(Decl(FunctionDecl(
+  IdentifierDecl,
+  FunctionArgs,
+  TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
+  "{",
+  ForStatement(
+    ForKeyword,
+    ForCLoop(
+      CForInit(LetKeyword, IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))),
+      CForCondition(FunctionValueExpr(FunctionValueExpr(FunctionValueAtom(IdentifierDecl)), BinaryOperator("<"), FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))))),
+      CForUpdate(IdentifierDecl, "++")
+    ),
+    "{",
+    AssignmentStatement(IdentifierDecl, AssignmentOperator("+="), FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))),
+    "}"
+  ),
+  FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))),
+  "}"
+)))
+
+# Complex expression function with loops and object construction
+
+function ComplexFunction() -> Receipt {
+  for (item in [1, 2, 3]) {
+    item += 1;
+  }
+  
+  for (let i = 0; i < 10; i++) {
+    i += 2;
+  }
+  
+  let r = Receipt { name: "Test", total: 20 };
+  let result = r.calculate();
+  result
+}
+
+==>
+
+Baml(Decl(FunctionDecl(
+  IdentifierDecl,
+  FunctionArgs,
+  TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
+  "{",
+  ForStatement(
+    ForKeyword,
+    ForInLoop(
+      IdentifierDecl,
+      InKeyword,
+      FunctionValueExpr(FunctionValueAtom(ListValue("[", FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))), FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))), FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))), "]")))
+    ),
+    "{",
+    AssignmentStatement(IdentifierDecl, AssignmentOperator("+="), FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))),
+    "}"
+  ),
+  ForStatement(
+    ForKeyword,
+    ForCLoop(
+      CForInit(LetKeyword, IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))),
+      CForCondition(FunctionValueExpr(FunctionValueExpr(FunctionValueAtom(IdentifierDecl)), BinaryOperator("<"), FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))))),
+      CForUpdate(IdentifierDecl, "++")
+    ),
+    "{",
+    AssignmentStatement(IdentifierDecl, AssignmentOperator("+="), FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))),
+    "}"
+  ),
+  LetDecl(LetKeyword, IdentifierDecl, FunctionValueExpr(FunctionValueAtom(ObjectConstructor(IdentifierDecl, "{", ObjectField(IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(QuotedString)))), ObjectField(IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))), "}")))),
+  LetDecl(LetKeyword, IdentifierDecl, FunctionValueExpr(FunctionValueExpr(FunctionValueAtom(IdentifierDecl)), MethodCall(".", IdentifierDecl, "(", FunctionArgs, ")"))),
+  FunctionValueExpr(FunctionValueAtom(IdentifierDecl)),
+  "}"
+)))
+
+# Multi-line object construction with trailing commas
+
+function TestMultiLineObject() -> Receipt {
+  let receipt = Receipt {
+    establishment_name: "Pizzaria la Rocca",
+    date: "2025-09-03",
+    total: 25.50,
+    currency: "USD",
+  };
+  receipt
+}
+
+==>
+
+Baml(Decl(FunctionDecl(
+  IdentifierDecl,
+  FunctionArgs,
+  TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
+  "{",
+  LetDecl(LetKeyword, IdentifierDecl, FunctionValueExpr(FunctionValueAtom(ObjectConstructor(IdentifierDecl, "{", ObjectField(IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(QuotedString)))), ObjectField(IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(QuotedString)))), ObjectField(IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))), ObjectField(IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(QuotedString)))), "}")))),
+  FunctionValueExpr(FunctionValueAtom(IdentifierDecl)),
+  "}"
+)))
+
+# Method call test
+
+function TestMethodCall() -> int {
+  let obj = SomeObject { id: 42, name: "test" };
+  let result = obj.foo();
+  result
+}
+
+==>
+
+Baml(Decl(FunctionDecl(
+  IdentifierDecl,
+  FunctionArgs,
+  TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
+  "{",
+  LetDecl(LetKeyword, IdentifierDecl, FunctionValueExpr(FunctionValueAtom(ObjectConstructor(IdentifierDecl, "{", ObjectField(IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))), ObjectField(IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(QuotedString)))), "}")))),
+  LetDecl(LetKeyword, IdentifierDecl, FunctionValueExpr(FunctionValueExpr(FunctionValueAtom(IdentifierDecl)), MethodCall(".", IdentifierDecl, "(", FunctionArgs, ")"))),
   FunctionValueExpr(FunctionValueAtom(IdentifierDecl)),
   "}"
 )))

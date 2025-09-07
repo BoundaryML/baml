@@ -4,7 +4,8 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_expr::{
-        parse_expr_block, parse_fn_app, parse_generic_fn_app, parse_if_expression, parse_lambda,
+        parse_expr_block, parse_expr_fn, parse_fn_app, parse_generic_fn_app, parse_if_expression,
+        parse_lambda,
     },
     parse_identifier::parse_identifier,
     Rule,
@@ -185,7 +186,7 @@ fn parse_primary_expression(
         Rule::BLOCK_LEVEL_CATCH_ALL => {
             diagnostics.push_error(
                 internal_baml_diagnostics::DatamodelError::new_validation_error(
-                    "This is not a valid expression.",
+                    "This is not a valid expression!",
                     span,
                 ),
             );
@@ -624,7 +625,7 @@ mod tests {
     use pest::{consumes_to, parses_to, Parser};
 
     use super::{
-        super::{BAMLParser, Rule},
+        super::{parse_expr::parse_expr_block, BAMLParser, Rule},
         *,
     };
 
@@ -644,6 +645,125 @@ mod tests {
         match expr {
             Expression::JinjaExpressionValue(JinjaExpression(s), _) => assert_eq!(s, "1 + 1"),
             _ => panic!("Expected JinjaExpression, got {expr:?}"),
+        }
+    }
+
+    #[test]
+    fn test_mdx_header_parsing() {
+        println!("\n=== Testing MDX Header Parsing ===");
+
+        let input = r#"{
+            # Level 1 Header
+            let x = "hello";
+            
+            ## Level 2 Header
+            let y = "world";
+
+            ########### Level 11 Header
+            
+            ### Level 3 Headers
+            x + y
+        }"#;
+
+        let root_path = "test_file.baml";
+        let source = SourceFile::new_static(root_path.into(), input);
+        let mut diagnostics = Diagnostics::new(root_path.into());
+        diagnostics.set_source(&source);
+
+        println!("Parsing expression block with mdx headers...");
+
+        let pair_result = BAMLParser::parse(Rule::expr_block, input);
+        match pair_result {
+            Ok(mut pairs) => {
+                let pair = pairs.next().unwrap();
+                let expr = parse_expr_block(pair, &mut diagnostics);
+                match expr {
+                    Some(expr_block) => {
+                        println!("✓ Successfully parsed expression block: {expr_block:?}")
+                    }
+                    None => println!("✗ Failed to parse expression block"),
+                }
+            }
+            Err(e) => println!("✗ Parse error: {e:?}"),
+        }
+
+        println!("Diagnostics:");
+        for error in diagnostics.errors() {
+            println!("  Error: {error:?}");
+        }
+        for warning in diagnostics.warnings() {
+            println!("  Warning: {warning:?}");
+        }
+    }
+
+    #[test]
+    fn test_complex_header_hierarchy() {
+        println!("\n=== Testing Complex Header Hierarchy ===");
+
+        let input = r#"# Loop Processing
+fn ForLoopWithHeaders() -> int {
+    let items = [1, 2, 3, 4, 5];
+    let result = 0;
+    
+    ## Main Loop
+    for (item in items) {
+        ### Item Processing
+        let processed = item * 2;
+        
+        #### Accumulation
+        result = result + processed;
+    }
+    
+    ## Final Result
+    result
+}"#;
+
+        let root_path = "test_file.baml";
+        let source = SourceFile::new_static(root_path.into(), input);
+        let mut diagnostics = Diagnostics::new(root_path.into());
+        diagnostics.set_source(&source);
+
+        println!("Parsing function with complex header hierarchy...");
+
+        let pair_result = BAMLParser::parse(Rule::schema, input);
+        match pair_result {
+            Ok(mut pairs) => {
+                let schema_pair = pairs.next().unwrap();
+                println!("✓ Successfully parsed schema");
+
+                // Look for expr_fn within the schema
+                for item in schema_pair.into_inner() {
+                    match item.as_rule() {
+                        Rule::expr_fn => {
+                            let expr_fn = parse_expr_fn(item, &mut diagnostics);
+                            match expr_fn {
+                                Some(expr_fn) => {
+                                    println!(
+                                        "✓ Found and parsed function: {}",
+                                        expr_fn.name.name()
+                                    );
+                                }
+                                None => println!("✗ Failed to parse function"),
+                            }
+                        }
+                        Rule::comment_block => {
+                            println!("✓ Found top-level comment block");
+                        }
+                        _ => {
+                            println!("Found other item: {:?}", item.as_rule());
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                println!("✗ Parse error: {e:?}");
+                return;
+            }
+        }
+
+        println!("Diagnostics errors: {}", diagnostics.errors().len());
+        for error in diagnostics.errors() {
+            println!("  Error: {error:?}");
         }
     }
 }

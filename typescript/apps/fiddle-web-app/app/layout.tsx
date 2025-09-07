@@ -37,7 +37,7 @@ export default function RootLayout({
       <PHProvider>
         <body
           className={cn(
-            'bg-background text-foreground relative min-h-screen font-sans antialiased',
+            'bg-background text-foreground relative h-screen font-sans antialiased',
             GeistSans.variable,
             GeistMono.variable,
           )}

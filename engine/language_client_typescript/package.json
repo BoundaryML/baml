@@ -89,7 +89,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.7.3",
-    "@napi-rs/cli": "3.0.0-alpha.62",
+    "@napi-rs/cli": "3.0.4",
     "@types/jest": "^29.5.14",
     "@types/node": "^20.12.11",
     "jest": "^29.7.0",

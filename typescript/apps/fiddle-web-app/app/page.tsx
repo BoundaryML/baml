@@ -27,7 +27,7 @@ export default async function Home({
     return <div>Project not found</div>;
   }
   return (
-    <main className="flex flex-col justify-between items-center min-h-screen font-sans bg-background">
+    <main className="flex flex-col justify-between items-center h-screen overflow-hidden font-sans bg-background">
       <ProjectView project={data} />
     </main>
   );

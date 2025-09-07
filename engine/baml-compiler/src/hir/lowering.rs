@@ -393,6 +393,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
             is_mutable,
             expr,
             span,
+            annotations: _,
         }) => {
             let lifted_expr = Expression::from_ast(expr);
 
@@ -415,6 +416,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
             iterator,
             body,
             span,
+            annotations: _,
         }) => {
             // Lower for loop to HIR
             let lifted_iterator = Expression::from_ast(iterator);
@@ -428,8 +430,8 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
             }
         }
         ast::Stmt::Expression(expr) => Statement::Expression {
-            expr: Expression::from_ast(expr),
-            span: expr.span().clone(),
+            expr: Expression::from_ast(&expr.expr),
+            span: expr.span.clone(),
         },
         ast::Stmt::Semicolon(expr) => Statement::Semicolon {
             expr: Expression::from_ast(expr),

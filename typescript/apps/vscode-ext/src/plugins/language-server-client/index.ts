@@ -429,26 +429,14 @@ export const registerClientEventHandlers = (client: LanguageClient, context: Ext
   })
 
   const handleRuntimeUpdated = (params: { root_path: string; files: Record<string, string> }) => {
-    const activeEditor =
-      window.activeTextEditor || (window.visibleTextEditors.length > 0 ? window.visibleTextEditors[0] : null)
-    if (activeEditor) {
-      try {
-        const currentFilePath = URI.parse(activeEditor.document.uri.toString()).fsPath
-        const rootPathUri = URI.file(params.root_path).fsPath
-        if (isPathWithinParent(currentFilePath, rootPathUri)) {
-          console.log('Forwarding runtime_updated to WebviewPanelHost')
-          WebviewPanelHost.currentPanel?.postMessage('add_project', {
-            ...params,
-            root_path: URI.file(params.root_path).toString(),
-          })
-        } else {
-          console.log('runtime_updated ignored: root path does not match active editor', currentFilePath, rootPathUri)
-        }
-      } catch (e) {
-        console.error('Error processing runtime_updated:', e)
-      }
-    } else {
-      console.log('runtime_updated ignored: no active editor')
+    try {
+      console.log('Forwarding runtime_updated to WebviewPanelHost')
+      WebviewPanelHost.currentPanel?.postMessage('add_project', {
+        ...params,
+        root_path: URI.file(params.root_path).toString(),
+      })
+    } catch (e) {
+      console.error('Error processing runtime_updated:', e)
     }
   }
 

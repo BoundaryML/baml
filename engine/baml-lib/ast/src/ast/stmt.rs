@@ -9,6 +9,7 @@ pub struct LetStmt {
     pub is_mutable: bool,
     pub expr: Expression,
     pub span: Span,
+    pub annotations: Vec<std::sync::Arc<Header>>,
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +57,14 @@ pub struct ForLoopStmt {
     pub iterator: Expression,
     pub body: ExpressionBlock,
     pub span: Span,
+    pub annotations: Vec<std::sync::Arc<Header>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExprStmt {
+    pub expr: Expression,
+    pub annotations: Vec<std::sync::Arc<Header>>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -95,7 +104,7 @@ pub enum Stmt {
     CForLoop(CForLoopStmt),
     WhileLoop(WhileStmt),
     /// Expression without a trailing semicolon.
-    Expression(Expression),
+    Expression(ExprStmt),
     /// Expression with a trailing semicolon.
     Semicolon(Expression),
     Assign(AssignStmt),
@@ -121,6 +130,13 @@ impl fmt::Display for AssignOp {
             AssignOp::ShrAssign => ">>=",
         })
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Header {
+    pub level: u8,
+    pub title: String,
+    pub span: Span,
 }
 
 impl fmt::Display for Stmt {
@@ -149,7 +165,7 @@ impl fmt::Display for Stmt {
 
                 write!(f, ") {}", stmt.body)
             }
-            Stmt::Expression(expr) => write!(f, "{expr}"),
+            Stmt::Expression(es) => write!(f, "{}", es.expr),
             Stmt::Semicolon(expr) => write!(f, "{expr};"),
             Stmt::Assign(stmt) => write!(f, "{} = {}", stmt.left, stmt.expr),
             Stmt::AssignOp(stmt) => {
@@ -188,8 +204,8 @@ impl Stmt {
                 stmt1.iterator.assert_eq_up_to_span(&stmt2.iterator);
                 stmt1.body.assert_eq_up_to_span(&stmt2.body);
             }
-            (Stmt::Expression(expr1), Stmt::Expression(expr2)) => {
-                expr1.assert_eq_up_to_span(expr2);
+            (Stmt::Expression(es1), Stmt::Expression(es2)) => {
+                es1.expr.assert_eq_up_to_span(&es2.expr);
             }
             (Stmt::Semicolon(expr1), Stmt::Semicolon(expr2)) => {
                 expr1.assert_eq_up_to_span(expr2);
@@ -308,7 +324,7 @@ impl Stmt {
             | Stmt::Continue(span)
             | Stmt::Assert(AssertStmt { span, .. }) => span,
 
-            Stmt::Expression(expr) => expr.span(),
+            Stmt::Expression(es) => &es.span,
             Stmt::Semicolon(expr) => expr.span(),
         }
     }

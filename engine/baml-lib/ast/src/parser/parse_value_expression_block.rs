@@ -100,6 +100,8 @@ pub(crate) fn parse_value_expression_block(
                         }
 
                         Rule::comment_block => pending_field_comment = Some(item),
+                        // Ignore markdown headers inside value expression blocks.
+                        // Top-level headers are handled in parse.rs and bound as annotations.
                         Rule::block_attribute => {
                             let span = item.as_span();
                             let attribute = parse_attribute(item, false, diagnostics);
@@ -125,7 +127,7 @@ pub(crate) fn parse_value_expression_block(
                             }
                         }
                         Rule::empty_lines => {}
-                        Rule::BLOCK_LEVEL_CATCH_ALL => {
+                        Rule::BLOCK_LEVEL_CATCH_ALL | Rule::mdx_header => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
                                 "This line is not a valid field or attribute definition. A valid property may look like: 'myProperty \"some value\"' for example, with no colons.",
                                 diagnostics.span(item.as_span()),
@@ -172,6 +174,7 @@ pub(crate) fn parse_value_expression_block(
             span: diagnostics.span(pair_span),
             type_builder,
             block_type: sub_type.unwrap_or(ValueExprBlockType::Function),
+            annotations: vec![],
         });
     }
 

@@ -31,7 +31,7 @@ import { areTestsRunningAtom, selectedItemAtom, selectionAtom } from './atoms';
 import { FunctionTestName } from './function-test-name';
 import { isParallelTestsEnabledAtom } from './prompt-preview/test-panel/atoms';
 import { useRunBamlTests } from './prompt-preview/test-panel/test-runner';
-import { betaFeatureEnabledAtom, isVSCodeEnvironment } from '../feature-flags';
+import { standaloneBetaFeatureEnabledAtom, isVSCodeEnvironment } from '../feature-flags';
 import { vscodeSettingsAtom } from '../atoms';
 
 export const displaySettingsAtom = atom({
@@ -88,7 +88,7 @@ export function PreviewToolbar() {
   const setBamlConfig = useSetAtom(bamlConfig);
   
   // Beta feature flag settings
-  const [betaFeatureEnabled, setBetaFeatureEnabled] = useAtom(betaFeatureEnabledAtom);
+  const [betaFeatureEnabled, setBetaFeatureEnabled] = useAtom(standaloneBetaFeatureEnabledAtom);
   const vscodeSettings = useAtomValue(vscodeSettingsAtom);
   const isInVSCode = isVSCodeEnvironment();
   

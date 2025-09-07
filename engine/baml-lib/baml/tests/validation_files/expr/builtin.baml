@@ -21,18 +21,6 @@ function GetTodoMissingTypeArg() -> Todo {
   })
 }
 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/builtin.baml:8
-//    | 
-//  7 | 
-//  8 | function GetTodo() -> Todo {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/builtin.baml:16
-//    | 
-// 15 | 
-// 16 | function GetTodoMissingTypeArg() -> Todo {
-//    | 
 // error: Generic function std::fetch_value must have a type argument. Try adding a type argument like this: std::fetch_value<Type>
 //   -->  expr/builtin.baml:17
 //    | 

@@ -1,8 +1,5 @@
 use baml_types::{BamlMap, BamlValue};
-use napi::{
-    bindgen_prelude::*, JsBoolean, JsDate, JsExternal, JsNumber, JsObject, JsString, JsUnknown,
-    NapiRaw,
-};
+use napi::{bindgen_prelude::*, JsDate, JsExternal, JsNumber, JsString, Unknown};
 
 use crate::types::{audio::BamlAudio, image::BamlImage, pdf::BamlPdf, video::BamlVideo};
 
@@ -44,37 +41,7 @@ impl From<Errors> for napi::Error {
     }
 }
 
-// use the FromNapiValue implementation for serde_json::Number here
-// https://github.com/napi-rs/napi-rs/blob/b2239fd880fa40fa98d206d8f31aec1bb8a0ce12/crates/napi/src/bindgen_runtime/js_values/serde.rs#L147
-fn from_napi_number(env: Env, napi_val: JsNumber) -> Result<BamlValue> {
-    let n = unsafe { f64::from_napi_value(env.raw(), napi_val.raw())? };
-    // Try to auto-convert to integers
-    let n = if n.trunc() == n {
-        if n >= 0.0f64 && n <= u32::MAX as f64 {
-            // This can be represented as u32
-            Some(BamlValue::Int(n as i64))
-        } else if n < 0.0f64 && n >= i32::MIN as f64 {
-            Some(BamlValue::Int(n as i64))
-        } else {
-            // must be a float
-            Some(BamlValue::Float(n))
-        }
-    } else {
-        // must be a float
-        Some(BamlValue::Float(n))
-    };
-
-    let n = n.ok_or_else(|| {
-        Error::new(
-            Status::InvalidArg,
-            "Unexpected JsNumber type, expected int or float".to_owned(),
-        )
-    })?;
-
-    Ok(n)
-}
-
-pub fn js_object_to_baml_value(env: Env, kwargs: JsObject) -> napi::Result<BamlValue> {
+pub fn js_object_to_baml_value(env: &Env, kwargs: Object) -> napi::Result<BamlValue> {
     if kwargs.is_array()? || kwargs.is_typedarray()? || kwargs.is_dataview()? {
         let len = kwargs.get_array_length()?;
         let mut args = Vec::with_capacity(len as usize);
@@ -96,7 +63,8 @@ pub fn js_object_to_baml_value(env: Env, kwargs: JsObject) -> napi::Result<BamlV
         }
         Ok(BamlValue::List(args))
     } else if kwargs.is_date()? {
-        let date: JsDate = unsafe { kwargs.into_unknown().cast() };
+        let date: JsDate =
+            unsafe { JsDate::from_napi_value(env.raw(), kwargs.into_unknown(env)?.raw())? };
         let timestamp = date.value_of()?;
         // TODO: Convert timestamp to a DateTime
         Ok(BamlValue::Float(timestamp))
@@ -118,7 +86,7 @@ pub fn js_object_to_baml_value(env: Env, kwargs: JsObject) -> napi::Result<BamlV
         log::trace!("Processing object with {num_keys} keys");
         for i in 0..num_keys {
             let key = keys.get_element::<JsString>(i)?;
-            let param: JsUnknown = kwargs.get_property(key)?;
+            let param: Unknown = kwargs.get_property(key)?;
             let key_as_string = key.into_utf8()?.as_str()?.to_string();
 
             log::trace!("Processing key: {key_as_string}");
@@ -143,27 +111,41 @@ pub fn js_object_to_baml_value(env: Env, kwargs: JsObject) -> napi::Result<BamlV
 }
 
 pub fn jsunknown_to_baml_value(
-    env: Env,
-    item: JsUnknown,
+    env: &Env,
+    item: Unknown,
     skip_unsupported: bool,
 ) -> napi::Result<Option<BamlValue>> {
     let item_type = item.get_type()?;
     log::trace!("Processing item of type: {item_type:?}");
     Ok(Some(match item_type {
         ValueType::Boolean => {
-            let b: JsBoolean = unsafe { item.cast() };
-            BamlValue::Bool(b.get_value()?)
+            let b: bool = unsafe { bool::from_napi_value(env.raw(), item.raw())? };
+            BamlValue::Bool(b)
         }
         ValueType::Number => {
-            let n: JsNumber = unsafe { item.cast() };
-            from_napi_number(env, n)?
+            let n: f64 = unsafe { f64::from_napi_value(env.raw(), item.raw())? };
+            // Try to auto-convert to integers
+            if n.trunc() == n {
+                if n >= 0.0f64 && n <= u32::MAX as f64 {
+                    // This can be represented as u32
+                    BamlValue::Int(n as i64)
+                } else if n < 0.0f64 && n >= i32::MIN as f64 {
+                    BamlValue::Int(n as i64)
+                } else {
+                    // must be a float
+                    BamlValue::Float(n)
+                }
+            } else {
+                // must be a float
+                BamlValue::Float(n)
+            }
         }
         ValueType::String => {
-            let s: JsString = unsafe { item.cast() };
-            BamlValue::String(s.into_utf8()?.as_str()?.to_string())
+            let s: String = unsafe { String::from_napi_value(env.raw(), item.raw())? };
+            BamlValue::String(s)
         }
         ValueType::Object => {
-            let obj: JsObject = unsafe { item.cast() };
+            let obj: Object = unsafe { Object::from_napi_value(env.raw(), item.raw())? };
             js_object_to_baml_value(env, obj)?
         }
         ValueType::Undefined | ValueType::Null => BamlValue::Null,
@@ -184,14 +166,15 @@ pub fn jsunknown_to_baml_value(
             ));
         }
         ValueType::External => {
-            let external = unsafe { item.cast::<JsExternal>() };
-            if let Ok(img) = env.get_value_external::<BamlImage>(&external) {
+            let external = unsafe { JsExternal::from_napi_value(env.raw(), item.raw())? };
+
+            if let Ok(img) = external.get_value::<BamlImage>() {
                 BamlValue::Media(img.inner.clone())
-            } else if let Ok(audio) = env.get_value_external::<BamlAudio>(&external) {
+            } else if let Ok(audio) = external.get_value::<BamlAudio>() {
                 BamlValue::Media(audio.inner.clone())
-            } else if let Ok(pdf) = env.get_value_external::<BamlPdf>(&external) {
+            } else if let Ok(pdf) = external.get_value::<BamlPdf>() {
                 BamlValue::Media(pdf.inner.clone())
-            } else if let Ok(video) = env.get_value_external::<BamlVideo>(&external) {
+            } else if let Ok(video) = external.get_value::<BamlVideo>() {
                 BamlValue::Media(video.inner.clone())
             } else {
                 if skip_unsupported {

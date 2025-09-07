@@ -31,6 +31,14 @@ regex.workspace = true
 pretty_assertions.workspace = true
 unindent = "0.2.3"
 
+[[example]]
+name = "generate_mermaid_ast"
+path = "examples/generate_mermaid_ast.rs"
+
+[[example]]
+name = "generate_mermaid_headers"
+path = "examples/generate_mermaid_headers.rs"
+
 [features]
 debug_parser = []
-# default = ["debug_parser"]
+#default = ["debug_parser"]

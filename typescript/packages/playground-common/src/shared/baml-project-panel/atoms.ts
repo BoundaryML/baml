@@ -14,6 +14,26 @@ import { vscode } from './vscode';
 import { apiKeysAtom } from '../../components/api-keys-dialog/atoms';
 import { standaloneFeatureFlagsAtom, isVSCodeEnvironment } from './feature-flags';
 
+// Unified beta feature atom that works in both VS Code and standalone environments
+export const betaFeatureEnabledAtom = atom((get) => {
+  const isInVSCode = isVSCodeEnvironment();
+  
+  if (isInVSCode) {
+    // In VSCode: try vscodeSettingsAtom, then bamlConfig fallback
+    const vscodeSettings = get(vscodeSettingsAtom);
+    if (vscodeSettings?.featureFlags) {
+      return vscodeSettings.featureFlags.includes('beta');
+    } else {
+      // VSCode settings not loaded yet, use bamlConfig as immediate fallback
+      const config = get(bamlConfig);
+      return (config.config?.featureFlags ?? []).includes('beta');
+    }
+  } else {
+    // Standalone: use standalone flags
+    return get(standaloneFeatureFlagsAtom).includes('beta');
+  }
+});
+
 const wasmAtomAsync = atom(async () => {
   const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build');
   // Enable WASM logging for debugging

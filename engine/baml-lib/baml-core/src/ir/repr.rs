@@ -312,7 +312,7 @@ fn convert_function_body(
         .expr
         .map(|e| e.repr(db))
         .unwrap_or_else(|| {
-            eprintln!("TODO @greg: convert blocks with no return types to lambda terms");
+            // eprintln!("TODO @greg: convert blocks with no return types to lambda terms");
             // Placeholder just to allow compilation.
             Ok(Expr::Atom(BamlValueWithMeta::Null((Span::fake(), None))))
         })
@@ -772,7 +772,7 @@ impl IntermediateRepr {
         self.expr_fns.iter().map(|e| Walker { ir: self, item: e })
     }
 
-    pub fn walk_tests(
+    pub fn walk_function_test_pairs(
         &self,
     ) -> impl Iterator<Item = Walker<'_, (&Node<Function>, &Node<TestCase>)>> {
         self.functions.iter().flat_map(move |f| {

@@ -729,7 +729,7 @@ impl WithRenderRawCurl for AwsClient {
         // pretty, multi-line JSON
         let input_json_str = serde_json::to_string_pretty(&serde_json::Value::Object(root))?;
         let input_json_escaped = escape(Cow::Borrowed(&input_json_str));
-        cmd.push(format!("--cli-input-json {}", input_json_escaped));
+        cmd.push(format!("--cli-input-json {input_json_escaped}"));
 
         Ok(cmd.join(" "))
     }
