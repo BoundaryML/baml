@@ -605,11 +605,9 @@ impl TypeContext<'_> {
                             name: enum_name, ..
                         } => {
                             // Look up field in enum definition
-                            if let Some(enum_def) = self.enums.get(&enum_name) {
-                                Some(TypeIR::r#enum(&enum_def.name))
-                            } else {
-                                None
-                            }
+                            self.enums
+                                .get(&enum_name)
+                                .map(|enum_def| TypeIR::r#enum(&enum_def.name))
                         }
                         _ => None, // Not a class
                     }
