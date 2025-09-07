@@ -53,20 +53,27 @@ impl Hir {
 
         let enums = HashSet::<&str>::from_iter(hir.enums.iter().map(|e| e.name.as_str()));
 
+        let param_type: fn(&mut Parameter) -> &mut TypeIR = |p| &mut p.r#type;
+
         // Patch return types because only here in the code we have the full
         // context for enums.
         hir.expr_functions
             .iter_mut()
-            .map(|f| &mut f.return_type)
-            .chain(hir.llm_functions.iter_mut().map(|f| &mut f.return_type))
+            .map(|f| (f.parameters.iter_mut().map(param_type), &mut f.return_type))
             .chain(
-                hir.classes
+                hir.llm_functions
                     .iter_mut()
-                    .flat_map(|c| c.methods.iter_mut().map(|f| &mut f.return_type)),
+                    .map(|f| (f.parameters.iter_mut().map(param_type), &mut f.return_type)),
             )
-            .for_each(|return_type| match return_type {
+            .chain(hir.classes.iter_mut().flat_map(|c| {
+                c.methods
+                    .iter_mut()
+                    .map(|f| (f.parameters.iter_mut().map(param_type), &mut f.return_type))
+            }))
+            .flat_map(|(parameters, return_type)| parameters.chain(std::iter::once(return_type)))
+            .for_each(|ty| match ty {
                 TypeIR::Class { name, meta, .. } if enums.contains(name.as_str()) => {
-                    *return_type = TypeIR::Enum {
+                    *ty = TypeIR::Enum {
                         name: name.to_owned(),
                         dynamic: false, // TODO: How to know if it's dynamic.
                         meta: meta.clone(),

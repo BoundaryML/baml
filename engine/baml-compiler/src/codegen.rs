@@ -234,8 +234,8 @@ fn compile_thir_to_bytecode(
 
     let mut resolved_class_names = HashMap::new();
     let mut resolved_function_names = HashMap::new();
+    let mut resolved_enums_names = HashMap::new();
 
-    // TODO: Unify in resolved_globals instead.
     for (i, object) in objects.iter().enumerate() {
         match object {
             Object::Class(c) => {
@@ -244,7 +244,10 @@ fn compile_thir_to_bytecode(
             Object::Function(f) => {
                 resolved_function_names.insert(f.name.clone(), (ObjectIndex::from_raw(i), f.kind));
             }
-            _ => continue,
+            Object::Enum(e) => {
+                resolved_enums_names.insert(e.name.clone(), ObjectIndex::from_raw(i));
+            }
+            _ => {}
         }
     }
 
@@ -253,6 +256,7 @@ fn compile_thir_to_bytecode(
         globals,
         resolved_function_names,
         resolved_class_names,
+        resolved_enums_names,
     })
 }
 

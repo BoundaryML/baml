@@ -66,6 +66,7 @@ fn setup_and_exec_program(
         objects,
         globals,
         resolved_function_names,
+        resolved_enums_names,
         resolved_class_names,
     } = baml_compiler::compile(&ast)?;
     let (target_function_index, _) = resolved_function_names[function];
@@ -2068,6 +2069,43 @@ mod enums {
                     panic!(
                         "expected Variant, got {:?}",
                         &vm.objects[ObjectIndex::from_raw(7)]
+                    );
+                };
+
+                assert_eq!(variant.index, 1);
+
+                Ok(())
+            },
+        )
+    }
+
+    #[test]
+    fn take_and_return_enum_variant() -> anyhow::Result<()> {
+        assert_vm_executes_with_inspection(
+            Program {
+                source: r#"
+                    enum Shape {
+                        Square
+                        Rectangle
+                        Circle
+                    }
+
+                    function return_shape(shape: Shape) -> Shape {
+                        shape
+                    }
+
+                    fn main() -> Shape {
+                        return_shape(Shape.Rectangle)
+                    }
+                "#,
+                function: "main",
+                expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(8))),
+            },
+            |vm| {
+                let Object::Variant(variant) = &vm.objects[ObjectIndex::from_raw(8)] else {
+                    panic!(
+                        "expected Variant, got {:?}",
+                        &vm.objects[ObjectIndex::from_raw(8)]
                     );
                 };
 

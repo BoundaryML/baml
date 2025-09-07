@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 pub(super) mod indexable;
 
-use baml_types::BamlMap;
+use baml_types::{BamlMap, BamlMedia};
 use indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 
 use crate::{
@@ -172,6 +172,9 @@ pub enum Object {
     Map(BamlMap<String, Value>),
 
     Future(Future),
+
+    /// Images, audio, pdf, video.
+    Media(BamlMedia),
 }
 
 #[derive(Clone, Debug)]
@@ -231,6 +234,7 @@ impl std::fmt::Display for Object {
             Object::String(string) => string.fmt(f),
             Object::Array(array) => write!(f, "{array:?}"),
             Object::Map(map) => write!(f, "{map:?}"),
+            Object::Media(_media) => write!(f, "<media>"),
             Object::Future(future) => match future {
                 Future::Pending(llm_future) => write!(f, "<pending: {}>", llm_future.llm_function),
                 Future::Ready(value) => write!(f, "<ready: {value}>"),
@@ -312,6 +316,7 @@ pub enum ObjectType {
     String,
     Enum,
     Variant,
+    Media,
     Future(FutureType),
 }
 
@@ -328,6 +333,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Variant => write!(f, "variant"),
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
             ObjectType::String => write!(f, "string"),
+            ObjectType::Media => write!(f, "media"),
         }
     }
 }
@@ -394,6 +400,7 @@ impl ObjectType {
             Object::String(_) => Self::String,
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
+            Object::Media(_) => Self::Media,
             Object::Future(fut) => Self::Future(fut.into()),
         }
     }
@@ -778,6 +785,7 @@ pub struct BamlVmProgram {
     pub globals: GlobalPool,
     pub resolved_function_names: HashMap<String, (ObjectIndex, FunctionKind)>,
     pub resolved_class_names: HashMap<String, ObjectIndex>,
+    pub resolved_enums_names: HashMap<String, ObjectIndex>,
 }
 
 impl Vm {
@@ -899,6 +907,15 @@ impl Vm {
             self.objects
                 .insert(Object::Instance(Instance { class, fields })),
         )
+    }
+
+    // TODO: Same problem as above. Ideally takes (&str, &str) instead.
+    pub fn alloc_variant(&mut self, enm: ObjectIndex, index: usize) -> Value {
+        Value::Object(self.objects.insert(Object::Variant(Variant { enm, index })))
+    }
+
+    pub fn alloc_media(&mut self, media: BamlMedia) -> Value {
+        Value::Object(self.objects.insert(Object::Media(media)))
     }
 
     /// Main VM execution loop.

@@ -103,9 +103,17 @@ function SumFromTo(x: int, y: int) -> int {
     s
 }
 
+function ReturnCategory(category: Category) -> Category {
+    category
+}
+
 // --------------------------------
 // Expression Functions with LLM calls.
 // --------------------------------
+
+function CallLlmDescribeImage(img: image) -> string {
+    DescribeImage(img)
+}
 
 function LlmReturnNumber(n: int) -> int {
     client GPT35LegacyProvider // GPT 3.5 Turbo

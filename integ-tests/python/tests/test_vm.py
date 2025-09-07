@@ -6,6 +6,7 @@ Important: No LLM calls here, this will run in CI.
 
 from ..baml_client.sync_client import b
 from ..baml_client.runtime import disassemble
+from ..baml_client.types import Category
 
 
 def test_return_one():
@@ -70,3 +71,11 @@ def test_sum_array():
 
 def test_sum_from_to():
     assert b.SumFromTo(1, 10) == 55
+
+
+def test_return_category():
+    assert b.ReturnCategory(Category.Refund) == Category.Refund
+    assert b.ReturnCategory(Category.CancelOrder) == Category.CancelOrder
+    assert b.ReturnCategory(Category.TechnicalSupport) == Category.TechnicalSupport
+    assert b.ReturnCategory(Category.AccountIssue) == Category.AccountIssue
+    assert b.ReturnCategory(Category.Question) == Category.Question

@@ -224,8 +224,13 @@ impl BamlAsyncVmRuntime {
                     anyhow::bail!("missing parameter: {name}");
                 };
 
-                try_vm_value_from_baml_value(&mut vm, &self.program.resolved_class_names, param)
-                    .context("failed to convert baml argument to vm value")
+                try_vm_value_from_baml_value(
+                    &mut vm,
+                    &self.program.resolved_class_names,
+                    &self.program.resolved_enums_names,
+                    param,
+                )
+                .context("failed to convert baml argument to vm value")
             })
             .collect::<Result<Vec<_>, _>>()
             .context("failed to convert baml args to vm values")
@@ -247,9 +252,10 @@ impl BamlAsyncVmRuntime {
                     let mut fulfilled = false;
 
                     while let Ok((ready_idx, (result, call_id))) = futures_rx.try_recv() {
-                        let vm_value = match vm_value_from_function_result(
+                        let vm_value = match try_vm_value_from_function_result(
                             &mut vm,
                             &self.program.resolved_class_names,
+                            &self.program.resolved_enums_names,
                             result,
                         ) {
                             Ok(vm_value) => vm_value,
@@ -282,9 +288,10 @@ impl BamlAsyncVmRuntime {
                             }
                         };
 
-                        let vm_value = match vm_value_from_function_result(
+                        let vm_value = match try_vm_value_from_function_result(
                             &mut vm,
                             &self.program.resolved_class_names,
+                            &self.program.resolved_enums_names,
                             result,
                         ) {
                             Ok(vm_value) => vm_value,
@@ -659,14 +666,62 @@ fn try_baml_value_from_vm_value(vm: &Vm, value: &baml_vm::Value) -> anyhow::Resu
         baml_vm::Value::Int(n) => Ok(BamlValue::Int(*n)),
         baml_vm::Value::Float(f) => Ok(BamlValue::Float(*f)),
 
-        baml_vm::Value::Object(o) => match &vm.objects[*o] {
-            baml_vm::Object::String(s) => Ok(BamlValue::String(s.clone())),
-            baml_vm::Object::Array(a) => Ok(BamlValue::List(
-                a.iter()
+        baml_vm::Value::Object(obj_index) => match &vm.objects[*obj_index] {
+            baml_vm::Object::String(string) => Ok(BamlValue::String(string.clone())),
+
+            baml_vm::Object::Media(media) => Ok(BamlValue::Media(media.clone())),
+
+            baml_vm::Object::Array(array) => Ok(BamlValue::List(
+                array
+                    .iter()
                     .map(|v| try_baml_value_from_vm_value(vm, v))
                     .collect::<Result<Vec<_>, _>>()?,
             )),
-            _ => anyhow::bail!("unsupported object: {:?}", o),
+
+            baml_vm::Object::Map(vm_map) => {
+                let mut baml_map = BamlMap::new();
+
+                for (k, v) in vm_map {
+                    baml_map.insert(k.clone(), try_baml_value_from_vm_value(vm, v)?);
+                }
+
+                Ok(BamlValue::Map(baml_map))
+            }
+
+            baml_vm::Object::Instance(instance) => {
+                let baml_vm::Object::Class(class) = &vm.objects[instance.class] else {
+                    anyhow::bail!("internal error: cannot convert VM value {value} to Baml value: class ID '{}' not found in VM objects", instance.class);
+                };
+
+                let mut fields = BamlMap::new();
+                for (i, v) in instance.fields.iter().enumerate() {
+                    fields.insert(
+                        class.field_names[i].clone(),
+                        try_baml_value_from_vm_value(vm, v)?,
+                    );
+                }
+
+                Ok(BamlValue::Class(class.name.clone(), fields))
+            }
+
+            baml_vm::Object::Variant(variant) => {
+                let baml_vm::Object::Enum(enm) = &vm.objects[variant.enm] else {
+                    anyhow::bail!("internal error: cannot convert VM value {value} to Baml value: enum ID '{}' not found in VM objects", variant.enm);
+                };
+
+                Ok(BamlValue::Enum(
+                    enm.name.clone(),
+                    enm.variant_names[variant.index].clone(),
+                ))
+            }
+
+            baml_vm::Object::Future(_)
+            | baml_vm::Object::Class(_)
+            | baml_vm::Object::Enum(_)
+            | baml_vm::Object::Function(_) => anyhow::bail!(
+                "internal error: unsupported VM object to BamlValue convertion: {}",
+                vm.objects[*obj_index]
+            ),
         },
     }
 }
@@ -674,6 +729,7 @@ fn try_baml_value_from_vm_value(vm: &Vm, value: &baml_vm::Value) -> anyhow::Resu
 fn try_vm_value_from_baml_value(
     vm: &mut Vm,
     resolved_class_names: &HashMap<String, ObjectIndex>,
+    resolved_enums_names: &HashMap<String, ObjectIndex>,
     value: &BamlValue,
 ) -> anyhow::Result<baml_vm::Value> {
     match value {
@@ -688,7 +744,12 @@ fn try_vm_value_from_baml_value(
             let mut array = Vec::with_capacity(l.len());
 
             for v in l {
-                array.push(try_vm_value_from_baml_value(vm, resolved_class_names, v)?);
+                array.push(try_vm_value_from_baml_value(
+                    vm,
+                    resolved_class_names,
+                    resolved_enums_names,
+                    v,
+                )?);
             }
 
             Ok(vm.alloc_array(array))
@@ -700,7 +761,12 @@ fn try_vm_value_from_baml_value(
             for (k, v) in map {
                 vm_map.insert(
                     k.to_owned(),
-                    try_vm_value_from_baml_value(vm, resolved_class_names, v)?,
+                    try_vm_value_from_baml_value(
+                        vm,
+                        resolved_class_names,
+                        resolved_enums_names,
+                        v,
+                    )?,
                 );
             }
 
@@ -727,25 +793,41 @@ fn try_vm_value_from_baml_value(
 
             let mut vm_fields_layout = Vec::new();
             for v in ordered_field_values {
-                vm_fields_layout.push(try_vm_value_from_baml_value(vm, resolved_class_names, v)?);
+                vm_fields_layout.push(try_vm_value_from_baml_value(
+                    vm,
+                    resolved_class_names,
+                    resolved_enums_names,
+                    v,
+                )?);
             }
 
             Ok(vm.alloc_instance(*class_index, vm_fields_layout))
         }
 
-        BamlValue::Enum(_, _) => {
-            anyhow::bail!("cannot convert value {value} to VM value: enum not supported")
+        BamlValue::Enum(enm, variant) => {
+            let Some(enum_index) = resolved_enums_names.get(enm) else {
+                anyhow::bail!("cannot convert value {value} to VM value: enum '{enm}' not found");
+            };
+
+            let baml_vm::Object::Enum(enm) = &vm.objects[*enum_index] else {
+                anyhow::bail!("internal error: cannot convert value {value} to VM value: enum '{enm}' not found in VM objects");
+            };
+
+            let Some(variant_index) = enm.variant_names.iter().position(|v| v == variant) else {
+                anyhow::bail!("cannot convert value {value} to VM value: enum '{enm}' has no variant '{variant}'");
+            };
+
+            Ok(vm.alloc_variant(*enum_index, variant_index))
         }
 
-        BamlValue::Media(m) => {
-            anyhow::bail!("cannot convert value {value} to VM value: media not supported")
-        }
+        BamlValue::Media(media) => Ok(vm.alloc_media(media.clone())),
     }
 }
 
-fn vm_value_from_function_result(
+fn try_vm_value_from_function_result(
     vm: &mut Vm,
     resolved_class_names: &HashMap<String, ObjectIndex>,
+    resolved_enums_names: &HashMap<String, ObjectIndex>,
     result: anyhow::Result<FunctionResult>,
 ) -> anyhow::Result<baml_vm::Value> {
     let fn_result = result.context("failed to get function result")?;
@@ -761,5 +843,5 @@ fn vm_value_from_function_result(
         .0
         .value();
 
-    try_vm_value_from_baml_value(vm, resolved_class_names, &baml_value)
+    try_vm_value_from_baml_value(vm, resolved_class_names, resolved_enums_names, &baml_value)
 }
