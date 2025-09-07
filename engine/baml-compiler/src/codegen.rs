@@ -300,6 +300,8 @@ impl ForLoopVarCounters {
 }
 
 /// Compile an HIR function to bytecode.
+/// TODO: Fix this shit.
+#[allow(clippy::too_many_arguments)]
 fn compile_thir_function(
     func: &thir::ExprFunction<(Span, Option<TypeIR>)>,
     globals: &BamlMap<String, GlobalIndex>,
