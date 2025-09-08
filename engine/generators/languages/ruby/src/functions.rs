@@ -7,9 +7,7 @@ use crate::{
     r#type::{SerializeType, TypeRb},
 };
 
-#[allow(dead_code)]
 pub struct FunctionRb {
-    #[allow(dead_code)]
     pub(crate) documentation: Option<String>,
     pub(crate) name: String,
     pub(crate) args: Vec<FunctionArgRb>,
@@ -39,13 +37,11 @@ pub fn render_client(
 
 #[derive(askama::Template)]
 #[template(path = "parser.rb.j2", escape = "none")]
-#[allow(dead_code)]
 struct Parser<'a> {
     functions: &'a [FunctionRb],
     pkg: &'a CurrentRenderPackage,
 }
 
-#[allow(dead_code)]
 pub fn render_parser(
     functions: &[FunctionRb],
     pkg: &CurrentRenderPackage,
@@ -72,13 +68,11 @@ pub fn render_parser(
 /// ```
 #[derive(askama::Template)]
 #[template(in_doc = true, escape = "none", ext = "txt")]
-#[allow(dead_code)]
 struct TypeMap<'a> {
     classes: &'a [ClassRb<'a>],
     enums: &'a [EnumRb],
 }
 
-#[allow(dead_code)]
 pub fn render_type_map(classes: &[ClassRb], enums: &[EnumRb]) -> Result<String, askama::Error> {
     TypeMap { classes, enums }.render()
 }
@@ -99,12 +93,10 @@ pub fn render_type_map(classes: &[ClassRb], enums: &[EnumRb]) -> Result<String, 
 /// ```
 #[derive(askama::Template)]
 #[template(in_doc = true, escape = "none", ext = "txt")]
-#[allow(dead_code)]
 struct SourceFiles<'a> {
     file_map: &'a [(String, String)],
 }
 
-#[allow(dead_code)]
 pub fn render_source_files(file_map: Vec<(String, String)>) -> Result<String, askama::Error> {
     SourceFiles {
         file_map: &file_map,
@@ -124,12 +116,10 @@ pub fn render_globals(_pkg: &CurrentRenderPackage) -> Result<String, askama::Err
     Ok(include_str!("./_templates/globals.rb").to_string())
 }
 
-#[allow(dead_code)]
 pub fn render_config(_pkg: &CurrentRenderPackage) -> Result<String, askama::Error> {
     Ok(include_str!("./_templates/config.rb").to_string())
 }
 
-#[allow(dead_code)]
 pub fn render_tracing(_pkg: &CurrentRenderPackage) -> Result<String, askama::Error> {
     Ok("".to_string())
     // Ok(include_str!("./_templates/tracing.rb").to_string())
@@ -137,13 +127,11 @@ pub fn render_tracing(_pkg: &CurrentRenderPackage) -> Result<String, askama::Err
 
 #[derive(askama::Template)]
 #[template(path = "baml.rb.j2", escape = "none", ext = "txt")]
-#[allow(dead_code)]
 struct Init<'a> {
     version: &'a str,
     default_client_mode: GeneratorDefaultClientMode,
 }
 
-#[allow(dead_code)]
 pub fn render_init(
     _pkg: &CurrentRenderPackage,
     client_mode: &GeneratorDefaultClientMode,

@@ -6,6 +6,9 @@ authors.workspace = true
 description.workspace = true
 license-file.workspace = true
 
+[lints.rust]
+dead_code = "allow"
+
 [dependencies]
 askama.workspace = true
 anyhow.workspace = true

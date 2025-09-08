@@ -81,24 +81,6 @@ mod protoc_lang_out {
             self
         }
 
-        /// Append a path to `-I` args
-        #[allow(dead_code)]
-        pub fn include(&mut self, include: impl AsRef<Path>) -> &mut Self {
-            self.includes.push(include.as_ref().to_owned());
-            self
-        }
-
-        /// Append multiple paths to `-I` args
-        #[allow(dead_code)]
-        pub fn includes(
-            &mut self,
-            includes: impl IntoIterator<Item = impl AsRef<Path>>,
-        ) -> &mut Self {
-            for include in includes {
-                self.include(include);
-            }
-            self
-        }
 
         /// Append a `.proto` file path to compile
         pub fn input(&mut self, input: impl AsRef<Path>) -> &mut Self {
@@ -106,14 +88,6 @@ mod protoc_lang_out {
             self
         }
 
-        /// Append multiple `.proto` file paths to compile
-        #[allow(dead_code)]
-        pub fn inputs(&mut self, inputs: impl IntoIterator<Item = impl AsRef<Path>>) -> &mut Self {
-            for input in inputs {
-                self.input(input);
-            }
-            self
-        }
 
         /// Execute `protoc` with given args
         pub fn run(&self) -> Result<()> {
@@ -169,19 +143,6 @@ mod protoc_lang_out {
         }
     }
 
-    /// `Protoc --descriptor_set_out...` args
-    #[derive(Debug)]
-    #[allow(dead_code)]
-    pub struct DescriptorSetOutArgs<'a> {
-        /// `--file_descriptor_out=...` param
-        pub out: &'a str,
-        /// `-I` args
-        pub includes: &'a [&'a str],
-        /// List of `.proto` files to compile
-        pub input: &'a [&'a str],
-        /// `--include_imports`
-        pub include_imports: bool,
-    }
 
     /// Protoc command.
     #[derive(Clone, Debug)]
@@ -198,27 +159,6 @@ mod protoc_lang_out {
             }
         }
 
-        /// New `protoc` command from specified path
-        ///
-        /// # Examples
-        ///
-        /// ```no_run
-        /// # mod protoc_bin_vendored {
-        /// #   pub fn protoc_bin_path() -> Result<std::path::PathBuf, std::io::Error> {
-        /// #       unimplemented!()
-        /// #   }
-        /// # }
-        ///
-        /// // Use a binary from `protoc-bin-vendored` crate
-        /// let protoc = protoc::Protoc::from_path(
-        ///     protoc_bin_vendored::protoc_bin_path().unwrap());
-        /// ```
-        #[allow(dead_code)]
-        pub fn from_path(path: impl AsRef<OsStr>) -> Protoc {
-            Protoc {
-                exec: path.as_ref().to_owned(),
-            }
-        }
 
         /// Check `protoc` command found and valid
         pub fn check(&self) -> Result<()> {
@@ -284,38 +224,9 @@ mod protoc_lang_out {
             Ok(())
         }
 
-        /// Execute `protoc --descriptor_set_out=`
-        #[allow(dead_code)]
-        pub fn write_descriptor_set(&self, args: DescriptorSetOutArgs) -> Result<()> {
-            let mut cmd_args: Vec<OsString> = Vec::new();
-
-            for include in args.includes {
-                cmd_args.push(format!("-I{include}").into());
-            }
-
-            if args.out.is_empty() {
-                return Err(err_other("out is empty"));
-            }
-
-            cmd_args.push(format!("--descriptor_set_out={}", args.out).into());
-
-            if args.include_imports {
-                cmd_args.push("--include_imports".into());
-            }
-
-            if args.input.is_empty() {
-                return Err(err_other("input is empty"));
-            }
-
-            cmd_args.extend(args.input.iter().map(|a| OsString::from(*a)));
-
-            self.run_with_args(cmd_args)
-        }
     }
 
-    #[allow(dead_code)]
     pub struct Version {
-        #[allow(dead_code)]
         pub version: String,
     }
 

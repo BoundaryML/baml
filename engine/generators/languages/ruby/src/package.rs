@@ -31,7 +31,6 @@ impl Package {
         }
     }
 
-    #[allow(dead_code)]
     pub fn in_type_definition(&self) -> bool {
         self.type_definition_scope
     }
@@ -126,7 +125,6 @@ impl CurrentRenderPackage {
         }
     }
 
-    #[allow(dead_code)]
     pub fn name(&self) -> String {
         self.get().package_path.last().unwrap().clone()
     }

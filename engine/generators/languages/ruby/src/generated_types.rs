@@ -27,7 +27,6 @@ mod class {
         pub docstring: Option<String>,
         pub fields: Vec<FieldRb<'a>>,
         pub dynamic: bool,
-        #[allow(dead_code)]
         pub pkg: &'a CurrentRenderPackage,
     }
 
@@ -45,7 +44,6 @@ mod class {
         pub docstring: Option<String>,
         pub name: String,
         pub r#type: TypeRb,
-        #[allow(dead_code)]
         pub pkg: &'a CurrentRenderPackage,
     }
     impl std::fmt::Debug for FieldRb<'_> {
@@ -109,7 +107,6 @@ mod type_builder {
     }
 
     impl super::EnumRb {
-        #[allow(dead_code)]
         pub fn to_type_builder_property(&self) -> TypeBuilderProperty<'_, Self> {
             TypeBuilderProperty { property: self }
         }
@@ -129,7 +126,6 @@ mod type_builder {
     }
 
     impl super::ClassRb<'_> {
-        #[allow(dead_code)]
         pub fn to_type_builder_property(&self) -> TypeBuilderProperty<'_, Self> {
             TypeBuilderProperty { property: self }
         }
@@ -241,7 +237,6 @@ mod type_builder {
             )
         }
 
-        #[allow(dead_code)]
         pub fn to_type_builder_object(&'a self) -> TypeBuilderClassObject<'a> {
             TypeBuilderClassObject { class: self }
         }
@@ -338,7 +333,6 @@ mod type_builder {
             )
         }
 
-        #[allow(dead_code)]
         pub fn to_type_builder_object(&'a self) -> TypeBuilderEnumObject<'a> {
             TypeBuilderEnumObject { enum_: self }
         }
@@ -362,7 +356,6 @@ mod type_aliases {
         pub name: String,
         pub type_: TypeRb,
         pub docstring: Option<String>,
-        #[allow(dead_code)]
         pub pkg: &'a CurrentRenderPackage,
     }
 }
@@ -390,7 +383,6 @@ mod type_aliases {
 #[derive(askama::Template)]
 #[template(in_doc = true, escape = "none", ext = "txt")]
 struct RbTypesUtils<'a> {
-    #[allow(dead_code)]
     pkg: &'a CurrentRenderPackage,
 }
 
@@ -449,7 +441,6 @@ pub(crate) fn render_rb_types<T: askama::Template>(
 #[derive(askama::Template)]
 #[template(in_doc = true, escape = "none", ext = "txt")]
 pub struct RbStreamTypesUtils<'a> {
-    #[allow(dead_code)]
     pkg: &'a CurrentRenderPackage,
 }
 
