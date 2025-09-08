@@ -1,7 +1,6 @@
-import type { Configuration } from 'webpack';
-
-function getNextJsVersion(): string | null {
+function getNextJsVersion() {
   try {
+    // Try to find Next.js in the project's dependencies first
     const projectNextPath = require.resolve('next/package.json', {
       paths: [process.cwd()],
     });
@@ -9,6 +8,7 @@ function getNextJsVersion(): string | null {
     return nextPackageJson.version || null;
   } catch {
     try {
+      // Fallback to checking in the plugin's dependencies
       const nextPackageJson = require('next/package.json');
       return nextPackageJson.version || null;
     } catch {
@@ -20,84 +20,57 @@ function getNextJsVersion(): string | null {
   }
 }
 
-type GenericNextConfig = {
-  experimental?: {
-    serverComponentsExternalPackages?: string[];
-    turbo?: {
-      rules?: Record<string, any>;
-      resolveAlias?: Record<string, any>;
-      resolve?: {
-        alias?: Record<string, any>;
-        conditionNames?: string[];
-        preferRelative?: boolean;
-      };
-    };
-  };
-  serverExternalPackages?: string[];
-  webpack?: ((config: Configuration, context: any) => Configuration) | null;
-};
-
-export interface BamlNextConfig {
-  webpack?: ((config: Configuration, context: any) => Configuration) | null;
-}
-
-export function withBaml(_bamlConfig: BamlNextConfig = {}) {
-  return function withBamlConfig<T extends GenericNextConfig>(
-    nextConfig: T = {} as T,
-  ): T {
+export function withBaml(_bamlConfig = {}) {
+  // eslint-disable-line no-unused-vars
+  return function withBamlConfig(nextConfig = {}) {
     const nextVersion = getNextJsVersion();
+    // Default to new config (>= 14) if version can't be determined
     const majorVersion = nextVersion
       ? Number.parseInt(nextVersion.split('.')[0], 10)
       : 14;
     const useNewConfig = majorVersion >= 14;
     const isTurbo = Boolean(process.env.TURBOPACK === '1');
 
-    const turboConfig = isTurbo
-      ? {
-          ...(nextConfig.experimental?.turbo || {}),
-          rules: {
-            ...(nextConfig.experimental?.turbo?.rules || {}),
-            '*.node': { loaders: ['nextjs-node-loader'], as: '*.js' },
-          },
-        }
-      : undefined;
-
     return {
       ...nextConfig,
       ...(useNewConfig
         ? {
-            experimental: {
-              ...(nextConfig.experimental || {}),
-              ...(isTurbo ? { turbo: turboConfig } : {}),
-            },
-            ...(isTurbo
-              ? {}
-              : {
-                  serverExternalPackages: [
-                    ...(nextConfig?.serverExternalPackages || []),
-                    '@boundaryml/baml',
-                  ],
-                }),
+            // Always add BAML to serverExternalPackages for both webpack and Turbopack
+            serverExternalPackages: [
+              ...(nextConfig?.serverExternalPackages || []),
+              '@boundaryml/baml',
+              '@boundaryml/baml-darwin-arm64',
+              '@boundaryml/baml-darwin-x64',
+              '@boundaryml/baml-linux-arm64-gnu',
+              '@boundaryml/baml-linux-arm64-musl',
+              '@boundaryml/baml-linux-x64-gnu',
+              '@boundaryml/baml-linux-x64-musl',
+              '@boundaryml/baml-win32-arm64-msvc',
+              '@boundaryml/baml-win32-x64-msvc',
+            ],
           }
         : {
             experimental: {
               ...(nextConfig.experimental || {}),
               serverComponentsExternalPackages: [
-                ...(nextConfig.experimental?.serverComponentsExternalPackages || []),
+                ...(nextConfig.experimental?.serverComponentsExternalPackages ||
+                  []),
                 '@boundaryml/baml',
               ],
-              ...(isTurbo ? { turbo: turboConfig } : {}),
             },
           }),
-      webpack: (config: Configuration, context: any) => {
+      webpack: (config, context) => {
         let webpackConfig = config;
         if (typeof nextConfig.webpack === 'function') {
           webpackConfig = nextConfig.webpack(config, context);
         }
 
         if (context.isServer) {
+          // Externalize the native module
           webpackConfig.externals = [
-            ...(Array.isArray(webpackConfig.externals) ? webpackConfig.externals : []),
+            ...(Array.isArray(webpackConfig.externals)
+              ? webpackConfig.externals
+              : []),
             '@boundaryml/baml',
             '@boundaryml/baml-darwin-arm64',
             '@boundaryml/baml-darwin-x64',
@@ -110,6 +83,7 @@ export function withBaml(_bamlConfig: BamlNextConfig = {}) {
           ];
         }
 
+        // Only add webpack rules if not using Turbo
         if (!isTurbo) {
           webpackConfig.module = webpackConfig.module || {};
           webpackConfig.module.rules = webpackConfig.module.rules || [];
@@ -128,6 +102,6 @@ export function withBaml(_bamlConfig: BamlNextConfig = {}) {
 
         return webpackConfig;
       },
-    } as T;
+    };
   };
 }
