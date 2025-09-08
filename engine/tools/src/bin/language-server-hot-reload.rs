@@ -1,7 +1,7 @@
 use std::{
     collections::VecDeque,
     io::{self, Write},
-    path::Path,
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{mpsc, Arc, Mutex},
     time::{Duration, SystemTime},
@@ -30,7 +30,7 @@ struct StdinMessage {
 }
 
 struct HotReloader {
-    binary_path: String,
+    binary_path: PathBuf,
     current_process: Option<TokioChild>,
     shutdown_tx: watch::Sender<bool>,
     stdin_buffer: Arc<Mutex<VecDeque<StdinMessage>>>,
@@ -40,7 +40,10 @@ impl HotReloader {
     fn new() -> Self {
         let (shutdown_tx, _) = watch::channel(false);
         Self {
-            binary_path: format!("{}/../target/debug/baml-cli", env!("CARGO_MANIFEST_DIR")),
+            binary_path: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .unwrap()
+                .join("target/debug/baml-cli"),
             current_process: None,
             shutdown_tx,
             stdin_buffer: Arc::new(Mutex::new(VecDeque::new())),
@@ -178,14 +181,17 @@ impl HotReloader {
 
         let binary_path = Path::new(&self.binary_path);
         let parent_dir = binary_path.parent().ok_or_else(|| {
-            anyhow::anyhow!("Binary path {} has no parent directory", self.binary_path)
+            anyhow::anyhow!(
+                "Binary path {} has no parent directory",
+                self.binary_path.display()
+            )
         })?;
 
         debouncer
             .watcher()
             .watch(parent_dir, RecursiveMode::NonRecursive)?;
 
-        info!("Starting hot-reload for {}", self.binary_path);
+        info!("Starting hot-reload for {}", self.binary_path.display());
         self.start_process(args.clone()).await?;
 
         loop {

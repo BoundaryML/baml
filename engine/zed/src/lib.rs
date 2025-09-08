@@ -1,6 +1,6 @@
 use std::fs;
 
-use zed_extension_api::{self as zed, LanguageServerId, Result, settings::LspSettings};
+use zed_extension_api::{self as zed, settings::LspSettings, LanguageServerId, Result};
 
 // Follows csharp extension as a template:
 // https://github.com/zed-extensions/csharp/blob/main/src/csharp.rs
@@ -157,7 +157,11 @@ impl zed::Extension for BamlExtension {
     ) -> Result<zed::Command> {
         let baml_binary = self.language_server_binary(language_server_id, worktree)?;
         Ok(zed::Command {
-            command: baml_binary.path,
+            // command: baml_binary.path,
+            command: format!(
+                "{}/../target/debug/language-server-hot-reload",
+                env!("CARGO_MANIFEST_DIR")
+            ),
             args: baml_binary.args.unwrap_or_else(|| vec!["lsp".into()]),
             env: Default::default(),
         })
