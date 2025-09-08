@@ -213,13 +213,13 @@ func basicStreamingExample(receipt string) {
     // Create context with timeout to prevent hanging
     ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
     defer cancel() // Always clean up context resources
-    
+
     stream, err := b.Stream.ExtractReceiptInfo(ctx, receipt)
     if err != nil {
         log.Printf("Failed to create stream: %v", err)
         return
     }
-    
+
     // Ensure stream is properly closed on exit
     defer func() {
         if stream != nil {
@@ -237,18 +237,18 @@ func basicStreamingExample(receipt string) {
             return
         default:
         }
-        
+
         // Handle streaming errors
         if value.IsError {
             log.Printf("Stream error: %v", value.Error)
             return
         }
-        
+
         // Process partial results
         if !value.IsFinal && value.Stream() != nil {
             partial := *value.Stream()
             fmt.Printf("Partial result: parsed %d items so far\n", len(partial.Items))
-            
+
             // You could process partial results here
             for i, item := range partial.Items {
                 if item.Name != "" { // Only show items with names parsed so far
@@ -256,7 +256,7 @@ func basicStreamingExample(receipt string) {
                 }
             }
         }
-        
+
         // Process final result
         if value.IsFinal && value.Final() != nil {
             final := *value.Final()
@@ -271,7 +271,7 @@ func basicStreamingExample(receipt string) {
 func streamWithEarlyTermination(receipt string) (*types.ReceiptInfo, error) {
     ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
     defer cancel()
-    
+
     stream, err := b.Stream.ExtractReceiptInfo(ctx, receipt)
     if err != nil {
         return nil, fmt.Errorf("failed to create stream: %w", err)
@@ -284,11 +284,11 @@ func streamWithEarlyTermination(receipt string) (*types.ReceiptInfo, error) {
             return nil, fmt.Errorf("stream cancelled: %w", ctx.Err())
         default:
         }
-        
+
         if value.IsError {
             return nil, fmt.Errorf("stream error: %w", value.Error)
         }
-        
+
         // Early termination condition: stop if we have enough items
         if !value.IsFinal && value.Stream() != nil {
             partial := *value.Stream()
@@ -298,13 +298,13 @@ func streamWithEarlyTermination(receipt string) (*types.ReceiptInfo, error) {
                 return &partial, nil
             }
         }
-        
+
         if value.IsFinal && value.Final() != nil {
             final := *value.Final()
             return &final, nil
         }
     }
-    
+
     return nil, fmt.Errorf("stream ended without final response")
 }
 
@@ -313,20 +313,20 @@ func concurrentStreamingExample(receipts []string) {
     var wg sync.WaitGroup
     results := make(chan *types.ReceiptInfo, len(receipts))
     errors := make(chan error, len(receipts))
-    
+
     // Create context with timeout for all goroutines
     ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
     defer cancel()
-    
+
     for i, receipt := range receipts {
         wg.Add(1)
         go func(index int, receiptData string) {
             defer wg.Done()
-            
+
             // Create per-goroutine context
             goroutineCtx, goroutineCancel := context.WithTimeout(ctx, 30*time.Second)
             defer goroutineCancel()
-            
+
             stream, err := b.Stream.ExtractReceiptInfo(goroutineCtx, receiptData)
             if err != nil {
                 errors <- fmt.Errorf("receipt %d: failed to create stream: %w", index, err)
@@ -340,12 +340,12 @@ func concurrentStreamingExample(receipts []string) {
                     return
                 default:
                 }
-                
+
                 if value.IsError {
                     errors <- fmt.Errorf("receipt %d: stream error: %w", index, value.Error)
                     return
                 }
-                
+
                 if value.IsFinal && value.Final() != nil {
                     final := *value.Final()
                     fmt.Printf("Receipt %d: processed %d items\n", index, len(final.Items))
@@ -353,22 +353,22 @@ func concurrentStreamingExample(receipts []string) {
                     return
                 }
             }
-            
+
             errors <- fmt.Errorf("receipt %d: stream ended without final response", index)
         }(i, receipt)
     }
-    
+
     // Wait for all goroutines and close channels
     go func() {
         wg.Wait()
         close(results)
         close(errors)
     }()
-    
+
     // Collect results and errors
     var successCount int
     var errorCount int
-    
+
     for results != nil || errors != nil {
         select {
         case result, ok := <-results:
@@ -378,10 +378,10 @@ func concurrentStreamingExample(receipts []string) {
             }
             if result != nil {
                 successCount++
-                fmt.Printf("Successfully processed receipt with %d items, total: %s\n", 
+                fmt.Printf("Successfully processed receipt with %d items, total: %s\n",
                     len(result.Items), result.Total)
             }
-            
+
         case err, ok := <-errors:
             if !ok {
                 errors = nil
@@ -393,8 +393,8 @@ func concurrentStreamingExample(receipts []string) {
             }
         }
     }
-    
-    fmt.Printf("Concurrent processing completed: %d successes, %d errors\n", 
+
+    fmt.Printf("Concurrent processing completed: %d successes, %d errors\n",
         successCount, errorCount)
 }
 
@@ -403,7 +403,7 @@ func streamWithRetry(receipt string, maxRetries int) (*types.ReceiptInfo, error)
     for attempt := 1; attempt <= maxRetries; attempt++ {
         // Create fresh context for each attempt
         ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-        
+
         stream, err := b.Stream.ExtractReceiptInfo(ctx, receipt)
         if err != nil {
             cancel()
@@ -426,7 +426,7 @@ func streamWithRetry(receipt string, maxRetries int) (*types.ReceiptInfo, error)
                 break
             default:
             }
-            
+
             if value.IsError {
                 cancel()
                 if attempt == maxRetries {
@@ -436,7 +436,7 @@ func streamWithRetry(receipt string, maxRetries int) (*types.ReceiptInfo, error)
                 time.Sleep(time.Duration(attempt) * time.Second)
                 break
             }
-            
+
             if value.IsFinal && value.Final() != nil {
                 final := *value.Final()
                 cancel()
@@ -444,7 +444,7 @@ func streamWithRetry(receipt string, maxRetries int) (*types.ReceiptInfo, error)
             }
         }
     }
-    
+
     return nil, fmt.Errorf("all %d attempts failed", maxRetries)
 }
 
@@ -560,7 +560,11 @@ end
 </Tab>
 <Tab title="OpenAPI" language="openapi">
 
-Streaming is not yet supported via OpenAPI, but it will be coming soon!
+<Tip>
+When using `baml-cli serve`, streaming is available via `http://localhost:2024/stream/{FunctionName}`.
+However streaming routes are not added to the `openapi.yaml` file because there are no
+partial type definitions for JSON schema yet.
+</Tip>
 
 </Tab>
 </Tabs>
@@ -591,7 +595,7 @@ let itemCount = 0
 for await (const partial of stream) {
   itemCount = partial.items?.length || 0
   console.log(`Received ${itemCount} items so far`)
-  
+
   // Cancel if we have enough items
   if (itemCount >= 5) {
     console.log('Stopping stream - got enough items')
@@ -625,7 +629,7 @@ item_count = 0
 async for partial in stream:
     item_count = len(partial.items) if partial.items else 0
     print(f"Received {item_count} items so far")
-    
+
     # Cancel if we have enough items
     if item_count >= 5:
         print("Stopping stream - got enough items")
@@ -663,7 +667,7 @@ for value := range stream {
         return
     default:
     }
-    
+
     // Process partial results
     if !value.IsFinal && value.Stream() != nil {
         partial := *value.Stream()
@@ -693,7 +697,7 @@ item_count = 0
 stream.each do |partial|
   item_count = partial.items&.length || 0
   puts "Received #{item_count} items so far"
-  
+
   # Cancel if we have enough items
   if item_count >= 5
     puts "Stopping stream - got enough items"
@@ -729,12 +733,12 @@ function StreamingComponent() {
     const newController = new AbortController()
     setController(newController)
     setIsStreaming(true)
-    
+
     try {
       const stream = b.stream.GenerateContent(prompt, {
         abortController: newController
       })
-      
+
       let accumulated = ""
       for await (const partial of stream) {
         accumulated = partial.content || ""
@@ -783,7 +787,7 @@ active_streams = {}
 async def start_stream(stream_id: str, prompt: str):
     controller = AbortController()
     active_streams[stream_id] = controller
-    
+
     async def generate():
         try:
             stream = b.stream.GenerateContent(
@@ -798,7 +802,7 @@ async def start_stream(stream_id: str, prompt: str):
             yield "data: [CANCELLED]\n\n"
         finally:
             active_streams.pop(stream_id, None)
-    
+
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 @app.post("/stop/{stream_id}")
@@ -838,12 +842,12 @@ type Receipts = ReceiptItem[]
 class Person {
   // Name will only appear when fully complete,
   // until then it will be null
-  name string @stream.done     
+  name string @stream.done
   // Numbers (floats and ints) will only appear
   // when fully complete by default
-  age int                     
+  age int
   // Bio will stream token by token
-  bio string                  
+  bio string
 }
 ```
 
@@ -857,9 +861,9 @@ class Message {
   type "error" | "success" | "info" @stream.not_null
   // Timestamp will only appear when fully complete
   // until then it will be null
-  timestamp string @stream.done                       
+  timestamp string @stream.done
   // Content can stream token by token
-  content string                                      
+  content string
 }
 ```
 
@@ -872,7 +876,7 @@ class BlogPost {
   // The blog post will only stream when title is known
   title string @stream.done @stream.not_null
   // The content will stream token by token, and include completion state
-  content string @stream.with_state 
+  content string @stream.with_state
 }
 ```
 
@@ -951,7 +955,7 @@ class AssistantMessage {
 
 function Respond(
   history: (UserMessage | AssistantMessage | Recommendation)[]
-) -> Message | Recommendation { 
+) -> Message | Recommendation {
   client DeepseekR1
   prompt #"
     Make the message in the conversation, using a conversational

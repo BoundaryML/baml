@@ -75,7 +75,7 @@ We integrate with [OpenAPI](https://www.openapis.org/) (universal API definition
             3. Run the [Adoptium OpenJDK `.msi` installer](https://adoptium.net/temurin/releases/?os=windows) (install the JDK; default installer settings are fine).
 
           You can verify that `npx` and `java` are installed by running:
-          
+
           ```powershell
           npx -version
           java -version
@@ -119,7 +119,7 @@ We integrate with [OpenAPI](https://www.openapis.org/) (universal API definition
       </Tab>
 
       <Tab title="Java" language="bash">
-      
+
       ```bash
       npx @boundaryml/baml init \
         --client-type rest/openapi --openapi-client-type java
@@ -177,7 +177,7 @@ We integrate with [OpenAPI](https://www.openapis.org/) (universal API definition
     ```bash
     npx @boundaryml/baml dev --preview
     ```
-    
+
     This will do four things:
 
     - serve your BAML functions over a RESTful interface on `localhost:2024`
@@ -192,8 +192,26 @@ We integrate with [OpenAPI](https://www.openapis.org/) (universal API definition
     so that we can stabilize the feature and keep you updated!
   </Note>
 
+  ### Check that the server is running
+
+  After running the `npx @boundaryml/baml dev` command, you can check that the
+  server is up and running by making an HTTP request to these routes:
+
+  1. [`http://localhost:2024/_debug/ping`](http://localhost:2024/_debug/ping):
+  Open in the browser or use `curl` to check that the server is up. You should
+  see a text response similar to this: `pong (from baml v0.206.1)`.
+
+  2. [`http://localhost:2024/docs`](http://localhost:2024/docs): Open in the
+  browser to see and interact with all your routes through the Swagger UI
+  generated from the OpenAPI schema.
+
+  <Note>
+    If using Docker, replace `localhost` with the container hostname or IP as
+    appropriate.
+  </Note>
+
   ### Use a BAML function in any language!
-  
+
   `openapi-generator` will generate a `README` with instructions for installing
   and using your client; we've included snippets for some of the most popular
   languages below. Check out
@@ -357,7 +375,7 @@ public class Example {
   public static void main(String[] args) {
     ApiClient defaultClient = Configuration.getDefaultApiClient();
     DefaultApi apiInstance = new DefaultApi(defaultClient);
-    ExtractResumeRequest extractResumeRequest = new ExtractResumeRequest(); // ExtractResumeRequest | 
+    ExtractResumeRequest extractResumeRequest = new ExtractResumeRequest(); // ExtractResumeRequest |
     try {
       Resume result = apiInstance.extractResume(extractResumeRequest);
       System.out.println(result);
