@@ -27,4 +27,3 @@ fn array_constructor() -> anyhow::Result<()> {
         )],
     })
 }
-

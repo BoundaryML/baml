@@ -67,10 +67,7 @@ fn function_returning_string() -> anyhow::Result<()> {
                 "hello"
             }
         "#,
-        expected: vec![(
-            "main",
-            vec![Instruction::LoadConst(0), Instruction::Return]
-        )],
+        expected: vec![("main", vec![Instruction::LoadConst(0), Instruction::Return])],
     })
 }
 
