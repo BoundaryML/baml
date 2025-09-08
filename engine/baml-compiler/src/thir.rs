@@ -2,7 +2,7 @@
 ///
 use baml_types::ir_type::TypeIR;
 
-use crate::hir::{self, AssignOp, BinaryOperator, Enum, LlmFunction, UnaryOperator};
+use crate::hir::{self, AssignOp, BinaryOperator, LlmFunction, UnaryOperator};
 
 pub mod interpret;
 pub mod typecheck;
@@ -52,6 +52,14 @@ pub struct Class<T> {
     // TODO: Allow LLM functions here.
     pub methods: Vec<ExprFunction<T>>,
     pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct Enum {
+    pub name: String,
+    pub variants: Vec<hir::EnumVariant>,
+    pub span: Span,
+    pub ty: TypeIR, // TODO: Used for type checking, but do we need this?
 }
 
 /// A BAML expression term.

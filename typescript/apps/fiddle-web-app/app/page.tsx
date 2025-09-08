@@ -1,9 +1,5 @@
-import dynamic from 'next/dynamic';
 import { loadProject } from '../lib/loadProject';
-const ProjectView = dynamic(
-  () => import('./[project_id]/_components/ProjectView'),
-  { ssr: true },
-);
+import ProjectView from './_components/ClientProjectView';
 
 type Params = Promise<{ project_id: string }>;
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;

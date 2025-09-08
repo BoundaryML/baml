@@ -1,3 +1,4 @@
+'use client';
 import { Label } from '@baml/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@baml/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@baml/ui/table'

@@ -1,8 +1,8 @@
 @top Baml { Decl* }
 
-Decl { ClassDecl | EnumDecl | FunctionDecl | ClientDecl | RetryPolicyDecl | TemplateStringDecl | TestDecl | TypeAliasDecl | TypeBuilderDecl | LetDecl }
+Decl { ClassDecl | EnumDecl | FunctionDecl | ClientDecl | RetryPolicyDecl | TemplateStringDecl | TestDecl | TypeAliasDecl | TypeBuilderDecl | LetDecl | TrailingComment | MultilineComment }
 
-ClassDecl { "class" IdentifierDecl "{" (BlockAttribute | ClassField)* "}" }
+ClassDecl { "class" IdentifierDecl "{" (TrailingComment | MultilineComment | BlockAttribute | ClassField)* "}" }
 
 ClassField {
   IdentifierDecl TypeExpr FieldAttribute*
@@ -26,17 +26,20 @@ ComplexTypeExpr {
   SimpleTypeExpr
 }
 MapTypeExpr { MapIdentifier "<" ComplexTypeExpr "," ComplexTypeExpr ">"}
-ListTypeExpr { ComplexTypeExpr"[]" }
-OptionalTypeExpr { ComplexTypeExpr"?" }
+ListTypeExpr { ComplexTypeExpr "[]" }
+OptionalTypeExpr { ComplexTypeExpr "?" }
 SimpleTypeExpr { ListTypeExpr | OptionalTypeExpr | MapTypeExpr!MapOverIdentifier | IdentifierDecl | LiteralDecl }
-UnionTypeExpr { TypeExpr!TypeUnion"|"TypeExpr }
+UnionTypeExpr { TypeExpr!TypeUnion "|" TypeExpr }
 
 @precedence {
   TypeUnion @left
   MapOverIdentifier @left
+  BinaryOp @left
+  MethodCall @left
+  ObjectConstruct @right
 }
 
-EnumDecl { "enum" IdentifierDecl "{" (BlockAttribute | EnumValueDecl)* "}" }
+EnumDecl { "enum" IdentifierDecl "{" (TrailingComment | MultilineComment | BlockAttribute | EnumValueDecl)* "}" }
 EnumValueDecl { IdentifierDecl FieldAttribute* }
 
 FieldAttribute {
@@ -48,64 +51,107 @@ BlockAttribute {
 }
 
 FunctionDecl {
-  ("function" | FnKeyword) IdentifierDecl "(" FunctionArgs ")" ("->" TypeExpr)?
-  "{" (FunctionTupleValue | LetDecl | FunctionValueExpr)* "}"
+  ("function" | FnKeyword) IdentifierDecl (MethodTarget)? "(" FunctionArgs ")" ("->" TypeExpr)?
+  "{" (FunctionTupleValue | Statement)* "}"
 }
+
+Statement { TrailingComment | MultilineComment | LetDecl | FunctionValueExpr | ForStatement | AssignmentStatement | IfStatement | WhileStatement }
 FunctionArgs { (FunctionArg ",")* FunctionArg? }
 FunctionArg {
-  IdentifierDecl ":" TypeExpr
+  (SelfKeyword | IdentifierDecl) (":" TypeExpr)?
 }
+MethodTarget { "." IdentifierDecl }
 FunctionValueAtom {
-  LiteralDecl | PromptExpr | IdentifierDecl
+  LiteralDecl | PromptExpr | IdentifierDecl | ListValue | ObjectConstructor
 }
 FunctionValueExpr {
   FunctionValueAtom |
   "{" LetDecl* FunctionValueExpr "}" |
-  IdentifierDecl "(" (FunctionValueExpr ("," FunctionValueExpr)*)? ")"
+  IdentifierDecl "(" (FunctionValueExpr ("," FunctionValueExpr)*)? ")" |
+  FunctionValueExpr!BinaryOp BinaryOperator FunctionValueExpr |
+  FunctionValueExpr!MethodCall MethodCall
 }
 
-ClassConstructor {
-  IdentifierDecl "{" (ClassConstructorField ("," ClassConstructorField)*)? "}"
+ObjectConstructor {
+  IdentifierDecl!ObjectConstruct "{" (ObjectField ("," ObjectField)* ","?)? "}"
 }
 
-ClassConstructorField {
+ObjectField {
   IdentifierDecl ":" FunctionValueExpr
 }
+
 FunctionTupleValue { (ClientKeyword | PromptKeyword) FunctionValueAtom }
 
-ConfigValueExpr { LiteralDecl | PromptExpr | UnquotedString | ListValue | ConfigMap }
+ConfigValueExpr { LiteralDecl | PromptExpr | UnquotedString | ConfigListValue | ConfigMap }
 ConfigTupleValue { IdentifierDecl ConfigValueExpr }
 
-ListValue { "[" (IdentifierDecl ("," IdentifierDecl)*)? "]" }
+ListValue { "[" (FunctionValueExpr ("," FunctionValueExpr)*)? "]" }
+ConfigListValue { "[" (IdentifierDecl ("," IdentifierDecl)*)? "]" }
 ConfigMap { "{" ConfigTupleValue* "}" }
 
 ClientDecl {
-  "client<llm>" IdentifierDecl "{" ConfigTupleValue* "}"
+  "client<llm>" IdentifierDecl "{" (TrailingComment | MultilineComment | ConfigTupleValue)* "}"
 }
 
 TestDecl {
-  "test" IdentifierDecl "{" (BlockAttribute | ConfigTupleValue | TypeBuilderDecl)* "}"
+  "test" IdentifierDecl "{" (TrailingComment | MultilineComment | BlockAttribute | ConfigTupleValue | TypeBuilderDecl)* "}"
 }
 
-LiteralDecl { NumericLiteral | QuotedString }
+LiteralDecl { NumericLiteral | QuotedString | BooleanLiteral }
 
 TemplateStringDecl {
   "template_string" IdentifierDecl "(" FunctionArgs ")" PromptExpr
 }
 
-LetDecl { LetKeyword IdentifierDecl "=" FunctionValueExpr ";"}
+LetDecl { LetKeyword IdentifierDecl "=" FunctionValueExpr ";"? }  // Semicolons optional
+
+// New rules for advanced expression syntax
+ForStatement { 
+  ForKeyword "(" (ForInLoop | ForCLoop) ")" "{" Statement* "}"
+}
+ForInLoop { IdentifierDecl InKeyword FunctionValueExpr }
+ForCLoop { CForInit? ";" CForCondition? ";" CForUpdate? }
+CForInit { LetKeyword IdentifierDecl "=" FunctionValueExpr }
+CForCondition { FunctionValueExpr }  
+CForUpdate { IdentifierDecl "++" }
+
+AssignmentStatement { IdentifierDecl AssignmentOperator FunctionValueExpr ";"? }
+AssignmentOperator { "+=" | "-=" | "*=" | "/=" | "=" }
+
+IfStatement { 
+  IfKeyword "(" FunctionValueExpr ")" "{" Statement* "}" (ElseIfClause)* (ElseClause)?
+}
+
+ElseIfClause { ElseKeyword IfKeyword "(" FunctionValueExpr ")" "{" Statement* "}" }
+ElseClause { ElseKeyword "{" Statement* "}" }
+
+WhileStatement { 
+  WhileKeyword "(" FunctionValueExpr ")" "{" Statement* "}"
+}
+
+BinaryOperator { "+" | "-" | "*" | "/" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||" }
+MethodCall { "." IdentifierDecl "(" FunctionArgs ")" }
 
 @tokens {
 
   @precedence {
-    NumericLiteral, QuotedString, UnquotedString, UnquotedAttributeValue
+    BooleanLiteral, NumericLiteral, QuotedString, UnquotedString, UnquotedAttributeValue
   }
   @precedence {
-    MapIdentifier, TypeBuilderKeyword, ClientKeyword, PromptKeyword, LetKeyword, FnKeyword, IdentifierDecl, UnquotedAttributeValue
+    TrailingComment, ".", "/"
+  }
+  @precedence {
+    TrailingComment, MultilineComment, MapIdentifier, TypeBuilderKeyword, ClientKeyword, PromptKeyword, LetKeyword, FnKeyword, ForKeyword, InKeyword, IfKeyword, ElseKeyword, WhileKeyword, SelfKeyword, BooleanLiteral, IdentifierDecl, UnquotedAttributeValue
   }
 
   LetKeyword { "let" }
   FnKeyword { "fn" }
+  ForKeyword { "for" }
+  InKeyword { "in" }
+  IfKeyword { "if" }
+  ElseKeyword { "else" }
+  WhileKeyword { "while" }
+  SelfKeyword { "self" }
   ClientKeyword { "client" }
   PromptKeyword { "prompt" }
   TypeBuilderKeyword { "type_builder" }
@@ -113,7 +159,8 @@ LetDecl { LetKeyword IdentifierDecl "=" FunctionValueExpr ";"}
   MapIdentifier { "map" }
   IdentifierDecl { $[A-Za-z]$[A-Za-z0-9-_]* }
 
-  NumericLiteral { $[0-9]+ | $[0-9]*'.'$[0-9]+ }
+  NumericLiteral { $[0-9]+ ("." $[0-9]+)? }
+  BooleanLiteral { "true" | "false" }
 
   QuotedString { '"' QuotedStringChar* '"' }
   UnquotedString { UnquotedStringChar+ }
@@ -132,15 +179,15 @@ LetDecl { LetKeyword IdentifierDecl "=" FunctionValueExpr ";"}
   TrailingComment { "//" ![\n]* }
   MultilineComment { "{//"![]*"//}" }
 
-  "{" "}" "[" "]"
+  "{" "}" "[" "]" "(" ")" "+" "-" "*" "/" "=" "+=" "-=" "*=" "/=" "==" "!=" "<" ">" "<=" ">=" "&&" "||" "++" "."
 }
 
 @skip {
-  whitespace | MultilineComment | TrailingComment
+  whitespace
 }
 
 @skip {} {
-  PromptExpr { '#"' PromptExprContents '"#'}
+  PromptExpr { '#"' PromptExprContents '"#' }
   PromptExprContents { (promptChar)* }
   JinjaExpr { "{{" (promptChar)* "}}" }
   AttributeValue { '(' (QuotedString | UnquotedAttributeValue | PromptExprNonJinja | JinjaExpr)? ')' }

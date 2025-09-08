@@ -1,3 +1,4 @@
+'use client';
 import { Button } from '@baml/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@baml/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';

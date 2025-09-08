@@ -66,6 +66,8 @@ fn setup_and_exec_program(
         objects,
         globals,
         resolved_function_names,
+        resolved_enums_names,
+        resolved_class_names,
     } = baml_compiler::compile(&ast)?;
     let (target_function_index, _) = resolved_function_names[function];
     let mut vm = Vm {
@@ -280,15 +282,15 @@ fn array_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(5))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(6))),
         },
         |vm| {
             dbg!(&vm.objects);
 
-            let Object::Array(array) = &vm.objects[ObjectIndex::from_raw(5)] else {
+            let Object::Array(array) = &vm.objects[ObjectIndex::from_raw(6)] else {
                 panic!(
                     "expected Array, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(5)]
+                    &vm.objects[ObjectIndex::from_raw(6)]
                 );
             };
 
@@ -316,13 +318,13 @@ fn class_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(6))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(7))),
         },
         |vm| {
-            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(6)] else {
+            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(7)] else {
                 panic!(
                     "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(6)]
+                    &vm.objects[ObjectIndex::from_raw(7)]
                 );
             };
 
@@ -356,13 +358,13 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(7))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(8))),
         },
         |vm| {
-            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(7)] else {
+            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(8)] else {
                 panic!(
                     "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(7)]
+                    &vm.objects[ObjectIndex::from_raw(8)]
                 );
             };
 
@@ -2003,5 +2005,114 @@ fn Len() -> int {
             function: "Len",
             expected: VmExecState::Complete(Value::Int(2)),
         })
+    }
+}
+
+#[cfg(test)]
+mod enums {
+    use super::*;
+
+    #[test]
+    fn return_enum_variant() -> anyhow::Result<()> {
+        assert_vm_executes_with_inspection(
+            Program {
+                source: r#"
+                    enum Shape {
+                        Square
+                        Rectangle
+                        Circle
+                    }
+
+                    fn main() -> Shape {
+                        Shape.Rectangle
+                    }
+                "#,
+                function: "main",
+                expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(7))),
+            },
+            |vm| {
+                let Object::Variant(variant) = &vm.objects[ObjectIndex::from_raw(7)] else {
+                    panic!(
+                        "expected Variant, got {:?}",
+                        &vm.objects[ObjectIndex::from_raw(7)]
+                    );
+                };
+
+                assert_eq!(variant.index, 1);
+
+                Ok(())
+            },
+        )
+    }
+
+    #[test]
+    fn assign_enum_variant() -> anyhow::Result<()> {
+        assert_vm_executes_with_inspection(
+            Program {
+                source: r#"
+                    enum Shape {
+                        Square
+                        Rectangle
+                        Circle
+                    }
+
+                    fn main() -> Shape {
+                        let s = Shape.Rectangle;
+                        s
+                    }
+                "#,
+                function: "main",
+                expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(7))),
+            },
+            |vm| {
+                let Object::Variant(variant) = &vm.objects[ObjectIndex::from_raw(7)] else {
+                    panic!(
+                        "expected Variant, got {:?}",
+                        &vm.objects[ObjectIndex::from_raw(7)]
+                    );
+                };
+
+                assert_eq!(variant.index, 1);
+
+                Ok(())
+            },
+        )
+    }
+
+    #[test]
+    fn take_and_return_enum_variant() -> anyhow::Result<()> {
+        assert_vm_executes_with_inspection(
+            Program {
+                source: r#"
+                    enum Shape {
+                        Square
+                        Rectangle
+                        Circle
+                    }
+
+                    function return_shape(shape: Shape) -> Shape {
+                        shape
+                    }
+
+                    fn main() -> Shape {
+                        return_shape(Shape.Rectangle)
+                    }
+                "#,
+                function: "main",
+                expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(8))),
+            },
+            |vm| {
+                let Object::Variant(variant) = &vm.objects[ObjectIndex::from_raw(8)] else {
+                    panic!(
+                        "expected Variant, got {:?}",
+                        &vm.objects[ObjectIndex::from_raw(8)]
+                    );
+                };
+
+                assert_eq!(variant.index, 1);
+
+                Ok(())
+            },
+        )
     }
 }

@@ -130,6 +130,7 @@ fn Nothing() -> int {
 //      4   RETURN         
 //
 // Class: std::Request with 3 fields
+// Enum std::HttpMethod
 // Function: std.Array.len
 //
 // Function: std.Map.len

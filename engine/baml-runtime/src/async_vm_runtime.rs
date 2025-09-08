@@ -12,6 +12,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use anyhow::{anyhow, Context};
 use baml_compiler::{self};
 use baml_ids::FunctionCallId;
 use baml_types::{tracing::events::HTTPRequest, BamlMap, BamlValue, BamlValueWithMeta, Completion};
@@ -135,6 +136,8 @@ impl BamlAsyncVmRuntime {
             .create_ctx_manager(language, baml_src_reader)
     }
 
+    // TODO: Tuple return type (Result, FunctionCallId) makes it hard to use
+    // early returns and `?` syntax. Change this.
     pub async fn call_function(
         &self,
         function_name: String,
@@ -146,14 +149,22 @@ impl BamlAsyncVmRuntime {
         env_vars: HashMap<String, String>,
         cancel_tripwire: Arc<TripWire>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
-        // TODO: Proper error handling. Refactor the API to return a Result.
-        let (function_index, function_kind) = self
-            .program
-            .resolved_function_names
-            .get(&function_name)
-            .unwrap_or_else(|| {
-                todo!("function '{function_name}' not found, add proper error handling for this")
-            });
+        let current_call_id = self
+            .llm_runtime
+            .tracer_wrapper
+            .get_or_create_tracer(&env_vars)
+            .start_call(&function_name, ctx, params, true, false, collectors.clone())
+            .curr_call_id();
+
+        // Find the function.
+        let Some((function_index, function_kind)) =
+            self.program.resolved_function_names.get(&function_name)
+        else {
+            return (
+                Err(anyhow!("function '{function_name}' not found")),
+                current_call_id,
+            );
+        };
 
         // If we're not running an expression function, then just delegate the
         // call to the LLM runtime.
@@ -173,21 +184,19 @@ impl BamlAsyncVmRuntime {
                 .await;
         }
 
-        let current_call_id = self
-            .llm_runtime
-            .tracer_wrapper
-            .get_or_create_tracer(&env_vars)
-            .start_call(&function_name, ctx, params, true, false, collectors.clone())
-            .curr_call_id();
-
-        let expr_fn = self
+        let Some(expr_fn) = self
             .llm_runtime
             .inner
             .ir()
             .expr_fns
             .iter()
             .find(|f| f.elem.name == function_name)
-            .unwrap_or_else(|| panic!("expr function not found: {function_name}"));
+        else {
+            return (
+                Err(anyhow!("function '{function_name}' not found")),
+                current_call_id,
+            );
+        };
 
         let output_type = expr_fn.elem.output.clone();
 
@@ -205,17 +214,30 @@ impl BamlAsyncVmRuntime {
         // compiler produced objects betweeen VMs. We know they are read only.
         let mut vm = Vm::new(self.program.clone());
 
-        // TODO: We can't assume arg ordering here is correct, figure out why.
-        let args = Vec::from_iter(expr_fn.elem.inputs().iter().map(|(name, _)| {
-            let Some(param) = params.get(name) else {
-                panic!("missing parameter: {name}");
-            };
+        // TODO: We can't assume ordering of `params` is correct, figure out why.
+        let args = match expr_fn
+            .elem
+            .inputs()
+            .iter()
+            .map(|(name, _)| {
+                let Some(param) = params.get(name) else {
+                    anyhow::bail!("missing parameter: {name}");
+                };
 
-            let vm_value = try_vm_value_from_baml_value(&mut vm, param)
-                .unwrap_or_else(|e| panic!("failed to convert baml arg to vm value: {e}"));
-
-            vm_value
-        }));
+                try_vm_value_from_baml_value(
+                    &mut vm,
+                    &self.program.resolved_class_names,
+                    &self.program.resolved_enums_names,
+                    param,
+                )
+                .context("failed to convert baml argument to vm value")
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .context("failed to convert baml args to vm values")
+        {
+            Ok(args) => args,
+            Err(e) => return (Err(e), current_call_id),
+        };
 
         vm.set_entry_point(*function_index, &args);
 
@@ -224,18 +246,26 @@ impl BamlAsyncVmRuntime {
             (anyhow::Result<FunctionResult>, FunctionCallId),
         )>();
 
-        let result = 'mainloop: loop {
+        let vm_result = 'mainloop: loop {
             match vm.exec() {
                 Ok(VmExecState::Await(idx)) => {
                     let mut fulfilled = false;
 
-                    // Fulfil completed futures without blocking, if any.
-                    // TODO: Handle errors.
                     while let Ok((ready_idx, (result, call_id))) = futures_rx.try_recv() {
-                        let vm_value = vm_value_from_function_result(&mut vm, result);
+                        let vm_value = match try_vm_value_from_function_result(
+                            &mut vm,
+                            &self.program.resolved_class_names,
+                            &self.program.resolved_enums_names,
+                            result,
+                        ) {
+                            Ok(vm_value) => vm_value,
+                            Err(e) => break 'mainloop Err(e),
+                        };
 
                         if let Err(e) = vm.fulfil_future(ready_idx, vm_value) {
-                            break 'mainloop Err(e.into());
+                            break 'mainloop Err(
+                                anyhow::Error::from(e).context("failed to fulfil VM future")
+                            );
                         }
 
                         if ready_idx == idx {
@@ -247,15 +277,35 @@ impl BamlAsyncVmRuntime {
                     // Tokio take care of it.
                     while !fulfilled {
                         // TODO: Handle errors.
-                        let (ready_idx, (result, call_id)) = futures_rx
-                            .recv()
-                            .await
-                            .expect("failed to receive result from channel");
+                        let (ready_idx, (result, call_id)) = match futures_rx.recv().await {
+                            Some(result) => result,
 
-                        let vm_value = vm_value_from_function_result(&mut vm, result);
+                            // This should not happen because VM will never close the channel.
+                            None => {
+                                break 'mainloop Err(anyhow!(
+                                    "failed to receive function result from futures channel (channel closed)"
+                                ))
+                            }
+                        };
+
+                        let vm_value = match try_vm_value_from_function_result(
+                            &mut vm,
+                            &self.program.resolved_class_names,
+                            &self.program.resolved_enums_names,
+                            result,
+                        ) {
+                            Ok(vm_value) => vm_value,
+                            Err(e) => {
+                                break 'mainloop Err(
+                                    e.context("failed to convert function result to vm value")
+                                )
+                            }
+                        };
 
                         if let Err(e) = vm.fulfil_future(ready_idx, vm_value) {
-                            break 'mainloop Err(e.into());
+                            break 'mainloop Err(
+                                anyhow::Error::from(e).context("failed to fulfil VM future")
+                            );
                         }
 
                         // After this one we don't have to wait for more futures
@@ -270,28 +320,45 @@ impl BamlAsyncVmRuntime {
                 Ok(VmExecState::ScheduleFuture(idx)) => {
                     let pending_future = match vm.pending_future(idx) {
                         Ok(f) => f,
-                        Err(e) => break Err(e.into()),
+                        Err(e) => {
+                            break 'mainloop Err(
+                                anyhow::Error::from(e).context("failed to get pending future")
+                            )
+                        }
                     };
 
-                    let llm_fn = self
+                    let llm_fn = match self
                         .llm_runtime
                         .inner
                         .ir()
                         .find_function(&pending_future.llm_function)
-                        .unwrap_or_else(|_| {
-                            panic!("LLM function not found: {}", pending_future.llm_function)
-                        });
+                    {
+                        Ok(f) => f,
+                        Err(e) => {
+                            break 'mainloop Err(e.context(format!(
+                                "Failed scheduling LLM future: {}",
+                                pending_future.llm_function
+                            )))
+                        }
+                    };
 
-                    let llm_args = pending_future
+                    let llm_args = match pending_future
                         .args
                         .iter()
                         .map(|v| try_baml_value_from_vm_value(&vm, v))
                         .collect::<Result<Vec<_>, _>>()
-                        .unwrap_or_else(|e| panic!("failed to convert vm args to baml values: {e}"))
-                        .into_iter()
-                        .zip(llm_fn.inputs().iter().map(|(name, _)| name.to_owned()))
-                        .map(|(arg, param_name)| (param_name, arg))
-                        .collect::<BamlMap<_, _>>();
+                    {
+                        Ok(args) => args,
+                        Err(e) => {
+                            break 'mainloop Err(
+                                e.context("failed to convert VM args to baml values")
+                            )
+                        }
+                    }
+                    .into_iter()
+                    .zip(llm_fn.inputs().iter().map(|(name, _)| name.to_owned()))
+                    .map(|(arg, param_name)| (param_name, arg))
+                    .collect::<BamlMap<_, _>>();
 
                     let future = {
                         let llm_runtime = Arc::clone(&self.llm_runtime);
@@ -306,9 +373,10 @@ impl BamlAsyncVmRuntime {
 
                         let futures_tx = futures_tx.clone();
 
+                        let cancel_tripwire = cancel_tripwire.to_owned();
+
                         // Spanwed future basically awaits the LLM call and
                         // sends the result to the futures channel.
-                        let cancel_tripwire = cancel_tripwire.to_owned();
                         async move {
                             let result = llm_runtime
                                 .call_function(
@@ -325,7 +393,7 @@ impl BamlAsyncVmRuntime {
 
                             // TODO: Handle panic somehow.
                             futures_tx.send((idx, result)).unwrap_or_else(|e| {
-                                panic!("failed to send result to channel: {e}")
+                                panic!("failed to send LLM function result to futures channel: {e}")
                             });
                         }
                     };
@@ -363,15 +431,26 @@ impl BamlAsyncVmRuntime {
                 Ok(VmExecState::Complete(value)) => break Ok(value),
 
                 // VM error, stop execution.
-                Err(e) => break Err(e),
+                Err(e) => break Err(e.into()),
             }
         };
 
-        let baml_value = try_baml_value_from_vm_value(
-            &vm,
-            &result.unwrap_or_else(|e| panic!("failed to get vm result: {e}")),
-        )
-        .unwrap_or_else(|e| panic!("failed to convert vm result to baml value: {e}"));
+        let vm_value = match vm_result {
+            Ok(vm_value) => vm_value,
+            Err(e) => {
+                return (Err(e.context("VM execution failed")), current_call_id);
+            }
+        };
+
+        let baml_value = match try_baml_value_from_vm_value(&vm, &vm_value) {
+            Ok(baml_value) => baml_value,
+            Err(e) => {
+                return (
+                    Err(e.context("failed to convert vm result to baml value")),
+                    current_call_id,
+                );
+            }
+        };
 
         let response_baml_value = ResponseBamlValue(BamlValueWithMeta::with_const_meta(
             &baml_value,
@@ -587,56 +666,182 @@ fn try_baml_value_from_vm_value(vm: &Vm, value: &baml_vm::Value) -> anyhow::Resu
         baml_vm::Value::Int(n) => Ok(BamlValue::Int(*n)),
         baml_vm::Value::Float(f) => Ok(BamlValue::Float(*f)),
 
-        baml_vm::Value::Object(o) => match &vm.objects[*o] {
-            baml_vm::Object::String(s) => Ok(BamlValue::String(s.clone())),
-            baml_vm::Object::Array(a) => Ok(BamlValue::List(
-                a.iter()
+        baml_vm::Value::Object(obj_index) => match &vm.objects[*obj_index] {
+            baml_vm::Object::String(string) => Ok(BamlValue::String(string.clone())),
+
+            baml_vm::Object::Media(media) => Ok(BamlValue::Media(media.clone())),
+
+            baml_vm::Object::Array(array) => Ok(BamlValue::List(
+                array
+                    .iter()
                     .map(|v| try_baml_value_from_vm_value(vm, v))
                     .collect::<Result<Vec<_>, _>>()?,
             )),
-            _ => anyhow::bail!("unsupported object: {:?}", o),
+
+            baml_vm::Object::Map(vm_map) => {
+                let mut baml_map = BamlMap::new();
+
+                for (k, v) in vm_map {
+                    baml_map.insert(k.clone(), try_baml_value_from_vm_value(vm, v)?);
+                }
+
+                Ok(BamlValue::Map(baml_map))
+            }
+
+            baml_vm::Object::Instance(instance) => {
+                let baml_vm::Object::Class(class) = &vm.objects[instance.class] else {
+                    anyhow::bail!("internal error: cannot convert VM value {value} to Baml value: class ID '{}' not found in VM objects", instance.class);
+                };
+
+                let mut fields = BamlMap::new();
+                for (i, v) in instance.fields.iter().enumerate() {
+                    fields.insert(
+                        class.field_names[i].clone(),
+                        try_baml_value_from_vm_value(vm, v)?,
+                    );
+                }
+
+                Ok(BamlValue::Class(class.name.clone(), fields))
+            }
+
+            baml_vm::Object::Variant(variant) => {
+                let baml_vm::Object::Enum(enm) = &vm.objects[variant.enm] else {
+                    anyhow::bail!("internal error: cannot convert VM value {value} to Baml value: enum ID '{}' not found in VM objects", variant.enm);
+                };
+
+                Ok(BamlValue::Enum(
+                    enm.name.clone(),
+                    enm.variant_names[variant.index].clone(),
+                ))
+            }
+
+            baml_vm::Object::Future(_)
+            | baml_vm::Object::Class(_)
+            | baml_vm::Object::Enum(_)
+            | baml_vm::Object::Function(_) => anyhow::bail!(
+                "internal error: unsupported VM object to BamlValue convertion: {}",
+                vm.objects[*obj_index]
+            ),
         },
     }
 }
 
-fn try_vm_value_from_baml_value(vm: &mut Vm, value: &BamlValue) -> anyhow::Result<baml_vm::Value> {
+fn try_vm_value_from_baml_value(
+    vm: &mut Vm,
+    resolved_class_names: &HashMap<String, ObjectIndex>,
+    resolved_enums_names: &HashMap<String, ObjectIndex>,
+    value: &BamlValue,
+) -> anyhow::Result<baml_vm::Value> {
     match value {
         BamlValue::Null => Ok(baml_vm::Value::Null),
         BamlValue::Bool(b) => Ok(baml_vm::Value::Bool(*b)),
         BamlValue::Int(n) => Ok(baml_vm::Value::Int(*n)),
         BamlValue::Float(f) => Ok(baml_vm::Value::Float(*f)),
+
+        BamlValue::String(s) => Ok(vm.alloc_string(s.clone())),
+
         BamlValue::List(l) => {
             let mut array = Vec::with_capacity(l.len());
 
             for v in l {
-                array.push(try_vm_value_from_baml_value(vm, v)?);
+                array.push(try_vm_value_from_baml_value(
+                    vm,
+                    resolved_class_names,
+                    resolved_enums_names,
+                    v,
+                )?);
             }
 
             Ok(vm.alloc_array(array))
         }
-        _ => todo!("handle strings and objects"),
+
+        BamlValue::Map(map) => {
+            let mut vm_map = BamlMap::new();
+
+            for (k, v) in map {
+                vm_map.insert(
+                    k.to_owned(),
+                    try_vm_value_from_baml_value(
+                        vm,
+                        resolved_class_names,
+                        resolved_enums_names,
+                        v,
+                    )?,
+                );
+            }
+
+            Ok(vm.alloc_map(vm_map))
+        }
+
+        BamlValue::Class(name, fields) => {
+            let Some(class_index) = resolved_class_names.get(name) else {
+                anyhow::bail!("cannot convert value {value} to VM value: class '{name}' not found");
+            };
+
+            let baml_vm::Object::Class(class) = &vm.objects[*class_index] else {
+                anyhow::bail!("internal error: cannot convert value {value} to VM value: class '{name}' not found in VM objects");
+            };
+
+            let mut ordered_field_values = Vec::new();
+            for field_name in &class.field_names {
+                let Some(value) = fields.get(field_name) else {
+                    anyhow::bail!("cannot convert value {value} to VM value: class '{name}' has no field '{field_name}'");
+                };
+
+                ordered_field_values.push(value);
+            }
+
+            let mut vm_fields_layout = Vec::new();
+            for v in ordered_field_values {
+                vm_fields_layout.push(try_vm_value_from_baml_value(
+                    vm,
+                    resolved_class_names,
+                    resolved_enums_names,
+                    v,
+                )?);
+            }
+
+            Ok(vm.alloc_instance(*class_index, vm_fields_layout))
+        }
+
+        BamlValue::Enum(enm, variant) => {
+            let Some(enum_index) = resolved_enums_names.get(enm) else {
+                anyhow::bail!("cannot convert value {value} to VM value: enum '{enm}' not found");
+            };
+
+            let baml_vm::Object::Enum(enm) = &vm.objects[*enum_index] else {
+                anyhow::bail!("internal error: cannot convert value {value} to VM value: enum '{enm}' not found in VM objects");
+            };
+
+            let Some(variant_index) = enm.variant_names.iter().position(|v| v == variant) else {
+                anyhow::bail!("cannot convert value {value} to VM value: enum '{enm}' has no variant '{variant}'");
+            };
+
+            Ok(vm.alloc_variant(*enum_index, variant_index))
+        }
+
+        BamlValue::Media(media) => Ok(vm.alloc_media(media.clone())),
     }
 }
 
-fn vm_value_from_function_result(
+fn try_vm_value_from_function_result(
     vm: &mut Vm,
+    resolved_class_names: &HashMap<String, ObjectIndex>,
+    resolved_enums_names: &HashMap<String, ObjectIndex>,
     result: anyhow::Result<FunctionResult>,
-) -> baml_vm::Value {
-    let fn_result = result.unwrap_or_else(|e| panic!("failed to get function result: {e}"));
+) -> anyhow::Result<baml_vm::Value> {
+    let fn_result = result.context("failed to get function result")?;
 
-    // TODO: I don't know what the fuck this is.
+    // TODO: Return type of .parsed() sucks.
     let baml_value = fn_result
         .parsed()
         .as_ref()
-        .unwrap()
+        .ok_or_else(|| anyhow!("no parsed result available from function call"))?
         .as_ref()
-        .unwrap()
+        .map_err(|e| anyhow!("error parsing function result: {e}"))?
         .clone()
         .0
         .value();
 
-    let vm_value = try_vm_value_from_baml_value(vm, &baml_value)
-        .unwrap_or_else(|e| panic!("failed to convert result to vm value: {e}"));
-
-    vm_value
+    try_vm_value_from_baml_value(vm, resolved_class_names, resolved_enums_names, &baml_value)
 }

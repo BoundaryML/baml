@@ -2,9 +2,12 @@ import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { vscode } from '../../vscode';
 import { runtimeStateAtom } from '../atoms';
+import { sessionStore } from '../../../../baml_wasm_web/JotaiProvider';
 
-const isEmbed =
-  typeof window !== 'undefined' && window.location.href.includes('embed');
+const getIsEmbed = () => {
+  if (typeof window === 'undefined') return false;
+  return window.location.href.includes('embed');
+};
 
 export const functionsAtom = atom((get) => {
   const runtimeState = get(runtimeStateAtom);
@@ -24,5 +27,6 @@ export const functionsAreStaleAtom = atom((get) => {
 
 export const isSidebarOpenAtom = atomWithStorage(
   'isSidebarOpen',
-  isEmbed ? false : vscode.isVscode() ? true : false,
+  getIsEmbed() ? false : vscode.isVscode() ? true : false,
+  sessionStore,
 );

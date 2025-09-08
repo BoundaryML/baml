@@ -68,38 +68,3 @@ test TestMakePoem() {
     functions [MakePoem]
     args { length 4 }
 }
-
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/expr_full.baml:26
-//    | 
-// 25 | 
-// 26 | function Pipeline() -> string {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/expr_full.baml:36
-//    | 
-// 35 | 
-// 36 | function Pyramid() -> string {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/expr_full.baml:40
-//    | 
-// 39 | 
-// 40 | function OuterPyramid() -> string {
-//    | 
-// warning: Variable assignment is experimental, and will break in the future.
-//   -->  expr/expr_full.baml:18
-//    | 
-// 17 | 
-// 18 | let poem = MakePoem(10);
-//    | 
-// warning: Variable assignment is experimental, and will break in the future.
-//   -->  expr/expr_full.baml:20
-//    | 
-// 19 | 
-// 20 | let another = {
-// 21 |   let x = MakePoem(10);
-// 22 |   let y = MakePoem(5);
-// 23 |   CombinePoems(x,y)
-// 24 | };
-//    | 

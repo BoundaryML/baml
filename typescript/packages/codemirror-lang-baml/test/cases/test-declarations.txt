@@ -23,8 +23,8 @@ test Test1 {
 Baml(Decl(TestDecl(
   IdentifierDecl,
   "{",
-  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ListValue("[", IdentifierDecl, "]"))),
-  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ConfigMap("{", ConfigTupleValue(IdentifierDecl, ConfigValueExpr(PromptExpr(Document))), "}"))),
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ConfigListValue("[", IdentifierDecl, "]"))),
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ConfigMap("{", ConfigTupleValue(IdentifierDecl, ConfigValueExpr(PromptExpr(PromptExprContents))), "}"))),
   "}"
 )))
 
@@ -42,7 +42,7 @@ test MultiTest {
 Baml(Decl(TestDecl(
   IdentifierDecl,
   "{",
-  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ListValue("[", IdentifierDecl, IdentifierDecl, IdentifierDecl, "]"))),
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ConfigListValue("[", IdentifierDecl, IdentifierDecl, IdentifierDecl, "]"))),
   ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ConfigMap("{", ConfigTupleValue(IdentifierDecl, ConfigValueExpr(LiteralDecl(QuotedString))), ConfigTupleValue(IdentifierDecl, ConfigValueExpr(LiteralDecl(NumericLiteral))), "}"))),
   "}"
 )))
@@ -62,7 +62,7 @@ Baml(Decl(TestDecl(
   IdentifierDecl,
   "{",
   BlockAttribute(IdentifierDecl, AttributeValue(QuotedString)),
-  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ListValue("[", IdentifierDecl, "]"))),
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ConfigListValue("[", IdentifierDecl, "]"))),
   ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ConfigMap("{", ConfigTupleValue(IdentifierDecl, ConfigValueExpr(LiteralDecl(QuotedString))), "}"))),
   "}"
 )))
@@ -77,6 +77,6 @@ test SimpleTest {
 Baml(Decl(TestDecl(
   IdentifierDecl,
   "{",
-  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ListValue("[", IdentifierDecl, "]"))),
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ConfigListValue("[", IdentifierDecl, "]"))),
   "}"
 )))

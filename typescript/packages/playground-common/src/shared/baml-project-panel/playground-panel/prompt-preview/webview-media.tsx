@@ -1,3 +1,4 @@
+'use client';
 import { Button } from '@baml/ui/button';
 // import Link from "next/link";
 import type { WasmChatMessagePartMedia } from '@gloo-ai/baml-schema-wasm-web';

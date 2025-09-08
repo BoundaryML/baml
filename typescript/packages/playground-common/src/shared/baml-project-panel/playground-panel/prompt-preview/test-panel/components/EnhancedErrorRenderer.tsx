@@ -1,3 +1,4 @@
+'use client';
 import React, { useMemo, useCallback, useState } from 'react';
 import { AlertCircle, RefreshCw, ExternalLink, WifiOff, ChevronDown, ChevronUp, Copy, Check, X, List } from 'lucide-react';
 import { Button } from '@baml/ui/button';

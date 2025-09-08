@@ -34,24 +34,6 @@ fn Nested() -> int {
     a // should be 2
 }
 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/break.baml:1
-//    | 
-//    | 
-//  1 | fn Factorial(limit: int) -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/break.baml:17
-//    | 
-// 16 | 
-// 17 | fn OutsideLoop() -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/break.baml:24
-//    | 
-// 23 | 
-// 24 | fn Nested() -> int {
-//    | 
 // error: Error validating: 'break' cannot be used outside of a loop
 //   -->  loops/break.baml:19
 //    | 

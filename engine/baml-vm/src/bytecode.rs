@@ -183,6 +183,12 @@ pub enum Instruction {
     /// [`crate::Vm::objects`] array.
     AllocInstance(ObjectIndex),
 
+    /// Builds a variant of an enum and allocates it on the heap.
+    ///
+    /// Format: `ALLOC_VARIANT i` where `i` is the index of the enum in the
+    /// [`crate::Vm::objects`] array.
+    AllocVariant(ObjectIndex),
+
     /// Creates a pending future, pushes it on the stack and notifies embedder.
     ///
     /// Format: `DISPATCH_FUTURE n` where `n` is the number of arguments passed
@@ -319,6 +325,7 @@ impl std::fmt::Display for Instruction {
             Instruction::StoreArrayElement => f.write_str("STORE_ARRAY_ELEMENT"),
             Instruction::StoreMapElement => f.write_str("STORE_MAP_ELEMENT"),
             Instruction::AllocInstance(i) => write!(f, "ALLOC_INSTANCE {i}"),
+            Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
             Instruction::DispatchFuture(i) => write!(f, "DISPATCH_FUTURE {i}"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call(n) => write!(f, "CALL {n}"),

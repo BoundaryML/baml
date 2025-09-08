@@ -168,8 +168,8 @@
     "vscode:publish": "vsce publish --no-dependencies",
     "clean": "git clean -xdf baml-*.vsix .turbo dist out node_modules",
     "typecheck": "tsc --noEmit --emitDeclarationOnly false",
-    "test:syntaxes": "vscode-tmgrammar-snap --config ../package.json all.test.baml",
-    "update-test:syntaxes": "pnpm test:syntaxes -- --updateSnapshot"
+    "test:syntaxes": "vscode-tmgrammar-snap --config package.json syntaxes/all.test.baml",
+    "update-test:syntaxes": "vscode-tmgrammar-snap --config package.json syntaxes/all.test.baml --updateSnapshot"
   },
   "dependencies": {
     "@aws-sdk/credential-providers": "3.830.0",

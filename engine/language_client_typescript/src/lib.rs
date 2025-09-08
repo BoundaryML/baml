@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use napi::{Env, JsUndefined};
+use napi::Env;
 use napi_derive::napi;
 
 mod abort_controller;
@@ -49,7 +49,7 @@ pub fn set_log_max_chunk_length(length: u32) {
     let _ = baml_log::set_max_message_length(length as usize);
 }
 
-#[napi::module_init]
+#[napi_derive::module_init]
 fn module_init() {
     match baml_log::init() {
         Ok(_) => (),
