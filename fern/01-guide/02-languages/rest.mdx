@@ -25,7 +25,7 @@ We integrate with [OpenAPI](https://www.openapis.org/) (universal API definition
   ### Install NPX + OpenAPI
 
      <Tabs>
-        <Tab title="macOS (brew)">
+        <Tab title="macOS (brew)" language="bash">
           ```bash
           brew install npm openapi-generator
           # 'npm' will install npx
@@ -33,7 +33,7 @@ We integrate with [OpenAPI](https://www.openapis.org/) (universal API definition
           ```
         </Tab>
 
-        <Tab title="Linux (apt)">
+        <Tab title="Linux (apt)" language="bash">
           OpenAPI requires `default-jdk`
 
           ```bash
@@ -42,7 +42,7 @@ We integrate with [OpenAPI](https://www.openapis.org/) (universal API definition
           ```
         </Tab>
 
-        <Tab title="Linux (yum/dnf)">
+        <Tab title="Linux (yum/dnf)" language="bash">
           OpenAPI requires Java
 
           ```bash
@@ -67,7 +67,7 @@ We integrate with [OpenAPI](https://www.openapis.org/) (universal API definition
           ```
         </Tab>
 
-        <Tab title="Windows">
+        <Tab title="Windows" language="powershell">
           To install `npx` and `java` (for OpenAPI):
 
             1. Use the [Node.js installer](https://nodejs.org/en/download/prebuilt-installer) to install `npx` (default installer settings are fine).
@@ -82,7 +82,7 @@ We integrate with [OpenAPI](https://www.openapis.org/) (universal API definition
           ```
         </Tab>
 
-        <Tab title="Other">
+        <Tab title="Other" language="bash">
           To install `npx`, use the [Node.js installer](https://nodejs.org/en/download/prebuilt-installer).
 
           To install `java` (for OpenAPI), use the [Adoptium OpenJDK packages](https://adoptium.net/installation/linux/).
@@ -93,14 +93,14 @@ We integrate with [OpenAPI](https://www.openapis.org/) (universal API definition
       This will give you some starter BAML code in a `baml_src` directory.
     <Tabs>
 
-      <Tab title="C#">
+      <Tab title="C#" language="bash">
       ```bash
       npx @boundaryml/baml init \
         --client-type rest/openapi --openapi-client-type csharp
       ```
       </Tab>
 
-      <Tab title="C++">
+      <Tab title="C++" language="bash">
 
       <Tip>OpenAPI supports [5 different C++ client types][openapi-client-types];
       any of them will work with BAML.</Tip>
@@ -111,14 +111,14 @@ We integrate with [OpenAPI](https://www.openapis.org/) (universal API definition
       ```
       </Tab>
 
-      <Tab title="Go">
+      <Tab title="Go" language="bash">
       ```bash
       npx @boundaryml/baml init \
         --client-type rest/openapi --openapi-client-type go
       ```
       </Tab>
 
-      <Tab title="Java">
+      <Tab title="Java" language="bash">
       
       ```bash
       npx @boundaryml/baml init \
@@ -138,28 +138,28 @@ We integrate with [OpenAPI](https://www.openapis.org/) (universal API definition
 
       </Tab>
 
-      <Tab title="PHP">
+      <Tab title="PHP" language="bash">
       ```bash
       npx @boundaryml/baml init \
         --client-type rest/openapi --openapi-client-type php
       ```
       </Tab>
 
-      <Tab title="Ruby">
+      <Tab title="Ruby" language="bash">
       ```bash
       npx @boundaryml/baml init \
         --client-type rest/openapi --openapi-client-type ruby
       ```
       </Tab>
 
-      <Tab title="Rust">
+      <Tab title="Rust" language="bash">
       ```bash
       npx @boundaryml/baml init \
         --client-type rest/openapi --openapi-client-type rust
       ```
       </Tab>
 
-      <Tab title="Other">
+      <Tab title="Other" language="bash">
 
       As long as there's an OpenAPI client generator that works with your stack,
       you can use it with BAML. Check out the [full list in the OpenAPI docs][openapi-client-types].
@@ -210,7 +210,7 @@ We integrate with [OpenAPI](https://www.openapis.org/) (universal API definition
 
 <Tabs>
 
-<Tab title="Go">
+<Tab title="Go" language="go">
 
 Run this with `go run main.go`:
 
@@ -241,7 +241,7 @@ func main() {
 ```
 </Tab>
 
-<Tab title="Java">
+<Tab title="Java" language="java">
 First, add the OpenAPI-generated client to your project.
 
 <AccordionGroup>
@@ -374,7 +374,7 @@ public class Example {
 ```
 </Tab>
 
-<Tab title="PHP">
+<Tab title="PHP" language="php">
 
 <Warning>
   The PHP OpenAPI generator doesn't support OpenAPI's `oneOf` type, which is
@@ -417,7 +417,7 @@ try {
 ```
 </Tab>
 
-<Tab title="Ruby">
+<Tab title="Ruby" language="ruby">
 
 Use `ruby -Ilib/baml_client app.rb` to run this:
 
@@ -457,7 +457,7 @@ end
 ```
 </Tab>
 
-<Tab title="Rust">
+<Tab title="Rust" language="rust">
 
 <Tip>
   If you're using `cargo watch -- cargo build` and seeing build failures because it can't find

@@ -60,7 +60,7 @@ received so far.
 
 <Tabs>
 
-<Tab title="Python">
+<Tab title="Python" language="python">
 BAML will generate `b.stream.ExtractReceiptInfo()` for you, which you can use like so:
 
 ```python main.py
@@ -126,7 +126,7 @@ if __name__ == '__main__':
 ```
 </Tab>
 
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 BAML will generate `b.stream.ExtractReceiptInfo()` for you, which you can use like so:
 
 ```ts main.ts
@@ -190,7 +190,7 @@ if (require.main === module) {
 ```
 </Tab>
 
-<Tab title="Go">
+<Tab title="Go" language="go" >
 BAML will generate `b.Stream.ExtractReceiptInfo()` for you, which you can use like so:
 
 ```go main.go
@@ -493,7 +493,7 @@ Total	$141.65`
 ```
 </Tab>
 
-<Tab title="Ruby (beta)">
+<Tab title="Ruby (beta)" language="ruby">
 BAML will generate `Baml.Client.stream.ExtractReceiptInfo()` for you,
 which you can use like so:
 
@@ -558,7 +558,7 @@ end
 ```
 
 </Tab>
-<Tab title="OpenAPI">
+<Tab title="OpenAPI" language="openapi">
 
 Streaming is not yet supported via OpenAPI, but it will be coming soon!
 
@@ -576,7 +576,7 @@ numbers like 1, 12, 129.9, etc.
 You can cancel ongoing streams using abort controllers, which is essential for responsive applications that allow users to stop generation or implement timeouts.
 
 <Tabs>
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 ```typescript
 import { b } from './baml_client'
 
@@ -608,7 +608,7 @@ setTimeout(() => {
 ```
 </Tab>
 
-<Tab title="Python">
+<Tab title="Python" language="python">
 ```python
 from baml_client.async_client import b
 from baml_py import AbortController
@@ -643,7 +643,7 @@ asyncio.create_task(cancel_after_timeout())
 ```
 </Tab>
 
-<Tab title="Go">
+<Tab title="Go" language="go">
 ```go
 // Go already uses context for cancellation in the examples above
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -677,7 +677,7 @@ for value := range stream {
 ```
 </Tab>
 
-<Tab title="Ruby">
+<Tab title="Ruby" language="ruby">
 ```ruby
 require 'baml_client'
 
@@ -718,7 +718,7 @@ end
 Allow users to stop streaming generation with a "Stop" button:
 
 <Tabs>
-<Tab title="React">
+<Tab title="React" language="react">
 ```tsx
 function StreamingComponent() {
   const [controller, setController] = useState<AbortController | null>(null)
@@ -769,7 +769,7 @@ function StreamingComponent() {
 ```
 </Tab>
 
-<Tab title="FastAPI">
+<Tab title="FastAPI" language="python">
 ```python
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
@@ -878,7 +878,7 @@ class BlogPost {
 
 This will generate the following code in the `partial_types` module:
 <Tabs>
-<Tab title="Python">
+<Tab title="Python" language="python">
 ```python
 class StreamState(BaseModel, Generic[T]):
   value: T,
@@ -890,7 +890,7 @@ class BlogPost(BaseModel):
 ```
 </Tab>
 
-<Tab title="Typescript">
+<Tab title="Typescript" language="typescript">
 ```typescript
 interface StreamState<T> {
   value: T,
@@ -965,7 +965,7 @@ function Respond(
 
 <Tabs>
 
-<Tab title="Python">
+<Tab title="Python" language="python">
 The above BAML code will generate the following Python definitions in the
 `partial_types` module. The use of streaming attributes has several effects on
 the generated code:
@@ -1000,7 +1000,7 @@ class Message(BaseClass):
 ```
 </Tab>
 
-<Tab title="Typescript">
+<Tab title="Typescript" language="typescript" >
 This BAML code will generate the following Typescript definitions in the
 `partial_types` module. The use of streaming attributes has several effects on
 the generated code:

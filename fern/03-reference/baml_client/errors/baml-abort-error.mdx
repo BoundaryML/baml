@@ -10,7 +10,7 @@ description: "Error thrown when a BAML operation is cancelled"
 ## Class Definition
 
 <Tabs>
-  <Tab title="TypeScript">
+  <Tab title="TypeScript" language="typescript">
     ```typescript
     export class BamlAbortError extends Error {
       public readonly name: string = 'BamlAbortError'
@@ -24,7 +24,7 @@ description: "Error thrown when a BAML operation is cancelled"
     ```
   </Tab>
   
-  <Tab title="Python">
+  <Tab title="Python" language="python">
     ```python
     class BamlAbortError(Exception):
         """Error raised when a BAML operation is aborted"""
@@ -36,7 +36,7 @@ description: "Error thrown when a BAML operation is cancelled"
     ```
   </Tab>
   
-  <Tab title="Go">
+  <Tab title="Go" language="go">
     ```go
     // In Go, cancellation is handled via context errors
     import (
@@ -54,7 +54,7 @@ description: "Error thrown when a BAML operation is cancelled"
     ```
   </Tab>
   
-  <Tab title="Ruby">
+  <Tab title="Ruby" language="ruby">
     ```ruby
     module Baml
       class AbortError < StandardError
@@ -261,7 +261,7 @@ async function retryableOperation(input: any, maxRetries: number = 3) {
 When streaming operations are cancelled, the error behavior differs slightly:
 
 <Tabs>
-  <Tab title="TypeScript">
+  <Tab title="TypeScript" language="typescript">
     ```typescript
     const controller = new AbortController()
     const stream = b.stream.FunctionName(input, {
@@ -284,7 +284,7 @@ When streaming operations are cancelled, the error behavior differs slightly:
     ```
   </Tab>
   
-  <Tab title="Python">
+  <Tab title="Python" language="python">
     ```python
     controller = AbortController()
     stream = b.stream.FunctionName(
