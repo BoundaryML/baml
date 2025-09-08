@@ -2,18 +2,16 @@ import type { Configuration } from 'webpack';
 
 function getNextJsVersion(): string | null {
   try {
-    // Try to find Next.js in the project's dependencies first
     const projectNextPath = require.resolve('next/package.json', {
       paths: [process.cwd()],
     });
     const nextPackageJson = require(projectNextPath);
     return nextPackageJson.version || null;
-  } catch (error) {
+  } catch {
     try {
-      // Fallback to checking in the plugin's dependencies
       const nextPackageJson = require('next/package.json');
       return nextPackageJson.version || null;
-    } catch (error) {
+    } catch {
       console.warn(
         'Warning: Could not determine Next.js version, defaulting to latest config',
       );
@@ -43,28 +41,16 @@ export interface BamlNextConfig {
   webpack?: ((config: Configuration, context: any) => Configuration) | null;
 }
 
-export function withBaml(bamlConfig: BamlNextConfig = {}) {
+export function withBaml(_bamlConfig: BamlNextConfig = {}) {
   return function withBamlConfig<T extends GenericNextConfig>(
     nextConfig: T = {} as T,
   ): T {
     const nextVersion = getNextJsVersion();
-    // Default to new config (>= 14) if version can't be determined
     const majorVersion = nextVersion
       ? Number.parseInt(nextVersion.split('.')[0], 10)
       : 14;
     const useNewConfig = majorVersion >= 14;
     const isTurbo = Boolean(process.env.TURBOPACK === '1');
-
-    if (isTurbo) {
-      console.warn(
-        '\x1b[33m%s\x1b[0m',
-        `
-⚠️  Warning: @boundaryml/baml-nextjs-plugin does not yet support Turbopack
-   Please remove the --turbo flag from your "next dev" command.
-   Example: "next dev" instead of "next dev --turbo"
-      `,
-      );
-    }
 
     const turboConfig = isTurbo
       ? {
@@ -84,7 +70,6 @@ export function withBaml(bamlConfig: BamlNextConfig = {}) {
               ...(nextConfig.experimental || {}),
               ...(isTurbo ? { turbo: turboConfig } : {}),
             },
-            // In Turbo mode, we don't add it to serverExternalPackages to avoid the conflict
             ...(isTurbo
               ? {}
               : {
@@ -98,22 +83,21 @@ export function withBaml(bamlConfig: BamlNextConfig = {}) {
             experimental: {
               ...(nextConfig.experimental || {}),
               serverComponentsExternalPackages: [
-                ...((nextConfig.experimental as any)
-                  ?.serverComponentsExternalPackages || []),
+                ...(nextConfig.experimental?.serverComponentsExternalPackages || []),
                 '@boundaryml/baml',
               ],
               ...(isTurbo ? { turbo: turboConfig } : {}),
             },
           }),
       webpack: (config: Configuration, context: any) => {
+        let webpackConfig = config;
         if (typeof nextConfig.webpack === 'function') {
-          config = nextConfig.webpack(config, context);
+          webpackConfig = nextConfig.webpack(config, context);
         }
 
         if (context.isServer) {
-          // Externalize the native module
-          config.externals = [
-            ...(Array.isArray(config.externals) ? config.externals : []),
+          webpackConfig.externals = [
+            ...(Array.isArray(webpackConfig.externals) ? webpackConfig.externals : []),
             '@boundaryml/baml',
             '@boundaryml/baml-darwin-arm64',
             '@boundaryml/baml-darwin-x64',
@@ -126,29 +110,23 @@ export function withBaml(bamlConfig: BamlNextConfig = {}) {
           ];
         }
 
-        // Only add webpack rules if not using Turbo
         if (!isTurbo) {
-          config.module = config.module || {};
-          config.module.rules = config.module.rules || [];
-          config.module.rules.push({
+          webpackConfig.module = webpackConfig.module || {};
+          webpackConfig.module.rules = webpackConfig.module.rules || [];
+          webpackConfig.module.rules.push({
             test: /\.node$/,
             use: [
               {
                 loader: 'nextjs-node-loader',
                 options: {
-                  outputPath: config.output?.path,
+                  outputPath: webpackConfig.output?.path,
                 },
               },
             ],
           });
         }
 
-        // Ensure module and rules are defined
-        config.module = config.module || {};
-        config.module.rules = config.module.rules || [];
-        // Add WebAssembly loading configuration (properly indented)
-
-        return config;
+        return webpackConfig;
       },
     } as T;
   };
