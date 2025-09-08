@@ -137,12 +137,10 @@ pub fn render_config() -> Result<String, askama::Error> {
 
 #[derive(askama::Template)]
 #[template(path = "tracing.ts.j2", escape = "none", ext = "txt")]
-struct Tracing<'a> {
-    pkg: &'a CurrentRenderPackage,
-}
+struct Tracing;
 
-pub fn render_tracing(pkg: &CurrentRenderPackage) -> Result<String, askama::Error> {
-    Tracing { pkg }.render()
+pub fn render_tracing(_pkg: &CurrentRenderPackage) -> Result<String, askama::Error> {
+    Tracing.render()
 }
 
 #[derive(askama::Template)]
@@ -244,7 +242,6 @@ pub fn render_react_server_streaming(
 struct ReactServerStreamingTypes<'a> {
     streaming_types: &'a IndexMap<String, String>,
     types: &'a [String],
-    pkg: &'a CurrentRenderPackage,
 }
 
 pub fn render_react_server_streaming_types(
@@ -261,7 +258,6 @@ pub fn render_react_server_streaming_types(
     ReactServerStreamingTypes {
         streaming_types: &streaming_types,
         types,
-        pkg,
     }
     .render()
 }

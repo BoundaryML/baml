@@ -217,6 +217,7 @@ pub trait LanguageFeatures: Default + Sized {
 pub struct FileCollector<'a, L: LanguageFeatures + Default> {
     // map of path to a an object that has the trail File
     files: IndexMap<PathBuf, String>,
+    #[allow(dead_code)]
     lang: L,
 
     on_file_created: Vec<Box<dyn Fn(&Path, &mut String) -> Result<()> + 'a>>,

@@ -75,7 +75,6 @@ mod union {
     pub struct UnionGo<'a> {
         pub name: String,
         pub cffi_name: String,
-        pub docstring: Option<String>,
         pub variants: Vec<VariantGo>,
         pub pkg: &'a CurrentRenderPackage,
     }

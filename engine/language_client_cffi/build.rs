@@ -82,12 +82,14 @@ mod protoc_lang_out {
         }
 
         /// Append a path to `-I` args
+        #[allow(dead_code)]
         pub fn include(&mut self, include: impl AsRef<Path>) -> &mut Self {
             self.includes.push(include.as_ref().to_owned());
             self
         }
 
         /// Append multiple paths to `-I` args
+        #[allow(dead_code)]
         pub fn includes(
             &mut self,
             includes: impl IntoIterator<Item = impl AsRef<Path>>,
@@ -105,6 +107,7 @@ mod protoc_lang_out {
         }
 
         /// Append multiple `.proto` file paths to compile
+        #[allow(dead_code)]
         pub fn inputs(&mut self, inputs: impl IntoIterator<Item = impl AsRef<Path>>) -> &mut Self {
             for input in inputs {
                 self.input(input);
@@ -168,6 +171,7 @@ mod protoc_lang_out {
 
     /// `Protoc --descriptor_set_out...` args
     #[derive(Debug)]
+    #[allow(dead_code)]
     pub struct DescriptorSetOutArgs<'a> {
         /// `--file_descriptor_out=...` param
         pub out: &'a str,
@@ -209,6 +213,7 @@ mod protoc_lang_out {
         /// let protoc = protoc::Protoc::from_path(
         ///     protoc_bin_vendored::protoc_bin_path().unwrap());
         /// ```
+        #[allow(dead_code)]
         pub fn from_path(path: impl AsRef<OsStr>) -> Protoc {
             Protoc {
                 exec: path.as_ref().to_owned(),
@@ -280,6 +285,7 @@ mod protoc_lang_out {
         }
 
         /// Execute `protoc --descriptor_set_out=`
+        #[allow(dead_code)]
         pub fn write_descriptor_set(&self, args: DescriptorSetOutArgs) -> Result<()> {
             let mut cmd_args: Vec<OsString> = Vec::new();
 
@@ -307,7 +313,9 @@ mod protoc_lang_out {
         }
     }
 
+    #[allow(dead_code)]
     pub struct Version {
+        #[allow(dead_code)]
         pub version: String,
     }
 

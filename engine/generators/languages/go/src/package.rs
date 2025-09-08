@@ -31,9 +31,6 @@ impl Package {
         format!("{}.", self.package_path.last().unwrap())
     }
 
-    pub fn current(&self) -> String {
-        self.package_path.last().unwrap().clone()
-    }
 
     pub fn types() -> Package {
         Package::new("baml_client.types")
@@ -43,9 +40,6 @@ impl Package {
         Package::new("baml_client.stream_types")
     }
 
-    pub fn types_builder() -> Package {
-        Package::new("baml_client.types_builder")
-    }
 
     pub fn checked() -> Package {
         Package::types()

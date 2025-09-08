@@ -93,7 +93,4 @@ impl CurrentRenderPackage {
         }
     }
 
-    pub fn name(&self) -> String {
-        self.get().package_path.last().unwrap().clone()
-    }
 }

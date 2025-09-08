@@ -43,9 +43,6 @@ pub struct TypeMetaGo {
 }
 
 impl TypeMetaGo {
-    pub fn is_optional(&self) -> bool {
-        matches!(self.type_wrapper, TypeWrapper::Optional(_))
-    }
 
     pub fn is_checked(&self) -> bool {
         matches!(self.type_wrapper, TypeWrapper::Checked(_))

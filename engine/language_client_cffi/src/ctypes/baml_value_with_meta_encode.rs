@@ -46,7 +46,7 @@ fn maybe_wrap_union_impl<TypeLookups, T>(
     holder: CffiValueHolder,
     lookup: &TypeLookups,
     get_target_type: impl Fn(&TypeGeneric<T>) -> TypeGeneric<T>,
-    to_current_type: impl Fn(&TypeIR) -> TypeGeneric<T>,
+    _to_current_type: impl Fn(&TypeIR) -> TypeGeneric<T>,
     mode: baml_types::StreamingMode,
 ) -> CffiValueHolder
 where

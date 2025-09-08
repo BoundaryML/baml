@@ -17,7 +17,7 @@
 ///
 /// However, the current implementation is simple and ad-hoc, likely wrong
 /// in several places. Bidirectional typing is the target.
-use std::{borrow::Cow, sync::Arc};
+use std::sync::Arc;
 
 use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta, TypeValue};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
@@ -1089,55 +1089,6 @@ fn infer_type_if_assigned_var(
     }
 }
 
-fn assign_error(lhs: &thir::Expr<IRMeta>) -> Cow<'static, str> {
-    match lhs {
-        thir::Expr::Var(name, _) => format!("Cannot assign to immutable variable `{name}`").into(),
-        thir::Expr::ArrayAccess { meta, .. } => match meta.1.as_ref() {
-            Some(TypeIR::List(_, _)) => "Cannot assign to index of immutable array",
-            Some(TypeIR::Map(_, _, _)) => "Cannot assign to key of immutable map",
-            _ => "Cannot assign to index of immutable map/array",
-        }
-        .into(),
-
-        thir::Expr::FieldAccess { base, .. } => match base.as_ref() {
-            thir::Expr::Var(name, _) if name == "self" => {
-                "Cannot assign to field of immutable self".into()
-            }
-            _ => "Cannot assign to field of immutable object".into(),
-        },
-        _ => panic!("assign error requested to non-assignable expression"),
-    }
-}
-
-/// Ensures that the location pointed to by `lhs` is assignable.
-fn is_assignable(
-    lhs: &thir::Expr<IRMeta>,
-    diagnostics: &mut Diagnostics,
-    ctx: &TypeContext,
-) -> bool {
-    match lhs {
-        // base case: check variable mutability.
-        // NOTE: thir::Expr::Var is still generated even for unknown variables
-        // (see typecheck_expression for hir::Expression::Identifier), so we must
-        // handle the case where the variable doesn't exist in ctx.vars.
-        thir::Expr::Var(name, _meta) => ctx
-            .vars
-            .get(name)
-            .map(|var_info| var_info.mut_var_info.is_some())
-            .unwrap_or(false),
-        thir::Expr::ArrayAccess { base, .. } | thir::Expr::FieldAccess { base, .. } => {
-            is_assignable(base, diagnostics, ctx)
-        }
-        _ => {
-            diagnostics.push_error(DatamodelError::new_validation_error(
-                        "Invalid left hand of assignment, only variables, instance fields and array elements can be assigned",
-                        lhs.span().clone(),
-                    ));
-            // do not error because this is not assigned.
-            true
-        }
-    }
-}
 
 fn render_doc_to_string(doc: pretty::RcDoc<'static>) -> String {
     let mut s = String::new();

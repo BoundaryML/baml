@@ -25,6 +25,7 @@ impl TypeMetaRb {
         matches!(self.type_wrapper, TypeWrapper::Optional(_))
     }
 
+    #[allow(dead_code)]
     pub fn is_checked(&self) -> bool {
         matches!(self.type_wrapper, TypeWrapper::Checked(_))
     }
@@ -92,6 +93,7 @@ pub enum MediaTypeRb {
 pub struct EscapedRubyString(String);
 
 impl EscapedRubyString {
+    #[allow(dead_code)]
     pub fn new(s: &str) -> Self {
         let has_single_quote = s.contains('\'');
         let has_double_quote = s.contains('"');

@@ -138,7 +138,7 @@ aws-config = { version = "=1.5.3", default-features = false, features = [] }
 aws-sdk-bedrockruntime = { version = "=1.76.0", default-features = false, features = [
 
 ] }
-colored = { workspace = true, default-features = false, features = [
+colored = { workspace = true, features = [
   "no-color",
 ] }
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }

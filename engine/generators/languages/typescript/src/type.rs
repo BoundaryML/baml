@@ -145,11 +145,6 @@ pub enum TypeTS {
     },
     List(Box<TypeTS>, TypeMetaTS),
     Map(Box<TypeTS>, Box<TypeTS>, TypeMetaTS),
-    Interface {
-        package: Package,
-        name: String,
-        meta: TypeMetaTS,
-    },
     // For any type that we can't represent in TS, we'll use this
     Any {
         reason: String,
@@ -186,7 +181,6 @@ impl TypeTS {
                 key.default_name_within_union(),
                 value.default_name_within_union()
             ),
-            TypeTS::Interface { name, .. } => name.clone(),
             TypeTS::Any { .. } => "any".to_string(),
         }
     }
@@ -205,7 +199,6 @@ impl TypeTS {
             TypeTS::Enum { meta, .. } => meta,
             TypeTS::List(_, meta) => meta,
             TypeTS::Map(_, _, meta) => meta,
-            TypeTS::Interface { meta, .. } => meta,
             TypeTS::Any { meta, .. } => meta,
         }
     }
@@ -224,7 +217,6 @@ impl TypeTS {
             TypeTS::Enum { meta, .. } => meta,
             TypeTS::List(_, meta) => meta,
             TypeTS::Map(_, _, meta) => meta,
-            TypeTS::Interface { meta, .. } => meta,
             TypeTS::Any { meta, .. } => meta,
         }
     }
@@ -292,9 +284,6 @@ impl SerializeType for TypeTS {
                     }
                     _ => format!("Record<{k}, {v}>"),
                 }
-            }
-            TypeTS::Interface { package, name, .. } => {
-                format!("{}{}", package.relative_from(pkg), name)
             }
             TypeTS::Any { .. } => "undefined".to_string(),
         };
