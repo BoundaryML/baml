@@ -68,7 +68,7 @@ fn call_function_from_c_inner(
         kwargs,
         client_registry,
         env_vars,
-        collectors: _,
+        collectors,
         type_builder,
     } = BamlFunctionArguments::from_c_buffer(encoded_args, length)?;
 
@@ -130,7 +130,7 @@ fn call_function_parse_from_c_inner(
         kwargs,
         client_registry,
         env_vars,
-        collectors: _,
+        collectors,
         type_builder,
     } = BamlFunctionArguments::from_c_buffer(encoded_args, length)?;
 
@@ -238,7 +238,7 @@ fn call_function_stream_from_c_inner(
         kwargs,
         client_registry,
         env_vars,
-        collectors: _,
+        collectors,
         type_builder,
     } = BamlFunctionArguments::from_c_buffer(encoded_args, length)?;
 

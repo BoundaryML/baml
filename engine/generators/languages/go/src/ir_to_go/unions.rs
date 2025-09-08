@@ -41,7 +41,6 @@ pub fn ir_union_to_go<'a>(
         Some(crate::generated_types::UnionGo {
             name,
             cffi_name: union.to_union_name(),
-            docstring: Some(format!("Generated from: {union}")),
             variants,
             pkg,
         })
@@ -92,7 +91,6 @@ pub fn ir_union_to_go_stream<'a>(
         Some(crate::generated_types::UnionGo {
             name,
             cffi_name: stream_union.to_union_name(),
-            docstring: Some(format!("Generated from: {stream_union}")),
             variants,
             pkg,
         })
