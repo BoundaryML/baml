@@ -1,4 +1,6 @@
-function getNextJsVersion() {
+import type { Configuration } from 'webpack';
+
+function getNextJsVersion(): string | null {
   try {
     // Try to find Next.js in the project's dependencies first
     const projectNextPath = require.resolve('next/package.json', {
@@ -20,9 +22,31 @@ function getNextJsVersion() {
   }
 }
 
-export function withBaml(_bamlConfig = {}) {
-  // eslint-disable-line no-unused-vars
-  return function withBamlConfig(nextConfig = {}) {
+type GenericNextConfig = {
+  experimental?: {
+    serverComponentsExternalPackages?: string[];
+    turbo?: {
+      rules?: Record<string, any>;
+      resolveAlias?: Record<string, any>;
+      resolve?: {
+        alias?: Record<string, any>;
+        conditionNames?: string[];
+        preferRelative?: boolean;
+      };
+    };
+  };
+  serverExternalPackages?: string[];
+  webpack?: ((config: Configuration, context: any) => Configuration) | null;
+};
+
+export interface BamlNextConfig {
+  webpack?: ((config: Configuration, context: any) => Configuration) | null;
+}
+
+export function withBaml(_bamlConfig: BamlNextConfig = {}) {
+  return function withBamlConfig<T extends GenericNextConfig>(
+    nextConfig: T = {} as T,
+  ): T {
     const nextVersion = getNextJsVersion();
     // Default to new config (>= 14) if version can't be determined
     const majorVersion = nextVersion
@@ -59,7 +83,7 @@ export function withBaml(_bamlConfig = {}) {
               ],
             },
           }),
-      webpack: (config, context) => {
+      webpack: (config: Configuration, context: any) => {
         let webpackConfig = config;
         if (typeof nextConfig.webpack === 'function') {
           webpackConfig = nextConfig.webpack(config, context);
@@ -102,6 +126,6 @@ export function withBaml(_bamlConfig = {}) {
 
         return webpackConfig;
       },
-    };
+    } as T;
   };
 }
