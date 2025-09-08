@@ -10,15 +10,18 @@ pub struct GetCostStatsRequest {
     #[ts(type = "string")]
     pub project_id: ProjectId,
     #[ts(type = "FilterExpression<number>", optional)]
-    pub start_time: Option<super::ui_function_calls::FilterExpression<crate::base::EpochMsTimestamp>>, 
+    pub start_time:
+        Option<super::ui_function_calls::FilterExpression<crate::base::EpochMsTimestamp>>,
     #[ts(type = "FilterExpression<number>", optional)]
-    pub end_time: Option<super::ui_function_calls::FilterExpression<crate::base::EpochMsTimestamp>>, 
+    pub end_time: Option<super::ui_function_calls::FilterExpression<crate::base::EpochMsTimestamp>>,
     #[ts(optional)]
     pub relative_time: Option<super::ui_function_calls::RelativeTime>,
     #[ts(optional)]
     pub function_name: Option<super::ui_function_calls::FilterExpression<String>>,
     #[ts(optional)]
-    pub status: Option<super::ui_function_calls::FilterExpression<super::ui_function_calls::FunctionCallStatus>>,
+    pub status: Option<
+        super::ui_function_calls::FilterExpression<super::ui_function_calls::FunctionCallStatus>,
+    >,
     #[ts(optional)]
     pub tags: Option<Vec<super::ui_function_calls::TagFilter>>,
 }
@@ -60,5 +63,3 @@ impl ApiEndpoint for GetCostStats {
 
     const PATH: &'static str = "/v1/dashboard/cost";
 }
-
-
