@@ -8,12 +8,6 @@ fn AssignWrongType(x: int) -> int {
 	42
 }
 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  assign_wrong_type.baml:1
-//    | 
-//    | 
-//  1 | fn AssignWrongType(x: int) -> int {
-//    | 
 // error: Error validating: Cannot assign string to int
 //   -->  assign_wrong_type.baml:5
 //    | 

@@ -3,6 +3,7 @@ Baml VM / compiler / expression functions with LLM calls. Ignored in CI.
 """
 
 import pytest
+from baml_py import Image
 
 from ..baml_client import b
 from ..baml_client.runtime import disassemble
@@ -23,3 +24,14 @@ async def test_bool_to_int_with_if_else_calling_llm():
     disassemble(b.BoolToIntWithIfElseCallingLlm)
     assert await b.BoolToIntWithIfElseCallingLlm(True) == 1
     assert await b.BoolToIntWithIfElseCallingLlm(False) == 0
+
+
+@pytest.mark.asyncio
+async def test_call_llm_describe_image():
+    # Call an expression function that calls an LLM function to check if the
+    # media type is passed correctly.
+    description = await b.CallLlmDescribeImage(
+        Image.from_url("https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png")
+    )
+
+    assert "ogre" in description.lower()

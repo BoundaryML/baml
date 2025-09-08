@@ -5,8 +5,8 @@ use std::{
 
 use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
 use napi::{
-    bindgen_prelude::*, Env, JsBoolean, JsNull, JsNumber, JsObject, JsString, JsUndefined,
-    JsUnknown, Result,
+    bindgen_prelude::{JavaScriptClassExt, *},
+    Env, JsNumber, JsString, Result, Unknown,
 };
 use napi_derive::napi;
 use serde_json::Value as JsonValue;
@@ -168,7 +168,7 @@ impl FunctionLog {
     }
 
     #[napi(getter, ts_return_type = "(LLMCall | LLMStreamCall)[]")]
-    pub fn calls(&self, env: Env) -> Result<Array> {
+    pub fn calls<'e>(&self, env: &'e Env) -> Result<Array<'e>> {
         let calls = self.inner.lock().unwrap().calls();
         let mut js_array = env.create_array(calls.len() as u32)?;
 
@@ -201,7 +201,7 @@ impl FunctionLog {
     }
 
     #[napi(getter)]
-    pub fn selected_call(&self, env: Env) -> Result<JsUnknown> {
+    pub fn selected_call<'e>(&self, env: &'e Env) -> Result<Unknown<'e>> {
         let calls = self.inner.lock().unwrap().calls();
         let found = calls.into_iter().find_map(|call| match call {
             baml_runtime::tracingv2::storage::storage::LLMCallKind::Basic(inner) => {
@@ -232,14 +232,15 @@ impl FunctionLog {
             Some(call) => match call {
                 baml_runtime::tracingv2::storage::storage::LLMCallKind::Basic(inner) => {
                     let llm_call = LLMCall { inner };
-                    Ok(env.create_external(llm_call, None)?.into_unknown())
+                    External::new(llm_call).into_unknown(env)
                 }
                 baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(inner) => {
                     let stream_call = LLMStreamCall { inner };
-                    Ok(env.create_external(stream_call, None)?.into_unknown())
+                    External::new(stream_call).into_unknown(env)
                 }
             },
-            None => Ok(env.get_null()?.into_unknown()),
+            // v2: env.get_null()?.into_unknown()
+            None => Ok(env.to_js_value(&Option::<()>::None)?),
         }
     }
 }
@@ -483,35 +484,36 @@ impl LLMStreamCall {
     }
 }
 
-pub fn serde_value_to_js(env: Env, value: &JsonValue) -> Result<JsUnknown> {
+pub fn serde_value_to_js<'e>(env: &'e Env, value: &JsonValue) -> Result<Unknown<'e>> {
     match value {
-        JsonValue::Null => Ok(env.get_null()?.into_unknown()),
-        JsonValue::Bool(b) => Ok(env.get_boolean(*b)?.into_unknown()),
+        // v2: env.get_null()?.into_unknown()
+        JsonValue::Null => Ok(env.to_js_value(&Option::<()>::None)?),
+        JsonValue::Bool(b) => Ok(env.to_js_value(b)?),
         JsonValue::Number(num) => {
             if let Some(i) = num.as_i64() {
-                Ok(env.create_int64(i)?.into_unknown())
+                Ok(env.to_js_value(&i)?)
             } else if let Some(f) = num.as_f64() {
-                Ok(env.create_double(f)?.into_unknown())
+                Ok(env.to_js_value(&f)?)
             } else {
                 Err(Error::from_reason("Could not convert number to i64 or f64"))
             }
         }
-        JsonValue::String(s) => Ok(env.create_string(s)?.into_unknown()),
+        JsonValue::String(s) => Ok(env.to_js_value(s)?),
         JsonValue::Array(arr) => {
-            let mut js_array = env.create_array_with_length(arr.len())?;
+            let mut js_array = env.create_array(arr.len() as u32)?;
             for (i, elem) in arr.iter().enumerate() {
                 let js_value = serde_value_to_js(env, elem)?;
                 js_array.set_element(i as u32, js_value)?;
             }
-            Ok(js_array.into_unknown())
+            Ok(js_array.into_unknown(env)?)
         }
         JsonValue::Object(obj) => {
-            let mut js_obj = env.create_object()?;
+            let mut js_obj = Object::new(env)?;
             for (k, v) in obj {
                 let js_value = serde_value_to_js(env, v)?;
                 js_obj.set_named_property(k, js_value)?;
             }
-            Ok(js_obj.into_unknown())
+            Ok(js_obj.into_unknown(env)?)
         }
     }
 }

@@ -29,7 +29,7 @@ def set_log_max_chunk_length(length: int) -> None:
 class AbortController:
     """Controller for cancelling BAML operations."""
 
-    def __init__(self, timeout_ms: Optional[int] = None) -> None: 
+    def __init__(self, timeout_ms: Optional[int] = None) -> None:
         """
         Creates a new abort controller with an optional timeout in milliseconds.
         Once aborted, the AbortController will forever remain in an an aborted state.
@@ -39,16 +39,15 @@ class AbortController:
             timeout_ms: The timeout in milliseconds. If not provided, AbortController will not timeout.
         """
         ...
-    
 
-    def abort(self) -> None: 
+    def abort(self) -> None:
         """
         Immediately abort all operations.
         """
         ...
 
     @property
-    def aborted(self) -> bool: 
+    def aborted(self) -> bool:
         """
         Check the state of this controller.
         Once aborted, the AbortController will forever remain in an an aborted state.
@@ -78,6 +77,7 @@ class FunctionResult:
         class_module: Any,
         partial_class_module: Any,
         allow_partials: bool,
+        runtime: BamlRuntime,
     ) -> Any: ...
 
     # This is a debug function that returns the internal representation of the response

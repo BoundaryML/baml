@@ -18,24 +18,6 @@ fn UseMapTypecheck() -> int {
     map["string"]
 }
 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  maps/key_and_value_typecheck.baml:2
-//    | 
-//  1 | // For now, errors with 'map keys must be string literals'
-//  2 | fn CreateMapExpr() -> map<int, string> {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  maps/key_and_value_typecheck.baml:6
-//    | 
-//  5 | 
-//  6 | fn UseMapContains() -> string {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  maps/key_and_value_typecheck.baml:16
-//    | 
-// 15 | // wrong input type, wrong output type.
-// 16 | fn UseMapTypecheck() -> int {
-//    | 
 // error: Error validating: Map keys must be string literals
 //   -->  maps/key_and_value_typecheck.baml:3
 //    | 

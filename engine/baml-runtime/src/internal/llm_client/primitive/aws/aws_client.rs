@@ -193,6 +193,7 @@ impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterc
             request.method().to_string(),
             headers,
             HTTPBody::new(request.body().bytes().unwrap_or_default().to_vec()),
+            self.client_details.clone(),
         );
         let call_stack = self.call_stack.clone();
         let request = Arc::new(request);
@@ -729,7 +730,7 @@ impl WithRenderRawCurl for AwsClient {
         // pretty, multi-line JSON
         let input_json_str = serde_json::to_string_pretty(&serde_json::Value::Object(root))?;
         let input_json_escaped = escape(Cow::Borrowed(&input_json_str));
-        cmd.push(format!("--cli-input-json {}", input_json_escaped));
+        cmd.push(format!("--cli-input-json {input_json_escaped}"));
 
         Ok(cmd.join(" "))
     }

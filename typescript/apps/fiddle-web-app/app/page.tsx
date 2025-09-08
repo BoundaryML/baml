@@ -1,9 +1,5 @@
-import dynamic from 'next/dynamic';
 import { loadProject } from '../lib/loadProject';
-const ProjectView = dynamic(
-  () => import('./[project_id]/_components/ProjectView'),
-  { ssr: true },
-);
+import ProjectView from './_components/ClientProjectView';
 
 type Params = Promise<{ project_id: string }>;
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
@@ -27,7 +23,7 @@ export default async function Home({
     return <div>Project not found</div>;
   }
   return (
-    <main className="flex flex-col justify-between items-center min-h-screen font-sans bg-background">
+    <main className="flex flex-col justify-between items-center h-screen overflow-hidden font-sans bg-background">
       <ProjectView project={data} />
     </main>
   );

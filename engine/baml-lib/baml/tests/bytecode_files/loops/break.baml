@@ -90,6 +90,7 @@ fn Nested() -> int {
 //      22   RETURN              
 //
 // Class: std::Request with 3 fields
+// Enum std::HttpMethod
 // Function: std.Array.len
 //
 // Function: std.Map.len

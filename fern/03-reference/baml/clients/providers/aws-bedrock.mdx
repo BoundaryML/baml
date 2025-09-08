@@ -33,7 +33,7 @@ client<llm> MyClient {
 AWS Bedrock uses standard AWS authentication methods. We recommend using AWS profiles in development and AWS services' IAM roles in production, but all of the following are supported:
 
 <Tabs>
-<Tab title="AWS Profile">
+<Tab title="AWS Profile" language="ini">
 
 When developing locally, you can use the AWS CLI in combination with profiles to manage your credentials.
 
@@ -80,7 +80,7 @@ client<llm> MyClient {
 
 </Tab>
 
-<Tab title="AWS Services (Lambda/ECS/EC2)">
+<Tab title="AWS Services (Lambda/ECS/EC2)" language="baml">
 
 In AWS Lambda, EC2, ECS, etc., BAML will automatically use the service's IAM role, by reading the relevant environment variables. To override this behavior, see the section on [Explicit Credentials](#explicit-credentials).```
 
@@ -103,7 +103,7 @@ client<llm> MyClient {
 
 </Tab>
 
-<Tab title="Environment Variables">
+<Tab title="Environment Variables" language="bash">
 
 The simplest way to authenticate. Set these environment variables:
 
@@ -125,7 +125,7 @@ client<llm> MyClient {
 
 </Tab>
 
-<Tab title="Explicit Credentials">
+<Tab title="Explicit Credentials" language="baml">
 
 You can specify credentials directly in your BAML configuration:
 
@@ -250,7 +250,7 @@ BAML follows a specific order when resolving AWS credentials:
 You can map your own environment variable names:
 
 <Tabs>
-<Tab title="BAML">
+<Tab title="BAML" language="baml">
 
 ```baml BAML
 client<llm> MyClient {
@@ -266,7 +266,7 @@ client<llm> MyClient {
 ```
 
 </Tab>
-<Tab title="Environment">
+<Tab title="Environment" language="bash">
 
 ```bash
 # Your custom environment variables
@@ -308,7 +308,7 @@ To use Bedrock from a different AWS account:
 2. **Configure the source account** (where your application runs):
 
 <Tabs>
-<Tab title="AWS Profile">
+<Tab title="AWS Profile" language="ini">
 
 ```ini
 # ~/.aws/config
@@ -329,7 +329,7 @@ client<llm> MyClient {
 ```
 
 </Tab>
-<Tab title="Environment Variables">
+<Tab title="Environment Variables" language="bash">
 
 ```bash
 # Assume role and export credentials
@@ -344,7 +344,7 @@ export AWS_SESSION_TOKEN="from-sts-output"
 ```
 
 </Tab>
-<Tab title="ClientRegistry">
+<Tab title="ClientRegistry" language="typescript">
 
 ```typescript
 import { ClientRegistry } from '@baml/core';
@@ -395,11 +395,11 @@ The following IAM permissions are required for basic Bedrock access:
 Depending on your setup, you might need additional permissions:
 
 <Tabs>
-<Tab title="Cross-Account Access">
+<Tab title="Cross-Account Access" language="json">
 See [Cross-Account Access](#cross-account-access) section for the required trust relationships and permissions.
 </Tab>
 
-<Tab title="VPC Endpoints">
+<Tab title="VPC Endpoints" language="json">
 If using VPC endpoints:
 ```json
 {
@@ -423,7 +423,7 @@ If using VPC endpoints:
 ```
 </Tab>
 
-<Tab title="Resource-Based">
+<Tab title="Resource-Based" language="json">
 To restrict access to specific models:
 ```json
 {

@@ -113,7 +113,7 @@ fn Len() -> int {
 // 29   0    LOAD_GLOBAL 1      (<fn CreateMapJSON>)
 //      1    CALL 0             
 //
-// 30   2    LOAD_GLOBAL 10     (<fn std.Map.contains>)
+// 30   2    LOAD_GLOBAL 11     (<fn std.Map.contains>)
 //      3    LOAD_VAR 1         (map)
 //      4    LOAD_CONST 0       (hello)
 //      5    CALL 2             
@@ -130,15 +130,16 @@ fn Len() -> int {
 //      14   RETURN             
 //
 // Function: Len
-// 38   0   LOAD_GLOBAL 0   (<fn CreateMap>)
-//      1   CALL 0          
+// 38   0   LOAD_GLOBAL 0    (<fn CreateMap>)
+//      1   CALL 0           
 //
-// 39   2   LOAD_GLOBAL 9   (<fn std.Map.len>)
-//      3   LOAD_VAR 1      (map)
-//      4   CALL 1          
-//      5   RETURN          
+// 39   2   LOAD_GLOBAL 10   (<fn std.Map.len>)
+//      3   LOAD_VAR 1       (map)
+//      4   CALL 1           
+//      5   RETURN           
 //
 // Class: std::Request with 3 fields
+// Enum std::HttpMethod
 // Function: std.Array.len
 //
 // Function: std.Map.len

@@ -71,12 +71,14 @@ impl Vm {
 pub type NativeFunction = fn(&mut Vm, &[Value]) -> Result<Value, VmError>;
 
 pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
-    let native_fn: NativeFunction = Vm::array_len;
-    let fns = [
-        ("std.Array.len".to_string(), (native_fn, 1)),
-        ("std.Map.len".to_string(), (Vm::map_len, 1)),
-        ("std.Map.contains".to_string(), (Vm::map_contains, 2)),
+    let fns: &[(&str, (NativeFunction, usize))] = &[
+        ("std.Array.len", (Vm::array_len, 1)),
+        ("std.Map.len", (Vm::map_len, 1)),
+        ("std.Map.contains", (Vm::map_contains, 2)),
     ];
 
-    BamlMap::from_iter(fns)
+    BamlMap::from_iter(
+        fns.iter()
+            .map(|(name, (func, arity))| (name.to_string(), (*func, *arity))),
+    )
 }

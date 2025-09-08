@@ -4,7 +4,10 @@ use std::{collections::BTreeMap, ops::Deref};
 // We use NAPI-RS to expose Rust functionality to JavaScript/TypeScript
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::{ir_type::UnionConstructor, BamlValue};
-use napi::{bindgen_prelude::Array, Env};
+use napi::{
+    bindgen_prelude::{Array, JavaScriptClassExt},
+    Env,
+};
 use napi_derive::napi;
 
 // Create TypeScript-compatible wrappers for our Rust types
@@ -197,12 +200,10 @@ impl EnumBuilder {
     }
 
     #[napi]
-    pub fn alias(&self, alias: Option<&str>) -> Self {
+    pub fn alias(&self, alias: Option<String>) -> Self {
         self.inner.lock().unwrap().with_meta(
             "alias",
-            alias.map_or(baml_types::BamlValue::Null, |s| {
-                BamlValue::String(s.to_string())
-            }),
+            alias.map_or(baml_types::BamlValue::Null, BamlValue::String),
         );
         self.inner.clone().into()
     }
@@ -216,12 +217,10 @@ impl EnumBuilder {
 #[napi]
 impl EnumValueBuilder {
     #[napi]
-    pub fn alias(&self, alias: Option<&str>) -> Self {
+    pub fn alias(&self, alias: Option<String>) -> Self {
         self.inner.lock().unwrap().with_meta(
             "alias",
-            alias.map_or(baml_types::BamlValue::Null, |s| {
-                BamlValue::String(s.to_string())
-            }),
+            alias.map_or(baml_types::BamlValue::Null, BamlValue::String),
         );
         self.inner.clone().into()
     }
@@ -236,12 +235,10 @@ impl EnumValueBuilder {
     }
 
     #[napi]
-    pub fn description(&self, description: Option<&str>) -> Self {
+    pub fn description(&self, description: Option<String>) -> Self {
         self.inner.lock().unwrap().with_meta(
             "description",
-            description.map_or(baml_types::BamlValue::Null, |s| {
-                BamlValue::String(s.to_string())
-            }),
+            description.map_or(baml_types::BamlValue::Null, BamlValue::String),
         );
         self.inner.clone().into()
     }
@@ -250,7 +247,7 @@ impl EnumValueBuilder {
 #[napi]
 impl ClassBuilder {
     #[napi]
-    pub fn list_properties(&self, env: Env) -> napi::Result<Array> {
+    pub fn list_properties<'e>(&self, env: &'e Env) -> napi::Result<Array<'e>> {
         let properties = self
             .inner
             .lock()
@@ -316,23 +313,19 @@ impl ClassPropertyBuilder {
     }
 
     #[napi]
-    pub fn alias(&self, alias: Option<&str>) -> Self {
+    pub fn alias(&self, alias: Option<String>) -> Self {
         self.inner.lock().unwrap().with_meta(
             "alias",
-            alias.map_or(baml_types::BamlValue::Null, |s| {
-                BamlValue::String(s.to_string())
-            }),
+            alias.map_or(baml_types::BamlValue::Null, BamlValue::String),
         );
         self.inner.clone().into()
     }
 
     #[napi]
-    pub fn description(&self, description: Option<&str>) -> Self {
+    pub fn description(&self, description: Option<String>) -> Self {
         self.inner.lock().unwrap().with_meta(
             "description",
-            description.map_or(baml_types::BamlValue::Null, |s| {
-                BamlValue::String(s.to_string())
-            }),
+            description.map_or(baml_types::BamlValue::Null, BamlValue::String),
         );
         self.inner.clone().into()
     }

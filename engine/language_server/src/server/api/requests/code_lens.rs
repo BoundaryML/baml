@@ -2,6 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use baml_lsp_types::BamlSpan;
 use baml_runtime::InternalRuntimeInterface;
+use itertools::Itertools;
 use lsp_types::{request, CodeLensParams, Command, Position, Range};
 
 use crate::{
@@ -65,6 +66,9 @@ impl SyncRequestHandler for CodeLens {
 
         let mk_range = |span: &BamlSpan| {
             Range::new(
+                // TODO(sam): I'm pretty sure there's a bug here - Position I believe is line number and
+                // character index _within_ the line, not the byte index corresponding to the start.
+                // But it doesn't make a difference for vscode, so not going to fix it right now.
                 Position::new(span.start_line as u32, span.start as u32),
                 Position::new(span.end_line as u32, span.end as u32),
             )
@@ -119,30 +123,34 @@ impl SyncRequestHandler for CodeLens {
         // `list_testcases`, but I'm not sure how this behavior interacts with VSCode so for
         // now I'm leaving this as-is.
         let test_case_lenses: Vec<lsp_types::CodeLens> = project_lock
-            .list_testcases()
+            .list_function_test_pairs()
             .unwrap_or_default()
             .iter()
             .filter(|testcase| doc_matches(&testcase.span, &project_lock))
-            .flat_map(|testcase| {
+            .map(|testcase| {
                 let project_id = project_lock.root_path().to_string_lossy().to_string();
-                let range = mk_range(&testcase.span);
-                testcase.parent_functions.iter().map(move |parent_func| {
-                    let command = RunBamlTest {
-                        project_id: project_id.clone(),
-                        test_case_name: testcase.name.clone(),
-                        function_name: parent_func.name.clone(),
-                        show_tests: true,
-                    };
+                (
+                    testcase.function_name_span.as_ref(),
                     lsp_types::CodeLens {
-                        range,
-                        command: command.to_lsp_command(),
+                        range: mk_range(&testcase.span),
+                        command: RunBamlTest {
+                            project_id: project_id.clone(),
+                            test_case_name: testcase.name.clone(),
+                            function_name: testcase.function.name.clone(),
+                            show_tests: true,
+                        }
+                        .to_lsp_command(),
                         data: None,
-                    }
-                })
+                    },
+                )
             })
+            .sorted_by_key(|(span, _)| span.map_or(None, |span| Some(span.start)))
+            .map(|(_, codelens)| codelens)
             .collect();
 
         function_lenses.extend(test_case_lenses);
+        function_lenses.sort_by_key(|lens| lens.range.start);
+        tracing::debug!("Function lenses: {:#?}", function_lenses);
         Ok(Some(function_lenses))
     }
 }

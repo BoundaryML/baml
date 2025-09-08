@@ -13,24 +13,6 @@ function Go3(x:int) -> int {
     Unknown(x)
 }
 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/unknown_name.baml:1
-//    | 
-//    | 
-//  1 | function Go(x: int) -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/unknown_name.baml:6
-//    | 
-//  5 | 
-//  6 | function Go2(x: int) -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/unknown_name.baml:12
-//    | 
-// 11 | 
-// 12 | function Go3(x:int) -> int {
-//    | 
 // error: Unknown variable a
 //   -->  expr/unknown_name.baml:2
 //    | 

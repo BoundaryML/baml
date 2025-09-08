@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 pub(super) mod indexable;
 
-use baml_types::BamlMap;
+use baml_types::{BamlMap, BamlMedia};
 use indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 
 use crate::{
@@ -98,6 +98,38 @@ impl std::fmt::Display for Instance {
     }
 }
 
+/// Runtime class representation.
+#[derive(Clone, Debug)]
+pub struct Enum {
+    /// Enum name.
+    pub name: String,
+
+    /// Enum variant names. Debug info, VM doesn't need this.
+    pub variant_names: Vec<String>,
+}
+
+/// Same as [`Instance`] but for enums.
+#[derive(Clone, Debug)]
+pub struct Variant {
+    /// Locate the enum.
+    pub enm: ObjectIndex,
+
+    /// Index of the variant in the ordered list of variants.
+    pub index: usize,
+}
+
+impl std::fmt::Display for Variant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<variant of {}>", self.enm)
+    }
+}
+
+impl std::fmt::Display for Enum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<enum {}>", self.name)
+    }
+}
+
 /// Any data that the Baml program can reference and is allocated on heap.
 ///
 /// [`Vm`] should own objects and give references to them to the running Baml
@@ -117,6 +149,12 @@ pub enum Object {
     /// Class instance object.
     Instance(Instance),
 
+    /// Enum object.
+    Enum(Enum),
+
+    /// Enum value object.
+    Variant(Variant),
+
     /// Heap allocated string.
     ///
     /// TODO: Add [`Vm::strings`] interner to avoid allocating duplicates.
@@ -134,6 +172,9 @@ pub enum Object {
     Map(BamlMap<String, Value>),
 
     Future(Future),
+
+    /// Images, audio, pdf, video.
+    Media(BamlMedia),
 }
 
 #[derive(Clone, Debug)]
@@ -188,9 +229,12 @@ impl std::fmt::Display for Object {
             Object::Function(function) => function.fmt(f),
             Object::Class(class) => class.fmt(f),
             Object::Instance(instance) => instance.fmt(f),
+            Object::Enum(enm) => enm.fmt(f),
+            Object::Variant(value) => value.fmt(f),
             Object::String(string) => string.fmt(f),
             Object::Array(array) => write!(f, "{array:?}"),
             Object::Map(map) => write!(f, "{map:?}"),
+            Object::Media(_media) => write!(f, "<media>"),
             Object::Future(future) => match future {
                 Future::Pending(llm_future) => write!(f, "<pending: {}>", llm_future.llm_function),
                 Future::Ready(value) => write!(f, "<ready: {value}>"),
@@ -247,6 +291,17 @@ pub enum Type {
     Object(ObjectType),
 }
 
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Int => write!(f, "int"),
+            Type::Float => write!(f, "float"),
+            Type::Bool => write!(f, "bool"),
+            Type::Object(object_type) => write!(f, "{object_type}"),
+        }
+    }
+}
+
 /// Object type lattice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ObjectType {
@@ -259,7 +314,28 @@ pub enum ObjectType {
     Function(FunctionType),
     Class,
     String,
+    Enum,
+    Variant,
+    Media,
     Future(FutureType),
+}
+
+impl std::fmt::Display for ObjectType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ObjectType::Any => write!(f, "any"),
+            ObjectType::Instance => write!(f, "instance"),
+            ObjectType::Array => write!(f, "array"),
+            ObjectType::Map => write!(f, "map"),
+            ObjectType::Function(function_type) => write!(f, "{function_type}"),
+            ObjectType::Class => write!(f, "class"),
+            ObjectType::Enum => write!(f, "enum"),
+            ObjectType::Variant => write!(f, "variant"),
+            ObjectType::Future(future_type) => write!(f, "{future_type}"),
+            ObjectType::String => write!(f, "string"),
+            ObjectType::Media => write!(f, "media"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -270,12 +346,32 @@ pub enum FunctionType {
     Llm,
 }
 
+impl std::fmt::Display for FunctionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FunctionType::Any => write!(f, "any"),
+            FunctionType::Callable => write!(f, "callable"),
+            FunctionType::Llm => write!(f, "llm"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FutureType {
     /// Top of future type lattice: represents all future types.
     Any,
     Pending,
     Ready,
+}
+
+impl std::fmt::Display for FutureType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FutureType::Any => write!(f, "any"),
+            FutureType::Pending => write!(f, "pending"),
+            FutureType::Ready => write!(f, "ready"),
+        }
+    }
 }
 
 impl From<&Future> for FutureType {
@@ -299,9 +395,12 @@ impl ObjectType {
             Object::Function(func) => Self::Function(func.kind.into()),
             Object::Class(_) => Self::Class,
             Object::Instance(_) => Self::Instance,
+            Object::Enum(_) => Self::Enum,
+            Object::Variant(_) => Self::Enum,
             Object::String(_) => Self::String,
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
+            Object::Media(_) => Self::Media,
             Object::Future(fut) => Self::Future(fut.into()),
         }
     }
@@ -407,6 +506,9 @@ pub enum RuntimeError {
 
     /// Map does not contain the requested key.
     NoSuchKeyInMap,
+
+    /// Right hand side of division operation is zero.
+    DivisionByZero { left: Value, right: Value },
 }
 
 /// Any kind of virtual machine error.
@@ -436,7 +538,52 @@ impl std::fmt::Display for VmError {
     }
 }
 
+impl std::fmt::Display for InternalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Internal VM Erorr: ")?;
+
+        match self {
+            InternalError::InvalidArgumentCount { expected, got } => {
+                write!(
+                    f,
+                    "invalid argument count: expected {expected} arguments, got {got}"
+                )
+            }
+            InternalError::UnexpectedEmptyStack => write!(f, "unexpected empty eval stack"),
+            InternalError::NotEnoughItemsOnStack(count) => {
+                write!(f, "not enough items on stack: {count}")
+            }
+            InternalError::InvalidObjectRef(index) => {
+                write!(f, "invalid object reference: {index}")
+            }
+            InternalError::TypeError { expected, got } => {
+                write!(f, "type error: expected {expected}, got {got}")
+            }
+            InternalError::CannotApplyBinOp { left, right, op } => {
+                write!(f, "cannot apply binary operation: {left} {op} {right}")
+            }
+            InternalError::CannotApplyCmpOp { left, right, op } => {
+                write!(f, "cannot apply comparison operation: {left} {op} {right}")
+            }
+            InternalError::CannotApplyUnaryOp { op, value } => {
+                write!(f, "cannot apply unary operation: {op} {value}")
+            }
+            InternalError::ArrayIndexOutOfBounds { index, length } => {
+                write!(f, "array index out of bounds: {index} of {length}")
+            }
+            InternalError::ArrayIndexIsNegative(index) => {
+                write!(f, "array index is negative: {index}")
+            }
+            InternalError::NegativeInstructionPtr(ptr) => {
+                write!(f, "negative instruction pointer: {ptr}")
+            }
+        }
+    }
+}
+
 impl std::error::Error for VmError {}
+
+impl std::error::Error for InternalError {}
 
 /// Call frame.
 ///
@@ -637,6 +784,8 @@ pub struct BamlVmProgram {
     pub objects: ObjectPool,
     pub globals: GlobalPool,
     pub resolved_function_names: HashMap<String, (ObjectIndex, FunctionKind)>,
+    pub resolved_class_names: HashMap<String, ObjectIndex>,
+    pub resolved_enums_names: HashMap<String, ObjectIndex>,
 }
 
 impl Vm {
@@ -740,9 +889,33 @@ impl Vm {
 
     /// Allocates an array on the heap and returns it to the caller.
     pub fn alloc_array(&mut self, values: Vec<Value>) -> Value {
-        let object = self.objects.len();
-        self.objects.push(Object::Array(values));
-        Value::Object(ObjectIndex(object))
+        Value::Object(self.objects.insert(Object::Array(values)))
+    }
+
+    pub fn alloc_map(&mut self, values: BamlMap<String, Value>) -> Value {
+        Value::Object(self.objects.insert(Object::Map(values)))
+    }
+
+    pub fn alloc_string(&mut self, s: String) -> Value {
+        Value::Object(self.objects.insert(Object::String(s)))
+    }
+
+    /// TODO: Seems to low level for an embedder, provide an API that takes
+    /// class name and mapping of field name => value instead.
+    pub fn alloc_instance(&mut self, class: ObjectIndex, fields: Vec<Value>) -> Value {
+        Value::Object(
+            self.objects
+                .insert(Object::Instance(Instance { class, fields })),
+        )
+    }
+
+    // TODO: Same problem as above. Ideally takes (&str, &str) instead.
+    pub fn alloc_variant(&mut self, enm: ObjectIndex, index: usize) -> Value {
+        Value::Object(self.objects.insert(Object::Variant(Variant { enm, index })))
+    }
+
+    pub fn alloc_media(&mut self, media: BamlMedia) -> Value {
+        Value::Object(self.objects.insert(Object::Media(media)))
     }
 
     /// Main VM execution loop.
@@ -815,10 +988,12 @@ impl Vm {
                     let value = &function.bytecode.constants[index];
                     self.stack.push(*value);
                 }
+
                 Instruction::LoadVar(index) => {
                     let value = self.stack[frame.locals_offset + index];
                     self.stack.push(value);
                 }
+
                 Instruction::StoreVar(index) => {
                     // Consume the value. There are some intricacies when it
                     // comes to consuming the value or not, mainly, should this
@@ -833,16 +1008,19 @@ impl Vm {
 
                     self.stack[frame.locals_offset + index] = value;
                 }
+
                 Instruction::LoadGlobal(index) => {
                     let value = &self.globals[index];
                     self.stack.push(*value);
                 }
+
                 Instruction::StoreGlobal(index) => {
                     // Consume the value. Read impl of Instruction::StoreVar.
                     let value = self.stack.ensure_pop()?;
 
                     self.globals[index] = value;
                 }
+
                 Instruction::LoadField(index) => {
                     let top = self.stack.ensure_pop()?;
 
@@ -859,6 +1037,7 @@ impl Vm {
                     // Push the value on top of the stack.
                     self.stack.push(instance.fields[index]);
                 }
+
                 Instruction::StoreField(index) => {
                     let reference = self.objects.as_object(
                         &self.stack[self.stack.ensure_slot_from_top(1)?],
@@ -882,15 +1061,18 @@ impl Vm {
                     // TODO: Borrow checker stuff.
                     function = self.objects[frame.function].as_function()?;
                 }
+
                 Instruction::Pop(n) => {
                     let drain_range = StackIndex(self.stack.len() - n)..;
                     self.stack.drain(drain_range);
                 }
+
                 Instruction::Copy(offset) => {
                     let index = self.stack.ensure_slot_from_top(offset)?;
                     let value = self.stack[index];
                     self.stack.push(value);
                 }
+
                 Instruction::PopReplace(n) => {
                     let value = self.stack.ensure_pop()?;
 
@@ -901,12 +1083,14 @@ impl Vm {
                     // Push the value back on top of the stack.
                     self.stack.push(value);
                 }
+
                 Instruction::Jump(offset) => {
                     // Reassign the frame's IP to the new instruction.
                     // Remember that offset can be negative here, so even though
                     // we're adding it can still jump backwards.
                     frame.instruction_ptr = instruction_ptr + offset;
                 }
+
                 Instruction::JumpIfFalse(offset) => {
                     match &self.stack[self.stack.ensure_stack_top()?] {
                         // Reassign only if the top of the stack is false.
@@ -926,6 +1110,7 @@ impl Vm {
                         }
                     }
                 }
+
                 Instruction::BinOp(op) => {
                     let right = self.stack.ensure_pop()?;
 
@@ -933,6 +1118,14 @@ impl Vm {
 
                     let result = match (left, right) {
                         (Value::Int(left), Value::Int(right)) => Value::Int(match op {
+                            BinOp::Div if right == 0 => {
+                                return Err(RuntimeError::DivisionByZero {
+                                    left: Value::Int(left),
+                                    right: Value::Int(right),
+                                }
+                                .into());
+                            }
+
                             BinOp::Add => left + right,
                             BinOp::Sub => left - right,
                             BinOp::Mul => left * right,
@@ -948,6 +1141,14 @@ impl Vm {
 
                         (Value::Float(left), Value::Float(right)) => {
                             Value::Float(match op {
+                                BinOp::Div if right == 0.0 => {
+                                    return Err(RuntimeError::DivisionByZero {
+                                        left: Value::Float(left),
+                                        right: Value::Float(right),
+                                    }
+                                    .into());
+                                }
+
                                 BinOp::Add => left + right,
                                 BinOp::Sub => left - right,
                                 BinOp::Mul => left * right,
@@ -980,6 +1181,7 @@ impl Vm {
 
                     self.stack.push(result);
                 }
+
                 Instruction::CmpOp(op) => {
                     let right = self.stack.ensure_pop()?;
                     let left = self.stack.ensure_pop()?;
@@ -1018,6 +1220,7 @@ impl Vm {
 
                     self.stack.push(result);
                 }
+
                 Instruction::UnaryOp(op) => {
                     let value = self.stack.ensure_pop()?;
 
@@ -1035,6 +1238,7 @@ impl Vm {
 
                     self.stack.push(result);
                 }
+
                 Instruction::AllocArray(size) => {
                     // Pop all the elements from the stack and create an array.
                     let drain_range = StackIndex(self.stack.len() - size)..;
@@ -1051,6 +1255,7 @@ impl Vm {
                     // borrow checker complains. Restore the reference.
                     function = self.objects[frame.function].as_function()?;
                 }
+
                 Instruction::LoadArrayElement => {
                     // Stack should contain [array, index]
                     // Pop the index first, then the array
@@ -1094,6 +1299,7 @@ impl Vm {
                     // Push the element onto the stack
                     self.stack.push(array[index]);
                 }
+
                 Instruction::LoadMapElement => {
                     // LoadMapElement Instruction
                     //
@@ -1134,6 +1340,7 @@ impl Vm {
                     // Push the value onto the stack
                     self.stack.push(value);
                 }
+
                 Instruction::StoreArrayElement => {
                     // StoreArrayElement Instruction
                     //
@@ -1195,6 +1402,7 @@ impl Vm {
                     // Restore function reference after mutable borrow of self.objects
                     function = self.objects[frame.function].as_function()?;
                 }
+
                 Instruction::StoreMapElement => {
                     // StoreMapElement Instruction
                     //
@@ -1235,6 +1443,7 @@ impl Vm {
                     // borrow check
                     function = self.objects[frame.function].as_function()?;
                 }
+
                 Instruction::AllocInstance(index) => {
                     let Object::Class(class) = &self.objects[index] else {
                         return Err(InternalError::TypeError {
@@ -1261,6 +1470,52 @@ impl Vm {
                     // borrow check.
                     function = self.objects[frame.function].as_function()?;
                 }
+
+                // TODO: Contains a lot of typechecking, we know at compile time
+                // that all this stuff is right. Should do something about it.
+                Instruction::AllocVariant(enum_index) => {
+                    let Object::Enum(enm) = &self.objects[enum_index] else {
+                        return Err(InternalError::TypeError {
+                            expected: ObjectType::Enum.into(),
+                            got: ObjectType::of(&self.objects[enum_index]).into(),
+                        }
+                        .into());
+                    };
+
+                    let variant = self.stack.ensure_pop()?;
+
+                    let Value::Int(variant_index) = variant else {
+                        return Err(InternalError::TypeError {
+                            expected: Type::Int,
+                            got: self.objects.type_of(&variant),
+                        }
+                        .into());
+                    };
+
+                    if variant_index < 0 {
+                        return Err(InternalError::ArrayIndexIsNegative(variant_index).into());
+                    }
+
+                    if variant_index as usize >= enm.variant_names.len() {
+                        return Err(InternalError::ArrayIndexOutOfBounds {
+                            index: variant_index as usize,
+                            length: enm.variant_names.len(),
+                        }
+                        .into());
+                    }
+
+                    let object_index = self.objects.insert(Object::Variant(Variant {
+                        enm: enum_index,
+                        index: variant_index as usize,
+                    }));
+
+                    // Push the variant object on top of the stack.
+                    self.stack.push(Value::Object(object_index));
+
+                    // borrow check.
+                    function = self.objects[frame.function].as_function()?;
+                }
+
                 Instruction::DispatchFuture(arg_count) => {
                     let args_offset = self.stack.ensure_slot_from_top(arg_count)?;
 
@@ -1317,6 +1572,7 @@ impl Vm {
                     // Yield control flow back to the embedder.
                     return Ok(VmExecState::ScheduleFuture(object_index));
                 }
+
                 Instruction::Await => {
                     let value = self.stack.ensure_stack_top()?;
 
@@ -1347,6 +1603,7 @@ impl Vm {
                         }
                     }
                 }
+
                 Instruction::Call(arg_count) => {
                     // Function calls are pushed onto the stack like this:
                     //
@@ -1442,6 +1699,7 @@ impl Vm {
                         }
                     }
                 }
+
                 Instruction::Return => {
                     // Pop the result from the eval stack.
                     let result = self.stack.ensure_pop()?;
@@ -1471,6 +1729,7 @@ impl Vm {
                     // more information about this piece.
                     function = self.objects[frame.function].as_function()?;
                 }
+
                 Instruction::Assert => {
                     let value = self.stack.pop().ok_or(RuntimeError::AssertionError)?;
 
@@ -1486,6 +1745,7 @@ impl Vm {
                         return Err(RuntimeError::AssertionError.into());
                     }
                 }
+
                 Instruction::AllocMap(n) => {
                     let map = if n > 0 {
                         let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1)?;

@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use baml_runtime::TripWire;
 use dashmap::DashMap;
-use napi::{Env, JsFunction, JsObject, JsUnknown};
+use napi::{
+    bindgen_prelude::{FnArgs, Function, JsObjectValue, JsValuesTupleIntoVec, Object, ToNapiValue},
+    Env, Unknown,
+};
 use once_cell::sync::Lazy;
 use stream_cancel::Trigger;
 
@@ -16,8 +19,8 @@ static OPERATION_ID_COUNTER: Lazy<std::sync::atomic::AtomicU32> =
 /// Convert a JavaScript AbortSignal to a Rust cancellation mechanism
 /// Returns (operation_id, tripwire) where operation_id is used to track the operation
 pub fn js_abort_signal_to_rust_tripwire(
-    env: Env,
-    signal: Option<JsObject>,
+    env: &Env,
+    signal: Option<Object>,
 ) -> napi::Result<Arc<baml_runtime::TripWire>> {
     let Some(signal) = signal else {
         return Ok(TripWire::new(None));
@@ -47,22 +50,22 @@ pub fn js_abort_signal_to_rust_tripwire(
     // Store the trigger for potential cancellation
 
     // Listen to 'abort' event
-    let callback = env.create_function_from_closure("abort_handler", move |_| {
-        // Cancel the operation when abort is triggered
-        if let Some((_, trigger)) = OPERATION_TRIGGERS.remove(&operation_id) {
-            trigger.cancel();
-        }
-        Ok(())
-    })?;
+    let callback: Function<(), ()> =
+        env.create_function_from_closure("abort_handler", move |_| {
+            // Cancel the operation when abort is triggered
+            if let Some((_, trigger)) = OPERATION_TRIGGERS.remove(&operation_id) {
+                trigger.cancel();
+            }
+            Ok(())
+        })?;
 
     // signal.addEventListener('abort', callback)
-    let add_event_listener: JsFunction = signal.get_named_property("addEventListener")?;
-    add_event_listener.call(
-        Some(&signal),
-        &[
-            env.create_string("abort")?.into_unknown(),
-            callback.into_unknown(),
-        ],
+    let add_event_listener: Function<FnArgs<(napi::JsString, Function<(), ()>)>> =
+        signal.get_named_property("addEventListener")?;
+
+    add_event_listener.apply(
+        signal.into_unknown(env)?,
+        FnArgs::from((env.create_string("abort")?, callback)),
     )?;
 
     Ok(tripwire)

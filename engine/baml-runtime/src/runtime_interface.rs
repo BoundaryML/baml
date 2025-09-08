@@ -121,6 +121,9 @@ pub trait InternalRuntimeInterface {
         ctx: &RuntimeContext,
     ) -> Result<Vec<OrchestratorNode>>;
 
+    /// send a mermaid graph of the function graph
+    fn function_graph(&self, function_name: &str, ctx: &RuntimeContext) -> Result<String>;
+
     fn get_function<'ir>(&'ir self, function_name: &str) -> Result<FunctionWalker<'ir>>;
     fn get_expr_function<'ir>(
         &'ir self,

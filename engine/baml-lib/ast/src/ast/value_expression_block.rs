@@ -2,8 +2,8 @@ use std::fmt::{Display, Formatter};
 
 use super::{
     argument::ArgumentId, traits::WithAttributes, type_builder_block::TypeBuilderBlock, Attribute,
-    Comment, Expression, Field, FieldType, Identifier, Span, WithDocumentation, WithIdentifier,
-    WithSpan,
+    Comment, Expression, Field, FieldType, Header, Identifier, Span, WithDocumentation,
+    WithIdentifier, WithSpan,
 };
 
 /// An opaque identifier for a field in an AST model. Use the
@@ -173,6 +173,8 @@ pub struct ValueExprBlock {
     pub type_builder: Option<TypeBuilderBlock>,
 
     pub block_type: ValueExprBlockType,
+
+    pub annotations: Vec<std::sync::Arc<Header>>,
 }
 
 impl ValueExprBlock {

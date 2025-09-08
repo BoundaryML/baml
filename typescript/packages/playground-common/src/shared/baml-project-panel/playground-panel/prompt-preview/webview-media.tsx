@@ -1,3 +1,4 @@
+'use client';
 import { Button } from '@baml/ui/button';
 // import Link from "next/link";
 import type { WasmChatMessagePartMedia } from '@gloo-ai/baml-schema-wasm-web';
@@ -239,7 +240,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   if (error) {
     return (
       <div className="w-full flex justify-center">
-        <div className="max-w-4xl w-full border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] p-4">
+        <div className="max-w-4xl w-full border-6 border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] p-4">
           <div className="flex h-[30vh] items-center justify-center">
             <div className="text-center space-y-3 text-[var(--vscode-charts-red)]">
               <div className="flex items-center justify-center gap-2 mb-2">
@@ -264,7 +265,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   if (isLoading) {
     return (
       <div className="w-full flex justify-center">
-        <div className="max-w-4xl w-full border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] p-4">
+        <div className="max-w-4xl w-full border-2 border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] p-4">
           <div className="flex h-[30vh] items-center justify-center">
             <div className="text-center space-y-3">
               <div className="w-8 h-8 border-2 border-[var(--vscode-panel-border)] border-t-[var(--vscode-foreground)] rounded-full animate-spin mx-auto" />
@@ -485,7 +486,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     if (youtubeEmbedUrl) {
       return (
         <div className="w-full max-w-3xl mx-auto">
-          <div className="aspect-video border border-[var(--vscode-panel-border)] rounded overflow-hidden">
+          <div className="aspect-video border-2 border-[var(--vscode-panel-border)] rounded overflow-hidden">
             <iframe
               src={youtubeEmbedUrl}
               width="100%"
@@ -506,7 +507,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     if (vimeoEmbedUrl) {
       return (
         <div className="w-full max-w-3xl mx-auto">
-          <div className="aspect-video border border-[var(--vscode-panel-border)] rounded overflow-hidden">
+          <div className="aspect-video border-2 border-[var(--vscode-panel-border)] rounded overflow-hidden">
             <iframe
               src={vimeoEmbedUrl}
               width="100%"
@@ -529,7 +530,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
 
       if (isNonVSCode) {
         return (
-          <div className="w-full max-w-3xl mx-auto border border-[var(--vscode-panel-border)] rounded-lg bg-[var(--vscode-editor-background)] p-6">
+          <div className="w-full max-w-3xl mx-auto border-2 border-[var(--vscode-panel-border)] rounded-lg bg-[var(--vscode-editor-background)] p-6">
             <div className="text-center space-y-4">
               <div className="flex justify-center">
                 <div className="p-3 bg-orange-100 dark:bg-orange-900/20 rounded-full">
@@ -573,7 +574,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
 
       // For VSCode, try normal video element with error handling
       return (
-        <div className="w-full max-w-3xl mx-auto border border-[var(--vscode-panel-border)] rounded overflow-hidden bg-black">
+        <div className="w-full max-w-3xl mx-auto border-2 border-[var(--vscode-panel-border)] rounded overflow-hidden bg-black">
           {/* biome-ignore lint/a11y/useMediaCaption: not correct */}
           <video
             controls
@@ -612,7 +613,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     // Fallback: try to embed as iframe (for other video platforms)
     return (
       <div className="w-full max-w-3xl mx-auto">
-        <div className="aspect-video border border-[var(--vscode-panel-border)] rounded overflow-hidden">
+        <div className="aspect-video border-2 border-[var(--vscode-panel-border)] rounded overflow-hidden">
           <iframe
             src={url}
             width="100%"
@@ -654,9 +655,9 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   const fileSize = isBase64 ? getDataUriSize(mediaUrl || '') : '';
 
   return (
-    <div className="w-full flex justify-center p-4 bg-[var(--vscode-sideBar-background)]">
+      <div className="w-full flex justify-center p-4 bg-[var(--vscode-sideBar-background)]">
       <div
-        className={`border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] space-y-3 ${
+          className={`border-2 border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] space-y-3 ${
           bamlMediaType === 'image'
             ? 'w-fit max-w-[90vw] min-w-80'
             : 'max-w-lg w-full'
@@ -666,7 +667,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
         {mediaUrl && (
           <button
             type="button"
-            className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] cursor-pointer select-none overflow-hidden min-w-0 w-full text-left"
+            className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] cursor-pointer select-none min-w-0 w-full text-left overflow-hidden"
             onClick={(e) => {
               setCollapsed(!collapsed);
             }}
@@ -714,14 +715,14 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
             </div>
             {/* Button area, right-aligned, compact, no overflow */}
             <div
-              className="flex items-center ml-2 flex-nowrap gap-1 h-7"
+              className="flex items-center ml-2 flex-nowrap gap-1 h-7 flex-shrink-0 max-w-[50%]"
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.stopPropagation();
                 }
               }}
-              style={{ maxWidth: 'calc(100% - 2rem)' }}
+              style={{}}
             >
               {isBase64 ? (
                 <Button
@@ -764,7 +765,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                     href={mediaUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex gap-1 items-center w-full h-full truncate"
+                    className="flex gap-1 items-center truncate"
                     style={{ maxWidth: 120 }}
                   >
                     <ExternalLinkIcon className="w-3 h-3" />

@@ -4,8 +4,8 @@ use std::collections::{HashMap, HashSet};
 
 use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta};
 use baml_vm::{
-    BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, GlobalIndex, GlobalPool,
-    Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
+    BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex,
+    GlobalPool, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
 };
 use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_parser_database::ParserDatabase;
@@ -46,6 +46,7 @@ fn compile_thir_to_bytecode(
 ) -> anyhow::Result<BamlVmProgram> {
     let mut resolved_globals = BamlMap::new();
     let mut resolved_classes = BamlMap::new();
+    let mut resolved_enums = BamlMap::new();
     let mut llm_functions = HashSet::new();
 
     // Resolve global functions from HIR
@@ -87,6 +88,21 @@ fn compile_thir_to_bytecode(
         }
     }
 
+    for enm in thir.enums.values() {
+        resolved_globals.insert(
+            enm.name.clone(),
+            GlobalIndex::from_raw(resolved_globals.len()),
+        );
+
+        let mut variant_names = HashMap::new();
+
+        for (variant_index, variant) in enm.variants.iter().enumerate() {
+            variant_names.insert(variant.name.clone(), variant_index);
+        }
+
+        resolved_enums.insert(enm.name.clone(), variant_names);
+    }
+
     let native_fns = baml_vm::native::functions();
 
     for name in native_fns.keys() {
@@ -108,6 +124,7 @@ fn compile_thir_to_bytecode(
             func,
             &resolved_globals,
             &resolved_classes,
+            &resolved_enums,
             &llm_functions,
             &mut loop_var_counter,
             &mut objects,
@@ -152,6 +169,7 @@ fn compile_thir_to_bytecode(
                 method,
                 &resolved_globals,
                 &resolved_classes,
+                &resolved_enums,
                 &llm_functions,
                 &mut loop_var_counter,
                 &mut objects,
@@ -165,6 +183,16 @@ fn compile_thir_to_bytecode(
             fn_class_patch_lists.push((object_index, class_alloc_patch_list));
             globals.push(Value::Object(object_index));
         }
+    }
+
+    for enm in thir.enums.values() {
+        let bytecode_enum = Enum {
+            name: enm.name.clone(),
+            variant_names: enm.variants.iter().map(|v| v.name.clone()).collect(),
+        };
+
+        let object_index = objects.insert(Object::Enum(bytecode_enum));
+        globals.push(Value::Object(object_index));
     }
 
     // resolve classes into their instance creation insns now that we've got their locations.
@@ -181,11 +209,13 @@ fn compile_thir_to_bytecode(
                 panic!("must have a class global here! The expected class may not be in the place resolved by `globals`");
             };
 
-            let Instruction::AllocInstance(index) = &mut bytecode.instructions[location] else {
-                panic!("alloc instance patch list must contain locations to AllocInstance!");
-            };
+            match &mut bytecode.instructions[location] {
+                Instruction::AllocInstance(index) | Instruction::AllocVariant(index) => {
+                    *index = object_index;
+                }
 
-            *index = object_index;
+                other => panic!("alloc instance patch list must contain locations to AllocInstance or AllocVariant! Got: {other}"),
+            }
         }
     }
 
@@ -202,19 +232,31 @@ fn compile_thir_to_bytecode(
         globals.push(Value::Object(object_index));
     }
 
-    let resolved_function_names = objects
-        .iter()
-        .enumerate()
-        .filter_map(|(i, obj)| match obj {
-            Object::Function(f) => Some((f.name.clone(), (ObjectIndex::from_raw(i), f.kind))),
-            _ => None,
-        })
-        .collect();
+    let mut resolved_class_names = HashMap::new();
+    let mut resolved_function_names = HashMap::new();
+    let mut resolved_enums_names = HashMap::new();
+
+    for (i, object) in objects.iter().enumerate() {
+        match object {
+            Object::Class(c) => {
+                resolved_class_names.insert(c.name.clone(), ObjectIndex::from_raw(i));
+            }
+            Object::Function(f) => {
+                resolved_function_names.insert(f.name.clone(), (ObjectIndex::from_raw(i), f.kind));
+            }
+            Object::Enum(e) => {
+                resolved_enums_names.insert(e.name.clone(), ObjectIndex::from_raw(i));
+            }
+            _ => {}
+        }
+    }
 
     Ok(BamlVmProgram {
         objects,
         globals,
         resolved_function_names,
+        resolved_class_names,
+        resolved_enums_names,
     })
 }
 
@@ -258,10 +300,13 @@ impl ForLoopVarCounters {
 }
 
 /// Compile an HIR function to bytecode.
+/// TODO: Fix this shit.
+#[allow(clippy::too_many_arguments)]
 fn compile_thir_function(
     func: &thir::ExprFunction<(Span, Option<TypeIR>)>,
     globals: &BamlMap<String, GlobalIndex>,
     classes: &BamlMap<String, HashMap<String, usize>>,
+    enums: &BamlMap<String, HashMap<String, usize>>,
     llm_functions: &HashSet<String>,
     loop_var_counter: &mut ForLoopVarCounters,
     objects: &mut ObjectPool,
@@ -270,6 +315,7 @@ fn compile_thir_function(
     let mut compiler = HirCompiler::new(
         globals,
         classes,
+        enums,
         llm_functions,
         loop_var_counter,
         objects,
@@ -336,6 +382,9 @@ struct HirCompiler<'g> {
     /// lifetime.
     classes: &'g BamlMap<String, HashMap<String, usize>>,
 
+    /// Resolved enum variants.
+    enums: &'g BamlMap<String, HashMap<String, usize>>,
+
     llm_functions: &'g HashSet<String>,
 
     /// Resolved local variables.
@@ -384,6 +433,7 @@ impl<'g> HirCompiler<'g> {
     fn new(
         globals: &'g BamlMap<String, GlobalIndex>,
         classes: &'g BamlMap<String, HashMap<String, usize>>,
+        enums: &'g BamlMap<String, HashMap<String, usize>>,
         llm_functions: &'g HashSet<String>,
         var_counters: &'g mut ForLoopVarCounters,
         objects: &'g mut ObjectPool,
@@ -392,6 +442,7 @@ impl<'g> HirCompiler<'g> {
         Self {
             globals,
             classes,
+            enums,
             llm_functions,
             objects,
             class_alloc_patch_list,
@@ -974,6 +1025,33 @@ impl<'g> HirCompiler<'g> {
             }
 
             thir::Expr::FieldAccess { base, field, .. } => {
+                // Direct enum access: Share.Rectangle
+                if let thir::Expr::Var(name, _) = base.as_ref() {
+                    if let Some(enm) = self.enums.get(name) {
+                        let Some(variant_index) = enm.get(field) else {
+                            panic!("undefined enum variant: {name}.{field}");
+                        };
+
+                        let Some(enum_index) = self.globals.get(name) else {
+                            panic!("undefined enum: {name}");
+                        };
+
+                        let const_index = self.add_constant(Value::Int(*variant_index as i64));
+                        self.emit(Instruction::LoadConst(const_index));
+
+                        let allocation_instruction =
+                            self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(usize::MAX)));
+
+                        // TODO: Confusing name because of class alloc reuse.
+                        self.class_alloc_patch_list.push(AllocInstancePatch {
+                            location: allocation_instruction,
+                            global: *enum_index,
+                        });
+
+                        return;
+                    }
+                }
+
                 // First compile the base expression
                 self.compile_expression(base);
 
@@ -1516,77 +1594,6 @@ impl<'g> HirCompiler<'g> {
         }
 
         loop_info.break_patch_list
-    }
-}
-
-impl thir::Expr<(Span, Option<TypeIR>)> {
-    /// Returns true if the block ends with an expression that has a final value.
-    ///
-    /// For example, it would return true for this block:
-    ///
-    /// ```ignore
-    /// let a = {
-    ///     let b = 1;
-    ///     if b == 1 {
-    ///         1
-    ///     } else {
-    ///         2
-    ///     }
-    /// };
-    /// ```
-    ///
-    /// But false for this one:
-    ///
-    /// ```ignore
-    /// let a = 0;
-    /// if a == 0 {
-    ///     a = 1;
-    /// } else {
-    ///     a = 2;
-    /// }
-    /// ```
-    ///
-    /// TODO: This seems completely unecessary, the typechecker will already
-    /// check at some point that return values match the expected type. After
-    /// that we should alreay have enough information to decide whether a block
-    /// returns or not.
-    #[allow(dead_code)]
-    fn produces_final_value(&self) -> bool {
-        match self {
-            // First call will happen on a block. Recurse on the final expression.
-            thir::Expr::Block(block, _) => match block.statements.last() {
-                Some(thir::Statement::Expression { expr, .. }) => expr.produces_final_value(),
-
-                // Does not produce a value.
-                _ => false,
-            },
-
-            // If statements as last expression need to check if they return
-            // any value. We won't recurse into the else branch because both
-            // need to match, if one of them returns a value the other one must
-            // return the same type. This is typechecker bug if it's wrong, so
-            // I won't bother here.
-            thir::Expr::If(_, if_branch, ..) => if_branch.produces_final_value(),
-
-            // This is an expression that produces a value, so true. We're
-            // forcing non-exhaustive match here because other types of
-            // expressions that we add in the future might need to be considered.
-            thir::Expr::List(_, _)
-            | thir::Expr::Map(_, _)
-            | thir::Expr::ArrayAccess { .. }
-            | thir::Expr::FieldAccess { .. }
-            | thir::Expr::MethodCall { .. }
-            | thir::Expr::Value(_)
-            | thir::Expr::Call { .. }
-            | thir::Expr::ClassConstructor { .. }
-            | thir::Expr::BinaryOperation { .. }
-            | thir::Expr::UnaryOperation { .. }
-            | thir::Expr::Var(_, _)
-            | thir::Expr::Builtin(_, _)
-            | thir::Expr::Paren(_, _) => true,
-
-            thir::Expr::Function(_, _, _) => todo!("function calls"),
-        }
     }
 }
 
@@ -2269,7 +2276,7 @@ mod tests {
                     [i]
                 };
 
-                [a, h]
+                0
             }
         "#)?;
 
@@ -2821,7 +2828,7 @@ mod tests {
                     Instruction::LoadConst(1),
                     Instruction::LoadConst(2),
                     Instruction::AllocArray(3),
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
                     Instruction::LoadVar(1),
                     // call with one argument (self)
                     Instruction::Call(1),
@@ -2850,7 +2857,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -2903,7 +2910,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -2965,7 +2972,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -3027,7 +3034,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
                     Instruction::LoadVar(4),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -3044,7 +3051,7 @@ mod tests {
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(6),
                     Instruction::LoadVar(2),
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
                     Instruction::LoadVar(8),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -3540,17 +3547,18 @@ fn UseMapNoKey() -> string {
         fn contains() -> anyhow::Result<()> {
             assert_compiles(Program {
                 source: r#"
-fn CreateMapJSON() -> map<string, string> {
-    {"hello": "world"}
-}
-fn UseMapContains() -> string {
-    let map = CreateMapJSON();
-    if (map.contains("hello")) {
-        map["hello"]
-    } else {
-        "hi"
-    }
-}"#,
+                    fn CreateMapJSON() -> map<string, string> {
+                        {"hello": "world"}
+                    }
+                    fn UseMapContains() -> string {
+                        let map = CreateMapJSON();
+                        if (map.contains("hello")) {
+                            map["hello"]
+                        } else {
+                            "hi"
+                        }
+                    }
+                "#,
                 expected: vec![
                     (
                         "CreateMapJSON",
@@ -3566,7 +3574,7 @@ fn UseMapContains() -> string {
                         vec![
                             Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                             Instruction::Call(0),
-                            Instruction::LoadGlobal(GlobalIndex::from_raw(5)),
+                            Instruction::LoadGlobal(GlobalIndex::from_raw(6)),
                             Instruction::LoadVar(1),
                             Instruction::LoadConst(0),
                             Instruction::Call(2),
@@ -3589,15 +3597,16 @@ fn UseMapContains() -> string {
         fn modify() -> anyhow::Result<()> {
             assert_compiles(Program {
                 source: r#"
-fn EditMapKey() -> int {
-	let map = { hi 123 };
+                    fn EditMapKey() -> int {
+                        let map = { hi 123 };
 
-	map["hi"] = 42 - 4;
-	map["hi"] += 4;
+                        map["hi"] = 42 - 4;
+                        map["hi"] += 4;
 
-	map["hi"]
+                        map["hi"]
 
-}"#,
+                    }
+                "#,
                 expected: vec![(
                     "EditMapKey",
                     vec![
@@ -3631,13 +3640,14 @@ fn EditMapKey() -> int {
         fn len() -> anyhow::Result<()> {
             assert_compiles(Program {
                 source: r#"
-fn Len() -> int {
-    let map = {
-        hi 123
-        it_works 456
-    };
-    map.len()
-}"#,
+                    fn Len() -> int {
+                        let map = {
+                            hi 123
+                            it_works 456
+                        };
+                        map.len()
+                    }
+                "#,
                 expected: vec![(
                     "Len",
                     vec![
@@ -3646,9 +3656,65 @@ fn Len() -> int {
                         Instruction::LoadConst(2),
                         Instruction::LoadConst(3),
                         Instruction::AllocMap(2),
-                        Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
+                        Instruction::LoadGlobal(GlobalIndex::from_raw(4)),
                         Instruction::LoadVar(1),
                         Instruction::Call(1),
+                        Instruction::Return,
+                    ],
+                )],
+            })
+        }
+    }
+
+    mod enums {
+        use super::*;
+
+        #[test]
+        fn return_enum_variant() -> anyhow::Result<()> {
+            assert_compiles(Program {
+                source: r#"
+                    enum Shape {
+                        Square
+                        Rectangle
+                        Circle
+                    }
+
+                    fn main() -> Shape {
+                        Shape.Rectangle
+                    }
+                "#,
+                expected: vec![(
+                    "main",
+                    vec![
+                        Instruction::LoadConst(0),
+                        Instruction::AllocVariant(ObjectIndex::from_raw(3)),
+                        Instruction::Return,
+                    ],
+                )],
+            })
+        }
+
+        #[test]
+        fn assign_enum_variant() -> anyhow::Result<()> {
+            assert_compiles(Program {
+                source: r#"
+                    enum Shape {
+                        Square
+                        Rectangle
+                        Circle
+                    }
+
+                    fn main() -> Shape {
+                        let s = Shape.Rectangle;
+                        s
+                    }
+                "#,
+                expected: vec![(
+                    "main",
+                    vec![
+                        Instruction::LoadConst(0),
+                        Instruction::AllocVariant(ObjectIndex::from_raw(3)),
+                        Instruction::LoadVar(1),
                         Instruction::Return,
                     ],
                 )],

@@ -268,9 +268,7 @@ pub fn project_diagnostics(
     }
 
     // Check for generator version mismatch as well.
-    if let Err(message) = guard
-        .get_common_generator_version(feature_flags, session.baml_settings.get_client_version())
-    {
+    if let Err(message) = guard.get_common_generator_version() {
         // Add the diagnostic to all generators
         if let Ok(generators) = guard.list_generators(feature_flags) {
             // Need to list generators again to get their spans

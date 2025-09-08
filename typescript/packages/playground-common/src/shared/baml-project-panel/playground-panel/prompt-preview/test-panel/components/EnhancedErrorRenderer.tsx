@@ -1,3 +1,4 @@
+'use client';
 import React, { useMemo, useCallback, useState } from 'react';
 import { AlertCircle, RefreshCw, ExternalLink, WifiOff, ChevronDown, ChevronUp, Copy, Check, X, List } from 'lucide-react';
 import { Button } from '@baml/ui/button';
@@ -89,15 +90,15 @@ const CopyErrorButton: React.FC<{ errorMessage: string }> = ({ errorMessage }) =
 // Enhanced collapsible error details with webview-media styling
 const ErrorDetails: React.FC<{ errorMessage: string }> = ({ errorMessage }) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
-  
+
   return (
-    <div className="mt-3">
+    <>
       <Button
         onClick={() => setIsExpanded(!isExpanded)}
         aria-label={isExpanded ? 'Hide full error details' : 'Show full error details'}
         variant="outline"
         size="xs"
-        className="flex items-center gap-1 text-xs px-2 py-0 h-7 transition-colors duration-150 border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] bg-[var(--vscode-editor-background)] cursor-pointer hover:opacity-80"
+        className="inline-flex items-center gap-1 text-xs px-2 py-0 h-7 transition-colors duration-150 border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] bg-[var(--vscode-editor-background)] cursor-pointer hover:opacity-80"
         style={{
           color: '#dc2626',
           background: 'var(--vscode-editor-background)',
@@ -117,8 +118,8 @@ const ErrorDetails: React.FC<{ errorMessage: string }> = ({ errorMessage }) => {
         )}
       </Button>
       {isExpanded && (
-        <div 
-          className="mt-2 p-3 bg-[var(--vscode-editor-background)] border border-[var(--vscode-panel-border)] rounded-md"
+        <div
+          className="basis-full w-full mt-2 p-3 bg-[var(--vscode-editor-background)] border border-[var(--vscode-panel-border)] rounded-md"
           style={{
             background: `linear-gradient(rgba(220, 38, 38, 0.03), rgba(220, 38, 38, 0.03)), var(--vscode-editor-background)`,
             borderColor: 'rgba(220, 38, 38, 0.2)',
@@ -129,7 +130,7 @@ const ErrorDetails: React.FC<{ errorMessage: string }> = ({ errorMessage }) => {
           </pre>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

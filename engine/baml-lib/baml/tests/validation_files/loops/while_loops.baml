@@ -33,16 +33,3 @@ fn Foo() -> int {
 
     3
 }
-
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/while_loops.baml:1
-//    | 
-//    | 
-//  1 | fn GCD(a: int, b: int) -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/while_loops.baml:14
-//    | 
-// 13 | 
-// 14 | fn Foo() -> int {
-//    | 

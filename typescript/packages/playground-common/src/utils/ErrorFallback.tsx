@@ -1,3 +1,4 @@
+'use client';
 import { Button } from '@baml/ui/button';
 import { RefreshCcw } from 'lucide-react';
 import type React from 'react';

@@ -61,3 +61,5 @@ semver = "1.0.20"
 toml = { version = "0.8" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = { version = "2.5.0" }
+walkdir = "2"
+chrono.workspace = true

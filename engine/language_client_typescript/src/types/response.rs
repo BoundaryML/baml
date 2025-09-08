@@ -1,4 +1,4 @@
-use napi::{bindgen_prelude::Env, JsObject};
+use napi::bindgen_prelude::{Env, JsObjectValue, Object};
 use napi_derive::napi;
 
 use super::request::HTTPBody;
@@ -27,8 +27,8 @@ impl HTTPResponse {
     }
 
     #[napi(getter)]
-    pub fn headers(&self, env: Env) -> napi::Result<JsObject> {
-        let mut obj = env.create_object()?;
+    pub fn headers(&self, env: &Env) -> napi::Result<Object<'_>> {
+        let mut obj = Object::new(env)?;
         if let Some(headers) = self.inner.headers() {
             for (k, v) in headers {
                 obj.set_named_property(k, v)?;

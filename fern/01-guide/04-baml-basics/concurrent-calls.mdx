@@ -33,7 +33,7 @@ function ClassifyMessage(input: string) -> Category {
 </Accordion>
 
 <Tabs>
-<Tab title="Python">
+<Tab title="Python" language="python">
 
 You can make concurrent `b.ClassifyMessage()` calls like so:
 
@@ -54,7 +54,7 @@ if __name__ == '__main__':
 ```
 </Tab>
 
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 
 You can make concurrent `b.ClassifyMessage()` calls like so:
 
@@ -77,7 +77,7 @@ if (require.main === module) {
 ```
 </Tab>
 
-<Tab title="Go">
+<Tab title="Go" language="go">
 
 You can make concurrent `b.ClassifyMessage()` calls using goroutines:
 
@@ -129,7 +129,7 @@ func main() {
 ```
 </Tab>
 
-<Tab title="Ruby (beta)">
+<Tab title="Ruby (beta)" language="ruby">
 
 BAML Ruby (beta) does not currently support async/concurrent calls.
 
@@ -147,7 +147,7 @@ When running multiple operations in parallel, you can use abort controllers to c
 Use a single abort controller to cancel all parallel operations:
 
 <Tabs>
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 ```typescript
 import { b } from './baml_client'
 
@@ -177,7 +177,7 @@ try {
 ```
 </Tab>
 
-<Tab title="Python">
+<Tab title="Python" language="python">
 ```python
 import asyncio
 from baml_client.async_client import b
@@ -218,7 +218,7 @@ async def main():
 ```
 </Tab>
 
-<Tab title="Go">
+<Tab title="Go" language="go">
 ```go
 package main
 
@@ -275,7 +275,7 @@ func main() {
 Use separate controllers to cancel operations independently:
 
 <Tabs>
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 ```typescript
 const controllers = [
   new AbortController(),
@@ -303,7 +303,7 @@ results.forEach((result, index) => {
 ```
 </Tab>
 
-<Tab title="Python">
+<Tab title="Python" language="python">
 ```python
 controllers = [
     AbortController(),
@@ -345,7 +345,7 @@ for index, result in enumerate(results):
 Race multiple LLM providers and cancel slower ones when the fastest completes. This pattern is useful for optimizing latency by using whichever provider responds first.
 
 <Tabs>
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 ```typescript
 import { ClientRegistry } from '@boundaryml/baml'
 
@@ -411,7 +411,7 @@ async function fastestProviderWins(message: string) {
 ```
 </Tab>
 
-<Tab title="Python">
+<Tab title="Python" language="python">
 ```python
 import os
 from baml_py import ClientRegistry
@@ -498,7 +498,7 @@ async def fastest_provider_wins(message: str):
 ```
 </Tab>
 
-<Tab title="Go">
+<Tab title="Go" language="go">
 ```go
 import (
     "context"
@@ -612,7 +612,7 @@ func fastestProviderWins(message string) (interface{}, error) {
 Set automatic timeouts to prevent operations from running indefinitely:
 
 <Tabs>
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 ```typescript
 async function classifyWithTimeout(messages: string[], timeoutMs: number = 5000) {
   const controller = new AbortController()
@@ -641,7 +641,7 @@ async function classifyWithTimeout(messages: string[], timeoutMs: number = 5000)
 ```
 </Tab>
 
-<Tab title="Python">
+<Tab title="Python" language="python">
 ```python
 import asyncio
 from baml_py import AbortController
@@ -673,7 +673,7 @@ async def classify_with_timeout(messages: list[str], timeout_seconds: float = 5)
 ```
 </Tab>
 
-<Tab title="Go">
+<Tab title="Go" language="go">
 ```go
 func classifyWithTimeout(messages []string, timeout time.Duration) ([]types.Category, error) {
     ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -716,7 +716,7 @@ func classifyWithTimeout(messages []string, timeout time.Duration) ([]types.Cate
 Process items in batches with the ability to cancel remaining batches:
 
 <Tabs>
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 ```typescript
 async function processBatches<T, R>(
   items: T[],
@@ -763,7 +763,7 @@ const results = await processBatches(
 ```
 </Tab>
 
-<Tab title="Python">
+<Tab title="Python" language="python">
 ```python
 async def process_batches(items, batch_size, processor):
     results = []

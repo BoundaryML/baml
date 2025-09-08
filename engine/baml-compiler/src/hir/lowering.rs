@@ -2,7 +2,10 @@
 //!
 //! This files contains the convertions between Baml AST nodes to HIR nodes.
 
+use std::collections::HashSet;
+
 use baml_types::{
+    ir_type::TypeGeneric,
     type_meta::{self, base::StreamingBehavior},
     Constraint, ConstraintLevel, TypeIR, TypeValue,
 };
@@ -47,6 +50,38 @@ impl Hir {
                 _ => {}
             }
         }
+
+        let enums = HashSet::<&str>::from_iter(hir.enums.iter().map(|e| e.name.as_str()));
+
+        let param_type: fn(&mut Parameter) -> &mut TypeIR = |p| &mut p.r#type;
+
+        // Patch return types because only here in the code we have the full
+        // context for enums.
+        hir.expr_functions
+            .iter_mut()
+            .map(|f| (f.parameters.iter_mut().map(param_type), &mut f.return_type))
+            .chain(
+                hir.llm_functions
+                    .iter_mut()
+                    .map(|f| (f.parameters.iter_mut().map(param_type), &mut f.return_type)),
+            )
+            .chain(hir.classes.iter_mut().flat_map(|c| {
+                c.methods
+                    .iter_mut()
+                    .map(|f| (f.parameters.iter_mut().map(param_type), &mut f.return_type))
+            }))
+            .flat_map(|(parameters, return_type)| parameters.chain(std::iter::once(return_type)))
+            .for_each(|ty| match ty {
+                TypeIR::Class { name, meta, .. } if enums.contains(name.as_str()) => {
+                    *ty = TypeIR::Enum {
+                        name: name.to_owned(),
+                        dynamic: false, // TODO: How to know if it's dynamic.
+                        meta: meta.clone(),
+                    }
+                }
+
+                _ => {}
+            });
 
         hir
     }
@@ -125,22 +160,12 @@ pub fn type_ir_from_ast(type_: &ast::FieldType) -> TypeIR {
     };
 
     match type_ {
-        ast::FieldType::Symbol(_, name, _) => {
-            if name.name().starts_with("Enum") {
-                TypeIR::Enum {
-                    name: name.name().to_string(),
-                    dynamic: false,
-                    meta,
-                }
-            } else {
-                TypeIR::Class {
-                    name: name.name().to_string(),
-                    mode: baml_types::ir_type::StreamingMode::NonStreaming,
-                    dynamic: false,
-                    meta,
-                }
-            }
-        }
+        ast::FieldType::Symbol(_, name, _) => TypeIR::Class {
+            name: name.name().to_string(),
+            mode: baml_types::ir_type::StreamingMode::NonStreaming,
+            dynamic: false,
+            meta,
+        },
         ast::FieldType::Primitive(_, prim, _, _) => TypeIR::Primitive(*prim, meta),
         ast::FieldType::List(_, inner, dims, _, _) => {
             // Respect multi-dimensional arrays (e.g., int[][] has dims=2)
@@ -375,6 +400,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
             is_mutable,
             expr,
             span,
+            annotations: _,
         }) => {
             let lifted_expr = Expression::from_ast(expr);
 
@@ -397,6 +423,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
             iterator,
             body,
             span,
+            annotations: _,
         }) => {
             // Lower for loop to HIR
             let lifted_iterator = Expression::from_ast(iterator);
@@ -410,8 +437,8 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
             }
         }
         ast::Stmt::Expression(expr) => Statement::Expression {
-            expr: Expression::from_ast(expr),
-            span: expr.span().clone(),
+            expr: Expression::from_ast(&expr.expr),
+            span: expr.span.clone(),
         },
         ast::Stmt::Semicolon(expr) => Statement::Semicolon {
             expr: Expression::from_ast(expr),

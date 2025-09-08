@@ -6,6 +6,7 @@ use baml_types::{
     BamlMap, BamlValue, Constraint, EvaluationContext,
 };
 use internal_baml_core::{
+    ast::BamlVisDiagramGenerator,
     internal_baml_diagnostics::SourceFile,
     ir::{
         repr::{IntermediateRepr, Node, TypeBuilderEntry},
@@ -168,6 +169,13 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
     ) -> Result<Vec<OrchestratorNode>> {
         let client = self.get_llm_provider(client_spec, ctx)?;
         client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self)
+    }
+
+    fn function_graph(&self, _function_name: &str, _ctx: &RuntimeContext) -> Result<String> {
+        // Use baml-vis to generate a Mermaid diagram for the current AST
+        let ast = self.db.ast();
+        let graph = BamlVisDiagramGenerator::generate_headers_flowchart(ast);
+        Ok(graph)
     }
 
     fn features(&self) -> IrFeatures {
