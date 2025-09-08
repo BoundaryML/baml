@@ -21,7 +21,6 @@ use tokio::{
 use tracing::{info, warn};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
-const BINARY_PATH: &str = "/Users/sam/baml4/engine/target/debug/baml-cli";
 const MAX_STDIN_BUFFER_SIZE: usize = 1000;
 
 #[derive(Clone, Debug)]
@@ -41,7 +40,7 @@ impl HotReloader {
     fn new() -> Self {
         let (shutdown_tx, _) = watch::channel(false);
         Self {
-            binary_path: BINARY_PATH.to_string(),
+            binary_path: format!("{}/../target/debug/baml-cli", env!("CARGO_MANIFEST_DIR")),
             current_process: None,
             shutdown_tx,
             stdin_buffer: Arc::new(Mutex::new(VecDeque::new())),

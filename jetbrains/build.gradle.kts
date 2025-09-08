@@ -149,6 +149,31 @@ tasks {
     runIde {
         args = listOf("${layout.projectDirectory}/../integ-tests/baml_src")
     }
+    
+    // Configure trusted paths to avoid security prompts in development
+    prepareSandbox {
+        val integTestsPath = layout.projectDirectory.dir("../integ-tests").asFile.absolutePath
+        val bamlSrcPath = layout.projectDirectory.dir("../integ-tests/baml_src").asFile.absolutePath
+        
+        doLast {
+            val trustedPathsFile = sandboxConfigDirectory.file("options/trusted-paths.xml").get().asFile
+            trustedPathsFile.parentFile.mkdirs()
+            trustedPathsFile.writeText(
+                """
+                <application>
+                  <component name="Trusted.Paths">
+                    <option name="TRUSTED_PROJECT_PATHS">
+                      <map>
+                        <entry key="$integTestsPath" value="true" />
+                        <entry key="$bamlSrcPath" value="true" />
+                      </map>
+                    </option>
+                  </component>
+                </application>
+                """.trimIndent()
+            )
+        }
+    }
 }
 
 intellijPlatformTesting {
