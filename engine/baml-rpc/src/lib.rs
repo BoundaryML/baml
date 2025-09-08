@@ -30,5 +30,8 @@ pub use ui::{
         ListProjectsRequest, ListProjectsResponse, Project, UpdateProject, UpdateProjectRequest,
         UpdateProjectResponse,
     },
+    ui_function_call_http_calls::{
+        GetFunctionCallHttpCalls, GetFunctionCallHttpCallsRequest, GetFunctionCallHttpCallsResponse,
+    },
     ui_function_calls::{ListFunctionCalls, ListFunctionCallsRequest, ListFunctionCallsResponse},
 };

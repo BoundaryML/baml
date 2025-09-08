@@ -252,6 +252,7 @@ mod tests {
         runtime_api::baml_value::{
             BamlValue, Media, MediaValue, TypeIndex, ValueContent, ValueMetadata,
         },
+        RpcClientDetails,
     };
     use indexmap::IndexMap;
 
@@ -613,6 +614,11 @@ mod tests {
             headers: std::collections::HashMap::new(),
             body: HTTPBody {
                 raw: Cow::Borrowed(original_body.as_bytes()),
+            },
+            client_details: RpcClientDetails {
+                name: "test-client".to_string(),
+                provider: "openai".to_string(),
+                options: IndexMap::new(),
             },
         });
 

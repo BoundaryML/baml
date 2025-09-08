@@ -154,11 +154,13 @@ pub struct UiUsageEstimate {
     pub input_tokens: Option<u64>,
     #[ts(type = "number | null")]
     pub output_tokens: Option<u64>,
-    // TODO: add cost estimate data here
-    // This is tricky to do because we need provider & model to effectively
-    // resolve the token costs. Even restricting to just openai is non-straightforward,
-    // and frankly I'm skeptical that restricting to just openai is a sufficiently common
-    // implementation use case.
+    // Cost estimates calculated from provider-specific pricing
+    #[ts(type = "number | null")]
+    pub input_cost: Option<f64>,
+    #[ts(type = "number | null")]
+    pub output_cost: Option<f64>,
+    #[ts(type = "number | null")]
+    pub total_cost: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]

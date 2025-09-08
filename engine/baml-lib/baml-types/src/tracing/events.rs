@@ -389,6 +389,7 @@ pub struct HTTPRequest {
     #[serde(deserialize_with = "deserialize_headers")]
     headers: HashMap<String, String>,
     pub body: HTTPBody,
+    pub client_details: std::sync::Arc<ClientDetails>,
 }
 
 impl HTTPRequest {
@@ -398,6 +399,7 @@ impl HTTPRequest {
         method: String,
         headers: HashMap<String, String>,
         body: HTTPBody,
+        client_details: ClientDetails,
     ) -> Self {
         Self {
             id,
@@ -405,6 +407,7 @@ impl HTTPRequest {
             method,
             headers,
             body,
+            client_details: std::sync::Arc::new(client_details),
         }
     }
 
@@ -614,6 +617,11 @@ mod tests {
             "POST".to_string(),
             headers.clone(),
             HTTPBody::new(b"test body".to_vec()),
+            ClientDetails {
+                name: "test-client".to_string(),
+                provider: "test-provider".to_string(),
+                options: IndexMap::new(),
+            },
         );
 
         // Test that .headers() returns original headers
