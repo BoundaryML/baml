@@ -1829,12 +1829,70 @@ pub fn typecheck_expression(
             operator,
             right,
             span,
-        } => thir::Expr::BinaryOperation {
-            left: Arc::new(typecheck_expression(left, context, diagnostics)),
-            operator: *operator,
-            right: Arc::new(typecheck_expression(right, context, diagnostics)),
-            meta: (span.clone(), None),
-        },
+        } => {
+            let left = typecheck_expression(left, context, diagnostics);
+            let right = typecheck_expression(right, context, diagnostics);
+
+            match (left.meta().1.as_ref(), operator, right.meta().1.as_ref()) {
+                // Ok: string + string
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                    hir::BinaryOperator::Add,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                ) => {}
+
+                // Other invalid operation for strings.
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                ) => diagnostics.push_error(DatamodelError::new_validation_error(
+                    &format!("Cannot apply {operator} operator to strings"),
+                    span.clone(),
+                )),
+
+                // OK: operation on ints
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                ) => {}
+
+                // OK: Operation on floats
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                ) => {}
+
+                // Err: Operation on int and float
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                )
+                | (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                ) => diagnostics.push_error(DatamodelError::new_validation_error(
+                    "Cannot apply {operator} operator to int and float",
+                    span.clone(),
+                )),
+
+                _ => diagnostics.push_error(DatamodelError::new_validation_error(
+                    "Invalid binary operation",
+                    span.clone(),
+                )),
+            }
+
+            thir::Expr::BinaryOperation {
+                left: Arc::new(left),
+                operator: *operator,
+                right: Arc::new(right),
+                meta: (span.clone(), None),
+            }
+        }
         hir::Expression::UnaryOperation {
             operator,
             expr,
