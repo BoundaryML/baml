@@ -149,20 +149,14 @@ impl BamlAsyncVmRuntime {
         env_vars: HashMap<String, String>,
         cancel_tripwire: Arc<TripWire>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
-        let current_call_id = self
-            .llm_runtime
-            .tracer_wrapper
-            .get_or_create_tracer(&env_vars)
-            .start_call(&function_name, ctx, params, true, false, collectors.clone())
-            .curr_call_id();
-
         // Find the function.
         let Some((function_index, function_kind)) =
             self.program.resolved_function_names.get(&function_name)
         else {
+            // TODO: We don't have an ID here! We can't call tracer here for llm functions here.
             return (
                 Err(anyhow!("function '{function_name}' not found")),
-                current_call_id,
+                FunctionCallId::new(),
             );
         };
 
@@ -183,6 +177,12 @@ impl BamlAsyncVmRuntime {
                 )
                 .await;
         }
+        let current_call_id = self
+            .llm_runtime
+            .tracer_wrapper
+            .get_or_create_tracer(&env_vars)
+            .start_call(&function_name, ctx, params, true, false, collectors.clone())
+            .curr_call_id();
 
         let Some(expr_fn) = self
             .llm_runtime
