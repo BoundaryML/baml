@@ -9,10 +9,12 @@ struct Program {
 
 fn bootstrap_vm(input: Program) -> Vm {
     let ast = baml_compiler::test::ast(input.source).unwrap();
+
     let BamlVmProgram {
         objects,
         globals,
         resolved_function_names,
+        ..
     } = baml_compiler::compile(&ast).unwrap();
 
     // Find the target function index by name
