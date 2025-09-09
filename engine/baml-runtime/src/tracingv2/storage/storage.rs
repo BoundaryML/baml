@@ -744,7 +744,8 @@ impl Drop for Collector {
 // watch out when running all cargo tests in the project -- as they could mess with the global tracer state if you don't add the #[serial]. Perhaps we need #[tokio::test]
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use core::time::Duration;
+
     use baml_ids::{FunctionCallId, FunctionEventId, HttpRequestId};
     use baml_types::{
         ir_type::TypeNonStreaming,
@@ -754,10 +755,11 @@ mod tests {
             TraceEvent,
         },
     };
-    use core::time::Duration;
     use indexmap::IndexMap;
     use serial_test::serial;
     use tokio::runtime::Runtime;
+
+    use super::*;
 
     #[test]
     #[serial]
@@ -787,7 +789,8 @@ mod tests {
             }
 
             // Put a simple SetTags event
-            let event: TraceEventWithMeta = TraceEvent::new_set_tags(vec![f_id.clone()], Default::default());
+            let event: TraceEventWithMeta =
+                TraceEvent::new_set_tags(vec![f_id.clone()], Default::default());
             let event = Arc::new(event);
             {
                 let mut tracer = BAML_TRACER.lock().unwrap();
@@ -842,7 +845,8 @@ mod tests {
             }
 
             // Put a simple SetTags event
-            let event: TraceEventWithMeta = TraceEvent::new_set_tags(vec![f_id.clone()], Default::default());
+            let event: TraceEventWithMeta =
+                TraceEvent::new_set_tags(vec![f_id.clone()], Default::default());
             let event = Arc::new(event);
             {
                 let mut tracer = BAML_TRACER.lock().unwrap();
@@ -913,7 +917,8 @@ mod tests {
             }
 
             // Put a simple SetTags event
-            let event: TraceEventWithMeta = TraceEvent::new_set_tags(vec![f_id.clone()], Default::default());
+            let event: TraceEventWithMeta =
+                TraceEvent::new_set_tags(vec![f_id.clone()], Default::default());
             let event = Arc::new(event);
             {
                 let mut tracer = BAML_TRACER.lock().unwrap();
@@ -984,7 +989,9 @@ mod tests {
                 vec![f_id.clone()],
                 "test_function".into(),
                 vec![],
-                EvaluationContext { tags: Default::default() },
+                EvaluationContext {
+                    tags: Default::default(),
+                },
                 FunctionType::Native,
                 false,
             );
@@ -1049,8 +1056,14 @@ mod tests {
             collector.track_function(f_id.clone());
 
             let mut tags_map = serde_json::Map::new();
-            tags_map.insert("foo".to_string(), serde_json::Value::String("bar".to_string()));
-            tags_map.insert("some_number".to_string(), serde_json::Value::Number(42.into()));
+            tags_map.insert(
+                "foo".to_string(),
+                serde_json::Value::String("bar".to_string()),
+            );
+            tags_map.insert(
+                "some_number".to_string(),
+                serde_json::Value::Number(42.into()),
+            );
 
             let start_event: TraceEventWithMeta = TraceEvent::new_function_start(
                 vec![f_id.clone()],
@@ -1102,7 +1115,9 @@ mod tests {
                     function_type: FunctionType::Native,
                     is_stream: false,
                     args: vec![],
-                    options: EvaluationContext { tags: Default::default() },
+                    options: EvaluationContext {
+                        tags: Default::default(),
+                    },
                 }),
                 call_stack: vec![f_id.clone()],
                 timestamp: start_time,
@@ -1179,7 +1194,9 @@ mod tests {
             vec![f_id.clone()],
             function_name.into(),
             vec![],
-            EvaluationContext { tags: Default::default() },
+            EvaluationContext {
+                tags: Default::default(),
+            },
             FunctionType::Native,
             false,
         );
@@ -1192,10 +1209,8 @@ mod tests {
         // Insert LLM requests and responses
         for (i, (req, resp)) in llm_calls.into_iter().enumerate() {
             // Put the request
-            let event_req: TraceEventWithMeta = TraceEvent::new_llm_request(
-                vec![f_id.clone()],
-                Arc::new(req),
-            );
+            let event_req: TraceEventWithMeta =
+                TraceEvent::new_llm_request(vec![f_id.clone()], Arc::new(req));
             let event_req = Arc::new(event_req);
             {
                 let mut tracer = BAML_TRACER.lock().unwrap();
@@ -1203,10 +1218,8 @@ mod tests {
             }
 
             // Put the response
-            let event_resp: TraceEventWithMeta = TraceEvent::new_llm_response(
-                vec![f_id.clone()],
-                Arc::new(resp),
-            );
+            let event_resp: TraceEventWithMeta =
+                TraceEvent::new_llm_response(vec![f_id.clone()], Arc::new(resp));
             let event_resp = Arc::new(event_resp);
             {
                 let mut tracer = BAML_TRACER.lock().unwrap();
