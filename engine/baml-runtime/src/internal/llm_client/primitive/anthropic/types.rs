@@ -202,7 +202,7 @@ pub struct MessageDeltaChunk {
     /// The result of this stream.
     pub delta: StreamStop,
     /// The billing and rate-limit usage of this stream.
-    pub usage: DeltaUsage,
+    pub usage: AnthropicUsage,
 }
 
 /// The text delta content block.
@@ -222,13 +222,6 @@ pub struct StreamStop {
     pub stop_reason: Option<String>,
     /// The stop sequence of this stream.
     pub stop_sequence: Option<StopSequence>,
-}
-
-/// The delta usage of the stream.
-#[derive(Debug, Deserialize, Clone, PartialEq, Serialize)]
-pub struct DeltaUsage {
-    /// The number of output tokens which were used.
-    pub output_tokens: u64,
 }
 
 #[cfg(test)]
