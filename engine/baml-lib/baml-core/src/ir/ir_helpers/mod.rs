@@ -139,7 +139,7 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
                 .any(|target| self.is_subtype(base, target)),
             (TypeIR::Primitive(p1, _), TypeIR::Primitive(p2, _)) => p1 == p2,
             (TypeIR::Primitive(TypeValue::Null, _), _) => false,
-            (TypeIR::Primitive(p1, _), _) => false,
+            (TypeIR::Primitive(_p1, _), _) => false,
 
             // Handle types that nest other types.
             (TypeIR::List(base_item, _), TypeIR::List(other_item, _)) => {
@@ -290,7 +290,7 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
             BamlValueWithMeta::Null(meta) => Ok(BamlValueWithMeta::Null((meta, field_type))),
 
             BamlValueWithMeta::Map(pairs, meta) => {
-                let (annotation_key_type, annotation_value_type) = map_types(self, &field_type)
+                let (_annotation_key_type, annotation_value_type) = map_types(self, &field_type)
                     .ok_or(anyhow::anyhow!("Could not unify map with {field_type:?}"))?;
 
                 let mapped_fields: BamlMap<String, BamlValueWithMeta<(T, TypeIR)>> = pairs
@@ -674,7 +674,7 @@ impl IRHelper for IntermediateRepr {
     }
 
     fn find_expr_fn<'a>(&'a self, function_name: &str) -> Result<ExprFunctionWalker<'a>> {
-        let expr_fn_names = self
+        let _expr_fn_names = self
             .walk_expr_fns()
             .map(|f| f.item.elem.name.clone())
             .collect::<Vec<_>>();
@@ -978,7 +978,7 @@ impl IRHelper for IntermediateRepr {
     fn get_dummy_args(
         &self,
         indent: usize,
-        allow_multiline: bool,
+        _allow_multiline: bool,
         params: &BamlMap<String, TypeIR>,
     ) -> String {
         params
@@ -1082,7 +1082,7 @@ fn item_type(ir: &(impl IRHelperExtended + ?Sized), field_type: &TypeIR) -> Opti
         TypeIR::Enum { .. } => None,
         TypeIR::List(inner, _) => Some(*inner.clone()),
         TypeIR::Literal(_, _) => None,
-        TypeIR::Map(k, v, _) => Some(*v.clone()),
+        TypeIR::Map(_k, v, _) => Some(*v.clone()),
         TypeIR::Primitive(_, _) => None,
         TypeIR::RecursiveTypeAlias {
             name: alias_name, ..
@@ -1178,6 +1178,7 @@ pub static UNIT_TYPE: once_cell::sync::Lazy<TypeIR> =
 /// definition in the IR (e.g. because the class was introduced through
 /// TypeBuilder), we enhance the `BamlValueWithMeta` using types inferred from
 /// each field of the class instance.
+#[allow(dead_code)]
 fn distribute_infer_class<T: Clone + std::fmt::Debug>(
     ir: &IntermediateRepr,
     class_name: &str,

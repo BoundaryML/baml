@@ -25,7 +25,7 @@ impl InternalBamlRuntime {
         let is_expr_fn = self.get_expr_function(&function_name, &ctx).is_ok();
         if is_expr_fn {
             // TODO: this likely breaks something, the expr_fn eval logic is now unreferenced
-            let func = self.get_expr_function(&function_name, &ctx)?;
+            let _func = self.get_expr_function(&function_name, &ctx)?;
             // let renderer = PromptRenderer::mk_fake();
             // let orchestrator = vec![];
             // let baml_args = self

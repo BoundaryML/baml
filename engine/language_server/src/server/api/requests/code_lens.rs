@@ -28,7 +28,7 @@ impl RequestHandler for CodeLens {
 impl SyncRequestHandler for CodeLens {
     fn run(
         session: &mut Session,
-        notifier: Notifier,
+        _notifier: Notifier,
         _requester: &mut Requester,
         params: CodeLensParams,
     ) -> Result<Option<Vec<lsp_types::CodeLens>>> {
@@ -166,8 +166,8 @@ impl RequestHandler for CodeLensResolve {
 
 impl SyncRequestHandler for CodeLensResolve {
     fn run(
-        session: &mut Session,
-        notifier: Notifier,
+        _session: &mut Session,
+        _notifier: Notifier,
         _requester: &mut Requester,
         params: lsp_types::CodeLens,
     ) -> Result<lsp_types::CodeLens> {

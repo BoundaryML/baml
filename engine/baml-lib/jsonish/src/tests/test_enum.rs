@@ -1,5 +1,6 @@
 
 
+#[allow(dead_code)]
 const ENUM_FILE: &str = r#"
 // Enums
 enum Category {
@@ -8,6 +9,7 @@ TWO
 }
 "#;
 
+#[allow(dead_code)]
 const PASCAL_CASE_ENUM_FILE: &str = r#"
 // Enums
 enum PascalCaseCategory {
@@ -132,6 +134,7 @@ test_failing_deserializer!(
     TypeIR::r#enum("Category")
 );
 
+#[allow(dead_code)]
 const ENUM_FILE_WITH_DESCRIPTIONS: &str = r#"
 // Enums
 enum Category {

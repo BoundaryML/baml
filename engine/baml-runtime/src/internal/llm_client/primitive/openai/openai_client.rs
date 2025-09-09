@@ -1,7 +1,7 @@
 
 use anyhow::Result;
 use baml_types::{BamlMap, BamlMediaContent, BamlMediaType};
-use futures::StreamExt;
+// use futures::StreamExt; // Unused import
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use internal_llm_client::{openai::ResolvedOpenAI, AllowedRoleMetadata, FinishReasonFilter};
@@ -704,7 +704,7 @@ impl ToProviderMessage for OpenAIClient {
                             }),
                         );
                     }
-                    BamlMediaContent::File(media_file) => {
+                    BamlMediaContent::File(_media_file) => {
                         // For files, we need to resolve them to base64 first
                         anyhow::bail!(
                             "BAML internal error (openai): Pdf file should have been resolved to base64 before this stage."

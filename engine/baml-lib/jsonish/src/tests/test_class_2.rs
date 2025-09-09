@@ -1,5 +1,6 @@
 
 
+#[allow(dead_code)]
 const TEST_FILE: &str = r###"
 class ServerActionTask {
     type "server_action" @description(#"
@@ -526,6 +527,7 @@ Actions:
   ]
 );
 
+#[allow(dead_code)]
 const TEST_FILE_STREAMING_NOT_NULL_LIST: &str = r###"
 class SemanticContainer2 {    
     three_small_things SmallThing[] @description("Should have three items.")

@@ -43,6 +43,7 @@ impl<'ir> ScopedIr<'ir> {
         }
     }
 
+    #[allow(dead_code)]
     fn find_enum(
         &self,
         enum_name: &str,

@@ -51,8 +51,8 @@ impl WithScore for Flag {
             Flag::SingleToArray => 1,
             // Parsing errors are bad.
             Flag::ArrayItemParseError(x, _) => 1 + (*x as i32),
-            Flag::MapKeyParseError(x, _) => 1,
-            Flag::MapValueParseError(x, _) => 1,
+            Flag::MapKeyParseError(_x, _) => 1,
+            Flag::MapValueParseError(_x, _) => 1,
             // Harmless to drop additional matches
             Flag::FirstMatch(_, _) => 1,
             // No penalty for picking an option from a union

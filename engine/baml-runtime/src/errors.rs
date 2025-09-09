@@ -110,7 +110,7 @@ impl IntoBamlError for &anyhow::Error {
                     raw_output: Cow::Owned(raw_response.clone()),
                 },
                 ExposedError::ClientHttpError {
-                    client_name,
+                    client_name: _,
                     message,
                     status_code,
                 } => baml_types::tracing::events::BamlError::ClientHttp {

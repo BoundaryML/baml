@@ -13,7 +13,7 @@ use baml_types::{
 };
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_ast::ast::{
-    self, Attribute, FieldArity, SubType, ValExpId, WithAttributes, WithIdentifier, WithName,
+    self, Attribute, FieldArity, SubType, ValExpId, WithIdentifier, WithName,
     WithSpan,
 };
 use internal_baml_diagnostics::{DatamodelWarning, Diagnostics, Span};
@@ -89,7 +89,7 @@ impl Pass2Repr {
             }
             TypeGeneric::Class {
                 name,
-                mode,
+                mode: _,
                 dynamic,
                 meta,
             } => {
@@ -264,7 +264,7 @@ impl WithRepr<ExprFunction> for ExprFnWalker<'_> {
 
 impl WithRepr<Function> for ExprFnWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Result<Function> {
-        let body = convert_function_body(self.expr_fn().body.to_owned(), db)?;
+        let _body = convert_function_body(self.expr_fn().body.to_owned(), db)?;
         let args = self
             .expr_fn()
             .args
@@ -328,7 +328,7 @@ fn convert_function_body(
                         Arc::new(acc),
                         (stmt.span().clone(), None),
                     ),
-                    Err(e) => acc,
+                    Err(_e) => acc,
                 });
             expr
         })
@@ -483,7 +483,7 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     meta: (span.clone(), Some(TypeIR::class(class_name.name()))),
                 })
             }
-            ast::Expression::ExprBlock(block, span) => {
+            ast::Expression::ExprBlock(block, _span) => {
                 // We use "function_body" and "expr_block" interchangeably.
                 // This may need to be revisited?
                 let body = convert_function_body(block.clone(), db)?;
@@ -571,7 +571,7 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                 })
             }
             // Don't care.
-            ast::Expression::Paren(expr, span) => expr.repr(db),
+            ast::Expression::Paren(expr, _span) => expr.repr(db),
         }
     }
 }
@@ -1499,7 +1499,7 @@ impl Default for NodeAttributes {
 }
 
 fn to_ir_attributes(
-    db: &ParserDatabase,
+    _db: &ParserDatabase,
     maybe_ast_attributes: Option<&Attributes>,
 ) -> (IndexMap<String, UnresolvedValue<()>>, Vec<Constraint>) {
     let Some(attributes) = maybe_ast_attributes else {
@@ -1770,7 +1770,7 @@ impl WithRepr<TypeIR> for ast::FieldType {
                     }
                     Some(TypeWalker::TypeAlias(alias_walker)) => {
                         if db.is_recursive_type_alias(&alias_walker.id) {
-                            let resolved = alias_walker.resolved();
+                            let _resolved = alias_walker.resolved();
                             // TODO: use resolved in some way
                             TypeIR::RecursiveTypeAlias {
                                 name: alias_walker.name().to_string(),
@@ -2126,6 +2126,7 @@ type ImplementationId = String;
 
 #[derive(Debug)]
 pub struct Implementation {
+    #[allow(dead_code)]
     r#type: OracleType,
     pub name: ImplementationId,
     pub function_name: String,
@@ -2248,7 +2249,7 @@ impl ExprFunction {
                     self.inputs
                         .iter()
                         .enumerate()
-                        .fold(body, |body, (ind, (name, r#type))| {
+                        .fold(body, |body, (ind, (_name, r#type))| {
                             let target = VarIndex {
                                 de_bruijn: 0,
                                 tuple: ind as u32,
@@ -2276,7 +2277,7 @@ pub fn annotate_variable(
     expr: Expr<ExprMetadata>,
 ) -> Expr<ExprMetadata> {
     match &expr {
-        Expr::FreeVar(var_name, meta) => expr,
+        Expr::FreeVar(_var_name, _meta) => expr,
         Expr::Builtin(builtin, meta) => Expr::Builtin(builtin.clone(), meta.clone()),
         Expr::BoundVar(var_index, meta) => {
             if var_index == &target {
@@ -2506,6 +2507,7 @@ pub fn annotate_variable(
     }
 }
 
+#[allow(dead_code)]
 fn process_field(
     overrides: &IndexMap<(String, String), IndexMap<String, UnresolvedValue<()>>>, // Adjust the type according to your actual field type
     original_name: &str,
@@ -2516,7 +2518,7 @@ fn process_field(
     match overrides.get(&((*function_name).to_string(), (*impl_name).to_string())) {
         Some(overrides) => {
             if let Some(UnresolvedValue::String(alias, ..)) = overrides.get("alias") {
-                if let Some(UnresolvedValue::String(description, ..)) = overrides.get("description")
+                if let Some(UnresolvedValue::String(_description, ..)) = overrides.get("description")
                 {
                     // "alias" and "alias: description"
                     vec![
@@ -2638,7 +2640,7 @@ impl WithRepr<Client> for ClientWalker<'_> {
         }
     }
 
-    fn repr(&self, db: &ParserDatabase) -> Result<Client> {
+    fn repr(&self, _db: &ParserDatabase) -> Result<Client> {
         Ok(Client {
             name: self.name().to_string(),
             provider: self.properties().provider.0.clone(),
@@ -2676,7 +2678,7 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
         }
     }
 
-    fn repr(&self, db: &ParserDatabase) -> Result<RetryPolicy> {
+    fn repr(&self, _db: &ParserDatabase) -> Result<RetryPolicy> {
         Ok(RetryPolicy {
             name: RetryPolicyId(self.name().to_string()),
             max_retries: self.retry_policy().max_retries,
@@ -2939,11 +2941,11 @@ fn make_test_ir_and_diagnostics_from_dir(
 // Specialize generics.
 fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<ExprMetadata>>) {
     match expr {
-        Expr::FreeVar(name, _) => {}
-        Expr::BoundVar(name, _) => {}
+        Expr::FreeVar(_name, _) => {}
+        Expr::BoundVar(_name, _) => {}
         Expr::Builtin(_, _) => {}
         Expr::Atom(_) => {}
-        Expr::Let(name, expr, body, _) => {
+        Expr::Let(_name, expr, body, _) => {
             specialize_generics(expr, ctx);
             specialize_generics(body, ctx);
         }
@@ -2983,7 +2985,7 @@ fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<E
             func,
             type_args,
             args,
-            meta,
+            meta: _,
         } => {
             // If there's a type arg then we know it's a builtin function
             // because as of right now users can't define their own generic
@@ -3000,7 +3002,7 @@ fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<E
             }
             specialize_generics(args, ctx);
         }
-        Expr::If(cond, then, r#else, meta) => {
+        Expr::If(cond, then, r#else, _meta) => {
             specialize_generics(cond, ctx);
             specialize_generics(then, ctx);
             if let Some(r#else) = r#else {

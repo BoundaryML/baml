@@ -116,6 +116,7 @@ pub struct ModelFeatures {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct RetryLLMResponse {
     pub client: Option<String>,
     pub passed: Option<Box<LLMResponse>>,

@@ -1,5 +1,6 @@
 
 
+#[allow(dead_code)]
 const NUMBERS: &str = r#"
 class Foo {
   nums int[]
@@ -14,6 +15,7 @@ test_partial_deserializer_streaming!(
     {"nums": [1]}
 );
 
+#[allow(dead_code)]
 const NUMBERS_STATE: &str = r#"
 class Foo {
   nums int[] @stream.with_state
@@ -29,6 +31,7 @@ test_partial_deserializer_streaming!(
     {"nums": {"value": [1], "state": "Incomplete"}, "bar": {"value": null, "state": "Pending"}}
 );
 
+#[allow(dead_code)]
 const TOPLEVEL_DONE: &str = r#"
 class Foo {
   nums int[]
@@ -47,6 +50,7 @@ test_partial_deserializer_streaming_failure!(
     }
 );
 
+#[allow(dead_code)]
 const NESTED_DONE: &str = r#"
 class Foo {
   nums int[]
@@ -70,6 +74,7 @@ test_partial_deserializer_streaming!(
   {"foos": [ {"nums": [1, 2]}]}
 );
 
+#[allow(dead_code)]
 const NESTED_DONE_WITH_TOPLEVEL_DONE: &str = r#"
 class Foo {
   nums int[]
@@ -95,6 +100,7 @@ test_partial_deserializer_streaming!(
   {"message": "Hello", "foos": [ {"nums": [1, 2]}]}
 );
 
+#[allow(dead_code)]
 const NEEDED_FIELD: &str = r#"
 class Foo {
   my_int int
@@ -117,6 +123,7 @@ test_partial_deserializer_streaming!(
   {"foos": []}
 );
 
+#[allow(dead_code)]
 const DONE_FIELD: &str = r#"
 class Foo {
   foo string @stream.done
@@ -142,6 +149,7 @@ test_partial_deserializer_streaming!(
   {"foo": "", "bar": null}
 );
 
+#[allow(dead_code)]
 const MEMORY_TEST: &str = r##"
 class MemoryObject {
   id string
@@ -174,6 +182,7 @@ class TestMemoryOutput {
 }
 "##;
 
+#[allow(dead_code)]
 const MEMORY_PAYLOAD: &str = r#"
 {
   "items": [
@@ -366,6 +375,7 @@ test_partial_deserializer_streaming!(
     }
 );
 
+#[allow(dead_code)]
 const TODO_TOOLS_EXAMPLE: &str = r#"
 type Tool = MessageToUser | AddItem | AdjustItem | GetLastItemId
 
@@ -426,6 +436,7 @@ test_partial_deserializer_streaming_failure!(
 );
 
 // Test for @stream.not_null fields receiving null values during streaming
+#[allow(dead_code)]
 const STREAM_NOT_NULL_TEST: &str = r#"
 class ClassWithBlockDone {
     i_16_digits int
@@ -533,6 +544,7 @@ test_partial_deserializer_streaming!(
 );
 
 // Test for union types with @stream.not_null
+#[allow(dead_code)]
 const UNION_NOT_NULL_TEST: &str = r#"
 class Foo {
   y (string | null) @stream.not_null

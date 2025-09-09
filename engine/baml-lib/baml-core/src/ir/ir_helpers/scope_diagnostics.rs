@@ -1,6 +1,7 @@
 #[allow(dead_code)]
 type ScopeName = Vec<String>;
 
+#[allow(dead_code)]
 trait ScopeTrait {
     fn push(&mut self, name: String, scope_type: ScopeType);
 

@@ -90,7 +90,7 @@ impl From<JsonCollection> for Option<Value> {
                 Value::String(s, completion_state)
             }
             JsonCollection::TripleBacktickString { content, .. } => {
-                let Some((fenced_codeblock_info, codeblock_contents)) = content.0.split_once("\n")
+                let Some((_fenced_codeblock_info, codeblock_contents)) = content.0.split_once("\n")
                 else {
                     return Some(Value::String(content.0, content.1));
                 };

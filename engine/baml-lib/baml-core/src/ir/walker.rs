@@ -9,7 +9,7 @@ use internal_baml_parser_database::RetryPolicyStrategy;
 use internal_llm_client::ClientSpec;
 
 use crate::ir::{
-    repr::{self, FunctionConfig, TypeBuilderEntry, WithRepr},
+    repr::{self, FunctionConfig, TypeBuilderEntry},
     Class, Client, Enum, EnumValue, ExprFunctionNode, Field, FunctionNode, IRHelper,
     Impl, IntermediateRepr, RetryPolicy, TemplateString, TestCase, TypeAlias, TypeIR, Walker,
 };
@@ -199,7 +199,7 @@ impl<'a> Walker<'a, &'a Enum> {
 }
 
 impl<'a> Walker<'a, &'a EnumValue> {
-    pub fn skip(&self, ctx: &EvaluationContext<'_>) -> Result<bool> {
+    pub fn skip(&self, _ctx: &EvaluationContext<'_>) -> Result<bool> {
         Ok(self.item.attributes.skip())
     }
 

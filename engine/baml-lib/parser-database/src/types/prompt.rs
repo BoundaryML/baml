@@ -6,6 +6,7 @@ use super::PromptVariable;
 use crate::context::Context;
 
 /// Function returns the raw_string without any comments.
+#[allow(dead_code)]
 pub(super) fn validate_prompt(
     ctx: &mut Context<'_>,
     raw_string: &RawString,
@@ -30,6 +31,7 @@ pub(super) fn validate_prompt(
     }
 }
 
+#[allow(dead_code)]
 fn handle_comment(
     prev_white_space: &mut Option<String>,
     post_white_space: &mut Option<String>,
@@ -72,6 +74,7 @@ fn handle_comment(
     Some(ws.clone())
 }
 
+#[allow(dead_code)]
 fn process_prompt_ast(ctx: &mut Context<'_>, ast: PromptAst) -> (String, Vec<PromptVariable>) {
     let mut prev_white_space: Option<String> = None;
     let mut post_white_space: Option<String> = None;
@@ -136,6 +139,7 @@ fn process_prompt_ast(ctx: &mut Context<'_>, ast: PromptAst) -> (String, Vec<Pro
     (full_prompt_text, replacers)
 }
 
+#[allow(dead_code)]
 fn process_code_block(ctx: &mut Context<'_>, code_block: CodeBlock) -> Option<PromptVariable> {
     match code_block {
         CodeBlock::Chat(c) => Some(PromptVariable::Chat(c)),
@@ -154,6 +158,7 @@ fn process_code_block(ctx: &mut Context<'_>, code_block: CodeBlock) -> Option<Pr
     }
 }
 
+#[allow(dead_code)]
 fn process_print_enum(ctx: &mut Context<'_>, variable: &Variable) -> bool {
     if variable.text == "output" {
         ctx.push_error(DatamodelError::new_validation_error(
@@ -166,10 +171,12 @@ fn process_print_enum(ctx: &mut Context<'_>, variable: &Variable) -> bool {
     }
 }
 
+#[allow(dead_code)]
 fn process_print_type(_ctx: &mut Context<'_>, _variable: &Variable) -> bool {
     true
 }
 
+#[allow(dead_code)]
 fn process_input(ctx: &mut Context<'_>, variable: &Variable) -> bool {
     if variable.path[0] != "input" {
         ctx.push_error(DatamodelError::new_validation_error(

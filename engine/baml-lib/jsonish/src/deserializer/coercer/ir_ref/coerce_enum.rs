@@ -33,7 +33,7 @@ fn enum_match_candidates(enm: &Enum) -> Vec<(&str, Vec<String>)> {
 impl TypeCoercer for Enum {
     fn try_cast(
         &self,
-        ctx: &ParsingContext,
+        _ctx: &ParsingContext,
         target: &TypeIR,
         value: Option<&crate::jsonish::Value>,
     ) -> Option<BamlValueWithFlags> {

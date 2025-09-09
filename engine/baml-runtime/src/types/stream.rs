@@ -136,19 +136,19 @@ impl FunctionResultStream {
         let call_stack = call.new_call_id_stack.clone();
         #[cfg(not(target_arch = "wasm32"))]
         match self.tracer.finish_baml_call(call, ctx, &res) {
-            Ok(id) => {}
+            Ok(_id) => {}
             Err(e) => log::debug!("Error during logging: {e}"),
         }
         #[cfg(target_arch = "wasm32")]
         match self.tracer.finish_baml_call(call, ctx, &res).await {
-            Ok(id) => {}
+            Ok(_id) => {}
             Err(e) => log::debug!("Error during logging: {e}"),
         }
 
         let trace_event = TraceEvent::new_function_end(
             call_stack,
             match &res {
-                Ok(result) => Ok(baml_types::BamlValueWithMeta::<TypeNonStreaming>::Null(
+                Ok(_result) => Ok(baml_types::BamlValueWithMeta::<TypeNonStreaming>::Null(
                     TypeNonStreaming::null(),
                 )),
                 Err(e) => Err(e.to_baml_error()),

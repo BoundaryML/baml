@@ -5,7 +5,7 @@ use super::{
     description::visit_description_attribute,
 };
 use crate::{context::Context, types::Attributes};
-pub(super) fn visit(ctx: &mut Context<'_>, span: &Span, as_block: bool) -> Option<Attributes> {
+pub(super) fn visit(ctx: &mut Context<'_>, _span: &Span, as_block: bool) -> Option<Attributes> {
     let mut modified = false;
 
     let mut attributes = Attributes::default();

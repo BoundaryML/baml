@@ -149,7 +149,7 @@ fn relevant_data_models<'a>(
         match &output {
             TypeIR::Enum {
                 name,
-                dynamic,
+                dynamic: _,
                 meta,
             } => {
                 if checked_types.insert(output.to_string()) {
@@ -219,7 +219,7 @@ fn relevant_data_models<'a>(
             TypeIR::Class {
                 name,
                 mode,
-                dynamic,
+                dynamic: _,
                 meta: metadata,
             } => {
                 if checked_types.insert(output.to_string()) {

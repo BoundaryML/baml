@@ -288,6 +288,7 @@ impl RenderOptions {
     }
 
     // TODO: Might need a builder pattern for this as well.
+    #[allow(dead_code)]
     pub(crate) fn with_hoisted_class_prefix(prefix: &str) -> Self {
         Self {
             hoisted_class_prefix: RenderSetting::Always(prefix.to_owned()),
@@ -296,6 +297,7 @@ impl RenderOptions {
     }
 
     // TODO: Might need a builder pattern for this as well.
+    #[allow(dead_code)]
     pub(crate) fn hoist_classes(hoist_classes: HoistClasses) -> Self {
         Self {
             hoist_classes,

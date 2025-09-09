@@ -144,8 +144,8 @@ pub(super) fn pick_best(
 
             // De-value default values when comparing
             if let (
-                BamlValueWithFlags::Class(_, _, a_conds, a_props),
-                BamlValueWithFlags::Class(_, _, b_conds, b_props),
+                BamlValueWithFlags::Class(_, _, _a_conds, a_props),
+                BamlValueWithFlags::Class(_, _, _b_conds, b_props),
             ) = (a_val, b_val)
             {
                 // If matching on a union, and one of the choices is picking an object that only
@@ -181,7 +181,7 @@ pub(super) fn pick_best(
                     }
                 }
 
-                let a_is_default = a_props.iter().all(|(k, cond)| {
+                let a_is_default = a_props.iter().all(|(_k, cond)| {
                     cond.conditions().flags.iter().any(|f| {
                         matches!(
                             f,
@@ -189,7 +189,7 @@ pub(super) fn pick_best(
                         )
                     })
                 });
-                let b_is_default = b_props.iter().all(|(k, cond)| {
+                let b_is_default = b_props.iter().all(|(_k, cond)| {
                     cond.conditions().flags.iter().any(|f| {
                         matches!(
                             f,

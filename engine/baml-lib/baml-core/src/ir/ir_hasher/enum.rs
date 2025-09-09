@@ -87,7 +87,7 @@ impl super::ShallowSignature for Enum {
             .elem
             .values
             .iter()
-            .map(|(value, docstring)| NameForLLM {
+            .map(|(value, _docstring)| NameForLLM {
                 name: value.elem.0.as_str(),
                 alias: value.attributes.alias(),
                 description: value.attributes.description(),

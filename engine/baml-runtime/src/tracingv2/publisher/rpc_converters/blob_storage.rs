@@ -302,6 +302,7 @@ pub fn extract_blobs_from_baml_value<'a>(
 
 /// Helper for extracting blobs from string content (for LLMRequest and RawRequest)
 /// This does simple string replacement of base64 content with blob references (format: <baml_blob>{hash}</baml_blob>)
+#[allow(dead_code)]
 pub fn extract_blobs_from_string(
     content: &str,
     cache: &BlobRefCache,

@@ -19,6 +19,7 @@ mod traits;
 use notifications as notification;
 use requests as request;
 
+#[allow(unused_imports)]
 use self::traits::{
     BackgroundDocumentNotificationHandler, NotificationHandler, RequestHandler,
     SyncNotificationHandler,
@@ -73,7 +74,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
         }
         "getBAMLFunctions" => {
             // tracing::info!("getBAMLFunctions");
-            return Task::local(move |session, _notifier, requester, responder| {
+            return Task::local(move |session, _notifier, _requester, responder| {
                 let result: anyhow::Result<(serde_json::Value,)> = {
                     let mut all_functions = Vec::new();
                     let projects = session.baml_src_projects.lock();

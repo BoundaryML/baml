@@ -12,6 +12,7 @@ use crate::deserializer::{coercer::TypeCoercer, types::BamlValueWithFlags};
 pub(super) enum IrRef<'a> {
     Enum(&'a String),
     Class(&'a String, &'a baml_types::StreamingMode),
+    #[allow(dead_code)]
     RecursiveAlias(&'a String),
 }
 
@@ -25,15 +26,15 @@ impl<'a> TypeCoercer for IrRef<'a> {
         match self {
             IrRef::Enum(e) => match ctx.of.find_enum(e.as_str()) {
                 Ok(e) => e.try_cast(ctx, target, value),
-                Err(e) => None,
+                Err(_e) => None,
             },
             IrRef::Class(c, mode) => match ctx.of.find_class(mode, c.as_str()) {
                 Ok(c) => c.try_cast(ctx, target, value),
-                Err(e) => None,
+                Err(_e) => None,
             },
             IrRef::RecursiveAlias(a) => match ctx.of.find_recursive_alias_target(a.as_str()) {
                 Ok(a) => a.try_cast(ctx, target, value),
-                Err(e) => None,
+                Err(_e) => None,
             },
         }
     }

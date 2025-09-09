@@ -36,7 +36,7 @@ struct DuplicateNames {
 impl DuplicateNames {
     fn into_errors(self, ctx: &mut Context<'_>) {
         for category in [self.tops, self.generators] {
-            for (name, ids) in category {
+            for (_name, ids) in category {
                 let ast_tops = ids.iter().map(|id| &ctx.ast[*id]).collect::<Vec<_>>();
                 let others = ast_tops
                     .iter()
@@ -57,7 +57,7 @@ impl DuplicateNames {
                 }
             }
         }
-        for (name, ids) in self.dynamic_types {
+        for (_name, ids) in self.dynamic_types {
             let ast_tops = ids.iter().map(|id| &ctx.ast[*id]).collect::<Vec<_>>();
             let others = ast_tops
                 .iter()
@@ -229,7 +229,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                 Some(either::Left(&mut names.generators))
             }
 
-            (ast::TopId::TestCase(testcase_id), ast::Top::TestCase(testcase)) => {
+            (ast::TopId::TestCase(_testcase_id), ast::Top::TestCase(testcase)) => {
                 validate_test(testcase, ctx.diagnostics);
                 check_for_duplicate_properties(top, testcase.fields(), &mut tmp_names, ctx);
 

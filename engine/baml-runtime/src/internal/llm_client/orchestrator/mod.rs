@@ -209,7 +209,7 @@ impl WithSingleCallable for OrchestratorNode {
                             content: m.parts.iter().map(|p| p.into()).collect(),
                         })
                         .collect(),
-                    RenderedPrompt::Completion(completion) => {
+                    RenderedPrompt::Completion(_completion) => {
                         todo!("not implemented")
                     }
                 },
@@ -271,7 +271,7 @@ impl WithStreamable for OrchestratorNode {
                             content: m.parts.iter().map(|p| p.into()).collect(),
                         })
                         .collect(),
-                    RenderedPrompt::Completion(completion) => {
+                    RenderedPrompt::Completion(_completion) => {
                         todo!("not implemented")
                     }
                 },

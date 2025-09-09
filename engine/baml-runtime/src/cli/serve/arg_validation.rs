@@ -27,7 +27,7 @@ impl BamlServeValidate for BamlValue {
             Ok(())
           }
           BamlValue::Map(m) => {
-            for (k, v) in m {
+            for (_k, v) in m {
               v.validate_for_baml_serve()?;
             }
             Ok(())

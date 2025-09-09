@@ -7,7 +7,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::BamlFunctionCallError<'a>>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl IRRpcState + ?Sized),
+        _lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::BamlFunctionCallError<'a> {
         match self {
             baml_types::tracing::events::BamlError::External { message } => {

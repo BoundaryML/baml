@@ -18,8 +18,8 @@ use baml_rpc::{
     NamedType, S3UploadMetadata, TraceEventBatch, TypeDefinition, TypeDefinitionSource,
     TypeReference,
 };
-use baml_types::HasType;
-use futures::StreamExt;
+// use baml_types::HasType; // Unused import
+// use futures::StreamExt; // Unused import
 use http::{HeaderMap, HeaderName, HeaderValue};
 use once_cell::sync::OnceCell;
 use serde::Serialize;
@@ -264,7 +264,7 @@ pub async fn shutdown_publisher() -> anyhow::Result<()> {
     let Some(channel) = get_publish_channel(true) else {
         return Ok(());
     };
-    let Some(blob_channel) = BLOB_UPLOADER_TASK.get() else {
+    let Some(_blob_channel) = BLOB_UPLOADER_TASK.get() else {
         return Ok(());
     };
     let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
@@ -411,7 +411,7 @@ impl TracePublisher {
         let functions: Vec<FunctionDefinition> = ast
             .functions
             .iter()
-            .map(|(name, signature)| {
+            .map(|(_name, signature)| {
                 let inputs = signature
                     .inputs
                     .iter()
@@ -853,7 +853,7 @@ impl BlobUploader {
             .send()
             .await;
 
-        let blob_hashes: Vec<String> = blobs_to_upload
+        let _blob_hashes: Vec<String> = blobs_to_upload
             .iter()
             .map(|b| b.metadata.blob_hash.clone())
             .collect();

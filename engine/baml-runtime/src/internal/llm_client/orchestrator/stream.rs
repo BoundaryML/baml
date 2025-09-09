@@ -172,7 +172,7 @@ where
                 };
 
                 // parsed_response.map(|r| r.and_then(|v| parsed_value_to_response(v)));
-                let node_name = node.scope.name();
+                let _node_name = node.scope.name();
                 let sleep_duration = node.error_sleep_duration().cloned();
 
                 {

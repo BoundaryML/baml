@@ -77,7 +77,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::EvaluationContext>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl IRRpcState + ?Sized),
+        _lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::EvaluationContext {
         baml_rpc::runtime_api::EvaluationContext {
             tags: self
@@ -181,7 +181,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::LLMUsage>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl IRRpcState + ?Sized),
+        _lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::LLMUsage {
         baml_rpc::runtime_api::LLMUsage {
             input_tokens: self.input_tokens,
@@ -196,7 +196,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::HTTPBody<'a>>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl IRRpcState + ?Sized),
+        _lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::HTTPBody<'a> {
         baml_rpc::runtime_api::HTTPBody {
             raw: Cow::Borrowed(self.raw()),
@@ -252,7 +252,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl IRRpcState + ?Sized),
+        _lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::IntermediateData<'a> {
         baml_rpc::runtime_api::IntermediateData::RawLLMResponseStream {
             http_request_id: self.request_id.to_string(),

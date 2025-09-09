@@ -302,7 +302,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
 
         let maybe_params = maybe_test_and_params.or(maybe_expr_test_and_params);
 
-        let eval_ctx = ctx.eval_ctx(strict);
+        let _eval_ctx = ctx.eval_ctx(strict);
 
         match maybe_params {
             Ok((params, function_params, span)) => {
@@ -345,7 +345,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         &self,
         function_name: &str,
         test_name: &str,
-        ctx: &RuntimeContext,
+        _ctx: &RuntimeContext,
     ) -> Result<Vec<Constraint>> {
         let func = self.get_function(function_name)?;
         let walker = self.ir().find_test(&func, test_name)?;

@@ -17,7 +17,7 @@ pub(super) fn try_cast_map(
     map_target: &TypeIR,
     value: Option<&jsonish::Value>,
 ) -> Option<BamlValueWithFlags> {
-    let TypeIR::Map(key_type, value_type, _) = map_target else {
+    let TypeIR::Map(_key_type, value_type, _) = map_target else {
         unreachable!("try_cast_map");
     };
 

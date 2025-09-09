@@ -71,6 +71,7 @@ impl<'db> Context<'db> {
         self.diagnostics.push_error(error)
     }
 
+    #[allow(dead_code)]
     pub(super) fn push_warning(&mut self, warning: DatamodelWarning) {
         self.diagnostics.push_warning(warning)
     }

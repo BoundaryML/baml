@@ -101,6 +101,7 @@ use crate::{
 #[cfg(not(target_arch = "wasm32"))]
 static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
 
+#[allow(dead_code)]
 static INIT: std::sync::Once = std::sync::Once::new();
 
 // fn setup_crypto_provider() {
@@ -443,7 +444,7 @@ impl BamlRuntime {
         collector: Option<Arc<Collector>>,
         env_vars: HashMap<String, String>,
         cancel_tripwire: Arc<TripWire>,
-        on_tick: Option<G>,
+        _on_tick: Option<G>,
     ) -> (Result<TestResponse>, FunctionCallId)
     where
         F: Fn(FunctionResult),
@@ -491,9 +492,9 @@ impl BamlRuntime {
 
             // If the expression evaluates to an LLM call, shadow the old function_name and params (of
             // the test function) with the new function_name and params (of the LLM call).
-            let (function_name, params): (String, BamlMap<String, BamlValue>) =
+            let (function_name, _params): (String, BamlMap<String, BamlValue>) =
                 match &expr_eval_result {
-                    ExprEvalResult::Value { value, field_type } => {
+                    ExprEvalResult::Value { value: _value, field_type: _field_type } => {
                         (function_name.to_string(), params.clone())
                     }
                     ExprEvalResult::LLMCall { name, args } => (name.to_string(), args.clone()),
@@ -516,7 +517,7 @@ impl BamlRuntime {
 
             let (function_name, params) = match expr_eval_result {
                 ExprEvalResult::Value { value, field_type } => {
-                    let fake_syntax_span = Span::fake();
+                    let _fake_syntax_span = Span::fake();
                     return Ok(TestResponse {
                         // TODO: Factor out fake response data.
                         function_response: FunctionResult::new(
@@ -632,7 +633,7 @@ impl BamlRuntime {
                 .get_or_create_tracer(&env_vars)
                 .finish_call(call, ctx, None)
             {
-                Ok(id) => {}
+                Ok(_id) => {}
                 Err(e) => baml_log::error!("Error during logging: {e}"),
             }
             #[cfg(target_arch = "wasm32")]
@@ -847,7 +848,7 @@ impl BamlRuntime {
                         };
                         let param_baml_values = params
                             .iter()
-                            .map(|(k, v)| {
+                            .map(|(_k, v)| {
                                 let arg_type = infer_type(v);
                                 let baml_value_with_meta: BamlValueWithMeta<ExprMetadata> =
                                     match arg_type {
@@ -942,7 +943,7 @@ impl BamlRuntime {
             .get_or_create_tracer(&env_vars)
             .finish_baml_call(call, ctx, &response)
         {
-            Ok(id) => {}
+            Ok(_id) => {}
             Err(e) => baml_log::error!("Error during logging: {}", e),
         }
         #[cfg(target_arch = "wasm32")]
@@ -968,7 +969,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
-        expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
+        _expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
         cancel_tripwire: Arc<TripWire>,
     ) -> Result<FunctionResultStream> {
         baml_log::set_from_env(&env_vars).unwrap();
@@ -1443,7 +1444,7 @@ async fn expr_eval_result(
 ) -> Result<ExprEvalResult> {
     let fake_syntax_span = Span::fake();
     let ir = runtime.inner.ir();
-    let is_expr_fn = ir.find_expr_fn(function_name).is_ok();
+    let _is_expr_fn = ir.find_expr_fn(function_name).is_ok();
     let maybe_expr_f = ir.find_expr_fn(function_name);
     match maybe_expr_f {
         Ok(expr_fn) => {
@@ -1451,7 +1452,7 @@ async fn expr_eval_result(
             let collectors = collector.as_ref().map(|c| vec![c.clone()]);
             let call = tracer.start_call(function_name, mgr, params, true, false, collectors);
 
-            let ctx = mgr.create_ctx(tb, cb, env_vars.clone(), call.new_call_id_stack.clone())?;
+            let _ctx = mgr.create_ctx(tb, cb, env_vars.clone(), call.new_call_id_stack.clone())?;
             let env = EvalEnv {
                 context: initial_context(ir),
                 runtime,
@@ -1462,7 +1463,7 @@ async fn expr_eval_result(
 
             let param_baml_values = params
                 .iter()
-                .map(|(k, v)| {
+                .map(|(_k, v)| {
                     let arg_type = infer_type(v);
                     let baml_value_with_meta: BamlValueWithMeta<ExprMetadata> = match arg_type {
                         None => Ok::<_, anyhow::Error>(BamlValueWithMeta::with_const_meta(
@@ -1498,7 +1499,7 @@ async fn expr_eval_result(
             let res = eval_expr::eval_to_value_or_llm_call(&env, &fn_call_expr).await?;
             Ok(res)
         }
-        Err(e) => Ok(ExprEvalResult::LLMCall {
+        Err(_e) => Ok(ExprEvalResult::LLMCall {
             name: function_name.to_string(),
             args: params.clone(),
         }),

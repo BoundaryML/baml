@@ -34,7 +34,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                 level,
                 expression,
             },
-            constraint_span,
+            _constraint_span,
             expr_span,
         ) in constraints.iter()
         {

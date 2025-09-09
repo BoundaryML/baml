@@ -1,4 +1,5 @@
 
+#[allow(dead_code)]
 const CLASS_FOO_INT_STRING: &str = r#"
 class Foo {
   age int
@@ -40,6 +41,7 @@ test_failing_deserializer!(
     TypeIR::class("Foo")
 );
 
+#[allow(dead_code)]
 const UNION_WITH_CHECKS: &str = r#"
 class Thing1 {
   bar int @check(bar_small, {{ this < 10 }})
@@ -78,6 +80,7 @@ test_failing_deserializer!(
     TypeIR::class("Either")
 );
 
+#[allow(dead_code)]
 const MAP_WITH_CHECKS: &str = r#"
 class Foo {
   foo map<string,int> @check(hello_is_10, {{ this["hello"] == 10 }})
@@ -100,6 +103,7 @@ test_deserializer_with_expected_score!(
     2
 );
 
+#[allow(dead_code)]
 const NESTED_CLASS_CONSTRAINTS: &str = r#"
 class Outer {
   inner Inner
@@ -118,6 +122,7 @@ test_deserializer_with_expected_score!(
     1
 );
 
+#[allow(dead_code)]
 const BLOCK_LEVEL: &str = r#"
 class Foo {
   foo int
@@ -154,6 +159,7 @@ test_failing_deserializer!(
     TypeIR::r#enum("MyEnum")
 );
 
+#[allow(dead_code)]
 const MULTIPLE_BLOCK_LEVEL_CONSTRAINTS: &str = r#"
 class Foo {
   foo int
@@ -169,6 +175,7 @@ test_failing_deserializer!(
     TypeIR::class("Foo")
 );
 
+#[allow(dead_code)]
 const ENUM_WITH_CONSTRAINTS: &str = r#"
 enum Color {
   RED
@@ -177,6 +184,7 @@ enum Color {
 }
 "#;
 
+#[allow(dead_code)]
 const CLASS_WITH_CONSTRAINTS: &str = r#"
 class Person {
   name string

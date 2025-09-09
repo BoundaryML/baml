@@ -1,6 +1,7 @@
 
 
 //
+#[allow(dead_code)]
 const FOO_FILE: &str = r#"
 class Foo {
   hi string[]
@@ -80,6 +81,7 @@ test_deserializer!(
     {"foo": "Here is how you can build the API call:\n```json\n{\n  \"foo\": {\n    \"world\": [\n      \"bar\"\n    ]\n  }\n}\n```"}
 );
 
+#[allow(dead_code)]
 const OPTIONAL_FOO: &str = r#"
 class Foo {
   foo string?
@@ -102,6 +104,7 @@ test_deserializer!(
     { "foo": "" }
 );
 
+#[allow(dead_code)]
 const MULTI_FIELDED_FOO: &str = r#"
 class Foo {
   one string
@@ -149,6 +152,7 @@ test_deserializer!(
     { "one": "hi", "two": "hello" }
 );
 
+#[allow(dead_code)]
 const MULTI_FIELDED_FOO_WITH_LIST: &str = r#"
 class Foo {
   a int
@@ -165,6 +169,7 @@ test_deserializer!(
     { "a": 1, "b": "hi", "c": ["a", "b"] }
 );
 
+#[allow(dead_code)]
 const NEST_CLASS: &str = r#"
 class Foo {
   a string
@@ -227,6 +232,7 @@ test_deserializer!(
     { "foo": { "a": "hi" } }
 );
 
+#[allow(dead_code)]
 const NEST_CLASS_WITH_LIST: &str = r#"
 class Resume {
     name string
@@ -319,6 +325,7 @@ test_partial_deserializer!(
     }
 );
 
+#[allow(dead_code)]
 const CLASS_WITH_ALIASES: &str = r#"
 class TestClassAlias {
     key string @alias("key-dash")
@@ -349,6 +356,7 @@ test_deserializer!(
     }
 );
 
+#[allow(dead_code)]
 const CLASS_SIMPLE: &str = r#"
 class SimpleTest {
     answer Answer
@@ -371,6 +379,7 @@ test_deserializer!(
     }
 );
 
+#[allow(dead_code)]
 const CLASS_WITH_NESTED_CLASS_LIST: &str = r#"
 class Resume {
     name string
@@ -460,6 +469,7 @@ test_deserializer!(
         ]
 );
 
+#[allow(dead_code)]
 const FUNCTION_FILE: &str = r#"
 class Function {
     selected (Function1 | Function2 | Function3)
@@ -631,6 +641,7 @@ test_deserializer!(
     { "foo": true }
 );
 
+#[allow(dead_code)]
 const NESTED_CLASSES: &str = r##"
 class Nested {
   prop3 string | null @description(#"
@@ -1094,6 +1105,7 @@ Here's the redesigned code with these changes:
   }
 );
 
+#[allow(dead_code)]
 const OBJECT_STREAM_TEST: &str = r#"
 class Foo {
   a int
@@ -1442,6 +1454,7 @@ test_deserializer!(
   }
 );
 
+#[allow(dead_code)]
 const OPTIONAL_LIST_AND_MAP: &str = r#"
 class OptionalListAndMap {
   p string[]?
@@ -1466,6 +1479,7 @@ test_partial_deserializer_streaming!(
   {"p": ["test"], "q": { "test": "ok" }}
 );
 
+#[allow(dead_code)]
 const INTEG_TEST_FAILURE_STR: &str = r#"
 [
   {
@@ -1475,6 +1489,7 @@ const INTEG_TEST_FAILURE_STR: &str = r#"
 ]
 "#;
 
+#[allow(dead_code)]
 const INTEG_TEST_FAILURE_SCHEMA: &str = r#"
 class TestOutputClass {
   prop1 string @description("A long string with about 200 words")

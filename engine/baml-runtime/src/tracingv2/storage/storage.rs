@@ -195,7 +195,7 @@ fn build_function_log(
                     combined_metadata.insert(k.clone(), v.clone());
                 }
             }
-            TraceData::FunctionEnd(end) => {
+            TraceData::FunctionEnd(_end) => {
                 // function_end = Some(end);
                 function_end_time = Some(time_ms);
             }
@@ -439,6 +439,7 @@ pub struct FunctionLog {
     id: FunctionCallId,
     /// We store an optional Arc<Mutex<FunctionLogInner>> so that we only load it lazily.
     inner: Option<Arc<Mutex<FunctionLogInner>>>,
+    #[allow(dead_code)]
     instance_id: String,
 }
 
@@ -577,13 +578,13 @@ impl LLMCallKind {
     pub fn as_request(&self) -> Option<&LLMCall> {
         match self {
             LLMCallKind::Basic(c) => Some(c),
-            LLMCallKind::Stream(c) => None,
+            LLMCallKind::Stream(_c) => None,
         }
     }
 
     pub fn as_stream(&self) -> Option<&LLMStreamCall> {
         match self {
-            LLMCallKind::Basic(c) => None,
+            LLMCallKind::Basic(_c) => None,
             LLMCallKind::Stream(c) => Some(c),
         }
     }

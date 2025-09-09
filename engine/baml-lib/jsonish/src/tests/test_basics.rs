@@ -949,6 +949,7 @@ repleta de monstros e perigos!"""
     }]
 );
 
+#[allow(dead_code)]
 const SIDD_BAML: &str = r#"
 class Headings {
     headings Heading[]

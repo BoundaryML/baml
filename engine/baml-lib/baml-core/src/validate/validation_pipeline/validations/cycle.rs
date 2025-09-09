@@ -92,7 +92,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
 
             let valid_clients = ctx.db.valid_client_names();
 
-            for (client, span) in options.strategy() {
+            for (client, _span) in options.strategy() {
                 if let either::Either::Right(internal_llm_client::ClientSpec::Named(s)) = client {
                     if valid_clients.contains(s) {
                         dependencies.insert(ctx.db.find_client(s).unwrap().id);

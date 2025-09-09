@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use baml_types::tracing::events::{HTTPResponseStream, SSEEvent, TraceEvent};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
@@ -45,7 +45,7 @@ pub async fn make_stream_request(
     )
     .await?
     {
-        (EitherResponse::Raw(resp), sys, inst) => Ok(resp),
+        (EitherResponse::Raw(resp), _sys, _inst) => Ok(resp),
         (EitherResponse::Consumed(_), _, _) => {
             unreachable!("We never consume the body in streaming mode unless an error is returned.")
         }
@@ -181,7 +181,7 @@ pub async fn make_stream_request(
                     } else {
                         match accumulated {
                             Ok(v) => std::future::ready(Some(LLMResponse::Success(v.clone()))),
-                            Err(e) => std::future::ready(None),
+                            Err(_e) => std::future::ready(None),
                         }
                     }
                 },

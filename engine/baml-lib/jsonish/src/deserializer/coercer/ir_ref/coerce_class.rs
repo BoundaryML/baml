@@ -65,6 +65,7 @@ impl TypeCoercer for Class {
         #[derive(Debug)]
         enum Triple {
             Pending,
+            #[allow(dead_code)]
             NotPresent,
             Present(Box<BamlValueWithFlags>),
         }
@@ -82,7 +83,7 @@ impl TypeCoercer for Class {
 
         let flags = DeserializerConditions::new();
         for (k, v) in obj.iter() {
-            if let Some((_, field_type, streaming_needed, val)) = fill_result.get_mut(k.as_str()) {
+            if let Some((_, field_type, _streaming_needed, val)) = fill_result.get_mut(k.as_str()) {
                 if matches!(val, Triple::Present(_)) {
                     continue;
                 }
@@ -98,7 +99,7 @@ impl TypeCoercer for Class {
         }
 
         let mut result = BamlMap::new();
-        for (_, (name, field_type, streaming_needed, val)) in fill_result.into_iter() {
+        for (_, (name, field_type, _streaming_needed, val)) in fill_result.into_iter() {
             if let Triple::Present(ref val_ref) = val {
                 // Check if field is required (non-optional) and is incomplete in streaming mode
                 if !field_type.is_optional()
@@ -257,7 +258,7 @@ impl TypeCoercer for Class {
                     });
                 }
             }
-            Some(crate::jsonish::Value::Array(items, completion)) => {
+            Some(crate::jsonish::Value::Array(items, _completion)) => {
                 if self.fields.len() == 1 {
                     let field = &self.fields[0];
                     let scope = ctx.enter_scope(&format!("<implied:{}>", field.0.real_name()));
@@ -385,7 +386,7 @@ impl TypeCoercer for Class {
                 .iter()
                 .filter_map(|(k, v)| match v {
                     Some(Ok(_)) => None,
-                    Some(Err(e)) => None,
+                    Some(Err(_e)) => None,
                     None => Some(k.clone()),
                 })
                 .collect::<Vec<_>>();
@@ -400,7 +401,7 @@ impl TypeCoercer for Class {
                 }
             } else {
                 // TODO: Figure out how to propagate these errors as flags.
-                let merged_errors = required_values
+                let _merged_errors = required_values
                     .iter()
                     .filter_map(|(_k, v)| v.clone())
                     .filter_map(|v| match v {

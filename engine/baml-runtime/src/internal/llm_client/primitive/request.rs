@@ -23,6 +23,7 @@ use crate::{
 pub struct LoggedHttpResponse {
     pub status: StatusCode,
     pub headers: HeaderMap,
+    #[allow(dead_code)]
     pub url: String,
     pub body: Bytes,
 }
@@ -42,6 +43,7 @@ impl LoggedHttpResponse {
         })
     }
 
+    #[allow(dead_code)]
     pub fn into_http_response(self) -> HttpResponse<Bytes> {
         let mut builder = http::response::Builder::new().status(self.status);
         for (key, value) in self.headers.iter() {
@@ -77,8 +79,10 @@ pub(crate) fn to_prompt(
 }
 
 pub enum JsonBodyInput<'a> {
+    #[allow(dead_code)]
     ReqwestBody(Option<&'a reqwest::Body>),
     Bytes(&'a [u8]),
+    #[allow(dead_code)]
     String(String),
 }
 

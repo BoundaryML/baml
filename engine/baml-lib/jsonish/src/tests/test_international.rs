@@ -4,6 +4,7 @@
 // ENUM TESTS WITH ACCENTED ALIASES
 // =============================================================================
 
+#[allow(dead_code)]
 const CUISINE_ENUM_WITH_ACCENTED_ALIASES: &str = r#"
 enum CuisineType {
   FRENCH @alias("française")
@@ -96,6 +97,7 @@ test_deserializer!(
     ["FRENCH", "CHINESE", "ARABIC"]
 );
 
+#[allow(dead_code)]
 const DOCUMENT_ENUM_WITH_FRENCH_ALIASES: &str = r#"
 enum DocumentType {
   INVOICE @alias("facture")
@@ -137,6 +139,7 @@ test_deserializer!(
     "INVOICE"
 );
 
+#[allow(dead_code)]
 const STATUS_ENUM_WITH_ACCENTED_ALIASES: &str = r#"
 enum Status {
   ACTIVE @alias("actif")
@@ -171,6 +174,7 @@ test_deserializer!(
     "CANCELLED"
 );
 
+#[allow(dead_code)]
 const PRIORITY_ENUM_WITH_MULTILINGUAL_ALIASES: &str = r#"
 enum Priority {
   HIGH @alias("élevé")
@@ -390,6 +394,7 @@ test_deserializer!(
 // CLASS TESTS WITH ACCENTED ALIASES
 // =============================================================================
 
+#[allow(dead_code)]
 const RESTAURANT_CLASS_WITH_FRENCH_ALIASES: &str = r#"
 class Restaurant {
   name string @alias("nom")
@@ -432,6 +437,7 @@ test_failing_deserializer!(
     TypeIR::class("Restaurant")
 );
 
+#[allow(dead_code)]
 const INTERNATIONAL_CONTACT_WITH_ALIASES: &str = r#"
 class InternationalContact {
   first_name string @alias("prénom")
@@ -481,6 +487,7 @@ test_deserializer!(
   }
 );
 
+#[allow(dead_code)]
 const PERSON_WITH_FRENCH_NESTED_ALIASES: &str = r#"
 class Address {
   number int @alias("numéro")
@@ -515,6 +522,7 @@ test_deserializer!(
   }
 );
 
+#[allow(dead_code)]
 const CLASS_WITH_ACCENTED_ALIASES: &str = r#"
 class ProductInfo {
   name string @alias("nom")
@@ -566,6 +574,7 @@ test_deserializer!(
 // UNACCENTED INPUT MATCHING ACCENTED ALIASES
 // =============================================================================
 
+#[allow(dead_code)]
 const SPANISH_ENUM_WITH_ACCENTED_ALIASES: &str = r#"
 enum SpanishTitle {
   MISTER @alias("señor")
@@ -607,6 +616,7 @@ test_deserializer!(
     "MISTER"
 );
 
+#[allow(dead_code)]
 const FRENCH_ENUM_WITH_ACCENTED_ALIASES: &str = r#"
 enum FrenchWords {
   COFFEE @alias("café")
@@ -665,6 +675,7 @@ test_deserializer!(
     ["COFFEE", "NAIVE", "RESUME"]
 );
 
+#[allow(dead_code)]
 const GERMAN_ENUM_WITH_ACCENTED_ALIASES: &str = r#"
 enum GermanWords {
   OVER @alias("über")
@@ -708,6 +719,7 @@ test_deserializer!(
 
 // CLASS TESTS WITH UNACCENTED INPUT MATCHING ACCENTED ALIASES
 
+#[allow(dead_code)]
 const SPANISH_CLASS_WITH_ACCENTED_ALIASES: &str = r#"
 class SpanishForm {
   title string @alias("señor")
@@ -743,6 +755,7 @@ test_deserializer!(
   }
 );
 
+#[allow(dead_code)]
 const FRENCH_CLASS_WITH_ACCENTED_ALIASES: &str = r#"
 class FrenchProfile {
   first_name string @alias("prénom")
@@ -765,6 +778,7 @@ test_deserializer!(
   }
 );
 
+#[allow(dead_code)]
 const PORTUGUESE_CLASS_WITH_ACCENTED_ALIASES: &str = r#"
 class PortugueseData {
   location string @alias("localização")
@@ -829,6 +843,7 @@ test_deserializer!(
 // CASE-INSENSITIVE UNACCENTED MATCHING TESTS
 // =============================================================================
 
+#[allow(dead_code)]
 const MIXED_CASE_SPANISH_ENUM: &str = r#"
 enum SpanishGreeting {
   HELLO @alias("Hola")
@@ -870,6 +885,7 @@ test_deserializer!(
     "PLEASE"
 );
 
+#[allow(dead_code)]
 const MIXED_CASE_FRENCH_ENUM: &str = r#"
 enum FrenchFood {
   COFFEE @alias("Café")
@@ -912,6 +928,7 @@ test_deserializer!(
 );
 
 // Test case insensitive unaccented matching in class fields
+#[allow(dead_code)]
 const CASE_MIXED_GERMAN_CLASS: &str = r#"
 class GermanAddress {
   street string @alias("Straße")
@@ -973,6 +990,7 @@ test_deserializer!(
 );
 
 // Test combinations of case variations and accents
+#[allow(dead_code)]
 const COMPLEX_ACCENT_ENUM: &str = r#"
 enum ComplexAccents {
   WORD1 @alias("Señorita")
@@ -1032,6 +1050,7 @@ test_deserializer!(
 );
 
 // Test case insensitive unaccented with punctuation
+#[allow(dead_code)]
 const PUNCTUATION_ACCENT_ENUM: &str = r#"
 enum PunctuationAccents {
   TEST1 @alias("señor-josé")

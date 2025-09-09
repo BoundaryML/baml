@@ -65,7 +65,7 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
             (ast::TopId::TypeAlias(idx), ast::Top::TypeAlias(assignment)) => {
                 visit_type_alias(idx, assignment, ctx);
             }
-            (_, ast::Top::TypeAlias(assignment)) => unreachable!("Type alias misconfigured"),
+            (_, ast::Top::TypeAlias(_assignment)) => unreachable!("Type alias misconfigured"),
 
             (ast::TopId::TemplateString(idx), ast::Top::TemplateString(template_string)) => {
                 visit_template_string(idx, template_string, ctx)
@@ -167,6 +167,7 @@ impl PromptVariable {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct StringValue {
     pub value: String,
     pub span: Span,
@@ -281,7 +282,9 @@ pub struct FunctionType {
 #[derive(Debug, Clone)]
 pub struct TemplateStringProperties {
     // Not all template strings have names (e.g. function prompt)
+    #[allow(dead_code)]
     pub name: Option<String>,
+    #[allow(dead_code)]
     pub type_dependencies: HashSet<String>,
     /// This is dedented and trimmed.
     pub template: String,
@@ -469,7 +472,7 @@ fn visit_class<'db>(
 pub fn resolve_type_alias(field_type: &FieldType, ctx: &Context<'_>) -> Result<FieldType, String> {
     Ok(match field_type {
         // For symbols we need to check if we're dealing with aliases.
-        FieldType::Symbol(arity, ident, attrs) => {
+        FieldType::Symbol(arity, ident, _attrs) => {
             let Some(string_id) = ctx.interner.lookup(ident.name()) else {
                 return Err(format!(
                     "Attempting to resolve alias `{ident}` that does not exist in the interner"
@@ -728,7 +731,7 @@ fn visit_client<'db>(idx: ValExpId, client: &'db ast::ValueExprBlock, ctx: &mut 
                     Some(e) => match e.as_static_str() {
                         Ok(s) => match s.parse::<ClientProvider>() {
                             Ok(p) => provider = Some((p, e.meta().clone())),
-                            Err(err) => {
+                            Err(_err) => {
                                 ctx.push_error(DatamodelError::not_found_error(
                                     "client provider",
                                     s,

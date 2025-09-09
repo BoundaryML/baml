@@ -262,7 +262,7 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
                 ));
             }
 
-            let field_names = cc
+            let _field_names = cc
                 .fields
                 .iter()
                 .filter_map(|field| match field {

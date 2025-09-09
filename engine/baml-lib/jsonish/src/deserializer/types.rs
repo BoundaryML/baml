@@ -152,21 +152,21 @@ impl BamlValueWithFlags {
             BamlValueWithFlags::Int(f) => f.score(),
             BamlValueWithFlags::Float(f) => f.score(),
             BamlValueWithFlags::Bool(f) => f.score(),
-            BamlValueWithFlags::List(f, target, items) => {
+            BamlValueWithFlags::List(f, _target, items) => {
                 f.score() + items.iter().map(|i| i.score()).sum::<i32>()
             }
-            BamlValueWithFlags::Map(f, target, kv) => {
+            BamlValueWithFlags::Map(f, _target, kv) => {
                 f.score()
                     + kv.iter()
                         .map(|(_, (f, v))| f.score() + v.score())
                         .sum::<i32>()
             }
-            BamlValueWithFlags::Enum(_, target, f) => f.score(),
-            BamlValueWithFlags::Class(_, f, target, items) => {
+            BamlValueWithFlags::Enum(_, _target, f) => f.score(),
+            BamlValueWithFlags::Class(_, f, _target, items) => {
                 f.score() + items.iter().map(|(_, v)| v.score()).sum::<i32>()
             }
-            BamlValueWithFlags::Null(target, f) => f.score(),
-            BamlValueWithFlags::Media(target, f) => f.score(),
+            BamlValueWithFlags::Null(_target, f) => f.score(),
+            BamlValueWithFlags::Media(_target, f) => f.score(),
         }
     }
 
@@ -194,11 +194,11 @@ impl From<BamlValueWithFlags> for BamlValueWithMeta<TypeIR> {
             BamlValueWithFlags::Int(v) => BamlValueWithMeta::Int(v.value, field_type),
             BamlValueWithFlags::Float(v) => BamlValueWithMeta::Float(v.value, field_type),
             BamlValueWithFlags::Bool(v) => BamlValueWithMeta::Bool(v.value, field_type),
-            BamlValueWithFlags::List(conditions, target, items) => BamlValueWithMeta::List(
+            BamlValueWithFlags::List(_conditions, _target, items) => BamlValueWithMeta::List(
                 items.into_iter().map(BamlValueWithMeta::from).collect(),
                 field_type,
             ),
-            BamlValueWithFlags::Map(conditions, target, fields) => BamlValueWithMeta::Map(
+            BamlValueWithFlags::Map(_conditions, _target, fields) => BamlValueWithMeta::Map(
                 // NOTE: For some reason, Map is map<key, (conds, v)>, even though `v` contains conds.
                 // Maybe the extra conds are for the field, not the value?
                 fields
@@ -207,10 +207,10 @@ impl From<BamlValueWithFlags> for BamlValueWithMeta<TypeIR> {
                     .collect(),
                 field_type,
             ),
-            BamlValueWithFlags::Enum(n, target, v) => {
+            BamlValueWithFlags::Enum(n, _target, v) => {
                 BamlValueWithMeta::Enum(n, v.value, field_type)
             }
-            BamlValueWithFlags::Class(name, conds, target, fields) => BamlValueWithMeta::Class(
+            BamlValueWithFlags::Class(name, _conds, _target, fields) => BamlValueWithMeta::Class(
                 name,
                 fields
                     .into_iter()
@@ -218,8 +218,8 @@ impl From<BamlValueWithFlags> for BamlValueWithMeta<TypeIR> {
                     .collect(),
                 field_type,
             ),
-            BamlValueWithFlags::Null(target, v) => BamlValueWithMeta::Null(field_type),
-            BamlValueWithFlags::Media(target, v) => BamlValueWithMeta::Media(v.value, field_type),
+            BamlValueWithFlags::Null(_target, _v) => BamlValueWithMeta::Null(field_type),
+            BamlValueWithFlags::Media(_target, v) => BamlValueWithMeta::Media(v.value, field_type),
         }
     }
 }
@@ -231,11 +231,11 @@ impl From<BamlValueWithFlags> for BamlValueWithMeta<Vec<Flag>> {
             BamlValueWithFlags::Int(v) => BamlValueWithMeta::Int(v.value, v.flags.flags),
             BamlValueWithFlags::Float(v) => BamlValueWithMeta::Float(v.value, v.flags.flags),
             BamlValueWithFlags::Bool(v) => BamlValueWithMeta::Bool(v.value, v.flags.flags),
-            BamlValueWithFlags::List(conditions, target, items) => BamlValueWithMeta::List(
+            BamlValueWithFlags::List(conditions, _target, items) => BamlValueWithMeta::List(
                 items.into_iter().map(BamlValueWithMeta::from).collect(),
                 conditions.flags,
             ),
-            BamlValueWithFlags::Map(conditions, target, fields) => BamlValueWithMeta::Map(
+            BamlValueWithFlags::Map(conditions, _target, fields) => BamlValueWithMeta::Map(
                 // NOTE: For some reason, Map is map<key, (conds, v)>, even though `v` contains conds.
                 // Maybe the extra conds are for the field, not the value?
                 fields
@@ -244,10 +244,10 @@ impl From<BamlValueWithFlags> for BamlValueWithMeta<Vec<Flag>> {
                     .collect(),
                 conditions.flags,
             ),
-            BamlValueWithFlags::Enum(n, target, v) => {
+            BamlValueWithFlags::Enum(n, _target, v) => {
                 BamlValueWithMeta::Enum(n, v.value, v.flags.flags)
             }
-            BamlValueWithFlags::Class(name, conds, target, fields) => BamlValueWithMeta::Class(
+            BamlValueWithFlags::Class(name, conds, _target, fields) => BamlValueWithMeta::Class(
                 name,
                 fields
                     .into_iter()
@@ -255,8 +255,8 @@ impl From<BamlValueWithFlags> for BamlValueWithMeta<Vec<Flag>> {
                     .collect(),
                 conds.flags,
             ),
-            BamlValueWithFlags::Null(target, v) => BamlValueWithMeta::Null(v.flags),
-            BamlValueWithFlags::Media(target, v) => {
+            BamlValueWithFlags::Null(_target, v) => BamlValueWithMeta::Null(v.flags),
+            BamlValueWithFlags::Media(_target, v) => {
                 BamlValueWithMeta::Media(v.value, v.flags.flags)
             }
         }
@@ -329,7 +329,7 @@ impl BamlValueWithFlags {
                     });
                 }
             }
-            BamlValueWithFlags::List(flags, target, values) => {
+            BamlValueWithFlags::List(flags, _target, values) => {
                 let causes = flags.explanation();
                 if !causes.is_empty() {
                     expls.push(ParsingError {
@@ -344,7 +344,7 @@ impl BamlValueWithFlags {
                     value.explanation_impl(scope, expls);
                 }
             }
-            BamlValueWithFlags::Map(flags, target, kv) => {
+            BamlValueWithFlags::Map(flags, _target, kv) => {
                 let causes = flags.explanation();
                 if !causes.is_empty() {
                     expls.push(ParsingError {
@@ -367,7 +367,7 @@ impl BamlValueWithFlags {
                     v.explanation_impl(scope, expls);
                 }
             }
-            BamlValueWithFlags::Enum(enum_name, target, v) => {
+            BamlValueWithFlags::Enum(enum_name, _target, v) => {
                 let causes = v.flags.explanation();
                 if !causes.is_empty() {
                     expls.push(ParsingError {
@@ -377,7 +377,7 @@ impl BamlValueWithFlags {
                     });
                 }
             }
-            BamlValueWithFlags::Class(class_name, conds, target, fields) => {
+            BamlValueWithFlags::Class(class_name, conds, _target, fields) => {
                 let causes = conds.explanation();
                 if !causes.is_empty() {
                     expls.push(ParsingError {
@@ -393,7 +393,7 @@ impl BamlValueWithFlags {
                 }
             }
 
-            BamlValueWithFlags::Null(target, v) => {
+            BamlValueWithFlags::Null(_target, v) => {
                 let causes = v.explanation();
                 if !causes.is_empty() {
                     expls.push(ParsingError {
@@ -403,7 +403,7 @@ impl BamlValueWithFlags {
                     });
                 }
             }
-            BamlValueWithFlags::Media(target, v) => {
+            BamlValueWithFlags::Media(_target, v) => {
                 let causes = v.flags.explanation();
                 if !causes.is_empty() {
                     expls.push(ParsingError {

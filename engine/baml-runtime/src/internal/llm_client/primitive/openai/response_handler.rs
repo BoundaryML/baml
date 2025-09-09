@@ -109,7 +109,7 @@ pub fn scan_openai_chat_completion_stream(
     let inner = match accumulated {
         Ok(accumulated) => accumulated,
         // We'll just keep the first error and return it
-        Err(e) => return Ok(()),
+        Err(_e) => return Ok(()),
     };
 
     let event = ChatCompletionResponseDelta::deserialize(&event_body)
@@ -339,7 +339,7 @@ pub fn scan_openai_responses_stream(
     let inner = match accumulated {
         Ok(accumulated) => accumulated,
         // We'll just keep the first error and return it
-        Err(e) => return Ok(()),
+        Err(_e) => return Ok(()),
     };
 
     let event = ResponsesApiStreamEvent::deserialize(&event_body)

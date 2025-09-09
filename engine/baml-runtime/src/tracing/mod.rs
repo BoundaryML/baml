@@ -51,6 +51,7 @@ pub struct TracingCall {
     pub new_call_id_stack: Vec<baml_ids::FunctionCallId>,
     params: BamlMap<String, BamlValue>,
     start_time: web_time::SystemTime,
+    #[allow(dead_code)]
     tags: HashMap<String, BamlValue>,
 }
 
@@ -159,7 +160,7 @@ impl Visualize for FunctionResult {
                     }
                 }
             }
-            Some(Err(e)) => {
+            Some(Err(_e)) => {
                 // Do nothing as self.llm_response().visualize() already prints the error
 
                 // s.push(format!(
@@ -571,7 +572,7 @@ impl BamlTracer {
         //     .into_iter()
         //     .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
         //     .collect();
-        let event_chain = call.new_call_id_stack.clone();
+        let _event_chain = call.new_call_id_stack.clone();
         // let tag_event = TraceEvent::new_set_tags(event_chain, tags);
         // BAML_TRACER.lock().unwrap().put(Arc::new(tag_event));
 
@@ -715,6 +716,7 @@ impl BamlTracer {
     }
 }
 
+#[allow(dead_code)]
 fn log_json_event(is_ok: bool, log_event: BamlEventJson) -> Result<()> {
     if is_ok {
         baml_log::info!("{}", serde_json::to_string(&log_event)?);
@@ -724,6 +726,7 @@ fn log_json_event(is_ok: bool, log_event: BamlEventJson) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn log_simple_event(
     is_ok: bool,
     name: Option<&str>,

@@ -51,7 +51,7 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
         let mut locked = project.lock();
 
         let default_flags = vec!["beta".to_string()];
-        let effective_flags = session
+        let _effective_flags = session
             .baml_settings
             .feature_flags
             .as_ref()

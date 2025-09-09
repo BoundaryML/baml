@@ -619,7 +619,7 @@ Streaming is available via http://localhost:{port}/stream/{{FunctionName}}, but 
     /// Render the openapi spec. This endpoint is used by the swagger ui.
     async fn openapi_json_handler(self: Arc<Self>) -> Result<String, BamlError> {
         let locked = self.b.read().await;
-        let fake_generator = GeneratorArgs::new(
+        let _fake_generator = GeneratorArgs::new(
             "fake_directory",
             "fake_directory",
             Vec::new(),

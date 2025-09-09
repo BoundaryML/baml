@@ -46,7 +46,7 @@ impl TypeCoercer for TypeValue {
 
     fn try_cast(
         &self,
-        ctx: &ParsingContext,
+        _ctx: &ParsingContext,
         target: &TypeIR,
         value: Option<&crate::jsonish::Value>,
     ) -> Option<BamlValueWithFlags> {

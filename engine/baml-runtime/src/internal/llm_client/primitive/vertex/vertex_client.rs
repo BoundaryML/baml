@@ -1,7 +1,7 @@
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use baml_types::BamlMediaContent;
-use futures::StreamExt;
+// use futures::StreamExt; // Unused import
 #[cfg(not(target_arch = "wasm32"))]
 use gcp_auth::TokenProvider;
 use internal_baml_core::ir::ClientWalker;
@@ -233,10 +233,10 @@ impl RequestBuilder for VertexClient {
             "{base_url}/{model}:{rpc_and_protocol}",
             model = self.properties.model,
             rpc_and_protocol = match (&self.properties.anthropic_version, stream) {
-                (Some(ref anthropic_version), true) => {
+                (Some(ref _anthropic_version), true) => {
                     "streamRawPredict"
                 }
-                (Some(ref anthropic_version), false) => {
+                (Some(ref _anthropic_version), false) => {
                     "rawPredict"
                 }
                 (None, true) => "streamGenerateContent?alt=sse",
@@ -264,10 +264,10 @@ impl RequestBuilder for VertexClient {
         let mut json_body = self.properties.properties.clone();
 
         match (&self.properties.anthropic_version, prompt) {
-            (Some(ref anthropic_version), either::Either::Left(prompt)) => {
+            (Some(ref _anthropic_version), either::Either::Left(prompt)) => {
                 json_body.extend(anthropic::convert_completion_prompt_to_body(prompt));
             }
-            (Some(ref anthropic_version), either::Either::Right(messages)) => {
+            (Some(ref _anthropic_version), either::Either::Right(messages)) => {
                 let anthropic_client = AnthropicClient::synthetic_for_vertex_anthropic(
                     self.name.clone(),
                     self.context.clone(),
@@ -303,7 +303,7 @@ impl WithChat for VertexClient {
             either::Either::Right(prompt),
             false,
             match self.properties.anthropic_version {
-                Some(ref anthropic_version) => ResponseType::Anthropic,
+                Some(ref _anthropic_version) => ResponseType::Anthropic,
                 None => ResponseType::Vertex,
             },
             ctx,

@@ -12,12 +12,12 @@ use super::{RenderTestExecutionStatus, TestExecutionStatus, TestExecutionStatusM
 use crate::TestStatus;
 
 impl RenderTestExecutionStatus for GithubTestExecutionStatusRenderer {
-    fn render_progress(&self, test_status_map: &TestExecutionStatusMap) {}
+    fn render_progress(&self, _test_status_map: &TestExecutionStatusMap) {}
 
     fn render_final(
         &self,
         test_status_map: &TestExecutionStatusMap,
-        selected_tests: &BTreeMap<(String, String), String>,
+        _selected_tests: &BTreeMap<(String, String), String>,
     ) {
         for ((function_name, test_name), status) in test_status_map.iter() {
             match status {
@@ -45,7 +45,7 @@ impl RenderTestExecutionStatus for GithubTestExecutionStatusRenderer {
                                 "[         ok ]: {function_name}::{test_name} in {duration:?}"
                             );
                         }
-                        TestStatus::NeedsHumanEval(reasons) => {
+                        TestStatus::NeedsHumanEval(_reasons) => {
                             print!("::group::");
                             println!(
                                 "[ needs-human ]: {function_name}::{test_name} in {duration:?}"

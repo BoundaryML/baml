@@ -20,7 +20,7 @@ use deserializer::{
 use internal_baml_core::ir::TypeValue;
 use internal_baml_jinja::types::OutputFormatContent;
 use serde::{
-    ser::{SerializeMap, SerializeStruct},
+    ser::SerializeStruct,
     Serialize, Serializer,
 };
 

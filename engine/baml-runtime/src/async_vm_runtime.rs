@@ -251,7 +251,7 @@ impl BamlAsyncVmRuntime {
                 Ok(VmExecState::Await(idx)) => {
                     let mut fulfilled = false;
 
-                    while let Ok((ready_idx, (result, call_id))) = futures_rx.try_recv() {
+                    while let Ok((ready_idx, (result, _call_id))) = futures_rx.try_recv() {
                         let vm_value = match try_vm_value_from_function_result(
                             &mut vm,
                             &self.program.resolved_class_names,
@@ -277,7 +277,7 @@ impl BamlAsyncVmRuntime {
                     // Tokio take care of it.
                     while !fulfilled {
                         // TODO: Handle errors.
-                        let (ready_idx, (result, call_id)) = match futures_rx.recv().await {
+                        let (ready_idx, (result, _call_id)) = match futures_rx.recv().await {
                             Some(result) => result,
 
                             // This should not happen because VM will never close the channel.

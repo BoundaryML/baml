@@ -20,6 +20,7 @@ mod test_unions;
 
 
 
+#[allow(dead_code)]
 const EMPTY_FILE: &str = r#"
 "#;
 
@@ -147,6 +148,7 @@ test_deserializer!(
     "#
 );
 
+#[allow(dead_code)]
 const FOO_FILE: &str = r#"
 class Foo {
   id string?
@@ -188,6 +190,7 @@ test_deserializer!(
     json!({"id": r#"{{hi} there"# })
 );
 
+#[allow(dead_code)]
 const EXAMPLE_FILE: &str = r##"
 class Score {
     year int @description(#"
@@ -457,6 +460,7 @@ test_deserializer!(
     })
 );
 
+#[allow(dead_code)]
 const EXAMPLE_FILE_ORDERED_CLASS: &str = r##"
   class OrderedClass {
     one string?

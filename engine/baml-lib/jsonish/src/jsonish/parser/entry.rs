@@ -93,7 +93,7 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
                             }
                             _ => None,
                         })
-                        .map(|v| {
+                        .map(|_v| {
                             parse_func(
                                 str,
                                 options.next_from_mode(
@@ -148,7 +148,7 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
                     let first = items.pop().expect("Expected 1 item");
                     match &first {
                         // if the string is the same, then we can drop this condition.
-                        Value::String(content, completion_state) if content == str => {}
+                        Value::String(content, _completion_state) if content == str => {}
                         _ => {
                             let ret = Value::AnyOf(
                                 vec![Value::FixedJson(
@@ -161,7 +161,7 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
                         }
                     }
                 }
-                n => {
+                _n => {
                     let items_clone = Value::Array(items.clone(), CompletionState::Incomplete);
                     let items = items
                         .into_iter()

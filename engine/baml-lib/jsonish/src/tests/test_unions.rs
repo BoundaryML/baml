@@ -1,6 +1,7 @@
 
 
 //
+#[allow(dead_code)]
 const FOO_FILE: &str = r#"
 class Foo {
   hi string[]
@@ -78,6 +79,7 @@ fn test_union_full() {
     assert_json_diff::assert_json_eq!(json_value, expected);
 }
 
+#[allow(dead_code)]
 const SPUR_FILE: &str = r###"
 enum CatA {
   A
@@ -130,6 +132,7 @@ test_deserializer!(
   }
 );
 
+#[allow(dead_code)]
 const CUSTOMER_FILE2: &str = r###"
 enum AssistantType {
   ETF @alias("ETFAssistantAPI")
@@ -307,6 +310,7 @@ test_deserializer!(
   }
 );
 
+#[allow(dead_code)]
 const CONTACT_INFO: &str = r#"
 class PhoneNumber {
   value string @check(valid_phone_number, {{this|regex_match("\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}")}})

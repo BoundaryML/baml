@@ -13,7 +13,7 @@ use aws_credential_types::{
 };
 use aws_sdk_bedrockruntime::{
     self as bedrock,
-    config::{Intercept, StalledStreamProtectionConfig},
+    config::StalledStreamProtectionConfig,
     operation::converse::ConverseOutput,
     Client as BedrockRuntimeClient,
 };
@@ -45,9 +45,9 @@ use super::wasm::WasmAwsCreds;
 use crate::{
     client_registry::ClientProperty,
     internal::llm_client::{
-        primitive::request::RequestBuilder,
+        // primitive::request::RequestBuilder, // Unused import
         traits::{
-            HttpContext, StreamResponse, ToProviderMessageExt, WithChat, WithClient,
+            HttpContext, StreamResponse, WithChat, WithClient,
             WithClientProperties, WithNoCompletion, WithRenderRawCurl, WithRetryPolicy,
             WithStreamChat,
         },
@@ -60,6 +60,7 @@ use crate::{
 };
 
 // Strip the MIME type prefix ("type/subtype" -> "subtype").
+#[allow(dead_code)]
 fn strip_mime_prefix(mime: &str) -> &str {
     mime.split_once('/').map(|(_, s)| s).unwrap_or(mime)
 }
@@ -178,7 +179,7 @@ impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterc
     ) -> std::result::Result<(), aws_sdk_bedrockruntime::error::BoxError> {
         let request = context.request();
         let headers = smithy_json_headers(request.headers());
-        let body = if let Some(bytes) = request.body().bytes() {
+        let _body = if let Some(bytes) = request.body().bytes() {
             json_body(JsonBodyInput::Bytes(bytes)).unwrap_or_default()
         } else {
             serde_json::Value::Null
@@ -470,7 +471,7 @@ impl AwsClient {
 
     fn build_request(
         &self,
-        ctx: &RuntimeContext,
+        _ctx: &RuntimeContext,
         chat_messages: &[RenderedChatMessage],
     ) -> Result<bedrock::operation::converse::ConverseInput> {
         let mut system_message = None;
@@ -525,6 +526,7 @@ impl AwsClient {
     }
 }
 
+#[allow(dead_code)]
 fn try_to_json<
     Ser: Fn(
         &mut JsonObjectWriter,
@@ -546,7 +548,7 @@ fn try_to_json<
 impl WithRenderRawCurl for AwsClient {
     async fn render_raw_curl(
         &self,
-        ctx: &RuntimeContext,
+        _ctx: &RuntimeContext,
         prompt: &[internal_baml_jinja::RenderedChatMessage],
         render_settings: RenderCurlSettings,
     ) -> Result<String> {
@@ -1159,6 +1161,7 @@ impl AwsClient {
         }
     }
 
+    #[allow(dead_code)]
     fn parts_to_message(
         &self,
         parts: &[ChatMessagePart],

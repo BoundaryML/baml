@@ -330,7 +330,7 @@ impl DefaultValue for TypeIR {
             (_, None) => None,
             (true, Some(v)) => Some(v),
             (false, Some(v)) => {
-                let asserts = self
+                let _asserts = self
                     .meta()
                     .constraints
                     .iter()

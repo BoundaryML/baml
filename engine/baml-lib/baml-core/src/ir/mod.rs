@@ -34,6 +34,7 @@ pub type TemplateString = repr::Node<repr::TemplateString>;
 pub type TestCase = repr::Node<repr::TestCase>;
 pub(super) type Walker<'db, I> = repr::Walker<'db, I>;
 
+#[allow(dead_code)]
 pub(super) type Prompt = repr::Prompt;
 
 pub use walker::ExprFnAsFunctionWalker;

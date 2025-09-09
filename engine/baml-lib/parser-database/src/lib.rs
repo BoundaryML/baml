@@ -146,7 +146,7 @@ impl ParserDatabase {
         self.finalize_dependencies(diag);
     }
 
-    fn finalize_dependencies(&mut self, diag: &mut Diagnostics) {
+    fn finalize_dependencies(&mut self, _diag: &mut Diagnostics) {
         // NOTE: Class dependency cycles are already checked at
         // baml-lib/baml-core/src/validate/validation_pipeline/validations/cycle.rs
         //
@@ -203,7 +203,7 @@ impl ParserDatabase {
                                     // Skip this one, recursive type aliases are
                                     // not part of the finite class cycle. They
                                     // are handled separately.
-                                    Some(TypeWalker::TypeAlias(alias)) => None,
+                                    Some(TypeWalker::TypeAlias(_alias)) => None,
                                     None => panic!("Unknown class `{dep}`"),
                                 }
                             },

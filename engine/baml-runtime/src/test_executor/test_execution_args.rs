@@ -196,6 +196,7 @@ mod filter_test {
         assert!(!test_filters(&["MyFunc::*Test"], &["MyFunc::MyTest"]).includes("MyFunc", "MyTest"));
     }
 
+    #[allow(dead_code)]
     fn test_filters(include: &[&str], exclude: &[&str]) -> TestFilter {
         TestFilter::from(include.iter().copied(), exclude.iter().copied())
     }

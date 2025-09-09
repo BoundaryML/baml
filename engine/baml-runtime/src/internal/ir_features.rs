@@ -1,7 +1,9 @@
 use internal_baml_core::ir::{FunctionWalker, TestCaseWalker};
 
 pub struct IrFeatures {
+    #[allow(dead_code)]
     v1_functions: Vec<String>,
+    #[allow(dead_code)]
     v2_functions: bool,
     class_getters: Vec<(String, Vec<String>)>,
 }
@@ -54,7 +56,9 @@ impl IrFeatures {
 pub trait WithInternal {
     fn features(&self) -> IrFeatures;
 
+    #[allow(dead_code)]
     fn walk_functions(&self) -> impl ExactSizeIterator<Item = FunctionWalker<'_>>;
 
+    #[allow(dead_code)]
     fn walk_tests(&self) -> impl Iterator<Item = TestCaseWalker<'_>>;
 }

@@ -38,6 +38,7 @@ mod vertex;
 use enum_dispatch::enum_dispatch;
 
 #[enum_dispatch(WithRetryPolicy)]
+#[allow(dead_code)]
 pub enum LLMPrimitive2 {
     OpenAIClient,
     AnthropicClient,
@@ -132,7 +133,7 @@ impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMPrimitiveProvider {
             ClientProvider::AwsBedrock => AwsClient::dynamic_new(value, ctx).map(Into::into),
             ClientProvider::GoogleAi => GoogleAIClient::dynamic_new(value, ctx).map(Into::into),
             ClientProvider::Vertex => VertexClient::dynamic_new(value, ctx).map(Into::into),
-            ClientProvider::Strategy(strategy_client_provider) => {
+            ClientProvider::Strategy(_strategy_client_provider) => {
                 unimplemented!(
                     "Strategy client providers are not supported yet in LLMPrimitiveProvider"
                 )
@@ -193,7 +194,7 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
             ClientProvider::AwsBedrock => AwsClient::new(client, ctx).map(Into::into),
             ClientProvider::GoogleAi => GoogleAIClient::new(client, ctx).map(Into::into),
             ClientProvider::Vertex => VertexClient::new(client, ctx).map(Into::into),
-            ClientProvider::Strategy(strategy_client_provider) => {
+            ClientProvider::Strategy(_strategy_client_provider) => {
                 unimplemented!(
                     "Strategy client providers are not supported yet in LLMPrimitiveProvider"
                 )
@@ -214,7 +215,7 @@ impl LLMPrimitiveProvider {
             LLMPrimitiveProvider::Anthropic(client) => client.chat_to_message(chat),
             LLMPrimitiveProvider::Google(client) => client.chat_to_message(chat),
             LLMPrimitiveProvider::Vertex(client) => client.chat_to_message(chat),
-            LLMPrimitiveProvider::Aws(client) => {
+            LLMPrimitiveProvider::Aws(_client) => {
                 anyhow::bail!("Prompt exposure for AWS client is not supported")
             }
         }
@@ -229,7 +230,7 @@ impl LLMPrimitiveProvider {
             LLMPrimitiveProvider::Anthropic(client) => client.completion_to_provider_body(prompt),
             LLMPrimitiveProvider::Google(client) => client.completion_to_provider_body(prompt),
             LLMPrimitiveProvider::Vertex(client) => client.completion_to_provider_body(prompt),
-            LLMPrimitiveProvider::Aws(client) => {
+            LLMPrimitiveProvider::Aws(_client) => {
                 anyhow::bail!("Prompt exposure for AWS client is not supported")
             }
         })
@@ -262,7 +263,7 @@ impl LLMPrimitiveProvider {
                     .build_request(prompt, allow_proxy, stream, true)
                     .await
             }
-            LLMPrimitiveProvider::Aws(client) => {
+            LLMPrimitiveProvider::Aws(_client) => {
                 anyhow::bail!("Prompt exposure for AWS client is not supported")
             }
         }

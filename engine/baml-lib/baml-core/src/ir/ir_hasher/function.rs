@@ -105,7 +105,7 @@ impl super::ShallowSignature for FunctionNode {
 
         let client_dependencies = self.elem.default_config().map(|c| match &c.client {
             ClientSpec::Named(name) => Some(name.clone()),
-            ClientSpec::Shorthand(provider, model) => None,
+            ClientSpec::Shorthand(_provider, _model) => None,
         });
 
         // TODO: Add prompt dependencies (i.e. template_strings)

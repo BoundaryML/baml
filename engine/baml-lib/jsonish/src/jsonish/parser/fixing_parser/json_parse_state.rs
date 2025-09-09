@@ -112,6 +112,7 @@ impl JsonParseState {
         Ok(0)
     }
 
+    #[allow(dead_code)]
     fn is_string_complete(&self) -> bool {
         let Some((JsonCollection::UnquotedString(v, _), _)) = self.collection_stack.last() else {
             return false;

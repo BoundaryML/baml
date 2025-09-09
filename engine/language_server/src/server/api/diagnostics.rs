@@ -131,7 +131,7 @@ pub fn publish_session_lsp_diagnostics(
 pub fn project_diagnostics(
     project: Arc<Mutex<Project>>,
     feature_flags: &[String],
-    session: &Session,
+    _session: &Session,
 ) -> HashMap<Url, Vec<lsp_types::Diagnostic>> {
     tracing::info!(
         "project_diagnostics called with feature_flags: {:?}",

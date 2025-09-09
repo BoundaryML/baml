@@ -147,6 +147,7 @@ impl minijinja::value::Object for MinijinjaBamlMedia {
 
 #[derive(Debug)]
 pub struct MinijinjaBamlEnumType {
+    #[allow(dead_code)]
     pub enum_name: String,
     pub enum_values: IndexMap<String, MinijinjaBamlEnumValue>,
 }
@@ -177,6 +178,7 @@ impl Object for MinijinjaBamlEnumType {
 pub struct MinijinjaBamlEnumValue {
     pub value: String,
     pub alias: Option<String>,
+    #[allow(dead_code)]
     pub enum_name: String,
 }
 

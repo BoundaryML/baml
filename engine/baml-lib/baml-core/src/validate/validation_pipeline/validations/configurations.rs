@@ -29,7 +29,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                     // TODO: Check args.
                 }
                 None => {
-                    let expr_fns = ctx
+                    let _expr_fns = ctx
                         .db
                         .walk_expr_fns()
                         .filter(|f| f.name() == name)

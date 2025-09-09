@@ -1,5 +1,6 @@
 
 
+#[allow(dead_code)]
 const BAML_FILE: &str = r###"
 class Score {
   year int @description(#"
@@ -235,6 +236,7 @@ test_partial_deserializer!(
   }
 );
 
+#[allow(dead_code)]
 const CHOPPY_BAML_FILE: &str = r##"
 class Error {
   code int
@@ -270,6 +272,7 @@ class Edge {
 }
   "##;
 
+#[allow(dead_code)]
 const TRIMMED_CHOPPY_RESULT: &str = r#"
 ```json
 {

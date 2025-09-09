@@ -159,7 +159,7 @@ impl Server {
         tracing::info!("Starting server with {} worker threads", worker_threads);
         tracing::info!("-------- Version: {}", env!("CARGO_PKG_VERSION"));
 
-        let rt = tokio::runtime::Runtime::new()?;
+        let _rt = tokio::runtime::Runtime::new()?;
 
         // Extract client version from initialization parameters
         let client_version = init_params
@@ -192,7 +192,7 @@ impl Server {
 
         {
             let lsp_sender = server.connection.make_sender();
-            let playground_tx = server.session.playground_tx.clone();
+            let _playground_tx = server.session.playground_tx.clone();
             server.args.tokio_runtime.spawn(async move {
                 lsp_sender
                     .send(Message::Notification(lsp_server::Notification::new(
@@ -353,7 +353,7 @@ impl Server {
         _client_capabilities: &ClientCapabilities,
         mut session: Session,
         worker_threads: NonZeroUsize,
-        broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
+        _broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
     ) -> anyhow::Result<()> {
         // Ensure we have a notifier for reload operations
         let client = client::Client::new(connection.make_sender());

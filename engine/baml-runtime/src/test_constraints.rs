@@ -52,12 +52,14 @@ impl TestConstraintsResult {
             failed_assert: None,
         }
     }
+    #[allow(dead_code)]
     fn checks(self) -> Vec<(String, bool)> {
         match self {
             TestConstraintsResult::Completed { checks, .. } => checks,
             _ => Vec::new(),
         }
     }
+    #[allow(dead_code)]
     fn add_check_result(self, name: String, result: bool) -> Self {
         match self {
             TestConstraintsResult::Completed { mut checks, .. } => {

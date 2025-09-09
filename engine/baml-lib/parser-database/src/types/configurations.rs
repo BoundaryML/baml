@@ -14,6 +14,7 @@ use crate::{
     coerce_expression::coerce_map, context::Context,
 };
 
+#[allow(dead_code)]
 fn dedent(s: &str) -> String {
     // Find the shortest indentation in the string (that's not an empty line).
     let shortest_indent = Regex::new(r"^(?m)\s*\S")

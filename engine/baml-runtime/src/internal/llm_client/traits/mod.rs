@@ -340,6 +340,7 @@ where
 }
 
 // Stream related
+#[allow(dead_code)]
 pub trait SseResponseTrait {
     fn response_stream(
         &self,

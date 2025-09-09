@@ -17,7 +17,7 @@ use crate::{
 impl TypeCoercer for LiteralValue {
     fn try_cast(
         &self,
-        ctx: &ParsingContext,
+        _ctx: &ParsingContext,
         target: &TypeIR,
         value: Option<&jsonish::Value>,
     ) -> Option<BamlValueWithFlags> {
@@ -88,7 +88,7 @@ impl TypeCoercer for LiteralValue {
         // If we get an object with a single key-value pair, try to extract the value
         if let jsonish::Value::Object(obj, completion_state) = value {
             if obj.len() == 1 {
-                let (key, inner_value) = obj.iter().next().unwrap();
+                let (_key, inner_value) = obj.iter().next().unwrap();
                 // only extract value if it's a primitive (not an object or array, hoping to god its fixed)
                 match inner_value {
                     jsonish::Value::Number(_, _)

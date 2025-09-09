@@ -11,7 +11,7 @@ use baml_types::{
 };
 use futures::{
     channel::mpsc,
-    stream::StreamExt,
+    // stream::StreamExt, // Unused import
 };
 use internal_baml_core::{
     internal_baml_diagnostics::SerializedSpan,
@@ -57,8 +57,8 @@ fn subst<'a>(
                 Ok(expr.clone())
             }
         }
-        Expr::Builtin(builtin, meta) => Ok(expr.clone()),
-        Expr::FreeVar(name, _) => Ok(expr.clone()),
+        Expr::Builtin(_builtin, _meta) => Ok(expr.clone()),
+        Expr::FreeVar(_name, _) => Ok(expr.clone()),
         Expr::Atom(_) => Ok(expr.clone()),
         Expr::App {
             func,
@@ -228,7 +228,7 @@ async fn beta_reduce<'a>(
 ) -> anyhow::Result<Expr<ExprMetadata>> {
     match expr {
         Expr::Atom(_) => Ok(expr.clone()),
-        Expr::Let(name, value, body, meta) => {
+        Expr::Let(name, value, body, _meta) => {
             // First evaluate the bound expression
             let evaluated_value = Box::pin(beta_reduce(env, value, eval_final_llm_fn)).await?;
 
@@ -249,7 +249,7 @@ async fn beta_reduce<'a>(
             meta,
             type_args,
         } => match (func.as_ref(), args.as_ref()) {
-            (Expr::Lambda(arity, body, _), Expr::ArgsTuple(args, _)) => {
+            (Expr::Lambda(_arity, body, _), Expr::ArgsTuple(args, _)) => {
                 let pairs: Vec<(VarIndex, Expr<ExprMetadata>)> = args
                     .iter()
                     .enumerate()
@@ -270,7 +270,7 @@ async fn beta_reduce<'a>(
                     });
                 Box::pin(beta_reduce(env, &new_body, eval_final_llm_fn)).await
             }
-            (Expr::Lambda(arity, body, _), arg) => {
+            (Expr::Lambda(_arity, body, _), arg) => {
                 let args = match arg {
                     Expr::ArgsTuple(args, _) => args.clone(),
                     x => vec![x.clone()],
@@ -591,18 +591,18 @@ pub async fn eval_to_value_or_llm_call<'a>(
 ) -> anyhow::Result<ExprEvalResult> {
     let mut current_expr = expr.clone();
 
-    for steps in 0..MAX_STEPS {
+    for _steps in 0..MAX_STEPS {
         match current_expr {
             Expr::App {
                 ref func,
                 ref args,
-                ref meta,
-                ref type_args,
+                meta: _,
+                type_args: _,
             } => match (func.as_ref(), args.as_ref()) {
                 (Expr::LLMFunction(name, arg_names, _), Expr::ArgsTuple(args, _)) => {
                     let mut evaluated_args: Vec<(String, BamlValue)> = Vec::new();
                     for (arg_name, arg) in arg_names.iter().zip(args) {
-                        let val = eval_to_value(env, arg).await;
+                        let val = eval_to_value(env, &arg).await;
                         evaluated_args
                             .push((arg_name.clone(), val.unwrap().unwrap().clone().value()));
                     }
@@ -661,7 +661,7 @@ pub async fn eval_to_value_or_llm_call<'a>(
                 name,
                 fields,
                 spread,
-                meta,
+                meta: _,
             } => {
                 let mut new_fields = BamlMap::new();
                 for (key, value) in fields {
@@ -700,7 +700,7 @@ pub async fn eval_to_value_or_llm_call<'a>(
             Expr::Lambda(_, _, _) => {
                 return Err(anyhow!("Bare lambda found: {}", expr.dump_str()));
             }
-            Expr::Builtin(builtin, meta) => match builtin {
+            Expr::Builtin(builtin, _meta) => match builtin {
                 Builtin::FetchValue => {
                     return Err(anyhow!(
                         "Bare builtin fetch_value found: {}",
@@ -708,7 +708,7 @@ pub async fn eval_to_value_or_llm_call<'a>(
                     ));
                 }
             },
-            Expr::Let(var_name, value, body, meta) => {
+            Expr::Let(_var_name, _value, _body, _meta) => {
                 let res = beta_reduce(env, expr, false).await?;
                 if res.temporary_same_state(expr) {
                     return Err(anyhow!("Failed to make progress"));
@@ -808,22 +808,22 @@ pub async fn eval_to_value_or_llm_call<'a>(
             }
             Expr::BinaryOperation {
                 left,
-                operator,
+                operator: _,
                 right,
-                meta,
+                meta: _,
             } => {
-                let left = eval_to_value(env, left.as_ref()).await?;
-                let right = eval_to_value(env, right.as_ref()).await?;
+                let _left = eval_to_value(env, left.as_ref()).await?;
+                let _right = eval_to_value(env, right.as_ref()).await?;
 
                 todo!("impl eval to value for binary operation");
             }
 
             Expr::UnaryOperation {
                 expr,
-                operator,
-                meta,
+                operator: _,
+                meta: _,
             } => {
-                let expr = eval_to_value(env, expr.as_ref()).await?;
+                let _expr = eval_to_value(env, expr.as_ref()).await?;
 
                 todo!("impl eval to value for unary operation");
             }
@@ -851,10 +851,10 @@ pub async fn eval_to_value<'a>(
 ) -> anyhow::Result<Option<BamlValueWithMeta<()>>> {
     let mut current_expr = expr.clone();
 
-    for steps in 0..MAX_STEPS {
+    for _steps in 0..MAX_STEPS {
         match current_expr {
             Expr::Atom(value) => return Ok(Some(value.clone().map_meta(|_| ()))),
-            Expr::List(items, meta) => {
+            Expr::List(items, _meta) => {
                 let mut new_items = Vec::new();
                 for item in items {
                     let val = Box::pin(eval_to_value(env, &item))
@@ -865,7 +865,7 @@ pub async fn eval_to_value<'a>(
                 let val = BamlValueWithMeta::List(new_items, ());
                 return Ok(Some(val));
             }
-            Expr::Map(items, meta) => {
+            Expr::Map(items, _meta) => {
                 let mut new_items = BamlMap::new();
                 for (key, value) in items {
                     let val = Box::pin(eval_to_value(env, &value))
@@ -879,7 +879,7 @@ pub async fn eval_to_value<'a>(
                 name,
                 fields,
                 spread,
-                meta,
+                meta: _,
             } => {
                 let mut new_fields = BamlMap::new();
                 for (key, value) in fields {

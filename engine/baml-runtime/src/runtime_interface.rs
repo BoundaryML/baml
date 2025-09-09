@@ -32,6 +32,7 @@ pub(crate) trait RuntimeConstructor {
         feature_flags: internal_baml_core::feature_flags::FeatureFlags,
     ) -> Result<InternalBamlRuntime>;
 
+    #[allow(dead_code)]
     fn from_file_content<T: AsRef<str>>(
         root_path: &str,
         files: &HashMap<T, T>,

@@ -52,7 +52,7 @@ fn validate_type_exists(ctx: &mut Context<'_>, field_type: &FieldType) -> bool {
 
 fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
     match field_type {
-        FieldType::Map(arity, kv_types, ..) => {
+        FieldType::Map(_arity, kv_types, ..) => {
             match &kv_types.0 {
                 // String key.
                 FieldType::Primitive(FieldArity::Required, TypeValue::String, ..) => {}
@@ -110,7 +110,7 @@ fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
         FieldType::Literal(..) => {}
         FieldType::Symbol(..) => {}
 
-        FieldType::List(arity, field_type, ..) => validate_type_allowed(ctx, field_type),
+        FieldType::List(_arity, field_type, ..) => validate_type_allowed(ctx, field_type),
         FieldType::Tuple(_, field_types, ..) | FieldType::Union(_, field_types, ..) => {
             for field_type in field_types {
                 validate_type_allowed(ctx, field_type);
@@ -139,7 +139,7 @@ fn validate_type_constraints(ctx: &mut Context<'_>, field_type: &FieldType) {
             .collect::<Vec<_>>();
 
         match arg_expressions.as_slice() {
-            [Expression::Identifier(Identifier::Local(s, _)), Expression::JinjaExpressionValue(expr, span)] =>
+            [Expression::Identifier(Identifier::Local(_s, _)), Expression::JinjaExpressionValue(expr, span)] =>
             {
                 let mut defined_types = internal_baml_jinja_types::PredefinedTypes::default(
                     internal_baml_jinja_types::JinjaContext::Parsing,

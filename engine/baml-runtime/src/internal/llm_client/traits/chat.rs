@@ -12,7 +12,7 @@ impl<T> WithChatOptions for T
 where
     T: super::WithClientProperties,
 {
-    fn chat_options(&self, ctx: &RuntimeContext) -> Result<ChatOptions> {
+    fn chat_options(&self, _ctx: &RuntimeContext) -> Result<ChatOptions> {
         Ok(ChatOptions::new(
             self.default_role(),
             Some(self.allowed_roles()),

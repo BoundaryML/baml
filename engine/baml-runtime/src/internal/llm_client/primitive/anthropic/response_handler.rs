@@ -106,7 +106,7 @@ pub fn scan_anthropic_response_stream(
     let inner = match accumulated {
         Ok(accumulated) => accumulated,
         // We'll just keep the first error and return it
-        Err(e) => return Ok(()),
+        Err(_e) => return Ok(()),
     };
 
     let event = MessageChunk::deserialize(&event_body)

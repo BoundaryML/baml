@@ -89,6 +89,7 @@ pub(super) struct CompleteAPIConfig {
     pub host_name: String,
     pub log_redaction_enabled: bool,
     pub log_redaction_placeholder: String,
+    #[allow(dead_code)]
     pub max_log_chunk_chars: usize,
 
     client: reqwest::Client,

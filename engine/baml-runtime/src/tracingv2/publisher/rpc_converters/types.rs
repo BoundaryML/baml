@@ -36,7 +36,7 @@ impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::Baml
             BamlValueWithMeta::Media(baml_media, _) => {
                 baml_rpc::runtime_api::ValueContent::Media(baml_media.to_rpc_event(lookup))
             }
-            BamlValueWithMeta::Enum(name, value, _) => baml_rpc::runtime_api::ValueContent::Enum {
+            BamlValueWithMeta::Enum(_name, value, _) => baml_rpc::runtime_api::ValueContent::Enum {
                 value: value.clone(),
             },
             BamlValueWithMeta::Class(_, index_map, _) => {
@@ -116,8 +116,8 @@ fn matches_value_with_rpc_type<T: HasType<type_meta::NonStreaming>>(
             .all(|value| matches_value_with_rpc_type(value, inner_type, _lookup)),
         (
             BamlValueWithMeta::Map(map_values, _),
-            TypeReferenceWithMetadata::Map { key, value, .. },
-        ) => map_values.iter().all(|(map_key, map_value)| {
+            TypeReferenceWithMetadata::Map { key: _, value, .. },
+        ) => map_values.iter().all(|(_map_key, map_value)| {
             // TODO: Validate key type
             // matches_value_with_rpc_type(map_key, key, lookup)
             matches_value_with_rpc_type(map_value, value, _lookup)
@@ -253,7 +253,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::ir_type::Type
 }
 
 impl<'a> IntoRpcEvent<'a, baml_rpc::Expression> for baml_types::JinjaExpression {
-    fn to_rpc_event(&'a self, lookup: &(impl IRRpcState + ?Sized)) -> baml_rpc::Expression {
+    fn to_rpc_event(&'a self, _lookup: &(impl IRRpcState + ?Sized)) -> baml_rpc::Expression {
         baml_rpc::Expression::Jinja(self.0.to_string())
     }
 }
@@ -273,7 +273,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::Media<'a>> for baml_types::Baml
 impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::MediaValue<'a>> for baml_types::BamlMediaContent {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl IRRpcState + ?Sized),
+        _lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::MediaValue<'a> {
         match self {
             baml_types::BamlMediaContent::Url(url) => {

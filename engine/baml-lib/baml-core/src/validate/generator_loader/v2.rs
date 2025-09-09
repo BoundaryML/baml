@@ -281,7 +281,7 @@ fn parse_cloud_project(
             Ok(project_fqn) => {
                 builder.project_fqn(project_fqn);
             }
-            Err(e) => {
+            Err(_e) => {
                 errors.push(DatamodelError::new_validation_error(
                     "`project` must be a fully-qualified project ID, i.e. @boundaryml/baml",
                     args.get("project")

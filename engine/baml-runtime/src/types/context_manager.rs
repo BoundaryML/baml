@@ -180,7 +180,7 @@ impl RuntimeContextManager {
             })
             .collect();
 
-        let (id, _, mut tags, new_id) = ctx.pop()?;
+        let (id, _, mut tags, _new_id) = ctx.pop()?;
 
         for (k, v) in self.global_tags.lock().unwrap().iter() {
             tags.entry(k.clone()).or_insert_with(|| v.clone());

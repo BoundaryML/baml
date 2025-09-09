@@ -1,5 +1,5 @@
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use baml_types::{
     BamlMap, BamlValue, BamlValueWithMeta, TypeIR,
 };
@@ -21,6 +21,7 @@ pub(crate) struct PreparedFunction<'ir> {
 
 pub(crate) struct PreparedFunctionArgs {
     pub value: IndexMap<String, BamlValue>,
+    #[allow(dead_code)]
     pub value2: IndexMap<String, BamlValueWithMeta<TypeIR>>,
 }
 
@@ -58,11 +59,11 @@ impl From<PrepareFunctionError> for Result<FunctionResult> {
     fn from(error: PrepareFunctionError) -> Self {
         match error {
             PrepareFunctionError::FunctionNotFound {
-                function_name,
+                function_name: _,
                 error,
             } => Err(error),
             PrepareFunctionError::InvalidParams {
-                function_name,
+                function_name: _,
                 error,
             } => Err(error),
         }

@@ -44,7 +44,7 @@ impl ArgCoercer {
         value: &BamlValue, // original value passed in by user
         scope: &mut ScopeStack,
     ) -> Result<BamlValueWithMeta<TypeIR>, ArgCoerceError> {
-        let metadata = field_type.meta();
+        let _metadata = field_type.meta();
 
         let value = match field_type {
             TypeIR::Top(_) => {

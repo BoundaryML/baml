@@ -150,6 +150,7 @@ pub(super) struct ThreadedTracer {
     #[allow(dead_code)]
     join_handle: std::thread::JoinHandle<()>,
     log_event_callback: Arc<Mutex<Option<LogEventCallbackSync>>>,
+    #[allow(dead_code)]
     stats: TraceStats,
 }
 
@@ -202,7 +203,7 @@ impl ThreadedTracer {
                     ProcessorStatus::Done(r_id) if r_id >= id => {
                         return Ok(());
                     }
-                    ProcessorStatus::Done(id) => {
+                    ProcessorStatus::Done(_id) => {
                         // Old flush, ignore
                     }
                 }

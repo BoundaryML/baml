@@ -337,7 +337,7 @@ fn relevant_data_models<'a>(
             }
             TypeIR::Class {
                 name: cls,
-                mode,
+                mode: _,
                 dynamic: _,
                 meta: ref metadata,
             } => {

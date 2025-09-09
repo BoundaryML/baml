@@ -4,7 +4,7 @@ use internal_llm_client::{ClientSpec, StrategyClientProperty};
 use crate::validate::validation_pipeline::context::Context;
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
-    let valid_clients = ctx.db.valid_client_names();
+    let _valid_clients = ctx.db.valid_client_names();
 
     // required props are already validated in visit_client. No other validations here.
     for f in ctx.db.walk_clients() {

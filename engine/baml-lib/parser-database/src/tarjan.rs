@@ -6,7 +6,6 @@
 use std::{
     cmp,
     collections::{HashMap, HashSet},
-    fmt::Debug,
     hash::Hash,
 };
 

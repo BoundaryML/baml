@@ -16,7 +16,7 @@ impl RequestHandler for Completion {
 
 impl SyncRequestHandler for Completion {
     fn run(
-        session: &mut Session,
+        _session: &mut Session,
         _notifier: Notifier,
         _requester: &mut Requester,
         params: CompletionParams,

@@ -16,8 +16,8 @@ impl RequestHandler for DocumentFormatting {
 
 impl SyncRequestHandler for DocumentFormatting {
     fn run(
-        session: &mut Session,
-        notifier: Notifier,
+        _session: &mut Session,
+        _notifier: Notifier,
         _requester: &mut Requester,
         params: DocumentFormattingParams,
     ) -> Result<Option<Vec<lsp_types::TextEdit>>> {

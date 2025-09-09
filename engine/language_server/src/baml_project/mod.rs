@@ -941,7 +941,7 @@ impl Project {
     }
 
     /// Iterates over all generators and prints error messages if version mismatches are found.
-    pub fn check_version_on_save(&self, feature_flags: &[String]) -> Option<String> {
+    pub fn check_version_on_save(&self, _feature_flags: &[String]) -> Option<String> {
         let mut first_error_message = None;
         if let Ok(generators) = self.list_generators(&[]) {
             for gen in generators.iter() {
@@ -957,7 +957,7 @@ impl Project {
     }
 
     /// Returns true if any generator produces TypeScript output.
-    pub fn is_typescript_generator_present(&self, feature_flags: &[String]) -> bool {
+    pub fn is_typescript_generator_present(&self, _feature_flags: &[String]) -> bool {
         if let Ok(generators) = self.list_generators(&[]) {
             generators
                 .iter()
@@ -1171,7 +1171,7 @@ impl Project {
     /// Returns a list of generator configurations.
     pub fn list_generators(
         &self,
-        feature_flags: &[String],
+        _feature_flags: &[String],
     ) -> Result<Vec<BamlGeneratorConfig>, &str> {
         if let Some(ref runtime) = self.current_runtime {
             Ok(runtime.list_generators())

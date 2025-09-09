@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::Result;
-use baml_types::{ir_type::TypeNonStreaming, HasType};
+use baml_types::ir_type::TypeNonStreaming;
 
 use super::{IntermediateRepr, Walker};
 
@@ -17,7 +17,9 @@ mod function;
 mod retry_policy;
 mod type_alias;
 
+#[allow(dead_code)]
 trait ShallowSignature {
+    #[allow(dead_code)]
     fn shallow_hash_prefix(&self) -> &'static str;
     fn shallow_interface_hash(&self) -> impl std::hash::Hash;
     fn unsorted_interface_dependencies(&self) -> HashSet<String>;

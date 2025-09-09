@@ -29,6 +29,7 @@ pub struct RoundRobinStrategy {
     current_index: AtomicUsize,
 }
 
+#[allow(dead_code)]
 fn serialize_atomic<S>(value: &AtomicUsize, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,

@@ -1,4 +1,5 @@
 // This file attempts to find all possible JSON objects in a string and parse them.
+#![allow(dead_code)]
 
 use std::iter::Peekable;
 
@@ -206,10 +207,10 @@ impl JsonParseState {
 
         if let Some(last) = self.collection_stack.last_mut() {
             match last {
-                JsonCollection::Object(keys, values, completion_state) => {
+                JsonCollection::Object(keys, values, _completion_state) => {
                     if keys.len() == values.len() {
                         match value {
-                            Value::String(s, completion_state) => keys.push(s),
+                            Value::String(s, _completion_state) => keys.push(s),
                             _ => keys.push(value.to_string()),
                         }
                     } else {

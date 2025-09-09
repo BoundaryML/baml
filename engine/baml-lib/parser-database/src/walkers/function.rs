@@ -141,7 +141,7 @@ impl<'db> FunctionWalker<'db> {
         };
         match ClientSpec::new_from_id(client.0.as_str()) {
             Ok(ClientSpec::Named(name)) => {
-                if let Some(client) = self.db.find_client(&name) {
+                if let Some(_client) = self.db.find_client(&name) {
                     Ok(ClientSpec::Named(name))
                 } else {
                     let clients = self

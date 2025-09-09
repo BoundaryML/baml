@@ -123,7 +123,7 @@ pub fn scan_vertex_response_stream(
     let inner = match accumulated {
         Ok(accumulated) => accumulated,
         // We'll just keep the first error and return it
-        Err(e) => return Ok(()),
+        Err(_e) => return Ok(()),
     };
 
     let event = VertexResponse::deserialize(&event_body)
