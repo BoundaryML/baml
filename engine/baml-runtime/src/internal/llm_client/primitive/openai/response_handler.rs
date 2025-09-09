@@ -150,6 +150,12 @@ pub fn scan_openai_chat_completion_stream(
         inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
         inner.metadata.output_tokens = Some(usage.completion_tokens);
         inner.metadata.total_tokens = Some(usage.total_tokens);
+        inner.metadata.cached_input_tokens =
+            usage.input_tokens_details.as_ref().and_then(|details| {
+                details
+                    .get("cached_tokens")
+                    .and_then(|cached| cached.as_u64())
+            })
     }
 
     Ok(())
@@ -405,6 +411,12 @@ pub fn scan_openai_responses_stream(
                 inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
                 inner.metadata.output_tokens = Some(usage.completion_tokens);
                 inner.metadata.total_tokens = Some(usage.total_tokens);
+                inner.metadata.cached_input_tokens =
+                    usage.input_tokens_details.as_ref().and_then(|details| {
+                        details
+                            .get("cached_tokens")
+                            .and_then(|cached| cached.as_u64())
+                    })
             }
         }
         ResponseFailed { response, .. } => {
@@ -456,6 +468,12 @@ pub fn scan_openai_responses_stream(
                 inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
                 inner.metadata.output_tokens = Some(usage.completion_tokens);
                 inner.metadata.total_tokens = Some(usage.total_tokens);
+                inner.metadata.cached_input_tokens =
+                    usage.input_tokens_details.as_ref().and_then(|details| {
+                        details
+                            .get("cached_tokens")
+                            .and_then(|cached| cached.as_u64())
+                    })
             }
         }
         OutputTextDelta { delta, .. } => {

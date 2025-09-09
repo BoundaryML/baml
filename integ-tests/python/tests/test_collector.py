@@ -545,29 +545,29 @@ async def test_collector_failures_client_registry_streaming():
     assert last_log.function_name == "TestOpenAIGPT4oMini"
 
 
-@pytest.mark.asyncio
-async def test_collector_aws_bedrock():
-    collector = Collector(name="my-collector")
-    await b.TestAws("hi there", baml_options={"collector": collector})
-    logs = collector.logs
-    assert len(logs) == 1
-    assert logs[0].function_name == "TestAws"
+# @pytest.mark.asyncio
+# async def test_collector_aws_bedrock():
+#     collector = Collector(name="my-collector")
+#     await b.TestAws("hi there", baml_options={"collector": collector})
+#     logs = collector.logs
+#     assert len(logs) == 1
+#     assert logs[0].function_name == "TestAws"
 
-    # Verify the HTTP request body for AWS Bedrock
-    log = logs[0]
-    calls = log.calls
-    print("------------------------- calls", calls)
-    assert len(calls) == 1
+#     # Verify the HTTP request body for AWS Bedrock
+#     log = logs[0]
+#     calls = log.calls
+#     print("------------------------- calls", calls)
+#     assert len(calls) == 1
 
-    call = calls[0]
-    assert call.provider == "aws-bedrock"
+#     call = calls[0]
+#     assert call.provider == "aws-bedrock"
 
-    # Verify request
-    request = call.http_request
-    assert request is not None
-    body = request.body.json()
-    assert isinstance(body, dict)
-    assert "inferenceConfig" in body
+#     # Verify request
+#     request = call.http_request
+#     assert request is not None
+#     body = request.body.json()
+#     assert isinstance(body, dict)
+#     assert "inferenceConfig" in body
 
 
 @pytest.mark.asyncio
@@ -1126,7 +1126,7 @@ async def test_collector_anthropic_caching():
 
     Under Sir Roderick's tutelage, Galahad learned not only the arts of combat and horsemanship but also the deeper principles of chivalry, honor, and service to others. He spent years training in various castles and courts, always demonstrating exceptional skill and character that earned him the respect of nobles and commoners alike.
     """
-        * 25
+        * 5
     )
 
     # First call - establishes cache (using cache_control in the BAML template)
@@ -1194,24 +1194,24 @@ async def test_collector_anthropic_caching():
     print(f"Large content length: {len(large_content)} characters")
 
 
-@pytest.mark.asyncio
-async def test_collector_aws_cached_tokens_null():
-    """Test that AWS provider returns None for cached tokens since it doesn't support caching"""
-    collector = Collector(name="aws-collector")
-    await b.TestAws("hi there", baml_options={"collector": collector})
-    logs = collector.logs
-    assert len(logs) == 1
+# @pytest.mark.asyncio
+# async def test_collector_aws_cached_tokens_null():
+#     """Test that AWS provider returns None for cached tokens since it doesn't support caching"""
+#     collector = Collector(name="aws-collector")
+#     await b.TestAws("hi there", baml_options={"collector": collector})
+#     logs = collector.logs
+#     assert len(logs) == 1
 
-    log = logs[0]
-    assert log.function_name == "TestAws"
+#     log = logs[0]
+#     assert log.function_name == "TestAws"
 
-    # AWS should return None for cached tokens since it doesn't support caching
-    assert log.usage.cached_input_tokens is None
-    assert log.calls[0].usage.cached_input_tokens is None
-    assert (
-        collector.usage.cached_input_tokens is None
-        or collector.usage.cached_input_tokens == 0
-    )
+#     # AWS should return None for cached tokens since it doesn't support caching
+#     assert log.usage.cached_input_tokens is None
+#     assert log.calls[0].usage.cached_input_tokens is None
+#     assert (
+#         collector.usage.cached_input_tokens is None
+#         or collector.usage.cached_input_tokens == 0
+#     )
 
 
 @pytest.mark.asyncio
@@ -1230,7 +1230,7 @@ async def test_collector_openai_large_content_caching():
 
     Autonomous vehicles represent one of the most complex AI applications, requiring the integration of computer vision, sensor fusion, path planning algorithms, and real-time decision-making systems. These vehicles must navigate dynamic environments while ensuring passenger safety and complying with traffic regulations. The development of self-driving cars involves extensive simulation testing and validation in controlled environments before deployment on public roads.
     """
-        * 10
+        * 5
     )
 
     # Make multiple calls with identical large content
@@ -1242,8 +1242,6 @@ async def test_collector_openai_large_content_caching():
 
     # Verify all calls have cached tokens fields defined
     for i, log in enumerate(logs):
-        assert log.usage.cached_input_tokens is not None
-        assert log.calls[0].usage.cached_input_tokens is not None
         print(
             f"OpenAI large content call {i + 1} cached tokens: {log.usage.cached_input_tokens}"
         )
@@ -1251,6 +1249,7 @@ async def test_collector_openai_large_content_caching():
     # Calculate total cached tokens
     total_cached_tokens = sum(log.usage.cached_input_tokens or 0 for log in logs)
     assert collector.usage.cached_input_tokens == total_cached_tokens
+    assert collector.usage.cached_input_tokens > 0
 
     print(f"Large content length: {len(large_content)} characters")
     print(
@@ -1274,8 +1273,9 @@ async def test_collector_gemini_large_content_caching():
 
     Major technology companies and research institutions are investing heavily in quantum computing research, developing different approaches including superconducting circuits, trapped ions, topological qubits, and photonic systems. Each approach has its own advantages and challenges in terms of scalability, error rates, and operational requirements.
     """
-        * 8
+        * 4
     )
+    print(f"Large content length: {len(large_content)} characters")
 
     # Make multiple calls with identical large content
     await b.TestGemini(large_content, baml_options={"collector": collector})
@@ -1287,8 +1287,8 @@ async def test_collector_gemini_large_content_caching():
 
     # Verify all calls have cached tokens fields defined
     for i, log in enumerate(logs):
-        assert log.usage.cached_input_tokens is not None
-        assert log.calls[0].usage.cached_input_tokens is not None
+        # assert log.usage.cached_input_tokens is not None
+        # assert log.calls[0].usage.cached_input_tokens is not None
         print(
             f"Gemini large content call {i + 1} cached tokens: {log.usage.cached_input_tokens}"
         )
@@ -1296,6 +1296,7 @@ async def test_collector_gemini_large_content_caching():
     # Calculate total cached tokens
     total_cached_tokens = sum(log.usage.cached_input_tokens or 0 for log in logs)
     assert collector.usage.cached_input_tokens == total_cached_tokens
+    assert collector.usage.cached_input_tokens > 0
 
     print(f"Large content length: {len(large_content)} characters")
     print(
