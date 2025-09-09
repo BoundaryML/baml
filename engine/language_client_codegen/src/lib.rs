@@ -1,18 +1,15 @@
 use std::{
-    collections::{BTreeMap, HashSet},
-    path::{Path, PathBuf},
+    collections::HashSet,
+    path::PathBuf,
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use baml_types::{Constraint, ConstraintLevel, TypeIR};
 use indexmap::IndexMap;
 use internal_baml_core::{
-    configuration::{GeneratorDefaultClientMode, GeneratorOutputType, ModuleFormat},
+    configuration::GeneratorOutputType,
     ir::repr::IntermediateRepr,
 };
-use regex::Regex;
-use sugar_path::SugarPath;
-use version_check::{check_version, GeneratorType, VersionCheckMode};
 
 // mod dir_writer;
 // mod go;
@@ -40,39 +37,6 @@ pub trait GenerateClient {
     ) -> Result<GenerateOutput>;
 }
 
-// Assume VSCode is the only one that uses WASM, and it does call this method but at a different time.
-#[cfg(target_arch = "wasm32")]
-fn version_check_with_error(
-    runtime_version: &str,
-    gen_version: &str,
-    generator_type: GeneratorType,
-    mode: VersionCheckMode,
-    client_type: GeneratorOutputType,
-) -> Result<()> {
-    Ok(())
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn version_check_with_error(
-    runtime_version: &str,
-    gen_version: &str,
-    generator_type: GeneratorType,
-    mode: VersionCheckMode,
-    client_type: GeneratorOutputType,
-) -> Result<()> {
-    let res = check_version(
-        gen_version,
-        runtime_version,
-        generator_type,
-        mode,
-        client_type,
-        true,
-    );
-    match res {
-        Some(e) => Err(anyhow::anyhow!("{}", e.msg())),
-        None => Ok(()),
-    }
-}
 
 // impl GenerateClient for GeneratorOutputType {
 //     fn generate_client(
