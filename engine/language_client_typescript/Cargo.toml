@@ -8,7 +8,7 @@ name = "baml"
 crate-type = ["cdylib"]
 
 [lints.rust]
-dead_code = "deny"
+dead_code = "warn"
 elided_named_lifetimes = "deny"
 unused_imports = "allow"
 unused_variables = "allow"

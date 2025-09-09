@@ -1,7 +1,11 @@
 use std::{
     collections::BTreeMap,
-    io::ErrorKind,
     path::{Path, PathBuf},
+};
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::{
+    io::ErrorKind,
     thread::sleep,
     time::Duration,
 };
@@ -224,6 +228,7 @@ pub struct FileCollector<'a, L: LanguageFeatures + Default> {
     on_file_finished: Vec<Box<dyn Fn(&Path, &mut String) -> Result<()> + 'a>>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn try_delete_tmp_dir(temp_path: &Path) -> Result<()> {
     // if the .tmp dir exists, delete it so we can get back to a working state without user intervention.
     let delete_attempts = 3; // Number of attempts to delete the directory
@@ -324,6 +329,7 @@ impl<'a, L: LanguageFeatures + Default> FileCollector<'a, L> {
     /// in the first 1024 bytes, and limit our search to a max of N unrecognized files.
     /// This gives us performance bounds if, for example, we find ourselves iterating
     /// through node_modules or .pycache or some other thing.
+    #[cfg(not(target_arch = "wasm32"))]
     fn remove_dir_safe(&self, output_path: &Path) -> Result<()> {
         if !output_path.exists() {
             return Ok(());
@@ -405,7 +411,7 @@ impl<'a, L: LanguageFeatures + Default> FileCollector<'a, L> {
     ///
     /// `output_path` is the path to be written to, and the path that will be prepended
     /// to the returned file entries
-    pub fn commit(&mut self, output_path: &Path) -> Result<IndexMap<PathBuf, String>> {
+    pub fn commit(&mut self, #[cfg_attr(target_arch = "wasm32", allow(unused_variables))] output_path: &Path) -> Result<IndexMap<PathBuf, String>> {
         for (path, content) in self.files.iter_mut() {
             for on_file_finished in self.on_file_finished.iter() {
                 on_file_finished(path, content)?;
