@@ -1892,7 +1892,7 @@ pub fn typecheck_expression(
                     Some(TypeIR::Primitive(baml_types::TypeValue::Bool, _)),
                     _,
                     Some(TypeIR::Primitive(baml_types::TypeValue::Bool, _)),
-                ) if !operator.is_arithmetic() && !operator.is_bitwise() => Some(TypeIR::bool()),
+                ) if operator.is_logical() => Some(TypeIR::bool()),
 
                 // Err: Operation on int and float
                 (
@@ -1930,10 +1930,38 @@ pub fn typecheck_expression(
                 }
 
                 _ => {
-                    diagnostics.push_error(DatamodelError::new_validation_error(
-                        "Invalid binary operation",
-                        span.clone(),
-                    ));
+                    match (left.meta().1.as_ref(), right.meta().1.as_ref()) {
+                        (None, Some(_)) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                "Invalid binary operation: cannot infer type of left operand",
+                                span.clone(),
+                            ))
+                        }
+
+                        (Some(_), None) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                "Invalid binary operation: cannot infer type of right operand",
+                                span.clone(),
+                            ))
+                        }
+
+                        (Some(left_type), Some(right_type)) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Invalid binary operation ({operator}) on different types: {} {operator} {}",
+                                    left_type.name_for_user(),
+                                    right_type.name_for_user()
+                                ),
+                                span.clone(),
+                            ));
+                        }
+
+                        (None, None) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                "Invalid binary operation: cannot infer type of operands",
+                                span.clone(),
+                            ));
+                        }
+                    };
 
                     None
                 }
