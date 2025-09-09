@@ -1,3 +1,4 @@
+'use client';
 import { useAtomValue } from 'jotai';
 import { useEffect, useRef, useCallback } from 'react';
 import mermaid from 'mermaid';

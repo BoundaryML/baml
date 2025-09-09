@@ -6768,7 +6768,17 @@ components:
       type: object
       properties:
         client_registry:
-          $ref: '#/components/schemas/ClientProperty'
+          type: object
+          properties:
+            clients:
+              type: array
+              items:
+                $ref: '#/components/schemas/ClientProperty'
+            primary:
+              type: string
+          required:
+          - clients
+          additionalProperties: false
       required:
       - client_registry
       additionalProperties: false

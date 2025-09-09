@@ -15,7 +15,7 @@ use baml_runtime::{
     BamlRuntime, BamlSrcReader, DiagnosticsError, FunctionResult, IRHelper,
     InternalRuntimeInterface, RenderCurlSettings, RenderedPrompt,
 };
-use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, ResponseCheck, TypeValue};
+use baml_types::{BamlValue, GeneratorOutputType, ResponseCheck};
 use futures::{channel::mpsc, StreamExt};
 use indexmap::IndexMap;
 use internal_baml_codegen::version_check::{check_version, GeneratorType, VersionCheckMode};
@@ -849,115 +849,6 @@ impl WithRenderError for baml_runtime::internal::llm_client::LLMResponse {
     }
 }
 
-fn get_dummy_value(
-    indent: usize,
-    allow_multiline: bool,
-    t: &baml_runtime::TypeIR,
-) -> Option<String> {
-    let indent_str = "  ".repeat(indent);
-    match t {
-        baml_runtime::TypeIR::Primitive(t, _) => {
-            let dummy = match t {
-                TypeValue::String => {
-                    if allow_multiline {
-                        format!(
-                            "#\"\n{indent1}hello world\n{indent_str}\"#",
-                            indent1 = "  ".repeat(indent + 1)
-                        )
-                    } else {
-                        "\"a_string\"".to_string()
-                    }
-                }
-                TypeValue::Int => "123".to_string(),
-                TypeValue::Float => "0.5".to_string(),
-                TypeValue::Bool => "true".to_string(),
-                TypeValue::Null => "null".to_string(),
-                TypeValue::Media(BamlMediaType::Image) => {
-                    "{ url \"https://imgs.xkcd.com/comics/standards.png\" }".to_string()
-                }
-                TypeValue::Media(BamlMediaType::Audio) => {
-                    "{ url \"https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg\" }".to_string()
-                }
-                TypeValue::Media(BamlMediaType::Pdf) => {
-                    "{ url \"https://arxiv.org/pdf/2305.08675\" }".to_string()
-                }
-                TypeValue::Media(BamlMediaType::Video) => {
-                    "{ url \"https://samplelib.com/lib/preview/mp4/sample-5s.mp4\" }".to_string()
-                }
-            };
-
-            Some(dummy)
-        }
-        baml_runtime::TypeIR::Literal(_, _) => None,
-        baml_runtime::TypeIR::Enum { .. } => None,
-        baml_runtime::TypeIR::Class { .. } => None,
-        baml_runtime::TypeIR::RecursiveTypeAlias { .. } => None,
-        baml_runtime::TypeIR::List(item, _) => {
-            let dummy = get_dummy_value(indent + 1, allow_multiline, item);
-            // Repeat it 2 times
-            match dummy {
-                Some(dummy) => {
-                    if allow_multiline {
-                        Some(format!(
-                            "[\n{indent1}{dummy},\n{indent1}{dummy}\n{indent_str}]",
-                            dummy = dummy,
-                            indent1 = "  ".repeat(indent + 1)
-                        ))
-                    } else {
-                        Some(format!("[{dummy}, {dummy}]"))
-                    }
-                }
-                _ => None,
-            }
-        }
-        baml_runtime::TypeIR::Map(k, v, _) => {
-            let dummy_k = get_dummy_value(indent, false, k);
-            let dummy_v = get_dummy_value(indent + 1, allow_multiline, v);
-            match (dummy_k, dummy_v) {
-                (Some(k), Some(v)) => {
-                    if allow_multiline {
-                        Some(format!(
-                            r#"{{
-{indent1}{k} {v}
-{indent_str}}}"#,
-                            indent1 = "  ".repeat(indent + 1),
-                        ))
-                    } else {
-                        Some(format!("{{ {k} {v} }}"))
-                    }
-                }
-                _ => None,
-            }
-        }
-
-        baml_runtime::TypeIR::Union(fields, _) => fields
-            .iter_include_null()
-            .iter()
-            .filter_map(|f| get_dummy_value(indent, allow_multiline, f))
-            .next(),
-        baml_runtime::TypeIR::Tuple(vals, _) => {
-            let dummy = vals
-                .iter()
-                .filter_map(|f| get_dummy_value(0, false, f))
-                .collect::<Vec<_>>()
-                .join(", ");
-            Some(format!("({dummy},)"))
-        }
-        baml_runtime::TypeIR::Arrow(..) => None,
-        baml_runtime::TypeIR::Top(_) => panic!(
-            "TypeIR::Top should have been resolved by the compiler before code generation. \
-             This indicates a bug in the type resolution phase."
-        ),
-    }
-}
-
-fn get_dummy_field(indent: usize, name: &str, t: &baml_runtime::TypeIR) -> Option<String> {
-    let indent_str = "  ".repeat(indent);
-    let dummy = get_dummy_value(indent, true, t);
-
-    dummy.map(|dummy| format!("{indent_str}{name} {dummy}"))
-}
-
 // Rust-only methods
 impl WasmRuntime {
     pub fn run_generators(
@@ -1027,12 +918,20 @@ impl WasmRuntime {
 }}
 "#,
                     name = f.name(),
-                    args = f
-                        .inputs()
-                        .iter()
-                        .filter_map(|(k, t)| get_dummy_field(2, k, t))
-                        .collect::<Vec<_>>()
-                        .join("\n")
+                    args = {
+                        // Convert baml_runtime::TypeIR inputs to baml_types::TypeIR and use our improved dummy generator
+                        let params = f
+                            .inputs()
+                            .iter()
+                            .map(|(k, runtime_type)| (k.clone(), runtime_type.clone()))
+                            .collect::<indexmap::IndexMap<String, _>>();
+
+                        // Use the IR's get_dummy_args method
+                        self.runtime
+                            .internal()
+                            .ir()
+                            .get_dummy_args(2, true, &params)
+                    }
                 );
 
                 let wasm_span = match f.span() {
@@ -1044,12 +943,22 @@ impl WasmRuntime {
                     name: f.name().to_string(),
                     span: wasm_span,
                     signature: {
-                        let inputs = f
-                            .inputs()
-                            .iter()
-                            .filter_map(|(k, t)| get_dummy_field(2, k, t))
-                            .collect::<Vec<_>>()
-                            .join(",");
+                        let inputs = {
+                            let params = f
+                                .inputs()
+                                .iter()
+                                .map(|(k, runtime_type)| (k.clone(), runtime_type.clone()))
+                                .collect::<indexmap::IndexMap<String, _>>();
+
+                            self.runtime
+                                .internal()
+                                .ir()
+                                .get_dummy_args(2, false, &params)
+                                .split('\n')
+                                .map(|line| line.trim().to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        };
 
                         format!("({}) -> {}", inputs, f.output())
                     },

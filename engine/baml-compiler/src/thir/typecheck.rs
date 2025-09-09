@@ -44,7 +44,7 @@ pub fn typecheck_returning_context<'a>(
         .map(|c| (c.name.clone(), c))
         .collect();
 
-    let enums = hir
+    let enums: BamlMap<String, hir::Enum> = hir
         .enums
         .clone()
         .into_iter()
@@ -54,6 +54,7 @@ pub fn typecheck_returning_context<'a>(
     // Create typing context with all functions
     let mut typing_context = TypeContext::new();
     typing_context.classes.extend(classes.clone());
+    typing_context.enums.extend(enums.clone());
 
     // Add expr functions to typing context
     for func in &hir.expr_functions {
@@ -271,11 +272,32 @@ pub fn typecheck_returning_context<'a>(
         })
         .collect();
 
+    // TODO: Those are HIR enums, figure out if there's something different we
+    // would need in a THIR enum? Does it need a "type"?.
+    let thir_enums = enums
+        .iter()
+        .map(|(name, enum_def)| {
+            (
+                name.clone(),
+                thir::Enum {
+                    name: enum_def.name.clone(),
+                    variants: enum_def.variants.clone(),
+                    span: enum_def.span.clone(),
+                    ty: TypeIR::Enum {
+                        name: enum_def.name.clone(),
+                        dynamic: false,
+                        meta: Default::default(),
+                    },
+                },
+            )
+        })
+        .collect();
+
     (
         THir {
             llm_functions: hir.llm_functions.clone(),
             classes: thir_classes,
-            enums,
+            enums: thir_enums,
             expr_functions,
             global_assignments: BamlMap::new(),
         },
@@ -302,6 +324,7 @@ pub struct TypeContext<'func> {
     // Variables in scope with mutability info
     pub vars: BamlMap<String, VarInfo>,
     pub classes: BamlMap<String, hir::Class>,
+    pub enums: BamlMap<String, hir::Enum>,
     // Used for knowing whether `break` and `continue` are inside a loop or not.
     pub is_inside_loop: bool,
 
@@ -336,6 +359,7 @@ impl TypeContext<'_> {
             symbols: BamlMap::new(),
             vars,
             classes: BamlMap::new(),
+            enums: BamlMap::new(),
             is_inside_loop: false,
             function_return_type: None,
         }
@@ -428,7 +452,9 @@ impl TypeContext<'_> {
             }
             hir::Expression::Identifier(name, _) => {
                 // Look up type in context
-                self.get_type(name).cloned()
+                self.get_type(name)
+                    .cloned()
+                    .or_else(|| self.enums.get(name).map(|e| TypeIR::r#enum(&e.name)))
             }
             hir::Expression::Array(items, _) => {
                 // Infer array type from first item
@@ -574,6 +600,14 @@ impl TypeContext<'_> {
                             } else {
                                 None
                             }
+                        }
+                        TypeIR::Enum {
+                            name: enum_name, ..
+                        } => {
+                            // Look up field in enum definition
+                            self.enums
+                                .get(&enum_name)
+                                .map(|enum_def| TypeIR::r#enum(&enum_def.name))
                         }
                         _ => None, // Not a class
                     }
@@ -1162,6 +1196,14 @@ pub fn typecheck_expression(
             BamlValueWithMeta::String(value.clone(), (span.clone(), Some(TypeIR::string()))),
         ),
         hir::Expression::Identifier(name, span) => {
+            // Enum access: let x = Shape.Rectangle
+            if let Some(enum_def) = context.enums.get(name) {
+                return thir::Expr::Var(
+                    name.clone(),
+                    (span.clone(), Some(TypeIR::r#enum(&enum_def.name))),
+                );
+            }
+
             // Look up type in context
             let var_type = context.get_type(name).cloned();
             if var_type.is_none() {
@@ -1735,6 +1777,20 @@ pub fn typecheck_expression(
                         // Class definition not found (shouldn't happen in normal circumstances)
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             &format!("Class {class_name} not found"),
+                            span.clone(),
+                        ));
+                        None
+                    }
+                }
+                Some(TypeIR::Enum {
+                    name: enum_name, ..
+                }) => {
+                    // Look up field in enum definition
+                    if let Some(enum_def) = context.enums.get(enum_name) {
+                        Some(TypeIR::r#enum(&enum_def.name))
+                    } else {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Enum {enum_name} not found"),
                             span.clone(),
                         ));
                         None

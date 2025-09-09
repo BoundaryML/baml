@@ -17,7 +17,7 @@ use internal_baml_ast::ast::{
     self, Attribute, FieldArity, SubType, ValExpId, WithAttributes, WithIdentifier, WithName,
     WithSpan,
 };
-use internal_baml_diagnostics::{Diagnostics, Span};
+use internal_baml_diagnostics::{DatamodelWarning, Diagnostics, Span};
 use internal_baml_parser_database::{
     walkers::{
         ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, ExprFnWalker,
@@ -941,6 +941,120 @@ impl IntermediateRepr {
     /// Modifies the type to inject any block level attributes that are present on the class or enum.
     pub fn finalize_type(&self, type_generic: &mut TypeIR) {
         self.pass2_repr.update_type(type_generic);
+    }
+
+    // For each test, check that its arguments are valid - that they
+    // have the correct name and type for the function under test.
+    // If there are required args but the test has an empty args block,
+    // Produce an error message with a fully example of an args block with
+    // dummy args.
+    // If there are some args in the test block, give examples of all the
+    // missing args.
+    pub fn validate_test_args(&self, diagnostics: &mut Diagnostics) {
+        use std::collections::HashSet;
+
+        use crate::ir::ir_helpers::IRHelper;
+
+        // Validate LLM function tests
+        for function in &self.functions {
+            for test in &function.elem.tests {
+                if let Some(span) = test.attributes.span.as_ref() {
+                    self.validate_single_test_args(&function.elem, &test.elem, span, diagnostics);
+                }
+            }
+        }
+
+        // Validate expression function tests
+        for expr_function in &self.expr_fns {
+            for test in &expr_function.elem.tests {
+                let pseudo_function = Function {
+                    name: expr_function.elem.name.clone(),
+                    inputs: expr_function.elem.inputs.clone(),
+                    output: expr_function.elem.output.clone(),
+                    tests: vec![],                 // Not used in validation
+                    configs: vec![],               // Not used in validation
+                    default_config: String::new(), // Not used in validation
+                };
+                if let Some(span) = test.attributes.span.as_ref() {
+                    self.validate_single_test_args(&pseudo_function, &test.elem, span, diagnostics);
+                }
+            }
+        }
+    }
+
+    fn validate_single_test_args(
+        &self,
+        function: &Function,
+        test: &TestCase,
+        test_span: &Span,
+        diagnostics: &mut Diagnostics,
+    ) {
+        use std::collections::HashSet;
+
+        use baml_types::BamlMap;
+        use internal_baml_diagnostics::DatamodelError;
+
+        use crate::ir::ir_helpers::IRHelper;
+
+        let function_inputs: HashSet<&String> =
+            function.inputs.iter().map(|(name, _)| name).collect();
+        let test_args: HashSet<&String> = test.args.keys().collect();
+
+        // Find missing required arguments (filter out optional/nullable types)
+        let missing_args: Vec<&String> = function_inputs
+            .difference(&test_args)
+            .filter(|name| {
+                function
+                    .inputs
+                    .iter()
+                    .find(|(input_name, _)| *input_name == name.to_string())
+                    .map(|(_, type_ir)| !type_ir.is_optional())
+                    .unwrap_or(false)
+            })
+            .copied()
+            .collect();
+
+        // Handle missing arguments
+        if !missing_args.is_empty() {
+            if test.args.is_empty() && !function.inputs.is_empty() {
+                // Test has empty args block but function has required args - provide full example
+                let params_map: BamlMap<String, TypeIR> = function
+                    .inputs
+                    .iter()
+                    .map(|(name, type_ir)| (name.clone(), type_ir.clone()))
+                    .collect();
+                let example_args = self.get_dummy_args(1, true, &params_map);
+
+                diagnostics.push_warning(DatamodelWarning::new(
+                    format!("Test '{}' is missing required arguments for function '{}'. Add an args block like:\n\nargs {{\n{}\n}}",
+                             test.name, function.name, example_args),
+                    test_span.clone(),
+                ));
+            } else if !missing_args.is_empty() {
+                // Test has some args but is missing others - show missing ones with dummy values
+                let missing_params_map: BamlMap<String, TypeIR> = missing_args
+                    .iter()
+                    .filter_map(|name| {
+                        function
+                            .inputs
+                            .iter()
+                            .find(|(input_name, _)| input_name == *name)
+                            .map(|(name, type_ir)| (name.clone(), type_ir.clone()))
+                    })
+                    .collect();
+                let missing_examples = self.get_dummy_args(0, false, &missing_params_map);
+
+                diagnostics.push_warning(DatamodelWarning::new(
+                    format!(
+                        "Test '{}' is missing required arguments for function '{}': {}",
+                        test.name,
+                        function.name,
+                        missing_examples.replace('\n', ", ")
+                    ),
+                    test_span.clone(),
+                ));
+            }
+        }
     }
 
     /// Some block_types like enums and classes may have attributes on them.

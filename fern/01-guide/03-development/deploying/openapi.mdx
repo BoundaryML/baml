@@ -53,7 +53,7 @@ CMD baml-cli serve --preview --port 2024
 
 <Tabs>
 
-<Tab title="Using docker-compose">
+<Tab title="Using docker-compose" language="bash">
 
 Assuming you intend to run your own application in a container, we recommend
 using `docker-compose` to run your app and BAML-over-HTTP side-by-side:
@@ -96,7 +96,7 @@ services:
 
 </Tab>
 
-<Tab title="Using docker">
+<Tab title="Using docker" language="bash">
 
 If you don't care about using `docker-compose`, you can just run:
 
@@ -188,7 +188,7 @@ To secure your BAML server, you can also set a password on it using the
 
 <Tabs>
 
-<Tab title="bash">
+<Tab title="bash" language="bash">
 
 ```bash
 BAML_PASSWORD=sk-baml-your-secret-password \
@@ -196,7 +196,7 @@ BAML_PASSWORD=sk-baml-your-secret-password \
 ```
 </Tab>
 
-<Tab title="Dockerfile">
+<Tab title="Dockerfile" language="docker">
 
 ```docker
 FROM node:20
@@ -224,14 +224,14 @@ If you attach your password to the request, you'll see that it now returns `200 
 
 <Tabs>
 
-<Tab title="Using HTTP basic auth">
+<Tab title="Using HTTP basic auth" language="bash">
 ```bash
 export BAML_PASSWORD=sk-baml-your-secret-password
 curl "http://baml:${BAML_PASSWORD}@localhost:2024/_debug/status"
 ```
 </Tab>
 
-<Tab title="Using X-BAML-API-KEY">
+<Tab title="Using X-BAML-API-KEY" language="bash">
 ```bash
 export BAML_PASSWORD=sk-baml-your-secret-password
 curl "http://localhost:2024/_debug/status" -H "X-BAML-API-KEY: ${BAML_PASSWORD}"

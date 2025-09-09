@@ -193,6 +193,7 @@ impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterc
             request.method().to_string(),
             headers,
             HTTPBody::new(request.body().bytes().unwrap_or_default().to_vec()),
+            self.client_details.clone(),
         );
         let call_stack = self.call_stack.clone();
         let request = Arc::new(request);

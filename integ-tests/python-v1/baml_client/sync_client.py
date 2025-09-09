@@ -3196,6 +3196,20 @@ class BamlSyncClient:
                 "b": b,
             })
             return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def CallLlmDescribeImage(self, img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.CallLlmDescribeImage(img=img,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="CallLlmDescribeImage", args={
+                "img": img,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def CallReturnOne(self, 
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -3266,6 +3280,20 @@ class BamlSyncClient:
                 "a": a,"b": b,
             })
             return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def ReturnCategory(self, category: types.Category,
+        baml_options: BamlCallOptions = {},
+    ) -> types.Category:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.ReturnCategory(category=category,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="ReturnCategory", args={
+                "category": category,
+            })
+            return typing.cast(types.Category, result.cast_to(types, types, stream_types, False, __runtime__))
     def ReturnElseIfExpr(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -6051,6 +6079,18 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def CallLlmDescribeImage(self, img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[str], str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="CallLlmDescribeImage", args={
+            "img": img,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[str], str](
+          result,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def CallReturnOne(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
@@ -6109,6 +6149,18 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ReturnCategory(self, category: types.Category,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[types.Category], types.Category]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ReturnCategory", args={
+            "category": category,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[types.Category], types.Category](
+          result,
+          lambda x: typing.cast(typing.Optional[types.Category], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Category, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ReturnElseIfExpr(self, a: bool,b: bool,
@@ -7769,6 +7821,13 @@ class BamlHttpRequestClient:
             "b": b,
         }, mode="request")
         return result
+    def CallLlmDescribeImage(self, img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="CallLlmDescribeImage", args={
+            "img": img,
+        }, mode="request")
+        return result
     def CallReturnOne(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -7802,6 +7861,13 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="NormalElseIfStmt", args={
             "a": a,"b": b,
+        }, mode="request")
+        return result
+    def ReturnCategory(self, category: types.Category,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ReturnCategory", args={
+            "category": category,
         }, mode="request")
         return result
     def ReturnElseIfExpr(self, a: bool,b: bool,
@@ -9422,6 +9488,13 @@ class BamlHttpStreamRequestClient:
             "b": b,
         }, mode="stream")
         return result
+    def CallLlmDescribeImage(self, img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="CallLlmDescribeImage", args={
+            "img": img,
+        }, mode="stream")
+        return result
     def CallReturnOne(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -9455,6 +9528,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="NormalElseIfStmt", args={
             "a": a,"b": b,
+        }, mode="stream")
+        return result
+    def ReturnCategory(self, category: types.Category,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ReturnCategory", args={
+            "category": category,
         }, mode="stream")
         return result
     def ReturnElseIfExpr(self, a: bool,b: bool,

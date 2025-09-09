@@ -78,9 +78,6 @@ export const PromptPreview = () => {
         <SidebarInset>
           {wasm ? (
             <div className="h-full flex flex-col overflow-hidden relative">
-              <div className="flex-shrink-0 px-4 py-2 min-w-0 overflow-hidden">
-                <p>ipsum2 placeholder content</p>
-              </div>
               {/* Header - always at top */}
               <div className="flex-shrink-0 px-4 py-2 min-w-0 overflow-hidden">
                 <PreviewToolbar />

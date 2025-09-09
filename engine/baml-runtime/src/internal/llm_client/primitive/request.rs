@@ -202,6 +202,11 @@ pub(crate) async fn build_and_log_outbound_request(
                         .unwrap_or_default()
                         .into(),
                 ),
+                ClientDetails {
+                    name: client.context().name.clone(),
+                    provider: client.context().provider.clone(),
+                    options: client.context().options.clone(),
+                },
             )),
         );
         BAML_TRACER.lock().unwrap().put(Arc::new(event));

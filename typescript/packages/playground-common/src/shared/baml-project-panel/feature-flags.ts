@@ -1,8 +1,9 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
+import { sessionStore } from '../../baml_wasm_web/JotaiProvider';
 
 // Feature flags atom for standalone playground
-export const standaloneFeatureFlagsAtom = atomWithStorage<string[]>('baml-feature-flags', []);
+export const standaloneFeatureFlagsAtom = atomWithStorage<string[]>('baml-feature-flags', [], sessionStore);
 
 // Beta feature flag convenience atom for standalone use (with setter)
 export const standaloneBetaFeatureEnabledAtom = atom(

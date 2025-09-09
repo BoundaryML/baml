@@ -9,10 +9,20 @@ pub mod test {
     use internal_baml_diagnostics::Diagnostics;
     use internal_baml_parser_database::{parse_and_diagnostics, ParserDatabase};
 
+    use crate::{hir, thir};
+
     /// Shim helper function for testing.
     pub fn ast(source: &'static str) -> anyhow::Result<ParserDatabase> {
-        let (parser_db, diagnostics) = parse_and_diagnostics(source)?;
+        let (parser_db, mut diagnostics) = parse_and_diagnostics(source)?;
 
+        if diagnostics.has_errors() {
+            let errors = diagnostics.to_pretty_string();
+            anyhow::bail!("{errors}");
+        }
+
+        // Here because of cycle dependencies between crates and shit.
+        // TODO: We're building this like 3 different times, needs refactoring.
+        thir::typecheck::typecheck(&hir::Hir::from_ast(&parser_db.ast), &mut diagnostics);
         if diagnostics.has_errors() {
             let errors = diagnostics.to_pretty_string();
             anyhow::bail!("{errors}");

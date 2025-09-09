@@ -1354,6 +1354,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElseCallingLlm", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
+    def CallLlmDescribeImage(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="CallLlmDescribeImage", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def CallReturnOne(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
@@ -1383,6 +1389,12 @@ class LlmResponseParser:
     ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="NormalElseIfStmt", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
+
+    def ReturnCategory(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.Category:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnCategory", llm_response=llm_response, mode="request")
+        return typing.cast(types.Category, result)
 
     def ReturnElseIfExpr(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2772,6 +2784,12 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElseCallingLlm", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
+    def CallLlmDescribeImage(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="CallLlmDescribeImage", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], result)
+
     def CallReturnOne(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
@@ -2801,6 +2819,12 @@ class LlmStreamParser:
     ) -> typing.Optional[int]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="NormalElseIfStmt", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
+
+    def ReturnCategory(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[types.Category]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnCategory", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[types.Category], result)
 
     def ReturnElseIfExpr(
         self, llm_response: str, baml_options: BamlCallOptions = {},

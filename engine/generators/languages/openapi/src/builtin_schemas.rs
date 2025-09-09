@@ -160,8 +160,27 @@ pub fn builtin_schemas() -> IndexMap<TypeName, TypeOpenApi> {
                 r#type: TypePrimitive::Object {
                     properties: IndexMap::from_iter(vec![(
                         "client_registry".to_string(),
-                        TypeOpenApi::Ref {
-                            r#ref: "#/components/schemas/ClientProperty".to_string(),
+                        TypeOpenApi::Inline {
+                            r#type: TypePrimitive::Object {
+                                properties: IndexMap::from_iter(vec![
+                                    (
+                                        "clients".to_string(),
+                                        TypeOpenApi::Inline {
+                                            r#type: TypePrimitive::Array {
+                                                items: Box::new(TypeOpenApi::Ref {
+                                                    r#ref: "#/components/schemas/ClientProperty"
+                                                        .to_string(),
+                                                    meta: OpenApiMeta::default(),
+                                                }),
+                                            },
+                                            meta: OpenApiMeta::default(),
+                                        },
+                                    ),
+                                    ("primary".to_string(), type_string()),
+                                ]),
+                                required: IndexSet::from_iter(vec!["clients".to_string()]),
+                                additional_properties: AdditionalProperties::Closed,
+                            },
                             meta: OpenApiMeta::default(),
                         },
                     )]),

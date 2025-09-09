@@ -35,7 +35,7 @@ use anyhow::{Context, Result};
 use baml_ids::{FunctionCallId, HttpRequestId};
 use baml_types::{
     expr::{Expr, ExprMetadata},
-    tracing::events::{HTTPBody, HTTPRequest, TraceEvent},
+    tracing::events::{ClientDetails, HTTPBody, HTTPRequest, TraceEvent},
     BamlMap, BamlValue, BamlValueWithMeta, Completion, Constraint,
 };
 use cfg_if::cfg_if;
@@ -1064,6 +1064,11 @@ impl BamlRuntime {
                     .unwrap_or_default()
                     .into(),
             ),
+            ClientDetails {
+                name: "unknown".to_string(),
+                provider: "unknown".to_string(),
+                options: IndexMap::new(),
+            },
         ))
     }
 

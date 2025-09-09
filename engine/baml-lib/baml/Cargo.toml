@@ -28,4 +28,5 @@ indoc.workspace = true
 either.workspace = true
 strip-ansi-escapes.workspace = true
 baml-compiler = { path = "../../baml-compiler" }
+internal-baml-core = { path = "../baml-core" }
 baml-vm = { path = "../../baml-vm" }

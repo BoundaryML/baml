@@ -311,15 +311,18 @@ impl Server {
         //
         // .with_graceful_shutdown(signal::ctrl_c());
         baml_log::info!(
-            r#"BAML-over-HTTP listening on port {}, serving from {}
+            r#"BAML-over-HTTP listening on port {port}, serving from {src_dir}
 
-Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
+Tip: test that the server is up using `curl http://localhost:{port}/_debug/ping`
 
 (You may need to replace "localhost" with the container hostname as appropriate.)
+
+Once the server is up, open http://localhost:{port}/docs in the browser to test your routes interactively.
+
+Streaming is available via http://localhost:{port}/stream/{{FunctionName}}, but not added to openapi.yaml (no partial types yet).
 "#,
-            self.port,
-            self.src_dir.display(),
-            self.port,
+            port = self.port,
+            src_dir = self.src_dir.display(),
         );
 
         service.await?;
