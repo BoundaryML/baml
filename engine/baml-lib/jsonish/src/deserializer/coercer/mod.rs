@@ -8,10 +8,10 @@ mod field_type;
 mod ir_ref;
 mod match_string;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use anyhow::Result;
-use baml_types::{BamlValue, Constraint, JinjaExpression};
+use baml_types::{BamlValue, Constraint};
 use internal_baml_core::ir::{jinja_helpers::evaluate_predicate, TypeIR};
 use internal_baml_jinja::types::OutputFormatContent;
 

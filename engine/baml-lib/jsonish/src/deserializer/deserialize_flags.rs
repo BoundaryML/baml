@@ -1,4 +1,4 @@
-use baml_types::{Constraint, ConstraintLevel, JinjaExpression};
+use baml_types::{ConstraintLevel, JinjaExpression};
 
 use super::{coercer::ParsingError, types::BamlValueWithFlags};
 

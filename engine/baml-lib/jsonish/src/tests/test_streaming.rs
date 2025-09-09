@@ -1,7 +1,4 @@
-use baml_types::ir_type::UnionConstructor;
 
-use super::*;
-use crate::helpers::load_test_ir;
 
 const NUMBERS: &str = r#"
 class Foo {

@@ -1,6 +1,5 @@
 use anyhow::Result;
-use baml_types::LiteralValue;
-use internal_baml_core::ir::{TypeIR, TypeValue};
+use internal_baml_core::ir::TypeIR;
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
 use crate::deserializer::{coercer::array_helper, types::BamlValueWithFlags};

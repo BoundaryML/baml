@@ -1,4 +1,3 @@
-use baml_types::{Constraint, ConstraintLevel};
 
 use super::{
     deserialize_flags::{DeserializerConditions, Flag},

@@ -1,6 +1,4 @@
-use baml_types::{ir_type::UnionConstructor, type_meta::base::TypeMeta, LiteralValue};
 
-use super::*;
 
 test_deserializer!(
     test_simple_recursive_alias_list,

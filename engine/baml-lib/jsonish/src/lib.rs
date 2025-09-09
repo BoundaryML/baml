@@ -8,7 +8,7 @@ use std::collections::HashMap;
 pub mod jsonish;
 
 use baml_types::{
-    type_meta, BamlValue, BamlValueWithMeta, Completion, CompletionState, HasType, JinjaExpression,
+    type_meta, BamlValue, BamlValueWithMeta, Completion,
     ResponseCheck, TypeIR,
 };
 pub use deserializer::types::BamlValueWithFlags;
@@ -19,7 +19,6 @@ use deserializer::{
 };
 use internal_baml_core::ir::TypeValue;
 use internal_baml_jinja::types::OutputFormatContent;
-use jsonish::Value;
 use serde::{
     ser::{SerializeMap, SerializeStruct},
     Serialize, Serializer,

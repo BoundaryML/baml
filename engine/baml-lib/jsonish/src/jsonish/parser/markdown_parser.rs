@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use super::ParseOptions;
 use crate::jsonish::{
-    parser::{entry, ParsingMode},
+    parser::ParsingMode,
     Value,
 };
 

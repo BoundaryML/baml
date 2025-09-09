@@ -1,4 +1,3 @@
-use super::*;
 
 const CLASS_FOO_INT_STRING: &str = r#"
 class Foo {

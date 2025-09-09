@@ -3,19 +3,17 @@
 
 use std::collections::HashSet;
 
-use anyhow::{Context, Error};
+use anyhow::Context;
 use baml_types::{
-    BamlMap, BamlValueWithMeta, Completion, CompletionState, ResponseCheck, TypeIR, TypeValue,
+    BamlMap, BamlValueWithMeta, Completion, CompletionState, TypeIR, TypeValue,
 };
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::{
-    ir_helpers::infer_type_with_meta,
-    repr::{IntermediateRepr, Walker},
-    Field, IRHelper, IRHelperExtended, IRSemanticStreamingHelper,
+    ir_helpers::infer_type_with_meta, IRHelperExtended, IRSemanticStreamingHelper,
 };
 use thiserror;
 
-use crate::{deserializer::coercer::ParsingError, BamlValueWithFlags, Flag};
+use crate::{BamlValueWithFlags, Flag};
 
 #[derive(Debug, thiserror::Error)]
 pub enum StreamingError {

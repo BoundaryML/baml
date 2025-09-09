@@ -1,9 +1,4 @@
-use baml_types::{
-    ir_type::UnionConstructor,
-    type_meta::base::{StreamingBehavior, TypeMeta},
-};
 
-use super::*;
 
 const BAML_FILE: &str = r###"
 class Score {

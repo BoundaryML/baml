@@ -3,13 +3,12 @@ use std::vec;
 use anyhow::Result;
 use baml_types::LiteralValue;
 use internal_baml_core::ir::TypeIR;
-use internal_baml_jinja::CompletionOptions;
 
 use super::{coerce_primitive::coerce_int, ParsingContext, ParsingError};
 use crate::{
     deserializer::{
         coercer::{coerce_primitive::coerce_bool, match_string::match_string, TypeCoercer},
-        deserialize_flags::{DeserializerConditions, Flag},
+        deserialize_flags::Flag,
         types::BamlValueWithFlags,
     },
     jsonish,

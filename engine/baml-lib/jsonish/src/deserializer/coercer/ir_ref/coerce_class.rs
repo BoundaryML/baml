@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 
 use anyhow::Result;
 use baml_types::{BamlMap, Constraint};
@@ -10,7 +9,7 @@ use crate::deserializer::{
     coercer::{
         array_helper,
         field_type::validate_asserts,
-        match_string::{match_string, matches_string_to_string},
+        match_string::matches_string_to_string,
         run_user_checks, DefaultValue, ParsingError, TypeCoercer,
     },
     deserialize_flags::{DeserializerConditions, Flag},

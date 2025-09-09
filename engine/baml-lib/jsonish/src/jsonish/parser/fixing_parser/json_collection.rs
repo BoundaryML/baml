@@ -1,4 +1,4 @@
-use baml_types::{BamlMap, CompletionState};
+use baml_types::CompletionState;
 use bstd::dedent;
 
 use crate::jsonish::Value;

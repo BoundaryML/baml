@@ -3,7 +3,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use baml_types::{BamlMap, CompletionState};
+use baml_types::CompletionState;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fixes {

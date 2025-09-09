@@ -1,6 +1,4 @@
-use baml_types::{ir_type::UnionConstructor, TypeIR};
 
-use super::*;
 
 const TEST_FILE: &str = r###"
 class ServerActionTask {

@@ -165,7 +165,7 @@ impl TypeCoercer for TypeIR {
                         TypeIR::Class { name, mode, .. } => {
                             IrRef::Class(name, mode).coerce(ctx, target, value)
                         }
-                        TypeIR::RecursiveTypeAlias { name, .. } => {
+                        TypeIR::RecursiveTypeAlias {  .. } => {
                             coerce_alias(ctx, self, value).map(|v| v.with_target(target))
                         }
                         TypeIR::List(_, _) => {

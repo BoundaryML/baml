@@ -1,6 +1,4 @@
-use baml_types::{ir_type::UnionConstructor, type_meta::base::TypeMeta, LiteralValue};
 
-use super::*;
 
 // =============================================================================
 // ENUM TESTS WITH ACCENTED ALIASES

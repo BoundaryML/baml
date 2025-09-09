@@ -2,7 +2,6 @@ pub mod coerce_alias;
 mod coerce_class;
 pub mod coerce_enum;
 
-use core::panic;
 
 use anyhow::Result;
 use internal_baml_core::ir::TypeIR;

@@ -3,24 +3,22 @@ use std::{collections::HashSet, path::PathBuf};
 
 use anyhow::Result;
 use baml_types::{
-    type_meta::base::StreamingBehavior, BamlValueWithMeta, EvaluationContext, JinjaExpression,
+    BamlValueWithMeta, EvaluationContext, JinjaExpression,
     ResponseCheck,
 };
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::{
-    ast::Field,
     internal_baml_diagnostics::SourceFile,
     ir::{
-        repr::IntermediateRepr, ClassWalker, EnumWalker, IRHelper, IRHelperExtended, TypeIR,
-        TypeValue,
+        repr::IntermediateRepr, ClassWalker, EnumWalker, IRHelper, TypeIR,
     },
     validate,
 };
-use internal_baml_jinja::types::{Builder, Class, Enum, Name, OutputFormatContent};
+use internal_baml_jinja::types::{Class, Enum, Name, OutputFormatContent};
 
 use crate::{
     deserializer::{
-        deserialize_flags::{constraint_results, Flag},
+        deserialize_flags::Flag,
         semantic_streaming::validate_streaming_state,
     },
     BamlValueWithFlags, ResponseBamlValue,

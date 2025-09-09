@@ -1,6 +1,5 @@
 // examples of code the LLM may generate that we need to fix
 
-use super::*;
 
 const BAML_FILE: &str = r#"
 class Test {

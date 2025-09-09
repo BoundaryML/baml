@@ -1,11 +1,9 @@
 use std::collections::HashSet;
 
-use anyhow::Result;
 use baml_types::{
-    BamlMap, BamlMedia, BamlValue, BamlValueWithMeta, Constraint, JinjaExpression, TypeIR,
+    BamlMap, BamlMedia, BamlValue, BamlValueWithMeta, JinjaExpression, TypeIR,
 };
 use serde_json::json;
-use strsim::jaro;
 
 use super::{
     coercer::ParsingError,

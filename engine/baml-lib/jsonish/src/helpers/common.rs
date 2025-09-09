@@ -1,5 +1,3 @@
-use baml_types::{LiteralValue, TypeIR};
-use internal_baml_jinja::types::{Builder, OutputFormatContent};
 
 pub const CLASS_SCHEMA: &str = r#"
 class Book {

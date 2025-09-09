@@ -5,7 +5,7 @@
 use std::{cmp::Ordering, collections::HashMap};
 
 use anyhow::Result;
-use baml_types::{TypeIR, TypeValue};
+use baml_types::TypeIR;
 
 use super::ParsingContext;
 use crate::{

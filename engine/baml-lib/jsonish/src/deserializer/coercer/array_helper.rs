@@ -1,7 +1,6 @@
-use std::any::Any;
 
 use anyhow::Result;
-use internal_baml_core::{ast::Field, ir::TypeIR};
+use internal_baml_core::ir::TypeIR;
 
 use super::{ParsingContext, ParsingError};
 use crate::deserializer::{deserialize_flags::Flag, types::BamlValueWithFlags};
