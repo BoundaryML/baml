@@ -239,7 +239,7 @@ mod tests {
                 prompt_tokens: Some(128),
                 output_tokens: Some(71),
                 total_tokens: Some(199),
-                cached_input_tokens: None,
+                cached_input_tokens: 0,
             },
         };
 
