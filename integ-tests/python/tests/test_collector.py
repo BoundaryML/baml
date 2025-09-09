@@ -1160,14 +1160,19 @@ async def test_collector_anthropic_caching():
     assert second_log.calls[0].usage.cached_input_tokens is not None
 
     # Third call to really ensure caching is working
-    await b.TestCaching(
+    stream = b.stream.TestCaching(
         large_content,
         "How did Sir Galahad become a knight?",
         baml_options={"collector": collector},
     )
+    async for _ in stream:
+        pass
+    await stream.get_final_response()
 
     third_log = collector.logs[2]
     assert third_log is not None
+    assert third_log.usage.cached_input_tokens is not None
+    assert third_log.calls[0].usage.cached_input_tokens is not None
 
     # At least one of the later calls should have cached tokens > 0
     has_cached_tokens = (second_log.usage.cached_input_tokens or 0) > 0 or (
