@@ -156,6 +156,10 @@ tasks {
     // Configure the runIde task to auto-open integ-tests directory
     runIde {
         args = listOf("${layout.projectDirectory}/../integ-tests/baml_src")
+        jvmArgs = listOf(
+            "-Didea.log.debug.categories=#com.boundaryml.jetbrains_ext.BamlLanguageClient",
+            "-Didea.log.console.stdout.level=DEBUG"
+        )
     }
     
     // Configure trusted paths to avoid security prompts in development

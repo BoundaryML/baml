@@ -20,7 +20,7 @@
           <option value="runIde" />
         </list>
       </option>
-      <option name="vmOptions" value="-Didea.log.console.stdout.level=DEBUG" />
+      <option name="vmOptions" value="-Didea.log.console.stdout.level=DEBUG -Didea.log.debug.categories=#com.boundaryml.jetbrains_ext.BamlLanguageClient" />
     </ExternalSystemSettings>
     <ExternalSystemDebugServerProcess>true</ExternalSystemDebugServerProcess>
     <ExternalSystemReattachDebugProcess>true</ExternalSystemReattachDebugProcess>

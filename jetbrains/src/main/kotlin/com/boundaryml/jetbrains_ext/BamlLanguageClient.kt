@@ -23,13 +23,11 @@ class BamlLanguageClient(project: Project) :
     // Existing port notification (keep exactly as-is but use new service)
     @JsonNotification("baml/port")
     fun onPort(params: PortParams) {
-        log.warn("warn Port params: ${params.port}")
-        log.info("info Port params: ${params.port}")
-        log.debug("debug Port params: ${params.port}")
+        log.warn("Port params: ${params.port}")
 
-        println("Setting port to ${params.port}")
+        log.warn("Setting port to ${params.port}")
         languageServerService.setPort(params.port)
-        println("Set port to ${params.port}")
+        log.warn("Set port to ${params.port}")
     }
 
     // New version switching notification - DETECTION ONLY for Phase 1
@@ -41,7 +39,7 @@ class BamlLanguageClient(project: Project) :
         println("📋 Version notification received: ${payload.version} (processing not yet implemented)")
         
         // Validate we can access our service
-        log.info("Service state - current version: ${languageServerService.getCurrentCliVersion()}")
-        log.info("Service state - is restarting: ${languageServerService.isCurrentlyRestarting()}")
+        log.warn("Service state - current version: ${languageServerService.getCurrentCliVersion()}")
+        log.warn("Service state - is restarting: ${languageServerService.isCurrentlyRestarting()}")
     }
 }
