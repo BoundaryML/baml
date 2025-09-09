@@ -384,9 +384,6 @@ impl ApiEndpoint for ListFunctionCalls {
     const PATH: &'static str = "/v1/function-calls";
 }
 
-// use super::*;
-// use serde_json::json;
-
 #[test]
 fn test_deserialize_list_function_calls_request_with_start_time() {
     let json_str = r#"{

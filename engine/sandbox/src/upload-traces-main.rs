@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-// use baml_types::rpc::TraceEventUploadRequest;
 
 #[tokio::main]
 async fn main() -> Result<()> {

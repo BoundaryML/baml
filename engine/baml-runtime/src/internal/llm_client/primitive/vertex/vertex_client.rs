@@ -1,7 +1,6 @@
 
 use anyhow::Result;
 use baml_types::BamlMediaContent;
-// use futures::StreamExt; // Unused import
 #[cfg(not(target_arch = "wasm32"))]
 use gcp_auth::TokenProvider;
 use internal_baml_core::ir::ClientWalker;

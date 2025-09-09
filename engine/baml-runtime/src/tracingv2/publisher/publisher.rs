@@ -18,8 +18,6 @@ use baml_rpc::{
     NamedType, S3UploadMetadata, TraceEventBatch, TypeDefinition, TypeDefinitionSource,
     TypeReference,
 };
-// use baml_types::HasType; // Unused import
-// use futures::StreamExt; // Unused import
 use http::{HeaderMap, HeaderName, HeaderValue};
 use once_cell::sync::OnceCell;
 use serde::Serialize;

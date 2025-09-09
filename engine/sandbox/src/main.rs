@@ -1,8 +1,3 @@
-// use anyhow::{Context, Result};
-// use axum::{routing::get, Router};
-// use std::rc::Rc;
-
-// use btrace::WithTraceContext;
 // mod web_server;
 
 // fn main() {

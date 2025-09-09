@@ -5,7 +5,6 @@ use crate::{
     pretty_print::{pretty_print, DiagnosticColorer},
     Span,
 };
-// use indoc::indoc;
 
 /// A non-fatal warning emitted by the schema parser.
 /// For fancy printing, please use the `pretty_print_error` function.

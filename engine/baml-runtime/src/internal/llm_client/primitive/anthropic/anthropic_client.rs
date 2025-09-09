@@ -1,7 +1,6 @@
 
 use anyhow::Result;
 use baml_types::{BamlMap, BamlMediaContent};
-// use futures::StreamExt; // Unused import
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{
     RenderContext_Client, RenderedChatMessage,

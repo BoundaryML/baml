@@ -12,7 +12,6 @@ pub use internal_baml_diagnostics;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile, Span};
 use internal_baml_parser_database::TypeWalker;
 pub use internal_baml_parser_database::{self};
-// use ir::repr::WithRepr; // Unused import
 use rayon::prelude::*;
 
 mod common;

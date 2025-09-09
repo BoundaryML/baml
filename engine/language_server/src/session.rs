@@ -25,7 +25,6 @@ use crate::{
     edit::{DocumentKey, DocumentVersion},
     server::client::Notifier,
 };
-// use crate::system::{url_to_any_system_path, AnySystemPath, LSPSystem};
 use crate::{PositionEncoding, TextDocument};
 
 mod capabilities;

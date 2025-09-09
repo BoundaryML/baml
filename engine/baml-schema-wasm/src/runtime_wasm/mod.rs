@@ -94,8 +94,6 @@ pub struct WasmDiagnosticError {
     pub all_files: Vec<String>,
 }
 
-// use serde::Serialize;
-
 #[wasm_bindgen(getter_with_clone)]
 #[derive(Debug)]
 pub struct SymbolLocation {

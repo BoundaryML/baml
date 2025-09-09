@@ -1,4 +1,3 @@
-// use moniker::{Binder, BoundTerm, Scope, Var};
 use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
