@@ -76,6 +76,30 @@ impl Vm {
 
         Ok(self.alloc_media(BamlMedia::url(BamlMediaType::Image, url.to_owned(), None)))
     }
+
+    pub fn audio_from_url(&mut self, args: &[Value]) -> Result<Value, VmError> {
+        // Arity is already checked by the VM.
+
+        let url = self.objects.as_string(&args[0])?;
+
+        Ok(self.alloc_media(BamlMedia::url(BamlMediaType::Audio, url.to_owned(), None)))
+    }
+
+    pub fn video_from_url(&mut self, args: &[Value]) -> Result<Value, VmError> {
+        // Arity is already checked by the VM.
+
+        let url = self.objects.as_string(&args[0])?;
+
+        Ok(self.alloc_media(BamlMedia::url(BamlMediaType::Video, url.to_owned(), None)))
+    }
+
+    pub fn pdf_from_url(&mut self, args: &[Value]) -> Result<Value, VmError> {
+        // Arity is already checked by the VM.
+
+        let url = self.objects.as_string(&args[0])?;
+
+        Ok(self.alloc_media(BamlMedia::url(BamlMediaType::Pdf, url.to_owned(), None)))
+    }
 }
 
 pub type NativeFunction = fn(&mut Vm, &[Value]) -> Result<Value, VmError>;
@@ -89,6 +113,9 @@ pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
         ("std.Map.contains", (Vm::map_contains, 2)),
         // Media
         ("std.media.image.from_url", (Vm::image_from_url, 1)),
+        ("std.media.audio.from_url", (Vm::audio_from_url, 1)),
+        ("std.media.video.from_url", (Vm::video_from_url, 1)),
+        ("std.media.pdf.from_url", (Vm::pdf_from_url, 1)),
     ];
 
     BamlMap::from_iter(

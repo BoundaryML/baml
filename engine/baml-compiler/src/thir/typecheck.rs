@@ -130,6 +130,9 @@ pub fn typecheck_returning_context<'a>(
                 TypeIR::bool(),
             ),
             "std.media.image.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::image()),
+            "std.media.audio.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::audio()),
+            "std.media.video.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::video()),
+            "std.media.pdf.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
             _ => {
                 // Generic function type for other natives
                 let param_types = vec![TypeIR::null(); arity];
@@ -1445,11 +1448,14 @@ pub fn typecheck_expression(
                 None => {
                     // Check if it's media.
                     match &typed_receiver {
-                        thir::Expr::Var(name, _) if name == "image" => match method.as_str() {
-                            "from_url" => Some("std.media.image.from_url".to_string()),
+                        thir::Expr::Var(name, _) => match (name.as_str(), method.as_str()) {
+                            ("image", "from_url") => Some("std.media.image.from_url".to_string()),
+                            ("audio", "from_url") => Some("std.media.audio.from_url".to_string()),
+                            ("video", "from_url") => Some("std.media.video.from_url".to_string()),
+                            ("pdf", "from_url") => Some("std.media.pdf.from_url".to_string()),
                             _ => {
                                 diagnostics.push_error(DatamodelError::new_validation_error(
-                                    &format!("Method `{method}` is not available on type `std.media.image`"),
+                                    &format!("Method `{method}` is not available on type `{name}`"),
                                     span.clone(),
                                 ));
                                 None
