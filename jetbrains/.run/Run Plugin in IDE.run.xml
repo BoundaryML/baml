@@ -1,11 +1,11 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Run Plugin in IDE" type="GradleRunConfiguration" factoryName="Gradle">
+  <configuration default="false" name="Run Plugin in IDE" type="GradleRunConfiguration" factoryName="Gradle" show_console_on_std_err="true" show_console_on_std_out="true">
     <log_file alias="IDE logs" path="$PROJECT_DIR$/build/idea-sandbox/*/log/idea.log" show_all="true" />
     <ExternalSystemSettings>
       <option name="env">
         <map>
-          <entry key="VSCODE_DEBUG_MODE" value="true" />
           <entry key="JETBRAINS_PROJECT_DIR" value="$PROJECT_DIR$" />
+          <entry key="VSCODE_DEBUG_MODE" value="true" />
         </map>
       </option>
       <option name="executionName" />

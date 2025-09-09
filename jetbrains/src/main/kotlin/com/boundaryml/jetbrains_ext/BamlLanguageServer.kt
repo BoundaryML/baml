@@ -3,6 +3,7 @@ package com.boundaryml.jetbrains_ext
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.openapi.project.Project
 import com.redhat.devtools.lsp4ij.server.OSProcessStreamConnectionProvider
+import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -20,7 +21,16 @@ class BamlLanguageServer(private val project: Project) : OSProcessStreamConnecti
     }
 
     init {
-        val commandLine = if (BamlIdeConfig.isDebugMode) {
+        // Check for dynamic CLI path from version switching FIRST
+        val languageServerService = project.getService(BamlLanguageServerService::class.java)
+        val dynamicCliPath = languageServerService.getCurrentExecutingCliPath()
+        
+        val commandLine = if (dynamicCliPath != null) {
+            // Use dynamic CLI path from version switching
+            println("Using dynamic CLI path from version switch: $dynamicCliPath")
+            GeneralCommandLine(dynamicCliPath, "lsp")
+        } else if (BamlIdeConfig.isDebugMode) {
+            // PRESERVE EXISTING DEBUG MODE LOGIC EXACTLY AS-IS
             // Kill any orphaned baml-cli processes before starting
             val pkillProcess = Runtime.getRuntime().exec("pkill -f target/debug/baml-cli")
             pkillProcess.waitFor()
@@ -37,15 +47,30 @@ class BamlLanguageServer(private val project: Project) : OSProcessStreamConnecti
                 .withEnvironment("RUST_LOG", "debug")
                 .withEnvironment("VSCODE_DEBUG_MODE", "true")
         } else {
-            // Production mode - use installed CLI from cache
-            val cacheDir = Path.of(System.getProperty("user.home"), ".baml/jetbrains")
-            val version = Files.readString(cacheDir.resolve("baml-cli-installed.txt")).trim()
-            val (arch, platform, _) = BamlLanguageServerInstaller.getPlatformTriple()
-            val exe = if (platform == "pc-windows-msvc") "baml-cli.exe" else "baml-cli"
-            val cli = cacheDir.resolve("baml-cli-$version-$arch-$platform").resolve(exe)
-            GeneralCommandLine(cli.toString(), "lsp")
+            // REPLACE TODO: Use dynamic path resolution instead of existing production logic
+            // Get the extension's bundled version and resolve CLI path dynamically
+            val extensionVersion = getExtensionVersion() // TODO: implement this to read from plugin metadata
+            val resolvedCliPath = runBlocking { 
+                BamlCliPathResolver.resolveCliPath(project, extensionVersion) 
+            }
+            
+            if (resolvedCliPath != null) {
+                println("Using resolved CLI path: $resolvedCliPath")
+                GeneralCommandLine(resolvedCliPath, "lsp")
+            } else {
+                // Fallback to hardcoded debug CLI if resolution fails
+                val fallbackPath = "/Users/sam/baml/engine/target/debug/baml-cli"
+                println("CLI resolution failed, using fallback: $fallbackPath")
+                GeneralCommandLine(fallbackPath, "lsp")
+            }
         }
         super.setCommandLine(commandLine)
+    }
+    
+    private fun getExtensionVersion(): String {
+        // TODO: Get actual extension version from plugin.xml or build.gradle.kts
+        // For now, return a placeholder version that matches an available CLI
+        return "0.206.1" // Hardcoded for initial implementation
     }
 
 }

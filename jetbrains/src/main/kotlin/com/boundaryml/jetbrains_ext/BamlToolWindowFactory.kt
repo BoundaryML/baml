@@ -1,6 +1,5 @@
 package com.boundaryml.jetbrains_ext
 
-import BamlGetPortService
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -98,7 +97,7 @@ class BamlToolWindowFactory : ToolWindowFactory {
             val reloadButton = JButton("Reload").apply {
                 addActionListener {
                     val currentTime = java.time.LocalDateTime.now()
-                    val savedPort = project.getService(BamlGetPortService::class.java).port
+                    val savedPort = project.getService(BamlLanguageServerService::class.java).port
                     println("playground reload at ${currentTime}, port is $savedPort")
                     if (savedPort != null) {
                         browser.loadURL(BamlIdeConfig.getPlaygroundUrl(savedPort))
@@ -160,7 +159,7 @@ class BamlToolWindowFactory : ToolWindowFactory {
         val content = ContentFactory.getInstance().createContent(mainPanel, null, false)
         toolWindow.contentManager.addContent(content)
 
-        val savedPort = project.getService(BamlGetPortService::class.java).port
+        val savedPort = project.getService(BamlLanguageServerService::class.java).port
         if (savedPort != null) {
             // LS was up before the tool-window opened
             browser.loadURL(BamlIdeConfig.getPlaygroundUrl(savedPort))
@@ -168,8 +167,8 @@ class BamlToolWindowFactory : ToolWindowFactory {
             // LS not ready yet wait for a port message
             val busConnection = project.messageBus.connect(toolWindow.disposable)
             busConnection.subscribe(
-                BamlGetPortService.TOPIC,
-                BamlGetPortService.Listener { port ->
+                BamlLanguageServerService.PORT_TOPIC,
+                BamlLanguageServerService.PortListener { port ->
                     browser.loadURL(BamlIdeConfig.getPlaygroundUrl(port))
                     busConnection.disconnect()        // one-shot, avoid duplicates
                 }
