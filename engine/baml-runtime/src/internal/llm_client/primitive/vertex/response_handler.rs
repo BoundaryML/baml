@@ -163,6 +163,18 @@ pub fn scan_vertex_response_stream(
         if choice.finish_reason == Some("STOP".to_string()) {
             inner.metadata.baml_is_complete = true;
         }
+        inner.metadata.prompt_tokens =
+            event.usage_metadata.as_ref().and_then(|u| u.prompt_token_count);
+        inner.metadata.output_tokens = event
+            .usage_metadata
+            .as_ref()
+            .and_then(|u| u.candidates_token_count);
+        inner.metadata.total_tokens =
+            event.usage_metadata.as_ref().and_then(|u| u.total_token_count);
+        inner.metadata.cached_input_tokens = event
+            .usage_metadata
+            .as_ref()
+            .and_then(|u| u.cached_content_token_count);
     }
 
     inner.latency = instant_now.elapsed();

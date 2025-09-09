@@ -172,6 +172,7 @@ pub fn scan_google_response_stream(
     inner.metadata.prompt_tokens = event.usage_metadata.prompt_token_count;
     inner.metadata.output_tokens = event.usage_metadata.candidates_token_count;
     inner.metadata.total_tokens = event.usage_metadata.total_token_count;
+    inner.metadata.cached_input_tokens = event.usage_metadata.cached_content_token_count;
 
     inner.latency = instant_now.elapsed();
     Ok(())
@@ -333,7 +334,7 @@ mod tests {
                 prompt_tokens: Some(166),
                 output_tokens: Some(39),
                 total_tokens: Some(205),
-                cached_input_tokens: None,
+                cached_input_tokens: Some(0),
             },
         };
 
