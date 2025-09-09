@@ -7,10 +7,10 @@ description.workspace = true
 license-file.workspace = true
 
 [lints.rust]
-dead_code = "warn"
-elided_named_lifetimes = "warn"
-unused_imports = "warn"
-unused_variables = "warn"
+dead_code = "deny"
+elided_named_lifetimes = "deny"
+unused_imports = "deny"
+unused_variables = "deny"
 
 [dependencies]
 askama.workspace = true
