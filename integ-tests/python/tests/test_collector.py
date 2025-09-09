@@ -1144,9 +1144,6 @@ async def test_collector_anthropic_caching():
     assert first_log.usage.cached_input_tokens is not None
     assert first_log.calls[0].usage.cached_input_tokens is not None
 
-    # First call establishes cache, might have some cached tokens from cache creation
-    first_cached_tokens = first_log.usage.cached_input_tokens or 0
-
     # Second call with same large content - should use cache and show cached tokens > 0
     await b.TestCaching(
         large_content,
