@@ -21,13 +21,13 @@ fn return_enum_variant() -> anyhow::Result<()> {
                 }
             "#,
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(7))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(23))),
         },
         |vm| {
-            let baml_vm::Object::Variant(variant) = &vm.objects[ObjectIndex::from_raw(7)] else {
+            let baml_vm::Object::Variant(variant) = &vm.objects[ObjectIndex::from_raw(23)] else {
                 panic!(
                     "expected Variant, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(7)]
+                    &vm.objects[ObjectIndex::from_raw(23)]
                 );
             };
 
@@ -55,13 +55,13 @@ fn assign_enum_variant() -> anyhow::Result<()> {
                 }
             "#,
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(7))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(23))),
         },
         |vm| {
-            let baml_vm::Object::Variant(variant) = &vm.objects[ObjectIndex::from_raw(7)] else {
+            let baml_vm::Object::Variant(variant) = &vm.objects[ObjectIndex::from_raw(23)] else {
                 panic!(
                     "expected Variant, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(7)]
+                    &vm.objects[ObjectIndex::from_raw(23)]
                 );
             };
 
@@ -92,13 +92,13 @@ fn take_and_return_enum_variant() -> anyhow::Result<()> {
                 }
             "#,
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(8))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(24))),
         },
         |vm| {
-            let baml_vm::Object::Variant(variant) = &vm.objects[ObjectIndex::from_raw(8)] else {
+            let baml_vm::Object::Variant(variant) = &vm.objects[ObjectIndex::from_raw(24)] else {
                 panic!(
                     "expected Variant, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(8)]
+                    &vm.objects[ObjectIndex::from_raw(24)]
                 );
             };
 
