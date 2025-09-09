@@ -6,8 +6,10 @@ use crate::raw_ptr_wrapper::RawPtrType;
 pub enum ValueBase<T> {
     String(String, T),
     Int(i64, T),
+    #[allow(dead_code)]
     Float(f64, T),
     Bool(bool, T),
+    #[allow(dead_code)]
     Map(BamlMap<String, ValueBase<T>>, T),
     List(Vec<ValueBase<T>>, T),
     Null(T),
