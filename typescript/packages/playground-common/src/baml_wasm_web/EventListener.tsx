@@ -328,14 +328,12 @@ export const EventListener: React.FC = () => {
           setSelectedFunction(content.function_name);
           setSelectedTestcase(content.test_name);
 
+          // NB(sam): without this timeout, jetbrains hits "recursive use of an object"
           setTimeout(() => {
             runBamlTests([
               { functionName: content.function_name, testName: content.test_name },
             ]);
           }, 1000);
-          // run([content.test_name])
-          // setShowTests(true)
-          // setClientGraph(false)
           break;
       }
     };
