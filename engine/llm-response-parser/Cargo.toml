@@ -6,6 +6,12 @@ authors.workspace = true
 description.workspace = true
 license-file.workspace = true
 
+[lints.rust]
+dead_code = "warn"
+elided_named_lifetimes = "warn"
+unused_imports = "warn"
+unused_variables = "warn"
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true

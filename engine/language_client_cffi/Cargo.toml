@@ -6,6 +6,12 @@ authors.workspace = true
 description.workspace = true
 license-file.workspace = true
 
+[lints.rust]
+dead_code = "warn"
+elided_named_lifetimes = "warn"
+unused_imports = "warn"
+unused_variables = "warn"
+
 [lib]
 # If you only wanted dynamic library, you'd use only "cdylib".
 # This demo shows both. See https://doc.rust-lang.org/reference/linkage.html

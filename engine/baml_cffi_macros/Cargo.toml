@@ -3,6 +3,12 @@ name = "baml_cffi_macros"
 version = "0.1.0"
 edition = "2021"
 
+[lints.rust]
+dead_code = "warn"
+elided_named_lifetimes = "warn"
+unused_imports = "warn"
+unused_variables = "warn"
+
 [lib]
 proc-macro = true
 

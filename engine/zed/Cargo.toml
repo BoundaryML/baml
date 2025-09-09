@@ -4,6 +4,12 @@ edition = "2024"
 version = "0.0.1"
 description = "BAML language support for Zed"
 
+[lints.rust]
+dead_code = "warn"
+elided_named_lifetimes = "warn"
+unused_imports = "warn"
+unused_variables = "warn"
+
 [lib]
 crate-type = ["cdylib"]
 

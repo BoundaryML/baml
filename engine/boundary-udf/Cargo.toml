@@ -3,6 +3,12 @@ name = "boundary-udf"
 version = "0.1.0"
 edition = "2021"
 
+[lints.rust]
+dead_code = "warn"
+elided_named_lifetimes = "warn"
+unused_imports = "warn"
+unused_variables = "warn"
+
 [dependencies]
 anyhow.workspace = true
 baml-types.workspace = true
