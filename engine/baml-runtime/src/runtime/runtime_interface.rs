@@ -2,15 +2,14 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
 use baml_types::{
-    tracing::events::{FunctionEnd, FunctionStart, TraceData, TraceEvent},
-    BamlMap, BamlValue, Constraint, EvaluationContext,
+    BamlMap, BamlValue, Constraint,
 };
 use internal_baml_core::{
     ast::BamlVisDiagramGenerator,
     internal_baml_diagnostics::SourceFile,
     ir::{
-        repr::{IntermediateRepr, Node, TypeBuilderEntry},
-        ArgCoercer, ExprFunctionWalker, FunctionWalker, IRHelper, TestCase,
+        repr::IntermediateRepr,
+        ArgCoercer, ExprFunctionWalker, FunctionWalker, IRHelper,
     },
     validate,
 };
@@ -24,22 +23,18 @@ use crate::{
         llm_client::{
             llm_provider::LLMProvider,
             orchestrator::{
-                orchestrate_call, IterOrchestrator, OrchestrationScope, OrchestratorNode,
+                IterOrchestrator, OrchestrationScope, OrchestratorNode,
             },
             primitive::LLMPrimitiveProvider,
             retry_policy::CallablePolicy,
             traits::{WithClientProperties, WithPrompt, WithRenderRawCurl},
-            LLMResponse,
         },
         prompt_renderer::PromptRenderer,
     },
     runtime::CachedClient,
     runtime_interface::{InternalClientLookup, RuntimeConstructor},
-    tracing::BamlTracer,
-    tracingv2::storage::storage::{Collector, BAML_TRACER},
-    type_builder::TypeBuilder,
-    FunctionResult, FunctionResultStream, InternalBamlRuntime, InternalRuntimeInterface,
-    RenderCurlSettings, RuntimeContext, RuntimeContextManager,
+    type_builder::TypeBuilder, InternalBamlRuntime, InternalRuntimeInterface,
+    RenderCurlSettings, RuntimeContext,
 };
 
 impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {

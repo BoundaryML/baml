@@ -1,7 +1,6 @@
 use core::time::Duration;
 use std::{
     any::type_name,
-    borrow::Cow,
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
     sync::Arc,
@@ -12,17 +11,14 @@ use baml_rpc::{
     ast::tops::{FunctionDefinition, SourceCode, AST},
     runtime_api::{
         BlobBatchUploadS3File, BlobMetadataItem, BlobUploadItem, CreateBlobBatchUploadUrl,
-        CreateBlobBatchUploadUrlRequest, CreateBlobBatchUploadUrlResponse,
+        CreateBlobBatchUploadUrlRequest,
     },
     ApiEndpoint, BamlSrcUploadS3File, CheckBamlSrcUpload, CheckBamlSrcUploadRequest,
-    CreateTraceEventUploadUrl, CreateTraceEventUploadUrlRequest, CreateTraceEventUploadUrlResponse,
+    CreateTraceEventUploadUrl, CreateTraceEventUploadUrlRequest,
     NamedType, S3UploadMetadata, TraceEventBatch, TypeDefinition, TypeDefinitionSource,
     TypeReference,
 };
-use baml_types::{
-    tracing::events::{TraceData, TraceEvent},
-    BamlValueWithMeta, HasType, TypeIR,
-};
+use baml_types::HasType;
 use futures::StreamExt;
 use http::{HeaderMap, HeaderName, HeaderValue};
 use once_cell::sync::OnceCell;
@@ -30,15 +26,14 @@ use serde::Serialize;
 use tokio::sync::mpsc;
 #[cfg(not(target_family = "wasm"))]
 use tokio::time::*;
-use tracing::field;
 #[cfg(target_family = "wasm")]
 use wasmtimer::tokio::*;
 
 use super::rpc_converters::{
-    to_rpc_event, BlobRefCache, BlobStorage, IRRpcState, IntoRpcEvent, TypeLookup,
+    to_rpc_event, BlobRefCache, BlobStorage, IntoRpcEvent, TypeLookup,
 };
 use crate::{
-    runtime::{AstSignatureWrapper, InternalBamlRuntime},
+    runtime::AstSignatureWrapper,
     tracingv2::storage::interface::TraceEventWithMeta,
 };
 

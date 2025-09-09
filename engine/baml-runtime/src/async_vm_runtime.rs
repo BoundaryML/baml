@@ -9,7 +9,7 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use anyhow::{anyhow, Context};
@@ -24,7 +24,7 @@ use jsonish::{ResponseBamlValue, ResponseValueMeta};
 use crate::on_log_event::LogEventCallbackSync;
 use crate::{
     client_registry::ClientRegistry,
-    internal::llm_client::{orchestrator::OrchestrationScope, LLMResponse},
+    internal::llm_client::orchestrator::OrchestrationScope,
     runtime::InternalBamlRuntime,
     runtime_interface::ExperimentalTracingInterface,
     tracing::TracingCall,

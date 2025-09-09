@@ -2,7 +2,7 @@ use anyhow::Result;
 use baml_ids::HttpRequestId;
 use baml_types::BamlValue;
 use internal_baml_core::ir::repr::IntermediateRepr;
-use jsonish::{BamlValueWithFlags, ResponseBamlValue};
+use jsonish::ResponseBamlValue;
 use stream_cancel::Tripwire;
 use web_time::Duration;
 
@@ -10,7 +10,6 @@ use super::{OrchestrationScope, OrchestratorNodeIterator};
 use crate::{
     internal::{
         llm_client::{
-            parsed_value_to_response,
             traits::{HttpContext, WithClientProperties, WithPrompt, WithSingleCallable},
             LLMErrorResponse, LLMResponse,
         },

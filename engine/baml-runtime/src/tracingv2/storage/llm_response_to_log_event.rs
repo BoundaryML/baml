@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use baml_ids::{FunctionCallId, HttpRequestId};
-use baml_types::tracing::events::{LLMUsage, LoggedLLMResponse, TraceData, TraceEvent};
-use web_time::SystemTime;
+use baml_types::tracing::events::{LLMUsage, LoggedLLMResponse};
 
 use super::interface::TraceEventWithMeta;
 use crate::internal::llm_client::LLMResponse;

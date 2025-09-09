@@ -1,15 +1,10 @@
-use std::{collections::HashMap, ops::Deref};
+use std::ops::Deref;
 
 use anyhow::{Context, Result};
-use baml_types::{
-    tracing::events::{HTTPRequest, HTTPResponse, HTTPResponseStream, SSEEvent, TraceEvent},
-    BamlMap,
-};
+use baml_types::tracing::events::{HTTPResponseStream, SSEEvent, TraceEvent};
 use eventsource_stream::Eventsource;
-use futures::{StreamExt, TryStreamExt};
+use futures::StreamExt;
 use internal_baml_jinja::RenderedChatMessage;
-use reqwest::Response;
-use serde::de::DeserializeOwned;
 
 use super::{
     anthropic::response_handler::scan_anthropic_response_stream,
@@ -27,7 +22,6 @@ use crate::{
         ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
     },
     tracingv2::storage::storage::BAML_TRACER,
-    RuntimeContext,
 };
 
 pub async fn make_stream_request(

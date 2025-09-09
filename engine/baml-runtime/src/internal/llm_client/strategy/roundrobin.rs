@@ -1,15 +1,14 @@
 use std::{
-    collections::HashMap,
     fmt::Debug,
     sync::{atomic::AtomicUsize, Arc},
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use internal_baml_core::ir::ClientWalker;
 use internal_llm_client::{
     ClientProvider, ClientSpec, ResolvedClientProperty, UnresolvedClientProperty,
 };
-use serde::{Serialize, Serializer};
+use serde::Serializer;
 
 use crate::{
     client_registry::ClientProperty,

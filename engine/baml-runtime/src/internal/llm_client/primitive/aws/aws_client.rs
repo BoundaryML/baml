@@ -1,12 +1,12 @@
-use std::{borrow::Cow, collections::HashMap, ops::Deref, sync::Arc, time::Duration};
+use std::{borrow::Cow, collections::HashMap, ops::Deref, sync::Arc};
 
 use anyhow::{Context, Result};
 use aws_config::{
-    identity::IdentityCache, retry::RetryConfig, BehaviorVersion, ConfigLoader, Region,
+    BehaviorVersion, Region,
 };
 use aws_credential_types::{
     provider::{
-        error::{CredentialsError, CredentialsNotLoaded},
+        error::CredentialsError,
         future::ProvideCredentials,
     },
     Credentials,
@@ -20,11 +20,9 @@ use aws_sdk_bedrockruntime::{
 use aws_smithy_json::serialize::JsonObjectWriter;
 use aws_smithy_runtime_api::{client::result::SdkError, http::Headers};
 use aws_smithy_types::{Blob, Document};
-use baml_ids::HttpRequestId;
 use baml_types::{
     tracing::events::{
-        ClientDetails, HTTPBody, HTTPRequest, HTTPResponse, HTTPResponseStream, SSEEvent,
-        TraceData, TraceEvent,
+        ClientDetails, HTTPBody, HTTPRequest, HTTPResponse, HTTPResponseStream, SSEEvent, TraceEvent,
     },
     ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent, BamlMediaType,
 };
@@ -32,14 +30,12 @@ use futures::stream;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use internal_llm_client::{
-    aws_bedrock::{self, ResolvedAwsBedrock},
+    aws_bedrock::ResolvedAwsBedrock,
     AllowedRoleMetadata, ClientProvider, ResolvedClientProperty, UnresolvedClientProperty,
 };
 use secrecy::ExposeSecret;
-use serde::Deserialize;
-use serde_json::{json, Map};
+use serde_json::json;
 use shell_escape::escape;
-use uuid::Uuid;
 use web_time::{Instant, SystemTime};
 
 // See https://github.com/awslabs/aws-sdk-rust/issues/169

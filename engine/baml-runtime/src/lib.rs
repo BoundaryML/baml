@@ -25,10 +25,9 @@ pub mod type_builder;
 mod types;
 
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap},
-    hash::{Hash, Hasher},
+    collections::HashMap,
     path::PathBuf,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Arc, OnceLock},
 };
 
 use anyhow::{Context, Result};
@@ -44,10 +43,7 @@ pub use cli::RuntimeCliDefaults;
 use client_registry::ClientRegistry;
 use dashmap::DashMap;
 use eval_expr::{EvalEnv, ExprEvalResult};
-use futures::{
-    channel::mpsc,
-    future::{join, join_all},
-};
+use futures::channel::mpsc;
 use indexmap::IndexMap;
 use internal::{
     llm_client::{
@@ -63,8 +59,7 @@ use internal_baml_core::{
     configuration::{CloudProject, CodegenGenerator, Generator, GeneratorOutputType},
     internal_baml_diagnostics::SerializedSpan,
     ir::{
-        repr::{initial_context, IntermediateRepr},
-        FunctionWalker, IRHelperExtended,
+        repr::initial_context, IRHelperExtended,
     },
 };
 pub use internal_baml_core::{
@@ -75,7 +70,7 @@ pub use internal_baml_core::{
 #[cfg(feature = "internal")]
 pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
 #[cfg(not(feature = "internal"))]
-pub(crate) use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
+pub(crate) use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
 use jsonish::{ResponseBamlValue, ResponseValueMeta};
 use on_log_event::LogEventCallbackSync;
@@ -87,7 +82,7 @@ pub use runtime_interface::InternalRuntimeInterface;
 pub(crate) use runtime_interface::InternalRuntimeInterface;
 use runtime_interface::{ExperimentalTracingInterface, InternalClientLookup, RuntimeConstructor};
 pub(crate) use runtime_methods::prepare_function::PreparedFunctionArgs;
-use serde_json::{self, json};
+use serde_json::{self};
 use tracing::{BamlTracer, TracingCall};
 use tracingv2::{
     publisher::flush,
@@ -1195,7 +1190,7 @@ impl BamlRuntime {
         input_files: &IndexMap<PathBuf, String>,
         no_version_check: bool,
     ) -> Result<Vec<internal_baml_codegen::GenerateOutput>> {
-        use internal_baml_codegen::GenerateClient;
+        
 
         let client_types: Vec<(&CodegenGenerator, internal_baml_codegen::GeneratorArgs)> = self
             .codegen_generators()

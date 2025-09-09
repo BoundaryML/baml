@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
-use anyhow::Result;
-use baml_ids::FunctionCallId;
 use baml_rpc::{ast::tops::BamlFunctionId, BamlTypeId};
 use baml_types::{type_meta, HasType};
-use base64::Engine;
 
 use crate::tracingv2::storage::interface::TraceEventWithMeta;
 
@@ -79,7 +76,7 @@ fn extract_blobs_from_trace_data<'a>(
             blob_cache.end_function_call(call_id);
         }
         TraceData::Intermediate(intermediate_data) => {
-            use baml_rpc::runtime_api::{HTTPBody, IntermediateData};
+            use baml_rpc::runtime_api::IntermediateData;
 
             match intermediate_data {
                 IntermediateData::LLMRequest { prompt, .. } => {

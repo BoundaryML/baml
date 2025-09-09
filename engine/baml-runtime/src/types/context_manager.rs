@@ -10,7 +10,7 @@ use baml_types::{tracing::events::TraceEvent, BamlValue};
 
 use super::runtime_context::BamlSrcReader;
 use crate::{
-    client_registry::ClientRegistry, tracing::BamlTracer, tracingv2::storage::storage::BAML_TRACER,
+    client_registry::ClientRegistry, tracingv2::storage::storage::BAML_TRACER,
     type_builder::TypeBuilder, CallCtx, RuntimeContext,
 };
 pub type BamlContext = (

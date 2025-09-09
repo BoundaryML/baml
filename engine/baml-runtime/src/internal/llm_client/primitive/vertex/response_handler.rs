@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use serde_json::Value;
 
 use super::types::VertexResponse;
 use crate::internal::llm_client::{

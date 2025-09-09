@@ -22,7 +22,6 @@ use axum_extra::{
     TypedHeader,
 };
 use baml_types::{
-    expr::{Expr, ExprMetadata},
     BamlValue, GeneratorDefaultClientMode, GeneratorOutputType,
 };
 use error::BamlError;
@@ -31,15 +30,14 @@ use generators_lib::GeneratorArgs;
 use generators_openapi::OpenApiSchema;
 use indexmap::IndexMap;
 use json_response::Json;
-use jsonish::ResponseBamlValue;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 use tokio::{net::TcpListener, sync::RwLock};
 use tokio_stream::StreamExt;
 
 use crate::{
     client_registry::ClientRegistry, errors::ExposedError, internal::llm_client::LLMResponse,
-    BamlRuntime, FunctionResult, RuntimeContextManager, TripWire,
+    BamlRuntime, FunctionResult, TripWire,
 };
 
 #[derive(clap::Args, Clone, Debug)]

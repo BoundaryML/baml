@@ -1,10 +1,9 @@
-use std::{collections::HashMap, fmt};
+use std::collections::HashMap;
 
 use anyhow::Result;
 use baml_types::{BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, ResponseCheck};
 use indexmap::IndexMap;
-use internal_baml_core::ir::jinja_helpers::{evaluate_predicate, render_expression};
-use jsonish::BamlValueWithFlags;
+use internal_baml_core::ir::jinja_helpers::render_expression;
 use minijinja;
 
 use crate::internal::llm_client::LLMCompleteResponse;

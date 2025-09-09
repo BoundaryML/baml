@@ -1,32 +1,24 @@
-use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use baml_types::{BamlMap, BamlMedia, BamlMediaContent};
-use eventsource_stream::Eventsource;
+use baml_types::{BamlMap, BamlMediaContent};
 use futures::StreamExt;
-use http::header;
 use internal_baml_core::ir::ClientWalker;
-use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
+use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage};
 use internal_llm_client::{
     google_ai::ResolvedGoogleAI, AllowedRoleMetadata, ClientProvider, ResolvedClientProperty,
     UnresolvedClientProperty,
 };
-use secrecy::ExposeSecret;
 use serde_json::json;
 
 use crate::{
     client_registry::ClientProperty,
     internal::llm_client::{
-        primitive::{
-            google::types::GoogleResponse,
-            request::{make_parsed_request, RequestBuilder, ResponseType},
-        },
+        primitive::request::{make_parsed_request, RequestBuilder, ResponseType},
         traits::{
-            CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse,
+            CompletionToProviderBody, HttpContext, StreamResponse,
             ToProviderMessage, ToProviderMessageExt, WithChat, WithClient, WithClientProperties,
             WithNoCompletion, WithRetryPolicy, WithStreamChat,
-        },
-        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+        }, LLMResponse,
         ModelFeatures, ResolveMediaUrls,
     },
     request::create_client,

@@ -6,9 +6,7 @@ use std::{
 
 use baml_types::{BamlValue, EvaluationContext, TypeIR};
 use indexmap::{IndexMap, IndexSet};
-use internal_baml_core::{
-    internal_baml_parser_database::ParserDatabase, ir::repr::TypeBuilderEntry,
-};
+use internal_baml_core::ir::repr::TypeBuilderEntry;
 
 use crate::{
     runtime::InternalBamlRuntime,

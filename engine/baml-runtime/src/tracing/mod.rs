@@ -2,25 +2,20 @@ pub mod api_wrapper;
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
-    time::SystemTime,
+    sync::Arc,
 };
 
-use ::tracing as rust_tracing;
 use anyhow::{Context, Result};
 use baml_types::{
-    tracing::events::{EvaluationContext, FunctionStart, FunctionType, TraceData, TraceEvent},
+    tracing::events::{EvaluationContext, FunctionType, TraceEvent},
     BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta,
 };
 use cfg_if::cfg_if;
 use colored::{ColoredString, Colorize};
 use internal_baml_core::ir::ir_helpers::infer_type;
 use internal_baml_jinja::RenderedPrompt;
-use jsonish::ResponseBamlValue;
 use serde::Serialize;
-use tracing::Instrument;
 use uuid::Uuid;
-use valuable::Valuable;
 
 use self::api_wrapper::{
     core_types::{
@@ -31,13 +26,11 @@ use self::api_wrapper::{
     APIWrapper,
 };
 use crate::{
-    client_registry::ClientRegistry,
     internal::llm_client::LLMResponse,
     on_log_event::LogEventCallbackSync,
     tracing::api_wrapper::core_types::Role,
     tracingv2::storage::storage::{Collector, BAML_TRACER},
-    type_builder::TypeBuilder,
-    CallCtx, FunctionResult, InnerTraceStats, RuntimeContext, RuntimeContextManager, TestResponse,
+    CallCtx, FunctionResult, InnerTraceStats, RuntimeContextManager, TestResponse,
     TraceStats,
 };
 
@@ -517,7 +510,7 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         response: Option<BamlValue>,
     ) -> Result<uuid::Uuid> {
-        use baml_types::type_meta::base::TypeMeta;
+        
 
         let guard = self.trace_stats.guard();
         let Some((call_id, event_chain, global_and_user_tags)) = ctx.exit() else {

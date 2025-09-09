@@ -7,17 +7,14 @@ mod test_execution_args;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     ops::Deref,
-    sync::Arc,
     time::Instant,
 };
 
 use anyhow::Result;
 use baml_types::BamlValue;
 use futures::{future::join_all, join};
-use internal_baml_core::ir::repr::IntermediateRepr;
-use regex::Regex;
 pub use test_execution_args::TestFilter;
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::sync::Mutex;
 
 use crate::{BamlRuntime, TestResponse, TestStatus, TripWire};
 

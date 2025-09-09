@@ -4,22 +4,17 @@ mod stream;
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
-use baml_ids::HttpRequestId;
 use baml_types::{
     tracing::events::{
-        HTTPRequest, HTTPResponse, LLMChatMessage, LLMChatMessagePart, LLMUsage, LoggedLLMRequest,
-        LoggedLLMResponse, TraceData, TraceEvent,
+        LLMChatMessage, LoggedLLMRequest, TraceEvent,
     },
     BamlValue,
 };
 pub use call::orchestrate as orchestrate_call;
 use internal_baml_core::ir::repr::IntermediateRepr;
-use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage, RenderedPrompt};
-use serde::Serialize;
-use serde_json::json;
+use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
 pub use stream::orchestrate_stream;
 use web_time::Duration; // Add this line
-use web_time::SystemTime;
 
 pub use super::primitive::LLMPrimitiveProvider;
 use super::{
@@ -27,13 +22,11 @@ use super::{
     traits::{
         HttpContext, StreamResponse, WithClientProperties, WithPrompt, WithRenderRawCurl,
         WithSingleCallable, WithStreamable,
-    },
-    LLMCompleteResponse, LLMResponse,
+    }, LLMResponse,
 };
 use crate::{
     internal::prompt_renderer::PromptRenderer,
     runtime_interface::InternalClientLookup,
-    tracing::Visualize,
     tracingv2::storage::{make_trace_event_for_response, storage::BAML_TRACER},
     RenderCurlSettings, RuntimeContext,
 };

@@ -1,6 +1,5 @@
 use std::{
     env, fs,
-    io::Write,
     path::{Path, PathBuf},
     process::Command,
     time::Duration,

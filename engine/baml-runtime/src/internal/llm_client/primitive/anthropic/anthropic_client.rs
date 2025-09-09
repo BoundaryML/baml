@@ -1,35 +1,26 @@
-use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use baml_types::{ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent};
-use eventsource_stream::Eventsource;
+use baml_types::{BamlMap, BamlMediaContent};
 use futures::StreamExt;
-use indexmap::IndexMap;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{
-    ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
+    RenderContext_Client, RenderedChatMessage,
 };
 use internal_llm_client::{
     anthropic::ResolvedAnthropic, AllowedRoleMetadata, ClientProvider, ResolvedClientProperty,
-    RolesSelection, SupportedRequestModes, UnresolvedClientProperty,
+    RolesSelection, UnresolvedClientProperty,
 };
-use secrecy::{ExposeSecret, SecretString};
 use serde_json::json;
 
-use super::types::MessageChunk;
 use crate::{
     client_registry::ClientProperty,
     internal::llm_client::{
-        primitive::{
-            anthropic::types::AnthropicMessageResponse,
-            request::{make_parsed_request, RequestBuilder, ResponseType},
-        },
+        primitive::request::{make_parsed_request, RequestBuilder, ResponseType},
         traits::{
-            CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse,
+            CompletionToProviderBody, HttpContext, StreamResponse,
             ToProviderMessage, ToProviderMessageExt, WithChat, WithClient, WithClientProperties,
             WithNoCompletion, WithRetryPolicy, WithStreamChat,
-        },
-        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+        }, LLMResponse,
         ModelFeatures, ResolveMediaUrls,
     },
     request::create_client,

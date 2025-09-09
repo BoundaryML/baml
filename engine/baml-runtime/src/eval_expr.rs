@@ -7,19 +7,16 @@ use std::{
 use anyhow::{anyhow, Context};
 use baml_types::{
     expr::{Builtin, Expr, ExprMetadata, Name, VarIndex},
-    type_meta::base::TypeMeta,
-    Arrow, BamlMap, BamlValue, BamlValueWithMeta, EvaluationContext, TypeIR, TypeValue,
+    type_meta::base::TypeMeta, BamlMap, BamlValue, BamlValueWithMeta, EvaluationContext, TypeIR, TypeValue,
 };
 use futures::{
     channel::mpsc,
-    stream::{self as stream, StreamExt},
+    stream::StreamExt,
 };
 use internal_baml_core::{
     internal_baml_diagnostics::SerializedSpan,
-    internal_baml_parser_database::coerce,
-    ir::{builtin, repr::IntermediateRepr},
+    ir::builtin,
 };
-use internal_baml_jinja::types::OutputFormatContent;
 use jsonish::{deserializer::deserialize_flags::Flag, helpers::render_output_format};
 
 use crate::{BamlRuntime, FunctionResult, TripWire};

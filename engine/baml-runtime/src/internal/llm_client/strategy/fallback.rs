@@ -1,6 +1,5 @@
-use std::collections::HashMap;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use internal_baml_core::ir::ClientWalker;
 use internal_llm_client::{
     ClientProvider, ClientSpec, ResolvedClientProperty, UnresolvedClientProperty,

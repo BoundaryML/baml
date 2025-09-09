@@ -19,10 +19,9 @@ use crate::{
         },
     },
     runtime::InternalBamlRuntime,
-    tracing::{BamlTracer, TracingCall},
-    tracingv2::storage::storage::Collector,
+    tracing::TracingCall,
     type_builder::TypeBuilder,
-    types::{on_log_event::LogEventCallbackSync, FunctionResultStream},
+    types::on_log_event::LogEventCallbackSync,
     FunctionResult, RenderCurlSettings, RuntimeContext, RuntimeContextManager,
 };
 

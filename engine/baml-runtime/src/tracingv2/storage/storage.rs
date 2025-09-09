@@ -6,22 +6,18 @@
 //! It uses manual reference counting (`inc_ref` / `dec_ref`) to free memory for
 //! a FunctionCallId as soon as there are no more "owners."
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt,
     hash::Hash,
-    ops::DerefMut,
     sync::{Arc, Mutex},
 };
 
 use baml_ids::{FunctionCallId, HttpRequestId};
-use baml_types::{
-    tracing::events::{
-        FunctionEnd, FunctionStart, HTTPRequest, HTTPResponse, HTTPResponseStream,
-        LoggedLLMRequest, LoggedLLMResponse, SSEEvent, TraceData, TraceEvent,
-    },
-    HasType,
-};
-use indexmap::{IndexMap, IndexSet};
+use baml_types::tracing::events::{
+        FunctionStart, HTTPRequest, HTTPResponse, HTTPResponseStream,
+        LoggedLLMRequest, LoggedLLMResponse, SSEEvent, TraceData,
+    };
+use indexmap::IndexSet;
 use once_cell::sync::Lazy;
 use serde::Serialize;
 use uuid::Uuid;

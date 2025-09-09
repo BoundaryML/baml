@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::{Context, Result};
-use clap::{Args, Subcommand};
+use anyhow::Result;
+use clap::Args;
 
 use crate::{
     cli::dotenv,

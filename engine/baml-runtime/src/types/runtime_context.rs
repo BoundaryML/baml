@@ -5,9 +5,8 @@ use baml_ids::FunctionCallId;
 use baml_types::{BamlValue, EvaluationContext, UnresolvedValue};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::TypeIR;
-use thiserror::Error;
 
-use crate::{internal::llm_client::llm_provider::LLMProvider, tracing::BamlTracer};
+use crate::internal::llm_client::llm_provider::LLMProvider;
 
 #[derive(Debug, Clone)]
 pub struct CallCtx {

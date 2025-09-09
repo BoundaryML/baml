@@ -1,20 +1,16 @@
-use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use baml_types::BamlMediaContent;
-use chrono::{Duration, Utc};
-use eventsource_stream::Eventsource;
 use futures::StreamExt;
 #[cfg(not(target_arch = "wasm32"))]
 use gcp_auth::TokenProvider;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage};
 use internal_llm_client::{
-    vertex::{BaseUrlOrLocation, ResolvedGcpAuthStrategy, ResolvedVertex},
+    vertex::{BaseUrlOrLocation, ResolvedVertex},
     AllowedRoleMetadata, ClientProvider, ResolvedClientProperty, UnresolvedClientProperty,
 };
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 
 #[cfg(target_arch = "wasm32")]
 use crate::internal::wasm_jwt::{encode_jwt, JwtError};
@@ -25,14 +21,12 @@ use crate::{
             anthropic::{self, AnthropicClient},
             request::{make_parsed_request, RequestBuilder, ResponseType},
             stream_request::make_stream_request,
-            vertex::types::VertexResponse,
         },
         traits::{
-            CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse,
+            CompletionToProviderBody, HttpContext, StreamResponse,
             ToProviderMessage, ToProviderMessageExt, WithChat, WithClient, WithClientProperties,
             WithNoCompletion, WithRetryPolicy, WithStreamChat,
-        },
-        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+        }, LLMResponse,
         ModelFeatures, ResolveMediaUrls,
     },
     request::create_client,

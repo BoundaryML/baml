@@ -2,10 +2,10 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use baml_compiler::{compile, hir::Hir};
-use baml_vm::{EvalStack, Object, Value};
+use baml_vm::{EvalStack, Object};
 use clap::Parser;
 use internal_baml_core::{
-    internal_baml_diagnostics::SourceFile, ir::repr::IntermediateRepr, validate, ValidatedSchema,
+    internal_baml_diagnostics::SourceFile, validate, ValidatedSchema,
 };
 
 use crate::baml_src_files;

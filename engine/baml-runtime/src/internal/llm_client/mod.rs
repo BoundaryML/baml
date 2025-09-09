@@ -1,4 +1,3 @@
-use std::collections::{HashMap, HashSet};
 
 use colored::*;
 pub mod llm_provider;
@@ -11,21 +10,21 @@ pub mod traits;
 
 use std::error::Error;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use baml_types::{BamlMap, BamlValueWithMeta, JinjaExpression, ResponseCheck, TypeIR};
-use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker, IRHelper, IRHelperExtended};
+use internal_baml_core::ir::IRHelperExtended;
 use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::AllowedRoleMetadata;
 pub use jsonish::ResponseBamlValue;
 use jsonish::{
     deserializer::{
-        deserialize_flags::{constraint_results, DeserializerConditions, Flag},
+        deserialize_flags::Flag,
         semantic_streaming::validate_streaming_state,
     },
     BamlValueWithFlags,
 };
 use reqwest::StatusCode;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;
 

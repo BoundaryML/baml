@@ -3,12 +3,9 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::Result;
 use baml_types::{
     ir_type::TypeNonStreaming,
-    tracing::events::{FunctionEnd, FunctionStart, TraceData, TraceEvent},
-    BamlValueWithMeta, TypeIR,
+    tracing::events::TraceEvent,
 };
 use internal_baml_core::ir::repr::IntermediateRepr;
-use serde_json::json;
-use stream_cancel::Tripwire;
 
 use crate::{
     client_registry::ClientRegistry,

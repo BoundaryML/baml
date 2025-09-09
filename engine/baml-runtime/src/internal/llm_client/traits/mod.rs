@@ -1,15 +1,14 @@
-use std::{collections::HashMap, path::PathBuf, pin::Pin};
+use std::pin::Pin;
 
 use anyhow::{Context, Result};
-use aws_smithy_types::byte_stream::error::Error;
 use internal_llm_client::{AllowedRoleMetadata, FinishReasonFilter};
-use serde_json::{json, Map};
+use serde_json::Map;
 
 mod chat;
 mod completion;
 use std::borrow::Cow;
 
-use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue, MediaBase64, MediaUrl};
+use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue, MediaUrl};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use futures::stream::StreamExt;
 use infer;

@@ -2,13 +2,12 @@ use std::collections::HashSet;
 
 use anyhow::Result;
 use baml_types::{
-    baml_value::TypeLookups,
-    ir_type::{TypeIR, TypeStreaming},
+    ir_type::TypeIR,
     BamlValue, StreamingMode,
 };
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::{
-    repr::IntermediateRepr, ClassWalker, EnumWalker, IRHelper, IRHelperExtended,
+    repr::IntermediateRepr, ClassWalker, EnumWalker, IRHelper,
 };
 use internal_baml_jinja::types::{Class, Enum, Name, OutputFormatContent};
 

@@ -12,7 +12,6 @@ use super::{
     primitive::LLMPrimitiveProvider,
     strategy::LLMStrategyProvider,
     traits::WithRetryPolicy,
-    LLMResponse,
 };
 use crate::{
     client_registry::ClientProperty, runtime_interface::InternalClientLookup, RuntimeContext,

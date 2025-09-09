@@ -1,29 +1,22 @@
-use std::collections::HashMap;
 
 use anyhow::Result;
-use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
-use eventsource_stream::Eventsource;
+use baml_types::{BamlMap, BamlMediaContent, BamlMediaType};
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use internal_llm_client::{openai::ResolvedOpenAI, AllowedRoleMetadata, FinishReasonFilter};
-use secrecy::ExposeSecret;
 use serde_json::json;
 
-use super::{
-    properties,
-    types::{ChatCompletionResponse, ChatCompletionResponseDelta},
-};
+use super::properties;
 use crate::{
     client_registry::ClientProperty,
     internal::llm_client::{
         primitive::request::{make_parsed_request, RequestBuilder, ResponseType},
         traits::{
-            CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse,
+            CompletionToProviderBody, HttpContext, StreamResponse,
             ToProviderMessage, ToProviderMessageExt, WithChat, WithClient, WithClientProperties,
             WithNoCompletion, WithRetryPolicy, WithStreamChat,
-        },
-        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+        }, LLMResponse,
         ModelFeatures, ResolveMediaUrls,
     },
     request::create_client,

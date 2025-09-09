@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use baml_types::BamlMap;
 use serde::Deserialize;
-use serde_json::Value;
 
 use super::types::{AnthropicMessageContent, AnthropicMessageResponse, MessageChunk};
 use crate::internal::llm_client::{

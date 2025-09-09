@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 
 use baml_types::BamlMap;
 use indexmap::IndexMap;

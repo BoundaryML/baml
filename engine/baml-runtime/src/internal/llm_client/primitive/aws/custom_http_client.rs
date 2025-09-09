@@ -17,7 +17,6 @@ use aws_smithy_types::body::SdkBody;
 #[cfg(target_arch = "wasm32")]
 use {futures::channel::oneshot, wasm_bindgen_futures::spawn_local};
 
-use crate::request::create_client;
 
 /// Returns a wrapper around the global reqwest client.
 /// [HttpClient].
@@ -303,5 +302,5 @@ impl HttpClient for Client {
 // --- Non-WASM Implementation using Reqwest ---
 #[cfg(not(target_arch = "wasm32"))]
 mod reqwest_impl {
-    use std::time::Duration;
+    
 }

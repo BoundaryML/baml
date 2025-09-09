@@ -4,11 +4,11 @@ use std::{
     collections::HashMap,
     env,
     fs::File,
-    io::{self, BufReader, Read},
-    path::{Path, PathBuf},
+    io::{BufReader, Read},
+    path::PathBuf,
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::Result;
 
 /// Loads environment variables from a .env file
 ///

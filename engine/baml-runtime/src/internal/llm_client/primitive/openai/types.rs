@@ -1,6 +1,6 @@
 use serde::{
-    de::{self, Deserializer},
-    Deserialize, Serialize,
+    de::Deserializer,
+    Deserialize,
 };
 
 pub type CompletionResponse = ChatCompletionGeneric<CompletionChoice>;

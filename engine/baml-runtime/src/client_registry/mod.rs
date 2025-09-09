@@ -4,8 +4,8 @@ use std::{collections::HashMap, str::FromStr, sync::Arc};
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue};
 pub use internal_llm_client::ClientProvider;
-use internal_llm_client::{ClientSpec, PropertyHandler, UnresolvedClientProperty};
-use serde::{Deserialize, Deserializer, Serialize};
+use internal_llm_client::{PropertyHandler, UnresolvedClientProperty};
+use serde::{Deserialize, Deserializer};
 
 use crate::{internal::llm_client::llm_provider::LLMProvider, RuntimeContext};
 

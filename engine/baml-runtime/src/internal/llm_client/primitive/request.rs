@@ -1,7 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result};
-use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use baml_types::{
     tracing::events::{ClientDetails, HTTPBody, HTTPRequest, HTTPResponse, TraceEvent},
     BamlMap,
@@ -11,8 +10,6 @@ use http::Response as HttpResponse;
 use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage, RenderedPrompt};
 pub use internal_llm_client::ResponseType;
 use reqwest::{header::HeaderMap, Response, StatusCode};
-use serde::de::DeserializeOwned;
-use serde_json::json;
 
 use crate::{
     internal::llm_client::{

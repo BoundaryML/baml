@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use baml_types::BamlMap;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::json;
 
 use super::types::{
     ChatCompletionResponse, ChatCompletionResponseDelta, ResponseOutputType, ResponsesApiResponse,

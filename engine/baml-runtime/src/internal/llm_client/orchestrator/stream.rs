@@ -2,11 +2,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_std::stream::StreamExt;
-use baml_ids::HttpRequestId;
-use baml_types::{BamlValue, BamlValueWithMeta};
+use baml_types::BamlValue;
 use internal_baml_core::ir::repr::IntermediateRepr;
-use jsonish::BamlValueWithFlags;
-use serde_json::json;
 use stream_cancel::Tripwire;
 use web_time::Duration;
 
@@ -15,7 +12,6 @@ use crate::{
     internal::{
         llm_client::{
             orchestrator::ExecutionScope,
-            parsed_value_to_response,
             traits::{HttpContext, WithClientProperties, WithPrompt, WithStreamable},
             LLMErrorResponse, LLMResponse, ResponseBamlValue,
         },
