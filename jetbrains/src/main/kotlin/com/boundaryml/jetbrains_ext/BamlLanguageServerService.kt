@@ -8,7 +8,7 @@ import com.intellij.util.messages.Topic
 @Service(Service.Level.PROJECT)
 class BamlLanguageServerService(private val project: Project) {
     
-    private val logger = Logger.getInstance(BamlLanguageServerService::class.java)
+    private val logger = Logger.getInstance(javaClass)
 
     companion object {
         val PORT_TOPIC = Topic.create(
@@ -30,7 +30,7 @@ class BamlLanguageServerService(private val project: Project) {
         private set
 
     fun setPort(newPort: Int) {
-        logger.info("Setting port to: $newPort")
+        logger.warn("Setting port to: $newPort")
         port = newPort
         project.messageBus
             .syncPublisher(PORT_TOPIC)
@@ -50,7 +50,7 @@ class BamlLanguageServerService(private val project: Project) {
     fun isCurrentlyRestarting(): Boolean = isRestarting
 
     fun updateCurrentServer(cliPath: String, version: String) {
-        logger.info("Updating current server state: version=$version, path=$cliPath")
+        logger.warn("Updating current server state: version=$version, path=$cliPath")
         currentExecutingCliPath = cliPath
         currentCliVersion = version
         project.messageBus
@@ -59,13 +59,13 @@ class BamlLanguageServerService(private val project: Project) {
     }
 
     fun setRestartingFlag(restarting: Boolean) {
-        logger.debug("Setting restart flag: $restarting")
+        logger.warn("Setting restart flag: $restarting")
         isRestarting = restarting
     }
 
     fun shouldRestartForVersion(targetCliPath: String): Boolean {
         val shouldRestart = targetCliPath != currentExecutingCliPath
-        logger.info("Version switch decision: shouldRestart=$shouldRestart (current=$currentExecutingCliPath, target=$targetCliPath)")
+        logger.warn("Version switch decision: shouldRestart=$shouldRestart (current=$currentExecutingCliPath, target=$targetCliPath)")
         return shouldRestart
     }
 
