@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta};
+use baml_types::{ir_type::TypeIR, BamlMap, BamlMediaType, BamlValueWithMeta, TypeValue};
 use baml_vm::{
     BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex,
     GlobalPool, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
@@ -1158,6 +1158,17 @@ impl<'g> HirCompiler<'g> {
                     Some(TypeIR::List(_, _)) => format!("std.Array.{method}"),
 
                     Some(TypeIR::Map(_, _, _)) => format!("std.Map.{method}"),
+
+                    Some(TypeIR::Primitive(TypeValue::Media(media_type), _)) => {
+                        let subtype = match media_type {
+                            BamlMediaType::Image => "std.media.image",
+                            BamlMediaType::Video => "std.media.video",
+                            BamlMediaType::Audio => "std.media.audio",
+                            BamlMediaType::Pdf => "std.media.pdf",
+                        };
+
+                        format!("{subtype}.{method}")
+                    }
 
                     other => panic!("method calls must be on classes, got: {other:#?}"),
                 };

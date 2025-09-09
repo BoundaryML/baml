@@ -2,7 +2,7 @@
 //!
 //! We need to find a better pattern for this, but this works for now.
 
-use baml_types::{BamlMap, BamlMedia, BamlMediaType};
+use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
 
 use crate::{
     vm::{InternalError, Object, ObjectType, Vm, VmError},
@@ -151,6 +151,42 @@ impl Vm {
             Some("application/pdf".to_string()),
         )))
     }
+
+    pub fn media_is_url(&mut self, args: &[Value]) -> Result<Value, VmError> {
+        // Arity is already checked by the VM.
+
+        let object_index = self.objects.as_object(&args[0], ObjectType::Media)?;
+        let Object::Media(media) = &self.objects[object_index] else {
+            return Err(InternalError::TypeError {
+                expected: ObjectType::Media.into(),
+                got: ObjectType::of(&self.objects[object_index]).into(),
+            }
+            .into());
+        };
+
+        Ok(Value::Bool(matches!(
+            media.content,
+            BamlMediaContent::Url(_)
+        )))
+    }
+
+    pub fn media_is_base64(&mut self, args: &[Value]) -> Result<Value, VmError> {
+        // Arity is already checked by the VM.
+
+        let object_index = self.objects.as_object(&args[0], ObjectType::Media)?;
+        let Object::Media(media) = &self.objects[object_index] else {
+            return Err(InternalError::TypeError {
+                expected: ObjectType::Media.into(),
+                got: ObjectType::of(&self.objects[object_index]).into(),
+            }
+            .into());
+        };
+
+        Ok(Value::Bool(matches!(
+            media.content,
+            BamlMediaContent::Base64(_)
+        )))
+    }
 }
 
 pub type NativeFunction = fn(&mut Vm, &[Value]) -> Result<Value, VmError>;
@@ -171,6 +207,14 @@ pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
         ("std.media.audio.from_base64", (Vm::audio_from_base64, 2)),
         ("std.media.video.from_base64", (Vm::video_from_base64, 2)),
         ("std.media.pdf.from_base64", (Vm::pdf_from_base64, 1)),
+        ("std.media.image.is_url", (Vm::media_is_url, 1)),
+        ("std.media.video.is_url", (Vm::media_is_url, 1)),
+        ("std.media.audio.is_url", (Vm::media_is_url, 1)),
+        ("std.media.pdf.is_url", (Vm::media_is_url, 1)),
+        ("std.media.image.is_base64", (Vm::media_is_base64, 1)),
+        ("std.media.video.is_base64", (Vm::media_is_base64, 1)),
+        ("std.media.audio.is_base64", (Vm::media_is_base64, 1)),
+        ("std.media.pdf.is_base64", (Vm::media_is_base64, 1)),
     ];
 
     BamlMap::from_iter(
