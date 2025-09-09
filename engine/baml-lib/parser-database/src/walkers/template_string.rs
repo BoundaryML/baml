@@ -1,6 +1,6 @@
 use either::Either;
 use internal_baml_ast::ast::{
-    self, ArgumentId, BlockArgs, Span, WithIdentifier, WithName, WithSpan,
+    self, ArgumentId, Span, WithIdentifier, WithName, WithSpan,
 };
 use internal_baml_jinja_types::{PredefinedTypes, Type};
 

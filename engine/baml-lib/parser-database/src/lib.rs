@@ -37,13 +37,13 @@ mod tarjan;
 mod types;
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     path::PathBuf,
 };
 
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
 pub use internal_baml_ast::ast;
-use internal_baml_ast::ast::{Ast, FieldType, ValExpId, WithName};
+use internal_baml_ast::ast::{Ast, ValExpId, WithName};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
 use names::Names;
 pub use tarjan::Tarjan;

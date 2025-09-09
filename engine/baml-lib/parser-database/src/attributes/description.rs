@@ -1,6 +1,6 @@
 use internal_baml_diagnostics::DatamodelError;
 
-use crate::{coerce, context::Context, types::Attributes};
+use crate::{context::Context, types::Attributes};
 
 pub(super) fn visit_description_attribute(attributes: &mut Attributes, ctx: &mut Context<'_>) {
     match ctx.visit_default_arg_with_idx("description") {

@@ -1,7 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use baml_types::Constraint;
-use either::Either;
 use indexmap::IndexMap;
 use internal_baml_ast::ast::{
     self, ArgumentId, Identifier, SubType, WithIdentifier, WithName, WithSpan,

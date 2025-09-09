@@ -1,4 +1,4 @@
-use internal_baml_ast::ast::{Argument, ArgumentId, Attribute};
+use internal_baml_ast::ast::{ArgumentId, Attribute};
 use internal_baml_diagnostics::{DatamodelWarning, Span};
 
 use self::attributes::AttributesValidationState;

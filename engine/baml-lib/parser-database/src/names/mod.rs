@@ -1,8 +1,7 @@
 mod validate_reserved_names;
 
-use baml_types::{BamlMap, TypeIR};
-use indexmap::map::IndexedEntry;
-use internal_baml_ast::ast::{ConfigBlockProperty, Expression, Field, WithIdentifier};
+use baml_types::BamlMap;
+use internal_baml_ast::ast::{Expression, Field, WithIdentifier};
 use internal_baml_diagnostics::Span;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use validate_reserved_names::*;

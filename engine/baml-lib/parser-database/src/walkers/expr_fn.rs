@@ -1,5 +1,4 @@
-use baml_types::expr::Expr;
-use internal_baml_ast::ast::{self, ExprFn, TopLevelAssignment, WithName, WithSpan};
+use internal_baml_ast::ast::{self, WithName, WithSpan};
 use internal_baml_diagnostics::Span;
 
 use super::{ConfigurationWalker, Walker};

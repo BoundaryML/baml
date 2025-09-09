@@ -1,6 +1,4 @@
-use baml_types::Constraint;
-use internal_baml_diagnostics::{DatamodelError, Span};
-use itertools::Itertools;
+use internal_baml_diagnostics::Span;
 
 use super::{
     alias::visit_alias_attribute, constraint::visit_constraint_attributes,

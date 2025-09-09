@@ -1,20 +1,18 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     hash::Hash,
-    ops::Deref,
 };
 
 use baml_derive::BamlHash;
-use baml_types::{Constraint, StringOr, UnresolvedValue};
+use baml_types::{Constraint, UnresolvedValue};
 use indexmap::IndexMap;
 use internal_baml_ast::ast::{
-    self, BlockArgs, Expression, FieldId, FieldType, RawString, TypeAliasId, TypeBuilderBlock,
+    self, BlockArgs, FieldId, FieldType, RawString, TypeBuilderBlock,
     ValExpId, WithIdentifier, WithName, WithSpan,
 };
-use internal_baml_diagnostics::{Diagnostics, Span};
+use internal_baml_diagnostics::Span;
 use internal_baml_prompt_parser::ast::{ChatBlock, PrinterBlock, Variable};
 use internal_llm_client::{ClientProvider, PropertyHandler, UnresolvedClientProperty};
-use ouroboros::self_referencing;
 
 use crate::{
     coerce, context::Context, types::configurations::visit_test_case, DatamodelError,

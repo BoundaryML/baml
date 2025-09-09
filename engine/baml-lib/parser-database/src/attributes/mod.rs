@@ -6,11 +6,10 @@ pub mod constraint;
 mod description;
 mod to_string_attribute;
 use baml_types::{Constraint, UnresolvedValue};
-use internal_baml_ast::ast::{Expression, SubType};
+use internal_baml_ast::ast::SubType;
 
 use crate::{
     context::Context,
-    interner::StringId,
     types::{ClassAttributes, EnumAttributes},
 };
 

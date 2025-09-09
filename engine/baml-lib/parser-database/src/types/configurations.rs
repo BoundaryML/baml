@@ -1,14 +1,13 @@
-use std::{collections::HashSet, ops::Deref};
 
 use baml_types::{Constraint, UnresolvedValue};
 use internal_baml_ast::ast::{
-    Attribute, ValExpId, ValueExprBlock, WithIdentifier, WithName, WithSpan,
+    ValExpId, ValueExprBlock, WithIdentifier, WithName, WithSpan,
 };
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
+use internal_baml_diagnostics::{DatamodelError, Span};
 use regex::Regex;
 
 use super::{
-    Attributes, ContantDelayStrategy, ExponentialBackoffStrategy, RetryPolicy, RetryPolicyStrategy,
+    ContantDelayStrategy, ExponentialBackoffStrategy, RetryPolicy, RetryPolicyStrategy,
 };
 use crate::{
     attributes::constraint::attribute_as_constraint, coerce, coerce_array,
