@@ -2,7 +2,7 @@
 //!
 //! We need to find a better pattern for this, but this works for now.
 
-use baml_types::BamlMap;
+use baml_types::{BamlMap, BamlMedia, BamlMediaType};
 
 use crate::{
     vm::{InternalError, Object, ObjectType, Vm, VmError},
@@ -68,13 +68,27 @@ impl Vm {
     }
 }
 
+impl Vm {
+    pub fn image_from_url(&mut self, args: &[Value]) -> Result<Value, VmError> {
+        // Arity is already checked by the VM.
+
+        let url = self.objects.as_string(&args[0])?;
+
+        Ok(self.alloc_media(BamlMedia::url(BamlMediaType::Image, url.to_owned(), None)))
+    }
+}
+
 pub type NativeFunction = fn(&mut Vm, &[Value]) -> Result<Value, VmError>;
 
 pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
     let fns: &[(&str, (NativeFunction, usize))] = &[
+        // Array.
         ("std.Array.len", (Vm::array_len, 1)),
+        // Map.
         ("std.Map.len", (Vm::map_len, 1)),
         ("std.Map.contains", (Vm::map_contains, 2)),
+        // Media
+        ("std.media.image.from_url", (Vm::image_from_url, 1)),
     ];
 
     BamlMap::from_iter(

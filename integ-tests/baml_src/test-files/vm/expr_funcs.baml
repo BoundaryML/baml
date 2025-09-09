@@ -107,6 +107,10 @@ function ReturnCategory(category: Category) -> Category {
     category
 }
 
+function ReturnImageFromUrl(url: string) -> image {
+    image.from_url(url)
+}
+
 // --------------------------------
 // Expression Functions with LLM calls.
 // --------------------------------

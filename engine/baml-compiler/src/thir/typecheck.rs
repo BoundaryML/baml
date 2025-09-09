@@ -129,6 +129,7 @@ pub fn typecheck_returning_context<'a>(
                 ],
                 TypeIR::bool(),
             ),
+            "std.media.image.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::image()),
             _ => {
                 // Generic function type for other natives
                 let param_types = vec![TypeIR::null(); arity];
@@ -1207,10 +1208,17 @@ pub fn typecheck_expression(
             // Look up type in context
             let var_type = context.get_type(name).cloned();
             if var_type.is_none() {
-                diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Unknown variable {name}"),
-                    span.clone(),
-                ));
+                match name.as_str() {
+                    // Built-in types, you can call `image.from_url` and should work.
+                    "image" | "audio" | "video" | "pdf" => {}
+
+                    _ => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Unknown variable {name}"),
+                            span.clone(),
+                        ));
+                    }
+                }
             }
             thir::Expr::Var(name.clone(), (span.clone(), var_type))
         }
@@ -1433,8 +1441,25 @@ pub fn typecheck_expression(
                     None
                 }
 
-                // type not inferred, so we can't say anything about it.
-                None => None,
+                // type of receiver not inferred. Let's see if it's a built-in type.
+                None => {
+                    // Check if it's media.
+                    match &typed_receiver {
+                        thir::Expr::Var(name, _) if name == "image" => match method.as_str() {
+                            "from_url" => Some("std.media.image.from_url".to_string()),
+                            _ => {
+                                diagnostics.push_error(DatamodelError::new_validation_error(
+                                    &format!("Method `{method}` is not available on type `std.media.image`"),
+                                    span.clone(),
+                                ));
+                                None
+                            }
+                        },
+
+                        // Nothing we can do about it.
+                        _ => None,
+                    }
+                }
             };
 
             // Return untyped expr if not known.
@@ -1467,6 +1492,15 @@ pub fn typecheck_expression(
                 }
             };
 
+            // image.from_url is not a "method", it's an associated function (kind of).
+            let is_function_call_on_namespace = matches!(
+                &typed_receiver,
+                thir::Expr::Var(name, _) if matches!(
+                    name.as_str(),
+                    "image" | "audio" | "video" | "pdf"
+                )
+            );
+
             let typed_args: Vec<_> = if is_known_function {
                 // Only validate arguments for known functions. Skip the first argument since that's going to be
                 // our method receiver.
@@ -1474,7 +1508,7 @@ pub fn typecheck_expression(
                     .zip(
                         param_types
                             .iter()
-                            .skip(1)
+                            .skip(if is_function_call_on_namespace { 0 } else { 1 })
                             .chain(std::iter::repeat(&TypeIR::null())),
                     )
                     .map(|(arg, expected_type)| {
@@ -1509,8 +1543,23 @@ pub fn typecheck_expression(
                     .collect()
             };
 
+            // image.from_url is not a "method", it's an associated function (kind of).
+            let is_function_call_on_namespace = matches!(
+                &typed_receiver,
+                thir::Expr::Var(name, _) if matches!(
+                    name.as_str(),
+                    "image" | "audio" | "video" | "pdf"
+                )
+            );
+
+            let passed_number_of_args = if is_function_call_on_namespace {
+                args.len()
+            } else {
+                args.len() + 1 // self
+            };
+
             // Check argument count only for known functions
-            if is_known_function && args.len() + 1 != param_types.len() {
+            if is_known_function && passed_number_of_args != param_types.len() {
                 diagnostics.push_error(DatamodelError::new_validation_error(
                     &format!(
                         "Function {} expects {} arguments, got {}",
@@ -1520,6 +1569,21 @@ pub fn typecheck_expression(
                     ),
                     span.clone(),
                 ));
+            }
+
+            // Normal call
+            // TODO: Very annoying, figure out how to parse method calls on
+            // classes differently than function calls on namespaces.
+            if is_function_call_on_namespace {
+                return thir::Expr::Call {
+                    func: Arc::new(thir::Expr::Var(
+                        full_name.clone(),
+                        (span.clone(), func_type.clone()),
+                    )),
+                    type_args: vec![],
+                    args: typed_args,
+                    meta: (span.clone(), return_type),
+                };
             }
 
             thir::Expr::MethodCall {
