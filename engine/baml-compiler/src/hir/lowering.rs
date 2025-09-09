@@ -5,7 +5,6 @@
 use std::collections::HashSet;
 
 use baml_types::{
-    ir_type::TypeGeneric,
     type_meta::{self, base::StreamingBehavior},
     Constraint, ConstraintLevel, TypeIR, TypeValue,
 };

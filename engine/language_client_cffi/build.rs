@@ -203,7 +203,7 @@ mod protoc_lang_out {
                 return Err(err_other("version does not start with digit"));
             }
             Ok(Version {
-                version: output.to_owned(),
+                _version: output.to_owned(),
             })
         }
 
@@ -227,7 +227,7 @@ mod protoc_lang_out {
     }
 
     pub struct Version {
-        pub version: String,
+        pub _version: String,
     }
 
     #[cfg(test)]
