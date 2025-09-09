@@ -540,7 +540,7 @@ mod responses_tests {
                 prompt_tokens: Some(36),
                 output_tokens: Some(87),
                 total_tokens: Some(123),
-                cached_input_tokens: Some(0),
+                cached_input_tokens: None,
             },
         };
 

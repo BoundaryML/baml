@@ -334,7 +334,7 @@ mod tests {
                 prompt_tokens: Some(166),
                 output_tokens: Some(39),
                 total_tokens: Some(205),
-                cached_input_tokens: Some(0),
+                cached_input_tokens: None,
             },
         };
 
