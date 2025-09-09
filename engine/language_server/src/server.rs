@@ -6,23 +6,21 @@ use std::panic::PanicInfo;
 use std::{
     num::NonZeroUsize,
     path::PathBuf,
-    sync::Arc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use log::info;
 use lsp_server::Message;
 use lsp_types::{
-    notification::DidChangeTextDocument, ClientCapabilities, CodeLensOptions, CompletionOptions,
+    ClientCapabilities, CodeLensOptions, CompletionOptions,
     DiagnosticOptions, DiagnosticServerCapabilities, FileSystemWatcher, HoverProviderCapability,
     InitializeParams, MessageType, SaveOptions, ServerCapabilities, TextDocumentSyncCapability,
-    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url,
-    WorkspaceClientCapabilities, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
+    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
 use playground_server::{FrontendMessage, LangServerToWasmMessage, PreLangServerToWasmMessage};
 use schedule::Task;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::broadcast;
 
 use self::{
     connection::{Connection, ConnectionInitializer},

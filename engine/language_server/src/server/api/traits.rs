@@ -7,7 +7,6 @@ use lsp_types::notification::Notification as LSPNotification;
 use lsp_types::request::Request;
 use parking_lot::Mutex;
 
-use super::notifications::DidSaveTextDocument;
 use crate::{
     baml_project::Project,
     server::client::{Notifier, Requester},

@@ -1,17 +1,12 @@
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::time::Duration;
 
-use diagnostics::{file_diagnostics, project_diagnostics};
-use log::info;
+use diagnostics::file_diagnostics;
 use lsp_server;
 use lsp_types::{
-    DidChangeTextDocumentParams, DocumentDiagnosticReport, DocumentDiagnosticReportResult,
+    DocumentDiagnosticReport, DocumentDiagnosticReportResult,
     FullDocumentDiagnosticReport, RelatedFullDocumentDiagnosticReport,
 };
-use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use url::Url;
 
 use crate::{server::schedule::Task, session::Session};
@@ -29,7 +24,7 @@ use self::traits::{
     SyncNotificationHandler,
 };
 use super::{
-    client::{Notifier, Requester, Responder},
+    client::Responder,
     schedule::BackgroundSchedule,
     Result,
 };

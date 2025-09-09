@@ -1,13 +1,13 @@
 use std::borrow::Cow;
 
-use lsp_types::{self as types, notification as notif, request::Request, ConfigurationParams};
+use lsp_types::{self as types, notification as notif};
 
 use crate::{
     baml_project::{common_version_up_to_patch, Project},
     server::{
-        api::{self, notifications::baml_src_version::BamlSrcVersionPayload, ResultExt},
+        api::{notifications::baml_src_version::BamlSrcVersionPayload, ResultExt},
         client::{Notifier, Requester},
-        Result, Task,
+        Result,
     },
     session::{DocumentSnapshot, Session},
 };

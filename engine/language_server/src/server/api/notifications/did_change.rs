@@ -1,7 +1,7 @@
-use std::{collections::HashMap, time::Instant};
+use std::time::Instant;
 
 use lsp_types::{
-    notification::DidChangeTextDocument, DidChangeTextDocumentParams, PublishDiagnosticsParams,
+    notification::DidChangeTextDocument, DidChangeTextDocumentParams,
 };
 use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
 

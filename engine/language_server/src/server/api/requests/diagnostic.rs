@@ -12,7 +12,7 @@ use crate::{
     baml_project::Project,
     server::{
         api::{
-            diagnostics::{file_diagnostics, project_diagnostics},
+            diagnostics::file_diagnostics,
             traits::{BackgroundDocumentRequestHandler, RequestHandler, SyncRequestHandler},
             ResultExt,
         },

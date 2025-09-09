@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 
 use lsp_types::{self as types, request as req, HoverParams, TextDocumentItem};
 

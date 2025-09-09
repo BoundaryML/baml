@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 
 use lsp_types::{
     request, CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionParams, Command,

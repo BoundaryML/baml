@@ -1,18 +1,12 @@
-use std::path::PathBuf;
 
-use lsp_types::{request, CompletionItem, CompletionList, CompletionParams, CompletionResponse};
+use lsp_types::{request, CompletionParams};
 
 use crate::{
-    baml_project::{position_utils::get_word_at_position, trim_line},
     server::{
-        api::{
-            traits::{RequestHandler, SyncRequestHandler},
-            ResultExt,
-        },
+        api::traits::{RequestHandler, SyncRequestHandler},
         client::{Notifier, Requester},
         Result,
-    },
-    DocumentKey, Session,
+    }, Session,
 };
 pub(crate) struct Completion;
 

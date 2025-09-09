@@ -1,19 +1,12 @@
-use std::path::PathBuf;
 
-use internal_baml_core::internal_baml_ast::{format_schema, FormatOptions};
-use lsp_types::{request, DocumentFormattingParams, TextEdit};
+use lsp_types::{request, DocumentFormattingParams};
 
 use crate::{
-    baml_project::position_utils::full_document_range,
     server::{
-        api::{
-            traits::{RequestHandler, SyncRequestHandler},
-            ResultExt,
-        },
+        api::traits::{RequestHandler, SyncRequestHandler},
         client::{Notifier, Requester},
         Result,
-    },
-    DocumentKey, Session,
+    }, Session,
 };
 pub(crate) struct DocumentFormatting;
 

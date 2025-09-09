@@ -31,7 +31,7 @@ use internal_baml_codegen::{
 use internal_baml_diagnostics::Diagnostics;
 use lsp_server::Notification;
 use lsp_types::{
-    Diagnostic, DiagnosticSeverity, Hover, HoverContents, Position, Range, TextDocumentItem,
+    Hover, HoverContents, Position, Range, TextDocumentItem,
 };
 use position_utils::get_word_at_position;
 use semver::Version;

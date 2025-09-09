@@ -1,5 +1,5 @@
 use lsp_types as types;
-use lsp_types::{notification as notif, PublishDiagnosticsParams, Url};
+use lsp_types::{notification as notif, Url};
 
 use crate::{
     server::{

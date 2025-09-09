@@ -5,7 +5,7 @@
 //! `logFile` path can also be specified in the settings, and output will be directed there
 //! instead.
 use core::str;
-use std::{net::Ipv4Addr, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
+use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 use serde::Deserialize;
 use tracing::level_filters::LevelFilter;

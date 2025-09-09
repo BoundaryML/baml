@@ -1,4 +1,4 @@
-use lsp_types::{self as types, notification as notif, ConfigurationItem, ConfigurationParams};
+use lsp_types::{self as types, notification as notif, ConfigurationParams};
 
 use crate::{
     server::{

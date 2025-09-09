@@ -6,7 +6,7 @@ use std::{
 
 use baml_runtime::InternalRuntimeInterface;
 use internal_baml_diagnostics::{SourceFile, Span};
-use lsp_server::{ErrorCode, Notification, Request};
+use lsp_server::{ErrorCode, Notification};
 use lsp_types::{
     notification::PublishDiagnostics, Diagnostic, DiagnosticSeverity, PublishDiagnosticsParams, Url,
 };
@@ -14,7 +14,7 @@ use parking_lot::Mutex;
 
 use super::LSPResult;
 use crate::{
-    baml_project::{self, Project},
+    baml_project::Project,
     baml_text_size::TextSize,
     server::{api::ResultExt, client::Notifier, Result},
     DocumentKey, Session,

@@ -1,9 +1,7 @@
-use std::time::Duration;
 
 use lsp_server::ErrorCode;
 use lsp_types::{request, ExecuteCommandParams, MessageType};
 use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
-use tokio::time::sleep;
 use webbrowser;
 
 use crate::{

@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf};
 use baml_lsp_types::BamlSpan;
 use baml_runtime::InternalRuntimeInterface;
 use itertools::Itertools;
-use lsp_types::{request, CodeLensParams, Command, Position, Range};
+use lsp_types::{request, CodeLensParams, Position, Range};
 
 use crate::{
     baml_project::Project,

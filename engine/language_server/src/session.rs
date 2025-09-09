@@ -2,18 +2,17 @@
 
 use std::{
     collections::HashMap,
-    ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     sync::Arc,
     time::Instant,
 };
 
-use anyhow::{anyhow, Context};
+use anyhow::anyhow;
 use index::DocumentController;
 use itertools::any;
 use lsp_types::{ClientCapabilities, TextDocumentContentChangeEvent, Url};
 use parking_lot::Mutex;
-use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
+use playground_server::PreLangServerToWasmMessage;
 use serde_json::Value;
 
 pub(crate) use self::{capabilities::ResolvedClientCapabilities, settings::AllSettings};
@@ -33,7 +32,7 @@ mod capabilities;
 pub mod index;
 pub mod settings;
 
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::broadcast;
 
 /// The global state for the LSP
 #[derive(Debug)]

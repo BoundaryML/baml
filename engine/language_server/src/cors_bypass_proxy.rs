@@ -1,16 +1,14 @@
-use std::collections::HashMap;
 
 use anyhow::Result;
 use axum::{
     body::Body,
-    extract::{Path, Query, State},
-    http::{HeaderMap, Method, Request, Response, StatusCode, Uri},
+    extract::Path,
+    http::{HeaderMap, Method, StatusCode, Uri},
     response::{IntoResponse, Response as AxumResponse},
     routing::{any, get, options},
     Router,
 };
 use mime_guess::from_path;
-use serde::Deserialize;
 use tokio::{fs, net::TcpListener};
 use tower_http::cors::{Any, CorsLayer};
 

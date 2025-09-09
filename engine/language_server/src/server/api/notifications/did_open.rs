@@ -1,16 +1,13 @@
 use lsp_types::{
-    self as types, notification::DidOpenTextDocument, ConfigurationItem, ConfigurationParams,
-    DidOpenTextDocumentParams, PublishDiagnosticsParams, TextDocumentItem,
+    self as types, notification::DidOpenTextDocument, ConfigurationParams,
+    DidOpenTextDocumentParams,
 };
 
 use crate::{
     server::{
         api::{
             diagnostics::publish_session_lsp_diagnostics,
-            notifications::{
-                baml_src_version::BamlSrcVersionPayload,
-                did_save_text_document::send_generator_version,
-            },
+            notifications::did_save_text_document::send_generator_version,
             traits::{NotificationHandler, SyncNotificationHandler},
             ResultExt,
         },
@@ -18,7 +15,6 @@ use crate::{
         Result, Task,
     },
     session::Session,
-    DocumentKey, TextDocument,
 };
 pub(crate) struct DidOpenTextDocumentHandler;
 

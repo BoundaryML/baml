@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 
 use lsp_types::{
     self, request as req, GotoDefinitionParams, GotoDefinitionResponse, Location, Position, Range,
