@@ -110,7 +110,7 @@ class BamlToolWindowFactory : ToolWindowFactory {
             }
 
             // vite hot reload
-            val viteButton = JButton("viteButton").apply {
+            val viteButton = JButton("Vite").apply {
                 addActionListener {
                     browser.loadHTML(VITE_HOT_RELOAD_HTML.trimIndent())
                 }
