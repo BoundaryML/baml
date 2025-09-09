@@ -133,6 +133,17 @@ pub fn typecheck_returning_context<'a>(
             "std.media.audio.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::audio()),
             "std.media.video.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::video()),
             "std.media.pdf.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
+
+            "std.media.image.from_base64" => {
+                TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::image())
+            }
+            "std.media.audio.from_base64" => {
+                TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::audio())
+            }
+            "std.media.video.from_base64" => {
+                TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::video())
+            }
+            "std.media.pdf.from_base64" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
             _ => {
                 // Generic function type for other natives
                 let param_types = vec![TypeIR::null(); arity];
@@ -1453,6 +1464,18 @@ pub fn typecheck_expression(
                             ("audio", "from_url") => Some("std.media.audio.from_url".to_string()),
                             ("video", "from_url") => Some("std.media.video.from_url".to_string()),
                             ("pdf", "from_url") => Some("std.media.pdf.from_url".to_string()),
+
+                            ("image", "from_base64") => {
+                                Some("std.media.image.from_base64".to_string())
+                            }
+                            ("audio", "from_base64") => {
+                                Some("std.media.audio.from_base64".to_string())
+                            }
+                            ("video", "from_base64") => {
+                                Some("std.media.video.from_base64".to_string())
+                            }
+                            ("pdf", "from_base64") => Some("std.media.pdf.from_base64".to_string()),
+
                             _ => {
                                 diagnostics.push_error(DatamodelError::new_validation_error(
                                     &format!("Method `{method}` is not available on type `{name}`"),

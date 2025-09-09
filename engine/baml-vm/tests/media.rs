@@ -1,12 +1,11 @@
 //! VM tests for media types.
 
-use baml_types::{BamlMediaContent, BamlMediaType, MediaUrl};
+use baml_types::{BamlMediaContent, BamlMediaType, MediaBase64, MediaUrl};
 use baml_vm::{ObjectIndex, Value, VmExecState};
 
 mod common;
 use common::{assert_vm_executes_with_inspection, Program};
 
-// Array tests
 #[test]
 fn image_from_url() -> anyhow::Result<()> {
     assert_vm_executes_with_inspection(
@@ -17,13 +16,13 @@ fn image_from_url() -> anyhow::Result<()> {
                 }
             "#,
             function: "image_from_url",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(11))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(15))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(11)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(15)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(11)]
+                    &vm.objects[ObjectIndex::from_raw(15)]
                 );
             };
 
@@ -51,13 +50,13 @@ fn audio_from_url() -> anyhow::Result<()> {
                 }
             "#,
             function: "audio_from_url",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(11))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(15))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(11)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(15)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(11)]
+                    &vm.objects[ObjectIndex::from_raw(15)]
                 );
             };
 
@@ -84,13 +83,13 @@ fn video_from_url() -> anyhow::Result<()> {
                 }
             "#,
             function: "video_from_url",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(11))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(15))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(11)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(15)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(11)]
+                    &vm.objects[ObjectIndex::from_raw(15)]
                 );
             };
 
@@ -117,13 +116,13 @@ fn pdf_from_url() -> anyhow::Result<()> {
                 }
             "#,
             function: "pdf_from_url",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(11))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(15))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(11)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(15)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(11)]
+                    &vm.objects[ObjectIndex::from_raw(15)]
                 );
             };
 
@@ -132,6 +131,39 @@ fn pdf_from_url() -> anyhow::Result<()> {
                 media.content,
                 BamlMediaContent::Url(MediaUrl {
                     url: "https://example.com/pdf.pdf".to_string()
+                })
+            );
+
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn image_from_base64() -> anyhow::Result<()> {
+    assert_vm_executes_with_inspection(
+        Program {
+            source: r#"
+                function image_from_base64() -> image {
+                    image.from_base64("image/png", "abc==")
+                }
+            "#,
+            function: "image_from_base64",
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(16))),
+        },
+        |vm| {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(16)] else {
+                panic!(
+                    "expected Media, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(16)]
+                );
+            };
+
+            assert_eq!(media.media_type, BamlMediaType::Image);
+            assert_eq!(
+                media.content,
+                BamlMediaContent::Base64(MediaBase64 {
+                    base64: "abc==".to_string()
                 })
             );
 
