@@ -1,4 +1,4 @@
-use std::{collections::HashSet, mem::MaybeUninit};
+use std::collections::HashSet;
 
 use internal_baml_ast::ast::{
     AssertStmt, ClassConstructorField, Expression, LetStmt, ReturnStmt, Stmt, WithName, WithSpan,

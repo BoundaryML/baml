@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    path::{Path, PathBuf},
+    path::Path,
     str::FromStr,
 };
 
@@ -11,7 +11,7 @@ use semver::Version;
 use strum::VariantNames;
 
 use crate::configuration::{
-    CloudProject, CloudProjectBuilder, CodegenGeneratorBuilder, Generator,
+    CloudProjectBuilder, CodegenGeneratorBuilder, Generator,
     GeneratorDefaultClientMode, GeneratorOutputType, ModuleFormat,
 };
 

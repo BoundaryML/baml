@@ -7,18 +7,16 @@ use std::collections::HashSet;
 use anyhow::Result;
 use baml_types::{
     ir_type::{TypeGeneric, UnionConstructor},
-    BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel,
-    LiteralValue, TypeIR, TypeValue, UnionType,
+    BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta, ConstraintLevel,
+    LiteralValue, TypeIR, TypeValue,
 };
 use indexmap::IndexMap;
-use internal_baml_ast::ast::{WithIdentifier, WithSpan};
 use internal_baml_diagnostics::Span;
-use internal_baml_parser_database::walkers::ExprFnWalker;
 use itertools::Itertools;
 pub use to_baml_arg::ArgCoercer;
 
 use self::scope_diagnostics::ScopeStack;
-use super::{repr, ExprFunctionNode};
+use super::ExprFunctionNode;
 use crate::{
     error_not_found,
     ir::{

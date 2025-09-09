@@ -1,10 +1,9 @@
 use baml_types::{
-    expr::{Builtin, Expr, ExprMetadata},
-    Arrow, TypeIR,
+    expr::{Builtin, Expr, ExprMetadata}, TypeIR,
 };
 use internal_baml_diagnostics::Span;
 
-use super::repr::{Class, Enum, EnumValue, ExprFunction, Field, Node, NodeAttributes};
+use super::repr::{Class, Enum, EnumValue, Field, Node, NodeAttributes};
 use crate::{ir::repr::IntermediateRepr, Configuration};
 
 pub mod functions {

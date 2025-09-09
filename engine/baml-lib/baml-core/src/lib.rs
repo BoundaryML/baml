@@ -2,11 +2,10 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
 use std::{
-    path::{Path, PathBuf},
+    path::Path,
     sync::Mutex,
 };
 
-use enumflags2::BitFlags;
 use internal_baml_ast::ast::{Identifier, WithName};
 pub use internal_baml_ast::{self, ast};
 pub use internal_baml_diagnostics;

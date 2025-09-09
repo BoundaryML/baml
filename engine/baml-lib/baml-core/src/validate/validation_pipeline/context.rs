@@ -1,4 +1,3 @@
-use baml_types::TypeIR;
 use enumflags2::BitFlags;
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics};
 

@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
 use baml_derive::BamlHash;
-use baml_types::{BamlMap, UnresolvedValue};
+use baml_types::UnresolvedValue;
 use internal_baml_parser_database::RetryPolicyStrategy;
 
-use super::{super::RetryPolicy, ShallowSignature};
+use super::super::RetryPolicy;
 
 /// Find some way to hash the class
 

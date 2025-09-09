@@ -5,10 +5,9 @@ use std::{
 };
 
 use anyhow::Result;
-use baml_rpc::{NamedType, TypeDefinition, TypeReference};
 use baml_types::{ir_type::TypeNonStreaming, HasType};
 
-use super::{repr::Node, IntermediateRepr, Walker};
+use super::{IntermediateRepr, Walker};
 
 mod class;
 mod client;

@@ -4,7 +4,6 @@ use baml_types::TypeValue;
 use serde_json::json;
 
 use super::{
-    repr::{self},
     Class, Enum, FunctionArgs, FunctionNode, IntermediateRepr, TypeIR, Walker,
 };
 

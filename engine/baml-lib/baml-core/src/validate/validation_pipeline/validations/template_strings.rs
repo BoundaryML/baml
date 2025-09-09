@@ -1,6 +1,5 @@
-use std::collections::HashSet;
 
-use internal_baml_ast::ast::{FieldType, TypeExpId, WithIdentifier, WithName, WithSpan};
+use internal_baml_ast::ast::{WithIdentifier, WithName, WithSpan};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 
 use super::types::validate_type;

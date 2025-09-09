@@ -1,9 +1,8 @@
 use std::collections::HashSet;
 
-use baml_types::BamlMap;
 use internal_llm_client::{ClientProvider, UnresolvedClientProperty};
 
-use super::{super::Client, ShallowSignature};
+use super::super::Client;
 
 /// Find some way to hash the class
 

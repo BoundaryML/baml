@@ -8,10 +8,9 @@ use baml_types::{
     baml_value::TypeLookups,
     expr::{self, Builtin, Expr, ExprMetadata, Name, VarIndex},
     ir_type::{ArrowGeneric, TypeNonStreaming, TypeStreaming, UnionConstructor},
-    type_meta, Arrow, BamlMap, BamlValueWithMeta, Constraint, ConstraintLevel, JinjaExpression,
-    Resolvable, StreamingMode, StringOr, TypeIR, TypeValue, UnionType, UnresolvedValue,
+    type_meta, BamlMap, BamlValueWithMeta, Constraint, ConstraintLevel, JinjaExpression,
+    Resolvable, StreamingMode, TypeIR, TypeValue, UnresolvedValue,
 };
-use either::Either;
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_ast::ast::{
     self, Attribute, FieldArity, SubType, ValExpId, WithAttributes, WithIdentifier, WithName,
@@ -29,7 +28,7 @@ use internal_baml_parser_database::{
 use internal_llm_client::{ClientProvider, ClientSpec, UnresolvedClientProperty};
 use serde::Serialize;
 
-use super::builtin::{builtin_classes, builtin_generic_fn, builtin_ir, is_builtin_identifier};
+use super::builtin::{builtin_generic_fn, is_builtin_identifier};
 use crate::Configuration;
 
 /// This class represents the intermediate representation of the BAML AST.
@@ -951,9 +950,9 @@ impl IntermediateRepr {
     // If there are some args in the test block, give examples of all the
     // missing args.
     pub fn validate_test_args(&self, diagnostics: &mut Diagnostics) {
-        use std::collections::HashSet;
+        
 
-        use crate::ir::ir_helpers::IRHelper;
+        
 
         // Validate LLM function tests
         for function in &self.functions {
@@ -992,7 +991,7 @@ impl IntermediateRepr {
         use std::collections::HashSet;
 
         use baml_types::BamlMap;
-        use internal_baml_diagnostics::DatamodelError;
+        
 
         use crate::ir::ir_helpers::IRHelper;
 
@@ -2921,9 +2920,9 @@ fn make_test_ir_and_diagnostics_from_dir(
     root_dir: &std::path::Path,
     source_code: Vec<internal_baml_diagnostics::SourceFile>,
 ) -> anyhow::Result<(IntermediateRepr, Diagnostics)> {
-    use std::path::PathBuf;
+    
 
-    use internal_baml_diagnostics::SourceFile;
+    
 
     use crate::{validate, ValidatedSchema};
 
@@ -2970,7 +2969,7 @@ fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<E
         Expr::ClassConstructor {
             fields,
             spread,
-            meta,
+            
             ..
         } => {
             for expr in fields.values() {
@@ -3021,7 +3020,7 @@ fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<E
         }
         Expr::BinaryOperation {
             left,
-            operator,
+            
             right,
             ..
         } => {

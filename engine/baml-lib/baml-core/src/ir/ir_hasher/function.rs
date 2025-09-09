@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use baml_types::{StringOr, TypeIR};
+use baml_types::TypeIR;
 use internal_llm_client::ClientSpec;
 
 use super::{super::FunctionNode, ShallowSignature};

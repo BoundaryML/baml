@@ -5,15 +5,12 @@ use baml_types::{
     type_meta::base::StreamingBehavior, BamlValue, EvaluationContext, UnresolvedValue,
 };
 use indexmap::{IndexMap, IndexSet};
-use internal_baml_ast::ast::WithIdentifier;
-use internal_baml_diagnostics::Span;
 use internal_baml_parser_database::RetryPolicyStrategy;
 use internal_llm_client::ClientSpec;
 
 use crate::ir::{
-    jinja_helpers::render_expression,
-    repr::{self, ExprFunction, FunctionConfig, Node, TypeBuilderEntry, WithRepr},
-    Class, Client, Enum, EnumValue, ExprFunctionNode, Field, Function, FunctionNode, IRHelper,
+    repr::{self, FunctionConfig, TypeBuilderEntry, WithRepr},
+    Class, Client, Enum, EnumValue, ExprFunctionNode, Field, FunctionNode, IRHelper,
     Impl, IntermediateRepr, RetryPolicy, TemplateString, TestCase, TypeAlias, TypeIR, Walker,
 };
 

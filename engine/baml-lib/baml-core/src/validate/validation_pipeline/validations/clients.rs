@@ -1,8 +1,5 @@
-use anyhow::Result;
-use baml_types::StringOr;
-use internal_baml_ast::ast::Expression;
 use internal_baml_diagnostics::{DatamodelError, Span};
-use internal_llm_client::{ClientProvider, ClientSpec, PropertyHandler, StrategyClientProperty};
+use internal_llm_client::{ClientSpec, StrategyClientProperty};
 
 use crate::validate::validation_pipeline::context::Context;
 

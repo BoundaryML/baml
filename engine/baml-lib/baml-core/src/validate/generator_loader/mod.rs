@@ -1,6 +1,5 @@
 mod v2;
 
-use internal_baml_ast::ast::WithSpan;
 use internal_baml_parser_database::ast;
 
 use crate::{configuration::Generator, internal_baml_diagnostics::*};

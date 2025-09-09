@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 
 use baml_types::{LiteralValue, TypeValue};
-use either::Either;
 use internal_baml_ast::ast::{
     Argument, Attribute, Expression, FieldArity, FieldType, Identifier, WithName, WithSpan,
 };

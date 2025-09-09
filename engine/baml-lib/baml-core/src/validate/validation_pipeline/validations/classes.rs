@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use baml_types::GeneratorOutputType;
 use internal_baml_ast::ast::{Field, FieldType, WithIdentifier, WithName, WithSpan};
@@ -9,12 +9,7 @@ use super::{
     reserved_names::{reserved_names, ReservedNamesMode},
     types::validate_type,
 };
-use crate::validate::validation_pipeline::{
-    context::Context,
-    validations::reserved_names::{
-        RESERVED_NAMES_FUNCTION_PARAMETERS, RESERVED_NAMES_PYTHON, RESERVED_NAMES_TYPESCRIPT,
-    },
-};
+use crate::validate::validation_pipeline::context::Context;
 pub(super) fn validate(ctx: &mut Context<'_>) {
     let mut defined_types = internal_baml_jinja_types::PredefinedTypes::default(
         internal_baml_jinja_types::JinjaContext::Prompt,
