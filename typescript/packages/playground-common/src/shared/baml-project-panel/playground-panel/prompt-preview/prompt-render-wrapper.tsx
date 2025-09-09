@@ -1,3 +1,4 @@
+'use client';
 import { Button } from '@baml/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@baml/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
@@ -111,7 +112,7 @@ export const PromptRenderWrapper = () => {
   };
 
   return (
-    <Tabs defaultValue="preview" className="flex flex-col h-full min-h-0">
+    <Tabs defaultValue="preview" className="flex flex-col min-h-0">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <TabsList>

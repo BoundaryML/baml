@@ -443,6 +443,10 @@ fn parse_statement_inner_rule(
     diagnostics: &mut Diagnostics,
 ) -> Option<Stmt> {
     match stmt_token.as_rule() {
+        Rule::INVALID_STMT_STARTING_CHAR => {
+            diagnostics.push_error(DatamodelError::new_static("Invalid statement", span));
+            None
+        }
         Rule::assert_stmt => {
             let assert_value = stmt_token.into_inner().next()?;
             let value = parse_expression(assert_value, diagnostics)?;
@@ -661,6 +665,7 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
             Rule::expr_body_stmt => {
                 let maybe_stmt = parse_expr_body_statement(item, diagnostics);
                 if let Some(mut stmt) = maybe_stmt {
+                    // Clear headers since last statement & get an iterator for the current ones.
                     let header_drain = headers_since_last_stmt.drain(..);
                     bind_headers_to_statement(&mut stmt, header_drain);
                     stmts.push(stmt);

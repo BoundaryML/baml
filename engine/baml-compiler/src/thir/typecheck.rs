@@ -23,7 +23,7 @@ use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta, TypeValue};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::{
-    hir::{self, dump::TypeDocumentRender, Hir},
+    hir::{self, dump::TypeDocumentRender, BinaryOperator, Hir},
     thir::{self as thir, ExprMetadata, THir},
 };
 
@@ -44,7 +44,7 @@ pub fn typecheck_returning_context<'a>(
         .map(|c| (c.name.clone(), c))
         .collect();
 
-    let enums = hir
+    let enums: BamlMap<String, hir::Enum> = hir
         .enums
         .clone()
         .into_iter()
@@ -54,6 +54,7 @@ pub fn typecheck_returning_context<'a>(
     // Create typing context with all functions
     let mut typing_context = TypeContext::new();
     typing_context.classes.extend(classes.clone());
+    typing_context.enums.extend(enums.clone());
 
     // Add expr functions to typing context
     for func in &hir.expr_functions {
@@ -271,11 +272,32 @@ pub fn typecheck_returning_context<'a>(
         })
         .collect();
 
+    // TODO: Those are HIR enums, figure out if there's something different we
+    // would need in a THIR enum? Does it need a "type"?.
+    let thir_enums = enums
+        .iter()
+        .map(|(name, enum_def)| {
+            (
+                name.clone(),
+                thir::Enum {
+                    name: enum_def.name.clone(),
+                    variants: enum_def.variants.clone(),
+                    span: enum_def.span.clone(),
+                    ty: TypeIR::Enum {
+                        name: enum_def.name.clone(),
+                        dynamic: false,
+                        meta: Default::default(),
+                    },
+                },
+            )
+        })
+        .collect();
+
     (
         THir {
             llm_functions: hir.llm_functions.clone(),
             classes: thir_classes,
-            enums,
+            enums: thir_enums,
             expr_functions,
             global_assignments: BamlMap::new(),
         },
@@ -302,6 +324,7 @@ pub struct TypeContext<'func> {
     // Variables in scope with mutability info
     pub vars: BamlMap<String, VarInfo>,
     pub classes: BamlMap<String, hir::Class>,
+    pub enums: BamlMap<String, hir::Enum>,
     // Used for knowing whether `break` and `continue` are inside a loop or not.
     pub is_inside_loop: bool,
 
@@ -336,6 +359,7 @@ impl TypeContext<'_> {
             symbols: BamlMap::new(),
             vars,
             classes: BamlMap::new(),
+            enums: BamlMap::new(),
             is_inside_loop: false,
             function_return_type: None,
         }
@@ -428,7 +452,9 @@ impl TypeContext<'_> {
             }
             hir::Expression::Identifier(name, _) => {
                 // Look up type in context
-                self.get_type(name).cloned()
+                self.get_type(name)
+                    .cloned()
+                    .or_else(|| self.enums.get(name).map(|e| TypeIR::r#enum(&e.name)))
             }
             hir::Expression::Array(items, _) => {
                 // Infer array type from first item
@@ -574,6 +600,14 @@ impl TypeContext<'_> {
                             } else {
                                 None
                             }
+                        }
+                        TypeIR::Enum {
+                            name: enum_name, ..
+                        } => {
+                            // Look up field in enum definition
+                            self.enums
+                                .get(&enum_name)
+                                .map(|enum_def| TypeIR::r#enum(&enum_def.name))
                         }
                         _ => None, // Not a class
                     }
@@ -986,23 +1020,23 @@ fn typecheck_assignment(
     context: &mut TypeContext<'_>,
     diagnostics: &mut Diagnostics,
 ) {
-    if !is_assignable(lhs, diagnostics, context) {
-        // Only report assignment errors for variables that actually exist.
-        // Unknown variables should only show "unknown variable" errors, not assignment errors.
-        let should_report_assignment_error = match lhs {
-            thir::Expr::Var(name, _) => context.vars.contains_key(name),
-            _ => true, // For non-variables (array access, field access), always report
-        };
+    // if !is_assignable(lhs, diagnostics, context) {
+    //     // Only report assignment errors for variables that actually exist.
+    //     // Unknown variables should only show "unknown variable" errors, not assignment errors.
+    //     let should_report_assignment_error = match lhs {
+    //         thir::Expr::Var(name, _) => context.vars.contains_key(name),
+    //         _ => true, // For non-variables (array access, field access), always report
+    //     };
 
-        if should_report_assignment_error {
-            diagnostics.push_error(DatamodelError::new_validation_error(
-                // perf: `new_validation_error` could accept Cow / into cow directly and
-                // avoid copy here.
-                assign_error(lhs).as_ref(),
-                assignment_span.clone(),
-            ));
-        }
-    }
+    //     if should_report_assignment_error {
+    //         diagnostics.push_error(DatamodelError::new_validation_error(
+    //             // perf: `new_validation_error` could accept Cow / into cow directly and
+    //             // avoid copy here.
+    //             assign_error(lhs).as_ref(),
+    //             assignment_span.clone(),
+    //         ));
+    //     }
+    // }
 
     let rhs_type = &rhs.meta().1;
     if let (Some(left_type), Some(val_type)) = (lhs.meta().1.as_ref(), rhs_type) {
@@ -1162,6 +1196,14 @@ pub fn typecheck_expression(
             BamlValueWithMeta::String(value.clone(), (span.clone(), Some(TypeIR::string()))),
         ),
         hir::Expression::Identifier(name, span) => {
+            // Enum access: let x = Shape.Rectangle
+            if let Some(enum_def) = context.enums.get(name) {
+                return thir::Expr::Var(
+                    name.clone(),
+                    (span.clone(), Some(TypeIR::r#enum(&enum_def.name))),
+                );
+            }
+
             // Look up type in context
             let var_type = context.get_type(name).cloned();
             if var_type.is_none() {
@@ -1740,6 +1782,20 @@ pub fn typecheck_expression(
                         None
                     }
                 }
+                Some(TypeIR::Enum {
+                    name: enum_name, ..
+                }) => {
+                    // Look up field in enum definition
+                    if let Some(enum_def) = context.enums.get(enum_name) {
+                        Some(TypeIR::r#enum(&enum_def.name))
+                    } else {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Enum {enum_name} not found"),
+                            span.clone(),
+                        ));
+                        None
+                    }
+                }
                 _ => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         "Can only access fields on class instances",
@@ -1773,12 +1829,152 @@ pub fn typecheck_expression(
             operator,
             right,
             span,
-        } => thir::Expr::BinaryOperation {
-            left: Arc::new(typecheck_expression(left, context, diagnostics)),
-            operator: *operator,
-            right: Arc::new(typecheck_expression(right, context, diagnostics)),
-            meta: (span.clone(), None),
-        },
+        } => {
+            let left = typecheck_expression(left, context, diagnostics);
+            let right = typecheck_expression(right, context, diagnostics);
+
+            // TODO: Probably easier to check operator first then expected types.
+            // Doing it like this (the other way around) seems cumbersome.
+            let expr_type = match (left.meta().1.as_ref(), operator, right.meta().1.as_ref()) {
+                // Ok: string + string
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                    hir::BinaryOperator::Add,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                ) => Some(TypeIR::string()),
+
+                // Other invalid operation for strings.
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                ) => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Cannot apply {operator} operator to strings"),
+                        span.clone(),
+                    ));
+
+                    None
+                }
+
+                // OK: operation on ints
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                ) if !operator.is_logical() => {
+                    if operator.is_arithmetic() || operator.is_bitwise() {
+                        Some(TypeIR::int())
+                    } else if operator.is_comparison() {
+                        Some(TypeIR::bool())
+                    } else {
+                        None
+                    }
+                }
+
+                // OK: Operation on floats
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                ) if !operator.is_logical() && !operator.is_bitwise() => {
+                    if operator.is_arithmetic() {
+                        Some(TypeIR::float())
+                    } else if operator.is_comparison() {
+                        Some(TypeIR::bool())
+                    } else {
+                        None
+                    }
+                }
+
+                // OK: Operation on bools
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Bool, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Bool, _)),
+                ) if operator.is_logical() => Some(TypeIR::bool()),
+
+                // Err: Operation on int and float
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                )
+                | (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                ) => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Cannot apply {operator} operator to int and float"),
+                        span.clone(),
+                    ));
+                    None
+                }
+
+                (Some(right), BinaryOperator::Eq | BinaryOperator::Neq, Some(left)) => {
+                    if left.map_meta(|_| ()) == right.map_meta(|_| ()) {
+                        Some(TypeIR::bool())
+                    } else {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!(
+                                "Invalid equality/inequality operation on objects of different type: {} {operator} {}",
+                                left.name_for_user(),
+                                right.name_for_user()
+                            ),
+                            span.clone()
+                        ));
+
+                        None
+                    }
+                }
+
+                _ => {
+                    match (left.meta().1.as_ref(), right.meta().1.as_ref()) {
+                        (None, Some(_)) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                "Invalid binary operation: cannot infer type of left operand",
+                                span.clone(),
+                            ))
+                        }
+
+                        (Some(_), None) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                "Invalid binary operation: cannot infer type of right operand",
+                                span.clone(),
+                            ))
+                        }
+
+                        (Some(left_type), Some(right_type)) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Invalid binary operation ({operator}) on different types: {} {operator} {}",
+                                    left_type.name_for_user(),
+                                    right_type.name_for_user()
+                                ),
+                                span.clone(),
+                            ));
+                        }
+
+                        (None, None) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                "Invalid binary operation: cannot infer type of operands",
+                                span.clone(),
+                            ));
+                        }
+                    };
+
+                    None
+                }
+            };
+
+            thir::Expr::BinaryOperation {
+                left: Arc::new(left),
+                operator: *operator,
+                right: Arc::new(right),
+                meta: (span.clone(), expr_type),
+            }
+        }
+        // TODO: Typecheck unary.
         hir::Expression::UnaryOperation {
             operator,
             expr,

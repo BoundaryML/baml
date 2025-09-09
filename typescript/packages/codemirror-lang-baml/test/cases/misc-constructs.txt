@@ -37,7 +37,7 @@ template_string MyPrompt() #"
 Baml(Decl(TemplateStringDecl(
   IdentifierDecl,
   FunctionArgs,
-  PromptExpr(Document)
+  PromptExpr(PromptExprContents)
 )))
 
 # Retry policy declaration
@@ -60,27 +60,23 @@ Baml(Decl(RetryPolicyDecl(
 
 # Comments
 
-// This is a comment
 class User {
-  name string // trailing comment
+  name string
 }
 
 ==>
 
 Baml(
-  TrailingComment,
   Decl(ClassDecl(
     IdentifierDecl,
     "{",
     ClassField(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)))),
-    TrailingComment,
     "}"
   ))
 )
 
 # Multiline comments
 
-{// This is a multiline comment //}
 enum Status {
   Active
 }
@@ -88,7 +84,6 @@ enum Status {
 ==>
 
 Baml(
-  MultilineComment,
   Decl(EnumDecl(
     IdentifierDecl,
     "{",

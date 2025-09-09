@@ -13,25 +13,25 @@ Or type `BAML Playground` in the VSCode Command Bar (`CMD + Shift + P` or `CTRL 
 To send logs and traces to Boundary Studio, you need to set the `BOUNDARY_API_KEY` environment variable. This key is provided when you create an API key in your Boundary Studio dashboard.
 
 <Tabs>
-  <Tab title="Next.js">
+  <Tab title="Next.js" language="typescript">
     ```bash
     # .env.local
     BOUNDARY_API_KEY=your_api_key_here
     ```
   </Tab>
-  <Tab title="Express.js">
+  <Tab title="Express.js" language="typescript">
     ```bash
     # .env
     BOUNDARY_API_KEY=your_api_key_here
     ```
   </Tab>
-  <Tab title="Flask">
+  <Tab title="Flask" language="python">
     ```bash
     # .env
     BOUNDARY_API_KEY=your_api_key_here
     ```
   </Tab>
-  <Tab title="Rails">
+  <Tab title="Rails" language="ruby">
     ```yaml
     # config/application.yml
     BOUNDARY_API_KEY: your_api_key_here
@@ -59,7 +59,7 @@ python my_program_using_baml.py
 ```
 
 <Tabs>
-  <Tab title="python">
+  <Tab title="python" language="python">
 
     ```python
     from dotenv import load_dotenv
@@ -68,7 +68,7 @@ python my_program_using_baml.py
     load_dotenv()
     ```
   </Tab>
-  <Tab title="typescript">
+  <Tab title="typescript" language="typescript">
 
     ```typescript
     import dotenv from 'dotenv'
@@ -77,7 +77,7 @@ python my_program_using_baml.py
     dotenv.config()
     ```
   </Tab>
-  <Tab title="ruby">
+  <Tab title="ruby" language="ruby">
     ```ruby
     require 'dotenv/load'
     require 'baml_client'

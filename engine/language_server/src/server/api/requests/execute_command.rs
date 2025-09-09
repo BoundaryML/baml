@@ -75,6 +75,7 @@ impl SyncRequestHandler for ExecuteCommand {
             return Ok(None);
         }
 
+        tracing::info!("Executing command: {:?}", params);
         match RegisteredCommands::from_execute_command(params) {
             Err(e) => {
                 return Err(crate::server::api::Error {
@@ -83,7 +84,7 @@ impl SyncRequestHandler for ExecuteCommand {
                 });
             }
             Ok(RegisteredCommands::OpenBamlPanel(args)) => {
-                session
+                let tx = session
                     .playground_tx
                     .send(PreLangServerToWasmMessage::FrontendMessage(
                         FrontendMessage::select_function {
@@ -91,19 +92,23 @@ impl SyncRequestHandler for ExecuteCommand {
                             root_path: args.project_id,
                             function_name: args.function_name,
                         },
-                    ))
-                    .unwrap();
+                    ));
+                if let Err(e) = tx {
+                    tracing::warn!("Error forwarding OpenBamlPanel to playground: {}", e);
+                }
             }
             Ok(RegisteredCommands::RunTest(args)) => {
-                session
+                let tx = session
                     .playground_tx
                     .send(PreLangServerToWasmMessage::FrontendMessage(
                         FrontendMessage::run_test {
                             function_name: args.function_name,
                             test_name: args.test_case_name,
                         },
-                    ))
-                    .unwrap();
+                    ));
+                if let Err(e) = tx {
+                    tracing::warn!("Error forwarding RunTest to playground: {}", e);
+                }
             }
         }
 

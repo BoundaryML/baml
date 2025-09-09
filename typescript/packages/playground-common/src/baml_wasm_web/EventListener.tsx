@@ -120,7 +120,7 @@ export const EventListener: React.FC = () => {
   const isVSCodeWebview = vscode.isVscode()
 
   const [selectedFunc, setSelectedFunction] = useAtom(selectedFunctionAtom)
-  const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)
+  const [selectedTestcase, setSelectedTestcase] = useAtom(selectedTestcaseAtom)
   const setBamlConfig = useSetAtom(bamlConfig)
   const [bamlCliVersion, setBamlCliVersion] = useAtom(bamlCliVersionAtom)
   const { runTests: runBamlTests } = useRunBamlTests()
@@ -327,12 +327,13 @@ export const EventListener: React.FC = () => {
           console.debug('run_test', content);
           setSelectedFunction(content.function_name);
           setSelectedTestcase(content.test_name);
-          runBamlTests([
-            { functionName: content.function_name, testName: content.test_name },
-          ]);
-          // run([content.test_name])
-          // setShowTests(true)
-          // setClientGraph(false)
+
+          // NB(sam): without this timeout, jetbrains hits "recursive use of an object"
+          setTimeout(() => {
+            runBamlTests([
+              { functionName: content.function_name, testName: content.test_name },
+            ]);
+          }, 1000);
           break;
       }
     };
@@ -341,7 +342,7 @@ export const EventListener: React.FC = () => {
 
     return () => window.removeEventListener('message', fn);
     // If we dont add the jotai atom callbacks here like setRunningTests, this will call an old version of the atom (e.g. runTests which may have undefined dependencies).
-  }, [selectedFunc, runBamlTests, updateCursor, setSelectedTestcase]);
+  }, [selectedFunc, runBamlTests, updateCursor, setSelectedFunction, setSelectedTestcase]);
 
   return (
     <>

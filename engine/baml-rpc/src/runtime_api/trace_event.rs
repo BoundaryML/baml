@@ -120,6 +120,7 @@ pub enum IntermediateData<'a> {
         url: String,
         method: String,
         headers: HashMap<String, String>,
+        client_details: RpcClientDetails,
         body: HTTPBody<'a>,
     },
     RawLLMResponse {

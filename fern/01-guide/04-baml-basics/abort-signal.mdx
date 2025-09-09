@@ -14,7 +14,7 @@ Abort controllers allow you to cancel ongoing LLM operations, which is essential
 ## Quick Start
 
 <Tabs>
-  <Tab title="TypeScript">
+  <Tab title="TypeScript" language="typescript">
     ```typescript
     import { b } from '@/baml_client'
 
@@ -51,7 +51,7 @@ Abort controllers allow you to cancel ongoing LLM operations, which is essential
     ```
   </Tab>
   
-  <Tab title="Python">
+  <Tab title="Python" language="python">
     ```python
     from baml_client import b
     # Python doesn't have a native abort controller construct,
@@ -76,7 +76,7 @@ Abort controllers allow you to cancel ongoing LLM operations, which is essential
     ```
   </Tab>
   
-  <Tab title="Go">
+  <Tab title="Go" language="go">
     ```go
     import (
         "context"
@@ -108,7 +108,7 @@ Abort controllers allow you to cancel ongoing LLM operations, which is essential
 Automatically cancel operations that take too long:
 
 <Tabs>
-  <Tab title="TypeScript">
+  <Tab title="TypeScript" language="typescript">
     ```typescript
     // Modern approach using AbortSignal.timeout()
     async function extractWithTimeout(text: string, timeoutMs: number = 30000) {
@@ -151,7 +151,7 @@ Automatically cancel operations that take too long:
     ```
   </Tab>
   
-  <Tab title="Python">
+  <Tab title="Python" language="python">
     ```python
     import asyncio
     from baml_py import AbortController
@@ -181,7 +181,7 @@ Automatically cancel operations that take too long:
     ```
   </Tab>
   
-  <Tab title="Go">
+  <Tab title="Go" language="go">
     ```go
     func extractWithTimeout(text string, timeout time.Duration) (Result, error) {
         ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -206,7 +206,7 @@ Automatically cancel operations that take too long:
 Build responsive backend services that allow users to cancel long-running operations:
 
 <Tabs>
-  <Tab title="TypeScript (Express)">
+  <Tab title="TypeScript (Express)" language="typescript">
     ```typescript
     import express from 'express'
     import { b } from '@/baml_client'
@@ -251,7 +251,7 @@ Build responsive backend services that allow users to cancel long-running operat
     ```
   </Tab>
   
-  <Tab title="Python (FastAPI)">
+  <Tab title="Python (FastAPI)" language="python">
     ```python
     from fastapi import FastAPI, BackgroundTasks
     from baml_py import AbortController
@@ -291,7 +291,7 @@ Build responsive backend services that allow users to cancel long-running operat
 Abort controllers work seamlessly with streaming responses:
 
 <Tabs>
-  <Tab title="TypeScript">
+  <Tab title="TypeScript" language="typescript">
     ```typescript
     const controller = new AbortController()
 
@@ -321,7 +321,7 @@ Abort controllers work seamlessly with streaming responses:
     ```
   </Tab>
   
-  <Tab title="Python">
+  <Tab title="Python" language="python">
     ```python
     controller = AbortController()
     
@@ -344,7 +344,7 @@ Abort controllers work seamlessly with streaming responses:
     ```
   </Tab>
   
-  <Tab title="Go">
+  <Tab title="Go" language="go">
     ```go
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
@@ -373,7 +373,7 @@ Abort controllers work seamlessly with streaming responses:
 Properly handle abort errors to distinguish cancellations from other failures:
 
 <Tabs>
-  <Tab title="TypeScript">
+  <Tab title="TypeScript" language="typescript">
     ```typescript
     import { BamlAbortError } from '@/baml_client'
 
@@ -400,7 +400,7 @@ Properly handle abort errors to distinguish cancellations from other failures:
     ```
   </Tab>
   
-  <Tab title="Python">
+  <Tab title="Python" language="python">
     ```python
     from baml_py import BamlAbortError, BamlValidationError
 
@@ -426,7 +426,7 @@ Properly handle abort errors to distinguish cancellations from other failures:
     ```
   </Tab>
   
-  <Tab title="Go">
+  <Tab title="Go" language="go">
     ```go
     result, err := b.ExtractResume(ctx, text)
     if err != nil {
@@ -454,7 +454,7 @@ Properly handle abort errors to distinguish cancellations from other failures:
 ### When to Use Each Pattern
 
 <Tabs>
-  <Tab title="TypeScript">
+  <Tab title="TypeScript" language="typescript">
     ```typescript
     // ✅ Use AbortSignal.timeout() for simple timeouts
     const result = await b.ExtractResume(text, {

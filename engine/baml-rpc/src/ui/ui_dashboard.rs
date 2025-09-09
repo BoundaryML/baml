@@ -153,11 +153,46 @@ pub struct StatusCountOverTime {
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
+pub struct TimeSeriesFloatPoint {
+    #[ts(type = "number")]
+    pub interval_start: EpochMsTimestamp,
+    pub value: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TimeSeriesIntPoint {
+    #[ts(type = "number")]
+    pub interval_start: EpochMsTimestamp,
+    pub value: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct MetricSeriesFloat {
+    pub total: f64,
+    pub series: Vec<TimeSeriesFloatPoint>,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct MetricSeriesInt {
+    pub total: u64,
+    pub series: Vec<TimeSeriesIntPoint>,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct GetDashboardDataResponse {
     pub status_counts_by_function: Vec<StatusCountByFunction>,
     pub parsing_errors_by_client: Vec<ParsingErrorCountByClient>,
     pub parsing_errors_by_function: Vec<ParsingErrorCountByFunction>,
     pub status_counts: Vec<StatusCountOverTime>,
+    pub latency_p75_ms: MetricSeriesFloat,
+    pub latency_p95_ms: MetricSeriesFloat,
+    pub latency_avg_ms: MetricSeriesFloat,
+    pub total_llm_calls: MetricSeriesInt,
+    pub total_traces: MetricSeriesInt,
 }
 
 pub struct GetDashboardData;

@@ -30,6 +30,7 @@
     </actions>
 
     <extensions defaultExtensionNs="com.intellij">
+        <!-- When changing toolWindow.id, also make sure to change BamlPlaygroundAction.kt -->
         <toolWindow
                 id="BAML Playground (beta)"
                 factoryClass="com.boundaryml.jetbrains_ext.BamlToolWindowFactory"
