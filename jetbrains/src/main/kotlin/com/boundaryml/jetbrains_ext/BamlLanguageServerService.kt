@@ -37,6 +37,9 @@ class BamlLanguageServerService() {
     var port: Int? = null
         private set
 
+    // NOTE(sam): it's important that setPort always publishes to the topic, because doing so will always
+    // trigger a tool window refresh. so if a lang server reuses a previous invocation's port, we still
+    // refresh the tool window.
     fun setPort(newPort: Int) {
         log.info("Setting port to: $newPort")
         port = newPort

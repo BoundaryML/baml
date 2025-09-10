@@ -23,7 +23,7 @@ class BamlLanguageServerFactory : LanguageServerFactory {
 
     override fun createClientFeatures(): LSPClientFeatures {
         val features = LSPClientFeatures()
-        features.setServerInstaller(BamlLanguageServerInstaller2()) // customize language server installer
+        features.setServerInstaller(BamlLanguageServerInstaller()) // customize language server installer
         return features
     }
 
@@ -32,7 +32,7 @@ class BamlLanguageServerFactory : LanguageServerFactory {
 }
 
 
-class BamlLanguageServerInstaller2 : LanguageServerInstallerBase() {
+class BamlLanguageServerInstaller : LanguageServerInstallerBase() {
 
     private val cliDownloader = CliDownloader()
     private val log = Logger.getInstance(javaClass)
@@ -46,12 +46,15 @@ class BamlLanguageServerInstaller2 : LanguageServerInstallerBase() {
 
     override fun install(indicator: ProgressIndicator) {
         log.info("install")
-        super.progress("Installing BAML CLI...", indicator)
+        try {
+            super.progress("Installing BAML CLI...", indicator)
 
-        val newCliVersion = service<BamlLanguageServerService>().getCurrentCliVersion()
-        val download = runBlocking { cliDownloader.resolveCliPath(newCliVersion) }
+            val newCliVersion = service<BamlLanguageServerService>().getCurrentCliVersion()
+            val download = runBlocking { cliDownloader.resolveCliPath(newCliVersion) }
 
-        super.progress("Installation complete!", 1.0, indicator)
-        service<BamlLanguageServerService>().setRestartingFlag(false)
+            super.progress("Installation complete!", 1.0, indicator)
+        } finally {
+            service<BamlLanguageServerService>().setRestartingFlag(false)
+        }
     }
 }
