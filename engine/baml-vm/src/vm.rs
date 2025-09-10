@@ -1113,7 +1113,6 @@ impl Vm {
 
                 Instruction::BinOp(op) => {
                     let right = self.stack.ensure_pop()?;
-
                     let left = self.stack.ensure_pop()?;
 
                     let result = match (left, right) {
@@ -1168,6 +1167,22 @@ impl Vm {
                                     }));
                                 }
                             })
+                        }
+
+                        (Value::Object(_), Value::Object(_)) if op == BinOp::Add => {
+                            let left = self.objects.as_string(&left)?;
+                            let right = self.objects.as_string(&right)?;
+
+                            let mut concat = left.clone();
+                            concat.push_str(right);
+
+                            let concat_str_object =
+                                Value::Object(self.objects.insert(Object::String(concat)));
+
+                            // Borrow check.
+                            function = self.objects[frame.function].as_function()?;
+
+                            concat_str_object
                         }
 
                         _ => {

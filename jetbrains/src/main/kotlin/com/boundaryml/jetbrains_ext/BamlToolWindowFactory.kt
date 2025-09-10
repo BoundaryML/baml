@@ -53,6 +53,32 @@ private const val PLACEHOLDER_HTML = """
     </html>
 """
 
+private const val VITE_HOT_RELOAD_HTML = """
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BAML Playground</title>
+  <script type="module">
+    import RefreshRuntime from "http://localhost:3030/@react-refresh"
+    RefreshRuntime.injectIntoGlobalHook(window)
+    ${"window.\$RefreshReg\$ = () => {}"}
+    ${"window.\$RefreshSig\$ = () => (type) => type"}
+    window.__vite_plugin_react_preamble_installed__ = true
+  </script>
+  <script type="module" crossorigin src="http://localhost:3030/src/main.tsx"></script>
+  <link rel="stylesheet" crossorigin href="http://localhost:3030/src/main.tsx">
+</head>
+
+<body>
+  <div id="root"></div>
+</body>
+
+</html>
+"""
+
 class BamlToolWindowFactory : ToolWindowFactory {
 
     init {
@@ -83,6 +109,14 @@ class BamlToolWindowFactory : ToolWindowFactory {
                 }
             }
 
+            // vite hot reload
+            val viteButton = JButton("Vite").apply {
+                addActionListener {
+                    browser.loadHTML(VITE_HOT_RELOAD_HTML.trimIndent())
+                }
+            }
+
+
             // Create lorem ipsum button
             val loremButton = JButton("Lorem Ipsum").apply {
                 addActionListener {
@@ -109,6 +143,7 @@ class BamlToolWindowFactory : ToolWindowFactory {
             }
             
             controlPanel.add(reloadButton)
+            controlPanel.add(viteButton)
             controlPanel.add(loremButton)
             controlPanel.add(openDevToolsButton)
         }

@@ -601,7 +601,6 @@ impl IRHelper for IntermediateRepr {
                 // Get best match.
                 let tests = function
                     .walk_tests()
-                    .inspect(|t| log::info!("walking test: {:?}", t.item.1.elem.name))
                     .map(|t| t.item.1.elem.name.as_str())
                     .collect::<Vec<_>>();
                 error_not_found!("test", test_name, &tests)

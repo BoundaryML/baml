@@ -8,6 +8,17 @@ import java.nio.file.Path
 
 class BamlLanguageServer(private val project: Project) : OSProcessStreamConnectionProvider() {
 
+    private fun findBamlWorkspaceRoot(startPath: Path): Path? {
+        var current = startPath
+        while (current.parent != null) {
+            if (Files.exists(current.resolve("engine/Cargo.toml"))) {
+                return current
+            }
+            current = current.parent
+        }
+        return null
+    }
+
     init {
         val commandLine = if (BamlIdeConfig.isDebugMode) {
             // Kill any orphaned baml-cli processes before starting
@@ -17,11 +28,14 @@ class BamlLanguageServer(private val project: Project) : OSProcessStreamConnecti
 
             // baml-hot-reload is implemented by recording and replaying stdin, but this may be buggy
             // if that happens, comment this out and just use `baml-cli` directly
-            GeneralCommandLine("/Users/sam/baml4/engine/target/debug/baml-hot-reload", "lsp")
+            val hostIdeProjectDir = System.getenv("JETBRAINS_PROJECT_DIR") ?: throw RuntimeException("JETBRAINS_PROJECT_DIR was not set")
+            val workspaceRoot = findBamlWorkspaceRoot(Path.of(hostIdeProjectDir)) ?: throw RuntimeException("BAML workspace root not found")
+            val hotReloadPath = workspaceRoot.resolve("engine/target/debug/language-server-hot-reload")
+            GeneralCommandLine(hotReloadPath.toString(), "lsp")
                 .withEnvironment("RUST_BACKTRACE", "full")
+                .withEnvironment("BAML_INTERNAL_LOG", "debug")
+                .withEnvironment("RUST_LOG", "debug")
                 .withEnvironment("VSCODE_DEBUG_MODE", "true")
-            // Commented debug option:
-            // GeneralCommandLine("/Users/sam/baml4/engine/target/debug/baml-cli", "lsp")
         } else {
             // Production mode - use installed CLI from cache
             val cacheDir = Path.of(System.getProperty("user.home"), ".baml/jetbrains")

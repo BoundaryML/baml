@@ -26,6 +26,5 @@
     "directory": "baml-schema-wasm"
   },
   "author": "BAML",
-
   "license": "Apache-2.0"
 }

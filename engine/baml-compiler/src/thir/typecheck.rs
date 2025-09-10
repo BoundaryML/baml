@@ -23,7 +23,7 @@ use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta, TypeValue};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::{
-    hir::{self, dump::TypeDocumentRender, Hir},
+    hir::{self, dump::TypeDocumentRender, BinaryOperator, Hir},
     thir::{self as thir, ExprMetadata, THir},
 };
 
@@ -1829,12 +1829,152 @@ pub fn typecheck_expression(
             operator,
             right,
             span,
-        } => thir::Expr::BinaryOperation {
-            left: Arc::new(typecheck_expression(left, context, diagnostics)),
-            operator: *operator,
-            right: Arc::new(typecheck_expression(right, context, diagnostics)),
-            meta: (span.clone(), None),
-        },
+        } => {
+            let left = typecheck_expression(left, context, diagnostics);
+            let right = typecheck_expression(right, context, diagnostics);
+
+            // TODO: Probably easier to check operator first then expected types.
+            // Doing it like this (the other way around) seems cumbersome.
+            let expr_type = match (left.meta().1.as_ref(), operator, right.meta().1.as_ref()) {
+                // Ok: string + string
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                    hir::BinaryOperator::Add,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                ) => Some(TypeIR::string()),
+
+                // Other invalid operation for strings.
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                ) => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Cannot apply {operator} operator to strings"),
+                        span.clone(),
+                    ));
+
+                    None
+                }
+
+                // OK: operation on ints
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                ) if !operator.is_logical() => {
+                    if operator.is_arithmetic() || operator.is_bitwise() {
+                        Some(TypeIR::int())
+                    } else if operator.is_comparison() {
+                        Some(TypeIR::bool())
+                    } else {
+                        None
+                    }
+                }
+
+                // OK: Operation on floats
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                ) if !operator.is_logical() && !operator.is_bitwise() => {
+                    if operator.is_arithmetic() {
+                        Some(TypeIR::float())
+                    } else if operator.is_comparison() {
+                        Some(TypeIR::bool())
+                    } else {
+                        None
+                    }
+                }
+
+                // OK: Operation on bools
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Bool, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Bool, _)),
+                ) if operator.is_logical() => Some(TypeIR::bool()),
+
+                // Err: Operation on int and float
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                )
+                | (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                ) => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Cannot apply {operator} operator to int and float"),
+                        span.clone(),
+                    ));
+                    None
+                }
+
+                (Some(right), BinaryOperator::Eq | BinaryOperator::Neq, Some(left)) => {
+                    if left.map_meta(|_| ()) == right.map_meta(|_| ()) {
+                        Some(TypeIR::bool())
+                    } else {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!(
+                                "Invalid equality/inequality operation on objects of different type: {} {operator} {}",
+                                left.name_for_user(),
+                                right.name_for_user()
+                            ),
+                            span.clone()
+                        ));
+
+                        None
+                    }
+                }
+
+                _ => {
+                    match (left.meta().1.as_ref(), right.meta().1.as_ref()) {
+                        (None, Some(_)) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                "Invalid binary operation: cannot infer type of left operand",
+                                span.clone(),
+                            ))
+                        }
+
+                        (Some(_), None) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                "Invalid binary operation: cannot infer type of right operand",
+                                span.clone(),
+                            ))
+                        }
+
+                        (Some(left_type), Some(right_type)) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Invalid binary operation ({operator}) on different types: {} {operator} {}",
+                                    left_type.name_for_user(),
+                                    right_type.name_for_user()
+                                ),
+                                span.clone(),
+                            ));
+                        }
+
+                        (None, None) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                "Invalid binary operation: cannot infer type of operands",
+                                span.clone(),
+                            ));
+                        }
+                    };
+
+                    None
+                }
+            };
+
+            thir::Expr::BinaryOperation {
+                left: Arc::new(left),
+                operator: *operator,
+                right: Arc::new(right),
+                meta: (span.clone(), expr_type),
+            }
+        }
+        // TODO: Typecheck unary.
         hir::Expression::UnaryOperation {
             operator,
             expr,

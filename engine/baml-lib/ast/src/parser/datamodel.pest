@@ -273,7 +273,7 @@ INVALID_STMT_STARTING_CHAR = { !ASCII_ALPHA ~ !WHITESPACE ~ !NEWLINE ~ !BLOCK_OP
 ADD = { "+" ~ !"=" }
 SUB = { "-" ~ !"=" }
 MUL = { "*" ~ !"=" }
-DIV = { "/" ~ !"=" }
+DIV = { "/" ~ !("=" | "/") } // Needed for trailing comments.
 MOD = { "%" ~ !"=" }
 
 // Bitwise

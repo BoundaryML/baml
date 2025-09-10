@@ -127,6 +127,8 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
                             const firstTest = func.tests[0];
                             if (firstTest) {
                               setSelectedItem(func.name, firstTest);
+                            } else {
+                              setSelectedItem(func.name, undefined);
                             }
                             setFunctionOpen(false);
                           }}

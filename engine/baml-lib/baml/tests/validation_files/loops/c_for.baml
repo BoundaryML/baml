@@ -74,6 +74,12 @@ fn BreakContinue() -> int {
 // 20 | 
 // 21 | for (; i <= 10; i += 1) {
 //    | 
+// error: Error validating: Invalid binary operation: cannot infer type of left operand
+//   -->  loops/c_for.baml:21
+//    | 
+// 20 | 
+// 21 | for (; i <= 10; i += 1) {
+//    | 
 // error: Error validating: Unknown variable i
 //   -->  loops/c_for.baml:21
 //    | 
