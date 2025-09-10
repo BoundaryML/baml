@@ -16,9 +16,7 @@ struct BamlBinary {
     args: Option<Vec<String>>,
 }
 
-struct BamlExtension {
-    cached_binary_path: Option<String>,
-}
+struct BamlExtension {}
 
 impl BamlExtension {
     fn language_server_binary(
@@ -145,9 +143,7 @@ impl BamlExtension {
 
 impl zed::Extension for BamlExtension {
     fn new() -> Self {
-        Self {
-            cached_binary_path: None,
-        }
+        Self {}
     }
 
     fn language_server_command(
@@ -157,11 +153,11 @@ impl zed::Extension for BamlExtension {
     ) -> Result<zed::Command> {
         let baml_binary = self.language_server_binary(language_server_id, worktree)?;
         Ok(zed::Command {
-            // command: baml_binary.path,
-            command: format!(
-                "{}/../target/debug/language-server-hot-reload",
-                env!("CARGO_MANIFEST_DIR")
-            ),
+            command: baml_binary.path,
+            // command: format!(
+            //     "{}/../target/debug/language-server-hot-reload",
+            //     env!("CARGO_MANIFEST_DIR")
+            // ),
             args: baml_binary.args.unwrap_or_else(|| vec!["lsp".into()]),
             env: Default::default(),
         })
