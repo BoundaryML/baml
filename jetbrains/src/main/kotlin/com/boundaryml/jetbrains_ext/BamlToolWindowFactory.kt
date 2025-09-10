@@ -169,6 +169,7 @@ class BamlToolWindowFactory : ToolWindowFactory {
             busConnection.subscribe(
                 BamlLanguageServerService.PORT_TOPIC,
                 BamlLanguageServerService.PortListener { port ->
+                    thisLogger().info("received port notification $port")
                     browser.loadURL(BamlIdeConfig.getPlaygroundUrl(port))
                     busConnection.disconnect()        // one-shot, avoid duplicates
                 }

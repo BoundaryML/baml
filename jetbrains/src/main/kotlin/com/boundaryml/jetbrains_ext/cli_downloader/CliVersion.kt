@@ -9,6 +9,16 @@ data class CliVersion(
     val platform: String
 ) {
     fun toArtifactName(): String = "baml-cli-$version-${architecture}-${platform}"
+
+    companion object {
+
+        fun fromVersionString(version: String): CliVersion {
+            val currentPlatform = PlatformDetector.getCurrentPlatform()
+            val currentArch = PlatformDetector.getCurrentArchitecture()
+
+            return CliVersion(version, currentArch, currentPlatform)
+        }
+    }
 }
 
 /**

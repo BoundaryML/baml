@@ -5,8 +5,8 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.util.messages.Topic
 
-@Service(Service.Level.PROJECT)
-class BamlLanguageServerService(private val project: Project) {
+@Service
+class BamlLanguageServerService() {
     
     private val logger = Logger.getInstance(javaClass)
 
@@ -32,41 +32,34 @@ class BamlLanguageServerService(private val project: Project) {
     fun setPort(newPort: Int) {
         logger.warn("Setting port to: $newPort")
         port = newPort
-        project.messageBus
-            .syncPublisher(PORT_TOPIC)
-            .onPort(newPort)
+//        project.messageBus
+//            .syncPublisher(PORT_TOPIC)
+//            .onPort(newPort)
     }
 
     // New version switching state
-    @Volatile
-    private var currentExecutingCliPath: String? = null
     @Volatile
     private var currentCliVersion: String? = null
     @Volatile
     private var isRestarting: Boolean = false
 
-    fun getCurrentExecutingCliPath(): String? = currentExecutingCliPath
-    fun getCurrentCliVersion(): String? = currentCliVersion
+    fun getCurrentCliVersion(): String {
+        return currentCliVersion ?: "0.206.1"
+
+    }
     fun isCurrentlyRestarting(): Boolean = isRestarting
 
-    fun updateCurrentServer(cliPath: String, version: String) {
-        logger.warn("Updating current server state: version=$version, path=$cliPath")
-        currentExecutingCliPath = cliPath
+    fun updateCurrentServer(version: String) {
+        logger.warn("Updating current server state: version=$version")
         currentCliVersion = version
-        project.messageBus
-            .syncPublisher(VERSION_TOPIC)
-            .onVersionChanged(version, cliPath)
+//        project.messageBus
+//            .syncPublisher(VERSION_TOPIC)
+//            .onVersionChanged(version, cliPath)
     }
 
     fun setRestartingFlag(restarting: Boolean) {
         logger.warn("Setting restart flag: $restarting")
         isRestarting = restarting
-    }
-
-    fun shouldRestartForVersion(targetCliPath: String): Boolean {
-        val shouldRestart = targetCliPath != currentExecutingCliPath
-        logger.warn("Version switch decision: shouldRestart=$shouldRestart (current=$currentExecutingCliPath, target=$targetCliPath)")
-        return shouldRestart
     }
 
     // Listener interfaces

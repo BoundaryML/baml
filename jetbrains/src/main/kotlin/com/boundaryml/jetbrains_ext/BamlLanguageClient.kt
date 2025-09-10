@@ -1,5 +1,6 @@
 package com.boundaryml.jetbrains_ext
 
+import com.boundaryml.jetbrains_ext.cli_downloader.CliVersion
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
@@ -88,23 +89,26 @@ class BamlLanguageClient(project: Project) :
             
             // 5. Resolve target CLI path (equivalent to VSCode's resolveCliPath call)
             runBlocking {
-                val targetCliPath = BamlCliPathResolver.resolveCliPath(project, payload.version)
-                
-                if (targetCliPath == null) {
-                    log.warn("No suitable CLI found for version: ${payload.version}")
-                    return@runBlocking
-                }
-                
+                val targetCliPath = CliVersion.fromVersionString(payload.version)
+
                 // 6. Check if restart is needed (equivalent to VSCode's path comparison)
-                if (!languageServerService.shouldRestartForVersion(targetCliPath)) {
-                    log.warn("Already using correct CLI version, no restart needed")
+                if (languageServerService.getCurrentCliVersion() != payload.version) {
                     // Update version tracking even if no restart needed
-                    languageServerService.updateCurrentServer(targetCliPath, payload.version)
-                    return@runBlocking
+                    languageServerService.updateCurrentServer(payload.version)
+                    // 7. Execute restart (equivalent to VSCode's executeLanguageServerRestart)
+                    log.info("Restarting language server with new version")
+                    // https://github.com/redhat-developer/lsp4ij/blob/main/docs/DeveloperGuide.md#install-language-server
+                    // Stops the language server if it is currently starting or already started.
+                    //Resets the installer's internal state.
+                    //Executes the installation via checkInstallation(context).
+                    //If the server was previously running, it restarts it once the installation completes.
+                    val context = ServerInstallationContext()
+                        .setForceInstall(true)
+                    LanguageServerManager.getInstance(project)
+                        .install("baml-language-server", context)
                 }
-                
-                // 7. Execute restart (equivalent to VSCode's executeLanguageServerRestart)
-                executeLanguageServerRestart(payload.version, targetCliPath)
+                log.info("Already using correct CLI version, no restart needed")
+
             }
             
         } catch (e: Exception) {
@@ -142,46 +146,7 @@ class BamlLanguageClient(project: Project) :
             false
         }
     }
-    
-    private fun executeLanguageServerRestart(version: String, targetCliPath: String) {
-        log.warn("Executing language server restart: version=$version, path=$targetCliPath")
-        
-        // Execute restart in background to avoid blocking LSP communication
-        ApplicationManager.getApplication().executeOnPooledThread {
-            performRestart(version, targetCliPath)
-        }
-    }
-    
-    private fun performRestart(version: String, targetCliPath: String) {
-        languageServerService.setRestartingFlag(true)
-        
-        try {
-            log.warn("Starting language server restart for version: $version")
-            
-            // 1. Update server state to track the new CLI path and version
-            languageServerService.updateCurrentServer(targetCliPath, version)
-            
-            // 2. Use LSP4IJ to restart the server
-            restartLanguageServer()
-            
-            log.warn("Successfully restarted language server with version: $version")
-            showSuccessNotification(version)
-            
-        } catch (e: Exception) {
-            log.error("Failed to restart language server", e)
-            showErrorNotification(version, e.message ?: "Unknown error")
-        } finally {
-            languageServerService.setRestartingFlag(false)
-        }
-    }
-    
-    private fun restartLanguageServer() {
-        log.info("Restarting language server with new version")
-        val context = ServerInstallationContext()
-            .setForceInstall(true)
-        LanguageServerManager.getInstance(project)
-            .install("baml-language-server", context)
-    }
+
 
     private fun showSuccessNotification(version: String) {
         try {

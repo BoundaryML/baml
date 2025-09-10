@@ -11,7 +11,6 @@ class BamlLanguageServerFactory : LanguageServerFactory {
     private val log = Logger.getInstance(javaClass)
 
     override fun createConnectionProvider(project: Project): StreamConnectionProvider {
-        log.warn("warn Creating connection provider")
         log.info("Creating connection provider")
         return BamlLanguageServer(project)
     }
@@ -24,9 +23,4 @@ class BamlLanguageServerFactory : LanguageServerFactory {
 
     override fun createLanguageClient(project: Project) =
         BamlLanguageClient(project)      // our custom client
-
-    // If you need to expose a custom server API
-//    override fun getServerInterface(): Class<out LanguageServer> {
-//        return BamlCustomServerAPI.kt::class.java
-//    }
 }
