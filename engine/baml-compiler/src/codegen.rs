@@ -1488,7 +1488,12 @@ impl<'g> HirCompiler<'g> {
     /// Keeps track of a new local and returns its index in the eval stack.
     fn track_local(&mut self, name: &str) -> usize {
         let index = self.locals.len() + 1;
-        debug_assert!(self.locals.insert(name.to_string(), index).is_none());
+        let old = self.locals.insert(name.to_string(), index);
+
+        debug_assert!(
+            old.is_none(),
+            "tracking local var {name} but it already exists"
+        );
 
         self.scopes
             .last_mut()

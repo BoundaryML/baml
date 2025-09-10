@@ -70,13 +70,13 @@ pub fn bench_iterative_fib(c: &mut Criterion) {
                 bootstrap_vm(Program {
                     source: r#"
                         function fib(n: int) -> int {
-                            let mut a = 0;
-                            let mut b = 1;
+                            let a = 0;
+                            let b = 1;
 
                             if (n == 0) {
                                 b
                             } else {
-                                let mut i = 1;
+                                let i = 1;
                                 while (i <= n) {
                                     let c = a + b;
                                     a = b;
