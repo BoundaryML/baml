@@ -16,13 +16,13 @@ fn image_from_url() -> anyhow::Result<()> {
                 }
             "#,
             function: "image_from_url",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(23))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(35))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(23)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(35)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(23)]
+                    &vm.objects[ObjectIndex::from_raw(35)]
                 );
             };
 
@@ -50,13 +50,13 @@ fn audio_from_url() -> anyhow::Result<()> {
                 }
             "#,
             function: "audio_from_url",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(23))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(35))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(23)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(35)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(23)]
+                    &vm.objects[ObjectIndex::from_raw(35)]
                 );
             };
 
@@ -83,13 +83,13 @@ fn video_from_url() -> anyhow::Result<()> {
                 }
             "#,
             function: "video_from_url",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(23))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(35))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(23)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(35)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(23)]
+                    &vm.objects[ObjectIndex::from_raw(35)]
                 );
             };
 
@@ -116,13 +116,13 @@ fn pdf_from_url() -> anyhow::Result<()> {
                 }
             "#,
             function: "pdf_from_url",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(23))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(35))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(23)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(35)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(23)]
+                    &vm.objects[ObjectIndex::from_raw(35)]
                 );
             };
 
@@ -149,13 +149,13 @@ fn image_from_base64() -> anyhow::Result<()> {
                 }
             "#,
             function: "image_from_base64",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(24))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(36))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(24)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(36)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(24)]
+                    &vm.objects[ObjectIndex::from_raw(36)]
                 );
             };
 
@@ -182,13 +182,13 @@ fn pdf_from_base64() -> anyhow::Result<()> {
                 }
             "#,
             function: "pdf_from_base64",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(23))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(35))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(23)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(35)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(23)]
+                    &vm.objects[ObjectIndex::from_raw(35)]
                 );
             };
 
@@ -209,12 +209,12 @@ fn pdf_from_base64() -> anyhow::Result<()> {
 fn media_is_url() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-                function media_is_url() -> bool {
-                    let v = video.from_url("https://example.com/video.mp4");
+            function media_is_url() -> bool {
+                let v = video.from_url("https://example.com/video.mp4");
 
-                    v.is_url()
-                }
-            "#,
+                v.is_url()
+            }
+        "#,
         function: "media_is_url",
         expected: VmExecState::Complete(Value::Bool(true)),
     })
@@ -224,13 +224,100 @@ fn media_is_url() -> anyhow::Result<()> {
 fn media_is_base64() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-                function media_is_base64() -> bool {
-                    let i = image.from_base64("image/png", "abc==");
+            function media_is_base64() -> bool {
+                let i = image.from_base64("image/png", "abc==");
 
-                    i.is_base64()
-                }
-            "#,
+                i.is_base64()
+            }
+        "#,
         function: "media_is_base64",
         expected: VmExecState::Complete(Value::Bool(true)),
     })
+}
+
+#[test]
+fn media_as_url() -> anyhow::Result<()> {
+    assert_vm_executes_with_inspection(
+        Program {
+            source: r#"
+                function media_as_url() -> string {
+                    let i = image.from_url("https://example.com/image.png");
+
+                    i.as_url()
+                }
+            "#,
+            function: "media_as_url",
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(36))),
+        },
+        |vm| {
+            let baml_vm::Object::String(string) = &vm.objects[ObjectIndex::from_raw(36)] else {
+                panic!(
+                    "expected String, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(36)]
+                );
+            };
+
+            assert_eq!(string, "https://example.com/image.png");
+
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn media_as_base64() -> anyhow::Result<()> {
+    assert_vm_executes_with_inspection(
+        Program {
+            source: r#"
+                function media_as_base64() -> string {
+                    let i = image.from_base64("image/png", "abc==");
+
+                    i.as_base64()
+                }
+            "#,
+            function: "media_as_base64",
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(37))),
+        },
+        |vm| {
+            let baml_vm::Object::String(string) = &vm.objects[ObjectIndex::from_raw(37)] else {
+                panic!(
+                    "expected String, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(37)]
+                );
+            };
+
+            assert_eq!(string, "abc==");
+
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn media_as_mime() -> anyhow::Result<()> {
+    assert_vm_executes_with_inspection(
+        Program {
+            source: r#"
+                function media_as_mime() -> string {
+                    let i = image.from_base64("image/png", "abc==");
+
+                    i.mime()
+                }
+            "#,
+            function: "media_as_mime",
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(37))),
+        },
+        |vm| {
+            let baml_vm::Object::String(string) = &vm.objects[ObjectIndex::from_raw(37)] else {
+                panic!(
+                    "expected String, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(37)]
+                );
+            };
+
+            assert_eq!(string, "image/png");
+
+            Ok(())
+        },
+    )
 }

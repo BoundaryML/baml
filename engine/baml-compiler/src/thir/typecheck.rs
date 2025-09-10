@@ -20,6 +20,7 @@
 use std::{borrow::Cow, sync::Arc};
 
 use baml_types::{ir_type::TypeIR, BamlMap, BamlMediaType, BamlValueWithMeta, TypeValue};
+use internal_baml_ast::ast::Expression;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::{
@@ -144,14 +145,32 @@ pub fn typecheck_returning_context<'a>(
                 TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::video())
             }
             "std.media.pdf.from_base64" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
+
             "std.media.image.is_url" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::bool()),
             "std.media.video.is_url" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::bool()),
             "std.media.audio.is_url" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::bool()),
             "std.media.pdf.is_url" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::bool()),
+
             "std.media.image.is_base64" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::bool()),
             "std.media.video.is_base64" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::bool()),
             "std.media.audio.is_base64" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::bool()),
             "std.media.pdf.is_base64" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::bool()),
+
+            "std.media.image.as_url" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
+            "std.media.video.as_url" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
+            "std.media.audio.as_url" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
+            "std.media.pdf.as_url" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+
+            "std.media.image.as_base64" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
+            "std.media.video.as_base64" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
+            "std.media.audio.as_base64" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
+            "std.media.pdf.as_base64" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+
+            "std.media.image.mime" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
+            "std.media.video.mime" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
+            "std.media.audio.mime" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
+            "std.media.pdf.mime" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+
             _ => {
                 // Generic function type for other natives
                 let param_types = vec![TypeIR::null(); arity];
@@ -1463,6 +1482,9 @@ pub fn typecheck_expression(
                     match method.as_str() {
                         "is_url" => Some(format!("{subtype}.is_url")),
                         "is_base64" => Some(format!("{subtype}.is_base64")),
+                        "as_url" => Some(format!("{subtype}.as_url")),
+                        "as_base64" => Some(format!("{subtype}.as_base64")),
+                        "mime" => Some(format!("{subtype}.mime")),
                         _ => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
                                 &format!("Method `{method}` is not available type `media`"),
