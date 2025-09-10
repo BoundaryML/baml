@@ -52,7 +52,7 @@ class BamlLanguageClient(project: Project) :
     // Phase 2: Full version switching notification processing
     @JsonNotification("baml_src_generator_version")
     fun generatorVersionNotification(payload: GeneratorVersionPayload) {
-        log.info("🔄 PROCESSING generator version notification: ${payload.version} for ${payload.root_path}")
+        log.info("🔄 language server requested that we run a different version: $payload")
 
         // Process in background to avoid blocking LSP communication
         ApplicationManager.getApplication().executeOnPooledThread {
@@ -61,63 +61,56 @@ class BamlLanguageClient(project: Project) :
     }
 
     private fun processVersionSwitchRequest(payload: GeneratorVersionPayload) {
-        try {
-            log.info("Processing version switch request: ${payload.version}")
+        if (BamlIdeConfig.shouldIgnoreLanguageServerDynamicVersioning()) {
+            log.info("Running in development mode, ignoring version switch request")
+            return
+        }
 
-            if (BamlIdeConfig.shouldIgnoreLanguageServerDynamicVersioning()) {
-                log.warn("Debug mode detected - skipping version switching to preserve existing debug logic")
-                return
+        // 1. Validate notification is for current project (equivalent to VSCode's isPathWithinParent)
+        if (!isNotificationForCurrentProject(payload.root_path)) {
+            log.debug("Ignoring version notification for different project: ${payload.root_path}")
+            return
+        }
+
+        // 2. Check if restart already in progress (equivalent to VSCode's isRestarting flag)
+        if (languageServerService.isCurrentlyRestarting()) {
+            log.info("Language server restart already in progress, ignoring request")
+            return
+        }
+
+        // 3. Validate semantic version (equivalent to VSCode's semver.valid check)
+        if (!isValidSemanticVersion(payload.version)) {
+            log.warn("Invalid semantic version received: ${payload.version}")
+            return
+        }
+
+        // 4. Check minimum version requirement (equivalent to VSCode's >= 0.86.0 check)
+        if (!isMinimumVersionSupported(payload.version)) {
+            log.warn("Ignoring version ${payload.version} - below minimum supported version")
+            return
+        }
+
+        // 5. Resolve target CLI path (equivalent to VSCode's resolveCliPath call)
+        runBlocking {
+            // 6. Check if restart is needed (equivalent to VSCode's path comparison)
+            if (languageServerService.getCurrentCliVersion() != payload.version) {
+                // Update version tracking even if no restart needed
+                languageServerService.updateCurrentServer(payload.version)
+                // 7. Execute restart (equivalent to VSCode's executeLanguageServerRestart)
+                log.info("Restarting language server with new version")
+                service<BamlLanguageServerService>().setRestartingFlag(true)
+                // https://github.com/redhat-developer/lsp4ij/blob/main/docs/DeveloperGuide.md#install-language-server
+                // Stops the language server if it is currently starting or already started.
+                //Resets the installer's internal state.
+                //Executes the installation via checkInstallation(context).
+                //If the server was previously running, it restarts it once the installation completes.
+                val context = ServerInstallationContext()
+                    .setForceInstall(true)
+                LanguageServerManager.getInstance(project)
+                    .install("baml-language-server", context)
             }
+            log.info("Already using correct CLI version, no restart needed")
 
-            // 1. Validate notification is for current project (equivalent to VSCode's isPathWithinParent)
-            if (!isNotificationForCurrentProject(payload.root_path)) {
-                log.debug("Ignoring version notification for different project: ${payload.root_path}")
-                return
-            }
-
-            // 2. Check if restart already in progress (equivalent to VSCode's isRestarting flag)
-            if (languageServerService.isCurrentlyRestarting()) {
-                log.info("Language server restart already in progress, ignoring request")
-                return
-            }
-
-            // 3. Validate semantic version (equivalent to VSCode's semver.valid check)
-            if (!isValidSemanticVersion(payload.version)) {
-                log.warn("Invalid semantic version received: ${payload.version}")
-                return
-            }
-
-            // 4. Check minimum version requirement (equivalent to VSCode's >= 0.86.0 check)  
-            if (!isMinimumVersionSupported(payload.version)) {
-                log.warn("Ignoring version ${payload.version} - below minimum supported version")
-                return
-            }
-
-            // 5. Resolve target CLI path (equivalent to VSCode's resolveCliPath call)
-            runBlocking {
-                // 6. Check if restart is needed (equivalent to VSCode's path comparison)
-                if (languageServerService.getCurrentCliVersion() != payload.version) {
-                    // Update version tracking even if no restart needed
-                    languageServerService.updateCurrentServer(payload.version)
-                    // 7. Execute restart (equivalent to VSCode's executeLanguageServerRestart)
-                    log.info("Restarting language server with new version")
-                    service<BamlLanguageServerService>().setRestartingFlag(true)
-                    // https://github.com/redhat-developer/lsp4ij/blob/main/docs/DeveloperGuide.md#install-language-server
-                    // Stops the language server if it is currently starting or already started.
-                    //Resets the installer's internal state.
-                    //Executes the installation via checkInstallation(context).
-                    //If the server was previously running, it restarts it once the installation completes.
-                    val context = ServerInstallationContext()
-                        .setForceInstall(true)
-                    LanguageServerManager.getInstance(project)
-                        .install("baml-language-server", context)
-                }
-                log.info("Already using correct CLI version, no restart needed")
-
-            }
-
-        } catch (e: Exception) {
-            log.error("Error processing version switch request", e)
         }
     }
 
