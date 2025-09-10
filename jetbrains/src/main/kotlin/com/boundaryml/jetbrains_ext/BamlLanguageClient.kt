@@ -5,10 +5,16 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
+import com.redhat.devtools.lsp4ij.LanguageServerManager
+import com.redhat.devtools.lsp4ij.LanguageServerManager.StartOptions
+import com.redhat.devtools.lsp4ij.LanguageServerManager.StopOptions
 import com.redhat.devtools.lsp4ij.client.LanguageClientImpl
 import kotlinx.coroutines.runBlocking
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification
 import java.nio.file.Paths
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 // Existing data class (keep as-is)
 data class PortParams(val port: Int)
@@ -170,19 +176,41 @@ class BamlLanguageClient(project: Project) :
     }
     
     private fun restartLanguageServer() {
-        // For Phase 3 implementation: Since BamlLanguageServer already checks the service 
-        // for dynamic CLI path in its init block, we just need to trigger a restart.
-        // For now, we'll implement this as a placeholder and focus on the state management.
+        // Using LSP4IJ LanguageServerManager API for server lifecycle management
+        // Based on research from background.md lines 171-176
+        val serverManager = LanguageServerManager.getInstance(project)
         
-        log.warn("Language server restart triggered - implementation pending")
-        
-        // The actual restart implementation would:
-        // 1. Use the LSP4IJ framework to stop the current server
-        // 2. Start a new server instance, which will automatically pick up the new CLI path
-        //    from languageServerService.getCurrentExecutingCliPath() in BamlLanguageServer.init
-        
-        // For now, just log that restart would happen
-        throw RuntimeException("Language server restart not yet implemented - this is expected for Phase 2")
+        try {
+            // Stop current server using LSP4IJ API
+            // The StopOptions allow for graceful shutdown
+            log.warn("Stopping current BAML language server")
+            val stopOptions = StopOptions()
+            stopOptions.setWillDisable(true) // Indicates we'll restart, not just stop
+            
+            // Stop the server (synchronous operation in LSP4IJ)
+            serverManager.stop("baml", stopOptions)
+            log.warn("BAML language server stop initiated")
+            
+            // Small delay to ensure clean shutdown
+            Thread.sleep(1000)
+            
+            // Start new server instance using LSP4IJ API
+            // The new BamlLanguageServer instance will automatically pick up
+            // the CLI path from languageServerService.getCurrentExecutingCliPath()
+            log.warn("Starting BAML language server with new CLI")
+            val startOptions = StartOptions()
+            startOptions.setForceStart(true) // Force start even if server was running
+            
+            // Start the server (synchronous operation in LSP4IJ)
+            serverManager.start("baml", startOptions)
+            log.warn("BAML language server restart initiated with new CLI")
+            
+            // Give the server time to initialize
+            Thread.sleep(2000)
+            
+        } catch (e: Exception) {
+            throw RuntimeException("Error during language server restart", e)
+        }
     }
     
     private fun showSuccessNotification(version: String) {

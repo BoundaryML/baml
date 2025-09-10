@@ -16,7 +16,12 @@ object BamlCliPathResolver {
         project: Project, 
         requestedVersion: String
     ): String? {
-        logger.info("Resolving CLI path for version: $requestedVersion (using hardcoded debug path)")
+        logger.info("Resolving CLI path for version: $requestedVersion")
+
+        if (requestedVersion == "0.205.0") {
+            logger.info("resolving to 0.205.0 special logic")
+            return "/Users/sam/.baml/baml-cli-0.205.0-aarch64-apple-darwin-baml-cli"
+        }
         
         // Always return the hardcoded debug CLI path for simplicity
         val debugCliPath = "/Users/sam/baml/engine/target/debug/baml-cli"
