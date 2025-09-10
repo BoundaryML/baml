@@ -52,5 +52,6 @@ class BamlLanguageServerInstaller2 : LanguageServerInstallerBase() {
         val download = runBlocking { cliDownloader.resolveCliPath(newCliVersion) }
 
         super.progress("Installation complete!", 1.0, indicator)
+        service<BamlLanguageServerService>().setRestartingFlag(false)
     }
 }

@@ -102,6 +102,7 @@ class BamlLanguageClient(project: Project) :
                     languageServerService.updateCurrentServer(payload.version)
                     // 7. Execute restart (equivalent to VSCode's executeLanguageServerRestart)
                     log.info("Restarting language server with new version")
+                    service<BamlLanguageServerService>().setRestartingFlag(true)
                     // https://github.com/redhat-developer/lsp4ij/blob/main/docs/DeveloperGuide.md#install-language-server
                     // Stops the language server if it is currently starting or already started.
                     //Resets the installer's internal state.

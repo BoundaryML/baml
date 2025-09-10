@@ -1,17 +1,20 @@
 package com.boundaryml.jetbrains_ext
 
+import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.application.Application
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.ComponentManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.project.Project
 import com.intellij.util.messages.Topic
 
 @Service
 class BamlLanguageServerService() {
     
-    private val logger = Logger.getInstance(javaClass)
+    private val log = thisLogger()
 
     companion object {
         val PORT_TOPIC = Topic.create(
@@ -19,6 +22,14 @@ class BamlLanguageServerService() {
             PortListener::class.java,
             Topic.BroadcastDirection.TO_CHILDREN
         )
+        
+        // Cache the plugin version to avoid repeated lookups
+        private val BUNDLED_VERSION: String by lazy {
+            val pluginId = PluginId.getId("com.boundaryml.jetbrains_ext")
+            val plugin = PluginManagerCore.getPlugin(pluginId)
+            thisLogger().info("Resolved bundled plugin: $plugin")
+            plugin?.version ?: "0.207.0"
+        }
     }
 
     // Existing port functionality (preserve exactly)
@@ -27,38 +38,30 @@ class BamlLanguageServerService() {
         private set
 
     fun setPort(newPort: Int) {
-        logger.warn("Setting port to: $newPort")
+        log.info("Setting port to: $newPort")
         port = newPort
         ApplicationManager.getApplication().messageBus
             .syncPublisher(PORT_TOPIC)
             .onPort(newPort)
     }
 
-    // New version switching state
     @Volatile
     private var currentCliVersion: String? = null
     @Volatile
     private var isRestarting: Boolean = false
 
     fun getCurrentCliVersion(): String {
-        return currentCliVersion ?: "0.207.0"
-
+        return currentCliVersion ?: BUNDLED_VERSION
     }
     fun isCurrentlyRestarting(): Boolean = isRestarting
 
     fun updateCurrentServer(version: String) {
-        logger.warn("Updating current server state: current=$currentCliVersion version=$version port=${this.port}")
+        log.info("Updating current server state: current=$currentCliVersion version=$version port=${this.port}")
         currentCliVersion = version
-        val port = this.port
-        if (port != null) {
-            ApplicationManager.getApplication().messageBus
-                .syncPublisher(PORT_TOPIC)
-                .onPort(port)
-        }
     }
 
     fun setRestartingFlag(restarting: Boolean) {
-        logger.warn("Setting restart flag: $restarting")
+        log.info("Setting restart flag: $restarting")
         isRestarting = restarting
     }
 

@@ -163,6 +163,8 @@ class BamlToolWindowFactory : ToolWindowFactory {
         val content = ContentFactory.getInstance().createContent(mainPanel, null, false)
         toolWindow.contentManager.addContent(content)
 
+        // NOTE: this must reload every time we receive a notification, because if we restart the language server
+        // then the webview's connection to the old language server is dead.
         val busConnection = ApplicationManager.getApplication().messageBus.connect(toolWindow.disposable)
         busConnection.subscribe(
             BamlLanguageServerService.PORT_TOPIC,
