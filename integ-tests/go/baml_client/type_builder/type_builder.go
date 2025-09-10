@@ -13,11 +13,7 @@
 
 package type_builder
 
-import (
-	"fmt"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-)
+import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
 type Type = baml.Type
 

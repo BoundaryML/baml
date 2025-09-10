@@ -53,7 +53,10 @@ class BamlLanguageServer(private val project: Project) : OSProcessStreamConnecti
                 runBlocking { cliDownloader.resolveCliPath(languageServerService.getCurrentCliVersion()) }
 
             log.info("creating baml language server at $dynamicCliPath")
-            super.setCommandLine(GeneralCommandLine(dynamicCliPath, "lsp"))
+            super.setCommandLine(GeneralCommandLine(dynamicCliPath, "lsp")
+                .withEnvironment("BAML_INTERNAL_LOG", "debug")
+                .withEnvironment("RUST_LOG", "debug")
+            )
         }
 
     }

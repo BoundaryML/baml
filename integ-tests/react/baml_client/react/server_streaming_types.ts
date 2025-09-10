@@ -103,7 +103,6 @@ export type StreamingServerTypes = {
   JsonTypeAliasCycle: JsonValue,
   LLMEcho: string,
   LiteralUnionsTest: 1 | true | "string output",
-  LlmReturnNumber: number,
   MakeBlockConstraint: types.Checked<BlockConstraint,"cross_field">,
   MakeClassWithBlockDone: types.ClassWithBlockDone,
   MakeClassWithExternalDone: types.ClassWithoutDone,

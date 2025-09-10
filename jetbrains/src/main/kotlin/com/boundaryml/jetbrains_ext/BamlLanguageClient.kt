@@ -61,7 +61,7 @@ class BamlLanguageClient(project: Project) :
     }
 
     private fun processVersionSwitchRequest(payload: GeneratorVersionPayload) {
-        if (BamlIdeConfig.shouldIgnoreLanguageServerDynamicVersioning()) {
+        if (BamlIdeConfig.shouldUseLocalLanguageServerBuild()) {
             log.info("Running in development mode, ignoring version switch request")
             return
         }
