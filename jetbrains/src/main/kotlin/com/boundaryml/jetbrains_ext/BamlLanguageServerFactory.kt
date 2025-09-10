@@ -1,5 +1,6 @@
 package com.boundaryml.jetbrains_ext
 
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.redhat.devtools.lsp4ij.LanguageServerFactory
 import com.redhat.devtools.lsp4ij.client.features.LSPClientFeatures
@@ -7,7 +8,11 @@ import com.redhat.devtools.lsp4ij.server.StreamConnectionProvider
 
 class BamlLanguageServerFactory : LanguageServerFactory {
 
+    private val log = Logger.getInstance(javaClass)
+
     override fun createConnectionProvider(project: Project): StreamConnectionProvider {
+        log.warn("warn Creating connection provider")
+        log.info("Creating connection provider")
         return BamlLanguageServer(project)
     }
 

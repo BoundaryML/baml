@@ -1,5 +1,6 @@
 package com.boundaryml.jetbrains_ext
 
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.util.io.HttpRequests
@@ -46,14 +47,17 @@ class BamlLanguageServerInstaller : LanguageServerInstallerBase() {
             return Triple(releaseArch, releasePlatform, ext)
         }
     }
+    private val log = Logger.getInstance(javaClass)
 
     override fun checkServerInstalled(indicator: ProgressIndicator): Boolean {
+        log.info("checkServerInstalled got called")
         super.progress("Checking if BAML CLI is installed...", indicator)
         ProgressManager.checkCanceled()
         return Files.exists(breadcrumbFile)
     }
 
     override fun install(indicator: ProgressIndicator) {
+        log.info("install got called")
         super.progress("Installing BAML CLI...", indicator)
         ProgressManager.checkCanceled()
 

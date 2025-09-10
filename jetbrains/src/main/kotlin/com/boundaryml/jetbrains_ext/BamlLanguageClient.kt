@@ -9,12 +9,12 @@ import com.redhat.devtools.lsp4ij.LanguageServerManager
 import com.redhat.devtools.lsp4ij.LanguageServerManager.StartOptions
 import com.redhat.devtools.lsp4ij.LanguageServerManager.StopOptions
 import com.redhat.devtools.lsp4ij.client.LanguageClientImpl
+import com.redhat.devtools.lsp4ij.installation.ServerInstallationContext
+import com.redhat.devtools.lsp4ij.installation.ServerInstallationStatus
 import kotlinx.coroutines.runBlocking
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification
 import java.nio.file.Paths
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
+
 
 // Existing data class (keep as-is)
 data class PortParams(val port: Int)
@@ -34,18 +34,18 @@ class BamlLanguageClient(project: Project) :
     // Existing port notification (keep exactly as-is but use new service)
     @JsonNotification("baml/port")
     fun onPort(params: PortParams) {
-        log.warn("Port params: ${params.port}")
+        log.info("Port params: ${params.port}")
 
-        log.warn("Setting port to ${params.port}")
+        log.info("Setting port to ${params.port}")
         languageServerService.setPort(params.port)
-        log.warn("Set port to ${params.port}")
+        log.info("Set port to ${params.port}")
     }
 
     // Phase 2: Full version switching notification processing
     @JsonNotification("baml_src_generator_version")
     fun generatorVersionNotification(payload: GeneratorVersionPayload) {
-        log.warn("🔄 PROCESSING generator version notification: ${payload.version} for ${payload.root_path}")
-        
+        log.info("🔄 PROCESSING generator version notification: ${payload.version} for ${payload.root_path}")
+
         // Process in background to avoid blocking LSP communication
         ApplicationManager.getApplication().executeOnPooledThread {
             processVersionSwitchRequest(payload)
@@ -54,7 +54,7 @@ class BamlLanguageClient(project: Project) :
     
     private fun processVersionSwitchRequest(payload: GeneratorVersionPayload) {
         try {
-            log.warn("Processing version switch request: ${payload.version}")
+            log.info("Processing version switch request: ${payload.version}")
             
             // 0. Skip version switching in debug mode - preserve existing debug behavior
 //            if (BamlIdeConfig.isDebugMode) {
@@ -176,43 +176,13 @@ class BamlLanguageClient(project: Project) :
     }
     
     private fun restartLanguageServer() {
-        // Using LSP4IJ LanguageServerManager API for server lifecycle management
-        // Based on research from background.md lines 171-176
-        val serverManager = LanguageServerManager.getInstance(project)
-        
-        try {
-            // Stop current server using LSP4IJ API
-            // The StopOptions allow for graceful shutdown
-            log.warn("Stopping current BAML language server")
-            val stopOptions = StopOptions()
-            stopOptions.setWillDisable(true) // Indicates we'll restart, not just stop
-            
-            // Stop the server (synchronous operation in LSP4IJ)
-            serverManager.stop("baml", stopOptions)
-            log.warn("BAML language server stop initiated")
-            
-            // Small delay to ensure clean shutdown
-            Thread.sleep(1000)
-            
-            // Start new server instance using LSP4IJ API
-            // The new BamlLanguageServer instance will automatically pick up
-            // the CLI path from languageServerService.getCurrentExecutingCliPath()
-            log.warn("Starting BAML language server with new CLI")
-            val startOptions = StartOptions()
-            startOptions.setForceStart(true) // Force start even if server was running
-            
-            // Start the server (synchronous operation in LSP4IJ)
-            serverManager.start("baml", startOptions)
-            log.warn("BAML language server restart initiated with new CLI")
-            
-            // Give the server time to initialize
-            Thread.sleep(2000)
-            
-        } catch (e: Exception) {
-            throw RuntimeException("Error during language server restart", e)
-        }
+        log.info("Restarting language server with new version")
+        val context = ServerInstallationContext()
+            .setForceInstall(true)
+        LanguageServerManager.getInstance(project)
+            .install("baml-language-server", context)
     }
-    
+
     private fun showSuccessNotification(version: String) {
         try {
             NotificationGroupManager.getInstance()
@@ -223,11 +193,11 @@ class BamlLanguageClient(project: Project) :
             log.warn("Failed to show success notification", e)
         }
     }
-    
+
     private fun showErrorNotification(version: String, error: String) {
         try {
             NotificationGroupManager.getInstance()
-                .getNotificationGroup("BAML Version Switch")  
+                .getNotificationGroup("BAML Version Switch")
                 .createNotification("Failed to switch to BAML CLI version $version: $error", NotificationType.ERROR)
                 .notify(project)
         } catch (e: Exception) {
