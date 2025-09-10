@@ -1487,7 +1487,7 @@ pub fn typecheck_expression(
                         "mime" => Some(format!("{subtype}.mime")),
                         _ => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Method `{method}` is not available type `media`"),
+                                &format!("Method `{method}` is not available on type `media`"),
                                 span.clone(),
                             ));
                             None
