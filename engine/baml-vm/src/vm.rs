@@ -1212,6 +1212,15 @@ impl Vm {
                             CmpOp::LtEq => left <= right,
                             CmpOp::Gt => left > right,
                             CmpOp::GtEq => left >= right,
+
+                            CmpOp::InstanceOf => {
+                                return Err(InternalError::CannotApplyCmpOp {
+                                    left: Type::Int,
+                                    right: Type::Int,
+                                    op,
+                                }
+                                .into())
+                            }
                         }),
 
                         (Value::Float(left), Value::Float(right)) => Value::Bool(match op {
@@ -1221,11 +1230,37 @@ impl Vm {
                             CmpOp::LtEq => left <= right,
                             CmpOp::Gt => left > right,
                             CmpOp::GtEq => left >= right,
+
+                            CmpOp::InstanceOf => {
+                                return Err(InternalError::CannotApplyCmpOp {
+                                    left: Type::Float,
+                                    right: Type::Float,
+                                    op,
+                                }
+                                .into())
+                            }
                         }),
 
                         _ => Value::Bool(match op {
                             CmpOp::Eq => left == right,
                             CmpOp::NotEq => left != right,
+
+                            CmpOp::InstanceOf => {
+                                let left = self.objects.as_object(&left, ObjectType::Instance)?;
+
+                                let Object::Instance(instance) = &self.objects[left] else {
+                                    return Err(InternalError::TypeError {
+                                        expected: ObjectType::Instance.into(),
+                                        got: ObjectType::of(&self.objects[left]).into(),
+                                    }
+                                    .into());
+                                };
+
+                                let right = self.objects.as_object(&right, ObjectType::Class)?;
+
+                                instance.class == right
+                            }
+
                             _ => {
                                 return Err(VmError::from(InternalError::CannotApplyCmpOp {
                                     left: self.objects.type_of(&left),

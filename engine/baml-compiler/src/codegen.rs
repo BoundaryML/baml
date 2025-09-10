@@ -1085,6 +1085,8 @@ impl<'g> HirCompiler<'g> {
             thir::Expr::Var(name, _) => {
                 if let Some(&index) = self.locals.get(name) {
                     self.emit(Instruction::LoadVar(index));
+                } else if let Some(class) = self.globals.get(name) {
+                    self.emit(Instruction::LoadGlobal(*class));
                 } else {
                     panic!("undefined variable: {name}");
                 }
@@ -1397,6 +1399,9 @@ impl<'g> HirCompiler<'g> {
                             hir::BinaryOperator::LtEq => Instruction::CmpOp(CmpOp::LtEq),
                             hir::BinaryOperator::Gt => Instruction::CmpOp(CmpOp::Gt),
                             hir::BinaryOperator::GtEq => Instruction::CmpOp(CmpOp::GtEq),
+
+                            // Instanceof operator.
+                            hir::BinaryOperator::InstanceOf => Instruction::CmpOp(CmpOp::InstanceOf),
 
                             // Logical operators.
                             hir::BinaryOperator::And | hir::BinaryOperator::Or => unreachable!(

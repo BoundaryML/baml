@@ -125,7 +125,7 @@ expression =  {
 }
 
 postfix_operator = _{ array_accessor | method_call | field_accessor }
-infix_operator = _{ AND | OR | EQ | NEQ | LTEQ | GTEQ | BIT_SHL | BIT_SHR | BIT_AND | BIT_OR | BIT_XOR | LT | GT | ADD | SUB | MUL | DIV | MOD }
+infix_operator = _{ INSTANCE_OF | AND | OR | EQ | NEQ | LTEQ | GTEQ | BIT_SHL | BIT_SHR | BIT_AND | BIT_OR | BIT_XOR | LT | GT | ADD | SUB | MUL | DIV | MOD }
 prefix_operator = _{ NOT | NEG }
 
 array_accessor = { "[" ~ expression ~ "]" }
@@ -290,6 +290,9 @@ LT = { "<" }
 LTEQ = { "<=" }
 GT = { ">" }
 GTEQ = { ">=" }
+
+// Instance of
+INSTANCE_OF = { "instanceof" }
 
 // Logical
 AND = { "&&" }

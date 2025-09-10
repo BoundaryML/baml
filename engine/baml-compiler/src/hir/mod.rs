@@ -308,6 +308,8 @@ pub enum BinaryOperator {
     And,
     /// The `||` operator (logical or).
     Or,
+    /// The `instanceof` operator (instance of).
+    InstanceOf,
 }
 
 impl BinaryOperator {

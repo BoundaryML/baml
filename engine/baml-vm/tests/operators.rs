@@ -390,3 +390,45 @@ fn basic_assign_bit_xor() -> anyhow::Result<()> {
         expected: VmExecState::Complete(Value::Int(9)),
     })
 }
+
+#[test]
+fn instance_of_returns_true() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class StopTool {
+                action "stop"
+            }
+
+            fn main() -> bool {
+                let t = StopTool { action: "stop" };
+
+                t instanceof StopTool
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Bool(true)),
+    })
+}
+
+#[test]
+fn instance_of_returns_false() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class StopTool {
+                action "stop"
+            }
+
+            class StartTool {
+                action "start"
+            }
+
+            fn main() -> bool {
+                let t = StopTool { action: "stop" };
+
+                t instanceof StartTool
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Bool(false)),
+    })
+}

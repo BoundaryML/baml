@@ -1154,6 +1154,12 @@ fn evaluate_binary_op(
             }
             _ => bail!("shift >> requires integer operands at {:?}", meta.0),
         },
+        BinaryOperator::InstanceOf => match (left_val.clone(), right_val.clone()) {
+            (BamlValueWithMeta::Class(class, ..), BamlValueWithMeta::Class(right_class, ..)) => {
+                BamlValueWithMeta::Bool(class == right_class, meta.clone())
+            }
+            _ => bail!("instanceof requires class operands at {:?}", meta.0),
+        },
     })
 }
 

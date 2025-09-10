@@ -107,6 +107,8 @@ pub enum BinaryOperator {
     And,
     /// The `||` operator (logical or).
     Or,
+    /// The `instanceof` operator (instance of).
+    InstanceOf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

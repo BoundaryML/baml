@@ -20,7 +20,6 @@
 use std::{borrow::Cow, sync::Arc};
 
 use baml_types::{ir_type::TypeIR, BamlMap, BamlMediaType, BamlValueWithMeta, TypeValue};
-use internal_baml_ast::ast::Expression;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::{
@@ -595,6 +594,11 @@ impl TypeContext<'_> {
                     | hir::BinaryOperator::Shr => {
                         // Bitwise operations on integers
                         Some(TypeIR::int())
+                    }
+
+                    hir::BinaryOperator::InstanceOf => {
+                        // Instanceof returns bool
+                        Some(TypeIR::bool())
                     }
                 }
             }
@@ -1252,6 +1256,8 @@ pub fn typecheck_expression(
                 match name.as_str() {
                     // Built-in types, you can call `image.from_url` and should work.
                     "image" | "audio" | "video" | "pdf" => {}
+
+                    cls if context.classes.contains_key(cls) => {}
 
                     _ => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
@@ -2072,6 +2078,28 @@ pub fn typecheck_expression(
                         None
                     }
                 }
+
+                // OK: Instanceof
+                (_, BinaryOperator::InstanceOf, _) => match &right {
+                    thir::Expr::Var(name, _) => {
+                        if context.classes.get(name).is_some() {
+                            Some(TypeIR::bool())
+                        } else {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Class {name} not found"),
+                                span.clone(),
+                            ));
+                            None
+                        }
+                    }
+                    _ => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            "Invalid binary operation (instanceof): right operand must be a class",
+                            span.clone(),
+                        ));
+                        None
+                    }
+                },
 
                 _ => {
                     match (left.meta().1.as_ref(), right.meta().1.as_ref()) {
