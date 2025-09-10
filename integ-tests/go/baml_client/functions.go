@@ -15,6 +15,7 @@ package baml_client
 
 import (
 	"context"
+	"fmt"
 
 	"example.com/integ-tests/baml_client/types"
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
@@ -4731,6 +4732,68 @@ func LiteralUnionsTest(ctx context.Context, input string, opts ...CallOptionFunc
 		}
 
 		return types.Union3BoolKTrueOrIntK1OrKstring_output{}, fmt.Errorf("No data returned from stream")
+	}
+}
+
+func LlmReturnNumber(ctx context.Context, n int64, opts ...CallOptionFunc) (int64, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"n": n},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "LlmReturnNumber", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		if result.Error != nil {
+			return 0, result.Error
+		}
+
+		casted := (result.Data).(int64)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "LlmReturnNumber", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return 0, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(int64), nil
+			}
+		}
+
+		return 0, fmt.Errorf("No data returned from stream")
 	}
 }
 

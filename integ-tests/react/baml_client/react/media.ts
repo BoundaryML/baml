@@ -31,6 +31,27 @@ $ pnpm add @boundaryml/baml
  * import { Image, Audio, Pdf, Video } from '@boundaryml/baml'
  * ```
  */
+
+// Detect if we're in server-side rendering environment
+const isSSR = typeof window === 'undefined';
+
+// Create a proxy handler that logs warnings in SSR environment
+function createSSRProxyHandler<T extends object>(
+  name: string,
+): ProxyHandler<T> {
+  return {
+    get: (target, prop) => {
+      if (isSSR) {
+        console.warn(
+          `Using ${name} from '@boundaryml/baml/browser' in a server-side environment. This will not function properly in SSR.`,
+        );
+      }
+      return (target as Record<string | symbol, unknown>)[prop];
+    },
+  };
+}
+
+
 /**
  * Browser-compatible implementation of BamlImage
  */
@@ -87,15 +108,15 @@ export class BamlImage {
   }
 
   /**
-   * Check if the image is stored as a URL
+   * Check if the Image is stored as a URL
    */
   isUrl(): boolean {
     return this.type === 'url'
   }
 
   /**
-   * Get the URL of the image if it's stored as a URL
-   * @throws Error if the image is not stored as a URL
+   * Get the URL of the Image if it's stored as a URL
+   * @throws Error if the Image is not stored as a URL
    */
   asUrl(): string {
     if (!this.isUrl()) {
@@ -105,9 +126,9 @@ export class BamlImage {
   }
 
   /**
-   * Get the base64 data and media type if the image is stored as base64
+   * Get the base64 data and media type if the Image is stored as base64
    * @returns [base64Data, mediaType]
-   * @throws Error if the image is not stored as base64
+   * @throws Error if the Image is not stored as base64
    */
   asBase64(): [string, string] {
     if (this.type !== 'base64') {
@@ -117,7 +138,7 @@ export class BamlImage {
   }
 
   /**
-   * Convert the image to a JSON representation
+   * Convert the Image to a JSON representation
    */
   toJSON(): { url: string } | { base64: string; media_type: string } {
     if (this.type === 'url') {
@@ -129,6 +150,18 @@ export class BamlImage {
     }
   }
 }
+
+// Create proxied versions that will work in both environments but warn in SSR
+const ImageImpl = new Proxy(
+  BamlImage,
+  createSSRProxyHandler<typeof BamlImage>('Image'),
+);
+
+// Now export everything properly
+// First, define the type alias
+export type Image = BamlImage;
+// Then export the implementations
+export { ImageImpl as Image };
 
 /**
  * Browser-compatible implementation of BamlAudio
@@ -144,21 +177,21 @@ export class BamlAudio {
    * Create a BamlAudio from a URL
    */
   static fromUrl(url: string, mediaType?: string): BamlAudio {
-    return new BamlAudio('url', url, mediaType);
+    return new BamlAudio('url', url, mediaType)
   }
 
   /**
    * Create a BamlAudio from base64 encoded data
    */
   static fromBase64(mediaType: string, base64: string): BamlAudio {
-    return new BamlAudio('base64', base64, mediaType);
+    return new BamlAudio('base64', base64, mediaType)
   }
 
   /**
    * Create a BamlAudio from a File object
    */
   static async fromFile(file: File): Promise<BamlAudio> {
-    return BamlAudio.fromBlob(file, file.type);
+    return BamlAudio.fromBlob(file, file.type)
   }
 
   /**
@@ -166,93 +199,70 @@ export class BamlAudio {
    */
   static async fromBlob(blob: Blob, mediaType?: string): Promise<BamlAudio> {
     const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
     // Remove the data URL prefix to get just the base64 string
-    const base64Data = base64.replace(/^data:.*?;base64,/, '');
-    return BamlAudio.fromBase64(mediaType || blob.type, base64Data);
+    const base64Data = base64.replace(/^data:.*?;base64,/, '')
+    return BamlAudio.fromBase64(mediaType || blob.type, base64Data)
   }
 
   /**
    * Create a BamlAudio by fetching from a URL
    */
   static async fromUrlToBase64(url: string): Promise<BamlAudio> {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    return BamlAudio.fromBlob(blob);
+    const response = await fetch(url)
+    const blob = await response.blob()
+    return BamlAudio.fromBlob(blob)
   }
 
   /**
-   * Check if the audio is stored as a URL
+   * Check if the Audio is stored as a URL
    */
   isUrl(): boolean {
-    return this.type === 'url';
+    return this.type === 'url'
   }
 
   /**
-   * Get the URL of the audio if it's stored as a URL
-   * @throws Error if the audio is not stored as a URL
+   * Get the URL of the Audio if it's stored as a URL
+   * @throws Error if the Audio is not stored as a URL
    */
   asUrl(): string {
     if (!this.isUrl()) {
-      throw new Error('Audio is not a URL');
+      throw new Error('Audio is not a URL')
     }
-    return this.content;
+    return this.content
   }
 
   /**
-   * Get the base64 data and media type if the audio is stored as base64
+   * Get the base64 data and media type if the Audio is stored as base64
    * @returns [base64Data, mediaType]
-   * @throws Error if the audio is not stored as base64
+   * @throws Error if the Audio is not stored as base64
    */
   asBase64(): [string, string] {
     if (this.type !== 'base64') {
-      throw new Error('Audio is not base64');
+      throw new Error('Audio is not base64')
     }
-    return [this.content, this.mediaType || ''];
+    return [this.content, this.mediaType || '']
   }
 
   /**
-   * Convert the audio to a JSON representation
+   * Convert the Audio to a JSON representation
    */
   toJSON(): { url: string } | { base64: string; media_type: string } {
     if (this.type === 'url') {
-      return { url: this.content };
+      return { url: this.content }
     }
     return {
       base64: this.content,
       media_type: this.mediaType || '',
-    };
+    }
   }
 }
 
-// Detect if we're in server-side rendering environment
-const isSSR = typeof window === 'undefined';
-
-// Create a proxy handler that logs warnings in SSR environment
-function createSSRProxyHandler<T extends object>(
-  name: string,
-): ProxyHandler<T> {
-  return {
-    get: (target, prop) => {
-      if (isSSR) {
-        console.warn(
-          `Using ${name} from '@boundaryml/baml/browser' in a server-side environment. This will not function properly in SSR.`,
-        );
-      }
-      return (target as Record<string | symbol, unknown>)[prop];
-    },
-  };
-}
-
 // Create proxied versions that will work in both environments but warn in SSR
-const ImageImpl = new Proxy(
-  BamlImage,
-  createSSRProxyHandler<typeof BamlImage>('Image'),
-);
 const AudioImpl = new Proxy(
   BamlAudio,
   createSSRProxyHandler<typeof BamlAudio>('Audio'),
@@ -260,9 +270,228 @@ const AudioImpl = new Proxy(
 
 // Now export everything properly
 // First, define the type alias
-export type Image = BamlImage;
 export type Audio = BamlAudio;
-
 // Then export the implementations
-export { ImageImpl as Image, AudioImpl as Audio };
+export { AudioImpl as Audio };
 
+/**
+ * Browser-compatible implementation of BamlVideo
+ */
+export class BamlVideo {
+  private constructor(
+    private readonly type: 'url' | 'base64',
+    private readonly content: string,
+    private readonly mediaType?: string,
+  ) {}
+
+  /**
+   * Create a BamlVideo from a URL
+   */
+  static fromUrl(url: string, mediaType?: string): BamlVideo {
+    return new BamlVideo('url', url, mediaType)
+  }
+
+  /**
+   * Create a BamlVideo from base64 encoded data
+   */
+  static fromBase64(mediaType: string, base64: string): BamlVideo {
+    return new BamlVideo('base64', base64, mediaType)
+  }
+
+  /**
+   * Create a BamlVideo from a File object
+   */
+  static async fromFile(file: File): Promise<BamlVideo> {
+    return BamlVideo.fromBlob(file, file.type)
+  }
+
+  /**
+   * Create a BamlVideo from a Blob object
+   */
+  static async fromBlob(blob: Blob, mediaType?: string): Promise<BamlVideo> {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+    // Remove the data URL prefix to get just the base64 string
+    const base64Data = base64.replace(/^data:.*?;base64,/, '')
+    return BamlVideo.fromBase64(mediaType || blob.type, base64Data)
+  }
+
+  /**
+   * Create a BamlVideo by fetching from a URL
+   */
+  static async fromUrlToBase64(url: string): Promise<BamlVideo> {
+    const response = await fetch(url)
+    const blob = await response.blob()
+    return BamlVideo.fromBlob(blob)
+  }
+
+  /**
+   * Check if the Video is stored as a URL
+   */
+  isUrl(): boolean {
+    return this.type === 'url'
+  }
+
+  /**
+   * Get the URL of the Video if it's stored as a URL
+   * @throws Error if the Video is not stored as a URL
+   */
+  asUrl(): string {
+    if (!this.isUrl()) {
+      throw new Error('Video is not a URL')
+    }
+    return this.content
+  }
+
+  /**
+   * Get the base64 data and media type if the Video is stored as base64
+   * @returns [base64Data, mediaType]
+   * @throws Error if the Video is not stored as base64
+   */
+  asBase64(): [string, string] {
+    if (this.type !== 'base64') {
+      throw new Error('Video is not base64')
+    }
+    return [this.content, this.mediaType || '']
+  }
+
+  /**
+   * Convert the Video to a JSON representation
+   */
+  toJSON(): { url: string } | { base64: string; media_type: string } {
+    if (this.type === 'url') {
+      return { url: this.content }
+    }
+    return {
+      base64: this.content,
+      media_type: this.mediaType || '',
+    }
+  }
+}
+
+// Create proxied versions that will work in both environments but warn in SSR
+const VideoImpl = new Proxy(
+  BamlVideo,
+  createSSRProxyHandler<typeof BamlVideo>('Video'),
+);
+
+// Now export everything properly
+// First, define the type alias
+export type Video = BamlVideo;
+// Then export the implementations
+export { VideoImpl as Video };
+
+/**
+ * Browser-compatible implementation of BamlPdf
+ */
+export class BamlPdf {
+  private constructor(
+    private readonly type: 'url' | 'base64',
+    private readonly content: string,
+    private readonly mediaType?: string,
+  ) {}
+
+  /**
+   * Create a BamlPdf from a URL
+   */
+  static fromUrl(url: string, mediaType?: string): BamlPdf {
+    return new BamlPdf('url', url, mediaType)
+  }
+
+  /**
+   * Create a BamlPdf from base64 encoded data
+   */
+  static fromBase64(mediaType: string, base64: string): BamlPdf {
+    return new BamlPdf('base64', base64, mediaType)
+  }
+
+  /**
+   * Create a BamlPdf from a File object
+   */
+  static async fromFile(file: File): Promise<BamlPdf> {
+    return BamlPdf.fromBlob(file, file.type)
+  }
+
+  /**
+   * Create a BamlPdf from a Blob object
+   */
+  static async fromBlob(blob: Blob, mediaType?: string): Promise<BamlPdf> {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+    // Remove the data URL prefix to get just the base64 string
+    const base64Data = base64.replace(/^data:.*?;base64,/, '')
+    return BamlPdf.fromBase64(mediaType || blob.type, base64Data)
+  }
+
+  /**
+   * Create a BamlPdf by fetching from a URL
+   */
+  static async fromUrlToBase64(url: string): Promise<BamlPdf> {
+    const response = await fetch(url)
+    const blob = await response.blob()
+    return BamlPdf.fromBlob(blob)
+  }
+
+  /**
+   * Check if the Pdf is stored as a URL
+   */
+  isUrl(): boolean {
+    return this.type === 'url'
+  }
+
+  /**
+   * Get the URL of the Pdf if it's stored as a URL
+   * @throws Error if the Pdf is not stored as a URL
+   */
+  asUrl(): string {
+    if (!this.isUrl()) {
+      throw new Error('Pdf is not a URL')
+    }
+    return this.content
+  }
+
+  /**
+   * Get the base64 data and media type if the Pdf is stored as base64
+   * @returns [base64Data, mediaType]
+   * @throws Error if the Pdf is not stored as base64
+   */
+  asBase64(): [string, string] {
+    if (this.type !== 'base64') {
+      throw new Error('Pdf is not base64')
+    }
+    return [this.content, this.mediaType || '']
+  }
+
+  /**
+   * Convert the Pdf to a JSON representation
+   */
+  toJSON(): { url: string } | { base64: string; media_type: string } {
+    if (this.type === 'url') {
+      return { url: this.content }
+    }
+    return {
+      base64: this.content,
+      media_type: this.mediaType || '',
+    }
+  }
+}
+
+// Create proxied versions that will work in both environments but warn in SSR
+const PdfImpl = new Proxy(
+  BamlPdf,
+  createSSRProxyHandler<typeof BamlPdf>('Pdf'),
+);
+
+// Now export everything properly
+// First, define the type alias
+export type Pdf = BamlPdf;
+// Then export the implementations
+export { PdfImpl as Pdf };
