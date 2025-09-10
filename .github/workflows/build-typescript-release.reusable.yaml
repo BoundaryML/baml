@@ -31,11 +31,11 @@ jobs:
 
           - target: aarch64-unknown-linux-gnu
             # Do not use -latest, since it uses a different glibc version!
-            host: ubuntu-22.04
+            host: ubuntu-22.04-arm
             # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
             # need a new version of manylinux to build crates on arm64-linux
-            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
-            node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu --use-napi-cross
+            # container: ghcr.io/rust-cross/manylinux_2_31-cross:aarch64
+            node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu
             cargo_args: -p baml-typescript-ffi -p baml-python-ffi
 
           - target: x86_64-apple-darwin
