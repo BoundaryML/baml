@@ -64,11 +64,10 @@ class BamlLanguageClient(project: Project) :
         try {
             log.info("Processing version switch request: ${payload.version}")
             
-            // 0. Skip version switching in debug mode - preserve existing debug behavior
-//            if (BamlIdeConfig.isDebugMode) {
-//                log.warn("Debug mode detected - skipping version switching to preserve existing debug logic")
-//                return
-//            }
+            if (BamlIdeConfig.shouldIgnoreLanguageServerDynamicVersioning()) {
+                log.warn("Debug mode detected - skipping version switching to preserve existing debug logic")
+                return
+            }
             
             // 1. Validate notification is for current project (equivalent to VSCode's isPathWithinParent)
             if (!isNotificationForCurrentProject(payload.root_path)) {
