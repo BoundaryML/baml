@@ -50,13 +50,14 @@ class BamlLanguageServerInstaller : LanguageServerInstallerBase() {
     private val log = Logger.getInstance(javaClass)
 
     override fun checkServerInstalled(indicator: ProgressIndicator): Boolean {
+        log.info("checkServerInstalled")
         super.progress("Checking if BAML CLI is installed...", indicator)
         val newCliVersion = service<BamlLanguageServerService>().getCurrentCliVersion()
-        cliDownloader.checkDownloadedCliExists(CliVersion.fromVersionString(newCliVersion))
-        return false
+        return cliDownloader.checkDownloadedCliExists(CliVersion.fromVersionString(newCliVersion))
     }
 
     override fun install(indicator: ProgressIndicator) {
+        log.info("install")
         super.progress("Installing BAML CLI...", indicator)
 
         val newCliVersion = service<BamlLanguageServerService>().getCurrentCliVersion()
