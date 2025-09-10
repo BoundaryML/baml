@@ -4,10 +4,46 @@ title: Changelog
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.207.0](https://github.com/boundaryml/baml/compare/0.206.1..0.207.0) - 2025-09-10
+
+### Bug Fixes
+
+- **(python)** Update internal runtime type annotations (#2400) - ([992acaa](https://github.com/boundaryml/baml/commit/992acaa5afcdb8e52f1315f4d9c7260906b38eb0)) - Samuel Lijin
+- **(vscode)** make "Run test" codelenses appear in the correct place and run the correct test (#2395) - ([b9c3fea](https://github.com/boundaryml/baml/commit/b9c3fea18603f611fae3d616b6082a29004701f9)) - Samuel Lijin
+- **(vscode)** Fix Jetbrains and VScode test selection (#2427) - ([e4d3529](https://github.com/boundaryml/baml/commit/e4d35296da2a9b39f9b56039d774f2c1871b9269)) - Samuel Lijin
+- use roles correctly with openai-responses (#2392) - ([d976c55](https://github.com/boundaryml/baml/commit/d976c55a7048f5a025f941a7bfae545d2bc94a54)) - Samuel Lijin
+- Emit notification to check CLI version against client (#2404) - ([6ea5617](https://github.com/boundaryml/baml/commit/6ea5617c99c82e4e4fd4296b82a5a44b50264e95)) - Jesús Lapastora
+- Fix media file path resolution on Windows (#2391) - ([3950a49](https://github.com/boundaryml/baml/commit/3950a495a3f91ec9bf274ace91df9c05837a3e9f)) - Greg Hale
+- syntax highlighting for pdf type (#2414) - ([21f7d62](https://github.com/boundaryml/baml/commit/21f7d62ba0ba8488cc1acc88557b459f859c1d46)) - Greg Hale
+- Fix TS double 'export declare' in baml_client by migrating to napiv3 (#2228) - ([a5294fa](https://github.com/boundaryml/baml/commit/a5294fabbb4f9d6806fe81ba99b9d436acb3f9c8)) - Ethan Lijin
+- [Python] Pass `abort_controller` to `Runtime::stream_function` (#2416) - ([8100bc2](https://github.com/boundaryml/baml/commit/8100bc2ecb36d1cf0338f9d2a61738a641d7ef13)) - Antonio Sarosi
+- Improve the samples and error messages for test blocks (#2418) - ([e1a8fd5](https://github.com/boundaryml/baml/commit/e1a8fd5541ed9e1401a66194aea32bd9c5e83289)) - Greg Hale
+
+### Docs
+- Fix tabs not syncing correctly in docs (#2420) - ([134fac0](https://github.com/boundaryml/baml/commit/134fac0aacd7ab49f77edf2648b0fd640bf9e08b)) - aaronvg
+- Enhance OpenAPI Docs (#2399) - ([964bc40](https://github.com/boundaryml/baml/commit/964bc408bca71279af676ff0b2ed6dc618dba0c4)) - Antonio Sarosi
+
+### Features
+- Add cached input token tracking to Usage reporting (#2394) - ([7e460e6](https://github.com/boundaryml/baml/commit/7e460e68dae52d203a7a0bb8e9906a7acff359c3)) - Luke Ramsden
+
+### BAML Agents / Workflows (WIP)
+- Improve expr-fn parsing (#2408) - ([eca5142](https://github.com/boundaryml/baml/commit/eca5142b7cef94b29e9a07aec7ddb567fcc8b71b)) - Greg Hale
+- Merge Mermaid diagram visualizer (#2381) - ([df6ee12](https://github.com/boundaryml/baml/commit/df6ee1250107ff989f704df942004ba46a2d9fbf)) - Greg Hale
+- Update syntax highlighting (#2412) - ([5c3c412](https://github.com/boundaryml/baml/commit/5c3c412e7ab99d582d202c10d9933bd29d163c7f)) - Greg Hale
+- VM Errors & Type Convertions & Missing Types (#2403) - ([51fc365](https://github.com/boundaryml/baml/commit/51fc365510577f3a271fb088f1b3df522be9f983)) - Antonio Sarosi
+- Add string concatenation: `"a" + "b"` (#2426) - ([41d53ea](https://github.com/boundaryml/baml/commit/41d53eaf12a689edab4a876b738c91d053932805)) - Antonio Sarosi
+
+
+### Boundary Studio
+- More improvements to studio2 publishing (#2333) - ([39e731a](https://github.com/boundaryml/baml/commit/39e731a23d88faaa750519fd402f85281b46f1cb)) - aaronvg
+
+
+
 ## [0.206.1](https://github.com/boundaryml/baml/compare/0.206.0..0.206.1) - 2025-08-28
 
 ### Bugfix
 
+- vscode extension is broken (#2387) - ([i43e4f72](https://github.com/BoundaryML/baml/commit/43e4f72effeb8ec48c40681dc129ba3ce9124288)) - hellovai
 - media types in jinja should evaluate to true in jinja bool conversions (#2384) - ([d25d3eb](https://github.com/boundaryml/baml/commit/d25d3ebce21ab6157dd760dfcde217e711229191)) - hellovai
 
 ## [0.206.0](https://github.com/boundaryml/baml/compare/0.205.0..0.206.0) - 2025-08-27
