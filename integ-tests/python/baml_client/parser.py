@@ -13,6 +13,8 @@
 import typing
 import typing_extensions
 
+import baml_py
+
 from . import stream_types, types
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
 
@@ -1401,6 +1403,12 @@ class LlmResponseParser:
     ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnElseIfExpr", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
+
+    def ReturnImageFromUrl(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> baml_py.Image:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnImageFromUrl", llm_response=llm_response, mode="request")
+        return typing.cast(baml_py.Image, result)
 
     def ReturnNumber(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2831,6 +2839,12 @@ class LlmStreamParser:
     ) -> typing.Optional[int]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnElseIfExpr", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
+
+    def ReturnImageFromUrl(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[baml_py.Image]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnImageFromUrl", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[baml_py.Image], result)
 
     def ReturnNumber(
         self, llm_response: str, baml_options: BamlCallOptions = {},

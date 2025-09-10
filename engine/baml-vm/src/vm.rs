@@ -509,6 +509,9 @@ pub enum RuntimeError {
 
     /// Right hand side of division operation is zero.
     DivisionByZero { left: Value, right: Value },
+
+    /// Any error, provide a custom message for this one.
+    Other(String),
 }
 
 /// Any kind of virtual machine error.

@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta};
+use baml_types::{ir_type::TypeIR, BamlMap, BamlMediaType, BamlValueWithMeta, TypeValue};
 use baml_vm::{
     BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex,
     GlobalPool, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
@@ -1159,6 +1159,17 @@ impl<'g> HirCompiler<'g> {
 
                     Some(TypeIR::Map(_, _, _)) => format!("std.Map.{method}"),
 
+                    Some(TypeIR::Primitive(TypeValue::Media(media_type), _)) => {
+                        let subtype = match media_type {
+                            BamlMediaType::Image => "std.media.image",
+                            BamlMediaType::Video => "std.media.video",
+                            BamlMediaType::Audio => "std.media.audio",
+                            BamlMediaType::Pdf => "std.media.pdf",
+                        };
+
+                        format!("{subtype}.{method}")
+                    }
+
                     other => panic!("method calls must be on classes, got: {other:#?}"),
                 };
 
@@ -1488,7 +1499,12 @@ impl<'g> HirCompiler<'g> {
     /// Keeps track of a new local and returns its index in the eval stack.
     fn track_local(&mut self, name: &str) -> usize {
         let index = self.locals.len() + 1;
-        debug_assert!(self.locals.insert(name.to_string(), index).is_none());
+        let old = self.locals.insert(name.to_string(), index);
+
+        debug_assert!(
+            old.is_none(),
+            "tracking local var {name} but it already exists"
+        );
 
         self.scopes
             .last_mut()
