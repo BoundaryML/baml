@@ -243,6 +243,7 @@ export declare class Usage {
   toString(): string
   get inputTokens(): number | null
   get outputTokens(): number | null
+  get cachedInputTokens(): number | null
 }
 
 export interface BamlLogEvent {

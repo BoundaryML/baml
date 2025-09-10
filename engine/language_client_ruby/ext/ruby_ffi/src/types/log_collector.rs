@@ -383,12 +383,15 @@ impl StreamTiming {
 impl Usage {
     pub fn to_s(&self) -> String {
         format!(
-            "Usage(input_tokens={}, output_tokens={})",
+            "Usage(input_tokens={}, output_tokens={}, cached_input_tokens={})",
             self.inner
                 .input_tokens
                 .map_or_else(|| "null".to_string(), |v| v.to_string()),
             self.inner
                 .output_tokens
+                .map_or_else(|| "null".to_string(), |v| v.to_string()),
+            self.inner
+                .cached_input_tokens
                 .map_or_else(|| "null".to_string(), |v| v.to_string())
         )
     }
@@ -401,12 +404,20 @@ impl Usage {
         self.inner.output_tokens
     }
 
+    pub fn cached_input_tokens(&self) -> Option<i64> {
+        self.inner.cached_input_tokens
+    }
+
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
         let cls = module.define_class("Usage", class::object())?;
 
         cls.define_method("to_s", method!(Usage::to_s, 0))?;
         cls.define_method("input_tokens", method!(Usage::input_tokens, 0))?;
         cls.define_method("output_tokens", method!(Usage::output_tokens, 0))?;
+        cls.define_method(
+            "cached_input_tokens",
+            method!(Usage::cached_input_tokens, 0),
+        )?;
 
         Ok(())
     }

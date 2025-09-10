@@ -79,3 +79,13 @@ def test_return_category():
     assert b.ReturnCategory(Category.TechnicalSupport) == Category.TechnicalSupport
     assert b.ReturnCategory(Category.AccountIssue) == Category.AccountIssue
     assert b.ReturnCategory(Category.Question) == Category.Question
+
+
+def test_return_image_from_url():
+    url = "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+
+    # Image created within BAML.
+    img = b.ReturnImageFromUrl(url)
+
+    assert img.is_url()
+    assert img.as_url() == url

@@ -1221,7 +1221,7 @@ mod tests {
             }
         "##;
 
-        builder.add_baml(baml, runtime.internal())?;
+        builder.add_baml(baml, runtime.inner.as_ref())?;
         println!("{builder}");
         builder.to_overrides();
         Ok(())

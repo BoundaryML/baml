@@ -107,6 +107,7 @@ function TestOpenAIGPT4oMini(input: string) -> string {
   prompt #"
     {{ _.role("user") }}
     Write a nice haiku, given the user input. Make sure to reference the input in the haiku.
+    {{ input }}
   "#
 }
 function TestOpenAIGPT4oMini2(input: string) -> string {

@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta};
+use baml_types::{ir_type::TypeIR, BamlMap, BamlMediaType, BamlValueWithMeta, TypeValue};
 use baml_vm::{
     BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex,
     GlobalPool, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
@@ -1085,6 +1085,8 @@ impl<'g> HirCompiler<'g> {
             thir::Expr::Var(name, _) => {
                 if let Some(&index) = self.locals.get(name) {
                     self.emit(Instruction::LoadVar(index));
+                } else if let Some(class) = self.globals.get(name) {
+                    self.emit(Instruction::LoadGlobal(*class));
                 } else {
                     panic!("undefined variable: {name}");
                 }
@@ -1158,6 +1160,17 @@ impl<'g> HirCompiler<'g> {
                     Some(TypeIR::List(_, _)) => format!("std.Array.{method}"),
 
                     Some(TypeIR::Map(_, _, _)) => format!("std.Map.{method}"),
+
+                    Some(TypeIR::Primitive(TypeValue::Media(media_type), _)) => {
+                        let subtype = match media_type {
+                            BamlMediaType::Image => "std.media.image",
+                            BamlMediaType::Video => "std.media.video",
+                            BamlMediaType::Audio => "std.media.audio",
+                            BamlMediaType::Pdf => "std.media.pdf",
+                        };
+
+                        format!("{subtype}.{method}")
+                    }
 
                     other => panic!("method calls must be on classes, got: {other:#?}"),
                 };
@@ -1387,6 +1400,9 @@ impl<'g> HirCompiler<'g> {
                             hir::BinaryOperator::Gt => Instruction::CmpOp(CmpOp::Gt),
                             hir::BinaryOperator::GtEq => Instruction::CmpOp(CmpOp::GtEq),
 
+                            // Instanceof operator.
+                            hir::BinaryOperator::InstanceOf => Instruction::CmpOp(CmpOp::InstanceOf),
+
                             // Logical operators.
                             hir::BinaryOperator::And | hir::BinaryOperator::Or => unreachable!(
                                 "compiler bug: logical binary operators must be handled before arithmetic and comparison operators"
@@ -1488,7 +1504,12 @@ impl<'g> HirCompiler<'g> {
     /// Keeps track of a new local and returns its index in the eval stack.
     fn track_local(&mut self, name: &str) -> usize {
         let index = self.locals.len() + 1;
-        debug_assert!(self.locals.insert(name.to_string(), index).is_none());
+        let old = self.locals.insert(name.to_string(), index);
+
+        debug_assert!(
+            old.is_none(),
+            "tracking local var {name} but it already exists"
+        );
 
         self.scopes
             .last_mut()

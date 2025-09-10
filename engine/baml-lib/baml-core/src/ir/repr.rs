@@ -551,6 +551,7 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                         ast::BinaryOperator::Shr => expr::BinaryOperator::Shr,
                         ast::BinaryOperator::And => expr::BinaryOperator::And,
                         ast::BinaryOperator::Or => expr::BinaryOperator::Or,
+                        ast::BinaryOperator::InstanceOf => expr::BinaryOperator::InstanceOf,
                     },
                     right: Arc::new(right_ir),
                     meta: (span.clone(), None),

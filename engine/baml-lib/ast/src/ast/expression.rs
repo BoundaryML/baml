@@ -191,6 +191,8 @@ pub enum BinaryOperator {
     And,
     /// The `||` operator (logical or).
     Or,
+    /// The `instanceof` operator (instance of).
+    InstanceOf,
 }
 
 impl fmt::Display for BinaryOperator {
@@ -214,6 +216,7 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::Shr => write!(f, ">>"),
             BinaryOperator::And => write!(f, "&&"),
             BinaryOperator::Or => write!(f, "||"),
+            BinaryOperator::InstanceOf => write!(f, "instanceof"),
         }
     }
 }

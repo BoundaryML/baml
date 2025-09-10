@@ -223,7 +223,7 @@ Checkout our [guide on getting started](/CONTRIBUTING.md)
 You can cite the BAML repo as follows:
 ```bibtex
 @software{baml,
-  author = {Vaibhav Gupta, Aaron Villalpando and Boundary ML team},
+  author = {Boundary ML},
   title = {BAML},
   url = {https://github.com/boundaryml/baml},
   year = {2024}

@@ -5,7 +5,6 @@
 use std::collections::HashSet;
 
 use baml_types::{
-    ir_type::TypeGeneric,
     type_meta::{self, base::StreamingBehavior},
     Constraint, ConstraintLevel, TypeIR, TypeValue,
 };
@@ -615,6 +614,7 @@ impl Expression {
                     ast::BinaryOperator::BitXor => hir::BinaryOperator::BitXor,
                     ast::BinaryOperator::Shl => hir::BinaryOperator::Shl,
                     ast::BinaryOperator::Shr => hir::BinaryOperator::Shr,
+                    ast::BinaryOperator::InstanceOf => hir::BinaryOperator::InstanceOf,
                 },
                 right: Box::new(Self::from_ast(right)),
                 span: span.clone(),

@@ -90,6 +90,7 @@ pub fn parse_anthropic_response<C: WithClient + RequestBuilder>(
             prompt_tokens: Some(response.usage.input_tokens),
             output_tokens: Some(response.usage.output_tokens),
             total_tokens: Some(response.usage.input_tokens + response.usage.output_tokens),
+            cached_input_tokens: response.usage.cache_read_input_tokens,
         },
     })
 }
@@ -137,6 +138,7 @@ pub fn scan_anthropic_response_stream(
             inner.prompt_tokens = Some(body.usage.input_tokens);
             inner.output_tokens = Some(body.usage.output_tokens);
             inner.total_tokens = Some(body.usage.input_tokens + body.usage.output_tokens);
+            inner.cached_input_tokens = body.usage.cache_read_input_tokens;
         }
         MessageChunk::ContentBlockDelta(event) => {
             if let super::types::ContentBlockDelta::TextDelta { text } = event.delta {
@@ -153,6 +155,7 @@ pub fn scan_anthropic_response_stream(
             inner.finish_reason = body.delta.stop_reason.clone();
             inner.output_tokens = Some(body.usage.output_tokens);
             inner.total_tokens = Some(inner.prompt_tokens.unwrap_or(0) + body.usage.output_tokens);
+            inner.cached_input_tokens = body.usage.cache_read_input_tokens;
         }
         MessageChunk::MessageStop => (),
         MessageChunk::Error { error } => {
@@ -218,6 +221,7 @@ mod tests {
                 prompt_tokens: Some(321),
                 output_tokens: Some(158),
                 total_tokens: Some(479),
+                cached_input_tokens: Some(0),
             },
         };
 
