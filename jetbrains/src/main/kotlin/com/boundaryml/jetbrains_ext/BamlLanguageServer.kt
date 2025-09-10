@@ -75,11 +75,4 @@ class BamlLanguageServer(private val project: Project) : OSProcessStreamConnecti
 //        }
 //        super.setCommandLine(commandLine)
     }
-    
-    private fun getExtensionVersion(): String {
-        // TODO: Get actual extension version from plugin.xml or build.gradle.kts
-        // For now, return a placeholder version that matches an available CLI
-        return "0.206.1" // Hardcoded for initial implementation
-    }
-
 }

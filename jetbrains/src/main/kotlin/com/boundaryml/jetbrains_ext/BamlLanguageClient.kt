@@ -10,6 +10,7 @@ import com.intellij.openapi.project.Project
 import com.redhat.devtools.lsp4ij.LanguageServerManager
 import com.redhat.devtools.lsp4ij.LanguageServerManager.StartOptions
 import com.redhat.devtools.lsp4ij.LanguageServerManager.StopOptions
+import com.redhat.devtools.lsp4ij.ServerStatus
 import com.redhat.devtools.lsp4ij.client.LanguageClientImpl
 import com.redhat.devtools.lsp4ij.installation.ServerInstallationContext
 import com.redhat.devtools.lsp4ij.installation.ServerInstallationStatus
@@ -32,6 +33,11 @@ class BamlLanguageClient(project: Project) :
 
     private val log = Logger.getInstance(javaClass)
     private val languageServerService = service<BamlLanguageServerService>()
+
+    // NB(sam): if we need to do something after language server startup, we can apply that hook here
+//    override fun handleServerStatusChanged(serverStatus: ServerStatus) {
+//        super.handleServerStatusChanged(serverStatus)
+//    }
 
     // Existing port notification (keep exactly as-is but use new service)
     @JsonNotification("baml/port")
@@ -90,8 +96,6 @@ class BamlLanguageClient(project: Project) :
             
             // 5. Resolve target CLI path (equivalent to VSCode's resolveCliPath call)
             runBlocking {
-                val targetCliPath = CliVersion.fromVersionString(payload.version)
-
                 // 6. Check if restart is needed (equivalent to VSCode's path comparison)
                 if (languageServerService.getCurrentCliVersion() != payload.version) {
                     // Update version tracking even if no restart needed
@@ -145,29 +149,6 @@ class BamlLanguageClient(project: Project) :
             major > 0 || (major == 0 && minor >= 86)
         } catch (e: Exception) {
             false
-        }
-    }
-
-
-    private fun showSuccessNotification(version: String) {
-        try {
-            NotificationGroupManager.getInstance()
-                .getNotificationGroup("BAML Version Switch")
-                .createNotification("Switched to BAML CLI version $version", NotificationType.INFORMATION)
-                .notify(project)
-        } catch (e: Exception) {
-            log.warn("Failed to show success notification", e)
-        }
-    }
-
-    private fun showErrorNotification(version: String, error: String) {
-        try {
-            NotificationGroupManager.getInstance()
-                .getNotificationGroup("BAML Version Switch")
-                .createNotification("Failed to switch to BAML CLI version $version: $error", NotificationType.ERROR)
-                .notify(project)
-        } catch (e: Exception) {
-            log.warn("Failed to show error notification", e)
         }
     }
 }

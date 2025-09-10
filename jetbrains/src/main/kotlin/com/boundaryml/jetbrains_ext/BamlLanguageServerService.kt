@@ -1,5 +1,8 @@
 package com.boundaryml.jetbrains_ext
 
+import com.intellij.openapi.application.Application
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.ComponentManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
@@ -14,13 +17,7 @@ class BamlLanguageServerService() {
         val PORT_TOPIC = Topic.create(
             "BAML-port",
             PortListener::class.java,
-            Topic.BroadcastDirection.NONE
-        )
-        
-        val VERSION_TOPIC = Topic.create(
-            "BAML-version",
-            VersionListener::class.java,
-            Topic.BroadcastDirection.NONE
+            Topic.BroadcastDirection.TO_CHILDREN
         )
     }
 
@@ -32,9 +29,9 @@ class BamlLanguageServerService() {
     fun setPort(newPort: Int) {
         logger.warn("Setting port to: $newPort")
         port = newPort
-//        project.messageBus
-//            .syncPublisher(PORT_TOPIC)
-//            .onPort(newPort)
+        ApplicationManager.getApplication().messageBus
+            .syncPublisher(PORT_TOPIC)
+            .onPort(newPort)
     }
 
     // New version switching state
@@ -44,17 +41,20 @@ class BamlLanguageServerService() {
     private var isRestarting: Boolean = false
 
     fun getCurrentCliVersion(): String {
-        return currentCliVersion ?: "0.206.1"
+        return currentCliVersion ?: "0.207.0"
 
     }
     fun isCurrentlyRestarting(): Boolean = isRestarting
 
     fun updateCurrentServer(version: String) {
-        logger.warn("Updating current server state: version=$version")
+        logger.warn("Updating current server state: current=$currentCliVersion version=$version port=${this.port}")
         currentCliVersion = version
-//        project.messageBus
-//            .syncPublisher(VERSION_TOPIC)
-//            .onVersionChanged(version, cliPath)
+        val port = this.port
+        if (port != null) {
+            ApplicationManager.getApplication().messageBus
+                .syncPublisher(PORT_TOPIC)
+                .onPort(port)
+        }
     }
 
     fun setRestartingFlag(restarting: Boolean) {
@@ -65,9 +65,5 @@ class BamlLanguageServerService() {
     // Listener interfaces
     fun interface PortListener { 
         fun onPort(port: Int) 
-    }
-    
-    fun interface VersionListener { 
-        fun onVersionChanged(version: String, cliPath: String) 
     }
 }

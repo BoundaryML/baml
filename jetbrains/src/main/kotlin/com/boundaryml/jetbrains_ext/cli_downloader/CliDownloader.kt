@@ -1,5 +1,6 @@
 package com.boundaryml.jetbrains_ext.cli_downloader
 
+import com.intellij.openapi.diagnostic.thisLogger
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import java.nio.file.Files
@@ -18,6 +19,7 @@ class CliDownloader(
 ) {
     
     suspend fun resolveCliPath(requestedVersion: String): String? {
+
         logger.info { "Resolving CLI path for version: $requestedVersion" }
         
         val currentPlatform = PlatformDetector.getCurrentPlatform()

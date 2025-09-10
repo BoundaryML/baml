@@ -1,10 +1,16 @@
 package com.boundaryml.jetbrains_ext
 
+import com.boundaryml.jetbrains_ext.cli_downloader.CliDownloader
+import com.boundaryml.jetbrains_ext.cli_downloader.CliVersion
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.project.Project
 import com.redhat.devtools.lsp4ij.LanguageServerFactory
 import com.redhat.devtools.lsp4ij.client.features.LSPClientFeatures
+import com.redhat.devtools.lsp4ij.installation.LanguageServerInstallerBase
 import com.redhat.devtools.lsp4ij.server.StreamConnectionProvider
+import kotlinx.coroutines.runBlocking
 
 class BamlLanguageServerFactory : LanguageServerFactory {
 
@@ -17,10 +23,34 @@ class BamlLanguageServerFactory : LanguageServerFactory {
 
     override fun createClientFeatures(): LSPClientFeatures {
         val features = LSPClientFeatures()
-        features.setServerInstaller(BamlLanguageServerInstaller()) // customize language server installer
+        features.setServerInstaller(BamlLanguageServerInstaller2()) // customize language server installer
         return features
     }
 
     override fun createLanguageClient(project: Project) =
         BamlLanguageClient(project)      // our custom client
+}
+
+
+class BamlLanguageServerInstaller2 : LanguageServerInstallerBase() {
+
+    private val cliDownloader = CliDownloader()
+    private val log = Logger.getInstance(javaClass)
+
+    override fun checkServerInstalled(indicator: ProgressIndicator): Boolean {
+        log.info("checkServerInstalled")
+        super.progress("Checking if BAML CLI is installed...", indicator)
+        val newCliVersion = service<BamlLanguageServerService>().getCurrentCliVersion()
+        return cliDownloader.checkDownloadedCliExists(CliVersion.fromVersionString(newCliVersion))
+    }
+
+    override fun install(indicator: ProgressIndicator) {
+        log.info("install")
+        super.progress("Installing BAML CLI...", indicator)
+
+        val newCliVersion = service<BamlLanguageServerService>().getCurrentCliVersion()
+        val download = runBlocking { cliDownloader.resolveCliPath(newCliVersion) }
+
+        super.progress("Installation complete!", 1.0, indicator)
+    }
 }

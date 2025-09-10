@@ -5,7 +5,7 @@
       <option name="env">
         <map>
           <entry key="JETBRAINS_PROJECT_DIR" value="$PROJECT_DIR$" />
-          <entry key="VSCODE_DEBUG_MODE" value="true" />
+<!--          <entry key="VSCODE_DEBUG_MODE" value="true" />-->
         </map>
       </option>
       <option name="executionName" />

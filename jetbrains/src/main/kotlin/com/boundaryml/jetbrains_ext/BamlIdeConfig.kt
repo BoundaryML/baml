@@ -1,8 +1,8 @@
 package com.boundaryml.jetbrains_ext
 
 object BamlIdeConfig {
-    val isDebugMode: Boolean
-    
+    private val isDebugMode: Boolean
+
     init {
         val debugModeEnv = System.getenv("VSCODE_DEBUG_MODE")
         isDebugMode = debugModeEnv == "true"
@@ -12,4 +12,7 @@ object BamlIdeConfig {
     fun getPlaygroundUrl(port: Int): String {
         return "http://localhost:$port/"
     }
+
+    fun shouldShowToolWindowDebuggers(): Boolean = isDebugMode
+    fun shouldUseLocalLanguageServerBuild(): Boolean = isDebugMode
 }
