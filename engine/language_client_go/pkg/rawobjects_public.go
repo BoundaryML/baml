@@ -72,6 +72,8 @@ type Usage interface {
 	InputTokens() (int64, error)
 	// OutputTokens returns the number of output tokens
 	OutputTokens() (int64, error)
+	// CachedInputTokens returns the number of cached input tokens
+	CachedInputTokens() (int64, error)
 }
 
 type FunctionLog interface {

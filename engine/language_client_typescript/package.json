@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml",
-  "version": "0.206.1",
+  "version": "0.207.0",
   "description": "BAML typescript bindings (package.json)",
   "repository": {
     "type": "git",
@@ -17,7 +17,8 @@
     "node-addon-api"
   ],
   "bin": {
-    "baml-cli": "cli.js"
+    "baml-cli": "cli.js",
+    "baml": "cli.js"
   },
   "files": [
     "./cli.js",

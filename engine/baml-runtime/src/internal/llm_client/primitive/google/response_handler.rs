@@ -97,6 +97,7 @@ pub fn parse_google_response<C: WithClient + RequestBuilder>(
             prompt_tokens: response.usage_metadata.prompt_token_count,
             output_tokens: response.usage_metadata.candidates_token_count,
             total_tokens: response.usage_metadata.total_token_count,
+            cached_input_tokens: response.usage_metadata.cached_content_token_count,
         },
     })
 }
@@ -171,6 +172,7 @@ pub fn scan_google_response_stream(
     inner.metadata.prompt_tokens = event.usage_metadata.prompt_token_count;
     inner.metadata.output_tokens = event.usage_metadata.candidates_token_count;
     inner.metadata.total_tokens = event.usage_metadata.total_token_count;
+    inner.metadata.cached_input_tokens = event.usage_metadata.cached_content_token_count;
 
     inner.latency = instant_now.elapsed();
     Ok(())
@@ -285,6 +287,7 @@ mod tests {
                 prompt_token_count: Some(166),
                 candidates_token_count: Some(39),
                 total_token_count: Some(205),
+                cached_content_token_count: None,
             },
         };
 
@@ -331,6 +334,7 @@ mod tests {
                 prompt_tokens: Some(166),
                 output_tokens: Some(39),
                 total_tokens: Some(205),
+                cached_input_tokens: None,
             },
         };
 

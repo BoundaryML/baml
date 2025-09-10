@@ -19,7 +19,8 @@
 /// in several places. Bidirectional typing is the target.
 use std::{borrow::Cow, sync::Arc};
 
-use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta, TypeValue};
+use baml_types::{ir_type::TypeIR, BamlMap, BamlMediaType, BamlValueWithMeta, TypeValue};
+use internal_baml_ast::ast::Expression;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::{
@@ -129,6 +130,47 @@ pub fn typecheck_returning_context<'a>(
                 ],
                 TypeIR::bool(),
             ),
+            "std.media.image.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::image()),
+            "std.media.audio.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::audio()),
+            "std.media.video.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::video()),
+            "std.media.pdf.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
+
+            "std.media.image.from_base64" => {
+                TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::image())
+            }
+            "std.media.audio.from_base64" => {
+                TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::audio())
+            }
+            "std.media.video.from_base64" => {
+                TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::video())
+            }
+            "std.media.pdf.from_base64" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
+
+            "std.media.image.is_url" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::bool()),
+            "std.media.video.is_url" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::bool()),
+            "std.media.audio.is_url" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::bool()),
+            "std.media.pdf.is_url" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::bool()),
+
+            "std.media.image.is_base64" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::bool()),
+            "std.media.video.is_base64" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::bool()),
+            "std.media.audio.is_base64" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::bool()),
+            "std.media.pdf.is_base64" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::bool()),
+
+            "std.media.image.as_url" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
+            "std.media.video.as_url" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
+            "std.media.audio.as_url" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
+            "std.media.pdf.as_url" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+
+            "std.media.image.as_base64" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
+            "std.media.video.as_base64" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
+            "std.media.audio.as_base64" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
+            "std.media.pdf.as_base64" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+
+            "std.media.image.mime" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
+            "std.media.video.mime" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
+            "std.media.audio.mime" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
+            "std.media.pdf.mime" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+
             _ => {
                 // Generic function type for other natives
                 let param_types = vec![TypeIR::null(); arity];
@@ -1207,10 +1249,17 @@ pub fn typecheck_expression(
             // Look up type in context
             let var_type = context.get_type(name).cloned();
             if var_type.is_none() {
-                diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Unknown variable {name}"),
-                    span.clone(),
-                ));
+                match name.as_str() {
+                    // Built-in types, you can call `image.from_url` and should work.
+                    "image" | "audio" | "video" | "pdf" => {}
+
+                    _ => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Unknown variable {name}"),
+                            span.clone(),
+                        ));
+                    }
+                }
             }
             thir::Expr::Var(name.clone(), (span.clone(), var_type))
         }
@@ -1422,6 +1471,30 @@ pub fn typecheck_expression(
                     }
                 },
 
+                Some(TypeIR::Primitive(TypeValue::Media(media_type), _)) => {
+                    let subtype = match media_type {
+                        BamlMediaType::Image => "std.media.image",
+                        BamlMediaType::Video => "std.media.video",
+                        BamlMediaType::Audio => "std.media.audio",
+                        BamlMediaType::Pdf => "std.media.pdf",
+                    };
+
+                    match method.as_str() {
+                        "is_url" => Some(format!("{subtype}.is_url")),
+                        "is_base64" => Some(format!("{subtype}.is_base64")),
+                        "as_url" => Some(format!("{subtype}.as_url")),
+                        "as_base64" => Some(format!("{subtype}.as_base64")),
+                        "mime" => Some(format!("{subtype}.mime")),
+                        _ => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Method `{method}` is not available on type `media`"),
+                                span.clone(),
+                            ));
+                            None
+                        }
+                    }
+                }
+
                 Some(ty) => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         &format!(
@@ -1433,8 +1506,40 @@ pub fn typecheck_expression(
                     None
                 }
 
-                // type not inferred, so we can't say anything about it.
-                None => None,
+                // type of receiver not inferred. Let's see if it's a built-in type.
+                None => {
+                    // Check if it's media.
+                    match &typed_receiver {
+                        thir::Expr::Var(name, _) => match (name.as_str(), method.as_str()) {
+                            ("image", "from_url") => Some("std.media.image.from_url".to_string()),
+                            ("audio", "from_url") => Some("std.media.audio.from_url".to_string()),
+                            ("video", "from_url") => Some("std.media.video.from_url".to_string()),
+                            ("pdf", "from_url") => Some("std.media.pdf.from_url".to_string()),
+
+                            ("image", "from_base64") => {
+                                Some("std.media.image.from_base64".to_string())
+                            }
+                            ("audio", "from_base64") => {
+                                Some("std.media.audio.from_base64".to_string())
+                            }
+                            ("video", "from_base64") => {
+                                Some("std.media.video.from_base64".to_string())
+                            }
+                            ("pdf", "from_base64") => Some("std.media.pdf.from_base64".to_string()),
+
+                            _ => {
+                                diagnostics.push_error(DatamodelError::new_validation_error(
+                                    &format!("Method `{method}` is not available on type `{name}`"),
+                                    span.clone(),
+                                ));
+                                None
+                            }
+                        },
+
+                        // Nothing we can do about it.
+                        _ => None,
+                    }
+                }
             };
 
             // Return untyped expr if not known.
@@ -1467,6 +1572,15 @@ pub fn typecheck_expression(
                 }
             };
 
+            // image.from_url is not a "method", it's an associated function (kind of).
+            let is_function_call_on_namespace = matches!(
+                &typed_receiver,
+                thir::Expr::Var(name, _) if matches!(
+                    name.as_str(),
+                    "image" | "audio" | "video" | "pdf"
+                )
+            );
+
             let typed_args: Vec<_> = if is_known_function {
                 // Only validate arguments for known functions. Skip the first argument since that's going to be
                 // our method receiver.
@@ -1474,7 +1588,7 @@ pub fn typecheck_expression(
                     .zip(
                         param_types
                             .iter()
-                            .skip(1)
+                            .skip(if is_function_call_on_namespace { 0 } else { 1 })
                             .chain(std::iter::repeat(&TypeIR::null())),
                     )
                     .map(|(arg, expected_type)| {
@@ -1509,8 +1623,23 @@ pub fn typecheck_expression(
                     .collect()
             };
 
+            // image.from_url is not a "method", it's an associated function (kind of).
+            let is_function_call_on_namespace = matches!(
+                &typed_receiver,
+                thir::Expr::Var(name, _) if matches!(
+                    name.as_str(),
+                    "image" | "audio" | "video" | "pdf"
+                )
+            );
+
+            let passed_number_of_args = if is_function_call_on_namespace {
+                args.len()
+            } else {
+                args.len() + 1 // self
+            };
+
             // Check argument count only for known functions
-            if is_known_function && args.len() + 1 != param_types.len() {
+            if is_known_function && passed_number_of_args != param_types.len() {
                 diagnostics.push_error(DatamodelError::new_validation_error(
                     &format!(
                         "Function {} expects {} arguments, got {}",
@@ -1520,6 +1649,21 @@ pub fn typecheck_expression(
                     ),
                     span.clone(),
                 ));
+            }
+
+            // Normal call
+            // TODO: Very annoying, figure out how to parse method calls on
+            // classes differently than function calls on namespaces.
+            if is_function_call_on_namespace {
+                return thir::Expr::Call {
+                    func: Arc::new(thir::Expr::Var(
+                        full_name.clone(),
+                        (span.clone(), func_type.clone()),
+                    )),
+                    type_args: vec![],
+                    args: typed_args,
+                    meta: (span.clone(), return_type),
+                };
             }
 
             thir::Expr::MethodCall {

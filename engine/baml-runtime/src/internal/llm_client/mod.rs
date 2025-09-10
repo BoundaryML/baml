@@ -294,6 +294,7 @@ pub struct LLMCompleteResponseMetadata {
     pub prompt_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
+    pub cached_input_tokens: Option<u64>,
 }
 
 // This is how the response gets logged if you print the result to the console.

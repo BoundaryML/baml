@@ -61,7 +61,7 @@ const RunButton: React.FC<{ className?: string }> = ({ className }) => {
       }}
     >
       <Play className="size-4 flex-shrink-0" />
-      <span className="text-sm whitespace-nowrap">Run Test</span>
+      <span className="text-sm whitespace-nowrap">Run</span>
     </Button>
   );
 };

@@ -2,6 +2,9 @@ name: BAML Release - Build Typescript
 
 on:
   workflow_call: {}
+  push:
+    branches:
+      - ts-release
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -28,11 +31,15 @@ jobs:
 
           - target: aarch64-unknown-linux-gnu
             # Do not use -latest, since it uses a different glibc version!
-            host: ubuntu-22.04
+            host: ubuntu-22.04-arm
             # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
             # need a new version of manylinux to build crates on arm64-linux
-            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
-            node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu --use-napi-cross
+            # Note: update (aaron): this container doesnt work due to this error with ring:
+            # https://github.com/briansmith/ring/issues/1728
+            # So now we use ubuntu-arm, but glibc is too high, so we have to figure out container approach later.
+            # potential fix in https://github.com/apache/opendal/issues/5483
+            # container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
+            node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu
             cargo_args: -p baml-typescript-ffi -p baml-python-ffi
 
           - target: x86_64-apple-darwin

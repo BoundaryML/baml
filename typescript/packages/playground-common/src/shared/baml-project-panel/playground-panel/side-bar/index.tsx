@@ -25,6 +25,8 @@ import {
   ChevronUp,
   FlaskConical,
   Play,
+  Settings,
+  SidebarCloseIcon,
 } from 'lucide-react';
 import * as React from 'react';
 import { selectedItemAtom } from '../atoms';
@@ -34,6 +36,7 @@ import { FunctionItem } from './function-item';
 import { SearchForm } from './search-form';
 import { TestItem } from './test-item';
 import type { FunctionData } from './types';
+import { Button } from '@baml/ui/button';
 
 export { isSidebarOpenAtom };
 
@@ -108,6 +111,11 @@ export function TestingSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
         <SearchForm searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+        {/* <Button variant="ghost" size="sm" className='absolute right-0 top-0 xl:hidden' onClick={() => {
+          
+        }}>
+          <SidebarCloseIcon className="size-4 scale-x-[-1]" />
+        </Button> */}
       </SidebarHeader>
       <SidebarContent>
         <div className="flex-1 min-h-0 overflow-y-auto">
