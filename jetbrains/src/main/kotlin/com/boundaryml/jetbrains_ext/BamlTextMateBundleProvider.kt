@@ -43,7 +43,7 @@ class BamlTextMateBundleProvider : TextMateBundleProvider {
             if (!Files.exists(tempPath)) {
                 Files.createDirectories(tempPath)
             }
-            
+
             val tmpDir: Path = Files.createTempDirectory(tempPath, "textmate-baml")
 
             files.forEach { fileToCopy ->

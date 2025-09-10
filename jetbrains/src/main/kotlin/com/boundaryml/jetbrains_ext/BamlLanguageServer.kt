@@ -35,8 +35,10 @@ class BamlLanguageServer(private val project: Project) : OSProcessStreamConnecti
 
             // baml-hot-reload is implemented by recording and replaying stdin, but this may be buggy
             // if that happens, comment this out and just use `baml-cli` directly
-            val hostIdeProjectDir = System.getenv("JETBRAINS_PROJECT_DIR") ?: throw RuntimeException("JETBRAINS_PROJECT_DIR was not set")
-            val workspaceRoot = findBamlWorkspaceRoot(Path.of(hostIdeProjectDir)) ?: throw RuntimeException("BAML workspace root not found")
+            val hostIdeProjectDir =
+                System.getenv("JETBRAINS_PROJECT_DIR") ?: throw RuntimeException("JETBRAINS_PROJECT_DIR was not set")
+            val workspaceRoot = findBamlWorkspaceRoot(Path.of(hostIdeProjectDir))
+                ?: throw RuntimeException("BAML workspace root not found")
             val hotReloadPath = workspaceRoot.resolve("engine/target/debug/language-server-hot-reload")
             val commandLine = GeneralCommandLine(hotReloadPath.toString(), "lsp")
                 .withEnvironment("RUST_BACKTRACE", "full")
@@ -53,6 +55,6 @@ class BamlLanguageServer(private val project: Project) : OSProcessStreamConnecti
             log.info("creating baml language server at $dynamicCliPath")
             super.setCommandLine(GeneralCommandLine(dynamicCliPath, "lsp"))
         }
-        
+
     }
 }

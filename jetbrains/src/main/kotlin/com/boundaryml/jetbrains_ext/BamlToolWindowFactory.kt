@@ -125,7 +125,8 @@ class BamlToolWindowFactory : ToolWindowFactory {
                 addActionListener {
                     val currentTime = java.time.LocalDateTime.now()
                     log.debug("lorem button clicked at $currentTime")
-                    browser.loadHTML("""
+                    browser.loadHTML(
+                        """
                         <!DOCTYPE html>
                         <html>
                         <head><title>Lorem Ipsum</title></head>
@@ -135,7 +136,8 @@ class BamlToolWindowFactory : ToolWindowFactory {
                             <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
                         </body>
                         </html>
-                    """.trimIndent())
+                    """.trimIndent()
+                    )
                 }
             }
 
@@ -144,7 +146,7 @@ class BamlToolWindowFactory : ToolWindowFactory {
                     browser.openDevtools()
                 }
             }
-            
+
             controlPanel.add(reloadButton)
             controlPanel.add(viteButton)
             controlPanel.add(loremButton)

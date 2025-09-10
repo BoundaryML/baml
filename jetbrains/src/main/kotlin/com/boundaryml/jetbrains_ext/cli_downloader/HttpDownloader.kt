@@ -20,21 +20,21 @@ class HttpDownloader(
     private val client: OkHttpClient = createDefaultClient(config)
 ) {
     companion object {
-        private fun createDefaultClient(config: DownloadConfig): OkHttpClient = 
+        private fun createDefaultClient(config: DownloadConfig): OkHttpClient =
             OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(config.timeouts.binaryDownloadMs, TimeUnit.MILLISECONDS)
                 .writeTimeout(config.timeouts.binaryDownloadMs, TimeUnit.MILLISECONDS)
                 .build()
     }
-    
+
     suspend fun downloadFile(url: String, targetPath: Path): Unit = withContext(Dispatchers.IO) {
         logger.info { "Downloading file from $url to $targetPath" }
-        
+
         val request = Request.Builder()
             .url(url)
             .build()
-        
+
         try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
@@ -43,7 +43,7 @@ class HttpDownloader(
                         null
                     )
                 }
-                
+
                 response.body?.byteStream()?.use { inputStream ->
                     Files.newOutputStream(targetPath).use { outputStream ->
                         inputStream.copyTo(outputStream)
@@ -59,18 +59,18 @@ class HttpDownloader(
             }
         }
     }
-    
+
     suspend fun downloadText(url: String): String = withContext(Dispatchers.IO) {
         logger.debug { "Downloading text from $url" }
-        
+
         val request = Request.Builder()
             .url(url)
             .build()
-        
+
         val client = this@HttpDownloader.client.newBuilder()
             .readTimeout(config.timeouts.checksumDownloadMs, TimeUnit.MILLISECONDS)
             .build()
-        
+
         try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {

@@ -59,40 +59,40 @@ class BamlLanguageClient(project: Project) :
             processVersionSwitchRequest(payload)
         }
     }
-    
+
     private fun processVersionSwitchRequest(payload: GeneratorVersionPayload) {
         try {
             log.info("Processing version switch request: ${payload.version}")
-            
+
             if (BamlIdeConfig.shouldIgnoreLanguageServerDynamicVersioning()) {
                 log.warn("Debug mode detected - skipping version switching to preserve existing debug logic")
                 return
             }
-            
+
             // 1. Validate notification is for current project (equivalent to VSCode's isPathWithinParent)
             if (!isNotificationForCurrentProject(payload.root_path)) {
                 log.debug("Ignoring version notification for different project: ${payload.root_path}")
                 return
             }
-            
+
             // 2. Check if restart already in progress (equivalent to VSCode's isRestarting flag)
             if (languageServerService.isCurrentlyRestarting()) {
                 log.info("Language server restart already in progress, ignoring request")
                 return
             }
-            
+
             // 3. Validate semantic version (equivalent to VSCode's semver.valid check)
             if (!isValidSemanticVersion(payload.version)) {
                 log.warn("Invalid semantic version received: ${payload.version}")
                 return
             }
-            
+
             // 4. Check minimum version requirement (equivalent to VSCode's >= 0.86.0 check)  
             if (!isMinimumVersionSupported(payload.version)) {
                 log.warn("Ignoring version ${payload.version} - below minimum supported version")
                 return
             }
-            
+
             // 5. Resolve target CLI path (equivalent to VSCode's resolveCliPath call)
             runBlocking {
                 // 6. Check if restart is needed (equivalent to VSCode's path comparison)
@@ -115,12 +115,12 @@ class BamlLanguageClient(project: Project) :
                 log.info("Already using correct CLI version, no restart needed")
 
             }
-            
+
         } catch (e: Exception) {
             log.error("Error processing version switch request", e)
         }
     }
-    
+
     private fun isNotificationForCurrentProject(rootPath: String): Boolean {
         val projectBasePath = project.basePath ?: return false
         return try {
@@ -133,12 +133,12 @@ class BamlLanguageClient(project: Project) :
             false
         }
     }
-    
+
     private fun isValidSemanticVersion(version: String): Boolean {
         // Basic semantic version validation (x.y.z pattern)
         return version.matches(Regex("\\d+\\.\\d+\\.\\d+.*"))
     }
-    
+
     private fun isMinimumVersionSupported(version: String): Boolean {
         // Only versions 0.86.0+ support this notification (like VSCode)
         return try {

@@ -17,22 +17,22 @@ class CliDownloader(
     private val checksumVerifier: ChecksumVerifier = ChecksumVerifier(),
     private val backoffManager: BackoffManager = BackoffManager(config.backoff)
 ) {
-    
+
     suspend fun resolveCliPath(requestedVersion: String): String? {
 
         logger.info { "Resolving CLI path for version: $requestedVersion" }
-        
+
         val currentPlatform = PlatformDetector.getCurrentPlatform()
         val currentArch = PlatformDetector.getCurrentArchitecture()
         val cliVersion = CliVersion(requestedVersion, currentArch, currentPlatform)
-        
+
         // Check if already downloaded
         val expectedDownloadedPath = pathManager.getDownloadedCliPath(cliVersion)
         if (pathManager.checkDownloadedCliExists(cliVersion)) {
             logger.info { "Found existing CLI for version $requestedVersion: $expectedDownloadedPath" }
             return expectedDownloadedPath.toString()
         }
-        
+
         // Check backoff state
         when (val backoffResult = backoffManager.shouldAttemptDownload(requestedVersion)) {
             is BackoffResult.ShouldWait -> {
@@ -40,15 +40,17 @@ class CliDownloader(
                 logger.warn { "Download blocked by backoff for $requestedVersion. Wait $waitMinutes minutes." }
                 return null
             }
+
             is BackoffResult.AlreadyInProgress -> {
                 logger.warn { "Download already in progress for $requestedVersion" }
                 return null
             }
+
             BackoffResult.ShouldAttempt -> {
                 // Proceed with download
             }
         }
-        
+
         // Attempt download
         return try {
             backoffManager.markDownloadStarted(requestedVersion)
@@ -61,49 +63,49 @@ class CliDownloader(
             backoffManager.markDownloadCompleted(requestedVersion)
         }
     }
-    
+
     suspend fun downloadCli(cliVersion: CliVersion): String? {
         logger.info { "Starting download for BAML CLI v${cliVersion.version}" }
-        
+
         val installPath = pathManager.ensureInstallPathExists()
         val artifactName = pathManager.getBinaryArtifactName(cliVersion)
         val extension = PlatformMapper.getArchiveExtension(cliVersion.platform)
         val compressedFileName = "$artifactName.$extension"
-        
+
         val tempFilePath = installPath.resolve("$compressedFileName.tmp")
         val targetFilePath = pathManager.getDownloadedCliPath(cliVersion)
-        
+
         val binaryUrl = "${config.baseUrl}/${cliVersion.version}/$compressedFileName"
         val checksumUrl = "${config.baseUrl}/${cliVersion.version}/$compressedFileName.sha256"
-        
+
         logger.info { "Download URLs - Binary: $binaryUrl, Checksum: $checksumUrl" }
-        
+
         var downloadSucceeded = false
-        
+
         try {
             // Download binary file
             httpDownloader.downloadFile(binaryUrl, tempFilePath)
             downloadSucceeded = true
-            
+
             // Download and verify checksum
             val expectedChecksum = checksumVerifier.downloadAndVerifyChecksum(checksumUrl, httpDownloader)
             checksumVerifier.verifyChecksum(tempFilePath, expectedChecksum)
-            
+
             // Extract archive
             val extractor = ArchiveExtractorFactory.getExtractor(extension)
             extractor.extract(tempFilePath, targetFilePath.fileName.toString(), installPath)
-            
+
             // Set executable permissions
             if (!pathManager.ensureExecutablePermissions(targetFilePath)) {
                 throw DownloadException.ExtractionError("Failed to set executable permissions", null)
             }
-            
+
             // Success - clear any backoff state
             backoffManager.clearBackoff(cliVersion.version)
             logger.info { "Successfully downloaded BAML CLI v${cliVersion.version} to $targetFilePath" }
-            
+
             return targetFilePath.toString()
-            
+
         } finally {
             // Clean up temporary file
             if (downloadSucceeded) {
@@ -116,8 +118,8 @@ class CliDownloader(
             }
         }
     }
-    
-    fun checkDownloadedCliExists(cliVersion: CliVersion): Boolean = 
+
+    fun checkDownloadedCliExists(cliVersion: CliVersion): Boolean =
         runBlocking { pathManager.checkDownloadedCliExists(cliVersion) }
 }
 
@@ -125,10 +127,10 @@ class CliDownloader(
  * Factory object providing convenience methods for creating CLI downloaders.
  */
 object CliDownloaderFactory {
-    
-    fun create(config: DownloadConfig = DownloadConfig.default()): CliDownloader = 
+
+    fun create(config: DownloadConfig = DownloadConfig.default()): CliDownloader =
         CliDownloader(config)
-    
+
     // Mirror TypeScript exports
     suspend fun downloadCli(version: String, config: DownloadConfig = DownloadConfig.default()): String? {
         val downloader = create(config)
@@ -137,11 +139,11 @@ object CliDownloaderFactory {
         val cliVersion = CliVersion(version, currentArch, currentPlatform)
         return downloader.downloadCli(cliVersion)
     }
-    
+
     suspend fun resolveCliPath(version: String, config: DownloadConfig = DownloadConfig.default()): String? {
         return create(config).resolveCliPath(version)
     }
-    
+
     fun checkIfDownloadedCliExists(version: String, config: DownloadConfig = DownloadConfig.default()): Boolean {
         val downloader = create(config)
         val currentPlatform = PlatformDetector.getCurrentPlatform()
@@ -149,10 +151,10 @@ object CliDownloaderFactory {
         val cliVersion = CliVersion(version, currentArch, currentPlatform)
         return downloader.checkDownloadedCliExists(cliVersion)
     }
-    
+
     fun getReleaseArchitecture(nodeArch: String = PlatformDetector.getCurrentArchitecture()): String =
         PlatformMapper.toGitHubReleaseArchitecture(nodeArch)
-    
+
     fun getReleasePlatform(platform: String = PlatformDetector.getCurrentPlatform()): String =
         PlatformMapper.toGitHubReleasePlatform(platform)
 }

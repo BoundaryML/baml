@@ -13,7 +13,7 @@ import com.intellij.util.messages.Topic
 
 @Service
 class BamlLanguageServerService() {
-    
+
     private val log = thisLogger()
 
     companion object {
@@ -22,7 +22,7 @@ class BamlLanguageServerService() {
             PortListener::class.java,
             Topic.BroadcastDirection.TO_CHILDREN
         )
-        
+
         // Cache the plugin version to avoid repeated lookups
         private val BUNDLED_VERSION: String by lazy {
             val pluginId = PluginId.getId("com.boundaryml.jetbrains_ext")
@@ -47,12 +47,14 @@ class BamlLanguageServerService() {
 
     @Volatile
     private var currentCliVersion: String? = null
+
     @Volatile
     private var isRestarting: Boolean = false
 
     fun getCurrentCliVersion(): String {
         return currentCliVersion ?: BUNDLED_VERSION
     }
+
     fun isCurrentlyRestarting(): Boolean = isRestarting
 
     fun updateCurrentServer(version: String) {
@@ -66,7 +68,7 @@ class BamlLanguageServerService() {
     }
 
     // Listener interfaces
-    fun interface PortListener { 
-        fun onPort(port: Int) 
+    fun interface PortListener {
+        fun onPort(port: Int)
     }
 }

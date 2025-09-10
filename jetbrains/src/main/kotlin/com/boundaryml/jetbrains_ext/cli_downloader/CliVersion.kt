@@ -42,10 +42,12 @@ sealed class DownloadResult {
  */
 sealed class DownloadException(message: String, cause: Throwable? = null) : Exception(message, cause) {
     class NetworkError(message: String, cause: Throwable?) : DownloadException(message, cause)
-    class ChecksumMismatch(expected: String, actual: String) : 
+    class ChecksumMismatch(expected: String, actual: String) :
         DownloadException("Checksum mismatch: expected $expected, got $actual")
+
     class ExtractionError(message: String, cause: Throwable?) : DownloadException(message, cause)
-    class BackoffActive(waitTimeMs: Long) : 
+    class BackoffActive(waitTimeMs: Long) :
         DownloadException("Download blocked by backoff, wait ${waitTimeMs}ms")
+
     class FileNotFound(path: String) : DownloadException("File not found: $path")
 }

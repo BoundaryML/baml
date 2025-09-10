@@ -14,24 +14,24 @@ private val logger = KotlinLogging.logger {}
  * Manages installation paths and file operations for CLI binaries.
  */
 class PathManager(private val config: DownloadConfig) {
-    
+
     fun getInstallPath(): Path = Paths.get(config.installPath)
-    
+
     fun getDownloadedCliPath(cliVersion: CliVersion): Path {
         val releaseArch = PlatformMapper.toGitHubReleaseArchitecture(cliVersion.architecture)
         val releasePlatform = PlatformMapper.toGitHubReleasePlatform(cliVersion.platform)
         val executableName = PlatformMapper.getExecutableName(cliVersion.platform)
-        
+
         val uniqueFileName = "baml-cli-${cliVersion.version}-${releaseArch}-${releasePlatform}-${executableName}"
         return getInstallPath().resolve(uniqueFileName)
     }
-    
+
     fun getBinaryArtifactName(cliVersion: CliVersion): String {
         val releaseArch = PlatformMapper.toGitHubReleaseArchitecture(cliVersion.architecture)
         val releasePlatform = PlatformMapper.toGitHubReleasePlatform(cliVersion.platform)
         return "baml-cli-${cliVersion.version}-${releaseArch}-${releasePlatform}"
     }
-    
+
     suspend fun ensureInstallPathExists(): Path {
         val installPath = getInstallPath()
         withContext(Dispatchers.IO) {
@@ -42,14 +42,14 @@ class PathManager(private val config: DownloadConfig) {
         }
         return installPath
     }
-    
+
     suspend fun checkDownloadedCliExists(cliVersion: CliVersion): Boolean {
         val expectedPath = getDownloadedCliPath(cliVersion)
         return withContext(Dispatchers.IO) {
             Files.exists(expectedPath) && Files.isExecutable(expectedPath)
         }
     }
-    
+
     suspend fun ensureExecutablePermissions(filePath: Path): Boolean = withContext(Dispatchers.IO) {
         try {
             if (PlatformDetector.getCurrentPlatform() != "win32") {
