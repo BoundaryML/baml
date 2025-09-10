@@ -1,5 +1,6 @@
 package com.boundaryml.jetbrains_ext
 
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -97,7 +98,7 @@ class BamlToolWindowFactory : ToolWindowFactory {
             val reloadButton = JButton("Reload").apply {
                 addActionListener {
                     val currentTime = java.time.LocalDateTime.now()
-                    val savedPort = project.getService(BamlLanguageServerService::class.java).port
+                    val savedPort = service<BamlLanguageServerService>().port
                     println("playground reload at ${currentTime}, port is $savedPort")
                     if (savedPort != null) {
                         browser.loadURL(BamlIdeConfig.getPlaygroundUrl(savedPort))
@@ -159,7 +160,7 @@ class BamlToolWindowFactory : ToolWindowFactory {
         val content = ContentFactory.getInstance().createContent(mainPanel, null, false)
         toolWindow.contentManager.addContent(content)
 
-        val savedPort = project.getService(BamlLanguageServerService::class.java).port
+        val savedPort = service<BamlLanguageServerService>().port
         if (savedPort != null) {
             // LS was up before the tool-window opened
             browser.loadURL(BamlIdeConfig.getPlaygroundUrl(savedPort))

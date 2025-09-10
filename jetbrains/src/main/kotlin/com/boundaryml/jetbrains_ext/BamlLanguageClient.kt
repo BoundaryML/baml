@@ -4,6 +4,7 @@ import com.boundaryml.jetbrains_ext.cli_downloader.CliVersion
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.redhat.devtools.lsp4ij.LanguageServerManager
@@ -30,7 +31,7 @@ class BamlLanguageClient(project: Project) :
     LanguageClientImpl(project) {
 
     private val log = Logger.getInstance(javaClass)
-    private val languageServerService = project.getService(BamlLanguageServerService::class.java)
+    private val languageServerService = service<BamlLanguageServerService>()
 
     // Existing port notification (keep exactly as-is but use new service)
     @JsonNotification("baml/port")
