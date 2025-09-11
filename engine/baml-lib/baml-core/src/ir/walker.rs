@@ -10,8 +10,8 @@ use internal_llm_client::ClientSpec;
 
 use crate::ir::{
     repr::{self, FunctionConfig, TypeBuilderEntry},
-    Class, Client, Enum, EnumValue, ExprFunctionNode, Field, FunctionNode, IRHelper,
-    Impl, IntermediateRepr, RetryPolicy, TemplateString, TestCase, TypeAlias, TypeIR, Walker,
+    Class, Client, Enum, EnumValue, ExprFunctionNode, Field, FunctionNode, IRHelper, Impl,
+    IntermediateRepr, RetryPolicy, TemplateString, TestCase, TypeAlias, TypeIR, Walker,
 };
 
 impl<'a> Walker<'a, &'a ExprFunctionNode> {

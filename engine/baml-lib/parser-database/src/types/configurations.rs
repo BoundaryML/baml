@@ -1,14 +1,9 @@
-
 use baml_types::{Constraint, UnresolvedValue};
-use internal_baml_ast::ast::{
-    ValExpId, ValueExprBlock, WithIdentifier, WithName, WithSpan,
-};
+use internal_baml_ast::ast::{ValExpId, ValueExprBlock, WithIdentifier, WithName, WithSpan};
 use internal_baml_diagnostics::{DatamodelError, Span};
 use regex::Regex;
 
-use super::{
-    ContantDelayStrategy, ExponentialBackoffStrategy, RetryPolicy, RetryPolicyStrategy,
-};
+use super::{ContantDelayStrategy, ExponentialBackoffStrategy, RetryPolicy, RetryPolicyStrategy};
 use crate::{
     attributes::constraint::attribute_as_constraint, coerce, coerce_array,
     coerce_expression::coerce_map, context::Context,

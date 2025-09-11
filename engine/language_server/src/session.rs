@@ -24,8 +24,8 @@ use crate::{
     baml_project::{file_utils::find_top_level_parent, BamlProject, Project},
     edit::{DocumentKey, DocumentVersion},
     server::client::Notifier,
+    PositionEncoding, TextDocument,
 };
-use crate::{PositionEncoding, TextDocument};
 
 mod capabilities;
 pub mod index;

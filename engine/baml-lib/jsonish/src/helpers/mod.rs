@@ -2,25 +2,17 @@ pub mod common;
 use std::{collections::HashSet, path::PathBuf};
 
 use anyhow::Result;
-use baml_types::{
-    BamlValueWithMeta, EvaluationContext, JinjaExpression,
-    ResponseCheck,
-};
+use baml_types::{BamlValueWithMeta, EvaluationContext, JinjaExpression, ResponseCheck};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
-    ir::{
-        repr::IntermediateRepr, ClassWalker, EnumWalker, IRHelper, TypeIR,
-    },
+    ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, IRHelper, TypeIR},
     validate,
 };
 use internal_baml_jinja::types::{Class, Enum, Name, OutputFormatContent};
 
 use crate::{
-    deserializer::{
-        deserialize_flags::Flag,
-        semantic_streaming::validate_streaming_state,
-    },
+    deserializer::{deserialize_flags::Flag, semantic_streaming::validate_streaming_state},
     BamlValueWithFlags, ResponseBamlValue,
 };
 

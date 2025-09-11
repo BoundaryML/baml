@@ -1,9 +1,7 @@
 use std::borrow::Cow;
 
 use baml_rpc::{runtime_api, NarrowingType};
-use baml_types::{
-    ir_type::TypeGeneric, type_meta, BamlValueWithMeta, HasType,
-};
+use baml_types::{ir_type::TypeGeneric, type_meta, BamlValueWithMeta, HasType};
 
 use super::{IRRpcState, IntoRpcEvent};
 

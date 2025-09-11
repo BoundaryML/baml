@@ -1,10 +1,7 @@
-
 use anyhow::Result;
 use baml_types::{BamlMap, BamlMediaContent};
 use internal_baml_core::ir::ClientWalker;
-use internal_baml_jinja::{
-    RenderContext_Client, RenderedChatMessage,
-};
+use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage};
 use internal_llm_client::{
     anthropic::ResolvedAnthropic, AllowedRoleMetadata, ClientProvider, ResolvedClientProperty,
     RolesSelection, UnresolvedClientProperty,
@@ -16,11 +13,11 @@ use crate::{
     internal::llm_client::{
         primitive::request::{make_parsed_request, RequestBuilder, ResponseType},
         traits::{
-            CompletionToProviderBody, HttpContext, StreamResponse,
-            ToProviderMessage, ToProviderMessageExt, WithChat, WithClient, WithClientProperties,
-            WithNoCompletion, WithRetryPolicy, WithStreamChat,
-        }, LLMResponse,
-        ModelFeatures, ResolveMediaUrls,
+            CompletionToProviderBody, HttpContext, StreamResponse, ToProviderMessage,
+            ToProviderMessageExt, WithChat, WithClient, WithClientProperties, WithNoCompletion,
+            WithRetryPolicy, WithStreamChat,
+        },
+        LLMResponse, ModelFeatures, ResolveMediaUrls,
     },
     request::create_client,
     RuntimeContext,

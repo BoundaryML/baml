@@ -1,5 +1,3 @@
-
-
 #[allow(dead_code)]
 const NUMBERS: &str = r#"
 class Foo {

@@ -1135,7 +1135,6 @@ fn infer_type_if_assigned_var(
     }
 }
 
-
 fn render_doc_to_string(doc: pretty::RcDoc<'static>) -> String {
     let mut s = String::new();
     _ = doc.render_fmt(10, &mut s);

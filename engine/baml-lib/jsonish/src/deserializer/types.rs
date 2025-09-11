@@ -1,8 +1,6 @@
 use std::collections::HashSet;
 
-use baml_types::{
-    BamlMap, BamlMedia, BamlValue, BamlValueWithMeta, JinjaExpression, TypeIR,
-};
+use baml_types::{BamlMap, BamlMedia, BamlValue, BamlValueWithMeta, JinjaExpression, TypeIR};
 use serde_json::json;
 
 use super::{

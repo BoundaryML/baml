@@ -13,8 +13,7 @@ use baml_types::{
 };
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_ast::ast::{
-    self, Attribute, FieldArity, SubType, ValExpId, WithIdentifier, WithName,
-    WithSpan,
+    self, Attribute, FieldArity, SubType, ValExpId, WithIdentifier, WithName, WithSpan,
 };
 use internal_baml_diagnostics::{DatamodelWarning, Diagnostics, Span};
 use internal_baml_parser_database::{
@@ -951,10 +950,6 @@ impl IntermediateRepr {
     // If there are some args in the test block, give examples of all the
     // missing args.
     pub fn validate_test_args(&self, diagnostics: &mut Diagnostics) {
-        
-
-        
-
         // Validate LLM function tests
         for function in &self.functions {
             for test in &function.elem.tests {
@@ -992,7 +987,6 @@ impl IntermediateRepr {
         use std::collections::HashSet;
 
         use baml_types::BamlMap;
-        
 
         use crate::ir::ir_helpers::IRHelper;
 
@@ -2519,7 +2513,8 @@ fn process_field(
     match overrides.get(&((*function_name).to_string(), (*impl_name).to_string())) {
         Some(overrides) => {
             if let Some(UnresolvedValue::String(alias, ..)) = overrides.get("alias") {
-                if let Some(UnresolvedValue::String(_description, ..)) = overrides.get("description")
+                if let Some(UnresolvedValue::String(_description, ..)) =
+                    overrides.get("description")
                 {
                     // "alias" and "alias: description"
                     vec![
@@ -2923,10 +2918,6 @@ fn make_test_ir_and_diagnostics_from_dir(
     root_dir: &std::path::Path,
     source_code: Vec<internal_baml_diagnostics::SourceFile>,
 ) -> anyhow::Result<(IntermediateRepr, Diagnostics)> {
-    
-
-    
-
     use crate::{validate, ValidatedSchema};
 
     let validated_schema: ValidatedSchema =
@@ -2969,12 +2960,7 @@ fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<E
                 specialize_generics(expr, ctx);
             }
         }
-        Expr::ClassConstructor {
-            fields,
-            spread,
-            
-            ..
-        } => {
+        Expr::ClassConstructor { fields, spread, .. } => {
             for expr in fields.values() {
                 specialize_generics(expr, ctx);
             }
@@ -3021,12 +3007,7 @@ fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<E
         Expr::FieldAccess { base, .. } => {
             specialize_generics(base, ctx);
         }
-        Expr::BinaryOperation {
-            left,
-            
-            right,
-            ..
-        } => {
+        Expr::BinaryOperation { left, right, .. } => {
             specialize_generics(left, ctx);
             specialize_generics(right, ctx);
         }

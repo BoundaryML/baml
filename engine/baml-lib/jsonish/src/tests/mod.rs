@@ -17,9 +17,6 @@ mod test_partials;
 mod test_streaming;
 mod test_unions;
 
-
-
-
 #[allow(dead_code)]
 const EMPTY_FILE: &str = r#"
 "#;

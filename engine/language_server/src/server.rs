@@ -4,19 +4,16 @@
 // The new PanicInfoHook name requires MSRV >= 1.82
 #[allow(deprecated)]
 use std::panic::PanicInfo;
-use std::{
-    num::NonZeroUsize,
-    path::PathBuf,
-    time::Duration,
-};
+use std::{num::NonZeroUsize, path::PathBuf, time::Duration};
 
 use log::info;
 use lsp_server::Message;
 use lsp_types::{
-    ClientCapabilities, CodeLensOptions, CompletionOptions,
-    DiagnosticOptions, DiagnosticServerCapabilities, FileSystemWatcher, HoverProviderCapability,
-    InitializeParams, MessageType, SaveOptions, ServerCapabilities, TextDocumentSyncCapability,
-    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
+    ClientCapabilities, CodeLensOptions, CompletionOptions, DiagnosticOptions,
+    DiagnosticServerCapabilities, FileSystemWatcher, HoverProviderCapability, InitializeParams,
+    MessageType, SaveOptions, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
+    TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url, WorkspaceFoldersServerCapabilities,
+    WorkspaceServerCapabilities,
 };
 use playground_server::{FrontendMessage, LangServerToWasmMessage, PreLangServerToWasmMessage};
 use schedule::Task;

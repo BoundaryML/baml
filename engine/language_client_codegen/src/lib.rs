@@ -1,15 +1,9 @@
-use std::{
-    collections::HashSet,
-    path::PathBuf,
-};
+use std::{collections::HashSet, path::PathBuf};
 
 use anyhow::Result;
 use baml_types::{Constraint, ConstraintLevel, TypeIR};
 use indexmap::IndexMap;
-use internal_baml_core::{
-    configuration::GeneratorOutputType,
-    ir::repr::IntermediateRepr,
-};
+use internal_baml_core::{configuration::GeneratorOutputType, ir::repr::IntermediateRepr};
 
 // mod dir_writer;
 // mod go;
@@ -36,7 +30,6 @@ pub trait GenerateClient {
         gen: &GeneratorArgs,
     ) -> Result<GenerateOutput>;
 }
-
 
 // impl GenerateClient for GeneratorOutputType {
 //     fn generate_client(

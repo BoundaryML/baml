@@ -9,7 +9,6 @@ use std::{
     hash::Hash,
 };
 
-
 /// Dependency graph represented as an adjacency list.
 type Graph<V> = HashMap<V, HashSet<V>>;
 

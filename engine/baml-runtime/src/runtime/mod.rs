@@ -2,12 +2,9 @@ mod ir_features;
 mod publisher;
 pub(crate) mod runtime_interface;
 
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-};
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::Result;
 pub(super) use publisher::AstSignatureWrapper;

@@ -1,5 +1,3 @@
-
-
 test_deserializer!(
     test_literal_integer_positive,
     EMPTY_FILE,

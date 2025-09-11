@@ -1,5 +1,3 @@
-
-
 #[allow(dead_code)]
 const ENUM_FILE: &str = r#"
 // Enums

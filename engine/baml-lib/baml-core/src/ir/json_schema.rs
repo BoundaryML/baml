@@ -3,9 +3,7 @@
 use baml_types::TypeValue;
 use serde_json::json;
 
-use super::{
-    Class, Enum, FunctionArgs, FunctionNode, IntermediateRepr, TypeIR, Walker,
-};
+use super::{Class, Enum, FunctionArgs, FunctionNode, IntermediateRepr, TypeIR, Walker};
 
 pub trait WithJsonSchema {
     fn json_schema(&self) -> serde_json::Value;

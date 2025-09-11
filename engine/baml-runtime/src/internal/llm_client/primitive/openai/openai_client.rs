@@ -1,4 +1,3 @@
-
 use anyhow::Result;
 use baml_types::{BamlMap, BamlMediaContent, BamlMediaType};
 use internal_baml_core::ir::ClientWalker;
@@ -12,11 +11,11 @@ use crate::{
     internal::llm_client::{
         primitive::request::{make_parsed_request, RequestBuilder, ResponseType},
         traits::{
-            CompletionToProviderBody, HttpContext, StreamResponse,
-            ToProviderMessage, ToProviderMessageExt, WithChat, WithClient, WithClientProperties,
-            WithNoCompletion, WithRetryPolicy, WithStreamChat,
-        }, LLMResponse,
-        ModelFeatures, ResolveMediaUrls,
+            CompletionToProviderBody, HttpContext, StreamResponse, ToProviderMessage,
+            ToProviderMessageExt, WithChat, WithClient, WithClientProperties, WithNoCompletion,
+            WithRetryPolicy, WithStreamChat,
+        },
+        LLMResponse, ModelFeatures, ResolveMediaUrls,
     },
     request::create_client,
     RuntimeContext,

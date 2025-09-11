@@ -81,13 +81,11 @@ mod protoc_lang_out {
             self
         }
 
-
         /// Append a `.proto` file path to compile
         pub fn input(&mut self, input: impl AsRef<Path>) -> &mut Self {
             self.inputs.push(input.as_ref().to_owned());
             self
         }
-
 
         /// Execute `protoc` with given args
         pub fn run(&self) -> Result<()> {
@@ -143,7 +141,6 @@ mod protoc_lang_out {
         }
     }
 
-
     /// Protoc command.
     #[derive(Clone, Debug)]
     pub struct Protoc {
@@ -158,7 +155,6 @@ mod protoc_lang_out {
                     .into_os_string(),
             }
         }
-
 
         /// Check `protoc` command found and valid
         pub fn check(&self) -> Result<()> {
@@ -223,7 +219,6 @@ mod protoc_lang_out {
 
             Ok(())
         }
-
     }
 
     pub struct Version {

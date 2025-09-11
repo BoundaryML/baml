@@ -1,8 +1,6 @@
 use anyhow::Result;
 use baml_types::{BamlMap, TypeIR};
-use internal_baml_core::ir::{
-    IRHelper, IRHelperExtended, IRSemanticStreamingHelper,
-};
+use internal_baml_core::ir::{IRHelper, IRHelperExtended, IRSemanticStreamingHelper};
 
 use crate::{
     runtime_context::{RuntimeClassOverride, RuntimeEnumOverride},

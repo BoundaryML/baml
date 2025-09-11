@@ -7,10 +7,7 @@
 //! This architecture is inspired by Deno, which contains a Rust Tokio runtime
 //! that wraps the V8 machine and schedules JS promises.
 
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context};
 use baml_compiler::{self};
@@ -23,13 +20,9 @@ use jsonish::{ResponseBamlValue, ResponseValueMeta};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::on_log_event::LogEventCallbackSync;
 use crate::{
-    client_registry::ClientRegistry,
-    internal::llm_client::orchestrator::OrchestrationScope,
-    runtime::InternalBamlRuntime,
-    runtime_interface::ExperimentalTracingInterface,
-    tracing::TracingCall,
-    tracingv2::storage::storage::Collector,
-    type_builder::TypeBuilder,
+    client_registry::ClientRegistry, internal::llm_client::orchestrator::OrchestrationScope,
+    runtime::InternalBamlRuntime, runtime_interface::ExperimentalTracingInterface,
+    tracing::TracingCall, tracingv2::storage::storage::Collector, type_builder::TypeBuilder,
     BamlRuntime as LlmRuntime, BamlSrcReader, FunctionResult, FunctionResultStream,
     InnerTraceStats, InternalRuntimeInterface, RuntimeContextManager, TripWire,
 };

@@ -17,8 +17,8 @@ use super::{
         OrchestratorNodeIterator,
     },
     traits::{
-        CompletionToProviderBody, HttpContext, WithClient, WithClientProperties,
-        WithPrompt, WithRenderRawCurl, WithRetryPolicy, WithSingleCallable, WithStreamable,
+        CompletionToProviderBody, HttpContext, WithClient, WithClientProperties, WithPrompt,
+        WithRenderRawCurl, WithRetryPolicy, WithSingleCallable, WithStreamable,
     },
     LLMResponse,
 };

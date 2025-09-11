@@ -1,14 +1,12 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use baml_types::{
-    BamlMap, BamlValue,
-};
+use baml_types::{BamlMap, BamlValue};
 
 use crate::{
-    internal::prompt_renderer::PromptRenderer,
-    tracing::BamlTracer,
-    tracingv2::storage::storage::Collector, FunctionResultStream, InternalBamlRuntime, InternalRuntimeInterface, RuntimeContext, TripWire,
+    internal::prompt_renderer::PromptRenderer, tracing::BamlTracer,
+    tracingv2::storage::storage::Collector, FunctionResultStream, InternalBamlRuntime,
+    InternalRuntimeInterface, RuntimeContext, TripWire,
 };
 
 impl InternalBamlRuntime {

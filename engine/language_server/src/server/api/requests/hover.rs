@@ -1,4 +1,3 @@
-
 use lsp_types::{self as types, request as req, HoverParams, TextDocumentItem};
 
 use crate::{

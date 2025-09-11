@@ -1,8 +1,4 @@
-
-use crate::ast::{
-    BlockArgs, ExpressionBlock, FieldType, Header, Identifier, LetStmt,
-    Span,
-};
+use crate::ast::{BlockArgs, ExpressionBlock, FieldType, Header, Identifier, LetStmt, Span};
 
 /// A function definition.
 #[derive(Debug, Clone)]

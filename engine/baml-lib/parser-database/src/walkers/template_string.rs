@@ -1,7 +1,5 @@
 use either::Either;
-use internal_baml_ast::ast::{
-    self, ArgumentId, Span, WithIdentifier, WithName, WithSpan,
-};
+use internal_baml_ast::ast::{self, ArgumentId, Span, WithIdentifier, WithName, WithSpan};
 use internal_baml_jinja_types::{PredefinedTypes, Type};
 
 use super::Walker;

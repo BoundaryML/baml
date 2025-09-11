@@ -1,10 +1,7 @@
 use anyhow::Result;
 
 use super::ParseOptions;
-use crate::jsonish::{
-    parser::ParsingMode,
-    Value,
-};
+use crate::jsonish::{parser::ParsingMode, Value};
 
 #[derive(Debug)]
 pub enum MarkdownResult {

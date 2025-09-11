@@ -1,4 +1,3 @@
-
 use lsp_types::{request, CompletionParams};
 
 use crate::{
@@ -6,7 +5,8 @@ use crate::{
         api::traits::{RequestHandler, SyncRequestHandler},
         client::{Notifier, Requester},
         Result,
-    }, Session,
+    },
+    Session,
 };
 pub(crate) struct Completion;
 

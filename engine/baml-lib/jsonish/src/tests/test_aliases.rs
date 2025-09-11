@@ -1,5 +1,3 @@
-
-
 test_deserializer!(
     test_simple_recursive_alias_list,
     r#"

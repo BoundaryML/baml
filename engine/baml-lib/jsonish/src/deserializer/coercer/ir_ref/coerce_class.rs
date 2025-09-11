@@ -1,4 +1,3 @@
-
 use anyhow::Result;
 use baml_types::{BamlMap, Constraint};
 use internal_baml_core::ir::TypeIR;
@@ -7,9 +6,7 @@ use internal_baml_jinja::types::{Class, Name};
 use super::ParsingContext;
 use crate::deserializer::{
     coercer::{
-        array_helper,
-        field_type::validate_asserts,
-        match_string::matches_string_to_string,
+        array_helper, field_type::validate_asserts, match_string::matches_string_to_string,
         run_user_checks, DefaultValue, ParsingError, TypeCoercer,
     },
     deserialize_flags::{DeserializerConditions, Flag},

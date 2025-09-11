@@ -1,7 +1,4 @@
-use serde::{
-    de::Deserializer,
-    Deserialize,
-};
+use serde::{de::Deserializer, Deserialize};
 
 pub type CompletionResponse = ChatCompletionGeneric<CompletionChoice>;
 pub type ChatCompletionResponse = ChatCompletionGeneric<ChatCompletionChoice>;

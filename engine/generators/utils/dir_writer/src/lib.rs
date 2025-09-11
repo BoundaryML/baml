@@ -2,13 +2,8 @@ use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
-
 #[cfg(not(target_arch = "wasm32"))]
-use std::{
-    io::ErrorKind,
-    thread::sleep,
-    time::Duration,
-};
+use std::{io::ErrorKind, thread::sleep, time::Duration};
 
 use anyhow::Result;
 use indexmap::IndexMap;
@@ -411,7 +406,10 @@ impl<'a, L: LanguageFeatures + Default> FileCollector<'a, L> {
     ///
     /// `output_path` is the path to be written to, and the path that will be prepended
     /// to the returned file entries
-    pub fn commit(&mut self, #[cfg_attr(target_arch = "wasm32", allow(unused_variables))] output_path: &Path) -> Result<IndexMap<PathBuf, String>> {
+    pub fn commit(
+        &mut self,
+        #[cfg_attr(target_arch = "wasm32", allow(unused_variables))] output_path: &Path,
+    ) -> Result<IndexMap<PathBuf, String>> {
         for (path, content) in self.files.iter_mut() {
             for on_file_finished in self.on_file_finished.iter() {
                 on_file_finished(path, content)?;

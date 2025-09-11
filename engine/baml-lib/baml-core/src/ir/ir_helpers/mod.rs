@@ -7,8 +7,8 @@ use std::collections::HashSet;
 use anyhow::Result;
 use baml_types::{
     ir_type::{TypeGeneric, UnionConstructor},
-    BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta, ConstraintLevel,
-    LiteralValue, TypeIR, TypeValue,
+    BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta, ConstraintLevel, LiteralValue, TypeIR,
+    TypeValue,
 };
 use indexmap::IndexMap;
 use internal_baml_diagnostics::Span;

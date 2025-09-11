@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-};
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use baml_compiler::{
@@ -11,16 +8,11 @@ use baml_compiler::{
         typecheck::{typecheck_expression, typecheck_returning_context, VarInfo},
     },
 };
-use baml_types::{
-    expr::ExprMetadata, BamlValue, BamlValueWithMeta, TypeIR,
-};
+use baml_types::{expr::ExprMetadata, BamlValue, BamlValueWithMeta, TypeIR};
 use clap::Args;
 use indexmap::IndexMap;
 use internal_baml_ast::{ast::WithName, parse_standalone_expression};
-use internal_baml_core::{
-    ast::Span,
-    internal_baml_diagnostics::Diagnostics,
-};
+use internal_baml_core::{ast::Span, internal_baml_diagnostics::Diagnostics};
 use reedline::{
     default_emacs_keybindings, ColumnarMenu, DefaultCompleter, DefaultPrompt, Emacs,
     FileBackedHistory, KeyCode, KeyModifiers, MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu,

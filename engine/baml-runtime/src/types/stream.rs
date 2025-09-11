@@ -1,10 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
-use baml_types::{
-    ir_type::TypeNonStreaming,
-    tracing::events::TraceEvent,
-};
+use baml_types::{ir_type::TypeNonStreaming, tracing::events::TraceEvent};
 use internal_baml_core::ir::repr::IntermediateRepr;
 
 use crate::{

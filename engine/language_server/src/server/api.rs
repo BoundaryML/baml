@@ -3,8 +3,8 @@ use std::time::Duration;
 use diagnostics::file_diagnostics;
 use lsp_server;
 use lsp_types::{
-    DocumentDiagnosticReport, DocumentDiagnosticReportResult,
-    FullDocumentDiagnosticReport, RelatedFullDocumentDiagnosticReport,
+    DocumentDiagnosticReport, DocumentDiagnosticReportResult, FullDocumentDiagnosticReport,
+    RelatedFullDocumentDiagnosticReport,
 };
 use serde::Deserialize;
 use url::Url;
@@ -25,11 +25,7 @@ use self::traits::{
     BackgroundDocumentNotificationHandler, NotificationHandler, RequestHandler,
     SyncNotificationHandler,
 };
-use super::{
-    client::Responder,
-    schedule::BackgroundSchedule,
-    Result,
-};
+use super::{client::Responder, schedule::BackgroundSchedule, Result};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct BamlFunctionSpan {

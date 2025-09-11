@@ -7,10 +7,7 @@ pub mod deserializer;
 use std::collections::HashMap;
 pub mod jsonish;
 
-use baml_types::{
-    type_meta, BamlValue, BamlValueWithMeta, Completion,
-    ResponseCheck, TypeIR,
-};
+use baml_types::{type_meta, BamlValue, BamlValueWithMeta, Completion, ResponseCheck, TypeIR};
 pub use deserializer::types::BamlValueWithFlags;
 use deserializer::{
     coercer::{ParsingContext, ParsingError, TypeCoercer},
@@ -19,10 +16,7 @@ use deserializer::{
 };
 use internal_baml_core::ir::TypeValue;
 use internal_baml_jinja::types::OutputFormatContent;
-use serde::{
-    ser::SerializeStruct,
-    Serialize, Serializer,
-};
+use serde::{ser::SerializeStruct, Serialize, Serializer};
 
 use crate::deserializer::score::WithScore;
 

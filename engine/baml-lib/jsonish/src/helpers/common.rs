@@ -1,4 +1,3 @@
-
 pub const CLASS_SCHEMA: &str = r#"
 class Book {
     title string

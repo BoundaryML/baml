@@ -1,5 +1,3 @@
-
-
 //
 #[allow(dead_code)]
 const FOO_FILE: &str = r#"

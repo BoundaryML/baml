@@ -1,16 +1,11 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
-use baml_types::{
-    BamlMap, BamlValue, Constraint,
-};
+use baml_types::{BamlMap, BamlValue, Constraint};
 use internal_baml_core::{
     ast::BamlVisDiagramGenerator,
     internal_baml_diagnostics::SourceFile,
-    ir::{
-        repr::IntermediateRepr,
-        ArgCoercer, ExprFunctionWalker, FunctionWalker, IRHelper,
-    },
+    ir::{repr::IntermediateRepr, ArgCoercer, ExprFunctionWalker, FunctionWalker, IRHelper},
     validate,
 };
 use internal_baml_jinja::RenderedPrompt;
@@ -22,9 +17,7 @@ use crate::{
         ir_features::{IrFeatures, WithInternal},
         llm_client::{
             llm_provider::LLMProvider,
-            orchestrator::{
-                IterOrchestrator, OrchestrationScope, OrchestratorNode,
-            },
+            orchestrator::{IterOrchestrator, OrchestrationScope, OrchestratorNode},
             primitive::LLMPrimitiveProvider,
             retry_policy::CallablePolicy,
             traits::{WithClientProperties, WithPrompt, WithRenderRawCurl},
@@ -33,8 +26,8 @@ use crate::{
     },
     runtime::CachedClient,
     runtime_interface::{InternalClientLookup, RuntimeConstructor},
-    type_builder::TypeBuilder, InternalBamlRuntime, InternalRuntimeInterface,
-    RenderCurlSettings, RuntimeContext,
+    type_builder::TypeBuilder,
+    InternalBamlRuntime, InternalRuntimeInterface, RenderCurlSettings, RuntimeContext,
 };
 
 impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {

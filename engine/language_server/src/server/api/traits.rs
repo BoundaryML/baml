@@ -2,8 +2,7 @@
 #[allow(dead_code)]
 use std::sync::Arc;
 
-use lsp_types::notification::Notification as LSPNotification;
-use lsp_types::request::Request;
+use lsp_types::{notification::Notification as LSPNotification, request::Request};
 use parking_lot::Mutex;
 
 use crate::{

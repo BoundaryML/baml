@@ -1,4 +1,3 @@
-
 use lsp_types::{
     self, request as req, GotoDefinitionParams, GotoDefinitionResponse, Location, Position, Range,
     Url,

@@ -1,5 +1,6 @@
 use baml_types::{
-    expr::{Builtin, Expr, ExprMetadata}, TypeIR,
+    expr::{Builtin, Expr, ExprMetadata},
+    TypeIR,
 };
 use internal_baml_diagnostics::Span;
 

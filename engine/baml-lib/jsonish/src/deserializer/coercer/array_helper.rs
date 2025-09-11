@@ -1,4 +1,3 @@
-
 use anyhow::Result;
 use internal_baml_core::ir::TypeIR;
 

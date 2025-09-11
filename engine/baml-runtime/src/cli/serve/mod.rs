@@ -21,9 +21,7 @@ use axum_extra::{
     headers::{self, authorization::Basic, Authorization, Header},
     TypedHeader,
 };
-use baml_types::{
-    BamlValue, GeneratorDefaultClientMode, GeneratorOutputType,
-};
+use baml_types::{BamlValue, GeneratorDefaultClientMode, GeneratorOutputType};
 use error::BamlError;
 use futures::Stream;
 use generators_lib::GeneratorArgs;

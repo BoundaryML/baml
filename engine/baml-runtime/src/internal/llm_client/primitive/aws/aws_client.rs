@@ -1,20 +1,15 @@
 use std::{borrow::Cow, collections::HashMap, ops::Deref, sync::Arc};
 
 use anyhow::{Context, Result};
-use aws_config::Region;
 #[cfg(not(target_arch = "wasm32"))]
 use aws_config::BehaviorVersion;
+use aws_config::Region;
 use aws_credential_types::{
-    provider::{
-        error::CredentialsError,
-        future::ProvideCredentials,
-    },
+    provider::{error::CredentialsError, future::ProvideCredentials},
     Credentials,
 };
 use aws_sdk_bedrockruntime::{
-    self as bedrock,
-    config::StalledStreamProtectionConfig,
-    operation::converse::ConverseOutput,
+    self as bedrock, config::StalledStreamProtectionConfig, operation::converse::ConverseOutput,
     Client as BedrockRuntimeClient,
 };
 use aws_smithy_json::serialize::JsonObjectWriter;
@@ -22,7 +17,8 @@ use aws_smithy_runtime_api::{client::result::SdkError, http::Headers};
 use aws_smithy_types::{Blob, Document};
 use baml_types::{
     tracing::events::{
-        ClientDetails, HTTPBody, HTTPRequest, HTTPResponse, HTTPResponseStream, SSEEvent, TraceEvent,
+        ClientDetails, HTTPBody, HTTPRequest, HTTPResponse, HTTPResponseStream, SSEEvent,
+        TraceEvent,
     },
     ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent, BamlMediaType,
 };
@@ -30,8 +26,8 @@ use futures::stream;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use internal_llm_client::{
-    aws_bedrock::ResolvedAwsBedrock,
-    AllowedRoleMetadata, ClientProvider, ResolvedClientProperty, UnresolvedClientProperty,
+    aws_bedrock::ResolvedAwsBedrock, AllowedRoleMetadata, ClientProvider, ResolvedClientProperty,
+    UnresolvedClientProperty,
 };
 use secrecy::ExposeSecret;
 use serde_json::json;
@@ -47,12 +43,16 @@ use crate::{
     internal::llm_client::{
         // primitive::request::RequestBuilder, // Unused import
         traits::{
-            HttpContext, StreamResponse, WithChat, WithClient,
-            WithClientProperties, WithNoCompletion, WithRenderRawCurl, WithRetryPolicy,
-            WithStreamChat,
+            HttpContext, StreamResponse, WithChat, WithClient, WithClientProperties,
+            WithNoCompletion, WithRenderRawCurl, WithRetryPolicy, WithStreamChat,
         },
-        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
-        ModelFeatures, ResolveMediaUrls,
+        ErrorCode,
+        LLMCompleteResponse,
+        LLMCompleteResponseMetadata,
+        LLMErrorResponse,
+        LLMResponse,
+        ModelFeatures,
+        ResolveMediaUrls,
     },
     json_body,
     tracingv2::storage::storage::BAML_TRACER,

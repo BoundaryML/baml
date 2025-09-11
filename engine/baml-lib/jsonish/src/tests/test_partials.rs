@@ -1,5 +1,3 @@
-
-
 #[allow(dead_code)]
 const BAML_FILE: &str = r###"
 class Score {

@@ -4,9 +4,7 @@
 use std::collections::HashSet;
 
 use anyhow::Context;
-use baml_types::{
-    BamlMap, BamlValueWithMeta, Completion, CompletionState, TypeIR, TypeValue,
-};
+use baml_types::{BamlMap, BamlValueWithMeta, Completion, CompletionState, TypeIR, TypeValue};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::{
     ir_helpers::infer_type_with_meta, IRHelperExtended, IRSemanticStreamingHelper,

@@ -1,17 +1,9 @@
-
 use anyhow::Result;
-use baml_types::{
-    BamlMap, BamlValue, BamlValueWithMeta, TypeIR,
-};
+use baml_types::{BamlMap, BamlValue, BamlValueWithMeta, TypeIR};
 use indexmap::IndexMap;
-use internal_baml_core::ir::{
-        ArgCoercer, FunctionWalker, IRHelper,
-    };
+use internal_baml_core::ir::{ArgCoercer, FunctionWalker, IRHelper};
 
-use crate::{
-    runtime::InternalBamlRuntime,
-    FunctionResult, InternalRuntimeInterface,
-};
+use crate::{runtime::InternalBamlRuntime, FunctionResult, InternalRuntimeInterface};
 
 pub(crate) struct PreparedFunction<'ir> {
     pub function_name: String,

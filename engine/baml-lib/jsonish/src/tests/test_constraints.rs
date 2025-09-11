@@ -1,4 +1,3 @@
-
 #[allow(dead_code)]
 const CLASS_FOO_INT_STRING: &str = r#"
 class Foo {

@@ -3,11 +3,12 @@ use std::path::PathBuf;
 use lsp_server::ErrorCode;
 use lsp_types::{notification::DidCloseTextDocument, DidCloseTextDocumentParams};
 
-use crate::server::api::traits::{NotificationHandler, SyncNotificationHandler};
-use crate::server::api::LSPResult;
 use crate::{
     server::{
-        api::ResultExt,
+        api::{
+            traits::{NotificationHandler, SyncNotificationHandler},
+            LSPResult, ResultExt,
+        },
         client::{Notifier, Requester},
         Result,
     },

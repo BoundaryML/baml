@@ -1,4 +1,3 @@
-
 use internal_baml_ast::ast::{WithIdentifier, WithName, WithSpan};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 

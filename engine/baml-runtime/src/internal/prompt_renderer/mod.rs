@@ -4,9 +4,7 @@ use anyhow::Result;
 use baml_types::{BamlValue, StreamingMode, TypeIR, TypeValue};
 use internal_baml_core::{
     error_unsupported,
-    ir::{
-        repr::IntermediateRepr, FunctionWalker, IRHelper,
-    },
+    ir::{repr::IntermediateRepr, FunctionWalker, IRHelper},
 };
 use internal_baml_jinja::{
     types::OutputFormatContent, RenderContext, RenderContext_Client, RenderedPrompt,

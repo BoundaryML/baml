@@ -4,18 +4,12 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_expr::{
-        parse_expr_block, parse_fn_app, parse_generic_fn_app, parse_if_expression,
-        parse_lambda,
+        parse_expr_block, parse_fn_app, parse_generic_fn_app, parse_if_expression, parse_lambda,
     },
     parse_identifier::parse_identifier,
     Rule,
 };
-use crate::{
-    assert_correct_parser,
-    ast::*,
-    parser::parse_expr::consume_if_rule,
-    unreachable_rule,
-};
+use crate::{assert_correct_parser, ast::*, parser::parse_expr::consume_if_rule, unreachable_rule};
 
 pub(crate) fn parse_expression(
     token: Pair<'_>,

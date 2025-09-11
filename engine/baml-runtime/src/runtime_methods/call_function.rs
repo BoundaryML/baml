@@ -5,13 +5,9 @@ use baml_types::BamlValue;
 
 use super::prepare_function::PreparedFunction;
 use crate::{
-    internal::{
-        llm_client::orchestrator::orchestrate_call,
-        prompt_renderer::PromptRenderer,
-    },
+    internal::{llm_client::orchestrator::orchestrate_call, prompt_renderer::PromptRenderer},
     runtime::InternalBamlRuntime,
-    FunctionResult, InternalRuntimeInterface,
-    RuntimeContext, TripWire,
+    FunctionResult, InternalRuntimeInterface, RuntimeContext, TripWire,
 };
 
 impl InternalBamlRuntime {

@@ -1,4 +1,3 @@
-
 test_deserializer!(test_null, EMPTY_FILE, "null", TypeIR::null(), null);
 test_deserializer!(
     test_null_1,

@@ -9,10 +9,7 @@ use std::{sync::Arc, time::SystemTime};
 
 use aws_config::{BehaviorVersion, ConfigLoader};
 use aws_credential_types::{
-    provider::{
-        error::CredentialsError,
-        future::ProvideCredentials,
-    },
+    provider::{error::CredentialsError, future::ProvideCredentials},
     Credentials,
 };
 use aws_smithy_async::{

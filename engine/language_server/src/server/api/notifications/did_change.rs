@@ -1,8 +1,6 @@
 use std::time::Instant;
 
-use lsp_types::{
-    notification::DidChangeTextDocument, DidChangeTextDocumentParams,
-};
+use lsp_types::{notification::DidChangeTextDocument, DidChangeTextDocumentParams};
 use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
 
 use crate::{

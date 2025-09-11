@@ -5,9 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 use baml_types::{
-    tracing::events::{
-        LLMChatMessage, LoggedLLMRequest, TraceEvent,
-    },
+    tracing::events::{LLMChatMessage, LoggedLLMRequest, TraceEvent},
     BamlValue,
 };
 pub use call::orchestrate as orchestrate_call;
@@ -22,7 +20,8 @@ use super::{
     traits::{
         HttpContext, StreamResponse, WithClientProperties, WithPrompt, WithRenderRawCurl,
         WithSingleCallable, WithStreamable,
-    }, LLMResponse,
+    },
+    LLMResponse,
 };
 use crate::{
     internal::prompt_renderer::PromptRenderer,

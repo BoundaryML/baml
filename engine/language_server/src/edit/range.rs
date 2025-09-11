@@ -2,9 +2,8 @@
 use lsp_types as types;
 
 use super::PositionEncoding;
-use crate::baml_source_file::OneIndexed;
 use crate::{
-    baml_source_file::{LineIndex, SourceLocation},
+    baml_source_file::{LineIndex, OneIndexed, SourceLocation},
     baml_text_size::{TextRange, TextSize},
 };
 

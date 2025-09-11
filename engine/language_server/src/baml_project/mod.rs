@@ -29,9 +29,7 @@ use internal_baml_codegen::{
 };
 use internal_baml_diagnostics::Diagnostics;
 use lsp_server::Notification;
-use lsp_types::{
-    Hover, HoverContents, Position, Range, TextDocumentItem,
-};
+use lsp_types::{Hover, HoverContents, Position, Range, TextDocumentItem};
 use position_utils::get_word_at_position;
 use semver::Version;
 

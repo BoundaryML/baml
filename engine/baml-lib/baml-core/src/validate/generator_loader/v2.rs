@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    path::Path,
-    str::FromStr,
-};
+use std::{collections::HashMap, path::Path, str::FromStr};
 
 use bstd::ProjectFqn;
 use internal_baml_ast::ast::{self, WithName, WithSpan};
@@ -11,8 +7,8 @@ use semver::Version;
 use strum::VariantNames;
 
 use crate::configuration::{
-    CloudProjectBuilder, CodegenGeneratorBuilder, Generator,
-    GeneratorDefaultClientMode, GeneratorOutputType, ModuleFormat,
+    CloudProjectBuilder, CodegenGeneratorBuilder, Generator, GeneratorDefaultClientMode,
+    GeneratorOutputType, ModuleFormat,
 };
 
 fn parse_required_key<'a>(

@@ -7,8 +7,8 @@ use baml_derive::BamlHash;
 use baml_types::{Constraint, UnresolvedValue};
 use indexmap::IndexMap;
 use internal_baml_ast::ast::{
-    self, BlockArgs, FieldId, FieldType, RawString, TypeBuilderBlock,
-    ValExpId, WithIdentifier, WithName, WithSpan,
+    self, BlockArgs, FieldId, FieldType, RawString, TypeBuilderBlock, ValExpId, WithIdentifier,
+    WithName, WithSpan,
 };
 use internal_baml_diagnostics::Span;
 use internal_baml_prompt_parser::ast::{ChatBlock, PrinterBlock, Variable};

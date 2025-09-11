@@ -1,20 +1,15 @@
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
-use super::{
-    helpers::Pair,
-    parse_identifier::parse_identifier,
-    Rule,
-};
+use super::{helpers::Pair, parse_identifier::parse_identifier, Rule};
 use crate::{
     assert_correct_parser,
     ast::{
-        expr::ExprFn, App, ArgumentsList, AssignOp, AssignOpStmt, AssignStmt, ExprStmt,
-        Expression, ExpressionBlock, ForLoopStmt, LetStmt, Stmt, TopLevelAssignment, *,
+        expr::ExprFn, App, ArgumentsList, AssignOp, AssignOpStmt, AssignStmt, ExprStmt, Expression,
+        ExpressionBlock, ForLoopStmt, LetStmt, Stmt, TopLevelAssignment, *,
     },
     parser::{
         parse_arguments::parse_arguments_list, parse_expression::parse_expression,
-        parse_field::parse_field_type_chain,
-        parse_named_args_list::parse_named_argument_list,
+        parse_field::parse_field_type_chain, parse_named_args_list::parse_named_argument_list,
     },
     unreachable_rule,
 };

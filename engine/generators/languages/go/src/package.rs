@@ -31,7 +31,6 @@ impl Package {
         format!("{}.", self.package_path.last().unwrap())
     }
 
-
     pub fn types() -> Package {
         Package::new("baml_client.types")
     }
@@ -39,7 +38,6 @@ impl Package {
     pub fn stream_types() -> Package {
         Package::new("baml_client.stream_types")
     }
-
 
     pub fn checked() -> Package {
         Package::types()

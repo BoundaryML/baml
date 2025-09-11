@@ -1,5 +1,3 @@
-
-
 test_deserializer!(
     test_list,
     "",

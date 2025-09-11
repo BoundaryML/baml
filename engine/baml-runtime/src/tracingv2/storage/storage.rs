@@ -14,9 +14,9 @@ use std::{
 
 use baml_ids::{FunctionCallId, HttpRequestId};
 use baml_types::tracing::events::{
-        FunctionStart, HTTPRequest, HTTPResponse, HTTPResponseStream,
-        LoggedLLMRequest, LoggedLLMResponse, SSEEvent, TraceData,
-    };
+    FunctionStart, HTTPRequest, HTTPResponse, HTTPResponseStream, LoggedLLMRequest,
+    LoggedLLMResponse, SSEEvent, TraceData,
+};
 use indexmap::IndexSet;
 use once_cell::sync::Lazy;
 use serde::Serialize;

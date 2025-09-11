@@ -1,5 +1,3 @@
-
-
 #[allow(dead_code)]
 const TEST_FILE: &str = r###"
 class ServerActionTask {

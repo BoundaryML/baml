@@ -1,14 +1,9 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
-use baml_types::{
-    ir_type::TypeIR,
-    BamlValue, StreamingMode,
-};
+use baml_types::{ir_type::TypeIR, BamlValue, StreamingMode};
 use indexmap::{IndexMap, IndexSet};
-use internal_baml_core::ir::{
-    repr::IntermediateRepr, ClassWalker, EnumWalker, IRHelper,
-};
+use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, IRHelper};
 use internal_baml_jinja::types::{Class, Enum, Name, OutputFormatContent};
 
 use crate::{
