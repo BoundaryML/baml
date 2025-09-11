@@ -776,6 +776,8 @@ fn convert_completion_prompt_to_body(prompt: &str) -> serde_json::Map<String, se
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use indexmap::IndexMap;
     use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
     use internal_llm_client::{RolesSelection, SupportedRequestModes};

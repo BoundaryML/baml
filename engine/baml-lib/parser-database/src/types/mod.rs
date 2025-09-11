@@ -870,13 +870,3 @@ impl StaticType {
         }
     }
 }
-
-/// An opaque identifier for a class field.
-#[derive(Copy, Clone, PartialEq, Debug, Eq, Hash)]
-pub struct StaticFieldId(u32);
-
-impl From<FieldId> for StaticFieldId {
-    fn from(id: FieldId) -> Self {
-        StaticFieldId(id.0)
-    }
-}
