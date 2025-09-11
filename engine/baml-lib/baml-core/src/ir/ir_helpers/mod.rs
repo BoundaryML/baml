@@ -448,7 +448,7 @@ fn get_dummy_value(
             }
         }
         TypeIR::Literal(literal_value, _) => match literal_value {
-            LiteralValue::String(s) => format!("\"{}\"", s),
+            LiteralValue::String(s) => format!("\"{s}\""),
             LiteralValue::Int(i) => i.to_string(),
             LiteralValue::Bool(b) => b.to_string(),
         },

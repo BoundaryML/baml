@@ -402,9 +402,7 @@ impl TracePublisher {
 
         // Convert functions
         let functions: Vec<FunctionDefinition> = ast
-            .functions
-            .iter()
-            .map(|(_name, signature)| {
+            .functions.values().map(|signature| {
                 let inputs = signature
                     .inputs
                     .iter()

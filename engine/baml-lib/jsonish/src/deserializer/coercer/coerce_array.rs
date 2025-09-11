@@ -48,7 +48,7 @@ pub(super) fn try_cast_array(
 
     // Try to cast all elements
     let mut items = Vec::with_capacity(arr.len());
-    for (_i, item) in arr.iter().enumerate() {
+    for item in arr.iter() {
         match element_type.try_cast(ctx, element_type, Some(item)) {
             Some(v) => items.push(v),
             None => return None, // Fail fast on first error

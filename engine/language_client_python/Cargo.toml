@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 
 [lints.rust]
 dead_code = "deny"
-elided_named_lifetimes = "deny"
+mismatched_lifetime_syntaxes = "deny"
 unused_imports = "deny"
 unused_must_use = "deny"
 unused_variables = "deny"

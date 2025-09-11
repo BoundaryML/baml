@@ -8,7 +8,7 @@ license-file.workspace = true
 
 [lints.rust]
 dead_code = "allow"
-elided_named_lifetimes = "deny"
+mismatched_lifetime_syntaxes = "deny"
 unused_imports = "allow"
 unused_variables = "allow"
 

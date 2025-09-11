@@ -600,7 +600,7 @@ pub async fn eval_to_value_or_llm_call<'a>(
                 (Expr::LLMFunction(name, arg_names, _), Expr::ArgsTuple(args, _)) => {
                     let mut evaluated_args: Vec<(String, BamlValue)> = Vec::new();
                     for (arg_name, arg) in arg_names.iter().zip(args) {
-                        let val = eval_to_value(env, &arg).await;
+                        let val = eval_to_value(env, arg).await;
                         evaluated_args
                             .push((arg_name.clone(), val.unwrap().unwrap().clone().value()));
                     }
