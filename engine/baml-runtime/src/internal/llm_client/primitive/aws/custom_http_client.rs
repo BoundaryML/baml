@@ -17,7 +17,6 @@ use aws_smithy_types::body::SdkBody;
 #[cfg(target_arch = "wasm32")]
 use {futures::channel::oneshot, wasm_bindgen_futures::spawn_local};
 
-
 /// Returns a wrapper around the global reqwest client.
 /// [HttpClient].
 #[cfg(not(target_arch = "wasm32"))] // Keep function non-WASM for now
@@ -155,6 +154,7 @@ impl From<reqwest::Error> for CallError {
 enum CallErrorKind {
     User,
     Timeout,
+    #[cfg(not(target_arch = "wasm32"))]
     Io,
     Other,
 }
@@ -301,6 +301,4 @@ impl HttpClient for Client {
 
 // --- Non-WASM Implementation using Reqwest ---
 #[cfg(not(target_arch = "wasm32"))]
-mod reqwest_impl {
-    
-}
+mod reqwest_impl {}
