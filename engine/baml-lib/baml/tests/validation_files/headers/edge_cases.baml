@@ -1,18 +1,18 @@
 // Edge cases for MDX headers
 
-fn UnicodeHeaders() -> string {
+function UnicodeHeaders() -> string {
     # 你好世界
     // Unicode header test
-    
+
     ## Émojis 🎉🎊
     // Headers with emojis
-    
+
     ### Special «Characters» ™
-    
+
     "test"
 }
 
-fn HeaderLevels() -> string {
+function HeaderLevels() -> string {
     # Level 1
     ## Level 2
     ### Level 3
@@ -22,95 +22,95 @@ fn HeaderLevels() -> string {
     ####### Level 7 - More than 6 levels
     ######## Level 8
     ######### Level 9
-    
+
     "deep nesting"
 }
 
-fn HeadersWithWhitespace() -> string {
-    #    Extra Spaces Before Title    
-    ##  	Mixed Tabs And Spaces	  
-    ###			All Tabs			
-    
+function HeadersWithWhitespace() -> string {
+    #    Extra Spaces Before Title
+    ##  	Mixed Tabs And Spaces
+    ###			All Tabs
+
     let x = "whitespace test";
-    
-    # Trailing Spaces    
+
+    # Trailing Spaces
     ## Multiple  Spaces  Between  Words
-    
+
     x
 }
 
-fn HeadersAndComments() -> string {
+function HeadersAndComments() -> string {
     # Header Before Comment
     // This is a regular comment
-    
+
     let x = "test";
-    
+
     // Comment before header
     ## Header After Comment
-    
+
     /// Doc comment before header
     ### Header After Doc Comment
-    
+
     x
 }
 
-fn HeadersInComplexNesting() -> string {
+function HeadersInComplexNesting() -> string {
     # Main Function
-    
+
     let result = {
         ## Inside Block Expression
-        
+
         let inner = if (true) {
             ### Inside If True
-            
+
             let deep = {
                 #### Very Deep Block
                 "deep value"
             };
-            
+
             ### Back to If Level
             deep
         } else {
             ### Inside Else
             "else value"
         };
-        
+
         ## Back to Block Level
         inner
     };
-    
+
     # Back to Function Level
     result
 }
 
-fn HeadersWithSpecialChars() -> string {
+function HeadersWithSpecialChars() -> string {
     # Header-With-Dashes
     ## Header_With_Underscores
     ### Header.With.Dots
     #### Header/With/Slashes
     ##### Header\With\Backslashes
     ###### Header|With|Pipes
-    
+
     "special chars"
 }
 
-fn ConsecutiveHeaders() -> string {
+function ConsecutiveHeaders() -> string {
     # First Header
     # Second Header
     # Third Header
-    
+
     ## Subsection A
     ## Subsection B
     ## Subsection C
-    
+
     "multiple consecutive headers"
 }
 
-fn HeadersAroundExpressions() -> string {
+function HeadersAroundExpressions() -> string {
     # Before Let
     let x = 5;
     ## After Let
-    
+
     ### Before If
     if (x > 0) {
         #### Inside If
@@ -120,34 +120,34 @@ fn HeadersAroundExpressions() -> string {
         0
     }
     ### After If
-    
+
     ## Before For
     for (i in [1, 2, 3]) {
         ### Inside For
         i
     }
     ## After For
-    
+
     # Final Section
     x
 }
 
-fn VeryLongHeaderTitle() -> string {
+function VeryLongHeaderTitle() -> string {
     # This Is An Extremely Long Header Title That Goes On And On And On And Contains Many Words To Test How The Parser Handles Very Long Header Titles That Might Span Multiple Lines In Some Editors But Should Still Be Parsed As A Single Header
-    
+
     ## Another Long Title With Special Characters !@#$%^&*()_+-=[]{}|;':",./<>? And Numbers 1234567890
-    
+
     "long headers"
 }
 
-fn HeaderOnlyFunction() -> string {
+function HeaderOnlyFunction() -> string {
     # Just Headers
     ## No Code
     ### Only Documentation
     #### Pure Annotation
     ##### No Expressions
     ###### Until The End
-    
+
     "default"
 }
 
@@ -211,5 +211,3 @@ fn HeaderOnlyFunction() -> string {
 // 71 |             ### Back to If Level
 // 72 |             deep
 //    | 
-
-

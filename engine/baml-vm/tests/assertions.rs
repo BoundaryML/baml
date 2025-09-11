@@ -24,7 +24,7 @@ fn assert_ok() -> anyhow::Result<()> {
 fn assert_not_ok() -> anyhow::Result<()> {
     assert_vm_fails(FailingProgram {
         source: r#"
-            fn assertNotOk() -> int {
+            function assertNotOk() -> int {
                 assert 3 == 1;
 
                 2

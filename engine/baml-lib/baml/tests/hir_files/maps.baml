@@ -1,22 +1,22 @@
-fn CreateMap() -> map<string, string> {
+function CreateMap() -> map<string, string> {
     { hello "world" }
 }
 
-fn CreateMapJSON() -> map<string, string> {
+function CreateMapJSON() -> map<string, string> {
     {"hello": "world"}
 }
 
-fn UseMap() -> string {
+function UseMap() -> string {
     let map = CreateMap();
     map["hello"]
 }
 
-fn UseMapNoKey() -> string {
+function UseMapNoKey() -> string {
     let map = CreateMapJSON();
     map["world"]
 }
 
-fn EditMapKey() -> int {
+function EditMapKey() -> int {
 	let map = { hi 123 };
 
 	map["hi"] = 42 - 4;
@@ -26,7 +26,7 @@ fn EditMapKey() -> int {
 
 }
 
-fn UseMapContains() -> string {
+function UseMapContains() -> string {
     let map = CreateMapJSON();
     if (map.has("hello")) {
         map["hello"]
@@ -35,7 +35,7 @@ fn UseMapContains() -> string {
     }
 }
 
-fn Len() -> int {
+function Len() -> int {
     let map = CreateMap();
     map.length()
 }

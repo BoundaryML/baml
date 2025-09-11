@@ -1,4 +1,4 @@
-fn Sum(xs: int[]) -> int {
+function Sum(xs: int[]) -> int {
 	let result = 0;
 
 	for (x in xs) {
@@ -8,7 +8,7 @@ fn Sum(xs: int[]) -> int {
 	result
 }
 
-fn ForWithBreak(xs: int[]) -> int {
+function ForWithBreak(xs: int[]) -> int {
 	let result = 0;
 
 	for (x in xs) {
@@ -21,7 +21,7 @@ fn ForWithBreak(xs: int[]) -> int {
 	result
 }
 
-fn ForWithContinue(xs: int[]) -> int {
+function ForWithContinue(xs: int[]) -> int {
 	let result = 0;
 
 	for (x in xs) {
@@ -34,7 +34,7 @@ fn ForWithContinue(xs: int[]) -> int {
 	result
 }
 
-fn NestedFor(as: int[], bs: int[]) -> int {
+function NestedFor(as: int[], bs: int[]) -> int {
 
 	let result = 0;
 

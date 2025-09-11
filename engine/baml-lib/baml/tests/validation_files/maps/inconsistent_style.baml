@@ -1,4 +1,4 @@
-fn InconsistentStyleUse() -> int{ 
+function InconsistentStyleUse() -> int{
     let some_ident = "world";
 
     // here, 'name' is a string, but 'some_ident' is an expression.

@@ -221,7 +221,7 @@
     },
     "function_declaration": {
       "comment": "Function declaration",
-      "begin": "(function|fn)\\s+(\\w+)",
+      "begin": "(function)\\s+(\\w+)",
       "beginCaptures": {
         "1": {
           "name": "storage.type.declaration.function"

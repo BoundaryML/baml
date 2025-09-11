@@ -1,4 +1,4 @@
-fn IfThenOnlyHeader() -> int {
+function IfThenOnlyHeader() -> int {
     let x = 1;
 
     # Start
@@ -7,5 +7,3 @@ fn IfThenOnlyHeader() -> int {
     ## After
     y
 }
-
-

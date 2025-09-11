@@ -9,7 +9,7 @@ use common::{assert_compiles, Program};
 fn array_constructor() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main() -> int[] {
+            function main() -> int[] {
                 let a = [1, 2, 3];
                 a
             }

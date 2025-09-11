@@ -1,7 +1,5 @@
 # Top Container
-fn TopLevelNotFlattened() -> string {
+function TopLevelNotFlattened() -> string {
     ## Only Child
     "done"
 }
-
-

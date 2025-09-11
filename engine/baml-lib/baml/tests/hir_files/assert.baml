@@ -1,11 +1,11 @@
-fn assertOk() -> int {
+function assertOk() -> int {
 
 	assert 2 + 2 == 4;
 
 	3
 }
 
-fn assertNotOk() -> int {
+function assertNotOk() -> int {
 	assert 3 == 1;
 
 	2

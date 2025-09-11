@@ -1,4 +1,4 @@
-fn GCD(a: int, b: int) -> int {
+function GCD(a: int, b: int) -> int {
 
 	while (a != b) {
 	   if (a > b) {
@@ -11,7 +11,7 @@ fn GCD(a: int, b: int) -> int {
 	a
 }
 
-fn WhileWithScopes() -> int {
+function WhileWithScopes() -> int {
 
 	while (true) {
 		let a = 0;

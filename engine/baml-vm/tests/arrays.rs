@@ -11,7 +11,7 @@ fn array_constructor() -> anyhow::Result<()> {
     assert_vm_executes_with_inspection(
         Program {
             source: "
-                fn main() -> int[] {
+                function main() -> int[] {
                     let a = [1, 2, 3];
                     a
                 }

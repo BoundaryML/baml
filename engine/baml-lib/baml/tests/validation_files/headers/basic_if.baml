@@ -1,6 +1,6 @@
 
 # Basic test
-fn BasicIf() -> string {
+function BasicIf() -> string {
     let x = 1;
 
     # This is a named statement
@@ -14,5 +14,3 @@ fn BasicIf() -> string {
 
     z
 }
-
-

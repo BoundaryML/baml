@@ -852,7 +852,7 @@ fn return_with_stack() -> anyhow::Result<()> {
 fn for_loop_sum() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn Sum(xs: int[]) -> int {
+            function Sum(xs: int[]) -> int {
                 let result = 0;
 
                 for (x in xs) {

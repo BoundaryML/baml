@@ -721,7 +721,7 @@ mod tests {
               result
           }
 
-          fn add(x: int, y: int) -> int {
+          function add(x: int, y: int) -> int {
               x
           }
       "#;

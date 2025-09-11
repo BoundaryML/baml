@@ -1,4 +1,4 @@
-fn Sum(xs: int[]) -> int {
+function Sum(xs: int[]) -> int {
 	let result = 0;
 
 	for (x in xs) {
@@ -8,7 +8,7 @@ fn Sum(xs: int[]) -> int {
 	result
 }
 
-fn SumBadType(xs: string[]) -> int {
+function SumBadType(xs: string[]) -> int {
 	let result = 0;
 
 	for (x in xs) {
@@ -21,7 +21,7 @@ fn SumBadType(xs: string[]) -> int {
 
 // NOTE: `let mut b: string = ""` is not supported yet, so the variable is declared
 // as an argument instead.
-fn SumUnknownType(xs: int, b: string) -> int {
+function SumUnknownType(xs: int, b: string) -> int {
 
 
 	// this should error in `xs` saying it's not an array.
