@@ -1152,6 +1152,20 @@ class BamlSyncClient:
                 "input": input,
             })
             return typing.cast(typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], result.cast_to(types, types, stream_types, False, __runtime__))
+    def LlmReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.LlmReturnNumber(n=n,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="LlmReturnNumber", args={
+                "n": n,
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     def MakeBlockConstraint(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.Checked["types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']]:
@@ -3154,6 +3168,90 @@ class BamlSyncClient:
                 "vid": vid,
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def AssignElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.AssignElseIfExpr(a=a,b=b,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="AssignElseIfExpr", args={
+                "a": a,"b": b,
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def BoolToIntWithIfElse(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.BoolToIntWithIfElse(b=b,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="BoolToIntWithIfElse", args={
+                "b": b,
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def BoolToIntWithIfElseCallingLlm(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.BoolToIntWithIfElseCallingLlm(b=b,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="BoolToIntWithIfElseCallingLlm", args={
+                "b": b,
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def CallLlmDescribeImage(self, img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.CallLlmDescribeImage(img=img,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="CallLlmDescribeImage", args={
+                "img": img,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def CallReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.CallReturnOne(
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="CallReturnOne", args={
+                
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def ChainedCalls(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.ChainedCalls(
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="ChainedCalls", args={
+                
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     def EchoWorkflow(self, 
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -3168,6 +3266,174 @@ class BamlSyncClient:
                 
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def IterativeFibonacci(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.IterativeFibonacci(n=n,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="IterativeFibonacci", args={
+                "n": n,
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def NormalElseIfStmt(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.NormalElseIfStmt(a=a,b=b,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="NormalElseIfStmt", args={
+                "a": a,"b": b,
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def ReturnCategory(self, category: types.Category,
+        baml_options: BamlCallOptions = {},
+    ) -> types.Category:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.ReturnCategory(category=category,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="ReturnCategory", args={
+                "category": category,
+            })
+            return typing.cast(types.Category, result.cast_to(types, types, stream_types, False, __runtime__))
+    def ReturnElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.ReturnElseIfExpr(a=a,b=b,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="ReturnElseIfExpr", args={
+                "a": a,"b": b,
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def ReturnImageFromUrl(self, url: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.Image:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.ReturnImageFromUrl(url=url,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="ReturnImageFromUrl", args={
+                "url": url,
+            })
+            return typing.cast(baml_py.Image, result.cast_to(types, types, stream_types, False, __runtime__))
+    def ReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.ReturnNumber(n=n,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="ReturnNumber", args={
+                "n": n,
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def ReturnNumberCallingLlm(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.ReturnNumberCallingLlm(n=n,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="ReturnNumberCallingLlm", args={
+                "n": n,
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def ReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.ReturnOne(
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="ReturnOne", args={
+                
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def StoreFnCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.StoreFnCallInLocalVar(n=n,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="StoreFnCallInLocalVar", args={
+                "n": n,
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def StoreLlmCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.StoreLlmCallInLocalVar(n=n,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="StoreLlmCallInLocalVar", args={
+                "n": n,
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def SumArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.SumArray(arr=arr,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="SumArray", args={
+                "arr": arr,
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def SumFromTo(self, x: int,y: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.SumFromTo(x=x,y=y,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="SumFromTo", args={
+                "x": x,"y": y,
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -4087,6 +4353,18 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(typing.Union[int, bool, str], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def LlmReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[int, int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="LlmReturnNumber", args={
+            "n": n,
+        })
+        return baml_py.BamlSyncStream[int, int](
+          result,
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def MakeBlockConstraint(self, 
@@ -5805,6 +6083,78 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def AssignElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="AssignElseIfExpr", args={
+            "a": a,"b": b,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def BoolToIntWithIfElse(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="BoolToIntWithIfElse", args={
+            "b": b,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def BoolToIntWithIfElseCallingLlm(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="BoolToIntWithIfElseCallingLlm", args={
+            "b": b,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def CallLlmDescribeImage(self, img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[str], str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="CallLlmDescribeImage", args={
+            "img": img,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[str], str](
+          result,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def CallReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="CallReturnOne", args={
+            
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ChainedCalls(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ChainedCalls", args={
+            
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def EchoWorkflow(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.Optional[str], str]:
@@ -5815,6 +6165,150 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def IterativeFibonacci(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="IterativeFibonacci", args={
+            "n": n,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def NormalElseIfStmt(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="NormalElseIfStmt", args={
+            "a": a,"b": b,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ReturnCategory(self, category: types.Category,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[types.Category], types.Category]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ReturnCategory", args={
+            "category": category,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[types.Category], types.Category](
+          result,
+          lambda x: typing.cast(typing.Optional[types.Category], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Category, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ReturnElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ReturnElseIfExpr", args={
+            "a": a,"b": b,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ReturnImageFromUrl(self, url: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[baml_py.Image], baml_py.Image]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ReturnImageFromUrl", args={
+            "url": url,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[baml_py.Image], baml_py.Image](
+          result,
+          lambda x: typing.cast(typing.Optional[baml_py.Image], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(baml_py.Image, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ReturnNumber", args={
+            "n": n,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ReturnNumberCallingLlm(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ReturnNumberCallingLlm", args={
+            "n": n,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ReturnOne", args={
+            
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def StoreFnCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="StoreFnCallInLocalVar", args={
+            "n": n,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def StoreLlmCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="StoreLlmCallInLocalVar", args={
+            "n": n,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def SumArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="SumArray", args={
+            "arr": arr,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def SumFromTo(self, x: int,y: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="SumFromTo", args={
+            "x": x,"y": y,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     
@@ -6357,6 +6851,13 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
+    def LlmReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="LlmReturnNumber", args={
+            "n": n,
+        }, mode="request")
+        return result
     def MakeBlockConstraint(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -7358,11 +7859,137 @@ class BamlHttpRequestClient:
             "vid": vid,
         }, mode="request")
         return result
+    def AssignElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="AssignElseIfExpr", args={
+            "a": a,"b": b,
+        }, mode="request")
+        return result
+    def BoolToIntWithIfElse(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="BoolToIntWithIfElse", args={
+            "b": b,
+        }, mode="request")
+        return result
+    def BoolToIntWithIfElseCallingLlm(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="BoolToIntWithIfElseCallingLlm", args={
+            "b": b,
+        }, mode="request")
+        return result
+    def CallLlmDescribeImage(self, img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="CallLlmDescribeImage", args={
+            "img": img,
+        }, mode="request")
+        return result
+    def CallReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="CallReturnOne", args={
+            
+        }, mode="request")
+        return result
+    def ChainedCalls(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ChainedCalls", args={
+            
+        }, mode="request")
+        return result
     def EchoWorkflow(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="EchoWorkflow", args={
             
+        }, mode="request")
+        return result
+    def IterativeFibonacci(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="IterativeFibonacci", args={
+            "n": n,
+        }, mode="request")
+        return result
+    def NormalElseIfStmt(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="NormalElseIfStmt", args={
+            "a": a,"b": b,
+        }, mode="request")
+        return result
+    def ReturnCategory(self, category: types.Category,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ReturnCategory", args={
+            "category": category,
+        }, mode="request")
+        return result
+    def ReturnElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ReturnElseIfExpr", args={
+            "a": a,"b": b,
+        }, mode="request")
+        return result
+    def ReturnImageFromUrl(self, url: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ReturnImageFromUrl", args={
+            "url": url,
+        }, mode="request")
+        return result
+    def ReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ReturnNumber", args={
+            "n": n,
+        }, mode="request")
+        return result
+    def ReturnNumberCallingLlm(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ReturnNumberCallingLlm", args={
+            "n": n,
+        }, mode="request")
+        return result
+    def ReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ReturnOne", args={
+            
+        }, mode="request")
+        return result
+    def StoreFnCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="StoreFnCallInLocalVar", args={
+            "n": n,
+        }, mode="request")
+        return result
+    def StoreLlmCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="StoreLlmCallInLocalVar", args={
+            "n": n,
+        }, mode="request")
+        return result
+    def SumArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="SumArray", args={
+            "arr": arr,
+        }, mode="request")
+        return result
+    def SumFromTo(self, x: int,y: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="SumFromTo", args={
+            "x": x,"y": y,
         }, mode="request")
         return result
     
@@ -7905,6 +8532,13 @@ class BamlHttpStreamRequestClient:
             "input": input,
         }, mode="stream")
         return result
+    def LlmReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="LlmReturnNumber", args={
+            "n": n,
+        }, mode="stream")
+        return result
     def MakeBlockConstraint(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -8906,11 +9540,137 @@ class BamlHttpStreamRequestClient:
             "vid": vid,
         }, mode="stream")
         return result
+    def AssignElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="AssignElseIfExpr", args={
+            "a": a,"b": b,
+        }, mode="stream")
+        return result
+    def BoolToIntWithIfElse(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="BoolToIntWithIfElse", args={
+            "b": b,
+        }, mode="stream")
+        return result
+    def BoolToIntWithIfElseCallingLlm(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="BoolToIntWithIfElseCallingLlm", args={
+            "b": b,
+        }, mode="stream")
+        return result
+    def CallLlmDescribeImage(self, img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="CallLlmDescribeImage", args={
+            "img": img,
+        }, mode="stream")
+        return result
+    def CallReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="CallReturnOne", args={
+            
+        }, mode="stream")
+        return result
+    def ChainedCalls(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ChainedCalls", args={
+            
+        }, mode="stream")
+        return result
     def EchoWorkflow(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="EchoWorkflow", args={
             
+        }, mode="stream")
+        return result
+    def IterativeFibonacci(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="IterativeFibonacci", args={
+            "n": n,
+        }, mode="stream")
+        return result
+    def NormalElseIfStmt(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="NormalElseIfStmt", args={
+            "a": a,"b": b,
+        }, mode="stream")
+        return result
+    def ReturnCategory(self, category: types.Category,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ReturnCategory", args={
+            "category": category,
+        }, mode="stream")
+        return result
+    def ReturnElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ReturnElseIfExpr", args={
+            "a": a,"b": b,
+        }, mode="stream")
+        return result
+    def ReturnImageFromUrl(self, url: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ReturnImageFromUrl", args={
+            "url": url,
+        }, mode="stream")
+        return result
+    def ReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ReturnNumber", args={
+            "n": n,
+        }, mode="stream")
+        return result
+    def ReturnNumberCallingLlm(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ReturnNumberCallingLlm", args={
+            "n": n,
+        }, mode="stream")
+        return result
+    def ReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ReturnOne", args={
+            
+        }, mode="stream")
+        return result
+    def StoreFnCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="StoreFnCallInLocalVar", args={
+            "n": n,
+        }, mode="stream")
+        return result
+    def StoreLlmCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="StoreLlmCallInLocalVar", args={
+            "n": n,
+        }, mode="stream")
+        return result
+    def SumArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="SumArray", args={
+            "arr": arr,
+        }, mode="stream")
+        return result
+    def SumFromTo(self, x: int,y: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="SumFromTo", args={
+            "x": x,"y": y,
         }, mode="stream")
         return result
     
