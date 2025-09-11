@@ -57,6 +57,7 @@ impl APIConfig {
         }
     }
 
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub fn log_redaction_enabled(&self) -> bool {
         match self {
             Self::LocalOnly(config) => config.log_redaction_enabled,
@@ -64,6 +65,7 @@ impl APIConfig {
         }
     }
 
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub fn log_redaction_placeholder(&self) -> &str {
         match self {
             Self::LocalOnly(config) => &config.log_redaction_placeholder,
@@ -89,7 +91,6 @@ pub(super) struct CompleteAPIConfig {
     pub host_name: String,
     pub log_redaction_enabled: bool,
     pub log_redaction_placeholder: String,
-    #[allow(dead_code)]
     pub max_log_chunk_chars: usize,
 
     client: reqwest::Client,

@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use super::{
     Argument, ArgumentsList, Assignment, Ast, Attribute, BlockArgs, ClassConstructor,
     ClassConstructorField, ExprFn, Expression, ExpressionBlock, Field, FieldType, Header,
-    HeaderCollector, HeaderIndex, Stmt, TemplateString, Top,
-    TopLevelAssignment, TypeExpressionBlock, ValueExprBlock, WithIdentifier, WithName, WithSpan,
+    HeaderCollector, HeaderIndex, Stmt, TemplateString, Top, TopLevelAssignment,
+    TypeExpressionBlock, ValueExprBlock, WithIdentifier, WithName,
 };
 
 /// A debug utility for converting AST structures to Mermaid diagrams

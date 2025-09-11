@@ -14,9 +14,8 @@ use baml_rpc::{
         CreateBlobBatchUploadUrlRequest,
     },
     ApiEndpoint, BamlSrcUploadS3File, CheckBamlSrcUpload, CheckBamlSrcUploadRequest,
-    CreateTraceEventUploadUrl, CreateTraceEventUploadUrlRequest,
-    NamedType, S3UploadMetadata, TraceEventBatch, TypeDefinition, TypeDefinitionSource,
-    TypeReference,
+    CreateTraceEventUploadUrl, CreateTraceEventUploadUrlRequest, NamedType, S3UploadMetadata,
+    TraceEventBatch, TypeDefinition, TypeDefinitionSource, TypeReference,
 };
 use http::{HeaderMap, HeaderName, HeaderValue};
 use once_cell::sync::OnceCell;
@@ -27,13 +26,8 @@ use tokio::time::*;
 #[cfg(target_family = "wasm")]
 use wasmtimer::tokio::*;
 
-use super::rpc_converters::{
-    to_rpc_event, BlobRefCache, BlobStorage, IntoRpcEvent, TypeLookup,
-};
-use crate::{
-    runtime::AstSignatureWrapper,
-    tracingv2::storage::interface::TraceEventWithMeta,
-};
+use super::rpc_converters::{to_rpc_event, BlobRefCache, BlobStorage, IntoRpcEvent, TypeLookup};
+use crate::{runtime::AstSignatureWrapper, tracingv2::storage::interface::TraceEventWithMeta};
 
 enum PublisherMessage {
     Trace(Arc<TraceEventWithMeta>),
@@ -57,6 +51,7 @@ static PUBLISHING_CHANNEL: OnceCell<mpsc::UnboundedSender<PublisherMessage>> = O
 static PUBLISHING_TASK: OnceCell<Arc<tokio::task::JoinHandle<()>>> = OnceCell::new();
 static BLOB_UPLOADER_TASK: OnceCell<Arc<tokio::task::JoinHandle<()>>> = OnceCell::new();
 
+#[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
 fn get_publish_channel(
     allow_missing: bool,
 ) -> Option<&'static mpsc::UnboundedSender<PublisherMessage>> {

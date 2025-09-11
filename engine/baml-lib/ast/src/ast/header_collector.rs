@@ -16,7 +16,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use internal_baml_diagnostics::Span;
 
-use super::{Ast, Expression, ExpressionBlock, Field, Header, Stmt, Top, WithName, WithSpan};
+use super::{Ast, Expression, ExpressionBlock, Field, Header, Stmt, Top, WithName};
 
 /// Alias for external header identifiers for public consumption
 type HeaderId = String;

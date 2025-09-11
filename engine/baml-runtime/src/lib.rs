@@ -50,14 +50,14 @@ use internal::{
     },
     prompt_renderer::PromptRenderer,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use internal_baml_core::configuration::GeneratorOutputType;
 use internal_baml_core::{
     ast::Span,
     configuration::{CloudProject, CodegenGenerator, Generator},
     internal_baml_diagnostics::SerializedSpan,
     ir::{repr::initial_context, IRHelperExtended},
 };
-#[cfg(not(target_arch = "wasm32"))]
-use internal_baml_core::configuration::GeneratorOutputType;
 pub use internal_baml_core::{
     internal_baml_diagnostics,
     internal_baml_diagnostics::Diagnostics as DiagnosticsError,
@@ -77,9 +77,9 @@ pub use runtime_context::BamlSrcReader;
 pub use runtime_interface::InternalRuntimeInterface;
 #[cfg(not(feature = "internal"))]
 pub(crate) use runtime_interface::InternalRuntimeInterface;
-use runtime_interface::{ExperimentalTracingInterface, InternalClientLookup};
 #[cfg(not(target_arch = "wasm32"))]
 use runtime_interface::RuntimeConstructor;
+use runtime_interface::{ExperimentalTracingInterface, InternalClientLookup};
 pub(crate) use runtime_methods::prepare_function::PreparedFunctionArgs;
 use serde_json::{self};
 use tracing::{BamlTracer, TracingCall};
@@ -954,7 +954,7 @@ impl BamlRuntime {
             .finish_baml_call(call, ctx, &response)
             .await
         {
-            Ok(id) => {}
+            Ok(_id) => {}
             Err(e) => log::error!("Error during logging: {e}"),
         }
 

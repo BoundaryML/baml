@@ -85,6 +85,7 @@ impl CallError {
         }
     }
 
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     fn io<E>(source: E) -> Self
     where
         E: std::error::Error + Send + Sync + 'static,
@@ -154,7 +155,6 @@ impl From<reqwest::Error> for CallError {
 enum CallErrorKind {
     User,
     Timeout,
-    #[cfg(not(target_arch = "wasm32"))]
     Io,
     Other,
 }
@@ -162,6 +162,7 @@ enum CallErrorKind {
 #[derive(Debug)]
 struct ReqwestConnector {
     client: reqwest::Client,
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     timeout: Option<Duration>,
 }
 
@@ -169,6 +170,7 @@ struct ReqwestConnector {
 impl HttpConnector for ReqwestConnector {
     fn call(&self, request: Request) -> HttpConnectorFuture {
         let client = self.client.clone();
+        #[cfg(not(target_arch = "wasm32"))]
         let timeout = self.timeout;
 
         #[cfg(not(target_arch = "wasm32"))]

@@ -1,9 +1,6 @@
 pub mod api_wrapper;
 
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result};
 use baml_types::{
@@ -25,15 +22,14 @@ use self::api_wrapper::{
     },
     APIWrapper,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use crate::on_log_event::LogEventCallbackSync;
 use crate::{
     internal::llm_client::LLMResponse,
     tracing::api_wrapper::core_types::Role,
     tracingv2::storage::storage::{Collector, BAML_TRACER},
-    CallCtx, FunctionResult, InnerTraceStats, RuntimeContextManager, TestResponse,
-    TraceStats,
+    CallCtx, FunctionResult, InnerTraceStats, RuntimeContextManager, TestResponse, TraceStats,
 };
-#[cfg(not(target_arch = "wasm32"))]
-use crate::on_log_event::LogEventCallbackSync;
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
@@ -242,6 +238,7 @@ impl baml_log::Loggable for BamlEventLoggable<'_> {
 }
 
 impl BamlEventLoggable<'_> {
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     fn build_baml_event_json(&self) -> BamlEventJson {
         let call = self.call;
 
@@ -512,8 +509,6 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         response: Option<BamlValue>,
     ) -> Result<uuid::Uuid> {
-        
-
         let guard = self.trace_stats.guard();
         let Some((call_id, event_chain, global_and_user_tags)) = ctx.exit() else {
             anyhow::bail!(
