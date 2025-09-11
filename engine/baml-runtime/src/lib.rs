@@ -539,6 +539,7 @@ impl BamlRuntime {
                                     prompt_tokens: Some(50),
                                     output_tokens: Some(50),
                                     total_tokens: Some(100),
+                                    cached_input_tokens: None,
                                 },
                             }),
                             // TODO: Run checks and asserts.
@@ -750,6 +751,7 @@ impl BamlRuntime {
                 prompt_tokens: Some(50),
                 output_tokens: Some(50),
                 total_tokens: Some(100),
+                cached_input_tokens: None,
             },
         })
     }

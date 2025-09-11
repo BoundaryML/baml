@@ -308,6 +308,48 @@ pub enum BinaryOperator {
     And,
     /// The `||` operator (logical or).
     Or,
+    /// The `instanceof` operator (instance of).
+    InstanceOf,
+}
+
+impl BinaryOperator {
+    pub fn is_arithmetic(&self) -> bool {
+        matches!(
+            self,
+            BinaryOperator::Add
+                | BinaryOperator::Sub
+                | BinaryOperator::Mul
+                | BinaryOperator::Div
+                | BinaryOperator::Mod
+        )
+    }
+
+    pub fn is_bitwise(&self) -> bool {
+        matches!(
+            self,
+            BinaryOperator::BitAnd
+                | BinaryOperator::BitOr
+                | BinaryOperator::BitXor
+                | BinaryOperator::Shl
+                | BinaryOperator::Shr
+        )
+    }
+
+    pub fn is_comparison(&self) -> bool {
+        matches!(
+            self,
+            BinaryOperator::Eq
+                | BinaryOperator::Neq
+                | BinaryOperator::Lt
+                | BinaryOperator::LtEq
+                | BinaryOperator::Gt
+                | BinaryOperator::GtEq
+        )
+    }
+
+    pub fn is_logical(&self) -> bool {
+        matches!(self, BinaryOperator::And | BinaryOperator::Or)
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]

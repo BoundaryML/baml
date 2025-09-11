@@ -140,7 +140,7 @@ impl ProviderStrategy {
                                         .map(|part| match part {
                                             ChatMessagePart::Text(text) => {
                                                 Ok(json!({
-                                                    "type": "input_text",
+                                                    "type": if msg.role == "assistant" { "output_text" } else { "input_text" },
                                                     "text": text
                                                 }))
                                             }
@@ -157,7 +157,7 @@ impl ProviderStrategy {
                                                             }
                                                         };
                                                         Ok(json!({
-                                                            "type": "input_image",
+                                                            "type": if msg.role == "assistant" { "output_image" } else { "input_image" },
                                                             "image_url": image_url
                                                         }))
                                                     }
@@ -169,7 +169,7 @@ impl ProviderStrategy {
                                                                     .strip_prefix("audio/")
                                                                     .unwrap_or(&mime_type);
                                                                 Ok(json!({
-                                                                    "type": "input_audio",
+                                                                    "type": if msg.role == "assistant" { "output_audio" } else { "input_audio" },
                                                                     "input_audio": {
                                                                         "data": b64_media.base64,
                                                                         "format": format
@@ -185,7 +185,7 @@ impl ProviderStrategy {
                                                         match &media.content {
                                                             baml_types::BamlMediaContent::Url(url_content) => {
                                                                 Ok(json!({
-                                                                    "type": "input_file",
+                                                                    "type": if msg.role == "assistant" { "output_file" } else { "input_file" },
                                                                     "file_url": url_content.url
                                                                 }))
                                                             }
@@ -194,7 +194,7 @@ impl ProviderStrategy {
                                                             }
                                                             baml_types::BamlMediaContent::Base64(b64_media) => {
                                                                 Ok(json!({
-                                                                    "type": "input_file",
+                                                                    "type": if msg.role == "assistant" { "output_file" } else { "input_file" },
                                                                     "file_url": format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
                                                                 }))
                                                             }
@@ -210,7 +210,7 @@ impl ProviderStrategy {
                                                 match inner_part.as_ref() {
                                                     ChatMessagePart::Text(text) => {
                                                         Ok(json!({
-                                                            "type": "input_text",
+                                                            "type": if msg.role == "assistant" { "output_text" } else { "input_text" },
                                                             "text": text
                                                         }))
                                                     }
@@ -228,7 +228,7 @@ impl ProviderStrategy {
                                                                     }
                                                                 };
                                                                 Ok(json!({
-                                                                    "type": "input_image",
+                                                                    "type": if msg.role == "assistant" { "output_image" } else { "input_image" },
                                                                     "image_url": image_url
                                                                 }))
                                                             }

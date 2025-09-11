@@ -1,3 +1,5 @@
+use baml_types::BamlMedia;
+
 use super::{InternalError, ObjectType, Type};
 use crate::{Object, Value};
 
@@ -207,6 +209,19 @@ impl ObjectPool {
     pub fn as_string(&self, value: &Value) -> Result<&String, InternalError> {
         let index = self.as_object(value, ObjectType::String)?;
         self[index].as_string()
+    }
+
+    pub fn as_media(&self, value: &Value) -> Result<&BamlMedia, InternalError> {
+        let object_index = self.as_object(value, ObjectType::Media)?;
+
+        let Object::Media(media) = &self[object_index] else {
+            return Err(InternalError::TypeError {
+                expected: ObjectType::Media.into(),
+                got: ObjectType::of(&self[object_index]).into(),
+            });
+        };
+
+        Ok(media)
     }
 
     /// Inspects the type of a value, including the [`ObjectType`] if the object reference is

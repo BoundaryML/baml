@@ -9,7 +9,8 @@ use tracing_subscriber::EnvFilter;
 use walkdir::WalkDir;
 
 // const PROJECT_DIR: &'static str = "/Users/sam/baml4/c2/baml_src";
-const PROJECT_DIR: &'static str = "/Users/sam/baml4/engine/playground-server/tests/repro1";
+// const PROJECT_DIR: &'static str = "/Users/sam/baml/engine/playground-server/tests/codelens-bugs";
+const PROJECT_DIR: &'static str = "/Users/sam/baml/integ-tests/baml_src";
 
 #[derive(Debug)]
 pub struct Playground2Server {
@@ -179,24 +180,26 @@ pub async fn run_server() -> anyhow::Result<()> {
             let Ok(Some(_line)) = lines.next_line().await else {
                 break;
             };
-            // let playground_message =
-            //     LangServerToWasmMessage::PlaygroundMessage(FrontendMessage::run_test {
-            //         function_name: "ExtractResume".to_string(),
-            //         test_name: "vaibhav_resume".to_string(),
-            //     });
-            // tracing::info!("Sending playground message: {:?}", playground_message);
-            // let _ = broadcast_tx.send(playground_message);
-            tracing::info!("Sending samtest_update_project {}", chrono::Local::now());
-            if let Err(e) = broadcast_tx.send(LangServerToWasmMessage::PlaygroundMessage(
-                FrontendMessage::samtest_update_project {
-                    root_path: PROJECT_DIR.to_string(),
-                    files: vec![("test.baml".to_string(), "// comment\n".to_string())]
-                        .into_iter()
-                        .collect(),
-                },
-            )) {
+            let playground_message =
+                LangServerToWasmMessage::PlaygroundMessage(FrontendMessage::run_test {
+                    function_name: "TestFnNamedArgsSingleClass".to_string(),
+                    test_name: "TestFnNamedArgsSingleClass".to_string(),
+                });
+            tracing::info!("Sending playground message: {:?}", playground_message);
+            let _ = broadcast_tx.send(playground_message).inspect_err(|e| {
                 tracing::error!("Error sending playground message: {:?}", e);
-            };
+            });
+            // tracing::info!("Sending samtest_update_project {}", chrono::Local::now());
+            // if let Err(e) = broadcast_tx.send(LangServerToWasmMessage::PlaygroundMessage(
+            //     FrontendMessage::samtest_update_project {
+            //         root_path: PROJECT_DIR.to_string(),
+            //         files: vec![("test.baml".to_string(), "// comment\n".to_string())]
+            //             .into_iter()
+            //             .collect(),
+            //     },
+            // )) {
+            //     tracing::error!("Error sending playground message: {:?}", e);
+            // };
         }
 
         Ok::<(), anyhow::Error>(())

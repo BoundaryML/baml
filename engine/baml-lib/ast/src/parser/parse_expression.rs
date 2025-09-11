@@ -34,7 +34,8 @@ pub(crate) fn parse_expression(
             | Op::infix(Rule::LT, Assoc::Left)
             | Op::infix(Rule::LTEQ, Assoc::Left)
             | Op::infix(Rule::GT, Assoc::Left)
-            | Op::infix(Rule::GTEQ, Assoc::Left))
+            | Op::infix(Rule::GTEQ, Assoc::Left)
+            | Op::infix(Rule::INSTANCE_OF, Assoc::Left))
         .op(Op::infix(Rule::BIT_OR, Assoc::Left))
         .op(Op::infix(Rule::BIT_XOR, Assoc::Left))
         .op(Op::infix(Rule::BIT_AND, Assoc::Left))
@@ -128,6 +129,7 @@ pub(crate) fn parse_expression(
                 Rule::BIT_SHR => BinaryOperator::Shr,
                 Rule::OR => BinaryOperator::Or,
                 Rule::AND => BinaryOperator::And,
+                Rule::INSTANCE_OF => BinaryOperator::InstanceOf,
                 _ => unreachable_rule!(operator, Rule::infix_operator),
             };
 
@@ -655,12 +657,12 @@ mod tests {
         let input = r#"{
             # Level 1 Header
             let x = "hello";
-            
+
             ## Level 2 Header
             let y = "world";
 
             ########### Level 11 Header
-            
+
             ### Level 3 Headers
             x + y
         }"#;
@@ -704,16 +706,16 @@ mod tests {
 fn ForLoopWithHeaders() -> int {
     let items = [1, 2, 3, 4, 5];
     let result = 0;
-    
+
     ## Main Loop
     for (item in items) {
         ### Item Processing
         let processed = item * 2;
-        
+
         #### Accumulation
         result = result + processed;
     }
-    
+
     ## Final Result
     result
 }"#;

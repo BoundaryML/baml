@@ -509,6 +509,9 @@ pub enum RuntimeError {
 
     /// Right hand side of division operation is zero.
     DivisionByZero { left: Value, right: Value },
+
+    /// Any error, provide a custom message for this one.
+    Other(String),
 }
 
 /// Any kind of virtual machine error.
@@ -1113,7 +1116,6 @@ impl Vm {
 
                 Instruction::BinOp(op) => {
                     let right = self.stack.ensure_pop()?;
-
                     let left = self.stack.ensure_pop()?;
 
                     let result = match (left, right) {
@@ -1170,6 +1172,22 @@ impl Vm {
                             })
                         }
 
+                        (Value::Object(_), Value::Object(_)) if op == BinOp::Add => {
+                            let left = self.objects.as_string(&left)?;
+                            let right = self.objects.as_string(&right)?;
+
+                            let mut concat = left.clone();
+                            concat.push_str(right);
+
+                            let concat_str_object =
+                                Value::Object(self.objects.insert(Object::String(concat)));
+
+                            // Borrow check.
+                            function = self.objects[frame.function].as_function()?;
+
+                            concat_str_object
+                        }
+
                         _ => {
                             return Err(VmError::from(InternalError::CannotApplyBinOp {
                                 left: self.objects.type_of(&left),
@@ -1194,6 +1212,15 @@ impl Vm {
                             CmpOp::LtEq => left <= right,
                             CmpOp::Gt => left > right,
                             CmpOp::GtEq => left >= right,
+
+                            CmpOp::InstanceOf => {
+                                return Err(InternalError::CannotApplyCmpOp {
+                                    left: Type::Int,
+                                    right: Type::Int,
+                                    op,
+                                }
+                                .into())
+                            }
                         }),
 
                         (Value::Float(left), Value::Float(right)) => Value::Bool(match op {
@@ -1203,11 +1230,37 @@ impl Vm {
                             CmpOp::LtEq => left <= right,
                             CmpOp::Gt => left > right,
                             CmpOp::GtEq => left >= right,
+
+                            CmpOp::InstanceOf => {
+                                return Err(InternalError::CannotApplyCmpOp {
+                                    left: Type::Float,
+                                    right: Type::Float,
+                                    op,
+                                }
+                                .into())
+                            }
                         }),
 
                         _ => Value::Bool(match op {
                             CmpOp::Eq => left == right,
                             CmpOp::NotEq => left != right,
+
+                            CmpOp::InstanceOf => {
+                                let left = self.objects.as_object(&left, ObjectType::Instance)?;
+
+                                let Object::Instance(instance) = &self.objects[left] else {
+                                    return Err(InternalError::TypeError {
+                                        expected: ObjectType::Instance.into(),
+                                        got: ObjectType::of(&self.objects[left]).into(),
+                                    }
+                                    .into());
+                                };
+
+                                let right = self.objects.as_object(&right, ObjectType::Class)?;
+
+                                instance.class == right
+                            }
+
                             _ => {
                                 return Err(VmError::from(InternalError::CannotApplyCmpOp {
                                     left: self.objects.type_of(&left),

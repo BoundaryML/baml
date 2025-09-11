@@ -19,11 +19,11 @@
 /// in several places. Bidirectional typing is the target.
 use std::sync::Arc;
 
-use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta, TypeValue};
+use baml_types::{ir_type::TypeIR, BamlMap, BamlMediaType, BamlValueWithMeta, TypeValue};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::{
-    hir::{self, dump::TypeDocumentRender, Hir},
+    hir::{self, dump::TypeDocumentRender, BinaryOperator, Hir},
     thir::{self as thir, ExprMetadata, THir},
 };
 
@@ -129,6 +129,47 @@ pub fn typecheck_returning_context<'a>(
                 ],
                 TypeIR::bool(),
             ),
+            "std.media.image.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::image()),
+            "std.media.audio.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::audio()),
+            "std.media.video.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::video()),
+            "std.media.pdf.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
+
+            "std.media.image.from_base64" => {
+                TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::image())
+            }
+            "std.media.audio.from_base64" => {
+                TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::audio())
+            }
+            "std.media.video.from_base64" => {
+                TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::video())
+            }
+            "std.media.pdf.from_base64" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
+
+            "std.media.image.is_url" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::bool()),
+            "std.media.video.is_url" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::bool()),
+            "std.media.audio.is_url" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::bool()),
+            "std.media.pdf.is_url" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::bool()),
+
+            "std.media.image.is_base64" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::bool()),
+            "std.media.video.is_base64" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::bool()),
+            "std.media.audio.is_base64" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::bool()),
+            "std.media.pdf.is_base64" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::bool()),
+
+            "std.media.image.as_url" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
+            "std.media.video.as_url" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
+            "std.media.audio.as_url" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
+            "std.media.pdf.as_url" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+
+            "std.media.image.as_base64" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
+            "std.media.video.as_base64" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
+            "std.media.audio.as_base64" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
+            "std.media.pdf.as_base64" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+
+            "std.media.image.mime" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
+            "std.media.video.mime" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
+            "std.media.audio.mime" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
+            "std.media.pdf.mime" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+
             _ => {
                 // Generic function type for other natives
                 let param_types = vec![TypeIR::null(); arity];
@@ -553,6 +594,11 @@ impl TypeContext<'_> {
                     | hir::BinaryOperator::Shr => {
                         // Bitwise operations on integers
                         Some(TypeIR::int())
+                    }
+
+                    hir::BinaryOperator::InstanceOf => {
+                        // Instanceof returns bool
+                        Some(TypeIR::bool())
                     }
                 }
             }
@@ -1158,10 +1204,19 @@ pub fn typecheck_expression(
             // Look up type in context
             let var_type = context.get_type(name).cloned();
             if var_type.is_none() {
-                diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Unknown variable {name}"),
-                    span.clone(),
-                ));
+                match name.as_str() {
+                    // Built-in types, you can call `image.from_url` and should work.
+                    "image" | "audio" | "video" | "pdf" => {}
+
+                    cls if context.classes.contains_key(cls) => {}
+
+                    _ => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Unknown variable {name}"),
+                            span.clone(),
+                        ));
+                    }
+                }
             }
             thir::Expr::Var(name.clone(), (span.clone(), var_type))
         }
@@ -1373,6 +1428,30 @@ pub fn typecheck_expression(
                     }
                 },
 
+                Some(TypeIR::Primitive(TypeValue::Media(media_type), _)) => {
+                    let subtype = match media_type {
+                        BamlMediaType::Image => "std.media.image",
+                        BamlMediaType::Video => "std.media.video",
+                        BamlMediaType::Audio => "std.media.audio",
+                        BamlMediaType::Pdf => "std.media.pdf",
+                    };
+
+                    match method.as_str() {
+                        "is_url" => Some(format!("{subtype}.is_url")),
+                        "is_base64" => Some(format!("{subtype}.is_base64")),
+                        "as_url" => Some(format!("{subtype}.as_url")),
+                        "as_base64" => Some(format!("{subtype}.as_base64")),
+                        "mime" => Some(format!("{subtype}.mime")),
+                        _ => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Method `{method}` is not available on type `media`"),
+                                span.clone(),
+                            ));
+                            None
+                        }
+                    }
+                }
+
                 Some(ty) => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         &format!(
@@ -1384,8 +1463,40 @@ pub fn typecheck_expression(
                     None
                 }
 
-                // type not inferred, so we can't say anything about it.
-                None => None,
+                // type of receiver not inferred. Let's see if it's a built-in type.
+                None => {
+                    // Check if it's media.
+                    match &typed_receiver {
+                        thir::Expr::Var(name, _) => match (name.as_str(), method.as_str()) {
+                            ("image", "from_url") => Some("std.media.image.from_url".to_string()),
+                            ("audio", "from_url") => Some("std.media.audio.from_url".to_string()),
+                            ("video", "from_url") => Some("std.media.video.from_url".to_string()),
+                            ("pdf", "from_url") => Some("std.media.pdf.from_url".to_string()),
+
+                            ("image", "from_base64") => {
+                                Some("std.media.image.from_base64".to_string())
+                            }
+                            ("audio", "from_base64") => {
+                                Some("std.media.audio.from_base64".to_string())
+                            }
+                            ("video", "from_base64") => {
+                                Some("std.media.video.from_base64".to_string())
+                            }
+                            ("pdf", "from_base64") => Some("std.media.pdf.from_base64".to_string()),
+
+                            _ => {
+                                diagnostics.push_error(DatamodelError::new_validation_error(
+                                    &format!("Method `{method}` is not available on type `{name}`"),
+                                    span.clone(),
+                                ));
+                                None
+                            }
+                        },
+
+                        // Nothing we can do about it.
+                        _ => None,
+                    }
+                }
             };
 
             // Return untyped expr if not known.
@@ -1418,6 +1529,15 @@ pub fn typecheck_expression(
                 }
             };
 
+            // image.from_url is not a "method", it's an associated function (kind of).
+            let is_function_call_on_namespace = matches!(
+                &typed_receiver,
+                thir::Expr::Var(name, _) if matches!(
+                    name.as_str(),
+                    "image" | "audio" | "video" | "pdf"
+                )
+            );
+
             let typed_args: Vec<_> = if is_known_function {
                 // Only validate arguments for known functions. Skip the first argument since that's going to be
                 // our method receiver.
@@ -1425,7 +1545,7 @@ pub fn typecheck_expression(
                     .zip(
                         param_types
                             .iter()
-                            .skip(1)
+                            .skip(if is_function_call_on_namespace { 0 } else { 1 })
                             .chain(std::iter::repeat(&TypeIR::null())),
                     )
                     .map(|(arg, expected_type)| {
@@ -1460,8 +1580,23 @@ pub fn typecheck_expression(
                     .collect()
             };
 
+            // image.from_url is not a "method", it's an associated function (kind of).
+            let is_function_call_on_namespace = matches!(
+                &typed_receiver,
+                thir::Expr::Var(name, _) if matches!(
+                    name.as_str(),
+                    "image" | "audio" | "video" | "pdf"
+                )
+            );
+
+            let passed_number_of_args = if is_function_call_on_namespace {
+                args.len()
+            } else {
+                args.len() + 1 // self
+            };
+
             // Check argument count only for known functions
-            if is_known_function && args.len() + 1 != param_types.len() {
+            if is_known_function && passed_number_of_args != param_types.len() {
                 diagnostics.push_error(DatamodelError::new_validation_error(
                     &format!(
                         "Function {} expects {} arguments, got {}",
@@ -1471,6 +1606,21 @@ pub fn typecheck_expression(
                     ),
                     span.clone(),
                 ));
+            }
+
+            // Normal call
+            // TODO: Very annoying, figure out how to parse method calls on
+            // classes differently than function calls on namespaces.
+            if is_function_call_on_namespace {
+                return thir::Expr::Call {
+                    func: Arc::new(thir::Expr::Var(
+                        full_name.clone(),
+                        (span.clone(), func_type.clone()),
+                    )),
+                    type_args: vec![],
+                    args: typed_args,
+                    meta: (span.clone(), return_type),
+                };
             }
 
             thir::Expr::MethodCall {
@@ -1780,12 +1930,174 @@ pub fn typecheck_expression(
             operator,
             right,
             span,
-        } => thir::Expr::BinaryOperation {
-            left: Arc::new(typecheck_expression(left, context, diagnostics)),
-            operator: *operator,
-            right: Arc::new(typecheck_expression(right, context, diagnostics)),
-            meta: (span.clone(), None),
-        },
+        } => {
+            let left = typecheck_expression(left, context, diagnostics);
+            let right = typecheck_expression(right, context, diagnostics);
+
+            // TODO: Probably easier to check operator first then expected types.
+            // Doing it like this (the other way around) seems cumbersome.
+            let expr_type = match (left.meta().1.as_ref(), operator, right.meta().1.as_ref()) {
+                // Ok: string + string
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                    hir::BinaryOperator::Add,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                ) => Some(TypeIR::string()),
+
+                // Other invalid operation for strings.
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                ) => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Cannot apply {operator} operator to strings"),
+                        span.clone(),
+                    ));
+
+                    None
+                }
+
+                // OK: operation on ints
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                ) if !operator.is_logical() => {
+                    if operator.is_arithmetic() || operator.is_bitwise() {
+                        Some(TypeIR::int())
+                    } else if operator.is_comparison() {
+                        Some(TypeIR::bool())
+                    } else {
+                        None
+                    }
+                }
+
+                // OK: Operation on floats
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                ) if !operator.is_logical() && !operator.is_bitwise() => {
+                    if operator.is_arithmetic() {
+                        Some(TypeIR::float())
+                    } else if operator.is_comparison() {
+                        Some(TypeIR::bool())
+                    } else {
+                        None
+                    }
+                }
+
+                // OK: Operation on bools
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Bool, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Bool, _)),
+                ) if operator.is_logical() => Some(TypeIR::bool()),
+
+                // Err: Operation on int and float
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                )
+                | (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Float, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::Int, _)),
+                ) => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Cannot apply {operator} operator to int and float"),
+                        span.clone(),
+                    ));
+                    None
+                }
+
+                (Some(right), BinaryOperator::Eq | BinaryOperator::Neq, Some(left)) => {
+                    if left.map_meta(|_| ()) == right.map_meta(|_| ()) {
+                        Some(TypeIR::bool())
+                    } else {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!(
+                                "Invalid equality/inequality operation on objects of different type: {} {operator} {}",
+                                left.name_for_user(),
+                                right.name_for_user()
+                            ),
+                            span.clone()
+                        ));
+
+                        None
+                    }
+                }
+
+                // OK: Instanceof
+                (_, BinaryOperator::InstanceOf, _) => match &right {
+                    thir::Expr::Var(name, _) => {
+                        if context.classes.get(name).is_some() {
+                            Some(TypeIR::bool())
+                        } else {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Class {name} not found"),
+                                span.clone(),
+                            ));
+                            None
+                        }
+                    }
+                    _ => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            "Invalid binary operation (instanceof): right operand must be a class",
+                            span.clone(),
+                        ));
+                        None
+                    }
+                },
+
+                _ => {
+                    match (left.meta().1.as_ref(), right.meta().1.as_ref()) {
+                        (None, Some(_)) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                "Invalid binary operation: cannot infer type of left operand",
+                                span.clone(),
+                            ))
+                        }
+
+                        (Some(_), None) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                "Invalid binary operation: cannot infer type of right operand",
+                                span.clone(),
+                            ))
+                        }
+
+                        (Some(left_type), Some(right_type)) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Invalid binary operation ({operator}) on different types: {} {operator} {}",
+                                    left_type.name_for_user(),
+                                    right_type.name_for_user()
+                                ),
+                                span.clone(),
+                            ));
+                        }
+
+                        (None, None) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                "Invalid binary operation: cannot infer type of operands",
+                                span.clone(),
+                            ));
+                        }
+                    };
+
+                    None
+                }
+            };
+
+            thir::Expr::BinaryOperation {
+                left: Arc::new(left),
+                operator: *operator,
+                right: Arc::new(right),
+                meta: (span.clone(), expr_type),
+            }
+        }
+        // TODO: Typecheck unary.
         hir::Expression::UnaryOperation {
             operator,
             expr,

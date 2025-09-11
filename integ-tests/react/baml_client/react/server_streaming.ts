@@ -3565,6 +3565,25 @@ export const TestOpenAIResponses = async (
 };
 
 /**
+ * Executes the streaming variant of the "TestOpenAIResponsesAllRoles" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } problem - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestOpenAIResponsesAllRoles = async (
+  problem: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestOpenAIResponsesAllRoles(
+    problem,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "TestOpenAIResponsesAutoType" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding

@@ -177,3 +177,24 @@ fn return_with_stack() -> anyhow::Result<()> {
         expected: VmExecState::Complete(Value::Int(0)),
     })
 }
+
+#[test]
+fn recursive() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function fib(n: int) -> int {
+                if (n <= 1) {
+                    n
+                } else {
+                    fib(n - 1) + fib(n - 2)
+                }
+            }
+
+            function main() -> int {
+                fib(3)
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(2)),
+    })
+}

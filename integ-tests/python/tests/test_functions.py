@@ -658,20 +658,21 @@ async def test_streaming():
 
     final = await stream.get_final_response()
 
-    assert (
-        first_msg_time - start_time <= 1.5
-    ), "Expected first message within 1 second but it took longer."
-    assert (
-        last_msg_time - start_time >= 1
-    ), "Expected last message after 1.5 seconds but it was earlier."
+    assert first_msg_time - start_time <= 1.5, (
+        "Expected first message within 1 second but it took longer."
+    )
+    assert last_msg_time - start_time >= 1, (
+        "Expected last message after 1.5 seconds but it was earlier."
+    )
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     assert msgs[-1] == final, "Expected last stream message to match final response."
 
@@ -702,20 +703,21 @@ def test_streaming_sync():
 
     final = stream.get_final_response()
 
-    assert (
-        first_msg_time - start_time <= 1.5
-    ), "Expected first message within 1 second but it took longer."
-    assert (
-        last_msg_time - start_time >= 1
-    ), "Expected last message after 1.5 seconds but it was earlier."
+    assert first_msg_time - start_time <= 1.5, (
+        "Expected first message within 1 second but it took longer."
+    )
+    assert last_msg_time - start_time >= 1, (
+        "Expected last message after 1.5 seconds but it was earlier."
+    )
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     assert msgs[-1] == final, "Expected last stream message to match final response."
 
@@ -738,11 +740,12 @@ async def test_streaming_claude():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     print("msgs:")
     print(msgs[-1])
@@ -763,11 +766,12 @@ async def test_streaming_gemini():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     print("msgs:")
     print(msgs[-1])
@@ -1175,9 +1179,9 @@ In conclusion, this story is a reflection on the power of dreams and the respons
     print("Duration no caching: ", duration)
     print("Duration with caching: ", duration2)
 
-    assert (
-        duration2 < duration
-    ), f"{duration2} < {duration}. Expected second call to be faster than first by a large margin."
+    assert duration2 < duration, (
+        f"{duration2} < {duration}. Expected second call to be faster than first by a large margin."
+    )
 
 
 @pytest.mark.asyncio
@@ -1245,9 +1249,9 @@ async def test_baml_validation_error_format():
         except errors.BamlValidationError as e:
             print("Error: ", e)
             assert hasattr(e, "prompt"), "Error object should have 'prompt' attribute"
-            assert hasattr(
-                e, "raw_output"
-            ), "Error object should have 'raw_output' attribute"
+            assert hasattr(e, "raw_output"), (
+                "Error object should have 'raw_output' attribute"
+            )
             assert hasattr(e, "message"), "Error object should have 'message' attribute"
             assert 'Say "hello there"' in e.prompt
 
@@ -1558,9 +1562,9 @@ async def test_gemini_thinking():
 
     except Exception as e:
         # If it fails with the thinking config, ensure it's not due to parsing multiple non-thought parts
-        assert "Too many matches" not in str(
-            e
-        ), f"Parsing error with thinking response: {e}"
+        assert "Too many matches" not in str(e), (
+            f"Parsing error with thinking response: {e}"
+        )
         raise
 
 
@@ -1581,3 +1585,10 @@ async def test_openai_responses_reasoning_streaming():
         print(msg)
 
     _res = await stream.get_final_response()
+
+
+@pytest.mark.asyncio
+async def test_openai_responses_all_roles():
+    _res = await b.TestOpenAIResponsesAllRoles(
+        "a world without horses, should be titled 'A World Without Horses'. Make it short, 2 sentences."
+    )

@@ -51,3 +51,17 @@ func (u *usage) OutputTokens() (int64, error) {
 
 	return tokens, nil
 }
+
+func (u *usage) CachedInputTokens() (int64, error) {
+	result, err := raw_objects.CallMethod(u, "cached_input_tokens", nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get cached input tokens: %w", err)
+	}
+
+	tokens, ok := result.(int64)
+	if !ok {
+		return 0, fmt.Errorf("unexpected type for cached input tokens: %T", result)
+	}
+
+	return tokens, nil
+}

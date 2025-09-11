@@ -77,7 +77,6 @@
     "swr": "2.3.3",
     "tailwind-merge": "3.3.1",
     "unist-util-visit": "5.0.0",
-    "vscode-webview": "1.0.1-beta.1",
     "zod": "3.25.66"
   },
   "devDependencies": {

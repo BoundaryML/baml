@@ -58,8 +58,7 @@ async fn playground_static_assets() -> anyhow::Result<PathBuf> {
     const GITHUB_REPO: &str = "BoundaryML/baml";
 
     if std::env::var("VSCODE_DEBUG_MODE")
-        .map(|v| v == "true")
-        .unwrap_or(false)
+        .is_ok_and(|v| v.to_lowercase() == "true" || v.to_lowercase() == "1")
     {
         // Use cargo-relative path for local dist
         let local_dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

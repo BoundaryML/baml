@@ -211,6 +211,7 @@ export type StreamingServerTypes = {
   TestOpenAIO1WithMaxTokens: string,
   TestOpenAIProviderWithResponsesType: string,
   TestOpenAIResponses: string,
+  TestOpenAIResponsesAllRoles: string,
   TestOpenAIResponsesAutoType: string,
   TestOpenAIResponsesConversation: string,
   TestOpenAIResponsesCustomURL: string,

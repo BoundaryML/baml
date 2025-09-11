@@ -7946,6 +7946,49 @@ func (*parse_stream) TestOpenAIResponses(text string, opts ...CallOptionFunc) (s
 	return casted, nil
 }
 
+// / Parse version of TestOpenAIResponsesAllRoles (Takes in string and returns string)
+func (*parse_stream) TestOpenAIResponsesAllRoles(text string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": true},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesAllRoles: %w", err)
+		panic(wrapped_err)
+	}
+
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestOpenAIResponsesAllRoles", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	casted := (result).(string)
+
+	return casted, nil
+}
+
 // / Parse version of TestOpenAIResponsesAutoType (Takes in string and returns string)
 func (*parse_stream) TestOpenAIResponsesAutoType(text string, opts ...CallOptionFunc) (string, error) {
 

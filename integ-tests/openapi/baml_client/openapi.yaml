@@ -2596,6 +2596,19 @@ paths:
                 title: TestOpenAIResponsesResponse
                 type: string
       operationId: TestOpenAIResponses
+  /call/TestOpenAIResponsesAllRoles:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIResponsesAllRoles'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIResponsesAllRolesResponse
+                type: string
+      operationId: TestOpenAIResponsesAllRoles
   /call/TestOpenAIResponsesAutoType:
     post:
       requestBody:
@@ -6120,6 +6133,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    TestOpenAIResponsesAllRoles:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIResponsesAllRolesRequest
+            type: object
+            properties:
+              problem:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - problem
             additionalProperties: false
     TestOpenAIResponsesAutoType:
       required: true

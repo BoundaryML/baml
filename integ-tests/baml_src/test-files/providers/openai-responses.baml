@@ -338,3 +338,26 @@ test TestOpenAIResponsesReasoningTest {
     problem "Solve this step by step: If a train travels at 60 mph for 2.5 hours, then at 80 mph for 1.5 hours, what is the total distance traveled?"
   }
 }
+
+client<llm> Gpt5 {
+  provider openai-responses
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-5-chat-latest"
+  }
+}
+
+
+function TestOpenAIResponsesAllRoles(problem: string) -> string {
+  client Gpt5
+  prompt #"
+    {{ _.role("system") }}
+    Hi
+    {{ _.role("developer") }}
+    Hi
+    {{ _.role("assistant") }}
+    Hi
+    {{ _.role("user") }}
+    {{ problem }}
+  "#
+}

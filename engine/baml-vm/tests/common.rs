@@ -3,7 +3,7 @@
 use baml_compiler::test::ast;
 use baml_vm::{
     BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool, Instruction,
-    Object, ObjectIndex, ObjectPool, RuntimeError, StackIndex, Value, Vm, VmError, VmExecState,
+    Object, ObjectIndex, ObjectPool, StackIndex, Value, Vm, VmError, VmExecState,
 };
 
 /// Helper struct for testing VM execution.

@@ -3381,6 +3381,24 @@ export const TestOpenAIResponses = async (
 };
 
 /**
+ * Executes the "TestOpenAIResponsesAllRoles" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesAllRoles"
+ * with the specified parameters.
+ *
+ * @param { string } problem - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesAllRoles = async (
+  problem: string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesAllRoles(
+    problem,
+  );
+};
+
+/**
  * Executes the "TestOpenAIResponsesAutoType" BAML action.
  *
  * This server action calls the underlying BAML function "TestOpenAIResponsesAutoType"

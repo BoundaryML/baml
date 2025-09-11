@@ -49,6 +49,14 @@ dependencies {
     }
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    
+    // CLI Downloader dependencies
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.apache.commons:commons-compress:1.24.0")
+    implementation("org.slf4j:slf4j-api:2.0.9")
+    implementation("ch.qos.logback:logback-classic:1.4.11")
+    implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 }
 
 // Configure IntelliJ Platform Gradle Plugin - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-extension.html
@@ -143,6 +151,36 @@ tasks {
             include("syntaxes/jinja.tmLanguage.json")
         }
         into("src/main/resources/textmate")
+    }
+    
+    // Configure the runIde task to auto-open integ-tests directory
+    runIde {
+        args = listOf("${layout.projectDirectory}/../integ-tests/baml_src")
+    }
+    
+    // Configure trusted paths to avoid security prompts in development
+    prepareSandbox {
+        val integTestsPath = layout.projectDirectory.dir("../integ-tests").asFile.absolutePath
+        val bamlSrcPath = layout.projectDirectory.dir("../integ-tests/baml_src").asFile.absolutePath
+        
+        doLast {
+            val trustedPathsFile = sandboxConfigDirectory.file("options/trusted-paths.xml").get().asFile
+            trustedPathsFile.parentFile.mkdirs()
+            trustedPathsFile.writeText(
+                """
+                <application>
+                  <component name="Trusted.Paths">
+                    <option name="TRUSTED_PROJECT_PATHS">
+                      <map>
+                        <entry key="$integTestsPath" value="true" />
+                        <entry key="$bamlSrcPath" value="true" />
+                      </map>
+                    </option>
+                  </component>
+                </application>
+                """.trimIndent()
+            )
+        }
     }
 }
 

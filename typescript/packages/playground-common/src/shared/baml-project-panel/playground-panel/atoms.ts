@@ -42,7 +42,7 @@ export const selectedItemAtom = atom(
       string,
     ];
   },
-  (_, set, functionName: string, testcaseName: string) => {
+  (_, set, functionName: string, testcaseName: string | undefined) => {
     set(selectedFunctionAtom, functionName);
     set(selectedTestcaseAtom, testcaseName);
   },

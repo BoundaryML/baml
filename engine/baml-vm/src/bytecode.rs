@@ -254,6 +254,7 @@ pub enum CmpOp {
     LtEq,
     Gt,
     GtEq,
+    InstanceOf,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -288,6 +289,7 @@ impl std::fmt::Display for CmpOp {
             CmpOp::LtEq => "<=",
             CmpOp::Gt => ">",
             CmpOp::GtEq => ">=",
+            CmpOp::InstanceOf => "instanceof",
         })
     }
 }

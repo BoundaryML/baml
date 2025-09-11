@@ -255,7 +255,9 @@ pub struct CompletionUsage {
     /// Total number of tokens used in the request (prompt + completion).
     pub total_tokens: u64,
     /// Additional fields that may be present in responses API
+    #[serde(alias = "prompt_tokens_details")]
     pub input_tokens_details: Option<serde_json::Value>,
+    #[serde(alias = "completion_tokens_details")]
     pub output_tokens_details: Option<serde_json::Value>,
 }
 

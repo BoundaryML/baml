@@ -611,6 +611,7 @@ impl std::fmt::Display for BinaryOperator {
             BinaryOperator::BitXor => "^",
             BinaryOperator::Shl => "<<",
             BinaryOperator::Shr => ">>",
+            BinaryOperator::InstanceOf => "instanceof",
         })
     }
 }

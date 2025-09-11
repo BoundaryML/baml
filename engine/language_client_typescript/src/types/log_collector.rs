@@ -307,12 +307,15 @@ impl Usage {
     #[napi]
     pub fn to_string(&self) -> String {
         format!(
-            "Usage(input_tokens={}, output_tokens={})",
+            "Usage(input_tokens={}, output_tokens={}, cached_input_tokens={})",
             self.inner
                 .input_tokens
                 .map_or_else(|| "null".to_string(), |v| v.to_string()),
             self.inner
                 .output_tokens
+                .map_or_else(|| "null".to_string(), |v| v.to_string()),
+            self.inner
+                .cached_input_tokens
                 .map_or_else(|| "null".to_string(), |v| v.to_string())
         )
     }
@@ -325,6 +328,11 @@ impl Usage {
     #[napi(getter)]
     pub fn output_tokens(&self) -> Option<i64> {
         self.inner.output_tokens
+    }
+
+    #[napi(getter)]
+    pub fn cached_input_tokens(&self) -> Option<i64> {
+        self.inner.cached_input_tokens
     }
 }
 

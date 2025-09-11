@@ -9,10 +9,12 @@ struct Program {
 
 fn bootstrap_vm(input: Program) -> Vm {
     let ast = baml_compiler::test::ast(input.source).unwrap();
+
     let BamlVmProgram {
         objects,
         globals,
         resolved_function_names,
+        ..
     } = baml_compiler::compile(&ast).unwrap();
 
     // Find the target function index by name
@@ -68,13 +70,13 @@ pub fn bench_iterative_fib(c: &mut Criterion) {
                 bootstrap_vm(Program {
                     source: r#"
                         function fib(n: int) -> int {
-                            let mut a = 0;
-                            let mut b = 1;
+                            let a = 0;
+                            let b = 1;
 
                             if (n == 0) {
                                 b
                             } else {
-                                let mut i = 1;
+                                let i = 1;
                                 while (i <= n) {
                                     let c = a + b;
                                     a = b;
