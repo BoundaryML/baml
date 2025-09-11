@@ -14,7 +14,7 @@ anyhow.workspace = true
 
 [lints.rust]
 dead_code = "deny"
-mismatched_lifetime_syntaxes = "deny"
+elided_named_lifetimes = "deny"
 unused_imports = "deny"
 unused_variables = "deny"
 
