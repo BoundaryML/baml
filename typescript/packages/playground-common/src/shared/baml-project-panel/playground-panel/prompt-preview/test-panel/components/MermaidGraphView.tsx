@@ -204,15 +204,8 @@ export const MermaidGraphView: React.FC = () => {
               return;
             }
             console.log('[MermaidGraphView] triggerSpan', { nodeId, span });
-            vscode.postMessage?.({
-              command: 'jumpToFile',
-              span: {
-                start: span.start,
-                end: span.end,
-                source_file: span.file_path,
-                value: `${(span.file_path.split('/').pop() || '<file>.baml')}:${span.start_line + 1}`,
-              },
-            });
+            vscode.jumpToFile(span);
+            
             window.postMessage(
               {
                 command: 'set_flashing_regions',

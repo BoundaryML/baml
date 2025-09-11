@@ -38,17 +38,6 @@ impl BamlExtension {
             });
         }
 
-        if let Some(path) = &self.cached_binary_path {
-            if let Ok(stat) = fs::metadata(path) {
-                if stat.is_file() {
-                    return Ok(BamlBinary {
-                        path: path.clone(),
-                        args: binary_args,
-                    });
-                }
-            }
-        }
-
         #[cfg(feature = "debug")]
         {
             let binary_path = "baml-cli";
@@ -132,7 +121,6 @@ impl BamlExtension {
                 }
             }
 
-            self.cached_binary_path = Some(binary_path.clone());
             Ok(BamlBinary {
                 path: binary_path,
                 args: binary_args,
@@ -153,13 +141,13 @@ impl zed::Extension for BamlExtension {
     ) -> Result<zed::Command> {
         let baml_binary = self.language_server_binary(language_server_id, worktree)?;
         Ok(zed::Command {
-            command: baml_binary.path,
-            // command: format!(
-            //     "{}/../target/debug/language-server-hot-reload",
-            //     env!("CARGO_MANIFEST_DIR")
-            // ),
+            // command: baml_binary.path,
+            command: format!(
+                "{}/../target/debug/language-server-hot-reload",
+                env!("CARGO_MANIFEST_DIR")
+            ),
             args: baml_binary.args.unwrap_or_else(|| vec!["lsp".into()]),
-            env: Default::default(),
+            env: vec![("VSCODE_DEBUG_MODE".to_string(), "true".to_string())],
         })
     }
 

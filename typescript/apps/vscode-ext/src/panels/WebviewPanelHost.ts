@@ -425,13 +425,6 @@ export class WebviewPanelHost {
       async (
         message:
           | {
-              command:
-                | 'get_port'
-                | 'add_project'
-                | 'cancelTestRun'
-                | 'removeTest';
-            }
-          | {
               command: 'set_flashing_regions';
               content: {
                 spans: {
@@ -442,10 +435,6 @@ export class WebviewPanelHost {
                   end_char: number;
                 }[];
               };
-            }
-          | {
-              command: 'jumpToFile';
-              span: StringSpan;
             }
           | {
               command: 'telemetry';
@@ -462,33 +451,6 @@ export class WebviewPanelHost {
         console.log('DEBUG: webview message: ', message);
         if ('command' in message) {
           switch (message.command) {
-            case 'add_project':
-              console.log('webview add_project');
-              addProject();
-
-              return;
-            case 'jumpToFile': {
-              try {
-                console.log('jumpToFile', message.span);
-                const span = message.span;
-                // span.source_file is a file:/// URI
-
-                const uri = vscode.Uri.parse(span.source_file);
-                await vscode.workspace.openTextDocument(uri).then((doc) => {
-                  const range = new vscode.Range(
-                    doc.positionAt(span.start),
-                    doc.positionAt(span.end),
-                  );
-                  vscode.window.showTextDocument(doc, {
-                    selection: range,
-                    viewColumn: ViewColumn.One,
-                  });
-                });
-              } catch (e: any) {
-                console.log(e);
-              }
-              return;
-            }
             case 'telemetry': {
               const { action, data } = message.meta;
               this.reporter?.sendTelemetryEvent({
@@ -761,6 +723,24 @@ export class WebviewPanelHost {
               rpcId: message.rpcId,
               rpcMethod: vscodeCommand,
               data: { ack: true },
+            });
+            return;
+          case 'JUMP_TO_FILE':
+            const { span } = vscodeMessage;
+            const fileUri = vscode.Uri.parse(span.file_path);
+            const doc = await vscode.workspace.openTextDocument(fileUri);
+            const range = new vscode.Range(
+              new vscode.Position(span.start_line, 0),
+              new vscode.Position(span.start_line, 0),
+            );
+            vscode.window.showTextDocument(doc, {
+              selection: range,
+              viewColumn: ViewColumn.One,
+            });
+            this._panel.webview.postMessage({
+              rpcId: message.rpcId,
+              rpcMethod: vscodeCommand,
+              data: { ok: true },
             });
             return;
         }

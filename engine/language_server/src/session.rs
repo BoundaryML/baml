@@ -13,7 +13,7 @@ use index::DocumentController;
 use itertools::any;
 use lsp_types::{ClientCapabilities, TextDocumentContentChangeEvent, Url};
 use parking_lot::Mutex;
-use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
+use playground_server::{FrontendMessage, WebviewNotification, WebviewRouterMessage};
 use serde_json::Value;
 
 pub(crate) use self::{capabilities::ResolvedClientCapabilities, settings::AllSettings};
@@ -52,7 +52,7 @@ pub struct Session {
     pub baml_settings: BamlSettings,
 
     pub playground_port: u16,
-    pub playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
+    pub to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
 }
 
 impl Clone for Session {
@@ -64,7 +64,7 @@ impl Clone for Session {
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
             baml_settings: self.baml_settings.clone(),
             playground_port: self.playground_port,
-            playground_tx: self.playground_tx.clone(),
+            to_webview_router_tx: self.to_webview_router_tx.clone(),
         }
     }
 }
@@ -76,7 +76,7 @@ impl Session {
         global_settings: ClientSettings,
         workspace_folders: &[(Url, ClientSettings)],
         playground_port: u16,
-        playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
+        to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
         client_version: Option<String>,
     ) -> anyhow::Result<Self> {
         let mut projects = HashMap::new();
@@ -126,7 +126,7 @@ impl Session {
                 baml_settings
             },
             playground_port,
-            playground_tx,
+            to_webview_router_tx,
         })
     }
 
@@ -476,7 +476,7 @@ mod tests {
         let global_settings = ClientSettings::default();
         let workspace_folders = vec![]; // Start with empty workspace
 
-        let (playground_tx, _) = broadcast::channel(1);
+        let (to_webview_router_tx, _) = broadcast::channel(1);
 
         Session::new(
             &client_capabilities,
@@ -484,7 +484,7 @@ mod tests {
             global_settings,
             &workspace_folders,
             0,
-            playground_tx,
+            to_webview_router_tx,
             None, // No client_version for this test
         )
         .unwrap()

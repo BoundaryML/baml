@@ -19,9 +19,10 @@ use lsp_types::{
     TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url,
     WorkspaceClientCapabilities, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
-use playground_server::{FrontendMessage, LangServerToWasmMessage, PreLangServerToWasmMessage};
+use playground_server::{FrontendMessage, WebviewNotification, WebviewRouterMessage};
 use schedule::Task;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tokio::sync::{broadcast, RwLock};
 
 use self::{
@@ -48,9 +49,9 @@ pub type Result<T> = std::result::Result<T, api::Error>;
 
 pub(crate) struct ServerArgs {
     pub tokio_runtime: tokio::runtime::Runtime,
-    pub broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
-    pub playground_rx: broadcast::Receiver<PreLangServerToWasmMessage>,
-    pub playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
+    pub webview_router_to_websocket_tx: broadcast::Sender<WebviewNotification>,
+    pub to_webview_router_rx: broadcast::Receiver<WebviewRouterMessage>,
+    pub to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
     pub playground_port: u16,
     pub proxy_port: u16,
 }
@@ -175,7 +176,7 @@ impl Server {
             global_settings,
             &workspaces,
             args.playground_port,
-            args.playground_tx.clone(),
+            args.to_webview_router_tx.clone(),
             client_version,
         )?;
 
@@ -194,7 +195,6 @@ impl Server {
 
         {
             let lsp_sender = server.connection.make_sender();
-            let playground_tx = server.session.playground_tx.clone();
             server.args.tokio_runtime.spawn(async move {
                 lsp_sender
                     .send(Message::Notification(lsp_server::Notification::new(
@@ -208,15 +208,32 @@ impl Server {
             });
         }
         {
-            let mut playground_rx = server.args.playground_rx.resubscribe();
-            let broadcast_tx = server.args.broadcast_tx.clone();
+            // Start the webview router loop
+            //
+            // This is the communication bridge between the webview and IDE in non-VSCode environments
+            // and allows the webview to send messages to Jetbrains and allows Jetbrains to send messages
+            // to the webview.
+            //
+            // webview->IDE is generally backed by the webview POSTing to /webview/SEND_LSP_NOTIFICATION_TO_IDE,
+            //   and the language server will then forward that to the IDE
+            // IDE->webview is generally backed by the IDE calling POST /webview/SEND_LSP_NOTIFICATION_TO_WEBVIEW,
+            //   and the language server will then forward that to the webview
+            //
+            // (Note that although the language-server pretends to offer a request-response API, it does not
+            // block on either the IDE or webview responding before responding to its caller.)
+            //
+            // Incoming messages are received via to_webview_router_tx, which the router will then decide to
+            // dispatch to either the webview (via its websocket) or the IDE (via its LSP connection).
+            let lsp_sender = server.connection.make_sender();
+            let mut to_webview_router_rx = server.args.to_webview_router_rx.resubscribe();
+            let webview_router_to_websocket_tx = server.args.webview_router_to_websocket_tx.clone();
             let session = server.session.clone();
             server.args.tokio_runtime.spawn(async move {
                 tracing::info!("Starting playground rx loop");
-                while let Ok(msg) = playground_rx.recv().await {
+                while let Ok(msg) = to_webview_router_rx.recv().await {
                     tracing::info!("playground rx loop: {:?}", msg);
                     match msg {
-                        PreLangServerToWasmMessage::WasmIsInitialized => {
+                        WebviewRouterMessage::WasmIsInitialized => {
                             tracing::info!("Received playground INITIALIZED request");
                             let projects = session.baml_src_projects.lock();
                             for (_, project) in projects.iter() {
@@ -237,8 +254,8 @@ impl Server {
                                         (key, contents)
                                     })
                                     .collect();
-                                broadcast_tx
-                                    .send(LangServerToWasmMessage::PlaygroundMessage(
+                                let _ = webview_router_to_websocket_tx
+                                    .send(WebviewNotification::PlaygroundMessage(
                                         FrontendMessage::add_project {
                                             root_path: project
                                                 .root_path()
@@ -247,13 +264,38 @@ impl Server {
                                             files: files_map,
                                         },
                                     ))
-                                    .unwrap();
+                                    .inspect_err(|e| {
+                                        tracing::error!("Failed to forward add_project to playground: {e}");
+                                    });
                             }
                         }
-                        PreLangServerToWasmMessage::FrontendMessage(msg) => {
-                            broadcast_tx
-                                .send(LangServerToWasmMessage::PlaygroundMessage(msg))
-                                .unwrap();
+                        WebviewRouterMessage::SendLspNotificationToIde(notification) => {
+                            tracing::info!("Received playground SEND_LSP_NOTIFICATION request: {:?}", notification);
+                            let _ = lsp_sender
+                                .send(Message::Notification(notification))
+                                .inspect_err(|e| {
+                                    tracing::error!("Failed to forward SEND_LSP_NOTIFICATION message to language-server: {e}");
+                                });
+                        }
+                        WebviewRouterMessage::SendLspNotificationToWebview(notification) => {
+                            tracing::info!("Received playground SEND_LSP_NOTIFICATION_TO_WEBVIEW request: {:?}", notification);
+                            let _ = webview_router_to_websocket_tx
+                                .send(WebviewNotification::PlaygroundMessage(
+                                    FrontendMessage::lsp_message {
+                                        method: notification.method,
+                                        params: notification.params,
+                                    },
+                                ))
+                                .inspect_err(|e| {
+                                    tracing::error!("Failed to forward SEND_LSP_NOTIFICATION_TO_WEBVIEW message to webview: {e}");
+                                });
+                        }
+                        WebviewRouterMessage::CustomNotificationToWebview(msg) => {
+                            let _ = webview_router_to_websocket_tx
+                                .send(WebviewNotification::PlaygroundMessage(msg))
+                                .inspect_err(|e| {
+                                    tracing::error!("Failed to forward FrontendMessage to playground: {e}");
+                                });
                         }
                     }
                 }
@@ -339,7 +381,7 @@ impl Server {
                 &self.client_capabilities,
                 self.session,
                 self.worker_threads,
-                self.args.broadcast_tx,
+                self.args.webview_router_to_websocket_tx,
             )?;
             self.connection.close()?;
             Ok(())
@@ -355,7 +397,7 @@ impl Server {
         _client_capabilities: &ClientCapabilities,
         mut session: Session,
         worker_threads: NonZeroUsize,
-        broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
+        webview_router_to_websocket_tx: broadcast::Sender<WebviewNotification>,
     ) -> anyhow::Result<()> {
         // Ensure we have a notifier for reload operations
         let client = client::Client::new(connection.make_sender());
@@ -371,7 +413,7 @@ impl Server {
             if connection.handle_shutdown(&msg)? {
                 break;
             }
-            // broadcast_tx.send(LangServerToWasmMessage::LspMessage(msg.clone()))?;
+            // webview_router_to_websocket_tx.send(LangServerToWasmMessage::LspMessage(msg.clone()))?;
             let tasks = match msg {
                 Message::Request(req) => vec![api::request(req)],
                 Message::Notification(notification) => api::notification(notification),

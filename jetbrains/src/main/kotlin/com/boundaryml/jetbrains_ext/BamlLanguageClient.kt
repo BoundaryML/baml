@@ -6,6 +6,10 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.editor.event.CaretEvent
+import com.intellij.openapi.editor.event.CaretListener
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.redhat.devtools.lsp4ij.LanguageServerManager
 import com.redhat.devtools.lsp4ij.LanguageServerManager.StartOptions
@@ -15,6 +19,12 @@ import com.redhat.devtools.lsp4ij.client.LanguageClientImpl
 import com.redhat.devtools.lsp4ij.installation.ServerInstallationContext
 import com.redhat.devtools.lsp4ij.installation.ServerInstallationStatus
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MediaType.Companion.toMediaType
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification
 import java.nio.file.Paths
 
@@ -28,16 +38,128 @@ data class GeneratorVersionPayload(
     val root_path: String
 )
 
+// Data classes for cursor position notification
+@Serializable
+data class Position(
+    val line: Int,
+    val character: Int
+)
+
+@Serializable
+data class Range(
+    val start: Position,
+    val end: Position
+)
+
+@Serializable
+data class TextDocument(
+    val uri: String
+)
+
+@Serializable
+data class CursorNotificationPayload(
+    val textDocument: TextDocument,
+    val range: Range
+)
+
 class BamlLanguageClient(project: Project) :
     LanguageClientImpl(project) {
 
     private val log = Logger.getInstance(javaClass)
     private val languageServerService = service<BamlLanguageServerService>()
+    private val httpClient = OkHttpClient()
+    private val json = Json { ignoreUnknownKeys = true }
 
     // NB(sam): if we need to do something after language server startup, we can apply that hook here
-//    override fun handleServerStatusChanged(serverStatus: ServerStatus) {
-//        super.handleServerStatusChanged(serverStatus)
-//    }
+    //    override fun handleServerStatusChanged(serverStatus: ServerStatus) {
+    //        super.handleServerStatusChanged(serverStatus)
+    //    }
+
+
+    init {
+        log.info("Initializing cursor tracking for BAML files")
+
+        // Register global caret listener for all editors
+        EditorFactory.getInstance().eventMulticaster
+            .addCaretListener(object : CaretListener {
+                override fun caretPositionChanged(event: CaretEvent) {
+                    handleCaretPositionChanged(event)
+                }
+            }, project)
+        log.info("Cursor tracking initialized successfully")
+    }
+
+    private fun handleCaretPositionChanged(event: CaretEvent) {
+        try {
+            // Get the virtual file for the editor
+            val editor = event.editor
+            val document = editor.document
+            val virtualFile = FileDocumentManager.getInstance().getFile(document)
+            
+            // Only process BAML files
+            if (virtualFile?.extension != "baml") {
+                return
+            }
+            
+            log.debug("Processing caret position change for BAML file: ${virtualFile.path}")
+            
+            // Get current port
+            val port = languageServerService.port
+            if (port == null) {
+                log.debug("No port available yet, skipping cursor notification")
+                return
+            }
+            
+            // Get cursor position
+            val caret = event.caret ?: return
+            val logicalPosition = caret.logicalPosition
+            val line = logicalPosition.line
+            val character = logicalPosition.column
+            
+            // Create the payload
+            val payload = CursorNotificationPayload(
+                textDocument = TextDocument(uri = "file://${virtualFile.path}"),
+                range = Range(
+                    start = Position(line = line, character = character),
+                    end = Position(line = line, character = character)
+                )
+            )
+            
+            // Send POST request asynchronously
+            val portValue = port // capture the non-null value
+            ApplicationManager.getApplication().executeOnPooledThread {
+                sendCursorNotification(portValue, payload)
+            }
+            
+        } catch (e: Exception) {
+            log.warn("Error handling caret position change", e)
+        }
+    }
+
+    private fun sendCursorNotification(port: Int, payload: CursorNotificationPayload) {
+        try {
+            val webviewUrl = "http://localhost:$port/webview/SEND_LSP_NOTIFICATION_TO_WEBVIEW"
+            val jsonBody = json.encodeToString(CursorNotificationPayload.serializer(), payload)
+            
+            log.debug("Sending cursor notification to $webviewUrl: $jsonBody")
+            
+            val requestBody = jsonBody.toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url(webviewUrl)
+                .post(requestBody)
+                .build()
+            
+            httpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    log.debug("Successfully sent cursor notification")
+                } else {
+                    log.warn("Failed to send cursor notification: HTTP ${response.code} ${response.message}")
+                }
+            }
+        } catch (e: Exception) {
+            log.debug("Error sending cursor notification", e)
+        }
+    }
 
     // Existing port notification (keep exactly as-is but use new service)
     @JsonNotification("baml/port")

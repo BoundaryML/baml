@@ -84,6 +84,7 @@ eventsource-stream = "0.2.3"
 expect-test = "1.5.0"
 filetime = "0.2.25"
 futures = { version = "0.3.30", features = ["executor"] }
+google-cloud-auth = "1.0.0"
 http = "1.1.0"
 http-body = "1.0.0"
 indexmap = { version = "2.1.0", features = ["serde"] }
@@ -161,12 +162,27 @@ pin-project-lite = "0.2.14"
 url = "2.5.2"
 uuid = { version = "1.8.0", features = ["v4", "v7", "serde"] }
 walkdir = "2.5.0"
-wasm-bindgen-test = "0.3.45"
-web-time = "1.1.0"
 tokio = { version = "1", default-features = false, features = [
   "macros",
   "time",
 ] }
+
+js-sys = "=0.3.78"
+wasm-bindgen = "=0.2.101"
+wasm-bindgen-futures = "0.4.42"
+wasm-bindgen-test = "0.3.45"
+web-sys = { version = "0.3.78", features = [
+  "Crypto",
+  "CryptoKey",
+  "Headers",
+  "Request",
+  "RequestInit",
+  "Response",
+  "RequestMode",
+  "SubtleCrypto",
+  "Window",
+] }
+web-time = "1.1.0"
 
 [workspace.package]
 version = "0.207.1"
