@@ -200,7 +200,7 @@ async def test_openai_responses_conversation():
                         "role": "assistant",
                         "content": [
                             {
-                                "type": "input_text",
+                                "type": "output_text",
                                 "text": "lorem ipsum is a fascinating subject. Let me explain briefly.",
                             },
                         ],
