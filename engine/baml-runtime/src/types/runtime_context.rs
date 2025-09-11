@@ -41,7 +41,6 @@ pub struct RuntimeClassOverride {
 
 cfg_if::cfg_if!(
     if #[cfg(target_arch = "wasm32")] {
-        use core::pin::Pin;
         use core::future::Future;
         pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>>>>>>>;
     } else {

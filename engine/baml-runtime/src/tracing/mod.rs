@@ -27,12 +27,13 @@ use self::api_wrapper::{
 };
 use crate::{
     internal::llm_client::LLMResponse,
-    on_log_event::LogEventCallbackSync,
     tracing::api_wrapper::core_types::Role,
     tracingv2::storage::storage::{Collector, BAML_TRACER},
     CallCtx, FunctionResult, InnerTraceStats, RuntimeContextManager, TestResponse,
     TraceStats,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use crate::on_log_event::LogEventCallbackSync;
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {

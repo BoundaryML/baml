@@ -4,8 +4,10 @@ pub(crate) mod runtime_interface;
 
 use std::{
     collections::HashMap,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::Path;
 
 use anyhow::Result;
 pub(super) use publisher::AstSignatureWrapper;

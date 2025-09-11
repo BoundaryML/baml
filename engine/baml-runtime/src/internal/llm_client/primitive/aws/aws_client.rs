@@ -1,9 +1,9 @@
 use std::{borrow::Cow, collections::HashMap, ops::Deref, sync::Arc};
 
 use anyhow::{Context, Result};
-use aws_config::{
-    BehaviorVersion, Region,
-};
+use aws_config::Region;
+#[cfg(not(target_arch = "wasm32"))]
+use aws_config::BehaviorVersion;
 use aws_credential_types::{
     provider::{
         error::CredentialsError,

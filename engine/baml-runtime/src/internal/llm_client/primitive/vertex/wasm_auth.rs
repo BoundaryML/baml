@@ -4,10 +4,7 @@ use anyhow::{Context, Result};
 use internal_llm_client::vertex::ResolvedGcpAuthStrategy;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    internal::wasm_jwt::encode_jwt,
-    js_callback_provider::get_js_callback_provider,
-};
+use crate::{internal::wasm_jwt::encode_jwt, js_callback_provider::get_js_callback_provider};
 
 pub struct VertexAuth(Option<ServiceAccount>);
 
@@ -57,7 +54,7 @@ impl VertexAuth {
         })
     }
 
-    pub async fn token(&self, scopes: &[&str]) -> Result<Arc<Token>> {
+    pub async fn token(&self, _scopes: &[&str]) -> Result<Arc<Token>> {
         match &self.0 {
             Some(service_account) => {
                 let token = service_account.get_oauth2_token().await.context(

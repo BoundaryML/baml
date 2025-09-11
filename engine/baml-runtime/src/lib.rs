@@ -52,10 +52,12 @@ use internal::{
 };
 use internal_baml_core::{
     ast::Span,
-    configuration::{CloudProject, CodegenGenerator, Generator, GeneratorOutputType},
+    configuration::{CloudProject, CodegenGenerator, Generator},
     internal_baml_diagnostics::SerializedSpan,
     ir::{repr::initial_context, IRHelperExtended},
 };
+#[cfg(not(target_arch = "wasm32"))]
+use internal_baml_core::configuration::GeneratorOutputType;
 pub use internal_baml_core::{
     internal_baml_diagnostics,
     internal_baml_diagnostics::Diagnostics as DiagnosticsError,
@@ -67,6 +69,7 @@ pub(crate) use internal_baml_jinja::RenderedPrompt;
 pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
 use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
 use jsonish::{ResponseBamlValue, ResponseValueMeta};
+#[cfg(not(target_arch = "wasm32"))]
 use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
 pub use runtime_context::BamlSrcReader;
@@ -74,7 +77,9 @@ pub use runtime_context::BamlSrcReader;
 pub use runtime_interface::InternalRuntimeInterface;
 #[cfg(not(feature = "internal"))]
 pub(crate) use runtime_interface::InternalRuntimeInterface;
-use runtime_interface::{ExperimentalTracingInterface, InternalClientLookup, RuntimeConstructor};
+use runtime_interface::{ExperimentalTracingInterface, InternalClientLookup};
+#[cfg(not(target_arch = "wasm32"))]
+use runtime_interface::RuntimeConstructor;
 pub(crate) use runtime_methods::prepare_function::PreparedFunctionArgs;
 use serde_json::{self};
 use tracing::{BamlTracer, TracingCall};
