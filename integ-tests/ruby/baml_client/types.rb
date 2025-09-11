@@ -207,7 +207,7 @@ module BamlClient
   end
 
   # #########################################################################
-  # Generated classes (101)
+  # Generated classes (102)
   # #########################################################################
 
 
@@ -216,6 +216,12 @@ module BamlClient
       const :id, String
       const :thingy2, String
       const :thingy3, String
+  end
+
+
+  class Answer < T::Struct
+      include Baml::Sorbet::Struct
+      const :answer, String
   end
 
 

@@ -23,13 +23,16 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
     value: StreamStateValueT
     state: typing_extensions.Literal["Pending", "Incomplete", "Complete"]
 # #########################################################################
-# Generated classes (101)
+# Generated classes (102)
 # #########################################################################
 
 class AnotherObject(BaseModel):
     id: typing.Optional[str] = None
     thingy2: typing.Optional[str] = None
     thingy3: typing.Optional[str] = None
+
+class Answer(BaseModel):
+    answer: typing.Optional[str] = None
 
 class BigNumbers(BaseModel):
     a: typing.Optional[int] = None

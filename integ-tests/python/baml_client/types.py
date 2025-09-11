@@ -153,13 +153,16 @@ class TestEnum(str, Enum):
     G = "G"
 
 # #########################################################################
-# Generated classes (101)
+# Generated classes (102)
 # #########################################################################
 
 class AnotherObject(BaseModel):
     id: str
     thingy2: str
     thingy3: str
+
+class Answer(BaseModel):
+    answer: str
 
 class BigNumbers(BaseModel):
     a: int

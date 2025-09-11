@@ -23,6 +23,8 @@ import (
 var typeMap = map[string]reflect.Type{
 	"TYPES.AnotherObject":                        reflect.TypeOf(types.AnotherObject{}),
 	"STREAM_TYPES.AnotherObject":                 reflect.TypeOf(stream_types.AnotherObject{}),
+	"TYPES.Answer":                               reflect.TypeOf(types.Answer{}),
+	"STREAM_TYPES.Answer":                        reflect.TypeOf(stream_types.Answer{}),
 	"TYPES.BigNumbers":                           reflect.TypeOf(types.BigNumbers{}),
 	"STREAM_TYPES.BigNumbers":                    reflect.TypeOf(stream_types.BigNumbers{}),
 	"TYPES.BinaryNode":                           reflect.TypeOf(types.BinaryNode{}),

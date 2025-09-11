@@ -1100,19 +1100,6 @@ paths:
                 - type: boolean
                 - type: string
       operationId: LiteralUnionsTest
-  /call/LlmReturnNumber:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/LlmReturnNumber'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: LlmReturnNumberResponse
-                type: integer
-      operationId: LlmReturnNumber
   /call/MakeBlockConstraint:
     post:
       requestBody:
@@ -2215,7 +2202,7 @@ paths:
             application/json:
               schema:
                 title: TestFnNamedArgsSingleStringResponse
-                type: string
+                $ref: '#/components/schemas/Answer'
       operationId: TestFnNamedArgsSingleString
   /call/TestFnNamedArgsSingleStringArray:
     post:
@@ -2596,6 +2583,19 @@ paths:
                 title: TestOpenAIResponsesResponse
                 type: string
       operationId: TestOpenAIResponses
+  /call/TestOpenAIResponsesAllRoles:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIResponsesAllRoles'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIResponsesAllRolesResponse
+                type: string
+      operationId: TestOpenAIResponsesAllRoles
   /call/TestOpenAIResponsesAutoType:
     post:
       requestBody:
@@ -4337,22 +4337,6 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
-            additionalProperties: false
-    LlmReturnNumber:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: LlmReturnNumberRequest
-            type: object
-            properties:
-              n:
-                type: integer
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - n
             additionalProperties: false
     MakeBlockConstraint:
       required: true
@@ -6121,6 +6105,22 @@ components:
             required:
             - input
             additionalProperties: false
+    TestOpenAIResponsesAllRoles:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIResponsesAllRolesRequest
+            type: object
+            properties:
+              problem:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - problem
+            additionalProperties: false
     TestOpenAIResponsesAutoType:
       required: true
       content:
@@ -6829,6 +6829,14 @@ components:
       - id
       - thingy2
       - thingy3
+      additionalProperties: false
+    Answer:
+      type: object
+      properties:
+        answer:
+          type: string
+      required:
+      - answer
       additionalProperties: false
     BigNumbers:
       type: object

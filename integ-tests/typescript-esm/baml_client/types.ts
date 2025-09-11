@@ -190,6 +190,11 @@ export interface AnotherObject {
   
 }
 
+export interface Answer {
+  answer: string
+  
+}
+
 export interface BigNumbers {
   a: number
   b: number

@@ -338,3 +338,18 @@ test TestOpenAIResponsesReasoningTest {
     problem "Solve this step by step: If a train travels at 60 mph for 2.5 hours, then at 80 mph for 1.5 hours, what is the total distance traveled?"
   }
 }
+
+
+function TestOpenAIResponsesAllRoles(problem: string) -> string {
+  client OpenAIResponsesReasoning
+  prompt #"
+    {{ _.role("system") }}
+    Hi
+    {{ _.role("user") }}
+    Hi
+    {{ _.role("assistant") }}
+    Hi
+    {{ _.role("user") }}
+    {{ problem }}
+  "#
+}

@@ -26,7 +26,7 @@ module BamlClient
       const :state, Symbol
   end
   # #########################################################################
-  # Generated classes (101)
+  # Generated classes (102)
   # #########################################################################
 
 
@@ -35,6 +35,12 @@ module BamlClient
       const :id, T.nilable(String)
       const :thingy2, T.nilable(String)
       const :thingy3, T.nilable(String)
+  end
+
+
+  class Answer < T::Struct
+      include Baml::Sorbet::Struct
+      const :answer, T.nilable(String)
   end
 
 

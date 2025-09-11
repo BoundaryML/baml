@@ -154,7 +154,7 @@ class TestEnum(str, Enum):
     G = "G"
 
 # #########################################################################
-# Generated classes (101)
+# Generated classes (102)
 # #########################################################################
 
 class AnotherObject(BaseModel):
@@ -163,6 +163,11 @@ class AnotherObject(BaseModel):
     id: str
     thingy2: str
     thingy3: str
+
+class Answer(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    answer: str
 
 class BigNumbers(BaseModel):
     class Config:

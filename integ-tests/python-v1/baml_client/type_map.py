@@ -19,6 +19,9 @@ type_map = {
     "types.AnotherObject": types.AnotherObject,
     "stream_types.AnotherObject": stream_types.AnotherObject,
 
+    "types.Answer": types.Answer,
+    "stream_types.Answer": stream_types.Answer,
+
     "types.BigNumbers": types.BigNumbers,
     "stream_types.BigNumbers": stream_types.BigNumbers,
 

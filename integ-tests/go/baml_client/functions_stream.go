@@ -5366,76 +5366,6 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...Call
 	return channel, nil
 }
 
-// / Streaming version of LlmReturnNumber
-func (*stream) LlmReturnNumber(ctx context.Context, n int64, opts ...CallOptionFunc) (<-chan StreamValue[int64, int64], error) {
-
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
-
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"n": n},
-		Env:    getEnvVars(callOpts.env),
-	}
-
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
-
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
-
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
-
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: LlmReturnNumber: %w", err)
-		panic(wrapped_err)
-	}
-
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "LlmReturnNumber", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
-
-	channel := make(chan StreamValue[int64, int64])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[int64, int64]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).(int64)
-				channel <- StreamValue[int64, int64]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).(int64)
-				channel <- StreamValue[int64, int64]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
-
-		// when internal_channel is closed, close the output too
-		close(channel)
-	}()
-	return channel, nil
-}
-
 // / Streaming version of MakeBlockConstraint
 func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]], error) {
 
@@ -10839,7 +10769,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap
 }
 
 // / Streaming version of TestFnNamedArgsSingleString
-func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Answer, types.Answer], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -10876,11 +10806,11 @@ func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string,
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[string, string])
+	channel := make(chan StreamValue[stream_types.Answer, types.Answer])
 	go func() {
 		for result := range internal_channel {
 			if result.Error != nil {
-				channel <- StreamValue[string, string]{
+				channel <- StreamValue[stream_types.Answer, types.Answer]{
 					IsError: true,
 					Error:   result.Error,
 				}
@@ -10888,14 +10818,14 @@ func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string,
 				return
 			}
 			if result.HasData {
-				data := (result.Data).(string)
-				channel <- StreamValue[string, string]{
+				data := (result.Data).(types.Answer)
+				channel <- StreamValue[stream_types.Answer, types.Answer]{
 					IsFinal:  true,
 					as_final: &data,
 				}
 			} else {
-				data := (result.StreamData).(string)
-				channel <- StreamValue[string, string]{
+				data := (result.StreamData).(stream_types.Answer)
+				channel <- StreamValue[stream_types.Answer, types.Answer]{
 					IsFinal:   false,
 					as_stream: &data,
 				}
@@ -12902,6 +12832,76 @@ func (*stream) TestOpenAIResponses(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIResponses", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[string, string]{
+					IsError: true,
+					Error:   result.Error,
+				}
+				close(channel)
+				return
+			}
+			if result.HasData {
+				data := (result.Data).(string)
+				channel <- StreamValue[string, string]{
+					IsFinal:  true,
+					as_final: &data,
+				}
+			} else {
+				data := (result.StreamData).(string)
+				channel <- StreamValue[string, string]{
+					IsFinal:   false,
+					as_stream: &data,
+				}
+			}
+		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesAllRoles
+func (*stream) TestOpenAIResponsesAllRoles(ctx context.Context, problem string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"problem": problem},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesAllRoles: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIResponsesAllRoles", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
