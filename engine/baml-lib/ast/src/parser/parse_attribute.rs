@@ -1,5 +1,3 @@
-use baml_types::ConstraintLevel;
-use internal_baml_diagnostics::DatamodelError;
 
 use super::{
     helpers::{parsing_catch_all, Pair},

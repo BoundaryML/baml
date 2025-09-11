@@ -1,6 +1,6 @@
 //! Parser entry point.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
 use pest::Parser;

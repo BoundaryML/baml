@@ -1,5 +1,4 @@
-use baml_types::{TypeValue, UnresolvedValue as UnresolvedValueBase};
-use internal_baml_diagnostics::Diagnostics;
+use baml_types::UnresolvedValue as UnresolvedValueBase;
 
 type UnresolvedValue = UnresolvedValueBase<Span>;
 
