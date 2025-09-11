@@ -129,8 +129,6 @@ sha2 = "0.10.9"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 aws-config = { version = "=1.5.3", default-features = false, features = [] }
-# You will run into some crypto/install issues with vertex tests if you move further than this due to https://github.com/awslabs/aws-sdk-rust/releases/tag/release-2025-03-11 . The new version uses aws_lc_rs instead of ring.
-# but depending on ring and aws_lc_rs leads to issues.
 # https://github.com/rustls/rustls/issues/1877
 # https://github.com/awslabs/aws-sdk-rust/issues/1263
 # same goes for aws-config.
@@ -143,11 +141,11 @@ colored = { workspace = true, default-features = false, features = [
 ] }
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
 js-sys = "=0.3.69"
-reqwest = { version = "0.12.12", features = [
+reqwest = { version = "0.12.12", default-features = false, features = [
   "stream",
   "json",
-  "native-tls-vendored",
-  "native-tls-alpn",
+  "rustls-tls",
+  "http2",
 ] }
 #
 send_wrapper = { version = "0.6.0", features = ["futures"] }
@@ -174,8 +172,6 @@ tokio = { version = "1", features = ["rt", "sync"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 aws-config = "=1.5.3"
-# You will run into some crypto/install issues with vertex tests if you move further than this due to https://github.com/awslabs/aws-sdk-rust/releases/tag/release-2025-03-11 . The new version uses aws_lc_rs instead of ring.
-# but depending on ring and aws_lc_rs leads to issues.
 # https://github.com/rustls/rustls/issues/1877
 # https://github.com/awslabs/aws-sdk-rust/issues/1263
 # same goes for aws-config.
@@ -185,12 +181,10 @@ aws-sdk-bedrockruntime = { version = "=1.76.0", default-features = false, featur
 axum = "0.7.5"
 axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
 criterion = "0.5.1"
-# depends on ring
 gcp_auth = "0.12.3"
 hostname = "0.3.1"
 jsonwebtoken = { version = "9.3.0" }
 notify-debouncer-full = "0.3.1"
-ring = { version = "0.17.4", features = ["std"] }
 tokio = { version = "1", features = ["full"] }
 reqwest.workspace = true
 walkdir = "2.5.0"

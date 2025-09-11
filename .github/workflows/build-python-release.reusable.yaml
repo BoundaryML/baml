@@ -143,10 +143,10 @@ jobs:
           manylinux: ${{ matrix._.manylinux }}
           before-script-linux: |
             if command -v yum &> /dev/null; then
-                yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
+                yum update -y && yum install -y perl-core pkgconfig libatomic
             else
                 # If we're running on debian-based system.
-                # sudo apt update -y && apt-get install -y libssl-dev openssl pkg-config
+                # sudo apt update -y && apt-get install -y pkg-config
                 :
             fi
 

@@ -46,7 +46,7 @@ fn check_clang_support() -> Result<()> {
         .collect::<Vec<_>>();
 
     if !target_list.contains(&"wasm32") {
-        // See https://github.com/briansmith/ring/issues/1824
+        // Ensure clang supports the wasm32 target for crypto builds
         return Err(
           anyhow::anyhow!("clang does not support the wasm32 target: clang --print-targets returned {:?}", target_list)
             .context("BAML must be built with Clang with wasm32 target support - you need to 'brew install clang'")

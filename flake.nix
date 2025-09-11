@@ -54,7 +54,6 @@
           git
 	        go
 	        gotools
-          openssl
           pkg-config
           lld_17
           pythonEnv
@@ -84,7 +83,6 @@
         ]) ++ (if pkgs.stdenv.isDarwin then appleDeps else []);
         nativeBuildInputs = [
           pkgs.cmake
-          pkgs.openssl
           pkgs.pkg-config
           pkgs.ruby
           pythonEnv
@@ -125,10 +123,6 @@
               RUSTFLAGS = if pkgs.stdenv.isDarwin
                 then "--cfg tracing_unstable -C linker=lld"
                 else "--cfg tracing_unstable -Zlinker-features=+lld -C linker=gcc";
-              OPENSSL_STATIC = "1";
-              OPENSSL_DIR = "${pkgs.openssl.dev}";
-              OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
-              OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include";
               inherit buildInputs;
               nativeBuildInputs = nativeBuildInputs ++ nativeBuildInputsExtra;
               doCheck = false;

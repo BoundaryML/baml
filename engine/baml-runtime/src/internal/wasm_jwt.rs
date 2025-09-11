@@ -3,7 +3,7 @@
 /// replace our JWT creation code for native targets.
 ///
 /// The main motivation is to use browser APIs via web-sys, and to avoid
-/// compiling the native-targeting crypto library `ring`, which can be
+/// compiling native-targeting crypto libraries like `aws-lc-rs`, which can be
 /// problematic for some toolchains to cross-compile to WASM.
 ///
 /// At the time of writing, the Vertex provider is the only code in the

@@ -113,7 +113,7 @@ static INIT: std::sync::Once = std::sync::Once::new();
 //     {
 //         use rustls::crypto::CryptoProvider;
 //         INIT.call_once(|| {
-//             let provider = rustls::crypto::ring::default_provider();
+//             let provider = rustls::crypto::aws_lc_rs::default_provider();
 //             CryptoProvider::install_default(provider).expect("failed to install CryptoProvider");
 //         });
 //     }

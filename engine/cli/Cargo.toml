@@ -88,15 +88,14 @@ test-log = "0.2.16"
 infer = "0.16.0"
 url = "2.5.2"
 shell-escape = "0.1.5"
-aws-sigv4 = "1.2.2"
-aws-credential-types = "1.2.0"
-aws-smithy-async = "1.2.1"
-aws-smithy-runtime-api = "1.7.0"
-aws-smithy-types = "1.2.0"
-aws-smithy-runtime = "1.6.0"
+aws-sigv4 = "1"
+aws-credential-types = "1"
+aws-smithy-async = "1"
+aws-smithy-runtime-api = "1"
+aws-smithy-types = "1"
+aws-smithy-runtime = "1"
 enum_dispatch = "0.3.13"
-aws-smithy-json = "0.60.7"
-jsonwebtoken = "9.3.0"
+aws-smithy-json = "0.61"
 pretty_assertions = "1.4.0"
 sha2 = "0.10.8"
 tracing = "0.1.40"
@@ -109,13 +108,13 @@ tracing-subscriber = { version = "0.3.18", features = [
 ] }
 ctrlc = "3.4"
 
-# openssl = { version = "0.10", optional = true }
+# TLS handled via rustls
 
 [features]
 defaults = []
 internal = []
 skip-integ-tests = []
-static-ssl = ["reqwest/native-tls-vendored"]
+static-ssl = ["reqwest/rustls-tls"]
 
 [dev-dependencies]
 assert_cmd = "2"
