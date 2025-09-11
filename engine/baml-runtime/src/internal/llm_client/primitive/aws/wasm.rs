@@ -7,7 +7,7 @@ use core::{
 };
 use std::{sync::Arc, time::SystemTime};
 
-use aws_config::{BehaviorVersion, ConfigLoader, SdkConfig};
+use aws_config::{BehaviorVersion, ConfigLoader};
 use aws_credential_types::{
     provider::{
         error::{CredentialsError, CredentialsNotLoaded},
