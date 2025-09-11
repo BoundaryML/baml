@@ -1241,6 +1241,31 @@ impl Vm {
                             }
                         }),
 
+                        (Value::Object(left_index), Value::Object(right_index))
+                            if matches!(self.objects[left_index], Object::String(_))
+                                && matches!(self.objects[right_index], Object::String(_)) =>
+                        {
+                            let left = self.objects.as_string(&left)?;
+                            let right = self.objects.as_string(&right)?;
+
+                            Value::Bool(match op {
+                                CmpOp::Eq => left == right,
+                                CmpOp::NotEq => left != right,
+                                CmpOp::Lt => left < right,
+                                CmpOp::LtEq => left <= right,
+                                CmpOp::Gt => left > right,
+                                CmpOp::GtEq => left >= right,
+                                CmpOp::InstanceOf => {
+                                    return Err(InternalError::CannotApplyCmpOp {
+                                        left: Type::Object(ObjectType::String),
+                                        right: Type::Object(ObjectType::String),
+                                        op,
+                                    }
+                                    .into())
+                                }
+                            })
+                        }
+
                         _ => Value::Bool(match op {
                             CmpOp::Eq => left == right,
                             CmpOp::NotEq => left != right,

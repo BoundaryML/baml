@@ -1993,6 +1993,13 @@ pub fn typecheck_expression(
                     Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
                 ) => Some(TypeIR::string()),
 
+                // Ok: string comparisons
+                (
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                    _,
+                    Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
+                ) if operator.is_comparison() => Some(TypeIR::bool()),
+
                 // Other invalid operation for strings.
                 (
                     Some(TypeIR::Primitive(baml_types::TypeValue::String, _)),
