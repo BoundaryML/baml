@@ -639,7 +639,7 @@ impl BamlRuntime {
                 .finish_call(call, ctx, None)
                 .await
             {
-                Ok(id) => {}
+                Ok(_id) => {}
                 Err(e) => log::error!("Error during logging: {e}"),
             }
         }

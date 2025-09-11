@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+#[cfg(not(target_arch = "wasm32"))]
 use web_time::Duration;
 
 fn builder() -> reqwest::ClientBuilder {
@@ -21,7 +22,7 @@ fn builder() -> reqwest::ClientBuilder {
                 // https://github.com/hyperium/hyper/issues/2312
                 // https://github.com/Azure/azure-sdk-for-rust/pull/1550
                 .pool_max_idle_per_host(0)
-                .pool_idle_timeout(std::time::Duration::from_nanos(1))
+                .pool_idle_timeout(Duration::from_nanos(1))
         }
     }
 }

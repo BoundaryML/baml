@@ -1,4 +1,3 @@
-
 use anyhow::Result;
 use baml_types::BamlMediaContent;
 #[cfg(not(target_arch = "wasm32"))]
@@ -11,8 +10,6 @@ use internal_llm_client::{
 };
 use serde_json::json;
 
-#[cfg(target_arch = "wasm32")]
-use crate::internal::wasm_jwt::{encode_jwt, JwtError};
 use crate::{
     client_registry::ClientProperty,
     internal::llm_client::{
@@ -22,11 +19,11 @@ use crate::{
             stream_request::make_stream_request,
         },
         traits::{
-            CompletionToProviderBody, HttpContext, StreamResponse,
-            ToProviderMessage, ToProviderMessageExt, WithChat, WithClient, WithClientProperties,
-            WithNoCompletion, WithRetryPolicy, WithStreamChat,
-        }, LLMResponse,
-        ModelFeatures, ResolveMediaUrls,
+            CompletionToProviderBody, HttpContext, StreamResponse, ToProviderMessage,
+            ToProviderMessageExt, WithChat, WithClient, WithClientProperties, WithNoCompletion,
+            WithRetryPolicy, WithStreamChat,
+        },
+        LLMResponse, ModelFeatures, ResolveMediaUrls,
     },
     request::create_client,
     RuntimeContext,

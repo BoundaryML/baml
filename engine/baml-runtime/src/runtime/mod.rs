@@ -92,6 +92,7 @@ impl InternalBamlRuntime {
         })
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn from_files(
         directory: &Path,
         files: Vec<PathBuf>,

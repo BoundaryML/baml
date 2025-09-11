@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use internal_llm_client::vertex::ResolvedGcpAuthStrategy;
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     internal::wasm_jwt::encode_jwt,
-    js_callback_provider::{get_js_callback_provider, GcpCredResult},
+    js_callback_provider::get_js_callback_provider,
 };
 
 pub struct VertexAuth(Option<ServiceAccount>);

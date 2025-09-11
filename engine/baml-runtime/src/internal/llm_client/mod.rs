@@ -1,4 +1,3 @@
-
 use colored::*;
 pub mod llm_provider;
 pub mod orchestrator;
@@ -17,16 +16,11 @@ use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::AllowedRoleMetadata;
 pub use jsonish::ResponseBamlValue;
 use jsonish::{
-    deserializer::{
-        deserialize_flags::Flag,
-        semantic_streaming::validate_streaming_state,
-    },
+    deserializer::{deserialize_flags::Flag, semantic_streaming::validate_streaming_state},
     BamlValueWithFlags,
 };
 use reqwest::StatusCode;
 use serde::Serialize;
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::JsValue;
 
 /// Validate a parsed value, checking asserts and checks.
 pub fn parsed_value_to_response(

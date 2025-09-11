@@ -8,18 +8,16 @@
 ///
 /// At the time of writing, the Vertex provider is the only code in the
 /// runtime that produces JWT's.
-use aws_smithy_types::event_stream::Header;
 use base64::{
     engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
     Engine,
 };
 use js_sys::{Array, Object, Uint8Array};
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{window, CryptoKey, SubtleCrypto};
+use web_sys::{window, CryptoKey};
 
 #[derive(Error, Debug)]
 pub enum JwtError {

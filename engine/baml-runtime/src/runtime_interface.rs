@@ -9,6 +9,8 @@ use internal_baml_core::{
 use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::types::on_log_event::LogEventCallbackSync;
 use crate::{
     internal::{
         ir_features::IrFeatures,
@@ -21,7 +23,6 @@ use crate::{
     runtime::InternalBamlRuntime,
     tracing::TracingCall,
     type_builder::TypeBuilder,
-    types::on_log_event::LogEventCallbackSync,
     FunctionResult, RenderCurlSettings, RuntimeContext, RuntimeContextManager,
 };
 
