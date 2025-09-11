@@ -7,10 +7,10 @@ description = "BAML Bytecode Compiler"
 license-file.workspace = true
 
 [lints.rust]
-dead_code = "warn"
+dead_code = "deny"
 elided_named_lifetimes = "deny"
-unused_imports = "warn"
-unused_variables = "warn"
+unused_imports = "deny"
+unused_variables = "deny"
 
 [dependencies]
 baml-types = { path = "../baml-lib/baml-types" }
