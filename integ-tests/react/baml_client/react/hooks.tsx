@@ -8080,9 +8080,9 @@ export function useTestFnNamedArgsSingleMapStringToString(
  *
  *
  * **Return Type:**
- * - **Non‑streaming:** types.Answer
- * - **Streaming Partial:** Answer
- * - **Streaming Final:** types.Answer
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**

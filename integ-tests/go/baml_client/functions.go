@@ -9577,7 +9577,7 @@ func TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[strin
 	}
 }
 
-func TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...CallOptionFunc) (types.Answer, error) {
+func TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9609,33 +9609,33 @@ func TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...C
 	if callOpts.onTick == nil {
 		result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleString", encoded, callOpts.onTick)
 		if err != nil {
-			return types.Answer{}, err
+			return "", err
 		}
 
 		if result.Error != nil {
-			return types.Answer{}, result.Error
+			return "", result.Error
 		}
 
-		casted := (result.Data).(types.Answer)
+		casted := (result.Data).(string)
 
 		return casted, nil
 	} else {
 		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestFnNamedArgsSingleString", encoded, callOpts.onTick)
 		if err != nil {
-			return types.Answer{}, err
+			return "", err
 		}
 
 		for result := range channel {
 			if result.Error != nil {
-				return types.Answer{}, result.Error
+				return "", result.Error
 			}
 
 			if result.HasData {
-				return result.Data.(types.Answer), nil
+				return result.Data.(string), nil
 			}
 		}
 
-		return types.Answer{}, fmt.Errorf("No data returned from stream")
+		return "", fmt.Errorf("No data returned from stream")
 	}
 }
 

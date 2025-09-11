@@ -339,13 +339,21 @@ test TestOpenAIResponsesReasoningTest {
   }
 }
 
+client<llm> Gpt5 {
+  provider openai-responses
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-5-chat-latest"
+  }
+}
+
 
 function TestOpenAIResponsesAllRoles(problem: string) -> string {
-  client OpenAIResponsesReasoning
+  client Gpt5
   prompt #"
     {{ _.role("system") }}
     Hi
-    {{ _.role("user") }}
+    {{ _.role("developer") }}
     Hi
     {{ _.role("assistant") }}
     Hi

@@ -3899,7 +3899,7 @@ module BamlClient
           varargs: T.untyped,
           myString: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(BamlClient::Types::Answer)}
+      ).returns(String)}
       def TestFnNamedArgsSingleString(
           *varargs,
           myString:,
@@ -3918,7 +3918,7 @@ module BamlClient
           parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::Answer)
+          parsed.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
@@ -9410,7 +9410,7 @@ module BamlClient
           varargs: T.untyped,
           myString: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[BamlClient::StreamTypes::Answer, BamlClient::Types::Answer])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleString(
           *varargs,
           myString:,
@@ -9426,7 +9426,7 @@ module BamlClient
               myString: myString,
           })
 
-          Baml::BamlStream[BamlClient::StreamTypes::Answer, BamlClient::Types::Answer].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )

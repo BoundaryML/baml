@@ -10839,7 +10839,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap
 }
 
 // / Streaming version of TestFnNamedArgsSingleString
-func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Answer, types.Answer], error) {
+func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -10876,11 +10876,11 @@ func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string,
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[stream_types.Answer, types.Answer])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		for result := range internal_channel {
 			if result.Error != nil {
-				channel <- StreamValue[stream_types.Answer, types.Answer]{
+				channel <- StreamValue[string, string]{
 					IsError: true,
 					Error:   result.Error,
 				}
@@ -10888,14 +10888,14 @@ func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string,
 				return
 			}
 			if result.HasData {
-				data := (result.Data).(types.Answer)
-				channel <- StreamValue[stream_types.Answer, types.Answer]{
+				data := (result.Data).(string)
+				channel <- StreamValue[string, string]{
 					IsFinal:  true,
 					as_final: &data,
 				}
 			} else {
-				data := (result.StreamData).(stream_types.Answer)
-				channel <- StreamValue[stream_types.Answer, types.Answer]{
+				data := (result.StreamData).(string)
+				channel <- StreamValue[string, string]{
 					IsFinal:   false,
 					as_stream: &data,
 				}

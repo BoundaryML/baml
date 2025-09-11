@@ -83,55 +83,6 @@ func (u AnotherObject) BamlEncodeName() *cffi.CFFITypeName {
 	}
 }
 
-type Answer struct {
-	Answer *string `json:"answer"`
-}
-
-func (c *Answer) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
-	typeName := holder.Name
-	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
-		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
-	}
-	if typeName.Name != "Answer" {
-		panic(fmt.Sprintf("expected Answer, got %s", typeName.Name))
-	}
-
-	for _, field := range holder.Fields {
-		key := field.Key
-		valueHolder := field.Value
-		switch key {
-
-		case "answer":
-			c.Answer = baml.Decode(valueHolder).Interface().(*string)
-
-		default:
-
-			panic(fmt.Sprintf("unexpected field: %s in class Answer", key))
-
-		}
-	}
-
-}
-
-func (c Answer) Encode() (*cffi.CFFIValueHolder, error) {
-	fields := map[string]any{}
-
-	fields["answer"] = c.Answer
-
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
-}
-
-func (c Answer) BamlTypeName() string {
-	return "Answer"
-}
-
-func (u Answer) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Answer",
-	}
-}
-
 type BigNumbers struct {
 	A *int64   `json:"a"`
 	B *float64 `json:"b"`

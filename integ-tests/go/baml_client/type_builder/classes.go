@@ -55,38 +55,6 @@ func (t *AnotherObjectClassView) Type() (baml.Type, error) {
 	return t.inner.Type()
 }
 
-type AnswerClassView struct {
-	inner baml.ClassBuilder
-}
-
-func (t *AnswerClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
-	if err != nil {
-		return nil, err
-	}
-	builders := make([]ClassPropertyView, len(result))
-	for i, p := range result {
-		builders[i] = p
-	}
-	return builders, nil
-}
-
-func (t *AnswerClassView) PropertyAnswer() (ClassPropertyView, error) {
-	return t.inner.Property("answer")
-}
-
-func (t *TypeBuilder) Answer() (*AnswerClassView, error) {
-	bld, err := t.inner.Class("Answer")
-	if err != nil {
-		return nil, err
-	}
-	return &AnswerClassView{inner: bld}, nil
-}
-
-func (t *AnswerClassView) Type() (baml.Type, error) {
-	return t.inner.Type()
-}
-
 type BigNumbersClassView struct {
 	inner baml.ClassBuilder
 }

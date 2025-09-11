@@ -2388,7 +2388,7 @@ class BamlAsyncClient:
             return typing.cast(typing.Dict[str, str], result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestFnNamedArgsSingleString(self, myString: str,
         baml_options: BamlCallOptions = {},
-    ) -> types.Answer:
+    ) -> str:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
@@ -2400,7 +2400,7 @@ class BamlAsyncClient:
             result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestFnNamedArgsSingleString", args={
                 "myString": myString,
             })
-            return typing.cast(types.Answer, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestFnNamedArgsSingleStringArray(self, myStringArray: typing.List[str],
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -5520,14 +5520,14 @@ class BamlStreamClient:
         )
     def TestFnNamedArgsSingleString(self, myString: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[stream_types.Answer, types.Answer]:
+    ) -> baml_py.BamlStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestFnNamedArgsSingleString", args={
             "myString": myString,
         })
-        return baml_py.BamlStream[stream_types.Answer, types.Answer](
+        return baml_py.BamlStream[str, str](
           result,
-          lambda x: typing.cast(stream_types.Answer, x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(types.Answer, x.cast_to(types, types, stream_types, False, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestFnNamedArgsSingleStringArray(self, myStringArray: typing.List[str],

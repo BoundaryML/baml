@@ -950,9 +950,9 @@ class LlmResponseParser:
 
     def TestFnNamedArgsSingleString(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> types.Answer:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleString", llm_response=llm_response, mode="request")
-        return typing.cast(types.Answer, result)
+        return typing.cast(str, result)
 
     def TestFnNamedArgsSingleStringArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2392,9 +2392,9 @@ class LlmStreamParser:
 
     def TestFnNamedArgsSingleString(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> stream_types.Answer:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleString", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.Answer, result)
+        return typing.cast(str, result)
 
     def TestFnNamedArgsSingleStringArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},

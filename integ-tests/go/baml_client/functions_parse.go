@@ -6655,8 +6655,8 @@ func (*parse) TestFnNamedArgsSingleMapStringToString(text string, opts ...CallOp
 	return casted, nil
 }
 
-// / Parse version of TestFnNamedArgsSingleString (Takes in string and returns types.Answer)
-func (*parse) TestFnNamedArgsSingleString(text string, opts ...CallOptionFunc) (types.Answer, error) {
+// / Parse version of TestFnNamedArgsSingleString (Takes in string and returns string)
+func (*parse) TestFnNamedArgsSingleString(text string, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6690,10 +6690,10 @@ func (*parse) TestFnNamedArgsSingleString(text string, opts ...CallOptionFunc) (
 
 	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestFnNamedArgsSingleString", encoded)
 	if err != nil {
-		return types.Answer{}, err
+		return "", err
 	}
 
-	casted := (result).(types.Answer)
+	casted := (result).(string)
 
 	return casted, nil
 }
