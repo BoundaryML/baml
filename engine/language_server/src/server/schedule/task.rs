@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use lsp_server::RequestId;
 use serde::Serialize;
 
@@ -17,9 +18,11 @@ type BackgroundFnBuilder<'s> = Box<dyn FnOnce(&Session) -> BackgroundFn + 's>;
 pub enum BackgroundSchedule {
     /// The task should be run on the background thread designated
     /// for formatting actions. This is a high priority thread.
+    #[allow(dead_code)]
     Fmt,
     /// The task should be run on the general high-priority background
     /// thread.
+    #[allow(dead_code)]
     LatencySensitive,
     /// The task should be run on a regular-priority background thread.
     #[default]
@@ -35,6 +38,7 @@ pub enum BackgroundSchedule {
 /// local tasks will **block** the main event loop, so only use local tasks if you **need**
 /// mutable state access or you need the absolute lowest latency possible.
 pub enum Task<'s> {
+    #[allow(dead_code)]
     Background(BackgroundTaskBuilder<'s>),
     Sync(SyncTask<'s>),
 }

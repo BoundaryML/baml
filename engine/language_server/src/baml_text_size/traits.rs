@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use std::{convert::TryInto, sync::Arc};
 
 use priv_in_pub::Sealed;
@@ -44,11 +45,13 @@ pub trait Ranged {
     fn range(&self) -> TextRange;
 
     /// The start offset of this item in the source text.
+    #[allow(dead_code)]
     fn start(&self) -> TextSize {
         self.range().start()
     }
 
     /// The end offset of this item in the source text.
+    #[allow(dead_code)]
     fn end(&self) -> TextSize {
         self.range().end()
     }
@@ -88,6 +91,7 @@ pub trait TextSlice: Sealed {
     ///
     /// ## Panics
     /// If the range is out of bounds.
+    #[allow(dead_code)]
     fn slice(&self, range: impl Ranged) -> &str;
 }
 

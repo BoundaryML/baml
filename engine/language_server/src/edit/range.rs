@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use lsp_types as types;
 
 use super::PositionEncoding;
@@ -17,6 +18,7 @@ pub(crate) trait RangeExt {
         -> TextRange;
 }
 
+#[allow(dead_code)]
 pub(crate) trait ToRangeExt {
     fn to_range(&self, text: &str, index: &LineIndex, encoding: PositionEncoding) -> types::Range;
     // fn to_notebook_range(
@@ -172,6 +174,7 @@ fn utf8_column_offset(utf16_code_unit_offset: u32, line: &str) -> TextSize {
     utf8_code_unit_offset
 }
 
+#[allow(dead_code)]
 fn offset_to_source_location(
     offset: TextSize,
     text: &str,
@@ -207,6 +210,7 @@ fn offset_to_source_location(
     }
 }
 
+#[allow(dead_code)]
 fn source_location_to_position(location: &SourceLocation) -> types::Position {
     types::Position {
         line: u32::try_from(location.row.to_zero_indexed()).expect("row usize fits in u32"),

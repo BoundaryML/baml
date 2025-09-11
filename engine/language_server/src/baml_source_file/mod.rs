@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use std::{
     cmp::Ordering,
     fmt::{Debug, Display, Formatter},
@@ -22,12 +23,15 @@ mod newlines;
 
 /// Gives access to the source code of a file and allows mapping between [`TextSize`] and [`SourceLocation`].
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct SourceCode<'src, 'index> {
     text: &'src str,
     index: &'index LineIndex,
 }
 
+#[allow(dead_code)]
 impl<'src, 'index> SourceCode<'src, 'index> {
+    #[allow(dead_code)]
     pub fn new(content: &'src str, index: &'index LineIndex) -> Self {
         Self {
             text: content,
@@ -107,14 +111,17 @@ impl PartialEq<Self> for SourceCode<'_, '_> {
 impl Eq for SourceCode<'_, '_> {}
 
 /// A Builder for constructing a [`SourceFile`]
+#[allow(dead_code)]
 pub struct SourceFileBuilder {
     name: Box<str>,
     code: Box<str>,
     index: Option<LineIndex>,
 }
 
+#[allow(dead_code)]
 impl SourceFileBuilder {
     /// Creates a new builder for a file named `name`.
+    #[allow(dead_code)]
     pub fn new<Name: Into<Box<str>>, Code: Into<Box<str>>>(name: Name, code: Code) -> Self {
         Self {
             name: name.into(),
@@ -168,6 +175,7 @@ impl Debug for SourceFile {
     }
 }
 
+#[allow(dead_code)]
 impl SourceFile {
     /// Returns the name of the source file (filename).
     #[inline]
@@ -176,6 +184,7 @@ impl SourceFile {
     }
 
     #[inline]
+    #[allow(dead_code)]
     pub fn slice(&self, range: TextRange) -> &str {
         &self.source_text()[range]
     }
@@ -217,6 +226,7 @@ impl Ord for SourceFile {
     }
 }
 
+#[allow(dead_code)]
 struct SourceFileInner {
     name: Box<str>,
     code: Box<str>,
@@ -262,6 +272,7 @@ impl std::fmt::Display for SourceLocation {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[allow(dead_code)]
 pub enum SourceRow {
     /// A row within a cell in a Jupyter Notebook.
     Notebook { cell: OneIndexed, line: OneIndexed },

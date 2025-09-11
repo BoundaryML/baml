@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use std::{iter::FusedIterator, ops::Deref};
 
 use memchr::{memchr2, memrchr2};
@@ -6,6 +7,7 @@ use crate::baml_text_size::{TextLen, TextRange, TextSize};
 
 /// Extension trait for [`str`] that provides a [`UniversalNewlineIterator`].
 pub trait UniversalNewlines {
+    #[allow(dead_code)]
     fn universal_newlines(&self) -> UniversalNewlineIterator<'_>;
 }
 
@@ -146,10 +148,12 @@ pub struct NewlineWithTrailingNewline<'a> {
 }
 
 impl<'a> NewlineWithTrailingNewline<'a> {
+    #[allow(dead_code)]
     pub fn from(input: &'a str) -> NewlineWithTrailingNewline<'a> {
         Self::with_offset(input, TextSize::default())
     }
 
+    #[allow(dead_code)]
     pub fn with_offset(input: &'a str, offset: TextSize) -> Self {
         NewlineWithTrailingNewline {
             underlying: UniversalNewlineIterator::with_offset(input, offset),

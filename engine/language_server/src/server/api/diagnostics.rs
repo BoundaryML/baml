@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -20,6 +21,7 @@ use crate::{
     DocumentKey, Session,
 };
 
+#[allow(dead_code)]
 pub(super) fn clear_diagnostics(uri: &Url, notifier: &Notifier) -> Result<()> {
     notifier
         .notify::<PublishDiagnostics>(PublishDiagnosticsParams {

@@ -1,5 +1,6 @@
 //! Scheduling, I/O, and API endpoints.
 
+#[allow(dead_code)]
 // The new PanicInfoHook name requires MSRV >= 1.82
 #[allow(deprecated)]
 use std::panic::PanicInfo;
@@ -50,6 +51,7 @@ pub(crate) struct ServerArgs {
     pub playground_rx: broadcast::Receiver<PreLangServerToWasmMessage>,
     pub playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
     pub playground_port: u16,
+    #[allow(dead_code)]
     pub proxy_port: u16,
 }
 

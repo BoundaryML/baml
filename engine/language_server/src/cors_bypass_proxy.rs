@@ -1,15 +1,14 @@
 
+#[allow(dead_code)]
 use anyhow::Result;
 use axum::{
     body::Body,
-    extract::Path,
     http::{HeaderMap, Method, StatusCode, Uri},
     response::{IntoResponse, Response as AxumResponse},
-    routing::{any, get, options},
+    routing::{any, options},
     Router,
 };
-use mime_guess::from_path;
-use tokio::{fs, net::TcpListener};
+use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 
 #[derive(Debug, Clone)]
@@ -56,6 +55,7 @@ impl ProxyError {
         Self::new(message, StatusCode::BAD_REQUEST)
     }
 
+    #[allow(dead_code)]
     fn not_found(message: impl Into<String>) -> Self {
         Self::new(message, StatusCode::NOT_FOUND)
     }

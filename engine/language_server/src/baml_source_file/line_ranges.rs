@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use std::ops::Add;
 
 use memchr::{memchr2, memrchr2};
@@ -8,6 +9,7 @@ use crate::{
 };
 
 /// Extension trait for [`str`] that provides methods for working with ranges of lines.
+#[allow(dead_code)]
 pub trait LineRanges {
     /// Computes the start position of the line of `offset`.
     fn line_start(&self, offset: TextSize) -> TextSize;
@@ -17,6 +19,7 @@ pub trait LineRanges {
     fn bom_start_offset(&self) -> TextSize;
 
     /// Returns `true` if `offset` is at the start of a line.
+    #[allow(dead_code)]
     fn is_at_start_of_line(&self, offset: TextSize) -> bool {
         self.line_start(offset) == offset
     }

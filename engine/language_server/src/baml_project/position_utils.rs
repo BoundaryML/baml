@@ -1,12 +1,15 @@
+#[allow(dead_code)]
 use std::cmp;
 
 use lsp_types::{Position, Range, TextDocumentItem};
 use regex::Regex;
 
+#[allow(dead_code)]
 const MAX_SAFE_CHAR: u32 = u32::MAX; // You can adjust this to mimic your TS MAX_SAFE_VALUE_i32
 
 /// Returns the full range of the document, from the beginning (line 0, character 0)
 /// to the "end" (last line with a very large character position).
+#[allow(dead_code)]
 pub fn full_document_range(contents: &str) -> Range {
     // Compute the number of lines. If the text is empty, assume one line.
     let line_count = if contents.is_empty() {
@@ -44,6 +47,7 @@ pub fn get_current_line(contents: &str, line: u32) -> &str {
 /// - If the trimmed current line is empty, return true.
 /// - Otherwise, take the substring _up to_ the given position and check if the last
 ///   "word" (using a `\w+` search) ends exactly at the position.
+#[allow(dead_code)]
 pub fn is_first_inside_block(position: &Position, current_line: &str) -> bool {
     if current_line.trim().is_empty() {
         return true;
@@ -131,6 +135,7 @@ pub fn get_word_at_position(contents: &str, position: &Position) -> String {
 
 /// Returns the symbol (a single character) immediately preceding the given position.
 /// If the position is at the start of the line, an empty string is returned.
+#[allow(dead_code)]
 pub fn get_symbol_before_position(contents: &str, position: &Position) -> String {
     let current_line = get_current_line(contents, position.line);
     // position.character is a 0-indexed character offset.
@@ -171,6 +176,7 @@ pub fn get_symbol_before_position(contents: &str, position: &Position) -> String
 
 /// Computes the Position (line and character) corresponding to a given index in the document's text.
 /// This mimics the TS implementation by iterating over each character up to the given index.
+#[allow(dead_code)]
 pub fn get_position_from_index(document: &TextDocumentItem, index: usize) -> Position {
     let mut line: u32 = 0;
     let mut character: u32 = 0;

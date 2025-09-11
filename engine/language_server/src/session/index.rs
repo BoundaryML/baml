@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use std::{path::PathBuf, sync::Arc};
 
 use lsp_types::Url;
@@ -162,6 +163,7 @@ impl DocumentQuery {
     // }
 
     /// Get the version of document selected by this query.
+    #[allow(dead_code)]
     pub(crate) fn version(&self) -> DocumentVersion {
         match self {
             Self::Text { document, .. } => document.version(),
@@ -177,6 +179,7 @@ impl DocumentQuery {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn file_document_key(&self) -> &DocumentKey {
         match self {
             Self::Text { document_key, .. } => document_key,
@@ -189,6 +192,7 @@ impl DocumentQuery {
     ///
     /// The path isn't guaranteed to point to a real path on the filesystem. This is the case
     /// for unsaved (untitled) documents.
+    #[allow(dead_code)]
     pub(crate) fn file_path(&self) -> Option<PathBuf> {
         self.file_url().to_file_path().ok()
     }
@@ -204,6 +208,7 @@ impl DocumentQuery {
 
     /// Attempt to access the single inner text document selected by the query.
     /// If this query is selecting an entire notebook document, this will return `None`.
+    #[allow(dead_code)]
     pub(crate) fn as_single_document(&self) -> Option<&TextDocument> {
         match self {
             Self::Text { document, .. } => Some(document),

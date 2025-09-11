@@ -19,6 +19,7 @@ mod traits;
 use notifications as notification;
 use requests as request;
 
+#[allow(dead_code)]
 #[allow(unused_imports)]
 use self::traits::{
     BackgroundDocumentNotificationHandler, NotificationHandler, RequestHandler,
@@ -42,8 +43,10 @@ struct BamlFunctionResult {
     span: BamlFunctionSpan,
 }
 
+#[allow(dead_code)]
 struct BamlFunctionArg {}
 // --- Add debounce duration constant ---
+#[allow(dead_code)]
 const DID_CHANGE_DEBOUNCE_DURATION: Duration = Duration::from_millis(250);
 
 pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
@@ -283,6 +286,7 @@ fn local_request_task<'a, R: traits::SyncRequestHandler>(
     }))
 }
 
+#[allow(dead_code)]
 fn background_request_task<'a, R: traits::BackgroundDocumentRequestHandler>(
     req: lsp_server::Request,
     schedule: BackgroundSchedule,
@@ -326,6 +330,7 @@ fn local_notification_task<'a, N: traits::SyncNotificationHandler>(
     })])
 }
 
+#[allow(dead_code)]
 fn background_notification_task<'a, N: traits::BackgroundDocumentNotificationHandler>(
     notif: lsp_server::Notification,
     schedule: BackgroundSchedule,

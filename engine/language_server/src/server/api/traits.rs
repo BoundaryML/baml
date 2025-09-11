@@ -1,5 +1,5 @@
 //! A stateful LSP implementation that calls into the Ruff API.
-
+#[allow(dead_code)]
 use std::sync::Arc;
 
 use lsp_types::notification::Notification as LSPNotification;

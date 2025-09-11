@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use std::path::PathBuf;
 
 use lsp_types::Url;
@@ -11,7 +12,9 @@ pub(crate) type WorkspaceSettingsMap = FxHashMap<Url, ClientSettings>;
 #[cfg_attr(test, derive(PartialEq, Eq))]
 #[serde(rename_all = "camelCase")]
 pub struct BamlSettings {
+    #[allow(dead_code)]
     pub(crate) cli_path: Option<String>,
+    #[allow(dead_code)]
     pub(crate) generate_code_on_save: Option<String>,
     #[serde(default = "default_feature_flags")]
     pub(crate) feature_flags: Option<Vec<String>>,

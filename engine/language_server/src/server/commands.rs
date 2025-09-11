@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use serde::{
     de::{DeserializeOwned, Error},
     Deserialize, Serialize,
@@ -19,6 +20,7 @@ pub trait CodeLensCommand: Serialize + DeserializeOwned + Sized {
         })
     }
 
+    #[allow(dead_code)]
     fn from_execute_command_params(
         mut params: lsp_types::ExecuteCommandParams,
     ) -> Result<Self, serde_json::Error> {

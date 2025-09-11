@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use std::{collections::HashMap, path::PathBuf};
 
 use lsp_types::{request, RenameParams, TextEdit, WorkspaceEdit};
@@ -16,6 +17,7 @@ use crate::{
     DocumentKey, Session,
 };
 
+#[allow(dead_code)]
 pub(crate) struct Completion;
 
 pub struct Rename;

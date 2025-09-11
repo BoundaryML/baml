@@ -1,5 +1,5 @@
 //! Data model, state management, and configuration resolution.
-
+#[allow(dead_code)]
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -317,6 +317,7 @@ impl Session {
         self.index.lock().open_text_document(document_key, document);
     }
 
+    #[allow(dead_code)]
     pub(crate) fn set_unsaved_file(
         &mut self,
         document_key: &DocumentKey,
@@ -421,11 +422,13 @@ impl Session {
 pub struct DocumentSnapshot {
     resolved_client_capabilities: Arc<ResolvedClientCapabilities>,
     document_ref: index::DocumentQuery,
+    #[allow(dead_code)]
     position_encoding: PositionEncoding,
     session: Arc<Session>,
 }
 
 impl DocumentSnapshot {
+    #[allow(dead_code)]
     pub(crate) fn resolved_client_capabilities(&self) -> &ResolvedClientCapabilities {
         &self.resolved_client_capabilities
     }
@@ -434,6 +437,7 @@ impl DocumentSnapshot {
         &self.document_ref
     }
 
+    #[allow(dead_code)]
     pub(crate) fn encoding(&self) -> PositionEncoding {
         self.position_encoding
     }

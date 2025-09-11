@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use std::{borrow::Cow, sync::Arc};
 
 use lsp_types::{

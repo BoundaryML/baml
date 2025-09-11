@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 mod code_action;
 mod code_lens;
 mod completion;
@@ -17,4 +18,5 @@ pub(super) use format::DocumentFormatting;
 pub use go_to_definition::GotoDefinition;
 pub(super) use hover::Hover;
 pub use rename::Rename;
+#[allow(dead_code)]
 type FormatResponse = Option<Vec<lsp_types::TextEdit>>;

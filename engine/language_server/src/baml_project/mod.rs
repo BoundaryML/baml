@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
@@ -1347,6 +1348,7 @@ pub fn common_version_up_to_patch<'a>(
     }
 }
 
+#[allow(dead_code)]
 fn get_dummy_value(
     indent: usize,
     allow_multiline: bool,
@@ -1448,6 +1450,7 @@ fn get_dummy_value(
     }
 }
 
+#[allow(dead_code)]
 fn get_dummy_field(indent: usize, name: &str, t: &baml_runtime::TypeIR) -> Option<String> {
     let indent_str = "  ".repeat(indent);
     let dummy = get_dummy_value(indent, true, t);
