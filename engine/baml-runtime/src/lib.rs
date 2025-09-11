@@ -24,11 +24,7 @@ pub mod tracingv2;
 pub mod type_builder;
 mod types;
 
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-    sync::{Arc, OnceLock},
-};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
 use baml_ids::{FunctionCallId, HttpRequestId};
@@ -58,19 +54,17 @@ use internal_baml_core::{
     ast::Span,
     configuration::{CloudProject, CodegenGenerator, Generator, GeneratorOutputType},
     internal_baml_diagnostics::SerializedSpan,
-    ir::{
-        repr::initial_context, IRHelperExtended,
-    },
+    ir::{repr::initial_context, IRHelperExtended},
 };
 pub use internal_baml_core::{
     internal_baml_diagnostics,
     internal_baml_diagnostics::Diagnostics as DiagnosticsError,
     ir::{ir_helpers::infer_type, scope_diagnostics, IRHelper, TypeIR, TypeValue},
 };
-#[cfg(feature = "internal")]
-pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
 #[cfg(not(feature = "internal"))]
 pub(crate) use internal_baml_jinja::RenderedPrompt;
+#[cfg(feature = "internal")]
+pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
 use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
 use jsonish::{ResponseBamlValue, ResponseValueMeta};
 use on_log_event::LogEventCallbackSync;
@@ -99,7 +93,8 @@ use crate::{
 };
 
 #[cfg(not(target_arch = "wasm32"))]
-static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
+static TOKIO_SINGLETON: std::sync::OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> =
+    std::sync::OnceLock::new();
 
 #[allow(dead_code)]
 static INIT: std::sync::Once = std::sync::Once::new();
@@ -494,9 +489,10 @@ impl BamlRuntime {
             // the test function) with the new function_name and params (of the LLM call).
             let (function_name, _params): (String, BamlMap<String, BamlValue>) =
                 match &expr_eval_result {
-                    ExprEvalResult::Value { value: _value, field_type: _field_type } => {
-                        (function_name.to_string(), params.clone())
-                    }
+                    ExprEvalResult::Value {
+                        value: _value,
+                        field_type: _field_type,
+                    } => (function_name.to_string(), params.clone()),
                     ExprEvalResult::LLMCall { name, args } => (name.to_string(), args.clone()),
                 };
 
@@ -1191,8 +1187,6 @@ impl BamlRuntime {
         input_files: &IndexMap<PathBuf, String>,
         no_version_check: bool,
     ) -> Result<Vec<internal_baml_codegen::GenerateOutput>> {
-        
-
         let client_types: Vec<(&CodegenGenerator, internal_baml_codegen::GeneratorArgs)> = self
             .codegen_generators()
             .map(|generator| {
