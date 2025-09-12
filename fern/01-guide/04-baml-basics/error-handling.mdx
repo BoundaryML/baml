@@ -71,13 +71,13 @@ async function example() {
 
 ```ruby Ruby
 # Example coming soon
-```  
+```
 </CodeGroup>
 
 
 ## BamlError
 
-Base class for all BAML exceptions.  
+Base class for all BAML exceptions.
 
 <ParamField
   path="message"
@@ -99,7 +99,7 @@ Subclass of `BamlError`.
 Raised when a client fails to return a valid response.
 
 <Warning>
-In the case of aggregate clients like `fallback` or those with `retry_policy`, only the last client's error is raised.  
+In the case of aggregate clients like `fallback` or those with `retry_policy`, only the last client's error is raised.
 </Warning>
 
 #### BamlClientHttpError
@@ -219,14 +219,14 @@ from baml_py import AbortController, BamlAbortError
 
 async def example():
     controller = AbortController()
-    
+
     # Cancel after 5 seconds
     async def cancel_after_timeout():
         await asyncio.sleep(5)
         controller.abort('timeout')
-    
+
     asyncio.create_task(cancel_after_timeout())
-    
+
     try:
         result = await b.ExtractData(
             input_text,
@@ -247,10 +247,10 @@ import { BamlAbortError } from '@boundaryml/baml'
 
 async function example() {
   const controller = new AbortController()
-  
+
   // Cancel after 5 seconds
   setTimeout(() => controller.abort('timeout'), 5000)
-  
+
   try {
     const result = await b.ExtractData(inputText, {
       abortController: controller
@@ -280,7 +280,7 @@ func example() {
     // Create context with 5 second timeout
     ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
     defer cancel()
-    
+
     result, err := b.ExtractData(ctx, inputText)
     if err != nil {
         if errors.Is(err, context.DeadlineExceeded) {
@@ -298,13 +298,13 @@ func example() {
 ```ruby Ruby
 begin
   controller = Baml::AbortController.new
-  
+
   # Cancel after 5 seconds in another thread
   Thread.new do
     sleep(5)
     controller.abort('timeout')
   end
-  
+
   result = b.extract_data(
     input_text,
     baml_options: { abort_controller: controller }
@@ -322,3 +322,75 @@ end
 </CodeGroup>
 
 For more information on using abort controllers, see the [Abort Controllers guide](/guide/baml-basics/abort-signal).
+
+## LLM Fixup: Dealing with Validation Errors
+
+Our parser is very forgiving, allowing for structured data parsing even in the presence of
+minor errors and thought tokens in the LLM response. However, certain types of errors are
+too ambiguous to handle without the help of an LLM.
+
+In cases where your LLM is having trouble producing valid data from the output schema, you
+can use this 'fixup' recipe to get valid data:
+
+1. Write a Fixup Function. For example, if your original function is called `Foo` and it
+returns `MyClass`:
+
+```baml BAML
+function FixupFoo(errorMessage: string) -> MyClass {
+    client GPT4o
+    prompt #"
+        Fix this malformed JSON. Preserve the same information.
+
+        {{ ctx.output_format }}
+
+        Original data and parse error:
+        {{ errorMessage }}
+    "#
+}
+```
+
+2. Then call the fixup function from your client code in response to validation errors:
+
+<CodeGroup>
+```python Python
+try:
+    result = b.Foo(myData)
+except Baml.ValidationError as e:
+    result = b.FixupFoo(str(e))
+```
+```typescript TypeScript
+import { b } from './baml_client'
+import { BamlValidationError } from '@boundaryml/baml'
+
+async function example() {
+  try {
+    const result = await b.Foo(myData)
+  } catch (e) {
+    if (e instanceof BamlValidationError) {
+      const result = await b.FixupFoo(e.message)
+    }
+  }
+}
+```
+
+```go Go
+// Example coming soon.
+```
+
+```ruby Ruby
+begin
+  result = b.foo(my_data)
+rescue Baml::ValidationError => e
+  result = b.fixup_foo(e.message)
+end
+```
+</CodeGroup>
+
+### Choosing a Model
+
+LLMs are good at reconstituting data, so it is often possible to use a less
+powerful model for your fixup function than the model you used to produce
+the original data. The difficulty of producing valid JSON data depends on
+the complexity of the schema and the details of your data payload, so be
+sure to test your fixup function on realistic data payloads before moving
+to a smaller model.
