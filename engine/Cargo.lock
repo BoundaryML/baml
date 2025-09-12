@@ -1226,6 +1226,7 @@ dependencies = [
  "dashmap 5.5.3",
  "derive-new",
  "derive_more",
+ "dirs 5.0.1",
  "dissimilar",
  "dunce",
  "either",
@@ -1290,6 +1291,7 @@ dependencies = [
  "strsim",
  "strum",
  "strum_macros",
+ "supports-color",
  "tempfile",
  "test-log",
  "thiserror 2.0.12",
@@ -1300,6 +1302,7 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-subscriber",
+ "unicode-width 0.1.14",
  "url",
  "uuid",
  "valuable",
@@ -2430,7 +2433,7 @@ dependencies = [
  "filetime",
  "indexmap 2.9.0",
  "internal-baml-core",
- "pathdiff 0.1.0",
+ "pathdiff 0.2.3",
  "serde_json",
  "sugar_path",
  "walkdir",
@@ -4028,6 +4031,12 @@ dependencies = [
  "is-docker",
  "once_cell",
 ]
+
+[[package]]
+name = "is_ci"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7655c9839580ee829dfacba1d1278c2b7883e50a277ff7541299489d6bdfdc45"
 
 [[package]]
 name = "is_terminal_polyfill"
@@ -6946,6 +6955,15 @@ name = "sugar_path"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8230d5b8a65a6d4d4a7e5ee8dbdd9312ba447a8b8329689a390a0945d69b57ce"
+
+[[package]]
+name = "supports-color"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c64fc7232dd8d2e4ac5ce4ef302b1d81e0b80d055b9d77c7c4f51f6aa4c867d6"
+dependencies = [
+ "is_ci",
+]
 
 [[package]]
 name = "syn"
