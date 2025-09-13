@@ -793,6 +793,9 @@ navigation:
           - page: "OpenRouter (openai-generic)"
             slug: openrouter
             path: 03-reference/baml/clients/providers/openrouter.mdx
+          - page: "Vercel AI Gateway (openai-generic)"
+            slug: vercel-ai-gateway
+            path: 03-reference/baml/clients/providers/vercel-ai-gateway.mdx
           - page: "Tinfoil (openai-generic)"
             slug: tinfoil
             path: 03-reference/baml/clients/providers/tinfoil.mdx
@@ -1156,6 +1159,8 @@ redirects:
     destination: "/ref/llm-client-providers/ollama"
   - source: "/ref/llm-client-providers/openai-generic-openrouter"
     destination: "/ref/llm-client-providers/openrouter"
+  - source: "/ref/llm-client-providers/openai-generic-vercel-ai-gateway"
+    destination: "/ref/llm-client-providers/vercel-ai-gateway"
   - source: "/ref/llm-client-providers/openai-generic-togetherai"
     destination: "/ref/llm-client-providers/together"
   - source: "/ref/llm-client-providers/openai-generic-unify-ai"
