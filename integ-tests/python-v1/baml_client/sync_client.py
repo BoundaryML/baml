@@ -2090,6 +2090,20 @@ class BamlSyncClient:
                 "input": input,"not_cached": not_cached,
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestFallbackAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestFallbackAlwaysFails(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFallbackAlwaysFails", args={
+                "input": input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFallbackClient(self, 
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -5159,6 +5173,18 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def TestFallbackAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestFallbackAlwaysFails", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def TestFallbackClient(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
@@ -7320,6 +7346,13 @@ class BamlHttpRequestClient:
             "input": input,"not_cached": not_cached,
         }, mode="request")
         return result
+    def TestFallbackAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestFallbackAlwaysFails", args={
+            "input": input,
+        }, mode="request")
+        return result
     def TestFallbackClient(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -8999,6 +9032,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestCaching", args={
             "input": input,"not_cached": not_cached,
+        }, mode="stream")
+        return result
+    def TestFallbackAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestFallbackAlwaysFails", args={
+            "input": input,
         }, mode="stream")
         return result
     def TestFallbackClient(self, 

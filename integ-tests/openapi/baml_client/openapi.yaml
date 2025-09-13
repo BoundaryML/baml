@@ -2049,6 +2049,19 @@ paths:
                 title: TestCachingResponse
                 type: string
       operationId: TestCaching
+  /call/TestFallbackAlwaysFails:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestFallbackAlwaysFails'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestFallbackAlwaysFailsResponse
+                type: string
+      operationId: TestFallbackAlwaysFails
   /call/TestFallbackClient:
     post:
       requestBody:
@@ -5457,6 +5470,22 @@ components:
             required:
             - input
             - not_cached
+            additionalProperties: false
+    TestFallbackAlwaysFails:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestFallbackAlwaysFailsRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     TestFallbackClient:
       required: true

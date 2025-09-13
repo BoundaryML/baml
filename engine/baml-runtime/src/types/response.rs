@@ -119,13 +119,16 @@ impl FunctionResult {
                 Ok(val) => Ok(val),
                 Err(err) => Err(anyhow::anyhow!(self.format_err(err))),
             })
-            .unwrap_or_else(|| Err(anyhow::anyhow!(self.llm_response().clone())))
+            .expect("At least one result will always be present")
     }
 
     fn format_err(&self, err: &anyhow::Error) -> ExposedError {
+        let previous_error_detail = self.create_previous_error_detail();
+        
         if let Some(exposed_error) = err.downcast_ref::<ExposedError>() {
-            return exposed_error.clone();
+            return self.add_previous_error_detail_to_exposed(exposed_error.clone(), previous_error_detail);
         }
+        
         // Capture the actual error to preserve its details
         let actual_error = err.to_string();
         // TODO: HACK! Figure out why now connection errors dont get converted into ExposedError. Instead of converting to a validation error, check for connection errors here. We probably are missing a lot of other connection failures that should NOT be validation errors.
@@ -138,6 +141,7 @@ impl FunctionResult {
                 },
                 message: actual_error,
                 status_code: ErrorCode::ServiceUnavailable,
+                previous_error_detail,
             };
         }
         ExposedError::ValidationError {
@@ -171,7 +175,94 @@ impl FunctionResult {
                     format!("Operation Cancelled: {err} - {actual_error}")
                 }
             },
+            previous_error_detail,
         }
+    }
+
+    fn create_previous_error_detail(&self) -> Option<String> {
+        // Only create detail if there are multiple attempts
+        if self.event_chain.len() <= 1 {
+            return None;
+        }
+        
+        let mut details = Vec::new();
+        
+        // Skip the last event since that's the primary error being returned
+        for (index, (scope, response, parse_result)) in self.event_chain.iter()
+            .enumerate()
+            .take(self.event_chain.len().saturating_sub(1)) 
+        {
+            if !matches!(response, LLMResponse::Success(_)) {
+                // Create a temporary ExposedError for this attempt and use its Display
+                let temp_error = self.create_temp_exposed_error(response, parse_result);
+                details.push(format!("Attempt {} ({:?}): {}", 
+                    index + 1, 
+                    scope, 
+                    temp_error
+                ));
+            }
+        }
+        
+        if details.is_empty() {
+            None
+        } else {
+            Some(format!("Previous failures:\n{}", details.join("\n")))
+        }
+    }
+
+    fn create_temp_exposed_error(&self, response: &LLMResponse, parse_result: &Option<Result<ResponseBamlValue>>) -> ExposedError {
+        match response {
+            LLMResponse::LLMFailure(err) => ExposedError::ClientHttpError {
+                client_name: err.client.clone(),
+                message: err.message.clone(),
+                status_code: err.code.clone(),
+                previous_error_detail: None, // No recursion for temp errors
+            },
+            LLMResponse::UserFailure(msg) => ExposedError::ValidationError {
+                prompt: "N/A".to_string(),
+                raw_output: "N/A".to_string(),
+                message: format!("User Failure: {msg}"),
+                previous_error_detail: None,
+            },
+            LLMResponse::InternalFailure(msg) => ExposedError::ValidationError {
+                prompt: "N/A".to_string(),
+                raw_output: "N/A".to_string(),
+                message: format!("Internal Failure: {msg}"),
+                previous_error_detail: None,
+            },
+            LLMResponse::Cancelled(msg) => ExposedError::AbortError {
+                previous_error_detail: None,
+            },
+            LLMResponse::Success(_) => {
+                // If it's a success but there's a parse error, create a validation error
+                if let Some(Err(parse_err)) = parse_result {
+                    ExposedError::ValidationError {
+                        prompt: response.content().unwrap_or("N/A").to_string(),
+                        raw_output: response.content().unwrap_or("N/A").to_string(),
+                        message: format!("Parse failure: {parse_err}"),
+                        previous_error_detail: None,
+                    }
+                } else {
+                    // This shouldn't happen, but handle gracefully
+                    ExposedError::ValidationError {
+                        prompt: "N/A".to_string(),
+                        raw_output: "N/A".to_string(),
+                        message: "Unknown error".to_string(),
+                        previous_error_detail: None,
+                    }
+                }
+            }
+        }
+    }
+    
+    fn add_previous_error_detail_to_exposed(&self, mut error: ExposedError, detail: Option<String>) -> ExposedError {
+        match &mut error {
+            ExposedError::ValidationError { previous_error_detail: ref mut prev, .. } => *prev = detail,
+            ExposedError::FinishReasonError { previous_error_detail: ref mut prev, .. } => *prev = detail,
+            ExposedError::ClientHttpError { previous_error_detail: ref mut prev, .. } => *prev = detail,
+            ExposedError::AbortError { previous_error_detail: ref mut prev } => *prev = detail,
+        }
+        error
     }
 }
 

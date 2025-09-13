@@ -4,13 +4,15 @@ export class BamlClientFinishReasonError extends Error {
   prompt: string
   raw_output: string
   finish_reason?: string
+  previous_error_detail?: string
 
-  constructor(prompt: string, raw_output: string, message: string, finish_reason: string | undefined) {
+  constructor(prompt: string, raw_output: string, message: string, finish_reason: string | undefined, previous_error_detail?: string) {
     super(message)
     this.name = 'BamlClientFinishReasonError'
     this.prompt = prompt
     this.raw_output = raw_output
     this.finish_reason = finish_reason
+    this.previous_error_detail = previous_error_detail
 
     Object.setPrototypeOf(this, BamlClientFinishReasonError.prototype)
   }
@@ -23,6 +25,7 @@ export class BamlClientFinishReasonError extends Error {
         raw_output: this.raw_output,
         prompt: this.prompt,
         finish_reason: this.finish_reason,
+        previous_error_detail: this.previous_error_detail,
       },
       null,
       2,
@@ -39,6 +42,7 @@ export class BamlClientFinishReasonError extends Error {
             errorData.raw_output || '',
             errorData.message || error.message,
             errorData.finish_reason,
+            errorData.previous_error_detail,
           )
         }
       } catch (parseError) {
@@ -52,12 +56,14 @@ export class BamlClientFinishReasonError extends Error {
 export class BamlValidationError extends Error {
   prompt: string
   raw_output: string
+  previous_error_detail?: string
 
-  constructor(prompt: string, raw_output: string, message: string) {
+  constructor(prompt: string, raw_output: string, message: string, previous_error_detail?: string) {
     super(message)
     this.name = 'BamlValidationError'
     this.prompt = prompt
     this.raw_output = raw_output
+    this.previous_error_detail = previous_error_detail
 
     Object.setPrototypeOf(this, BamlValidationError.prototype)
   }
@@ -69,6 +75,7 @@ export class BamlValidationError extends Error {
         message: this.message,
         raw_output: this.raw_output,
         prompt: this.prompt,
+        previous_error_detail: this.previous_error_detail,
       },
       null,
       2,
@@ -84,6 +91,7 @@ export class BamlValidationError extends Error {
             errorData.prompt || '',
             errorData.raw_output || '',
             errorData.message || error.message,
+            errorData.previous_error_detail,
           )
         }
       } catch (parseError) {
@@ -97,12 +105,14 @@ export class BamlValidationError extends Error {
 export class BamlClientHttpError extends Error {
   client_name: string
   status_code: number
+  previous_error_detail?: string
 
-  constructor(client_name: string, message: string, status_code: number) {
+  constructor(client_name: string, message: string, status_code: number, previous_error_detail?: string) {
     super(message)
     this.name = 'BamlClientHttpError'
     this.client_name = client_name
     this.status_code = status_code
+    this.previous_error_detail = previous_error_detail
 
     Object.setPrototypeOf(this, BamlClientHttpError.prototype)
   }
@@ -113,6 +123,7 @@ export class BamlClientHttpError extends Error {
       message: this.message,
       status_code: this.status_code,
       client_name: this.client_name,
+      previous_error_detail: this.previous_error_detail,
     })
   }
 
@@ -125,6 +136,7 @@ export class BamlClientHttpError extends Error {
             errorData.client_name || '',
             errorData.message || error.message,
             errorData.status_code || -100,
+            errorData.previous_error_detail,
           )
         }
       } catch (parseError) {
@@ -137,11 +149,13 @@ export class BamlClientHttpError extends Error {
 
 export class BamlAbortError extends Error {
   public readonly reason?: any
+  previous_error_detail?: string
 
-  constructor(message: string, reason?: any) {
+  constructor(message: string, reason?: any, previous_error_detail?: string) {
     super(message)
     this.name = 'BamlAbortError'
     this.reason = reason
+    this.previous_error_detail = previous_error_detail
 
     Object.setPrototypeOf(this, BamlAbortError.prototype)
   }
@@ -152,6 +166,7 @@ export class BamlAbortError extends Error {
         name: this.name,
         message: this.message,
         reason: this.reason,
+        previous_error_detail: this.previous_error_detail,
       },
       null,
       2,

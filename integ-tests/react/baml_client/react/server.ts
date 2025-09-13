@@ -2646,6 +2646,24 @@ export const TestCaching = async (
 };
 
 /**
+ * Executes the "TestFallbackAlwaysFails" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestFallbackAlwaysFails"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestFallbackAlwaysFails = async (
+  input: string,
+): Promise<string> => {
+  return b.TestFallbackAlwaysFails(
+    input,
+  );
+};
+
+/**
  * Executes the "TestFallbackClient" BAML action.
  *
  * This server action calls the underlying BAML function "TestFallbackClient"

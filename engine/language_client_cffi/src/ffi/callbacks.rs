@@ -118,23 +118,12 @@ pub fn safe_trigger_callback(
     runtime: &BamlRuntime,
 ) {
     match result {
-        Ok(result) => match result.parsed() {
-            Some(Ok(content)) => {
+        Ok(result) => match result.result_with_constraints_content() {
+            Ok(content) => {
                 send_result_to_callback(id, is_done, content, runtime);
             }
-            Some(Err(e)) => {
-                send_error_to_callback(id, e);
-            }
-            None => {
-                // IF YOU EVER CHANGE THIS THINK CAREFULLY.
-                // Almost definitely you should update ExposedError in engine/baml-runtime/src/errors.rs
-                // and then propagate that error.
-                send_error_to_callback(
-                    id,
-                    &anyhow::anyhow!(
-                        "No result from baml - Please report this error to our team with BAML_LOG=info enabled so we can improve this error message"
-                    ),
-                );
+            Err(e) => {
+                send_error_to_callback(id, &anyhow::anyhow!(e));
             }
         },
         Err(e) => {

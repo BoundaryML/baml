@@ -882,6 +882,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestCaching", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def TestFallbackAlwaysFails(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestFallbackAlwaysFails", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def TestFallbackClient(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -2322,6 +2328,12 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestCaching", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestFallbackAlwaysFails(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestFallbackAlwaysFails", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
     def TestFallbackClient(

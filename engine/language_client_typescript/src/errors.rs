@@ -21,24 +21,31 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                 prompt,
                 message,
                 raw_output: raw_response,
-            } => throw_baml_validation_error(prompt, raw_response, message),
+                previous_error_detail,
+                ..
+            } => throw_baml_validation_error(prompt, raw_response, message, previous_error_detail.as_deref()),
             ExposedError::FinishReasonError {
                 prompt,
                 message,
                 raw_output: raw_response,
                 finish_reason,
+                previous_error_detail,
+                ..
             } => throw_baml_client_finish_reason_error(
                 prompt,
                 raw_response,
                 message,
                 finish_reason.as_ref().map(|f| f.as_str()),
+                previous_error_detail.as_deref(),
             ),
             ExposedError::ClientHttpError {
                 client_name,
                 message,
                 status_code,
-            } => throw_baml_client_http_error(client_name, message, status_code),
-            ExposedError::AbortError => throw_baml_abort_error(),
+                previous_error_detail,
+                ..
+            } => throw_baml_client_http_error(client_name, message, status_code, previous_error_detail.as_deref()),
+            ExposedError::AbortError { previous_error_detail, .. } => throw_baml_abort_error(previous_error_detail.as_deref()),
         }
     } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
         invalid_argument_error(&format!("{er}"))
@@ -67,6 +74,7 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                         failed.client.as_str(),
                         failed.message.as_str(),
                         &failed.code,
+                        None,
                     )
                 }
             },
@@ -90,12 +98,13 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
     }
 }
 
-fn throw_baml_validation_error(prompt: &str, raw_output: &str, message: &str) -> napi::Error {
+fn throw_baml_validation_error(prompt: &str, raw_output: &str, message: &str, previous_error_detail: Option<&str>) -> napi::Error {
     let error_json = serde_json::json!({
         "type": "BamlValidationError",
         "prompt": prompt,
         "raw_output": raw_output,
         "message": format!("BamlValidationError: {}", message),
+        "previous_error_detail": previous_error_detail,
     });
     napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
 }
@@ -105,6 +114,7 @@ fn throw_baml_client_finish_reason_error(
     raw_output: &str,
     message: &str,
     finish_reason: Option<&str>,
+    previous_error_detail: Option<&str>,
 ) -> napi::Error {
     let error_json = serde_json::json!({
         "type": "BamlClientFinishReasonError",
@@ -112,6 +122,7 @@ fn throw_baml_client_finish_reason_error(
         "raw_output": raw_output,
         "message": format!("BamlError: BamlClientError: BamlClientFinishReasonError: {}", message),
         "finish_reason": finish_reason,
+        "previous_error_detail": previous_error_detail,
     });
     napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
 }
@@ -120,19 +131,22 @@ fn throw_baml_client_http_error(
     client_name: &str,
     message: &str,
     status_code: &ErrorCode,
+    previous_error_detail: Option<&str>,
 ) -> napi::Error {
     let error_json = serde_json::json!({
         "type": "BamlClientHttpError",
         "client_name": client_name,
         "message": format!("BamlError: BamlClientError: BamlClientHttpError: {}", message),
         "status_code": status_code.to_u16(),
+        "previous_error_detail": previous_error_detail,
     });
     napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
 }
 
-fn throw_baml_abort_error() -> napi::Error {
+fn throw_baml_abort_error(previous_error_detail: Option<&str>) -> napi::Error {
     let error_json = serde_json::json!({
         "type": "BamlAbortError",
+        "previous_error_detail": previous_error_detail,
     });
     napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
 }

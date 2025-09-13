@@ -2789,6 +2789,25 @@ export const TestCaching = async (
 };
 
 /**
+ * Executes the streaming variant of the "TestFallbackAlwaysFails" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFallbackAlwaysFails = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestFallbackAlwaysFails(
+    input,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "TestFallbackClient" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding

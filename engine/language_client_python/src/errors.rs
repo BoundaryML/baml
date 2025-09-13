@@ -18,22 +18,22 @@ create_exception!(baml_py, BamlAbortError, BamlError);
 // can't use extends=PyException yet https://github.com/PyO3/pyo3/discussions/3838
 
 #[allow(non_snake_case)]
-fn raise_baml_validation_error(prompt: String, message: String, raw_output: String) -> PyErr {
+fn raise_baml_validation_error(prompt: String, message: String, raw_output: String, previous_error_detail: Option<String>) -> PyErr {
     Python::with_gil(|py| {
         let internal_monkeypatch = py.import("baml_py.internal_monkeypatch").unwrap();
         let exception = internal_monkeypatch.getattr("BamlValidationError").unwrap();
-        let args = (prompt, message, raw_output);
+        let args = (prompt, message, raw_output, previous_error_detail);
         let inst = exception.call1(args).unwrap();
         PyErr::from_value(inst)
     })
 }
 
 #[allow(non_snake_case)]
-fn raise_baml_client_http_error(client_name: String, message: String, status_code: u16) -> PyErr {
+fn raise_baml_client_http_error(client_name: String, message: String, status_code: u16, previous_error_detail: Option<String>) -> PyErr {
     Python::with_gil(|py| {
         let internal_monkeypatch = py.import("baml_py.internal_monkeypatch").unwrap();
         let exception = internal_monkeypatch.getattr("BamlClientHttpError").unwrap();
-        let args = (client_name, message, status_code);
+        let args = (client_name, message, status_code, previous_error_detail);
         let inst = exception.call1(args).unwrap();
         PyErr::from_value(inst)
     })
@@ -45,13 +45,14 @@ fn raise_baml_client_finish_reason_error(
     raw_output: String,
     message: String,
     finish_reason: Option<String>,
+    previous_error_detail: Option<String>,
 ) -> PyErr {
     Python::with_gil(|py| {
         let internal_monkeypatch = py.import("baml_py.internal_monkeypatch").unwrap();
         let exception = internal_monkeypatch
             .getattr("BamlClientFinishReasonError")
             .unwrap();
-        let args = (prompt, message, raw_output, finish_reason);
+        let args = (prompt, message, raw_output, finish_reason, previous_error_detail);
         let inst = exception.call1(args).unwrap();
         PyErr::from_value(inst)
     })
@@ -87,32 +88,40 @@ impl BamlError {
                     prompt,
                     raw_output,
                     message,
+                    previous_error_detail,
+                    ..
                 } => {
                     // Assuming ValidationError has fields that correspond to prompt, message, and raw_output
                     // If not, you may need to adjust this part based on the actual structure of ValidationError
-                    raise_baml_validation_error(prompt.clone(), message.clone(), raw_output.clone())
+                    raise_baml_validation_error(prompt.clone(), message.clone(), raw_output.clone(), previous_error_detail.clone())
                 }
                 ExposedError::FinishReasonError {
                     prompt,
                     raw_output,
                     message,
                     finish_reason,
+                    previous_error_detail,
+                    ..
                 } => raise_baml_client_finish_reason_error(
                     prompt.clone(),
                     raw_output.clone(),
                     message.clone(),
                     finish_reason.clone(),
+                    previous_error_detail.clone(),
                 ),
                 ExposedError::ClientHttpError {
                     client_name,
                     message,
                     status_code,
+                    previous_error_detail,
+                    ..
                 } => raise_baml_client_http_error(
                     client_name.clone(),
                     message.clone(),
                     status_code.to_u16(),
+                    previous_error_detail.clone(),
                 ),
-                ExposedError::AbortError => {
+                ExposedError::AbortError { .. } => {
                     PyErr::new::<BamlAbortError, _>("AbortError".to_string())
                 }
             }
@@ -141,6 +150,7 @@ impl BamlError {
                             failed.client.clone(),
                             failed.message.clone(),
                             failed.code.to_u16(),
+                            None,
                         )
                     }
                 },
