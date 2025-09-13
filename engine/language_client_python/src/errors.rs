@@ -150,7 +150,7 @@ impl BamlError {
                             failed.client.clone(),
                             failed.message.clone(),
                             failed.code.to_u16(),
-                            None,
+                            String::new(),
                         )
                     }
                 },

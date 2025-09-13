@@ -110,13 +110,14 @@ pub async fn orchestrate(
                             .finish_reason_filter()
                             .is_allowed(s.metadata.finish_reason.as_ref())
                         {
+                            let message = "Finish reason not allowed".to_string();
                             Some(Err(anyhow::anyhow!(
                                 crate::errors::ExposedError::FinishReasonError {
                                     prompt: prompt.to_string(),
                                     raw_output: s.content.clone(),
-                                    message: "Finish reason not allowed".to_string(),
+                                    detailed_message: message.clone(),
+                                    message,
                                     finish_reason: s.metadata.finish_reason.clone(),
-                                    detailed_message: String::new(),
                                 }
                             )))
                         } else {
@@ -139,7 +140,7 @@ pub async fn orchestrate(
                                     client_name: client.clone(),
                                     message: message.clone(),
                                     status_code: code.clone(),
-                                    detailed_message: String::new(),
+                                    detailed_message: message.clone(),
                                 }
                             ))),
                         }

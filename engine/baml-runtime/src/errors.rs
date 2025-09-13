@@ -38,72 +38,44 @@ impl std::fmt::Display for ExposedError {
                 prompt,
                 raw_output,
                 message,
-                detailed_message,
+                detailed_message: _,
             } => {
-                if !detailed_message.is_empty() {
-                    write!(
-                        f,
-                        "Parsing error: {message}\nPrompt: {prompt}\nRaw Response: {raw_output}\n\n{detailed_message}"
-                    )
-                } else {
-                    write!(
-                        f,
-                        "Parsing error: {message}\nPrompt: {prompt}\nRaw Response: {raw_output}"
-                    )
-                }
+                write!(
+                    f,
+                    "Parsing error: {message}\nPrompt: {prompt}\nRaw Response: {raw_output}"
+                )
             }
             ExposedError::FinishReasonError {
                 prompt,
                 raw_output,
                 message,
                 finish_reason,
-                detailed_message,
+                detailed_message: _,
             } => {
-                if !detailed_message.is_empty() {
-                    write!(
-                        f,
-                        "Finish reason error: {}\nPrompt: {}\nRaw Response: {}\nFinish Reason: {}\n\n{}",
-                        message,
-                        prompt,
-                        raw_output,
-                        finish_reason.as_ref().map_or("<none>", |f| f.as_str()),
-                        detailed_message
-                    )
-                } else {
-                    write!(
-                        f,
-                        "Finish reason error: {}\nPrompt: {}\nRaw Response: {}\nFinish Reason: {}",
-                        message,
-                        prompt,
-                        raw_output,
-                        finish_reason.as_ref().map_or("<none>", |f| f.as_str())
-                    )
-                }
+                write!(
+                    f,
+                    "Finish reason error: {}\nPrompt: {}\nRaw Response: {}\nFinish Reason: {}",
+                    message,
+                    prompt,
+                    raw_output,
+                    finish_reason.as_ref().map_or("<none>", |f| f.as_str())
+                )
             }
             ExposedError::ClientHttpError {
                 client_name,
                 message,
                 status_code,
-                detailed_message,
+                detailed_message: _,
             } => {
-                if !detailed_message.is_empty() {
-                    write!(
-                        f,
-                        "LLM client \"{client_name}\" failed with status code: {status_code}\nMessage: {message}\n\n{detailed_message}"
-                    )
-                } else {
-                    write!(
+                write!(
                         f,
                         "LLM client \"{client_name}\" failed with status code: {status_code}\nMessage: {message}"
                     )
-                }
             }
-            ExposedError::AbortError { detailed_message } => {
-                if !detailed_message.is_empty() {
-                    write!(f, "AbortError\n\n{detailed_message}")
-                } else {
-                    write!(f, "AbortError")
-                }
+            ExposedError::AbortError {
+                detailed_message: _,
+            } => {
+                write!(f, "AbortError")
             }
         }
     }
