@@ -130,14 +130,10 @@ impl IntoBamlError for &anyhow::Error {
                     prompt,
                     message,
                     raw_output: raw_response,
-                    previous_error_detail,
+                    previous_error_detail: _,
                 } => baml_types::tracing::events::BamlError::Validation {
                     raw_output: Cow::Owned(raw_response.clone()),
-                    message: Cow::Owned(if let Some(detail) = previous_error_detail {
-                        format!("{message}\n\n{detail}")
-                    } else {
-                        message.clone()
-                    }),
+                    message: Cow::Owned(message.clone()),
                     prompt: Cow::Owned(prompt.clone()),
                 },
                 ExposedError::FinishReasonError {
@@ -145,17 +141,13 @@ impl IntoBamlError for &anyhow::Error {
                     message,
                     raw_output: raw_response,
                     finish_reason,
-                    previous_error_detail,
+                    previous_error_detail: _,
                 } => baml_types::tracing::events::BamlError::ClientFinishReason {
                     finish_reason: match finish_reason {
                         Some(finish_reason) => Cow::Owned(finish_reason.clone()),
                         None => Cow::Owned(String::new()),
                     },
-                    message: Cow::Owned(if let Some(detail) = previous_error_detail {
-                        format!("{message}\n\n{detail}")
-                    } else {
-                        message.clone()
-                    }),
+                    message: Cow::Owned(message.clone()),
                     prompt: Cow::Owned(prompt.clone()),
                     raw_output: Cow::Owned(raw_response.clone()),
                 },
@@ -163,23 +155,15 @@ impl IntoBamlError for &anyhow::Error {
                     client_name: _,
                     message,
                     status_code,
-                    previous_error_detail,
+                    previous_error_detail: _,
                 } => baml_types::tracing::events::BamlError::ClientHttp {
-                    message: Cow::Owned(if let Some(detail) = previous_error_detail {
-                        format!("{message}\n\n{detail}")
-                    } else {
-                        message.clone()
-                    }),
+                    message: Cow::Owned(message.clone()),
                     status_code: status_code.to_u16() as i32,
                 },
                 ExposedError::AbortError {
-                    previous_error_detail,
+                    previous_error_detail: _,
                 } => baml_types::tracing::events::BamlError::Base {
-                    message: if let Some(detail) = previous_error_detail {
-                        format!("AbortError\n\n{detail}").into()
-                    } else {
-                        "AbortError".into()
-                    },
+                    message: "AbortError".into(),
                 },
             };
         }
