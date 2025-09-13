@@ -74,7 +74,7 @@ where
                     LLMResponse::Cancelled("Operation cancelled".to_string()),
                     Some(Err(anyhow::anyhow!(
                         crate::errors::ExposedError::AbortError {
-                            previous_error_detail: None
+                            detailed_message: None
                         }
                     ))),
                 ));
@@ -148,7 +148,7 @@ where
                                     raw_output: s.content.clone(),
                                     message: "Finish reason not allowed".to_string(),
                                     finish_reason: s.metadata.finish_reason.clone(),
-                                    previous_error_detail: None,
+                                    detailed_message: None,
                                 }
                             )))
                         } else {
@@ -171,7 +171,7 @@ where
                                     client_name: client.clone(),
                                     message: message.clone(),
                                     status_code: code.clone(),
-                                    previous_error_detail: None,
+                                    detailed_message: None,
                                 }
                             ))),
                         }

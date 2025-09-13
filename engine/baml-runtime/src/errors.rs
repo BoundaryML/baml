@@ -9,23 +9,23 @@ pub enum ExposedError {
         prompt: String,
         raw_output: String,
         message: String,
-        previous_error_detail: Option<String>,
+        detailed_message: Option<String>,
     },
     FinishReasonError {
         prompt: String,
         raw_output: String,
         message: String,
         finish_reason: Option<String>,
-        previous_error_detail: Option<String>,
+        detailed_message: Option<String>,
     },
     ClientHttpError {
         client_name: String,
         message: String,
         status_code: ErrorCode,
-        previous_error_detail: Option<String>,
+        detailed_message: Option<String>,
     },
     AbortError {
-        previous_error_detail: Option<String>,
+        detailed_message: Option<String>,
     },
 }
 
@@ -38,9 +38,9 @@ impl std::fmt::Display for ExposedError {
                 prompt,
                 raw_output,
                 message,
-                previous_error_detail,
+                detailed_message,
             } => {
-                if let Some(detail) = previous_error_detail {
+                if let Some(detail) = detailed_message {
                     write!(
                         f,
                         "Parsing error: {message}\nPrompt: {prompt}\nRaw Response: {raw_output}\n\n{detail}"
@@ -57,9 +57,9 @@ impl std::fmt::Display for ExposedError {
                 raw_output,
                 message,
                 finish_reason,
-                previous_error_detail,
+                detailed_message,
             } => {
-                if let Some(detail) = previous_error_detail {
+                if let Some(detail) = detailed_message {
                     write!(
                         f,
                         "Finish reason error: {}\nPrompt: {}\nRaw Response: {}\nFinish Reason: {}\n\n{}",
@@ -84,9 +84,9 @@ impl std::fmt::Display for ExposedError {
                 client_name,
                 message,
                 status_code,
-                previous_error_detail,
+                detailed_message,
             } => {
-                if let Some(detail) = previous_error_detail {
+                if let Some(detail) = detailed_message {
                     write!(
                         f,
                         "LLM client \"{client_name}\" failed with status code: {status_code}\nMessage: {message}\n\n{detail}"
@@ -99,9 +99,9 @@ impl std::fmt::Display for ExposedError {
                 }
             }
             ExposedError::AbortError {
-                previous_error_detail,
+                detailed_message,
             } => {
-                if let Some(detail) = previous_error_detail {
+                if let Some(detail) = detailed_message {
                     write!(f, "AbortError\n\n{detail}")
                 } else {
                     write!(f, "AbortError")
@@ -130,7 +130,7 @@ impl IntoBamlError for &anyhow::Error {
                     prompt,
                     message,
                     raw_output: raw_response,
-                    previous_error_detail: _,
+                    detailed_message: _,
                 } => baml_types::tracing::events::BamlError::Validation {
                     raw_output: Cow::Owned(raw_response.clone()),
                     message: Cow::Owned(message.clone()),
@@ -141,7 +141,7 @@ impl IntoBamlError for &anyhow::Error {
                     message,
                     raw_output: raw_response,
                     finish_reason,
-                    previous_error_detail: _,
+                    detailed_message: _,
                 } => baml_types::tracing::events::BamlError::ClientFinishReason {
                     finish_reason: match finish_reason {
                         Some(finish_reason) => Cow::Owned(finish_reason.clone()),
@@ -155,13 +155,13 @@ impl IntoBamlError for &anyhow::Error {
                     client_name: _,
                     message,
                     status_code,
-                    previous_error_detail: _,
+                    detailed_message: _,
                 } => baml_types::tracing::events::BamlError::ClientHttp {
                     message: Cow::Owned(message.clone()),
                     status_code: status_code.to_u16() as i32,
                 },
                 ExposedError::AbortError {
-                    previous_error_detail: _,
+                    detailed_message: _,
                 } => baml_types::tracing::events::BamlError::Base {
                     message: "AbortError".into(),
                 },
