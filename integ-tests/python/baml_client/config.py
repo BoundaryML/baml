@@ -85,10 +85,18 @@ def set_log_max_chunk_length():
     os.environ["BAML_LOG_MAX_CHUNK_LENGTH"] = "1000"
 
 
+def set_log_max_message_length(*args, **kwargs):
+    """
+    Alias for set_log_max_chunk_length for compatibility with docs.
+    """
+    return set_log_max_chunk_length(*args, **kwargs)
+
+
 __all__ = [
     "set_log_level",
     "get_log_level",
     "set_log_json_mode",
     "reset_baml_env_vars",
+    "set_log_max_message_length",
     "set_log_max_chunk_length",
 ]
