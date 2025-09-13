@@ -84,7 +84,7 @@ export const PromptPreview = () => {
               </div>
 
               {/* Scrollable Body - takes remaining space */}
-              <div className="flex-1 overflow-y-auto min-h-0 pb-14 px-4 min-w-0">
+              <div className="flex-1 overflow-y-auto min-h-0 pb-14 px-1 min-w-0">
                 {selectedTc ? (
                   <>
                     <PromptRenderWrapper />
