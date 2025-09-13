@@ -23,7 +23,7 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                 raw_output: raw_response,
                 detailed_message,
                 ..
-            } => throw_baml_validation_error(prompt, raw_response, message, detailed_message.as_deref()),
+            } => throw_baml_validation_error(prompt, raw_response, message, if detailed_message.is_empty() { None } else { Some(detailed_message.as_str()) }),
             ExposedError::FinishReasonError {
                 prompt,
                 message,
@@ -36,7 +36,7 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                 raw_response,
                 message,
                 finish_reason.as_ref().map(|f| f.as_str()),
-                detailed_message.as_deref(),
+                if detailed_message.is_empty() { None } else { Some(detailed_message.as_str()) },
             ),
             ExposedError::ClientHttpError {
                 client_name,
@@ -44,8 +44,8 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                 status_code,
                 detailed_message,
                 ..
-            } => throw_baml_client_http_error(client_name, message, status_code, detailed_message.as_deref()),
-            ExposedError::AbortError { detailed_message, .. } => throw_baml_abort_error(detailed_message.as_deref()),
+            } => throw_baml_client_http_error(client_name, message, status_code, if detailed_message.is_empty() { None } else { Some(detailed_message.as_str()) }),
+            ExposedError::AbortError { detailed_message, .. } => throw_baml_abort_error(if detailed_message.is_empty() { None } else { Some(detailed_message.as_str()) }),
         }
     } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
         invalid_argument_error(&format!("{er}"))

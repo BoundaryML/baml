@@ -18,7 +18,7 @@ create_exception!(baml_py, BamlAbortError, BamlError);
 // can't use extends=PyException yet https://github.com/PyO3/pyo3/discussions/3838
 
 #[allow(non_snake_case)]
-fn raise_baml_validation_error(prompt: String, message: String, raw_output: String, detailed_message: Option<String>) -> PyErr {
+fn raise_baml_validation_error(prompt: String, message: String, raw_output: String, detailed_message: String) -> PyErr {
     Python::with_gil(|py| {
         let internal_monkeypatch = py.import("baml_py.internal_monkeypatch").unwrap();
         let exception = internal_monkeypatch.getattr("BamlValidationError").unwrap();
@@ -29,7 +29,7 @@ fn raise_baml_validation_error(prompt: String, message: String, raw_output: Stri
 }
 
 #[allow(non_snake_case)]
-fn raise_baml_client_http_error(client_name: String, message: String, status_code: u16, detailed_message: Option<String>) -> PyErr {
+fn raise_baml_client_http_error(client_name: String, message: String, status_code: u16, detailed_message: String) -> PyErr {
     Python::with_gil(|py| {
         let internal_monkeypatch = py.import("baml_py.internal_monkeypatch").unwrap();
         let exception = internal_monkeypatch.getattr("BamlClientHttpError").unwrap();
@@ -45,7 +45,7 @@ fn raise_baml_client_finish_reason_error(
     raw_output: String,
     message: String,
     finish_reason: Option<String>,
-    detailed_message: Option<String>,
+    detailed_message: String,
 ) -> PyErr {
     Python::with_gil(|py| {
         let internal_monkeypatch = py.import("baml_py.internal_monkeypatch").unwrap();

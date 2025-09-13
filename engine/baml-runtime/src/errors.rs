@@ -9,23 +9,23 @@ pub enum ExposedError {
         prompt: String,
         raw_output: String,
         message: String,
-        detailed_message: Option<String>,
+        detailed_message: String,
     },
     FinishReasonError {
         prompt: String,
         raw_output: String,
         message: String,
         finish_reason: Option<String>,
-        detailed_message: Option<String>,
+        detailed_message: String,
     },
     ClientHttpError {
         client_name: String,
         message: String,
         status_code: ErrorCode,
-        detailed_message: Option<String>,
+        detailed_message: String,
     },
     AbortError {
-        detailed_message: Option<String>,
+        detailed_message: String,
     },
 }
 
@@ -40,10 +40,10 @@ impl std::fmt::Display for ExposedError {
                 message,
                 detailed_message,
             } => {
-                if let Some(detail) = detailed_message {
+                if !detailed_message.is_empty() {
                     write!(
                         f,
-                        "Parsing error: {message}\nPrompt: {prompt}\nRaw Response: {raw_output}\n\n{detail}"
+                        "Parsing error: {message}\nPrompt: {prompt}\nRaw Response: {raw_output}\n\n{detailed_message}"
                     )
                 } else {
                     write!(
@@ -59,7 +59,7 @@ impl std::fmt::Display for ExposedError {
                 finish_reason,
                 detailed_message,
             } => {
-                if let Some(detail) = detailed_message {
+                if !detailed_message.is_empty() {
                     write!(
                         f,
                         "Finish reason error: {}\nPrompt: {}\nRaw Response: {}\nFinish Reason: {}\n\n{}",
@@ -67,7 +67,7 @@ impl std::fmt::Display for ExposedError {
                         prompt,
                         raw_output,
                         finish_reason.as_ref().map_or("<none>", |f| f.as_str()),
-                        detail
+                        detailed_message
                     )
                 } else {
                     write!(
@@ -86,10 +86,10 @@ impl std::fmt::Display for ExposedError {
                 status_code,
                 detailed_message,
             } => {
-                if let Some(detail) = detailed_message {
+                if !detailed_message.is_empty() {
                     write!(
                         f,
-                        "LLM client \"{client_name}\" failed with status code: {status_code}\nMessage: {message}\n\n{detail}"
+                        "LLM client \"{client_name}\" failed with status code: {status_code}\nMessage: {message}\n\n{detailed_message}"
                     )
                 } else {
                     write!(
@@ -99,8 +99,8 @@ impl std::fmt::Display for ExposedError {
                 }
             }
             ExposedError::AbortError { detailed_message } => {
-                if let Some(detail) = detailed_message {
-                    write!(f, "AbortError\n\n{detail}")
+                if !detailed_message.is_empty() {
+                    write!(f, "AbortError\n\n{detailed_message}")
                 } else {
                     write!(f, "AbortError")
                 }
