@@ -200,6 +200,8 @@ impl FunctionResult {
                     "Attempt {}: {}",
                     index,
                     self.format_single_error(err)
+                        .to_string()
+                        .replace("\n", "\n    ")
                 ))
             })
             .collect::<Vec<String>>();

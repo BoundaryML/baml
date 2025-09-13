@@ -98,9 +98,7 @@ impl std::fmt::Display for ExposedError {
                     )
                 }
             }
-            ExposedError::AbortError {
-                detailed_message,
-            } => {
+            ExposedError::AbortError { detailed_message } => {
                 if let Some(detail) = detailed_message {
                     write!(f, "AbortError\n\n{detail}")
                 } else {
