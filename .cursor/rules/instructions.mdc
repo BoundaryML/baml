@@ -1,0 +1,15 @@
+---
+description: Instructions for working on BAML
+alwaysApply: true
+---
+
+Read the CONTRIBUTING.md guide and README-DEV.md.
+
+Install mise like this:
+`curl https://mise.run | sh`
+
+At the end of your task, see if you can update those files with better and/or more concise instructions for anyone else coming into the repo.
+
+You should prefer writing Rust unit tests. If you do need to run integ tests or create a new client integ test, try just running the python ones using uv + maturin to build + and pytest to test that particular problem. These integ tests actually call LLM functions declared in integ-tests/baml_src. Anytime the baml_src is updated, you must run `uv run baml-cli generate --from ../baml_src` from the integ-tests/python directory for example, (after building with latest rust changes using the maturin develop command from the contributing.md guide).
+
+If infisical CLI _is_ available, then feel free to use it as the scripts indicate, otherwise, assume you have the right env vars in your environment.
