@@ -731,8 +731,8 @@ impl<'g> HirCompiler<'g> {
 
                 let len_method = *self
                     .globals
-                    .get("std.Array.length")
-                    .expect("native std.Array.length() for array length is not in globals?");
+                    .get("baml.Array.length")
+                    .expect("native baml.Array.length() for array length is not in globals?");
 
                 // {
 
@@ -1157,16 +1157,16 @@ impl<'g> HirCompiler<'g> {
                         name: class_name, ..
                     }) => format!("{class_name}.{method}"),
 
-                    Some(TypeIR::List(_, _)) => format!("std.Array.{method}"),
+                    Some(TypeIR::List(_, _)) => format!("baml.Array.{method}"),
 
-                    Some(TypeIR::Map(_, _, _)) => format!("std.Map.{method}"),
+                    Some(TypeIR::Map(_, _, _)) => format!("baml.Map.{method}"),
 
                     Some(TypeIR::Primitive(TypeValue::Media(media_type), _)) => {
                         let subtype = match media_type {
-                            BamlMediaType::Image => "std.media.image",
-                            BamlMediaType::Video => "std.media.video",
-                            BamlMediaType::Audio => "std.media.audio",
-                            BamlMediaType::Pdf => "std.media.pdf",
+                            BamlMediaType::Image => "baml.media.image",
+                            BamlMediaType::Video => "baml.media.video",
+                            BamlMediaType::Audio => "baml.media.audio",
+                            BamlMediaType::Pdf => "baml.media.pdf",
                         };
 
                         format!("{subtype}.{method}")

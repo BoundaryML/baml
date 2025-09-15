@@ -101,13 +101,13 @@ pub fn typecheck_returning_context<'a>(
     let native_fns = baml_vm::native::functions();
     for (name, (_, arity)) in native_fns {
         // For now, create a simple function signature
-        // std.Array.length takes an array and returns int
+        // baml.Array.length takes an array and returns int
         let function_type = match name.as_str() {
-            "std.Array.length" => TypeIR::arrow(
+            "baml.Array.length" => TypeIR::arrow(
                 vec![TypeIR::List(Box::new(TypeIR::null()), Default::default())],
                 TypeIR::int(),
             ),
-            "std.Map.length" => TypeIR::arrow(
+            "baml.Map.length" => TypeIR::arrow(
                 // map<string, V> -> int
                 // NOTE: we don't have a "top" type for map/array values, so we'll use Null.
                 vec![TypeIR::Map(
@@ -117,7 +117,7 @@ pub fn typecheck_returning_context<'a>(
                 )],
                 TypeIR::int(),
             ),
-            "std.Map.has" => TypeIR::arrow(
+            "baml.Map.has" => TypeIR::arrow(
                 // map<string, V>, string -> bool
                 vec![
                     TypeIR::Map(
@@ -129,46 +129,46 @@ pub fn typecheck_returning_context<'a>(
                 ],
                 TypeIR::bool(),
             ),
-            "std.media.image.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::image()),
-            "std.media.audio.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::audio()),
-            "std.media.video.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::video()),
-            "std.media.pdf.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
+            "baml.media.image.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::image()),
+            "baml.media.audio.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::audio()),
+            "baml.media.video.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::video()),
+            "baml.media.pdf.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
 
-            "std.media.image.from_base64" => {
+            "baml.media.image.from_base64" => {
                 TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::image())
             }
-            "std.media.audio.from_base64" => {
+            "baml.media.audio.from_base64" => {
                 TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::audio())
             }
-            "std.media.video.from_base64" => {
+            "baml.media.video.from_base64" => {
                 TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::video())
             }
-            "std.media.pdf.from_base64" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
+            "baml.media.pdf.from_base64" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
 
-            "std.media.image.is_url" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::bool()),
-            "std.media.video.is_url" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::bool()),
-            "std.media.audio.is_url" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::bool()),
-            "std.media.pdf.is_url" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::bool()),
+            "baml.media.image.is_url" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::bool()),
+            "baml.media.video.is_url" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::bool()),
+            "baml.media.audio.is_url" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::bool()),
+            "baml.media.pdf.is_url" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::bool()),
 
-            "std.media.image.is_base64" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::bool()),
-            "std.media.video.is_base64" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::bool()),
-            "std.media.audio.is_base64" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::bool()),
-            "std.media.pdf.is_base64" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::bool()),
+            "baml.media.image.is_base64" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::bool()),
+            "baml.media.video.is_base64" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::bool()),
+            "baml.media.audio.is_base64" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::bool()),
+            "baml.media.pdf.is_base64" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::bool()),
 
-            "std.media.image.as_url" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
-            "std.media.video.as_url" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
-            "std.media.audio.as_url" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
-            "std.media.pdf.as_url" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+            "baml.media.image.as_url" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
+            "baml.media.video.as_url" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
+            "baml.media.audio.as_url" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
+            "baml.media.pdf.as_url" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
 
-            "std.media.image.as_base64" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
-            "std.media.video.as_base64" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
-            "std.media.audio.as_base64" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
-            "std.media.pdf.as_base64" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+            "baml.media.image.as_base64" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
+            "baml.media.video.as_base64" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
+            "baml.media.audio.as_base64" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
+            "baml.media.pdf.as_base64" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
 
-            "std.media.image.mime" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
-            "std.media.video.mime" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
-            "std.media.audio.mime" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
-            "std.media.pdf.mime" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+            "baml.media.image.mime" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
+            "baml.media.video.mime" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
+            "baml.media.audio.mime" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
+            "baml.media.pdf.mime" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
 
             _ => {
                 // Generic function type for other natives
@@ -1455,10 +1455,10 @@ pub fn typecheck_expression(
                 },
                 // TODO: Handle this uniformly with the other cases.
                 Some(TypeIR::List(_, _)) => match method.as_str() {
-                    "length" => Some("std.Array.length".to_string()),
+                    "length" => Some("baml.Array.length".to_string()),
                     _ => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
-                            &format!("Method `{method}` is not available on class `std.Array`"),
+                            &format!("Method `{method}` is not available on class `baml.Array`"),
                             span.clone(),
                         ));
                         None
@@ -1466,11 +1466,11 @@ pub fn typecheck_expression(
                 },
 
                 Some(TypeIR::Map(_, _, _)) => match method.as_str() {
-                    "length" => Some("std.Map.length".to_string()),
-                    "has" => Some("std.Map.has".to_string()),
+                    "length" => Some("baml.Map.length".to_string()),
+                    "has" => Some("baml.Map.has".to_string()),
                     _ => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
-                            &format!("Method `{method}` is not available on class `std.Map`"),
+                            &format!("Method `{method}` is not available on class `baml.Map`"),
                             span.clone(),
                         ));
                         None
@@ -1479,10 +1479,10 @@ pub fn typecheck_expression(
 
                 Some(TypeIR::Primitive(TypeValue::Media(media_type), _)) => {
                     let subtype = match media_type {
-                        BamlMediaType::Image => "std.media.image",
-                        BamlMediaType::Video => "std.media.video",
-                        BamlMediaType::Audio => "std.media.audio",
-                        BamlMediaType::Pdf => "std.media.pdf",
+                        BamlMediaType::Image => "baml.media.image",
+                        BamlMediaType::Video => "baml.media.video",
+                        BamlMediaType::Audio => "baml.media.audio",
+                        BamlMediaType::Pdf => "baml.media.pdf",
                     };
 
                     match method.as_str() {
@@ -1517,21 +1517,23 @@ pub fn typecheck_expression(
                     // Check if it's media.
                     match &typed_receiver {
                         thir::Expr::Var(name, _) => match (name.as_str(), method.as_str()) {
-                            ("image", "from_url") => Some("std.media.image.from_url".to_string()),
-                            ("audio", "from_url") => Some("std.media.audio.from_url".to_string()),
-                            ("video", "from_url") => Some("std.media.video.from_url".to_string()),
-                            ("pdf", "from_url") => Some("std.media.pdf.from_url".to_string()),
+                            ("image", "from_url") => Some("baml.media.image.from_url".to_string()),
+                            ("audio", "from_url") => Some("baml.media.audio.from_url".to_string()),
+                            ("video", "from_url") => Some("baml.media.video.from_url".to_string()),
+                            ("pdf", "from_url") => Some("baml.media.pdf.from_url".to_string()),
 
                             ("image", "from_base64") => {
-                                Some("std.media.image.from_base64".to_string())
+                                Some("baml.media.image.from_base64".to_string())
                             }
                             ("audio", "from_base64") => {
-                                Some("std.media.audio.from_base64".to_string())
+                                Some("baml.media.audio.from_base64".to_string())
                             }
                             ("video", "from_base64") => {
-                                Some("std.media.video.from_base64".to_string())
+                                Some("baml.media.video.from_base64".to_string())
                             }
-                            ("pdf", "from_base64") => Some("std.media.pdf.from_base64".to_string()),
+                            ("pdf", "from_base64") => {
+                                Some("baml.media.pdf.from_base64".to_string())
+                            }
 
                             _ => {
                                 diagnostics.push_error(DatamodelError::new_validation_error(
