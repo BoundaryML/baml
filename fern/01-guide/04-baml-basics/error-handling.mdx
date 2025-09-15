@@ -367,7 +367,7 @@ async function example() {
     const result = await b.Foo(myData)
   } catch (e) {
     if (e instanceof BamlValidationError) {
-      const result = await b.FixupFoo(e.message)
+      const result = await b.FixupFoo(JSON.stringify(e))
     }
   }
 }
@@ -381,7 +381,7 @@ async function example() {
 begin
   result = b.foo(my_data)
 rescue Baml::ValidationError => e
-  result = b.fixup_foo(e.message)
+  result = b.fixup_foo(JSON.generate(e))
 end
 ```
 </CodeGroup>
