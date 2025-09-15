@@ -1255,7 +1255,7 @@ pub fn typecheck_expression(
             if var_type.is_none() {
                 match name.as_str() {
                     // Built-in types, you can call `image.from_url` and should work.
-                    "image" | "audio" | "video" | "pdf" => {}
+                    "image" | "audio" | "video" | "pdf" | "baml" => {}
 
                     cls if context.classes.contains_key(cls) => {}
 
@@ -1535,6 +1535,8 @@ pub fn typecheck_expression(
                                 Some("baml.media.pdf.from_base64".to_string())
                             }
 
+                            ("baml", "deep_copy") => Some("baml.deep_copy".to_string()),
+
                             _ => {
                                 diagnostics.push_error(DatamodelError::new_validation_error(
                                     &format!("Method `{method}` is not available on type `{name}`"),
@@ -1563,7 +1565,7 @@ pub fn typecheck_expression(
                 };
             };
 
-            let func_type = context.get_type(&full_name).cloned();
+            let mut func_type = context.get_type(&full_name).cloned();
 
             let (param_types, return_type, is_known_function) = match &func_type {
                 Some(TypeIR::Arrow(arrow, _)) => (
@@ -1589,6 +1591,8 @@ pub fn typecheck_expression(
                 )
             );
 
+            let mut generic_return_type_inferred = None;
+
             let typed_args: Vec<_> = if is_known_function {
                 // Only validate arguments for known functions. Skip the first argument since that's going to be
                 // our method receiver.
@@ -1604,20 +1608,44 @@ pub fn typecheck_expression(
 
                         // Check if argument type matches expected type
                         if let Some(arg_type) = typed_arg.meta().1.as_ref() {
-                            if !types_compatible(arg_type, expected_type) {
-                                diagnostics.push_error(DatamodelError::new_validation_error(
-                                    &format!(
-                                        "Type mismatch in argument, expected: {}, got: {}",
-                                        expected_type.name_for_user(),
-                                        typed_arg
-                                            .meta()
-                                            .1
-                                            .as_ref()
-                                            .map(|t| t.name_for_user())
-                                            .unwrap_or("unknown".to_string())
-                                    ),
-                                    arg.span(),
-                                ));
+                            match full_name.as_str() {
+                                "baml.deep_copy" => match arg_type {
+                                    TypeIR::Class { name, .. } => {
+                                        generic_return_type_inferred = Some(TypeIR::class(name));
+
+                                        func_type = Some(TypeIR::arrow(
+                                            vec![TypeIR::class(name)],
+                                            TypeIR::class(name),
+                                        ));
+                                    }
+                                    _ => {
+                                        diagnostics.push_error(
+                                            DatamodelError::new_validation_error(
+                                                "deep_copy expects an instance of a class",
+                                                arg.span(),
+                                            ),
+                                        );
+                                    }
+                                },
+                                _ => {
+                                    if !types_compatible(arg_type, expected_type) {
+                                        diagnostics.push_error(
+                                            DatamodelError::new_validation_error(
+                                                &format!(
+                                                "Type mismatch in argument, expected: {}, got: {}",
+                                                expected_type.name_for_user(),
+                                                typed_arg
+                                                    .meta()
+                                                    .1
+                                                    .as_ref()
+                                                    .map(|t| t.name_for_user())
+                                                    .unwrap_or("unknown".to_string())
+                                            ),
+                                                arg.span(),
+                                            ),
+                                        );
+                                    }
+                                }
                             }
                         }
 
@@ -1636,7 +1664,7 @@ pub fn typecheck_expression(
                 &typed_receiver,
                 thir::Expr::Var(name, _) if matches!(
                     name.as_str(),
-                    "image" | "audio" | "video" | "pdf"
+                    "image" | "audio" | "video" | "pdf" | "baml"
                 )
             );
 
@@ -1670,7 +1698,7 @@ pub fn typecheck_expression(
                     )),
                     type_args: vec![],
                     args: typed_args,
-                    meta: (span.clone(), return_type),
+                    meta: (span.clone(), generic_return_type_inferred.or(return_type)),
                 };
             }
 
@@ -1681,7 +1709,7 @@ pub fn typecheck_expression(
                     (span.clone(), func_type.clone()),
                 )),
                 args: typed_args,
-                meta: (span.clone(), return_type),
+                meta: (span.clone(), generic_return_type_inferred.or(return_type)),
             }
         }
         hir::Expression::ClassConstructor(constructor, span) => {

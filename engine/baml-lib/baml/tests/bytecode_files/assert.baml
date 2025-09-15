@@ -94,3 +94,5 @@ fn assertNotOk() -> int {
 // Function: baml.media.audio.mime
 //
 // Function: baml.media.pdf.mime
+//
+// Function: baml.deep_copy

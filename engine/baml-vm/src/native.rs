@@ -196,6 +196,15 @@ impl Vm {
 
         Ok(self.alloc_string(media.mime_type.clone().unwrap_or("".to_string())))
     }
+
+    pub fn deep_copy_object(&mut self, args: &[Value]) -> Result<Value, VmError> {
+        // Arity is already checked by the VM.
+        let index = self.objects.as_object(&args[0], ObjectType::Any)?;
+
+        let object = self.objects[index].clone();
+
+        Ok(Value::Object(self.objects.insert(object)))
+    }
 }
 
 pub type NativeFunction = fn(&mut Vm, &[Value]) -> Result<Value, VmError>;
@@ -236,6 +245,8 @@ pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
         ("baml.media.video.mime", (Vm::media_mime_type, 1)),
         ("baml.media.audio.mime", (Vm::media_mime_type, 1)),
         ("baml.media.pdf.mime", (Vm::media_mime_type, 1)),
+        // Utility functions.
+        ("baml.deep_copy", (Vm::deep_copy_object, 1)),
     ];
 
     BamlMap::from_iter(
