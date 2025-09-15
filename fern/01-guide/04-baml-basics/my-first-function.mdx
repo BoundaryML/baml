@@ -13,7 +13,7 @@ When you write a BAML function like this:
 
 ```rust BAML
 function ExtractResume(resume_text: string) -> Resume {
-  client "openai/gpt-4o"
+  client "openai-responses/gpt-5-mini"
   // The prompt uses Jinja syntax.. more on this soon.
   prompt #"
      Extract info from this text.

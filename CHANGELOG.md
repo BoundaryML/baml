@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.207.1](https://github.com/boundaryml/baml/compare/0.207.0..0.207.1) - 2025-09-13
+
+### Bug Fixes
+
+- **(jetbrains)** implement dynamic versioning (#2439) - ([d352f02](https://github.com/boundaryml/baml/commit/d352f02883c5c01200ae4aacfe095396c6ef272b)) - Samuel Lijin
+- **(openai)** openai-responses had a bug in the assistant request format (#2440) - ([aca1c53](https://github.com/boundaryml/baml/commit/aca1c5314d29d7f91d02c29356d5e2a2dbb87319)) - Samuel Lijin
+- make baml-cli in go also work if you type 'baml' (#2445) - ([5f2df4b](https://github.com/boundaryml/baml/commit/5f2df4b323231d9d9b1a21cf4f4fb7d8ee92fac4)) - aaronvg
+- [Playground] Dont animate sidebar to improve performance - ([80ff10a](https://github.com/boundaryml/baml/commit/80ff10a7ff3432a94b17b2982c3ad1a01c4c59e2)) - Aaron Villalpando
+
+### Docs
+- Document fixing parsing issues with LLMs (#2448) - ([137ee7e](https://github.com/boundaryml/baml/commit/137ee7e303cd009f41504e15c2a7ed4aa3132eb0)) - Greg Hale
+
 ## [0.207.0](https://github.com/boundaryml/baml/compare/0.206.1..0.207.0) - 2025-09-10
 
 ### Bug Fixes

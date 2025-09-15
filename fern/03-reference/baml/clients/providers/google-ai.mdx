@@ -18,7 +18,7 @@ Example:
 client<llm> MyClient {
   provider google-ai
   options {
-    model "gemini-1.5-flash"
+    model "gemini-2.5-flash"
   }
 }
 ```
@@ -46,15 +46,15 @@ You can use this to modify the `headers` and `base_url` for example.
   path="model"
   type="string"
 >
-  The model to use. **Default: `gemini-1.5-flash`**
+  The model to use. **Default: `gemini-2.5-flash`**
 
   We don't have any checks for this field, you can pass any string you wish.
 
-| Model | Input(s) | Optimized for |
-| --- | ---  | --- |
-| `gemini-1.5-pro`  | Audio, images, videos, and text | Complex reasoning tasks such as code and text generation, text editing, problem solving, data extraction and generation |
-| `gemini-1.5-flash`  | Audio, images, videos, and text | Fast and versatile performance across a diverse variety of tasks |
-| `gemini-1.0-pro` | Text | Natural language tasks, multi-turn text and code chat, and code generation |
+| Model | Use Case | Context | Key Features |
+|-------|----------|---------|--------------|
+| **gemini-2.5-pro** | Complex tasks, coding, STEM | 1M | Adaptive thinking, multimodal |
+| **gemini-2.5-flash** | Production apps, balanced performance | 1M | Best price/performance |
+| **gemini-2.5-flash-lite** | High-volume, cost-sensitive | 1M | Lowest cost, fastest |
 
 See the [Google Model Docs](https://ai.google.dev/gemini-api/docs/models/gemini) for the latest models.
 </ParamField>
@@ -71,7 +71,7 @@ Example:
 client<llm> MyClient {
   provider google-ai
   options {
-    model "gemini-1.5-flash"
+    model "gemini-2.5-flash"
     headers {
       "X-My-Header" "my-value"
     }

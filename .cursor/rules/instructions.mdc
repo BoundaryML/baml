@@ -1,0 +1,24 @@
+---
+description: Instructions for working on BAML
+alwaysApply: true
+---
+
+Read the CONTRIBUTING.md guide and README-DEV.md.
+
+Install mise like this:
+`curl https://mise.run | sh`
+then run
+`./scripts/setup-dev.sh`
+This will install Rust and other things.
+
+At the end of your task, see if you can update those files with better and/or more concise instructions for anyone else coming into the repo.
+
+You should prefer writing Rust unit tests. If you do need to run integ tests or create a new client integ test, try just running the python ones using uv + maturin to build + and pytest to test that particular problem. These integ tests actually call LLM functions declared in integ-tests/baml_src. Anytime the baml_src is updated, you must run `uv run baml-cli generate --from ../baml_src` from the integ-tests/python directory for example, (after building with latest rust changes using the maturin develop command from the contributing.md guide).
+
+YOU MUST ALWAYS RUN THE UNIT TESTS OR INTEGRATION TESTS YOU CREATE.
+You must always run `cargo test --lib` if you changed any Rust code.
+
+If infisical CLI _is_ available, then feel free to use it as some scripts use it, otherwise, assume you have the right env vars in your environment and manually run some of the commands without the `infisical` part.
+
+When you are done coding, you should always run:
+`cargo fmt -- --config imports_granularity="Crate" --config group_imports="StdExternalCrate"` in engine directory if you changed any Rust files there. It will solve linter issues.

@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node --expose-gc ./node_modules/jest/bin/jest.js",
-    "build": "tsc",
+    "build": "tsc && pnpm run build:debug",
     "integ-tests:ci": "tsc && infisical run --env=test -- pnpm test -- --ci --silent false --testTimeout 30000 --verbose=false --reporters=jest-junit",
     "integ-tests": "tsc && infisical run --env=test -- pnpm test -- --silent false --testTimeout 60000",
     "integ-tests:dotenv": "tsc && dotenv -e ../.env -- pnpm test -- --silent false --testTimeout 30000",

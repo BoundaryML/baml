@@ -494,12 +494,14 @@ Consult the specific provider's documentation for more information.
 
 | Model | Description |
 | --- | --- |
-| `anthropic.claude-3-5-sonnet-20240620-v1:0` | Smartest |
-| `anthropic.claude-3-haiku-20240307-v1:0` | Fastest + Cheapest |
-| `meta.llama3-8b-instruct-v1:0` | |
-| `meta.llama3-70b-instruct-v1:0` | |
-| `mistral.mistral-7b-instruct-v0:2` | |
-| `mistral.mixtral-8x7b-instruct-v0:1` | |
+#### Anthropic Claude (Latest Generation)
+- `anthropic.claude-opus-4-1-20250805-v1:0` - Most powerful coding
+- `anthropic.claude-sonnet-4-20250514-v1:0` - Best default, 1M context available
+- `anthropic.claude-3-5-haiku-20241022-v1:0` - Fast and efficient
+
+#### Meta Llama (Latest Generation)  
+- `meta.llama4-maverick-17b-instruct-v1:0` - Latest Llama 4
+- `meta.llama3-3-70b-instruct-v1:0` - Enhanced Llama 3.3
 
 Run `aws bedrock list-foundation-models | jq '.modelSummaries.[].modelId'` to see available models.
 

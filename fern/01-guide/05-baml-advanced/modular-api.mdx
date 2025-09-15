@@ -16,7 +16,7 @@ class Resume {
 }
 
 function ExtractResume(resume: string) -> Resume {
-  client "openai/gpt-4o"
+  client "openai-responses/gpt-5"
   prompt #"
     Extract the following information from the resume:
 
@@ -325,7 +325,7 @@ Remember that the client is defined in the BAML function (or you can use the
 
 ```baml BAML {2}
 function ExtractResume(resume: string) -> Resume {
-  client "anthropic/claude-3-haiku"
+  client "anthropic/claude-3-5-haiku-20241022"
   // Prompt here...
 }
 ```
@@ -388,7 +388,7 @@ Remember that the client is defined in the BAML function (or you can use the
 
 ```baml BAML {2}
 function ExtractResume(resume: string) -> Resume {
-  client "google-ai/gemini-1.5-pro-001"
+  client "google-ai/gemini-2.5-flash"
   // Prompt here...
 }
 ```
@@ -410,7 +410,7 @@ async def run():
 
   # Use the gemini library to send the request.
   res = await client.aio.models.generate_content(
-    model="gemini-1.5-pro-001",
+    model="gemini-2.5-flash",
     contents=body["contents"],
     config={
       "safety_settings": [body["safetySettings"]] # REST API uses camelCase
@@ -431,7 +431,7 @@ import { b } from 'baml_client'
 async function run() {
   // Initialize the Gemini client.
   const client = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!)
-  const model = client.getGenerativeModel({ model: "gemini-1.5-pro-001" })
+  const model = client.getGenerativeModel({ model: "gemini-2.5-flash" })
 
   // Get the HTTP request object.
   const req = await b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")

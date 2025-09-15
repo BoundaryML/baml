@@ -123,6 +123,32 @@ func testPdfInput() error {
 ```
 </CodeBlocks>
 
+## Test Pdf in the Playground
+
+To test a function that accepts a `pdf` in the VSCode playground using a local file, add a `test` block to your `.baml` file:
+
+```baml
+function AnalyzePdf(myPdf: pdf) -> string {
+  client GPT4o
+  prompt #"
+    Summarize this Pdf: {{myPdf}}
+  "#
+}
+
+test PdfFileTest {
+  functions [AnalyzePdf]
+  args {
+    myPdf {
+      file "../documents/report.pdf"
+    }
+  }
+}
+```
+
+<ParamField path="file" type="string" required="true">
+  The path to the PDF file. Supports relative paths (resolved from the current BAML file) or absolute paths. The file does not need to be inside `baml_src/`.
+</ParamField>
+
 ## Static Methods
 
 <ParamField

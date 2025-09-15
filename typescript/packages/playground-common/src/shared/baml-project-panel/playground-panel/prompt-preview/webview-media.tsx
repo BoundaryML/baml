@@ -240,7 +240,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   if (error) {
     return (
       <div className="w-full flex justify-center">
-        <div className="max-w-4xl w-full border-6 border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] p-4">
+        <div className="max-w-2xl w-full border-6 border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] p-4">
           <div className="flex h-[30vh] items-center justify-center">
             <div className="text-center space-y-3 text-[var(--vscode-charts-red)]">
               <div className="flex items-center justify-center gap-2 mb-2">
@@ -574,7 +574,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
 
       // For VSCode, try normal video element with error handling
       return (
-        <div className="w-full max-w-3xl mx-auto border-2 border-[var(--vscode-panel-border)] rounded overflow-hidden bg-black">
+        <div className="w-full max-w-3xl mx-auto border-2 border-[var(--vscode-panel-border)] rounded overflow-hidden">
           {/* biome-ignore lint/a11y/useMediaCaption: not correct */}
           <video
             controls
@@ -659,7 +659,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
       <div
           className={`border-2 border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] space-y-3 ${
           bamlMediaType === 'image'
-            ? 'w-fit max-w-[90vw] min-w-80'
+            ? ' max-w-[64vw] min-w-[200px]'
             : 'max-w-lg w-full'
         }`}
       >

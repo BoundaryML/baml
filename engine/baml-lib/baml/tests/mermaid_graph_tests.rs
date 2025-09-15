@@ -225,7 +225,7 @@ fn strip_ansi(input: &str) -> String {
                 // Consume '['
                 chars.next();
                 // Consume until we hit a letter (commonly 'm', 'K', 'G', etc.)
-                while let Some(ch) = chars.next() {
+                for ch in chars.by_ref() {
                     if ch.is_alphabetic() {
                         break;
                     }

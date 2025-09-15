@@ -19,7 +19,7 @@ from baml_py import ClientRegistry, Collector
 # Set up default options for this client
 collector = Collector(name="my-collector")
 client_registry = ClientRegistry()
-client_registry.set_primary("openai/gpt-4o-mini")
+client_registry.set_primary("openai/gpt-5-mini")
 env = {"BAML_LOG": "DEBUG", "OPENAI_API_KEY": "key-123"}
 
 # Create client with default options
@@ -42,7 +42,7 @@ import { Collector, ClientRegistry } from "@boundaryml/baml"
 // Set up default options for this client
 const collector = new Collector("my-collector")
 const clientRegistry = new ClientRegistry()
-clientRegistry.setPrimary("openai/gpt-4o-mini")
+clientRegistry.setPrimary("openai/gpt-5-mini")
 const env = {"BAML_LOG": "DEBUG", "OPENAI_API_KEY": "key-123"}
 
 // Create client with default options
@@ -84,7 +84,7 @@ func run() {
     if err != nil {
         panic(err)
     }
-    err = clientRegistry.SetPrimary("openai/gpt-4o-mini")
+    err = clientRegistry.SetPrimary("openai/gpt-5-mini")
     if err != nil {
         panic(err)
     }
@@ -123,7 +123,7 @@ require 'baml_client'
 # Set up default options for this client
 collector = Baml::Collector.new(name: "my-collector")
 client_registry = Baml::ClientRegistry.new
-client_registry.set_primary("openai/gpt-4o-mini")
+client_registry.set_primary("openai/gpt-5-mini")
 env = {"BAML_LOG": "DEBUG", "OPENAI_API_KEY": "key-123"}
 
 # Create client with default options
@@ -155,7 +155,7 @@ def run():
     # Configure options
     collector = Collector(name="my-collector")
     client_registry = ClientRegistry()
-    client_registry.set_primary("openai/gpt-4o-mini")
+    client_registry.set_primary("openai/gpt-5-mini")
 
     # Create configured client
     my_b = b.with_options(collector=collector, client_registry=client_registry)
@@ -179,7 +179,7 @@ import { Collector, ClientRegistry } from "@boundaryml/baml"
 
 const collector = new Collector("my-collector")
 const clientRegistry = new ClientRegistry()
-clientRegistry.setPrimary("openai/gpt-4o-mini")
+clientRegistry.setPrimary("openai/gpt-5-mini")
 
 const myB = b.withOptions({ collector, clientRegistry })
 
@@ -222,7 +222,7 @@ func run() {
     if err != nil {
         panic(err)
     }
-    err = clientRegistry.SetPrimary("openai/gpt-4o-mini")
+    err = clientRegistry.SetPrimary("openai/gpt-5-mini")
     if err != nil {
         panic(err)
     }
@@ -258,7 +258,7 @@ require 'baml_client'
 
 collector = Baml::Collector.new(name: "my-collector")
 client_registry = Baml::ClientRegistry.new
-client_registry.set_primary("openai/gpt-4o-mini")
+client_registry.set_primary("openai/gpt-5-mini")
 
 my_b = Baml.Client.with_options(collector: collector, client_registry: client_registry)
 

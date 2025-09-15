@@ -11,7 +11,7 @@ Switch from "Prompt Review" to "Raw cURL" in the playground to see how BAML tran
 ```baml
 // "image" is a reserved keyword so we name the arg "img"
 function DescribeMedia(img: image) -> string {
-  client openai/gpt-4o
+  client "openai-responses/gpt-5"  // GPT-5 has excellent multimodal support
   // Most LLM providers require images or audio to be sent as "user" messages.
   prompt #"
     {{_.role("user")}}

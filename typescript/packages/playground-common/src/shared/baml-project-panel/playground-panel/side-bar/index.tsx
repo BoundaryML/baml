@@ -17,6 +17,8 @@ import {
   SidebarMenuSub,
   SidebarRail,
   SidebarSeparator,
+  SidebarTrigger,
+  useSidebar,
 } from '@baml/ui/sidebar';
 import { useAtomValue } from 'jotai';
 import {
@@ -48,6 +50,7 @@ export function TestingSidebar() {
   );
   const { runTests: runBamlTests } = useRunBamlTests();
   const selectedItem = useAtomValue(selectedItemAtom);
+
 
   const filteredFunctions = functions.filter(
     (func: FunctionData) =>
@@ -100,13 +103,16 @@ export function TestingSidebar() {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 relative">
               <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                 <FlaskConical className="size-4" />
               </div>
               <div className="flex flex-col gap-0.5 leading-none">
                 <span className="font-medium">BAML Tests</span>
               </div>
+            </div>
+            <div className='absolute right-0 top-0 xl:hidden'>
+              <SidebarTrigger />
             </div>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -220,3 +226,4 @@ export function TestingSidebar() {
     </Sidebar>
   );
 }
+
