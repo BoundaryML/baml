@@ -14,6 +14,7 @@ class BamlValidationError extends Error {
   message: string
   prompt: string
   raw_output: string
+  detailed_message: string
 }
 ```
 </CodeBlocks>
@@ -46,6 +47,13 @@ class BamlValidationError extends Error {
   type="string"
 >
   The raw output from the LLM that failed validation.
+</ParamField>
+
+<ParamField
+  path="detailed_message"
+  type="string"
+>
+  Comprehensive error information that includes the complete history of all failed attempts when using fallback clients or retry policies. When multiple attempts are made (via fallback or retry), this field contains formatted details about each failed attempt, making it invaluable for debugging complex client configurations.
 </ParamField>
 
 ## Type Guards
