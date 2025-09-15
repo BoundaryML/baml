@@ -57,7 +57,7 @@ Thrown when a BAML operation is cancelled via an abort controller. Contains an o
 
 ## Fallback Error Aggregation
 
-When using [fallback clients](/ref/llm-client-strategies/fallback) or clients with [retry policies](/ref/baml/clients/strategy/retry), BAML attempts multiple client calls before finally failing. In these cases:
+When using [fallback clients](/ref/llm-client-strategies/fallback) or clients with [retry policies](/ref/llm-client-strategies/retry-policy), BAML attempts multiple client calls before finally failing. In these cases:
 
 - The error **type** corresponds to the final (last) failed attempt
 - The `message` field contains the error message from the final attempt
