@@ -3,6 +3,7 @@ title: Runtime Events
 ---
 
 <Info>
+This feature was added in 0.210.0
 </Info>
 
 When running multi-step workflows, you need to be able to get information about
@@ -55,7 +56,7 @@ function MakePosts(source_url: string, count: int) -> Post[] {
 }
 ```
 
-## Tracking Emitted Block Events
+## Track Emitted Block Events
 
 You can track emitted block events from your client code.
 
@@ -148,7 +149,7 @@ export interface MakePostsEventCollector {
 </Tab>
 <Tab title="Go" language="go">
 
-In your client code, you can bind events to callbacks:
+In your client code, you can consume events via channels:
 
 ```go
 // baml_client/events.go
@@ -159,9 +160,20 @@ type BlockEvent struct {
     EventType  string    `json:"event_type"` // "enter" | "exit"
 }
 
-type MakePostsEventsCollector struct {
+type MakePostsEventCollector struct {
     blockEvents chan BlockEvent
-    // ... there are other fields we will describe later.
+    // ... additional event channels are initialized elsewhere.
+}
+
+func NewMakePostsEventCollector() *MakePostsEventCollector {
+    return &MakePostsEventCollector{
+        blockEvents: make(chan BlockEvent, 100),
+    }
+}
+
+// BlockEvents provides block execution updates as a channel.
+func (c *MakePostsEventCollector) BlockEvents() <-chan BlockEvent {
+    return c.blockEvents
 }
 ```
 
@@ -176,20 +188,21 @@ import (
 
     b "example.com/myproject/baml_client"
     "example.com/myproject/baml_client/events"
-    "example.com/myproject/baml_client/types"
 )
 
 func main() {
     ctx := context.Background()
 
-    // Get an Events callback collector with the right type
+    // Get an event collector with the right channels
     // for your MakePosts() function.
-    ev := events.NewMakePostsEventsCollector()
+    ev := events.NewMakePostsEventCollector()
 
-    // Register a handler for block events
-    ev.OnBlock(func(blockEvent events.BlockEvent) {
-        fmt.Println(blockEvent.BlockLabel)
-    })
+    // Consume block events asynchronously so updates are printed as they arrive.
+    go func() {
+        for blockEvent := range ev.BlockEvents() {
+            fmt.Println(blockEvent.BlockLabel)
+        }
+    }()
 
     // Invoke the function.
     posts, err := b.MakePosts(ctx, "https://wikipedia.org/wiki/DNA", &b.MakePostsOptions{
@@ -207,57 +220,137 @@ func main() {
 ## Track variables with `emit`
 
 Variable updates can also be tracked with events. To mark an update for tracking,
-use the `emit` keyword on any statement that creates or updates a variable. Let’s
-see how we would use this capability to track the progress of our marketing post
+attach `@emit` to the variable declaration (or update its options) so the runtime knows to emit changes.
+
+```baml BAML
+let foo = State { counter: 0 } @emit;
+foo.counter += 1; // *** This triggers an event
+```
+
+<CodeGroup>
+    ```python
+    events.on("foo", lambda st: my_state_update_handler(st))
+    ```
+
+    ```typescript
+    events.on("foo", (st) => my_state_update_handler(st))
+    ```
+
+    ```go
+    // Consume events from the events.on_foo channel
+    for st := range events.FooEvents {
+        handleState(st)
+    }
+    ```
+</CodeGroup>
+
+Updates can be tracked automatically or manually, depending on the `@emit` options you choose.
+Automatic tracking will emit events any time a variable is updated. Manual tracking
+only emits events after updates that you specify.
+
+### Auto Tracking
+
+
+
+Let’s see how we would use this capability to automatically track the progress of our
+marketing post
 generation workflow:
 
 ```baml BAML
 function MakePosts(source_url: string) -> Post[] {
-  # Summarize Source
   let source = LLMSummarizeSource(source_url);
-
-  # Determine Topic
   let topic = LLMInferTopic(source);
-
-  # Generate Marketing Post Ideas
   let ideas: string[] = LLMIdeas(topic, source);
-
-  // Track how many posts we need to generate.    <-***
   let posts_target_length = ideas.len();
-  emit let progress_percent: int = 0;
 
-  # Generate posts
+  let progress_percent: int = 0 @emit; // *** Emit marker used here.
+
   let posts: Post[] = [];
   for ((i,idea) in ideas.enumerate()) {
-
-    ## Create the post
     let post = LLMGeneratePost(idea, source);
-
-    ## Quality control
     let quality = LLMJudgePost(post, idea, source);
     if (quality > 8) {
       posts.push(post);
     } else {
       posts_target_length -= 1;
     }
-
     // *** This update will trigger events visible to the client.
-    emit progress_percent = i * 100 / posts_target_length
+    progress_percent = i * 100 / posts_target_length
   }
 }
 ```
 
-## Tracking Emitted Variables
+### Emit parameters
 
+The variable tracking can be controled in several ways.
+
+ - `@emit(when=MyFilterFunc)` - Only emits when `MyFilterFunc` returns `true`
+ - `@emit(when=false)` - Never auto emit (only emit when manually triggered)
+ - `@emit(skip_def=true)` - Emits every time the variable is updated, but not on initialization
+ - `@emit(name=my_channel)` - Emits events on a channel you spceify (default is the variable name)
+
+The filter functions you pass to `when` should take two parameters. It will be called every
+time an value is updated. The first parameter is the previous version of the value, and the
+second is the new version. With these two parameters, you can determine whether the event should
+be emitted or not (often by comparing the current to the previous, for deduplication).
+
+If you do not specify a filter function, BAML deduplicates automatically emitted events for you.
+You could replicate the same behavior by using `@emit(when=MyFilterFunc)` where `MyFilterFunc`
+is defined as:
+
+```baml BAML
+function MyFilterFunc(prev: MyObject, curr: MyObject) -> bool {
+    !(prev.id() == curr.id()) || !(baml.deep_eq(prev, curr))
+}
+```
+
+### Manual Tracking
+
+Sometimes you want no automatic tracking at all. For example, if you are building up a complex
+value in multiple steps, you may not want your application to see that value while it is still
+under construction. In that case, use `@emit(when=false)` when initializing the variable, and
+call `.$emit()` on the variable when you want to manually trigger an event.
+
+
+```baml BAML
+function ConstructValue(description: string) -> Character {
+  let character = Character { name: "", age: 0, skills: [] } @emit(when=false);
+  character.name = LLMChooseName(description);
+  character.age = LLMChooseAge(description);
+  character.skills = LLMChooseSkills(description);
+  character.$emit() // *** Only emit when done building the character.
+}
+```
+
+### Sharing a Channel
+
+Sometimes you want multiple variables to send update events on the same channel, for example,
+if you want a single view of all the state updates from multiple values in your BAML code,
+because you will render them into a single view in the order that they are emitted.
+
+```baml BAML
+function DoWork() -> bool {
+  let status = "Starting" @emit(name=updates);
+  let progress = 0 @emit(name=updates, skip_def=true);
+  for (let i = 0; i < 100; i++) {
+    progress = i; // *** These updates will apear on the `updates` channel.
+  }
+  status = "Done";
+  return true;
+}
+```
+
+## Receiving Events from Client Code
 
 <Tabs>
 
 <Tab title="Python" language="python">
 
-When you generate a BAML client for this function, its `MakePostsEventCollector`
-will accept callbacks for `progress_percent` because we marked that variable with
-`emit`, and the callbacks will receive an `int` data payload, because
-`progress_percent` is an `int`.
+When you generate a BAML client for our original function, your Python SDK will
+include a `MakePostsEventCollector` class. This class contains configurable callbacks
+for all your tracked variables. For example, it contains callbacks for `progress_percent`
+because we marked that variable with `@emit`. The callbacks will receive an `int` data payload,
+because `progress_percent` is an `int`.
 
 ```python
 # baml_client/events.py
@@ -268,7 +361,6 @@ class VarEvent(Generic[T]):
     """
     Event fired when an emitted variable is updated
     """
-    variable_name: str
     value: T
     timestamp: str
     function_name: str
@@ -305,7 +397,7 @@ def Example():
 
 When you generate a BAML client for this function, its `MakePostsEventCollector`
 will accept callbacks for `progress_percent` because we marked that variable with
-`emit`, and the callbacks will receive an `int` data payload, because
+`@emit`, and the callbacks will receive an `int` data payload, because
 `progress_percent` is an `int`.
 
 ```typescript
@@ -352,10 +444,8 @@ async function Example() {
 
 <Tab title="Go" language="go">
 
-In your client code, you can track these emitted variables by constructing an
-event listener specific to the workflow you are using. Then populating that
-listener with your own callback functions, and finally supplying the listener
-when you invoke the function.
+In your client code, you can track these emitted variables by constructing the
+generated event collector and reading from the channels it exposes.
 
 ```go
 // baml_client/events.go
@@ -377,37 +467,6 @@ type VarEvent[T any] struct {
 }
 
 type MakePostsEventCollector struct {
-    onBlockHandler              func(BlockEvent)
-    onVarProgressPercentHandler func(VarEvent[int])
-}
-
-func NewMakePostsEventCollector() *MakePostsEventCollector {
-    return &MakePostsEventCollector{}
-}
-
-// OnBlock registers a handler for block events
-func (c *MakePostsEventCollector) OnBlock(handler func(BlockEvent)) {
-    c.onBlockHandler = handler
-}
-
-// OnVarProgressPercent registers a handler for progress_percent variable updates
-func (c *MakePostsEventCollector) OnVarProgressPercent(handler func(VarEvent[int])) {
-    c.onVarProgressPercentHandler = handler
-}
-```
-
-```go
-// baml_client/events.go
-package events
-
-import "time"
-
-type VarEvent[T any] struct {
-    VariableName string    `json:"variable_name"`
-    Value        T         `json:"value"`
-}
-
-type MakePostsEventCollector struct {
     blockEvents           chan BlockEvent
     progressPercentEvents chan VarEvent[int]
 }
@@ -419,7 +478,12 @@ func NewMakePostsEventCollector() *MakePostsEventCollector {
     }
 }
 
-// ProgressPercentEvents returns a channel for receiving progress_percent variable updates
+// BlockEvents returns block execution updates.
+func (c *MakePostsEventCollector) BlockEvents() <-chan BlockEvent {
+    return c.blockEvents
+}
+
+// ProgressPercentEvents streams progress_percent variable updates.
 func (c *MakePostsEventCollector) ProgressPercentEvents() <-chan VarEvent[int] {
     return c.progressPercentEvents
 }
@@ -436,20 +500,27 @@ import (
 
     b "example.com/myproject/baml_client"
     "example.com/myproject/baml_client/events"
-    "example.com/myproject/baml_client/types"
 )
 
 func main() {
     ctx := context.Background()
 
-    // Get an Events callback collector with the right type
+    // Get an event collector with the right channels
     // for your MakePosts() function.
-    ev := events.NewMakePostsEventsCollector()
+    ev := events.NewMakePostsEventCollector()
 
-    // Register a handler for progress_percent variable updates
-    ev.OnVarProgressPercent(func(percent events.VarEvent[int]) {
-        fmt.Printf("Progress: %d%%\n", percent.Value)
-    })
+    // Consume block events and progress updates concurrently.
+    go func() {
+        for block := range ev.BlockEvents() {
+            fmt.Printf("Block: %s\n", block.BlockLabel)
+        }
+    }()
+
+    go func() {
+        for percent := range ev.ProgressPercentEvents() {
+            fmt.Printf("Progress: %d%%\n", percent.Value)
+        }
+    }()
 
     // Invoke the function.
     posts, err := b.MakePosts(ctx, "https://wikipedia.org/wiki/DNA", &b.MakePostsOptions{
@@ -466,10 +537,620 @@ func main() {
 
 For details about the types of events, see [BAML Language Reference](/ref/baml_client/events)
 
+# Streaming
+
+If updates to variables tagged with `@emit` include large amounts of data that you want to start
+surfacing to your application before they are done being generated, you want to use
+the streaming event interface. Streaming events are available for all `@emit` variables,
+but they are generally only useful when assigning a variable from the result of
+an LLM function. All other streamed events will return their values in a single
+complete chunk.
+
+```baml BAML
+function DescribeTerminatorMovies() -> string[] {
+  let results = [];
+  for (x in [1,2,3]) {
+    let movie_text = LLMElaborateOnTopic("Terminator " + std.to_string(x)) @emit;
+    results.push(movie_text);
+  }
+  return results;
+}
+
+function LLMElaborateOnTopic(topic: string) -> string {
+  client GPT4
+  prompt #"
+    Write a detailed 500-word analysis of {{ topic }}.
+    Include plot summary, themes, and cultural impact.
+  "#
+}
+```
+
+This function will take a while to run because it calls an LLM function
+three times. However, you can stream the results of each of these calls
+to start getting immediate feedback from the workflow as the LLM generates
+text token by token.
+
+The streaming listeners are available in client code under a separate streaming
+module that mirrors the structure of the regular event collectors.
+
+<Tabs>
+<Tab title="Python" language="python">
+
+```python
+# baml_client/events.py
+from typing import TypeVar, Generic, Callable
+from baml_client.types import BamlStream, VarEvent
+
+T = TypeVar('T')
+
+class VarEvent(Generic[T]):
+    """
+    Event fired when an emitted variable is updated
+    """
+    variable_name: str
+    value: T
+    timestamp: str
+    function_name: str
+
+class BlockEvent:
+    """
+    Event fired when entering or exiting a markdown block
+    """
+    block_label: str
+    event_type: str   # "enter" | "exit"
+
+class MakePostsVarsCollector:
+    progress_percent: Callable[[VarEvent[int]], None]
+
+class DescribeTerminatorMoviesEventCollector:
+    """Event collector for DescribeTerminatorMovies function with both regular and streaming events"""
+
+    def on_block(self, handler: Callable[[BlockEvent], None]) -> None:
+        """Register a handler for block events"""
+        pass
+
+    def on_var_movie_text(self, handler: Callable[[VarEvent[str]], None]) -> None:
+        """Register a handler for movie_text variable updates"""
+        pass
+
+    def on_stream_movie_text(self, handler: Callable[[BamlStream[VarEvent[str]]], None]) -> None:
+        """Register a handler for streaming movie_text variable updates"""
+        pass
+```
+
+```python
+# app.py
+from baml_client.sync_client import b
+import baml_client.events as events
+
+def example():
+    # Create the unified event collector
+    ev = events.DescribeTerminatorMoviesEventCollector()
+
+    # Track streaming updates for the main emitted variable
+    def handle_movie_text_stream(stream):
+        for event in stream:
+            print(f"Streaming movie text: {event.value}")
+
+    ev.on_stream_movie_text(handle_movie_text_stream)
+
+    # Invoke the function with events
+    results = b.DescribeTerminatorMovies({"events": ev})
+    print("Final results:", results)
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+
+```typescript
+// baml_client/events.ts
+import { BamlStream, VarEvent } from "./types";
+
+export interface BlockEvent {
+  block_label: string;
+  event_type: "enter" | "exit";
+}
+
+export interface VarEvent<T> {
+  variable_name: string;
+  value: T;
+  timestamp: string;
+  function_name: string;
+}
+
+export interface DescribeTerminatorMoviesEventCollector {
+  // Regular event handlers
+  on_block(handler: (ev: BlockEvent) => void): void;
+  on_var_movie_text(handler: (ev: VarEvent<string>) => void): void;
+
+  // Streaming event handlers
+  on_stream_movie_text(handler: (stream: BamlStream<VarEvent<string>>) => void): void;
+}
+
+export function DescribeTerminatorMovies(): DescribeTerminatorMoviesEventCollector {
+  return {
+    on_block(handler: (ev: BlockEvent) => void): void {
+      // Implementation details
+    },
+    on_var_movie_text(handler: (ev: VarEvent<string>) => void): void {
+      // Implementation details
+    },
+    on_stream_movie_text(handler: (stream: BamlStream<VarEvent<string>>) => void): void {
+      // Implementation details
+    }
+  }
+}
+```
+
+```typescript
+// index.ts
+import { b, events } from "./baml-client"
+
+async function example() {
+  // Create the unified event collector
+  let ev = events.DescribeTerminatorMovies()
+
+  // Track streaming updates for the main emitted variable
+  ev.on_stream_movie_text(async (stream) => {
+    for await (const event of stream) {
+      console.log(`Streaming movie text: ${event.value}`)
+    }
+  })
+
+  // Invoke the function with events
+  const results = await b.DescribeTerminatorMovies({"events": ev})
+  console.log("Final results:", results)
+}
+```
+</Tab>
+
+<Tab title="Go" language="go">
+
+```go
+// baml_client/events.go
+package events
+
+import "time"
+
+type BlockEvent struct {
+    BlockLabel string    `json:"block_label"`
+    EventType  string    `json:"event_type"` // "enter" | "exit"
+    Timestamp  time.Time `json:"timestamp"`
+}
+
+type VarEvent[T any] struct {
+    VariableName string    `json:"variable_name"`
+    Value        T         `json:"value"`
+    Timestamp    time.Time `json:"timestamp"`
+    FunctionName string    `json:"function_name"`
+}
+
+type DescribeTerminatorMoviesEventCollector struct {
+    blockEvents      chan BlockEvent
+    movieTextEvents  chan VarEvent[string]
+    movieTextStreams chan (<-chan VarEvent[string])
+}
+
+func NewDescribeTerminatorMoviesEventCollector() *DescribeTerminatorMoviesEventCollector {
+    return &DescribeTerminatorMoviesEventCollector{
+        blockEvents:      make(chan BlockEvent, 100),
+        movieTextEvents:  make(chan VarEvent[string], 100),
+        movieTextStreams: make(chan (<-chan VarEvent[string]), 10),
+    }
+}
+
+func (c *DescribeTerminatorMoviesEventCollector) BlockEvents() <-chan BlockEvent {
+    return c.blockEvents
+}
+
+func (c *DescribeTerminatorMoviesEventCollector) MovieTextEvents() <-chan VarEvent[string] {
+    return c.movieTextEvents
+}
+
+// MovieTextStreams produces a stream-of-streams for emitted movie_text updates.
+func (c *DescribeTerminatorMoviesEventCollector) MovieTextStreams() <-chan (<-chan VarEvent[string]) {
+    return c.movieTextStreams
+}
+```
+
+```go
+// main.go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    b "example.com/myproject/baml_client"
+    "example.com/myproject/baml_client/events"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Create the unified event collector
+    ev := events.NewDescribeTerminatorMoviesEventCollector()
+
+    // Track block events and single-value updates concurrently.
+    go func() {
+        for block := range ev.BlockEvents() {
+            fmt.Printf("Block: %s\n", block.BlockLabel)
+        }
+    }()
+
+    go func() {
+        for movieText := range ev.MovieTextEvents() {
+            fmt.Printf("Variable movie text: %s\n", movieText.Value)
+        }
+    }()
+
+    // Track streaming updates using the channel-of-channels pattern.
+    go func() {
+        for stream := range ev.MovieTextStreams() {
+            go func(inner <-chan events.VarEvent[string]) {
+                for event := range inner {
+                    fmt.Printf("Streaming movie text: %s\n", event.Value)
+                }
+            }(stream)
+        }
+    }()
+
+    // Invoke the function with events
+    results, err := b.DescribeTerminatorMovies(ctx, &b.DescribeTerminatorMoviesOptions{
+        Events: ev,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Final results: %+v\n", results)
+}
+```
+</Tab>
+</Tabs>
+
+## Combining Regular Events and Streaming
+
+You can use both regular events and streaming events together in a single unified collector to get comprehensive observability:
+
+<Tabs>
+<Tab title="Python" language="python">
+
+```python
+from baml_client.sync_client import b
+import baml_client.events as events
+
+def comprehensive_example():
+    # Create unified event collector
+    ev = events.DescribeTerminatorMoviesEventCollector()
+
+    # Regular events for workflow progress
+    ev.on_block(lambda block: print(f"Block: {block.block_label}"))
+    ev.on_var_movie_text(lambda movie_text: print(f"Variable movie text: {movie_text.value}"))
+
+    # Streaming events for real-time content
+    def handle_stream(stream):
+        for event in stream:
+            print(f"Streaming content: {event.value}")
+
+    ev.on_stream_movie_text(handle_stream)
+
+    # Use single events parameter
+    results = b.DescribeTerminatorMovies({"events": ev})
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+
+```typescript
+import { b, events } from "./baml-client"
+
+async function comprehensiveExample() {
+    // Create unified event collector
+    let ev = events.DescribeTerminatorMovies()
+
+    // Regular events for workflow progress
+    ev.on_block((block) => console.log(`Block: ${block.block_label}`))
+    ev.on_var_movie_text((movieText) => console.log(`Variable movie text: ${movieText.value}`))
+
+    // Streaming events for real-time content
+    ev.on_stream_movie_text(async (stream) => {
+        for await (const event of stream) {
+            console.log(`Streaming content: ${event.value}`)
+        }
+    })
+
+    // Use single events parameter
+    const results = await b.DescribeTerminatorMovies({ events: ev })
+}
+```
+</Tab>
+
+<Tab title="Go" language="go">
+
+```go
+func comprehensiveExample() {
+    ctx := context.Background()
+
+    // Create unified event collector
+    ev := events.NewDescribeTerminatorMoviesEventCollector()
+
+    // Regular events for workflow progress
+    go func() {
+        for block := range ev.BlockEvents() {
+            fmt.Printf("Block: %s\n", block.BlockLabel)
+        }
+    }()
+    go func() {
+        for movieText := range ev.MovieTextEvents() {
+            fmt.Printf("Variable movie text: %s\n", movieText.Value)
+        }
+    }()
+
+    // Streaming events for real-time content
+    go func() {
+        for stream := range ev.MovieTextStreams() {
+            go func(inner <-chan events.VarEvent[string]) {
+                for event := range inner {
+                    fmt.Printf("Streaming content: %s\n", event.Value)
+                }
+            }(stream)
+        }
+    }()
+
+    // Use single Events parameter
+    results, err := b.DescribeTerminatorMovies(ctx, &b.DescribeTerminatorMoviesOptions{
+        Events: ev,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+```
+</Tab>
+</Tabs>
 
 # Usage Scenarios
 
-## Tracking values across names
+## Track events from subfunctions
+
+When your main workflow calls other BAML functions, you can track events from those subfunctions as well. If `MakePosts()` calls `Foo()`, and `Foo()` contains variables tagged with `@emit` or markdown blocks, the client invoking `MakePosts()` can subscribe to those subfunction events through dedicated records in the `EventCollector`.
+
+Consider this example where `MakePosts()` calls a helper function:
+
+```baml BAML
+function MakePosts(source_url: string) -> Post[] {
+  let posts = GeneratePostsWithProgress(source_url);
+  return posts;
+}
+
+function GeneratePostsWithProgress(url: string) -> Post[] {
+  # Analyzing content
+  let content = LLMAnalyzeContent(url);
+
+  let progress_status = "Starting generation" @emit;
+
+  # Generate posts
+  let posts = [];
+  for (i in [1,2,3]) {
+    progress_status = "Generating post " + i.to_string();
+    posts.push(LLMGeneratePost(content, i));
+  }
+
+  return posts;
+}
+```
+
+<Tabs>
+<Tab title="Python" language="python">
+
+```python
+# baml_client/events.py
+
+class GeneratePostsWithProgressEventCollector:
+    """Event collector for GeneratePostsWithProgress function"""
+
+    def on_block(self, handler: Callable[[BlockEvent], None]) -> None:
+        """Register a handler for block events from this function"""
+        pass
+
+    def on_var_progress_status(self, handler: Callable[[VarEvent[str]], None]) -> None:
+        """Register a handler for progress_status variable updates"""
+        pass
+
+class MakePostsEventCollector:
+    """Event collector for MakePosts function"""
+
+    def __init__(self):
+        self.function_GeneratePostsWithProgress = GeneratePostsWithProgressEventCollector()
+```
+
+```python
+# app.py
+from baml_client.sync_client import b
+import baml_client.events as events
+
+def example():
+    # Create the main event collector
+    ev = events.MakePostsEventCollector()
+
+    # Subscribe to subfunction events
+    ev.function_GeneratePostsWithProgress.on_var_progress_status(
+        lambda e: print(f"Subfunction progress: {e.value}")
+    )
+
+    ev.function_GeneratePostsWithProgress.on_block(
+        lambda e: print(f"Subfunction block: {e.block_label}")
+    )
+
+    # Invoke the function
+    posts = b.MakePosts("https://wikipedia.org/wiki/DNA", {"events": ev})
+    print(posts)
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+
+```typescript
+// baml_client/events.ts
+
+export interface GeneratePostsWithProgressEventCollector {
+  on_block(handler: (ev: BlockEvent) => void): void;
+  on_var_progress_status(handler: (ev: VarEvent<string>) => void): void;
+}
+
+export interface MakePostsEventCollector {
+  function_GeneratePostsWithProgress: GeneratePostsWithProgressEventCollector;
+}
+
+export function MakePosts(): MakePostsEventCollector {
+  return {
+    function_GeneratePostsWithProgress: {
+      on_block(handler: (ev: BlockEvent) => void): void {
+        // Implementation details
+      },
+      on_var_progress_status(handler: (ev: VarEvent<string>) => void): void {
+        // Implementation details
+      }
+    }
+  }
+}
+```
+
+```typescript
+// index.ts
+import { b, events } from "./baml-client"
+
+async function example() {
+  // Create the main event collector
+  let ev = events.MakePosts()
+
+  // Subscribe to subfunction events
+  ev.function_GeneratePostsWithProgress.on_var_progress_status((e) => {
+    console.log(`Subfunction progress: ${e.value}`)
+  })
+
+  ev.function_GeneratePostsWithProgress.on_block((e) => {
+    console.log(`Subfunction block: ${e.block_label}`)
+  })
+
+  // Invoke the function
+  const posts = await b.MakePosts("https://wikipedia.org/wiki/DNA", {"events": ev})
+  console.log(posts)
+}
+```
+</Tab>
+
+<Tab title="Go" language="go">
+
+```go
+// baml_client/events.go
+package events
+
+import "time"
+
+type BlockEvent struct {
+    BlockLabel string    `json:"block_label"`
+    EventType  string    `json:"event_type"`
+    Timestamp  time.Time `json:"timestamp"`
+}
+
+type VarEvent[T any] struct {
+    VariableName string    `json:"variable_name"`
+    Value        T         `json:"value"`
+    Timestamp    time.Time `json:"timestamp"`
+    FunctionName string    `json:"function_name"`
+}
+
+type GeneratePostsWithProgressEventCollector struct {
+    blockEvents          chan BlockEvent
+    progressStatusEvents chan VarEvent[string]
+}
+
+func newGeneratePostsWithProgressEventCollector() *GeneratePostsWithProgressEventCollector {
+    return &GeneratePostsWithProgressEventCollector{
+        blockEvents:          make(chan BlockEvent, 100),
+        progressStatusEvents: make(chan VarEvent[string], 100),
+    }
+}
+
+func (c *GeneratePostsWithProgressEventCollector) BlockEvents() <-chan BlockEvent {
+    return c.blockEvents
+}
+
+func (c *GeneratePostsWithProgressEventCollector) ProgressStatusEvents() <-chan VarEvent[string] {
+    return c.progressStatusEvents
+}
+
+type MakePostsEventCollector struct {
+    blockEvents                    chan BlockEvent
+    progressPercentEvents          chan VarEvent[int]
+    FunctionGeneratePostsWithProgress *GeneratePostsWithProgressEventCollector
+}
+
+func NewMakePostsEventCollector() *MakePostsEventCollector {
+    return &MakePostsEventCollector{
+        blockEvents:           make(chan BlockEvent, 100),
+        progressPercentEvents: make(chan VarEvent[int], 100),
+        FunctionGeneratePostsWithProgress: newGeneratePostsWithProgressEventCollector(),
+    }
+}
+
+func (c *MakePostsEventCollector) BlockEvents() <-chan BlockEvent {
+    return c.blockEvents
+}
+
+func (c *MakePostsEventCollector) ProgressPercentEvents() <-chan VarEvent[int] {
+    return c.progressPercentEvents
+}
+```
+
+```go
+// main.go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    b "example.com/myproject/baml_client"
+    "example.com/myproject/baml_client/events"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Create the main event collector
+    ev := events.NewMakePostsEventCollector()
+
+    // Consume subfunction streams as well as top-level updates.
+    go func() {
+        for block := range ev.FunctionGeneratePostsWithProgress.BlockEvents() {
+            fmt.Printf("Subfunction block: %s\n", block.BlockLabel)
+        }
+    }()
+
+    go func() {
+        for status := range ev.FunctionGeneratePostsWithProgress.ProgressStatusEvents() {
+            fmt.Printf("Subfunction progress: %s\n", status.Value)
+        }
+    }()
+
+    // Invoke the function
+    posts, err := b.MakePosts(ctx, "https://wikipedia.org/wiki/DNA", &b.MakePostsOptions{
+        Events: ev,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("%+v\n", posts)
+}
+```
+</Tab>
+</Tabs>
+
+## Track values across names
 
 In JavaScript and Python, values can be referenced by multiple names, and
 updating the value through one name will update it through the other names,
@@ -482,19 +1163,19 @@ y["name"] = "Baml"               # Modify the name
 assert(x["name"] == "Baml")      # The original value is updated
 ```
 
-The same rule applies to `emit`. Anything causing a change to a value will
-cause the value to emit an event to listeners that listen to the original
+The same rule applies to variables tagged with `@emit`. Anything causing a change to a value will
+cause the value to emit an event to listeners that subscribe to the original
 variable.
 
 ```baml BAML
-emit let x = Foo { name: "BAML" }; // Make a BAML value
-let y = x;                         // Alias x to a new name
-emit y.name = "Baml";              // Modify the new name => triggers event
+let x = Foo { name: "BAML" } @emit;   // Make a BAML value that auto-emits
+let y = x;                             // Alias x to a new name
+y.name = "Baml";                      // Modify the new name => triggers event
 
-emit let a: int = 1;               // Make a BAML value
-let b = a;                         // Alias a to a new name
-emit b++;                               // Modify the new name => No new event
-                                   //   (see Note below)
+let a: int = 1 @emit;                  // Make a tracked BAML value
+let b = a;                             // Alias a to a new name
+b++;                                   // Modify the new name => No new event
+                                       //   (see Note below)
 ```
 
 <Note>
@@ -508,14 +1189,14 @@ emit b++;                               // Modify the new name => No new event
     old value, then the original variable will emit an event.
 </Note>
 
-## Tracking values that get packed into data structures
+## Track values that get packed into data structures
 
 If you put a value into a data structure, then modify it through that data structure,
 the value will continue to emit an event.
 
 ```baml BAML
-emit let x = Foo { name: "BAML" }; // Make a BAML value
-let y = [x];                       // Pack x into a list
+let x = Foo { name: "BAML" } @emit; // Make a tracked BAML value
+let y = [x];                        // Pack x into a list
 y[0].name = "Baml";                // Modify the list item => triggers event
 ```
 
@@ -523,9 +1204,9 @@ Reminder: In Python and TypeScript, if you put a variable `x` into a list, then
 modify it through the list, printing `x` will show the modified value. So
 modifying `x` through `y[0]` above will also result in an event being emitted.
 
-## Tracking variables across function calls
+## Track variables across function calls
 
-When you pass an `emit` variable to a function, there are two possible outcomes
+When you pass an `@emit` variable to a function, there are two possible outcomes
 if the called function modifies the variable:
 
 1. The modifications will be remembered by the system, but only the final
@@ -533,12 +1214,12 @@ if the called function modifies the variable:
    the function returns. **OR:**
 1. The modification will immediately result in the firing of an event.
 
-You get to choose the behavior based on the needs of your Workflow. If the function
+You get to choose the behavior based on the needs of your workflow. If the function
 is doing some setup work that makes multiple changes to the emitted value to build
 it up to a valid result before the function returns, use Option 1 to hide the events
 from all those intermediate states. But if the sub-function is part of a workflow
 and you are using events to track all updates to your workflow's state, use Option 2
-to see all the intermediate updates.
+to see all the intermediate updates in real time.
 
 <Note>
     The event-emission behavior of Option 1 differs from the rule of thumb given
@@ -548,15 +1229,14 @@ to see all the intermediate updates.
     invariants of your type.
 </Note>
 
-To choose between modes, you once again use the `emit` keyword, now in the function's
-parameters.
+To choose between modes, annotate the parameter with `@emit` in the function signature.
 
 ```baml BAML
 function Main() -> int {
-  emit let state = Foo {
+  let state = Foo {
     name: "BAML",
     counter: 0,
-  }; // Make a BAML value
+  } @emit; // Track state updates automatically
   ReadState(state);
   ChangeState(state);
   0
@@ -570,132 +1250,13 @@ function ReadState(state: Foo) -> Foo {
 }
 
 // This function uses Option 2, the `s` parameter is
-// marked as `emit`, so `state` in `Main()` will fire two events,
+// marked with `@emit`, so `state` in `Main()` will fire two events,
 // one for each update of `s`.
-function ChangeState(emit s: Foo) -> null {
+function ChangeState(s: Foo @emit) -> null {
   s.counter++;
   s.name = "Baml";
 }
 ```
-
-## Tracking a dynamic state
-
-In the first example on this page, we showed how to track workflow state using
-block events. In some cases, you may need more control over the state you are tracking,
-either because your state contains structured data, or because you are calling many
-functions and need custom logic to describe where the workflow is within its process.
-
-Let's consider an example that both uses a custom state type and sends that state
-through various workflow functions to collect status updates:
-
-```baml BAML
-// A workflow for downloading and summarizing websites.
-
-// The data about our workflow that we want to send to the user.
-// Enough to render a progress bar like:
-//
-// |--------62%     |
-// Downloading: wikipedia.org/wiki/owl
-// Downloading: wikipedia.org/wiki/cat
-// Summarizing: wikipedia.org/wiki/dog
-// Summarizing: wikipedia.org/wiki/dog
-// Errors: 2
-struct WorkflowState {
-  progressPercent int
-  downloading []string
-  summarizing []string
-  errors int
-}
-
-// The return value of the workflow, a mapping from input topic
-// to summary of that topic.
-struct Summaries {
-  summaries map<string, string>
-}
-
-// A workflow to summarize a list of topics on wikipedia.
-function SummarizeWikiArticles(topics: string[]) -> Summaries {
-
-  // Our main readout of the workflow state to the client.
-  emit let state = WorkflowState{
-    progressPercent: 0,
-    downloading: [],
-    summarizing: [],
-  };
-
-  let summaries = {};
-
-  for topic in topics {
-    let summary = DownloadAndSummarize(topic, state);
-    if (summary != null) {
-      summaries[topic] = summary;
-    }
-
-    // Update the state with new progressPercent.
-    state.progressPercent = (summaries.len() + state.errors) * 100 / topics.len();
-  }
-
-  return summaries;
-}
-
-function DownloadAndSummarize(topic: string, state: WorkflowState) -> string? {
-  state.downloading.push(topic);
-  let article = std.fetch(std.Request {
-      url: "https://en.wikipedia.org/wiki/" + topic,
-      method: "GET",
-  });
-  state.downloading.pop(topic);
-  state.summarizing.push(topic);
-  let summary = LLMSummarize(article, state);
-  state.summarizing.pop(topic);
-  let result = if (summary == null) {
-    state.errors += 1;
-    null
-  } else {
-    summary
-  }
-  return result;
-}
-
-function LLMSummarize(article: string) -> string? {
-  client GPT4
-  prompt #"
-    Summarize the following article into two sentences: {{ article }}
-
-    If there is a problem summarizing, return null.
-  "#
-}
-```
-
-# Streaming
-
-If updates to `emit` variables include large amounts of data that you want to start
-surfacing to your application before they are done being generated, you may use
-the streaming event interface. Streaming events are available for all `emit` variables,
-but they are generally only useful when assigning a variable from the result of
-an LLM function. All other streamed events will simple return their values in a single
-complete chunk.
-
-```baml BAML
-function DescribeTerminatorMovies() -> string[] {
-  let results = [];
-  for (x in [1,2,3]) {
-    emit let result = LLMElaborateOnTopic("Terminator " + std.to_string(x));
-    results.push(result);
-  }
-  return results;
-}
-```
-
-This function will take a while to run because it calls an LLM function
-three times. However, you can stream the results of each of these calls
-to start getting immediate feedback from the workflow.
-
-The streaming listeners are available in client code under the streaming
-module.
-
-<Tabs>
-</Tabs>
 
 # Comparison with other event systems
 
@@ -744,7 +1305,7 @@ def analyze_sentiments(phrases: List[str]) -> Response:
 
 With BAML's block events, we don't need to mix explicit logging with the workflow
 logic. When a logged event needs extra context (such as the index of an item being
-processed from a list), we can use an `emit` variable.
+processed from a list), we can use an `@emit` variable.
 
 ```baml BAML
 function LLMAnalyzeSentiment(message: string) -> string { ... }
@@ -756,7 +1317,7 @@ class Response {
 }
 
 function AnalyzeSentiments(messages: string[]) -> Response {
-    let emit status = "Starting analysis of " + messages.length().to_string() + " messages"
+    let status = "Starting analysis of " + messages.length().to_string() + " messages" @emit;
 
     sentiments = []
     for i, message in enumerate(messages, 1):
@@ -771,13 +1332,117 @@ function AnalyzeSentiments(messages: string[]) -> Response {
 }
 ```
 
-## AI SDK Generators
+## Vercel AI SDK Generators
+
+In Vercel's AI SDK, you can use TypeScript generators to yield incremental updates during tool execution. The calling code can consume these yielded values to provide real-time feedback to users.
+
+```typescript TypeScript (Vercel AI SDK)
+import { UIToolInvocation, tool } from 'ai';
+import { z } from 'zod';
+
+export const weatherTool = tool({
+  description: 'Get the weather in a location',
+  inputSchema: z.object({ city: z.string() }),
+  async *execute({ city }: { city: string }) {
+    yield { state: 'loading' as const };
+
+    // Add artificial delay to simulate API call
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const weatherOptions = ['sunny', 'cloudy', 'rainy', 'snowy', 'windy'];
+    const weather =
+      weatherOptions[Math.floor(Math.random() * weatherOptions.length)];
+
+    yield {
+      state: 'ready' as const,
+      temperature: 72,
+      weather,
+    };
+  },
+});
+```
+
+The calling code streams these incremental updates by consuming the generator chunks:
+
+```typescript TypeScript (Consuming streaming yields)
+import { streamText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+
+const stream = streamText({
+  model: openai('gpt-4'),
+  tools: { weather: weatherTool },
+  messages: [{ role: 'user', content: 'What is the weather in New York?' }],
+});
+
+// Stream individual yielded values as they arrive
+for await (const chunk of stream) {
+  if (chunk.type === 'tool-call-streaming-start') {
+    console.log('Weather tool started...');
+  } else if (chunk.type === 'tool-result') {
+    // Each yield from the generator appears here
+    if (chunk.result.state === 'loading') {
+      console.log('Weather lookup in progress...');
+    } else if (chunk.result.state === 'ready') {
+      console.log(`Weather: ${chunk.result.weather}, Temperature: ${chunk.result.temperature}°F`);
+    }
+  } else if (chunk.type === 'text-delta') {
+    // Stream the AI's text response
+    process.stdout.write(chunk.textDelta);
+  }
+}
+```
+
+This pattern provides a great mix of streaming and type safety. It differs architecturally
+from the pattern in BAML, where Workflow logic is separated from event handling logic.
+
+In BAML, functions and return values are meant for composing Workflow logic, while events
+are meant for communicating state back to your application. In the AI SDK, return values
+are used directly.
+
+**Key differences:**
+
+**Vercel AI SDK Generators:**
+- Manual yield statements at specific points in your tool execution
+- Generic streaming through the AI SDK's protocol
+- Tool-level progress updates handled by the framework
+- Updates tied to tool execution lifecycle
+
+**BAML's `emit`:**
+- Automatic event generation from variable assignments
+- Typesafe event listeners generated from your workflow code
+- Fine-grained control over exactly what business logic gets tracked
+- Updates tied to your specific domain logic and variable names
+
 
 ## Mastra `.watch()`
 
-# The Rules of emit
+Mastra provides a `.watch()` method for monitoring workflow execution in real-time. Let's compare a workflow monitoring example using Mastra's approach to one using BAML's `emit` system.
 
-There are times when we suppress events.
+```typescript TypeScript (Mastra)
+// Mastra approach - watching workflow steps externally
+const workflow = mastra.createWorkflow(...)
+const run = await workflow.createRunAsync()
 
-Emit on object instance changes.
-Emit when the id is the same but the deep equality changes.
+run.watch((event) => {
+  console.log(`Step ${event?.payload?.currentStep?.id} completed`)
+  console.log(`Progress: ${event?.payload?.progress}`)
+})
+
+const result = await run.start({ inputData: { value: "initial data" } })
+```
+
+With BAML's `emit` system, you mark variables directly in your workflow logic and get typesafe event listeners generated for you.
+
+Both approaches enable real-time workflow monitoring. But Mastra's `watch()` function contains
+a more limited number of fields - telling you only about the Workflow stage you are in, not
+specific values being processed.
+
+## Comparison Table
+
+| Feature            | Printf | Mastra | BAML |
+| ---                | ---    | ---    | ---  |
+| Real-time          | 🟢     | 🟢     | 🟢   |
+| Streaming          | ⚪     | 🟢     | 🟢   |
+| Debug levels       | 🟢     | ⚪     | ⚪   |
+| Value subscription | ⚪     | ⚪     | 🟢   |
+| Typed listeners    | ⚪     | ⚪     | 🟢   |
