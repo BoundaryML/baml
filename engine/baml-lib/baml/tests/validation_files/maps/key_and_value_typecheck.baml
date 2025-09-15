@@ -5,7 +5,7 @@ fn CreateMapExpr() -> map<int, string> {
 
 fn UseMapContains() -> string {
     let map = CreateMapExpr();
-    if (map.contains(1)) {
+    if (map.has(1)) {
         map[1]
     } else {
         "hi"
@@ -28,12 +28,12 @@ fn UseMapTypecheck() -> int {
 //   -->  maps/key_and_value_typecheck.baml:8
 //    | 
 //  7 |     let map = CreateMapExpr();
-//  8 |     if (map.contains(1)) {
+//  8 |     if (map.has(1)) {
 //    | 
 // error: Error validating: Map access must be a string
 //   -->  maps/key_and_value_typecheck.baml:9
 //    | 
-//  8 |     if (map.contains(1)) {
+//  8 |     if (map.has(1)) {
 //  9 |         map[1]
 //    | 
 // error: Error validating: Return type mismatch: function return type is int but got string

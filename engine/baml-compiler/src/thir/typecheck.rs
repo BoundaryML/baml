@@ -101,13 +101,13 @@ pub fn typecheck_returning_context<'a>(
     let native_fns = baml_vm::native::functions();
     for (name, (_, arity)) in native_fns {
         // For now, create a simple function signature
-        // std.Array.len takes an array and returns int
+        // std.Array.length takes an array and returns int
         let function_type = match name.as_str() {
-            "std.Array.len" => TypeIR::arrow(
+            "std.Array.length" => TypeIR::arrow(
                 vec![TypeIR::List(Box::new(TypeIR::null()), Default::default())],
                 TypeIR::int(),
             ),
-            "std.Map.len" => TypeIR::arrow(
+            "std.Map.length" => TypeIR::arrow(
                 // map<string, V> -> int
                 // NOTE: we don't have a "top" type for map/array values, so we'll use Null.
                 vec![TypeIR::Map(
@@ -117,7 +117,7 @@ pub fn typecheck_returning_context<'a>(
                 )],
                 TypeIR::int(),
             ),
-            "std.Map.contains" => TypeIR::arrow(
+            "std.Map.has" => TypeIR::arrow(
                 // map<string, V>, string -> bool
                 vec![
                     TypeIR::Map(
@@ -1455,7 +1455,7 @@ pub fn typecheck_expression(
                 },
                 // TODO: Handle this uniformly with the other cases.
                 Some(TypeIR::List(_, _)) => match method.as_str() {
-                    "len" => Some("std.Array.len".to_string()),
+                    "length" => Some("std.Array.length".to_string()),
                     _ => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             &format!("Method `{method}` is not available on class `std.Array`"),
@@ -1466,8 +1466,8 @@ pub fn typecheck_expression(
                 },
 
                 Some(TypeIR::Map(_, _, _)) => match method.as_str() {
-                    "len" => Some("std.Map.len".to_string()),
-                    "contains" => Some("std.Map.contains".to_string()),
+                    "length" => Some("std.Map.length".to_string()),
+                    "has" => Some("std.Map.has".to_string()),
                     _ => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             &format!("Method `{method}` is not available on class `std.Map`"),

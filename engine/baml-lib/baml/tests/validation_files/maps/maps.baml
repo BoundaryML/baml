@@ -18,7 +18,7 @@ fn UseMapNoKey() -> string {
 
 fn UseMapContains() -> string {
     let map = CreateMapJSON();
-    if (map.contains("hello")) {
+    if (map.has("hello")) {
         map["hello"]
     } else {
         "hi"
@@ -27,5 +27,5 @@ fn UseMapContains() -> string {
 
 fn Len() -> int {
     let map = CreateMap();
-    map.len()
+    map.length()
 }

@@ -48,7 +48,7 @@ impl Vm {
         Ok(Value::Int(map.len() as i64))
     }
     /// Map `contains`
-    pub fn map_contains(&mut self, args: &[Value]) -> Result<Value, VmError> {
+    pub fn map_has(&mut self, args: &[Value]) -> Result<Value, VmError> {
         // Arity is already checked by the VM.
 
         let expected = ObjectType::Map;
@@ -203,10 +203,10 @@ pub type NativeFunction = fn(&mut Vm, &[Value]) -> Result<Value, VmError>;
 pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
     let fns: &[(&str, (NativeFunction, usize))] = &[
         // Array.
-        ("std.Array.len", (Vm::array_len, 1)),
+        ("std.Array.length", (Vm::array_len, 1)),
         // Map.
-        ("std.Map.len", (Vm::map_len, 1)),
-        ("std.Map.contains", (Vm::map_contains, 2)),
+        ("std.Map.length", (Vm::map_len, 1)),
+        ("std.Map.has", (Vm::map_has, 2)),
         // Media
         ("std.media.image.from_url", (Vm::image_from_url, 1)),
         ("std.media.audio.from_url", (Vm::audio_from_url, 1)),

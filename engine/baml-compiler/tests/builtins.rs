@@ -11,7 +11,7 @@ fn builtin_method_call() -> anyhow::Result<()> {
         source: r#"
             fn main() -> int {
                 let arr = [1, 2, 3];
-                arr.len()
+                arr.length()
             }
         "#,
         expected: vec![(

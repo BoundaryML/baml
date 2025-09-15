@@ -28,7 +28,7 @@ fn EditMapKey() -> int {
 
 fn UseMapContains() -> string {
     let map = CreateMapJSON();
-    if (map.contains("hello")) {
+    if (map.has("hello")) {
         map["hello"]
     } else {
         "hi"
@@ -37,7 +37,7 @@ fn UseMapContains() -> string {
 
 fn Len() -> int {
     let map = CreateMap();
-    map.len()
+    map.length()
 }
 
 // String: "world"
@@ -113,7 +113,7 @@ fn Len() -> int {
 // 29   0    LOAD_GLOBAL 1      (<fn CreateMapJSON>)
 //      1    CALL 0             
 //
-// 30   2    LOAD_GLOBAL 11     (<fn std.Map.contains>)
+// 30   2    LOAD_GLOBAL 11     (<fn std.Map.has>)
 //      3    LOAD_VAR 1         (map)
 //      4    LOAD_CONST 0       (hello)
 //      5    CALL 2             
@@ -133,18 +133,18 @@ fn Len() -> int {
 // 38   0   LOAD_GLOBAL 0    (<fn CreateMap>)
 //      1   CALL 0           
 //
-// 39   2   LOAD_GLOBAL 10   (<fn std.Map.len>)
+// 39   2   LOAD_GLOBAL 10   (<fn std.Map.length>)
 //      3   LOAD_VAR 1       (map)
 //      4   CALL 1           
 //      5   RETURN           
 //
 // Class: std::Request with 3 fields
 // Enum std::HttpMethod
-// Function: std.Array.len
+// Function: std.Array.length
 //
-// Function: std.Map.len
+// Function: std.Map.length
 //
-// Function: std.Map.contains
+// Function: std.Map.has
 //
 // Function: std.media.image.from_url
 //

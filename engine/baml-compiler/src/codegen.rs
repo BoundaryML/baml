@@ -731,8 +731,8 @@ impl<'g> HirCompiler<'g> {
 
                 let len_method = *self
                     .globals
-                    .get("std.Array.len")
-                    .expect("native std.Array.len() for array length is not in globals?");
+                    .get("std.Array.length")
+                    .expect("native std.Array.length() for array length is not in globals?");
 
                 // {
 

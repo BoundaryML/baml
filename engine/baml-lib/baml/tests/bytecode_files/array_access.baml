@@ -46,11 +46,11 @@ function ArrayAccessWithVariable(arr: float[], idx: int) -> float {
 //
 // Class: std::Request with 3 fields
 // Enum std::HttpMethod
-// Function: std.Array.len
+// Function: std.Array.length
 //
-// Function: std.Map.len
+// Function: std.Map.length
 //
-// Function: std.Map.contains
+// Function: std.Map.has
 //
 // Function: std.media.image.from_url
 //

@@ -90,7 +90,7 @@ fn contains() -> anyhow::Result<()> {
             }
             fn UseMapContains() -> string {
                 let map = CreateMapJSON();
-                if (map.contains("hello")) {
+                if (map.has("hello")) {
                     map["hello"]
                 } else {
                     "hi"
@@ -183,7 +183,7 @@ fn len() -> anyhow::Result<()> {
                     hi 123
                     it_works 456
                 };
-                map.len()
+                map.length()
             }
         "#,
         expected: vec![(
