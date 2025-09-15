@@ -119,7 +119,7 @@ impl FunctionResult {
                 Ok(val) => Ok(val),
                 Err(err) => Err(anyhow::anyhow!(self.format_last_error_with_details(err))),
             })
-            .expect("At least one result will always be present")
+            .unwrap_or_else(|| Err(anyhow::anyhow!("No result from baml - Please report this error to our team with BAML_LOG=info enabled so we can improve this error message")))
     }
 
     fn format_last_error_with_details(&self, last_error: &anyhow::Error) -> ExposedError {
