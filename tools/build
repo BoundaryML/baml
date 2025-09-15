@@ -301,7 +301,7 @@ case "$_path" in
     if [ "$_test_mode" -eq 1 ]; then
       # Set BAML_LIBRARY_PATH and run tests with verbose output
       # The library path must point to the compiled CFFI shared library
-      command="${command} && BAML_LIBRARY_PATH=${_repo_root}/engine/target/debug/libbaml_cffi.dylib infisical run --env=test -- go test -timeout 0 -v -run TestFallbackErrors"
+      command="${command} && BAML_LIBRARY_PATH=${_repo_root}/engine/target/debug/libbaml_cffi.dylib infisical run --env=test -- go test -timeout 0 -v"
     fi
 
     if [ "$_watch_mode" -eq 1 ]; then

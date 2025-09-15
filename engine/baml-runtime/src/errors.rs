@@ -29,6 +29,31 @@ pub enum ExposedError {
     },
 }
 
+impl ExposedError {
+    pub fn to_anyhow_with_details(&self) -> anyhow::Error {
+        let detailed_message = match self {
+            ExposedError::ValidationError {
+                detailed_message, ..
+            } => detailed_message,
+            ExposedError::FinishReasonError {
+                detailed_message, ..
+            } => detailed_message,
+            ExposedError::ClientHttpError {
+                detailed_message, ..
+            } => detailed_message,
+            ExposedError::AbortError {
+                detailed_message, ..
+            } => detailed_message,
+        };
+        let with_details = format!(
+            "{}\n\nDetailed message: {}",
+            self.to_string(),
+            detailed_message
+        );
+        anyhow::anyhow!(with_details)
+    }
+}
+
 impl std::error::Error for ExposedError {}
 
 impl std::fmt::Display for ExposedError {

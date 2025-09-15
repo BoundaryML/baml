@@ -1,5 +1,7 @@
 use anyhow::Result;
-use baml_runtime::{internal::llm_client::ResponseBamlValue, BamlRuntime, FunctionResult};
+use baml_runtime::{
+    errors::ExposedError, internal::llm_client::ResponseBamlValue, BamlRuntime, FunctionResult,
+};
 use once_cell::sync::OnceCell;
 
 use crate::ctypes::{EncodeMeta, EncodeToBuffer};
@@ -123,7 +125,15 @@ pub fn safe_trigger_callback(
                 send_result_to_callback(id, is_done, content, runtime);
             }
             Err(e) => {
-                send_error_to_callback(id, &anyhow::anyhow!(e));
+                // IF YOU EVER CHANGE THIS THINK CAREFULLY.
+                // Almost definitely you should update ExposedError in engine/baml-runtime/src/errors.rs
+                // and then propagate that error.
+                match e.downcast_ref::<ExposedError>() {
+                    Some(exposed_error) => {
+                        send_error_to_callback(id, &exposed_error.to_anyhow_with_details())
+                    }
+                    None => send_error_to_callback(id, &e),
+                }
             }
         },
         Err(e) => {
