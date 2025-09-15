@@ -1248,6 +1248,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenRouterMistralSmall3_1_24b", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def TestOpenaiResponsesPdfs(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenaiResponsesPdfs", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def TestRetryConstant(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -2700,6 +2706,12 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenRouterMistralSmall3_1_24b", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenaiResponsesPdfs(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenaiResponsesPdfs", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
     def TestRetryConstant(

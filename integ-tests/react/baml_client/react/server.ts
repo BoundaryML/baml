@@ -3741,6 +3741,24 @@ export const TestOpenRouterMistralSmall3_1_24b = async (
 };
 
 /**
+ * Executes the "TestOpenaiResponsesPdfs" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenaiResponsesPdfs"
+ * with the specified parameters.
+ *
+ * @param { Pdf } pdf - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenaiResponsesPdfs = async (
+  pdf: Pdf,
+): Promise<string> => {
+  return b.TestOpenaiResponsesPdfs(
+    pdf,
+  );
+};
+
+/**
  * Executes the "TestRetryConstant" BAML action.
  *
  * This server action calls the underlying BAML function "TestRetryConstant"
