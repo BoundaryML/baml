@@ -46,9 +46,7 @@ impl ExposedError {
             } => detailed_message,
         };
         let with_details = format!(
-            "{}\n\nDetailed message: {}",
-            self.to_string(),
-            detailed_message
+            "{self}\n\nDetailed message: {detailed_message}"
         );
         anyhow::anyhow!(with_details)
     }
