@@ -18,7 +18,12 @@ create_exception!(baml_py, BamlAbortError, BamlError);
 // can't use extends=PyException yet https://github.com/PyO3/pyo3/discussions/3838
 
 #[allow(non_snake_case)]
-fn raise_baml_validation_error(prompt: String, message: String, raw_output: String, detailed_message: String) -> PyErr {
+fn raise_baml_validation_error(
+    prompt: String,
+    message: String,
+    raw_output: String,
+    detailed_message: String,
+) -> PyErr {
     Python::with_gil(|py| {
         let internal_monkeypatch = py.import("baml_py.internal_monkeypatch").unwrap();
         let exception = internal_monkeypatch.getattr("BamlValidationError").unwrap();
@@ -29,7 +34,12 @@ fn raise_baml_validation_error(prompt: String, message: String, raw_output: Stri
 }
 
 #[allow(non_snake_case)]
-fn raise_baml_client_http_error(client_name: String, message: String, status_code: u16, detailed_message: String) -> PyErr {
+fn raise_baml_client_http_error(
+    client_name: String,
+    message: String,
+    status_code: u16,
+    detailed_message: String,
+) -> PyErr {
     Python::with_gil(|py| {
         let internal_monkeypatch = py.import("baml_py.internal_monkeypatch").unwrap();
         let exception = internal_monkeypatch.getattr("BamlClientHttpError").unwrap();
@@ -93,7 +103,12 @@ impl BamlError {
                 } => {
                     // Assuming ValidationError has fields that correspond to prompt, message, and raw_output
                     // If not, you may need to adjust this part based on the actual structure of ValidationError
-                    raise_baml_validation_error(prompt.clone(), message.clone(), raw_output.clone(), detailed_message.clone())
+                    raise_baml_validation_error(
+                        prompt.clone(),
+                        message.clone(),
+                        raw_output.clone(),
+                        detailed_message.clone(),
+                    )
                 }
                 ExposedError::FinishReasonError {
                     prompt,
