@@ -2,7 +2,7 @@ import pytest
 
 from ..baml_client import b
 from baml_py.errors import BamlClientHttpError
-from hamcrest import assert_that, contains_string, equal_to
+from hamcrest import assert_that, equal_to
 
 
 @pytest.mark.asyncio
@@ -22,7 +22,6 @@ async def test_fallback_errors():
     with pytest.raises(Exception) as exc_info:
         await b.FnFallbackAlwaysFails("lorem ipsum")
     e = exc_info.value
-    print(e)
     assert_that(
         e.detailed_message,
         equal_to("""3 failed attempts:
