@@ -1163,6 +1163,31 @@ export class AsyncHttpRequest {
     }
   }
   
+  async FnAlwaysFails(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+        "FnAlwaysFails",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   async FnClassOptionalOutput(
       input: string,
       __baml_options__?: BamlCallOptions
@@ -1301,6 +1326,31 @@ export class AsyncHttpRequest {
         "FnFailRetryExponentialDelay",
         {
           "retries": retries,"initial_delay_ms": initial_delay_ms
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnFallbackAlwaysFails(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+        "FnFallbackAlwaysFails",
+        {
+          "input": input
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -3601,31 +3651,6 @@ export class AsyncHttpRequest {
         "TestCaching",
         {
           "input": input,"not_cached": not_cached
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        false,
-        env
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  async TestFallbackAlwaysFails(
-      input: string,
-      __baml_options__?: BamlCallOptions
-  ): Promise<HTTPRequest> {
-    try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-      return await this.runtime.buildRequest(
-        "TestFallbackAlwaysFails",
-        {
-          "input": input
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -6694,6 +6719,31 @@ export class AsyncHttpStreamRequest {
     }
   }
   
+  async FnAlwaysFails(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+        "FnAlwaysFails",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   async FnClassOptionalOutput(
       input: string,
       __baml_options__?: BamlCallOptions
@@ -6832,6 +6882,31 @@ export class AsyncHttpStreamRequest {
         "FnFailRetryExponentialDelay",
         {
           "retries": retries,"initial_delay_ms": initial_delay_ms
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnFallbackAlwaysFails(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+        "FnFallbackAlwaysFails",
+        {
+          "input": input
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -9132,31 +9207,6 @@ export class AsyncHttpStreamRequest {
         "TestCaching",
         {
           "input": input,"not_cached": not_cached
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        true,
-        env
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  async TestFallbackAlwaysFails(
-      input: string,
-      __baml_options__?: BamlCallOptions
-  ): Promise<HTTPRequest> {
-    try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-      return await this.runtime.buildRequest(
-        "TestFallbackAlwaysFails",
-        {
-          "input": input
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),

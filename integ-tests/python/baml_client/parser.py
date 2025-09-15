@@ -294,6 +294,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractResume2", llm_response=llm_response, mode="request")
         return typing.cast(types.Resume, result)
 
+    def FnAlwaysFails(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="FnAlwaysFails", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def FnClassOptionalOutput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional["types.ClassOptionalOutput"]:
@@ -328,6 +334,12 @@ class LlmResponseParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnFailRetryExponentialDelay", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def FnFallbackAlwaysFails(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="FnFallbackAlwaysFails", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
     def FnLiteralClassInputOutput(
@@ -880,12 +892,6 @@ class LlmResponseParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestCaching", llm_response=llm_response, mode="request")
-        return typing.cast(str, result)
-
-    def TestFallbackAlwaysFails(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> str:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestFallbackAlwaysFails", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
     def TestFallbackClient(
@@ -1742,6 +1748,12 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractResume2", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.Resume, result)
 
+    def FnAlwaysFails(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="FnAlwaysFails", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
     def FnClassOptionalOutput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional["stream_types.ClassOptionalOutput"]:
@@ -1776,6 +1788,12 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnFailRetryExponentialDelay", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def FnFallbackAlwaysFails(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="FnFallbackAlwaysFails", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
     def FnLiteralClassInputOutput(
@@ -2328,12 +2346,6 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestCaching", llm_response=llm_response, mode="stream")
-        return typing.cast(str, result)
-
-    def TestFallbackAlwaysFails(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> str:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestFallbackAlwaysFails", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
     def TestFallbackClient(

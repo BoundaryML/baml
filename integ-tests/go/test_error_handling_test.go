@@ -378,7 +378,7 @@ func TestFallbackErrors(t *testing.T) {
 	ctx := context.Background()
 	
 	// Call function with fallback chain that always fails
-	_, err := b.TestFallbackAlwaysFails(ctx, "lorem ipsum")
+	_, err := b.FnFallbackAlwaysFails(ctx, "lorem ipsum")
 	
 	// Should get an error since all fallback clients will fail
 	assert.Error(t, err, "Expected error from failing fallback chain")

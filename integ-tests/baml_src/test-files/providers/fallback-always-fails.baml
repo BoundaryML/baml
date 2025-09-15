@@ -9,7 +9,18 @@ client<llm> FallbackAlwaysFails {
   }
 }
 
-function TestFallbackAlwaysFails(input: string) -> string {
+function FnAlwaysFails(input: string) -> string {
+  client "openai/gpt-0-noexist"
+  prompt #"
+    {{ _.role('system') }}
+    You are a helpful assistant.
+
+    {{ _.role('user') }}
+    Write a nice short story about {{ input }}
+  "#
+}
+
+function FnFallbackAlwaysFails(input: string) -> string {
   client FallbackAlwaysFails
   prompt #"
     {{ _.role('system') }}

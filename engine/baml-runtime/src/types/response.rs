@@ -197,13 +197,7 @@ impl FunctionResult {
                 let Some(Err(err)) = parse_result else {
                     return None;
                 };
-                Some(format!(
-                    "Attempt {}: {}",
-                    index,
-                    self.format_single_error(err)
-                        .to_string()
-                        .replace("\n", "\n    ")
-                ))
+                Some(self.format_single_error(err).to_string())
             })
             .collect::<Vec<String>>();
 
@@ -211,9 +205,18 @@ impl FunctionResult {
             0 => String::new(),
             1 => error_vec[0].clone(),
             _ => format!(
-                "{} attempts failed:\n{}",
+                "{} failed attempts:\n\n{}",
                 error_vec.len(),
-                error_vec.join("\n")
+                error_vec
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, error)| format!(
+                        "Attempt {}: {}",
+                        index,
+                        error.replace("\n", "\n    ")
+                    ))
+                    .collect::<Vec<String>>()
+                    .join("\n")
             ),
         }
     }

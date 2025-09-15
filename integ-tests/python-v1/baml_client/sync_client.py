@@ -718,6 +718,20 @@ class BamlSyncClient:
                 "resume": resume,
             })
             return typing.cast(types.Resume, result.cast_to(types, types, stream_types, False, __runtime__))
+    def FnAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.FnAlwaysFails(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnAlwaysFails", args={
+                "input": input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def FnClassOptionalOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Optional["types.ClassOptionalOutput"]:
@@ -800,6 +814,20 @@ class BamlSyncClient:
             # Original non-streaming code
             result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnFailRetryExponentialDelay", args={
                 "retries": retries,"initial_delay_ms": initial_delay_ms,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def FnFallbackAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.FnFallbackAlwaysFails(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnFallbackAlwaysFails", args={
+                "input": input,
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def FnLiteralClassInputOutput(self, input: types.LiteralClassHello,
@@ -2088,20 +2116,6 @@ class BamlSyncClient:
             # Original non-streaming code
             result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestCaching", args={
                 "input": input,"not_cached": not_cached,
-            })
-            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
-    def TestFallbackAlwaysFails(self, input: str,
-        baml_options: BamlCallOptions = {},
-    ) -> str:
-        # Check if on_tick is provided
-        if 'on_tick' in baml_options:
-            stream = self.stream.TestFallbackAlwaysFails(input=input,
-                baml_options=baml_options)
-            return stream.get_final_response()
-        else:
-            # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFallbackAlwaysFails", args={
-                "input": input,
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFallbackClient(self, 
@@ -3997,6 +4011,18 @@ class BamlStreamClient:
           lambda x: typing.cast(types.Resume, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def FnAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="FnAlwaysFails", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def FnClassOptionalOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.Optional["stream_types.ClassOptionalOutput"], typing.Optional["types.ClassOptionalOutput"]]:
@@ -4062,6 +4088,18 @@ class BamlStreamClient:
     ) -> baml_py.BamlSyncStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="FnFailRetryExponentialDelay", args={
             "retries": retries,"initial_delay_ms": initial_delay_ms,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def FnFallbackAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="FnFallbackAlwaysFails", args={
+            "input": input,
         })
         return baml_py.BamlSyncStream[str, str](
           result,
@@ -5166,18 +5204,6 @@ class BamlStreamClient:
     ) -> baml_py.BamlSyncStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestCaching", args={
             "input": input,"not_cached": not_cached,
-        })
-        return baml_py.BamlSyncStream[str, str](
-          result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
-        )
-    def TestFallbackAlwaysFails(self, input: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[str, str]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestFallbackAlwaysFails", args={
-            "input": input,
         })
         return baml_py.BamlSyncStream[str, str](
           result,
@@ -6660,6 +6686,13 @@ class BamlHttpRequestClient:
             "resume": resume,
         }, mode="request")
         return result
+    def FnAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="FnAlwaysFails", args={
+            "input": input,
+        }, mode="request")
+        return result
     def FnClassOptionalOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -6700,6 +6733,13 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="FnFailRetryExponentialDelay", args={
             "retries": retries,"initial_delay_ms": initial_delay_ms,
+        }, mode="request")
+        return result
+    def FnFallbackAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="FnFallbackAlwaysFails", args={
+            "input": input,
         }, mode="request")
         return result
     def FnLiteralClassInputOutput(self, input: types.LiteralClassHello,
@@ -7344,13 +7384,6 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestCaching", args={
             "input": input,"not_cached": not_cached,
-        }, mode="request")
-        return result
-    def TestFallbackAlwaysFails(self, input: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestFallbackAlwaysFails", args={
-            "input": input,
         }, mode="request")
         return result
     def TestFallbackClient(self, 
@@ -8348,6 +8381,13 @@ class BamlHttpStreamRequestClient:
             "resume": resume,
         }, mode="stream")
         return result
+    def FnAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="FnAlwaysFails", args={
+            "input": input,
+        }, mode="stream")
+        return result
     def FnClassOptionalOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -8388,6 +8428,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="FnFailRetryExponentialDelay", args={
             "retries": retries,"initial_delay_ms": initial_delay_ms,
+        }, mode="stream")
+        return result
+    def FnFallbackAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="FnFallbackAlwaysFails", args={
+            "input": input,
         }, mode="stream")
         return result
     def FnLiteralClassInputOutput(self, input: types.LiteralClassHello,
@@ -9032,13 +9079,6 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestCaching", args={
             "input": input,"not_cached": not_cached,
-        }, mode="stream")
-        return result
-    def TestFallbackAlwaysFails(self, input: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestFallbackAlwaysFails", args={
-            "input": input,
         }, mode="stream")
         return result
     def TestFallbackClient(self, 
