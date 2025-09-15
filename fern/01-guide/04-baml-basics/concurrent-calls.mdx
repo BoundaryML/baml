@@ -359,21 +359,21 @@ async function fastestProviderWins(message: string) {
   // Create separate client registries for each provider
   const openaiRegistry = new ClientRegistry()
   openaiRegistry.addLlmClient('OpenAI', 'openai', {
-    model: 'gpt-4o-mini',
+    model: 'gpt-5-mini',
     api_key: process.env.OPENAI_API_KEY
   })
   openaiRegistry.setPrimary('OpenAI')
 
   const anthropicRegistry = new ClientRegistry()
   anthropicRegistry.addLlmClient('Anthropic', 'anthropic', {
-    model: 'claude-3-haiku-20240307',
+    model: 'claude-3-5-haiku-20241022',
     api_key: process.env.ANTHROPIC_API_KEY
   })
   anthropicRegistry.setPrimary('Anthropic')
 
   const geminiRegistry = new ClientRegistry()
   geminiRegistry.addLlmClient('Gemini', 'vertex-ai', {
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.5-flash',
     location: 'us-central1',
     credentials: process.env.GOOGLE_APPLICATION_CREDENTIALS
   })
@@ -426,21 +426,21 @@ async def fastest_provider_wins(message: str):
     # Create separate client registries for each provider
     openai_registry = ClientRegistry()
     openai_registry.add_llm_client('OpenAI', 'openai', {
-        'model': 'gpt-4o-mini',
+        'model': 'gpt-5-mini',
         'api_key': os.environ.get('OPENAI_API_KEY')
     })
     openai_registry.set_primary('OpenAI')
     
     anthropic_registry = ClientRegistry()
     anthropic_registry.add_llm_client('Anthropic', 'anthropic', {
-        'model': 'claude-3-haiku-20240307',
+        'model': 'claude-3-5-haiku-20241022',
         'api_key': os.environ.get('ANTHROPIC_API_KEY')
     })
     anthropic_registry.set_primary('Anthropic')
     
     gemini_registry = ClientRegistry()
     gemini_registry.add_llm_client('Gemini', 'vertex-ai', {
-        'model': 'gemini-1.5-flash',
+        'model': 'gemini-2.5-flash',
         'location': 'us-central1',
         'credentials': os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_CONTENT')
     })
@@ -523,21 +523,21 @@ func fastestProviderWins(message string) (interface{}, error) {
     // Create client registries for each provider
     openaiRegistry, _ := b.NewClientRegistry()
     openaiRegistry.AddLlmClient("OpenAI", "openai", map[string]interface{}{
-        "model": "gpt-4o-mini",
+        "model": "gpt-5-mini",
         "api_key": os.Getenv("OPENAI_API_KEY"),
     })
     openaiRegistry.SetPrimary("OpenAI")
     
     anthropicRegistry, _ := b.NewClientRegistry()
     anthropicRegistry.AddLlmClient("Anthropic", "anthropic", map[string]interface{}{
-        "model": "claude-3-haiku-20240307",
+        "model": "claude-3-5-haiku-20241022",
         "api_key": os.Getenv("ANTHROPIC_API_KEY"),
     })
     anthropicRegistry.SetPrimary("Anthropic")
     
     geminiRegistry, _ := b.NewClientRegistry()
     geminiRegistry.AddLlmClient("Gemini", "vertex-ai", map[string]interface{}{
-        "model": "gemini-1.5-flash",
+        "model": "gemini-2.5-flash",
         "location": "us-central1",
         "credentials": os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
     })

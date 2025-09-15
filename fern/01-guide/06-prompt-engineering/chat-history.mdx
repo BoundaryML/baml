@@ -12,7 +12,7 @@ class MyUserMessage {
 }
 
 function ChatWithLLM(messages: MyUserMessage[]) -> string {
-  client "openai/gpt-4o"
+  client "openai/gpt-5"
   prompt #"
     Answer the user's questions based on the chat history:
     {% for message in messages %}

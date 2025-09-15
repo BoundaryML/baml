@@ -12,7 +12,7 @@ Example:
 client<llm> MyClient {
   provider vertex-ai
   options {
-    model gemini-1.5-pro
+    model gemini-2.5-pro
     location us-central1
   }
 }
@@ -184,7 +184,7 @@ visible on-screen when the user navigates to #credentials_content, due to how Fe
     client<llm> Vertex {
       provider vertex-ai
       options {
-        model gemini-1.5-pro
+        model gemini-2.5-pro
         location us-central1
         // credentials can be a block string containing service account credentials in JSON format
         credentials #"
@@ -215,7 +215,7 @@ visible on-screen when the user navigates to #credentials_content, due to how Fe
   client<llm> Vertex {
     provider vertex-ai
     options {
-      model gemini-1.5-pro
+      model gemini-2.5-pro
       location us-central1
       credentials "path/to/credentials.json"
     }
@@ -228,7 +228,7 @@ visible on-screen when the user navigates to #credentials_content, due to how Fe
     client<llm> Vertex {
       provider vertex-ai
       options {
-        model gemini-1.5-pro
+        model gemini-2.5-pro
         location us-central1
         // credentials can be a block string containing service account credentials in JSON format
         credentials {
@@ -271,7 +271,7 @@ visible on-screen when the user navigates to #credentials_content, due to how Fe
     client<llm> Vertex {
       provider vertex-ai
       options {
-        model gemini-1.5-pro
+        model gemini-2.5-pro
         location us-central1
         // credentials_content is a block string containing service account credentials in JSON format
         credentials_content #"
@@ -307,8 +307,8 @@ visible on-screen when the user navigates to #credentials_content, due to how Fe
 
 | Model | Input(s) | Optimized for |
 | --- | ---  | --- |
-| `gemini-1.5-pro`  | Audio, images, videos, and text | Complex reasoning tasks such as code and text generation, text editing, problem solving, data extraction and generation |
-| `gemini-1.5-flash`  | Audio, images, videos, and text | Fast and versatile performance across a diverse variety of tasks |
+| `gemini-2.5-pro`  | Audio, images, videos, and text | Complex reasoning tasks such as code and text generation, text editing, problem solving, data extraction and generation |
+| `gemini-2.5-flash`  | Audio, images, videos, and text | Fast and versatile performance across a diverse variety of tasks |
 | `gemini-1.0-pro` | Text | Natural language tasks, multi-turn text and code chat, and code generation |
 
 See the [Google Model Docs](https://ai.google.dev/gemini-api/docs/models/gemini) for the latest models.
@@ -322,7 +322,7 @@ Example:
 client<llm> MyClient {
   provider vertex-ai
   options {
-    model gemini-1.5-pro
+    model gemini-2.5-pro
     project_id my-project-id
     location us-central1
     // Additional headers
@@ -356,7 +356,7 @@ Consult the specific provider's documentation for more information.
 client<llm> MyClient {
   provider vertex-ai
   options {
-    model gemini-1.5-pro
+    model gemini-2.5-pro
     project_id my-project-id
     location us-central1
 
@@ -379,7 +379,7 @@ client<llm> MyClient {
 client<llm> MyClient {
   provider vertex-ai
   options {
-    model gemini-1.5-pro
+    model gemini-2.5-pro
     project_id my-project-id
     location us-central1
 

@@ -63,7 +63,7 @@ ai-chat:
     // Functions define inputs, outputs and prompts
     // function name is always PascalCase
     function MyFunction(input: MyObject) -> string {
-      client "openai/gpt-4o"
+      client "openai-responses/gpt-5-mini"
       // prompt with jinja syntax inside here. with double curly braces for variables.
       // make sure to include: {{ ctx.output_format }} in the prompt, which prints the output schema instructions so the LLM returns the output in the correct format (json or string, etc.). DO NOT write the output schema manually.
       prompt #"
@@ -73,10 +73,10 @@ ai-chat:
 
     <LLMClients>
       You can use any of the following if you write a baml function example:
-      - openai/gpt-4o
-      - openai/gpt-4o-mini
-      - anthropic/claude-3-5-sonnet-latest (note the "3-5")
-      - anthropic/claude-3-5-haiku-latest
+      - openai-responses/gpt-5
+      - openai-responses/gpt-5-mini
+      - anthropic/claude-sonnet-4-20250514
+      - anthropic/claude-3-5-haiku-20241022
 
       If the user mentions an open-source model like "llama3" or "r1", search the docs for "OpenRouter" or "openai-generic" to see how to use it.
     </LLMClients>
@@ -97,7 +97,7 @@ ai-chat:
       }
 
       function ClassifyTweets(tweets: string[]) -> TweetAnalysis[] {
-        client "openai/gpt-4o-mini"
+        client "openai-responses/gpt-5-mini"
         prompt #"
           Analyze each of the following tweets and classify them.
 
