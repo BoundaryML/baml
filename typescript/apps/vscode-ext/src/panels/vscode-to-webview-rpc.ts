@@ -37,7 +37,6 @@ export type VscodeToWebviewCommand =
 				command: "baml.openBamlPanel";
 				arguments: [
 					{
-						projectId: string;
 						functionName: string;
 					}
 				]
@@ -49,7 +48,6 @@ export type VscodeToWebviewCommand =
 				command: "baml.runBamlTest";
 				arguments: [
 					{
-						projectId: string;
 						functionName: string;
 						testCaseName: string;
 					}

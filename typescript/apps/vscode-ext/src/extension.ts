@@ -196,7 +196,6 @@ export function activate(context: vscode.ExtensionContext) {
   const bamlTestcaseCommand = vscode.commands.registerCommand(
     "baml.runBamlTest",
     (args?: {
-      projectId: string;
       functionName: string;
       testCaseName: string;
     }) => {
