@@ -4,6 +4,7 @@ use anyhow::Result;
 use async_std::stream::StreamExt;
 use baml_ids::HttpRequestId;
 use baml_types::{BamlValue, BamlValueWithMeta};
+use futures::StreamExt as FuturesStreamExt;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
 use serde_json::json;
@@ -96,32 +97,59 @@ where
                 let ctx = CtxWithHttpRequestId::from(ctx);
                 let stream_res = node.stream(&ctx, &prompt).await;
                 let final_response = match stream_res {
-                    Ok(response) => response
-                        .map(|stream_part| {
-                            if let Some(on_tick) = on_tick_fn.as_ref() {
-                                on_tick();
-                            }
-                            if let Some(on_event) = on_event.as_ref() {
-                                if let LLMResponse::Success(s) = &stream_part {
-                                    let response_value = partial_parse_fn(&s.content);
-                                    // Flags seem to use a ton of memory, so we strip them here.
-                                    if let Ok(baml_value) = response_value {
-                                        // only success events are sent to the stream
-                                        on_event(FunctionResult::new(
-                                            node.scope.clone(),
-                                            LLMResponse::Success(s.clone()),
-                                            Some(Ok(ResponseBamlValue(baml_value.0.map_meta_owned(|m| {
+                    Ok(mut response_stream) => {
+                        let mut last_response: Option<LLMResponse> = None;
+                        let mut latest_success_snapshot: Option<crate::internal::llm_client::LLMCompleteResponse> = None;
+                        let mut latest_content_for_parse: Option<String> = None;
+
+                        loop {
+                            tokio::select! {
+                                biased;
+
+                                maybe_item = response_stream.next() => {
+                                    match maybe_item {
+                                        Some(stream_part) => {
+                                            if let Some(on_tick) = on_tick_fn.as_ref() {
+                                                on_tick();
+                                            }
+                                            match &stream_part {
+                                                LLMResponse::Success(s) => {
+                                                    // Track latest snapshot and content
+                                                    latest_success_snapshot = Some(s.clone());
+                                                    latest_content_for_parse = Some(s.content.clone());
+                                                    last_response = Some(LLMResponse::Success(s.clone()));
+                                                }
+                                                other => {
+                                                    last_response = Some(other.clone());
+                                                }
+                                            }
+                                        }
+                                        None => {
+                                            // End of stream
+                                            break;
+                                        }
+                                    }
+                                }
+                                // When there's a lull in incoming SSE events, parse only the latest content.
+                                _ = tokio::time::sleep(std::time::Duration::from_millis(0)), if latest_content_for_parse.is_some() && on_event.is_some() => {
+                                    if let (Some(on_event), Some(snap), Some(content)) = (on_event.as_ref(), latest_success_snapshot.as_ref(), latest_content_for_parse.take()) {
+                                        if let Ok(baml_value) = partial_parse_fn(&content) {
+                                            // Strip flags to reduce memory usage
+                                            let parsed = ResponseBamlValue(baml_value.0.map_meta_owned(|m| {
                                                 jsonish::ResponseValueMeta(vec![], m.1, m.2, m.3)
-                                            })))),
-                                        ));
+                                            }));
+                                            on_event(FunctionResult::new(
+                                                node.scope.clone(),
+                                                LLMResponse::Success(snap.clone()),
+                                                Some(Ok(parsed)),
+                                            ));
+                                        }
                                     }
                                 }
                             }
-                            stream_part
-                        })
-                        .fold(None, |_, current| Some(current))
-                        .await
-                        .unwrap_or_else(|| {
+                        }
+
+                        last_response.unwrap_or_else(|| {
                             LLMResponse::LLMFailure(LLMErrorResponse {
                                 client: node.provider.name().into(),
                                 model: None,
@@ -132,7 +160,8 @@ where
                                 message: "Stream ended without response".to_string(),
                                 code: crate::internal::llm_client::ErrorCode::from_u16(2),
                             })
-                        }),
+                        })
+                    }
                     Err(response) => response,
                 };
 
