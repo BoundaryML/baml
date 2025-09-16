@@ -237,42 +237,10 @@ impl Server {
                     tracing::info!("playground rx loop: {:?}", msg);
                     match msg {
                         WebviewRouterMessage::WasmIsInitialized => {
+                            // Reloading the session publishes a runtime_updated notification to the webview
                             let _ = session.reload(Some(notifier.clone())).inspect_err(|e| {
                                 tracing::error!("Failed to reload session: {e}");
                             });
-                            // tracing::info!("Received playground INITIALIZED request");
-                            // let projects = session.baml_src_projects.lock();
-                            // for (_, project) in projects.iter() {
-                            //     let project = project.lock();
-                            //     let files_map: std::collections::HashMap<String, String> = project
-                            //         .baml_project
-                            //         .files
-                            //         .iter()
-                            //         .map(|(path, doc)| {
-                            //             let key = path.path().to_string_lossy().to_string();
-                            //             // If there's an unsaved version, use it
-                            //             let contents = project
-                            //                 .baml_project
-                            //                 .unsaved_files
-                            //                 .get(path)
-                            //                 .map(|unsaved| unsaved.contents.clone())
-                            //                 .unwrap_or_else(|| doc.contents.clone());
-                            //             (key, contents)
-                            //         })
-                            //         .collect();
-                            //     let _ = webview_router_to_websocket_tx
-                            //         .send(WebviewNotification::LspMessage {
-                            //                 method: "runtime_updated".to_string(),
-                            //                 params: json!({
-                            //                     "root_path": project.root_path().to_string_lossy().to_string(),
-                            //                     "files": files_map,
-                            //                 })
-                            //             }
-                            //         )
-                            //         .inspect_err(|e| {
-                            //             tracing::error!("Failed to forward add_project to playground: {e}");
-                            //         });
-                            // }
                         }
                         WebviewRouterMessage::SendLspNotificationToIde(notification) => {
                             tracing::info!("Received playground SEND_LSP_NOTIFICATION request: {:?}", notification);

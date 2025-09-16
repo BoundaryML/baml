@@ -15,10 +15,6 @@ pub enum FrontendMessage {
     baml_settings_updated {
         settings: HashMap<String, String>,
     },
-    execute_command {
-        command: String,
-        arguments: Vec<serde_json::Value>,
-    },
 }
 
 #[derive(Debug, Clone)]

@@ -53,8 +53,7 @@ function AliasedInputEnum(input: AliasedEnum) -> string {
   client GPT4o
   prompt #"
     {{ _.role("user")}}
-
-
+a
     Write out this word only in your response, in lowercase:
     ---
     {{input}}

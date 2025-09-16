@@ -45,5 +45,14 @@
   "[baml]": {
     "editor.defaultFormatter": "Boundary.baml-extension"
   },
-  "editor.defaultFormatter": "vscode.typescript-language-features"
+  "[typescript]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features",
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
+  "[typescriptreact]": {
+      "editor.defaultFormatter": "vscode.typescript-language-features",
+      "editor.insertSpaces": true,
+      "editor.tabSize": 2
+  }
 }

@@ -71,11 +71,24 @@ impl Notifier {
 
         // Send to both client and webview router
         self.client_sender.send(message)?;
-        let _ = self
-            .to_webview_router_tx
-            .send(WebviewRouterMessage::SendLspNotificationToWebview(
-                notification,
-            ));
+        if vec![
+            "runtime_updated",
+            // "runtime_diagnostics",
+            // "textDocument/codeAction",
+        ]
+        .contains(&method.as_str())
+        {
+            let _ = self
+                .to_webview_router_tx
+                .send(WebviewRouterMessage::SendLspNotificationToWebview(
+                    notification,
+                ))
+                .inspect_err(|e| {
+                    tracing::error!(
+                        "Failed to send SEND_LSP_NOTIFICATION_TO_WEBVIEW message to webview: {e}"
+                    );
+                });
+        }
         Ok(())
     }
 

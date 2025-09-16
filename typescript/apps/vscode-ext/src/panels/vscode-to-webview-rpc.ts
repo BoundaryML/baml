@@ -14,12 +14,6 @@ export type VscodeToWebviewCommand =
 			};
 		}
 		| {
-			command: 'port_number';
-			content: {
-				port: number;
-			};
-		}
-		| {
 			command: 'baml_cli_version';
 			content: string;
 		}
