@@ -23,6 +23,7 @@ use playground_server::{FrontendMessage, WebviewNotification, WebviewRouterMessa
 use schedule::Task;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use similar::algorithms::NoFinishHook;
 use tokio::sync::{broadcast, RwLock};
 
 use self::{
@@ -180,7 +181,8 @@ impl Server {
             client_version,
         )?;
 
-        let client = client::Client::new(connection.make_sender(), args.to_webview_router_tx.clone());
+        let client =
+            client::Client::new(connection.make_sender(), args.to_webview_router_tx.clone());
         let notifier = client.notifier();
 
         session.reload(Some(notifier))?;
@@ -224,49 +226,53 @@ impl Server {
             //
             // Incoming messages are received via to_webview_router_tx, which the router will then decide to
             // dispatch to either the webview (via its websocket) or the IDE (via its LSP connection).
+            let notifier = client.notifier();
             let lsp_sender = server.connection.make_sender();
             let mut to_webview_router_rx = server.args.to_webview_router_rx.resubscribe();
             let webview_router_to_websocket_tx = server.args.webview_router_to_websocket_tx.clone();
-            let session = server.session.clone();
+            let mut session = server.session.clone();
             server.args.tokio_runtime.spawn(async move {
                 tracing::info!("Starting playground rx loop");
                 while let Ok(msg) = to_webview_router_rx.recv().await {
                     tracing::info!("playground rx loop: {:?}", msg);
                     match msg {
                         WebviewRouterMessage::WasmIsInitialized => {
-                            tracing::info!("Received playground INITIALIZED request");
-                            let projects = session.baml_src_projects.lock();
-                            for (_, project) in projects.iter() {
-                                let project = project.lock();
-                                let files_map: std::collections::HashMap<String, String> = project
-                                    .baml_project
-                                    .files
-                                    .iter()
-                                    .map(|(path, doc)| {
-                                        let key = path.path().to_string_lossy().to_string();
-                                        // If there's an unsaved version, use it
-                                        let contents = project
-                                            .baml_project
-                                            .unsaved_files
-                                            .get(path)
-                                            .map(|unsaved| unsaved.contents.clone())
-                                            .unwrap_or_else(|| doc.contents.clone());
-                                        (key, contents)
-                                    })
-                                    .collect();
-                                let _ = webview_router_to_websocket_tx
-                                    .send(WebviewNotification::LspMessage {
-                                            method: "runtime_updated".to_string(),
-                                            params: json!({
-                                                "root_path": project.root_path().to_string_lossy().to_string(),
-                                                "files": files_map,
-                                            })
-                                        }
-                                    )
-                                    .inspect_err(|e| {
-                                        tracing::error!("Failed to forward add_project to playground: {e}");
-                                    });
-                            }
+                            let _ = session.reload(Some(notifier.clone())).inspect_err(|e| {
+                                tracing::error!("Failed to reload session: {e}");
+                            });
+                            // tracing::info!("Received playground INITIALIZED request");
+                            // let projects = session.baml_src_projects.lock();
+                            // for (_, project) in projects.iter() {
+                            //     let project = project.lock();
+                            //     let files_map: std::collections::HashMap<String, String> = project
+                            //         .baml_project
+                            //         .files
+                            //         .iter()
+                            //         .map(|(path, doc)| {
+                            //             let key = path.path().to_string_lossy().to_string();
+                            //             // If there's an unsaved version, use it
+                            //             let contents = project
+                            //                 .baml_project
+                            //                 .unsaved_files
+                            //                 .get(path)
+                            //                 .map(|unsaved| unsaved.contents.clone())
+                            //                 .unwrap_or_else(|| doc.contents.clone());
+                            //             (key, contents)
+                            //         })
+                            //         .collect();
+                            //     let _ = webview_router_to_websocket_tx
+                            //         .send(WebviewNotification::LspMessage {
+                            //                 method: "runtime_updated".to_string(),
+                            //                 params: json!({
+                            //                     "root_path": project.root_path().to_string_lossy().to_string(),
+                            //                     "files": files_map,
+                            //                 })
+                            //             }
+                            //         )
+                            //         .inspect_err(|e| {
+                            //             tracing::error!("Failed to forward add_project to playground: {e}");
+                            //         });
+                            // }
                         }
                         WebviewRouterMessage::SendLspNotificationToIde(notification) => {
                             tracing::info!("Received playground SEND_LSP_NOTIFICATION request: {:?}", notification);

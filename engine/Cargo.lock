@@ -1096,6 +1096,7 @@ dependencies = [
  "jsonish",
  "log",
  "lsp-server",
+ "lsp-types",
  "once_cell",
  "serde",
  "serde_json",

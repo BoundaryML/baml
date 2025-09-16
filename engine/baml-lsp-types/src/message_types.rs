@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use lsp_server::Notification;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -28,4 +29,15 @@ impl BamlNotification {
     pub fn to_lsp_message(&self) -> lsp_server::Message {
         lsp_server::Message::Notification(self.to_lsp_notification())
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RuntimeUpdated {
+    pub root_path: String,
+    pub files: HashMap<String, String>,
+}
+
+impl lsp_types::notification::Notification for RuntimeUpdated {
+    type Params = Self;
+    const METHOD: &'static str = "runtime_updated";
 }

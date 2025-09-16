@@ -12,7 +12,7 @@ use std::{
 use anyhow::Context;
 use baml_lsp_types::{
     BamlFunction, BamlFunctionTestCasePair, BamlGeneratorConfig, BamlNotification, BamlParam,
-    BamlParentFunction, BamlSpan, SymbolLocation,
+    BamlParentFunction, BamlSpan, RuntimeUpdated, SymbolLocation,
 };
 use baml_runtime::{
     // internal::llm_client::LLMResponse,
@@ -991,13 +991,10 @@ impl Project {
         }
 
         if let Some(notifier) = runtime_notifier {
-            notifier.send_message(
-                BamlNotification::RuntimeUpdated {
-                    root_path: self.root_path().to_string_lossy().to_string(),
-                    files: file_map,
-                }
-                .to_lsp_message(),
-            )?;
+            notifier.notify::<RuntimeUpdated>(RuntimeUpdated {
+                root_path: self.root_path().to_string_lossy().to_string(),
+                files: file_map,
+            })?;
         }
 
         let runtime = self.baml_project.runtime(fake_env_vars, feature_flags);
