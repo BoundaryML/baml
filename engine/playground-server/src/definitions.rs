@@ -12,13 +12,6 @@ pub enum FrontendMessage {
         root_path: String,
         files: HashMap<String, String>,
     },
-    samtest_update_project {
-        root_path: String,
-        files: HashMap<String, String>,
-    },
-    remove_project {
-        root_path: String,
-    },
     select_function {
         root_path: String,
         function_name: String,

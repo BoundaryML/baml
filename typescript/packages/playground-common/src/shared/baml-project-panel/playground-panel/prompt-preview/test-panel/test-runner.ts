@@ -12,6 +12,7 @@ import {
   selectedTestcaseAtom,
   selectedFunctionAtom,
   currentAbortControllerAtom,
+  flashRangesAtom,
 } from '../../atoms'
 import { isParallelTestsEnabledAtom, testHistoryAtom, selectedHistoryIndexAtom, type TestHistoryRun } from './atoms'
 import { isClientCallGraphEnabledAtom } from '../../preview-toolbar'
@@ -37,6 +38,7 @@ const useRunTests = (maxBatchSize = 5) => {
   const setSelectedFunction = useSetAtom(selectedFunctionAtom)
   const setIsClientCallGraphEnabled = useSetAtom(isClientCallGraphEnabledAtom)
   const apiKeys = useAtomValue(apiKeysAtom)
+  const setFlashRanges = useSetAtom(flashRangesAtom)
   const runTests = useAtomCallback(
     useCallback(
       async (get, set, tests: { functionName: string; testName: string }[]) => {
@@ -45,7 +47,7 @@ const useRunTests = (maxBatchSize = 5) => {
         console.warn('BAML Cancel: Created new AbortController for test run')
         set(currentAbortControllerAtom, controller)
         console.warn('BAML Cancel: AbortController stored in atom')
-        
+
         // Create a new history run
         const historyRun: TestHistoryRun = {
           timestamp: Date.now(),
@@ -152,10 +154,14 @@ const useRunTests = (maxBatchSize = 5) => {
                 }))
                 console.log('spans_to_send: ', spans_to_send)
                 try {
-                  vscode.postMessage({
-                    command: 'set_flashing_regions',
-                    content: { spans: spans_to_send },
-                  })
+                  vscode.setFlashingRegions(spans_to_send)
+                  setFlashRanges(spans_to_send.map((span) => ({
+                    filePath: span.file_path,
+                    startLine: span.start_line,
+                    startCol: span.start,
+                    endLine: span.end_line,
+                    endCol: span.end,
+                  })))
                 } catch (e) {
                   console.error('Failed to send spans to VSCode:', e)
                 }
@@ -191,7 +197,7 @@ const useRunTests = (maxBatchSize = 5) => {
             console.log('test error!')
             console.error(e)
             clearHighlights() // Clear highlights on error
-            
+
             // Check if this is an abort error
             if (e instanceof Error && (e.name === 'AbortError' || e.message?.includes('BamlAbortError'))) {
               setState(test, {
@@ -286,7 +292,7 @@ const useParallelRunTests = (maxBatchSize = 5) => {
         console.warn('BAML Cancel: Created new AbortController for test run')
         set(currentAbortControllerAtom, controller)
         console.warn('BAML Cancel: AbortController stored in atom')
-        
+
         // Create a new history run
         const historyRun: TestHistoryRun = {
           timestamp: Date.now(),

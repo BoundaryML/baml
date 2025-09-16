@@ -17,17 +17,12 @@ import {
   type SetFeatureFlagsRequest,
   type SendLspNotificationToIdeRequest,
   type SendLspNotificationToIdeResponse,
-  decodeBuffer,
   type JumpToFileRequest,
   type JumpToFileResponse,
-} from './vscode-rpc';
-
-// Define WebviewApi type for VSCode webview context
-interface WebviewApi<T> {
-  postMessage(message: any): void;
-  getState(): T | undefined;
-  setState<U extends T>(newState: U): U;
-}
+  type SetFlashingRegionsRequest,
+  type SetFlashingRegionsResponse,
+  decodeBuffer,
+} from './webview-to-vscode-rpc';
 
 // Declare the global acquireVsCodeApi function provided by VSCode webviews
 declare global {
@@ -193,7 +188,7 @@ class VSCodeAPIWrapper {
   // non-VSCode environments (Jetbrains and Zed), the webview has no way of
   // directly asking the IDE to do something, so instead we ask the language
   // server to forward our notification to the IDE.
-  private async sendLspNotification({method, params}: {method: string, params: Record<string, any>}) {
+  private async sendLspNotification({ method, params }: { method: string, params: Record<string, any> }) {
     await this.rpc<SendLspNotificationToIdeRequest, SendLspNotificationToIdeResponse>({
       vscodeCommand: 'SEND_LSP_NOTIFICATION_TO_IDE',
       notification: {
@@ -322,6 +317,20 @@ class VSCodeAPIWrapper {
     });
   }
 
+  public async setFlashingRegions(spans: {
+    file_path: string;
+    start_line: number;
+    start: number;
+    end_line: number;
+    end: number;
+  }[]) {
+    const resp = await this.rpc<SetFlashingRegionsRequest, SetFlashingRegionsResponse>({
+      vscodeCommand: 'SET_FLASHING_REGIONS',
+      spans,
+    });
+    return resp;
+  }
+
   public rpc<TRequest, TResponse>(data: TRequest): Promise<TResponse> {
     if (!this.isVscode()) {
       return this.httpPostRpc(data);
@@ -395,7 +404,7 @@ class VSCodeAPIWrapper {
 
   private async httpPostRpc<TRequest, TResponse>(data: TRequest): Promise<TResponse> {
     const command = (data as unknown as { vscodeCommand: string }).vscodeCommand;
-    
+
     const response = await fetch(`/webview/${command}`, {
       method: 'POST',
       headers: {
@@ -403,12 +412,12 @@ class VSCodeAPIWrapper {
       },
       body: JSON.stringify(data),
     });
-  
+
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`HTTP RPC failed for ${command}: ${response.status} ${errorText}`);
     }
-  
+
     const result = await response.json();
     return result as TResponse;
   }

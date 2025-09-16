@@ -1095,6 +1095,7 @@ dependencies = [
  "js-sys",
  "jsonish",
  "log",
+ "lsp-server",
  "once_cell",
  "serde",
  "serde_json",

@@ -19,38 +19,17 @@ import {
   type GetWebviewUriResponse,
   type WebviewToVscodeRpc,
   encodeBuffer,
-} from '../vscode-rpc';
+} from '../webview-to-vscode-rpc';
 
-import { exec } from 'child_process';
 import * as fs from 'fs';
-import { promisify } from 'util';
 import { GoogleAuth } from 'google-auth-library';
-import { BAML_CONFIG_SINGLETON } from '../plugins/language-server-client/bamlConfig';
-import {
-  type Config,
-  adjectives,
-  animals,
-  colors,
-} from 'unique-names-generator';
 import {
   bamlConfig,
   requestDiagnostics,
 } from '../plugins/language-server-client';
 import { refreshBamlConfigSingleton } from '../plugins/language-server-client/bamlConfig';
 import type TelemetryReporter from '../telemetryReporter';
-// import { CredentialsProviderError } from '@aws-sdk/credential-providers'
-const customConfig: Config = {
-  dictionaries: [adjectives, colors, animals],
-  separator: '_',
-  length: 2,
-};
-
-export const openPlaygroundConfig: { lastOpenedFunction: null | string } = {
-  lastOpenedFunction: null,
-};
-
-const execAsync = promisify(exec);
-const readFileAsync = promisify(fs.readFile);
+import { VscodeToWebviewCommand } from './vscode-to-webview-rpc';
 
 /**
  * This class manages the state and behavior of HelloWorld webview panels.
@@ -150,7 +129,7 @@ export class WebviewPanelHost {
     }
   }
 
-  public postMessage<T>(command: string, content: T) {
+  public sendCommandToWebview({ command, content }: VscodeToWebviewCommand) {
     if (!this._isInitialized && command === 'select_function') {
       // Queue select_function commands until initialized
       this._pendingCommands.push({ command, content });
@@ -288,21 +267,18 @@ export class WebviewPanelHost {
 
     const csp = [
       `default-src 'none'`,
-      `script-src 'unsafe-eval' https://* ${
-        isDevelopment
-          ? `http://${localServerUrl} http://0.0.0.0:${localPort} 'nonce-${nonce}'`
-          : `'nonce-${nonce}'`
+      `script-src 'unsafe-eval' https://* ${isDevelopment
+        ? `http://${localServerUrl} http://0.0.0.0:${localPort} 'nonce-${nonce}'`
+        : `'nonce-${nonce}'`
       }`,
-      `style-src ${webview.cspSource} 'self' 'unsafe-inline' https://*${
-        isDevelopment
-          ? ` http://${localServerUrl} http://0.0.0.0:${localPort}`
-          : ''
+      `style-src ${webview.cspSource} 'self' 'unsafe-inline' https://*${isDevelopment
+        ? ` http://${localServerUrl} http://0.0.0.0:${localPort}`
+        : ''
       }`,
       `font-src ${webview.cspSource}`,
-      `connect-src https://* ${
-        isDevelopment
-          ? `ws://${localServerUrl} ws://0.0.0.0:${localPort} http://${localServerUrl} http://0.0.0.0:${localPort}`
-          : ''
+      `connect-src https://* ${isDevelopment
+        ? `ws://${localServerUrl} ws://0.0.0.0:${localPort} http://${localServerUrl} http://0.0.0.0:${localPort}`
+        : ''
       }`,
       `img-src ${webview.cspSource} https: data:`,
     ];
@@ -396,27 +372,34 @@ export class WebviewPanelHost {
 
     const addProject = async () => {
       await requestDiagnostics();
-      // console.log('last opened func', openPlaygroundConfig.lastOpenedFunction)
-      // if (openPlaygroundConfig.lastOpenedFunction) {
-      //   this.postMessage('select_function', {
-      //     root_path: 'default',
-      //     function_name: openPlaygroundConfig.lastOpenedFunction,
-      //   })
-      // }
-      this.postMessage('baml_cli_version', bamlConfig.cliVersion);
+      if (bamlConfig.cliVersion) {
+        this.sendCommandToWebview({
+          source: 'ide_message',
+          payload: { command: 'baml_cli_version', content: bamlConfig.cliVersion }
+        });
+      }
       // Refresh config to ensure we have latest settings before sending
       const refreshedConfig = refreshBamlConfigSingleton();
-      this.postMessage('baml_settings_updated', refreshedConfig);
+      if (refreshedConfig) {
+        this.sendCommandToWebview({
+          source: 'ide_message',
+          payload: { command: 'baml_settings_updated', content: refreshedConfig },
+        });
+      }
+
     };
 
     vscode.workspace.onDidChangeConfiguration((event) => {
       console.log('*** CLIENT DID CHANGE CONFIGURATION', event);
       if (event.affectsConfiguration('baml')) {
         setTimeout(() => {
-          this.postMessage(
-            'baml_settings_updated',
-            refreshBamlConfigSingleton(),
-          );
+          const refreshedConfig = refreshBamlConfigSingleton();
+          if (refreshedConfig) {
+            this.sendCommandToWebview({
+              source: 'ide_message',
+              payload: { command: 'baml_settings_updated', content: refreshedConfig },
+            });
+          }
         }, 1000);
       }
     });
@@ -425,28 +408,16 @@ export class WebviewPanelHost {
       async (
         message:
           | {
-              command: 'set_flashing_regions';
-              content: {
-                spans: {
-                  file_path: string;
-                  start_line: number;
-                  start_char: number;
-                  end_line: number;
-                  end_char: number;
-                }[];
-              };
-            }
+            command: 'telemetry';
+            meta: {
+              action: string;
+              data: Record<string, unknown>;
+            };
+          }
           | {
-              command: 'telemetry';
-              meta: {
-                action: string;
-                data: Record<string, unknown>;
-              };
-            }
-          | {
-              rpcId: number;
-              data: WebviewToVscodeRpc;
-            },
+            rpcId: number;
+            data: WebviewToVscodeRpc;
+          },
       ) => {
         console.log('DEBUG: webview message: ', message);
         if ('command' in message) {
@@ -456,17 +427,6 @@ export class WebviewPanelHost {
               this.reporter?.sendTelemetryEvent({
                 event: `baml.webview.${action}`,
                 properties: data,
-              });
-              return;
-            }
-            case 'set_flashing_regions': {
-              // Call the command handler with the spans
-              console.log(
-                'WEBPANELVIEW set_flashing_regions',
-                message.content.spans,
-              );
-              vscode.commands.executeCommand('baml.setFlashingRegions', {
-                content: message.content,
               });
               return;
             }
@@ -520,7 +480,7 @@ export class WebviewPanelHost {
               featureFlags: featureFlags,
             };
             console.log('GET_VSCODE_SETTINGS response:', response);
-            
+
             // Also immediately send the current config to the LSP to ensure it's in sync
             const bamlSettings = {
               featureFlags: featureFlags,
@@ -530,7 +490,7 @@ export class WebviewPanelHost {
               fileWatcher: config.get('fileWatcher', false),
               trace: config.get('trace', { server: 'off' }),
             };
-            
+
             // Import the client and send notification if available
             const { client } = require('../plugins/language-server-client');
             if (client) {
@@ -541,7 +501,7 @@ export class WebviewPanelHost {
             } else {
               console.log('GET_VSCODE_SETTINGS: LSP client not available');
             }
-            
+
             this._panel.webview.postMessage({
               rpcId: message.rpcId,
               rpcMethod: vscodeCommand,
@@ -569,10 +529,10 @@ export class WebviewPanelHost {
               const workspaceFolders = vscode.workspace.workspaceFolders;
               const workspaceUri = workspaceFolders?.[0]?.uri ?? Uri.parse("nonsense");
               uriPath = Uri.joinPath(workspaceUri, relpath);
-              console.log('GET_WEBVIEW_URI: Resolved relative path', { 
-                relpath, 
-                workspaceUri: workspaceUri.fsPath, 
-                resolvedPath: uriPath.fsPath 
+              console.log('GET_WEBVIEW_URI: Resolved relative path', {
+                relpath,
+                workspaceUri: workspaceUri.fsPath,
+                resolvedPath: uriPath.fsPath
               });
             }
             const uri = this._panel.webview.asWebviewUri(uriPath).toString();
@@ -741,6 +701,17 @@ export class WebviewPanelHost {
               rpcId: message.rpcId,
               rpcMethod: vscodeCommand,
               data: { ok: true },
+            });
+            return;
+          case 'SET_FLASHING_REGIONS':
+            const { spans } = vscodeMessage;
+            vscode.commands.executeCommand('baml.setFlashingRegions', {
+              content: { spans },
+            });
+            this._panel.webview.postMessage({
+              rpcId: message.rpcId,
+              rpcMethod: vscodeCommand,
+              data: { ack: true },
             });
             return;
         }

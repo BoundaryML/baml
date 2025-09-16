@@ -22,10 +22,11 @@ export const bamlConfigSchema = z
   .partial();
 type BamlConfig = z.infer<typeof bamlConfigSchema>;
 
-export const BAML_CONFIG_SINGLETON: {
+export type BamlConfigAtom = {
   config: BamlConfig | null;
   cliVersion: string | null;
-} = {
+};
+export const BAML_CONFIG_SINGLETON: BamlConfigAtom = {
   config: null,
   cliVersion: null,
 };

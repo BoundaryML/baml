@@ -7,9 +7,9 @@
     "defaultBranch": "main"
   },
   "files": {
-    "include": [
+    "includes": [
       "typescript/packages/sage-interface/**/*.ts",
-      "typescript/packages/sage-interface/**/*.tsx"
+      "typescript/packages/sage-interface/**/*.tsx",
     ]
   },
   "json": {

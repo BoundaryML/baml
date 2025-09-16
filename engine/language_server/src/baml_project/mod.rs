@@ -11,8 +11,8 @@ use std::{
 
 use anyhow::Context;
 use baml_lsp_types::{
-    BamlFunction, BamlFunctionTestCasePair, BamlGeneratorConfig, BamlParam, BamlParentFunction,
-    BamlSpan, SymbolLocation,
+    BamlFunction, BamlFunctionTestCasePair, BamlGeneratorConfig, BamlNotification, BamlParam,
+    BamlParentFunction, BamlSpan, SymbolLocation,
 };
 use baml_runtime::{
     // internal::llm_client::LLMResponse,
@@ -991,15 +991,13 @@ impl Project {
         }
 
         if let Some(notifier) = runtime_notifier {
-            notifier
-                .0
-                .send(lsp_server::Message::Notification(Notification::new(
-                    "runtime_updated".to_string(),
-                    serde_json::json!({
-                        "root_path": self.root_path(),
-                        "files": file_map,
-                    }),
-                )))?;
+            notifier.0.send(
+                BamlNotification::RuntimeUpdated {
+                    root_path: self.root_path().to_string_lossy().to_string(),
+                    files: file_map,
+                }
+                .to_lsp_message(),
+            )?;
         }
 
         let runtime = self.baml_project.runtime(fake_env_vars, feature_flags);

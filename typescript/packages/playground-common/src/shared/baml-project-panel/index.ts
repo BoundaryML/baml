@@ -2,7 +2,7 @@ export * from './atoms';
 export * from './vscode';
 export * from './Jotai';
 export * from './types';
-export * from './vscode-rpc';
+export * from './webview-to-vscode-rpc';
 export * from './playground-panel/atoms';
 export * from './playground-panel';
 export * from './playground-panel/atoms-orch-graph';
