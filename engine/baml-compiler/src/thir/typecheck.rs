@@ -1537,6 +1537,8 @@ pub fn typecheck_expression(
 
                             ("baml", "deep_copy") => Some("baml.deep_copy".to_string()),
 
+                            ("baml.unstable", "string") => Some("baml.unstable.string".to_string()),
+
                             _ => {
                                 diagnostics.push_error(DatamodelError::new_validation_error(
                                     &format!("Method `{method}` is not available on type `{name}`"),
@@ -1587,7 +1589,7 @@ pub fn typecheck_expression(
                 &typed_receiver,
                 thir::Expr::Var(name, _) if matches!(
                     name.as_str(),
-                    "image" | "audio" | "video" | "pdf"
+                    "image" | "audio" | "video" | "pdf" | "baml.unstable"
                 )
             );
 
@@ -1627,6 +1629,14 @@ pub fn typecheck_expression(
                                         );
                                     }
                                 },
+                                "baml.unstable.string" => {
+                                    generic_return_type_inferred = Some(TypeIR::string());
+
+                                    func_type = Some(TypeIR::arrow(
+                                        vec![arg_type.clone()],
+                                        TypeIR::string(),
+                                    ));
+                                }
                                 _ => {
                                     if !types_compatible(arg_type, expected_type) {
                                         diagnostics.push_error(
@@ -1664,7 +1674,7 @@ pub fn typecheck_expression(
                 &typed_receiver,
                 thir::Expr::Var(name, _) if matches!(
                     name.as_str(),
-                    "image" | "audio" | "video" | "pdf" | "baml"
+                    "image" | "audio" | "video" | "pdf" | "baml" | "baml.unstable"
                 )
             );
 
@@ -1976,11 +1986,37 @@ pub fn typecheck_expression(
                         None
                     }
                 }
+
                 _ => {
-                    diagnostics.push_error(DatamodelError::new_validation_error(
-                        "Can only access fields on class instances",
-                        base.span(),
-                    ));
+                    let mut is_namespace = false;
+
+                    if let hir::Expression::Identifier(name, _) = base.as_ref() {
+                        if name == "baml" {
+                            is_namespace = true;
+
+                            if field == "unstable" {
+                                // Typecheck as var and then next thing is MethodCall.
+                                // MethodCall figures out this is function on namespace.
+                                return thir::Expr::Var(
+                                    "baml.unstable".to_string(),
+                                    (base.span(), None),
+                                );
+                            } else {
+                                diagnostics.push_error(DatamodelError::new_validation_error(
+                                    &format!("Unknown namespace baml.{field}"),
+                                    base.span(),
+                                ));
+                            }
+                        }
+                    }
+
+                    if !is_namespace {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            "Can only access fields on class instances",
+                            base.span(),
+                        ));
+                    }
+
                     None
                 }
             };

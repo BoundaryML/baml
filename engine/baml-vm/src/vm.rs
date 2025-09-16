@@ -11,7 +11,7 @@ use crate::{
 };
 
 /// Max call stack size.
-const MAX_FRAMES: usize = 256;
+pub const MAX_FRAMES: usize = 256;
 
 /// Function type.
 #[derive(Clone, Copy, Debug)]

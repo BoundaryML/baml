@@ -59,25 +59,88 @@ fn deep_copy_object() -> anyhow::Result<()> {
             }
         "#,
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(45))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(46))),
         },
         |vm| {
-            let baml_vm::Object::Instance(tree) = &vm.objects[ObjectIndex::from_raw(45)] else {
+            let baml_vm::Object::Instance(tree) = &vm.objects[ObjectIndex::from_raw(46)] else {
                 panic!(
                     "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(45)]
+                    &vm.objects[ObjectIndex::from_raw(46)]
                 );
             };
 
-            let baml_vm::Object::Instance(copy) = &vm.objects[ObjectIndex::from_raw(42)] else {
+            let baml_vm::Object::Instance(copy) = &vm.objects[ObjectIndex::from_raw(43)] else {
                 panic!(
                     "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(42)]
+                    &vm.objects[ObjectIndex::from_raw(43)]
                 );
             };
 
             assert_eq!(tree.class, copy.class);
 
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn any_value_to_string() -> anyhow::Result<()> {
+    assert_vm_executes_with_inspection(
+        Program {
+            source: r#"
+            class Point {
+                x int
+                y int
+            }
+
+            class Person {
+                name string
+                age int
+                location Point
+                hobbies string[]
+                scores map<string, int>
+            }
+
+            fn main() -> string {
+                let p = Point { x: 10, y: 20 };
+                let person = Person {
+                    name: "Alice",
+                    age: 25,
+                    location: p,
+                    hobbies: ["reading", "coding"],
+                    scores: {"math": 95, "english": 88}
+                };
+
+                baml.unstable.string(person)
+            }
+        "#,
+            function: "main",
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(47))),
+        },
+        |vm| {
+            let baml_vm::Object::String(result) = &vm.objects[ObjectIndex::from_raw(47)] else {
+                panic!(
+                    "expected String, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(47)]
+                );
+            };
+
+            // Expected format with proper indentation
+            let expected = r#"Person {
+    name: "Alice"
+    age: 25
+    location: Point {
+        x: 10
+        y: 20
+    }
+    hobbies: ["reading", "coding"]
+    scores: {
+        "math": 95
+        "english": 88
+    }
+}"#;
+
+            assert_eq!(result, expected);
             Ok(())
         },
     )
