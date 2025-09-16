@@ -1,8 +1,10 @@
 use std::any::TypeId;
 
 use lsp_server::{Notification, RequestId};
+use playground_server::WebviewRouterMessage;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
+use tokio::sync::broadcast;
 
 use super::{schedule::Task, ClientSender};
 
@@ -15,7 +17,10 @@ pub(crate) struct Client<'s> {
 }
 
 #[derive(Clone)]
-pub struct Notifier(pub ClientSender);
+pub struct Notifier {
+    client_sender: ClientSender,
+    to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
+}
 
 #[derive(Clone)]
 pub(crate) struct Responder(ClientSender);
@@ -27,9 +32,15 @@ pub(crate) struct Requester<'s> {
 }
 
 impl Client<'_> {
-    pub(super) fn new(sender: ClientSender) -> Self {
+    pub(super) fn new(
+        sender: ClientSender,
+        to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
+    ) -> Self {
         Self {
-            notifier: Notifier(sender.clone()),
+            notifier: Notifier {
+                client_sender: sender.clone(),
+                to_webview_router_tx,
+            },
             responder: Responder(sender.clone()),
             requester: Requester {
                 sender,
@@ -56,40 +67,55 @@ impl Notifier {
     {
         let method = N::METHOD.to_string();
 
-        let message = lsp_server::Message::Notification(Notification::new(method, params));
+        let notification = Notification::new(method.clone(), params);
+        let message = lsp_server::Message::Notification(notification.clone());
 
-        self.0.send(message)
+        // Send to both client and webview router
+        self.client_sender.send(message)?;
+        let _ = self.to_webview_router_tx.send(WebviewRouterMessage::SendLspNotificationToWebview(notification));
+        Ok(())
     }
 
     pub(crate) fn notify_method(&self, method: String) -> anyhow::Result<()> {
-        self.0
-            .send(lsp_server::Message::Notification(Notification::new(
-                method,
-                Value::Null,
-            )))
+        let notification = Notification::new(method.clone(), Value::Null);
+        self.client_sender
+            .send(lsp_server::Message::Notification(notification.clone()))?;
+        let _ = self.to_webview_router_tx.send(WebviewRouterMessage::SendLspNotificationToWebview(notification));
+        Ok(())
     }
 
     pub(crate) fn notify_baml_error(&self, msg: &str) -> anyhow::Result<()> {
-        self.0
-            .send(lsp_server::Message::Notification(Notification::new(
-                "baml/message".to_string(),
-                serde_json::json!({
-                    "type": "error",
-                    "message": msg,
-                    "durationMs": 7000,
-                }),
-            )))
+        let notification = Notification::new(
+            "baml/message".to_string(),
+            serde_json::json!({
+                "type": "error",
+                "message": msg,
+                "durationMs": 7000,
+            }),
+        );
+        self.client_sender
+            .send(lsp_server::Message::Notification(notification.clone()))?;
+        let _ = self.to_webview_router_tx.send(WebviewRouterMessage::SendLspNotificationToWebview(notification));
+        Ok(())
     }
     pub(crate) fn notify_baml_info(&self, msg: &str) -> anyhow::Result<()> {
-        self.0
-            .send(lsp_server::Message::Notification(Notification::new(
-                "baml/message".to_string(),
-                serde_json::json!({
-                    "type": "info",
-                    "message": msg,
-                    "durationMs": 4000,
-                }),
-            )))
+        let notification = Notification::new(
+            "baml/message".to_string(),
+            serde_json::json!({
+                "type": "info",
+                "message": msg,
+                "durationMs": 4000,
+            }),
+        );
+        self.client_sender
+            .send(lsp_server::Message::Notification(notification.clone()))?;
+        let _ = self.to_webview_router_tx.send(WebviewRouterMessage::SendLspNotificationToWebview(notification));
+        Ok(())
+    }
+
+    /// Send a notification directly to the client without sending to webview router
+    pub(crate) fn send_message(&self, message: lsp_server::Message) -> anyhow::Result<()> {
+        self.client_sender.send(message)
     }
 }
 

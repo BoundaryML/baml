@@ -125,7 +125,7 @@ pub(crate) fn send_generator_version(
     opt_version: Option<&impl ToOwned<Owned = String>>,
 ) {
     if let Some(version) = opt_version.map(ToOwned::to_owned) {
-        let _ = notifier.0.send(lsp_server::Message::Notification(
+        let _ = notifier.send_message(lsp_server::Message::Notification(
             lsp_server::Notification::new(
                 "baml_src_generator_version".to_string(),
                 BamlSrcVersionPayload {

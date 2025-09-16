@@ -991,7 +991,7 @@ impl Project {
         }
 
         if let Some(notifier) = runtime_notifier {
-            notifier.0.send(
+            notifier.send_message(
                 BamlNotification::RuntimeUpdated {
                     root_path: self.root_path().to_string_lossy().to_string(),
                     files: file_map,

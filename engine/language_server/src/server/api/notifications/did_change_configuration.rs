@@ -70,8 +70,7 @@ impl super::SyncNotificationHandler for DidChangeConfiguration {
 
                 // Send the BAML settings as a notification
                 notifier
-                    .0
-                    .send(lsp_server::Message::Notification(
+                    .send_message(lsp_server::Message::Notification(
                         lsp_server::Notification::new(
                             "baml_settings_updated".to_string(),
                             baml_settings.clone(),
