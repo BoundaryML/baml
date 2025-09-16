@@ -912,6 +912,25 @@ export const ExtractResume2 = async (
 };
 
 /**
+ * Executes the streaming variant of the "FnAlwaysFails" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const FnAlwaysFails = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.FnAlwaysFails(
+    input,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "FnClassOptionalOutput" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -1027,6 +1046,25 @@ export const FnFailRetryExponentialDelay = async (
   const stream = b.stream.FnFailRetryExponentialDelay(
     retries,
     initial_delay_ms,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "FnFallbackAlwaysFails" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const FnFallbackAlwaysFails = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.FnFallbackAlwaysFails(
+    input,
   );
   return Promise.resolve(stream.toStreamable());
 };

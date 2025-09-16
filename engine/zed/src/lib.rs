@@ -6,11 +6,6 @@ use zed_extension_api::{self as zed, settings::LspSettings, LanguageServerId, Re
 // https://github.com/zed-extensions/csharp/blob/main/src/csharp.rs
 
 const GITHUB_REPO: &str = "BoundaryML/baml";
-
-// Embed the binary for debug mode
-#[cfg(feature = "debug")]
-const BAML_CLI_BINARY: &[u8] = include_bytes!("../../target/debug/baml-cli");
-// const BAML_CLI_BINARY: &[u8] = include_bytes!("../baml-cli");
 struct BamlBinary {
     path: String,
     args: Option<Vec<String>>,
@@ -36,17 +31,6 @@ impl BamlExtension {
                 path,
                 args: binary_args,
             });
-        }
-
-        if let Some(path) = &self.cached_binary_path {
-            if let Ok(stat) = fs::metadata(path) {
-                if stat.is_file() {
-                    return Ok(BamlBinary {
-                        path: path.clone(),
-                        args: binary_args,
-                    });
-                }
-            }
         }
 
         #[cfg(feature = "debug")]
@@ -132,7 +116,6 @@ impl BamlExtension {
                 }
             }
 
-            self.cached_binary_path = Some(binary_path.clone());
             Ok(BamlBinary {
                 path: binary_path,
                 args: binary_args,
@@ -151,16 +134,27 @@ impl zed::Extension for BamlExtension {
         language_server_id: &zed::LanguageServerId,
         worktree: &zed::Worktree,
     ) -> Result<zed::Command> {
-        let baml_binary = self.language_server_binary(language_server_id, worktree)?;
-        Ok(zed::Command {
-            command: baml_binary.path,
-            // command: format!(
-            //     "{}/../target/debug/language-server-hot-reload",
-            //     env!("CARGO_MANIFEST_DIR")
-            // ),
-            args: baml_binary.args.unwrap_or_else(|| vec!["lsp".into()]),
-            env: Default::default(),
-        })
+        #[cfg(feature = "debug")]
+        {
+            Ok(zed::Command {
+                command: format!(
+                    "{}/../target/debug/language-server-hot-reload",
+                    env!("CARGO_MANIFEST_DIR")
+                ),
+                args: vec!["lsp".into()],
+                env: vec![("VSCODE_DEBUG_MODE".to_string(), "true".to_string())],
+            })
+        }
+
+        #[cfg(not(feature = "debug"))]
+        {
+            let baml_binary = self.language_server_binary(language_server_id, worktree)?;
+            Ok(zed::Command {
+                command: baml_binary.path,
+                args: baml_binary.args.unwrap_or_else(|| vec!["lsp".into()]),
+                env: Default::default(),
+            })
+        }
     }
 
     // fn language_server_initialization_options(

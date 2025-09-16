@@ -867,6 +867,24 @@ export const ExtractResume2 = async (
 };
 
 /**
+ * Executes the "FnAlwaysFails" BAML action.
+ *
+ * This server action calls the underlying BAML function "FnAlwaysFails"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const FnAlwaysFails = async (
+  input: string,
+): Promise<string> => {
+  return b.FnAlwaysFails(
+    input,
+  );
+};
+
+/**
  * Executes the "FnClassOptionalOutput" BAML action.
  *
  * This server action calls the underlying BAML function "FnClassOptionalOutput"
@@ -977,6 +995,24 @@ export const FnFailRetryExponentialDelay = async (
   return b.FnFailRetryExponentialDelay(
     retries,
     initial_delay_ms,
+  );
+};
+
+/**
+ * Executes the "FnFallbackAlwaysFails" BAML action.
+ *
+ * This server action calls the underlying BAML function "FnFallbackAlwaysFails"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const FnFallbackAlwaysFails = async (
+  input: string,
+): Promise<string> => {
+  return b.FnFallbackAlwaysFails(
+    input,
   );
 };
 

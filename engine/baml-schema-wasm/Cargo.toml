@@ -39,7 +39,7 @@ internal-baml-codegen.workspace = true
 internal-baml-core.workspace = true
 jsonish = { path = "../baml-lib/jsonish" }
 internal-llm-client = { path = "../baml-lib/llm-client" }
-js-sys = "=0.3.69"
+js-sys.workspace = true
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -48,28 +48,15 @@ time.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 url.workspace = true
 uuid = { workspace = true, features = ["v4", "js"] }
-wasm-bindgen = "=0.2.92"
-wasm-bindgen-futures = "0.4.42"
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
 wasm-logger = { version = "0.2.0" }
+web-sys.workspace = true
 web-time.workspace = true
 either = "1.8.1"
 itertools = "0.13.0"
 once_cell.workspace = true
 stream-cancel = "0.8"
-[dependencies.web-sys]
-version = "0.3.69"
-features = [
-  'console',
-  'Headers',
-  'Request',
-  'RequestInit',
-  'RequestMode',
-  'Response',
-  'Window',
-  'AbortSignal',
-  'EventTarget',
-  'Event',
-]
 
 [dev-dependencies]
 dissimilar = "1.0.4"

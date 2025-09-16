@@ -127,8 +127,8 @@ pub fn new_test_server(worker_threads: NonZeroUsize) -> anyhow::Result<TestServe
             )
             .unwrap();
 
-        let (playground_tx, playground_rx) = broadcast::channel(1);
-        let (broadcast_tx, _) = broadcast::channel(1);
+        let (to_webview_router_tx, to_webview_router_rx) = broadcast::channel(1);
+        let (webview_router_to_websocket_tx, _) = broadcast::channel(1);
 
         let server = Server::new_with_connection(
             worker_threads,
@@ -136,9 +136,9 @@ pub fn new_test_server(worker_threads: NonZeroUsize) -> anyhow::Result<TestServe
             init_params,
             ServerArgs {
                 tokio_runtime: tokio::runtime::Runtime::new().unwrap(),
-                broadcast_tx,
-                playground_rx,
-                playground_tx,
+                webview_router_to_websocket_tx,
+                to_webview_router_rx,
+                to_webview_router_tx,
                 playground_port: 0,
                 proxy_port: 0,
             },

@@ -14,5 +14,5 @@ object BamlIdeConfig {
     }
 
     fun shouldShowToolWindowDebuggers(): Boolean = isDebugMode
-    fun shouldUseLocalLanguageServerBuild(): Boolean = false
+    fun shouldUseLocalLanguageServerBuild(): Boolean = isDebugMode
 }

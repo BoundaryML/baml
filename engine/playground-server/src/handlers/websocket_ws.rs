@@ -13,7 +13,7 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> 
 pub async fn start_client_connection(ws: axum::extract::ws::WebSocket, state: AppState) {
     tracing::info!("axum listening on /ws");
     let (mut ws_tx, mut ws_rx) = ws.split();
-    let mut rx = state.broadcast_rx;
+    let mut rx = state.webview_router_to_websocket_rx;
 
     // Send initial project state using the helper
     tracing::info!("send_all_projects_to_client BEGIN");

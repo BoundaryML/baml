@@ -2614,6 +2614,56 @@ export function useExtractResume2(
   }
 }
 /**
+ * A specialized hook for the FnAlwaysFails BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useFnAlwaysFails({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useFnAlwaysFails({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useFnAlwaysFails(props: HookInput<'FnAlwaysFails', { stream: false }>): HookOutput<'FnAlwaysFails', { stream: false }>
+export function useFnAlwaysFails(props?: HookInput<'FnAlwaysFails', { stream?: true }>): HookOutput<'FnAlwaysFails', { stream: true }>
+export function useFnAlwaysFails(
+  props: HookInput<'FnAlwaysFails', { stream?: boolean }> = {},
+): HookOutput<'FnAlwaysFails', { stream: true }> | HookOutput<'FnAlwaysFails', { stream: false }> {
+  let action: ServerAction = Actions.FnAlwaysFails;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.FnAlwaysFails;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'FnAlwaysFails', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the FnClassOptionalOutput BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -2915,6 +2965,56 @@ export function useFnFailRetryExponentialDelay(
     return useBamlAction(action, props)
   } else {
     return useBamlAction(action, props as HookInput<'FnFailRetryExponentialDelay', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the FnFallbackAlwaysFails BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useFnFallbackAlwaysFails({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useFnFallbackAlwaysFails({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useFnFallbackAlwaysFails(props: HookInput<'FnFallbackAlwaysFails', { stream: false }>): HookOutput<'FnFallbackAlwaysFails', { stream: false }>
+export function useFnFallbackAlwaysFails(props?: HookInput<'FnFallbackAlwaysFails', { stream?: true }>): HookOutput<'FnFallbackAlwaysFails', { stream: true }>
+export function useFnFallbackAlwaysFails(
+  props: HookInput<'FnFallbackAlwaysFails', { stream?: boolean }> = {},
+): HookOutput<'FnFallbackAlwaysFails', { stream: true }> | HookOutput<'FnFallbackAlwaysFails', { stream: false }> {
+  let action: ServerAction = Actions.FnFallbackAlwaysFails;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.FnFallbackAlwaysFails;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'FnFallbackAlwaysFails', { stream: false }>)
   }
 }
 /**

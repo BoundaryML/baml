@@ -660,6 +660,19 @@ paths:
                 title: ExtractResume2Response
                 $ref: '#/components/schemas/Resume'
       operationId: ExtractResume2
+  /call/FnAlwaysFails:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnAlwaysFails'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnAlwaysFailsResponse
+                type: string
+      operationId: FnAlwaysFails
   /call/FnClassOptionalOutput:
     post:
       requestBody:
@@ -748,6 +761,19 @@ paths:
                 title: FnFailRetryExponentialDelayResponse
                 type: string
       operationId: FnFailRetryExponentialDelay
+  /call/FnFallbackAlwaysFails:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnFallbackAlwaysFails'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnFallbackAlwaysFailsResponse
+                type: string
+      operationId: FnFallbackAlwaysFails
   /call/FnLiteralClassInputOutput:
     post:
       requestBody:
@@ -3823,6 +3849,22 @@ components:
             required:
             - resume
             additionalProperties: false
+    FnAlwaysFails:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnAlwaysFailsRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     FnClassOptionalOutput:
       required: true
       content:
@@ -3924,6 +3966,22 @@ components:
             required:
             - initial_delay_ms
             - retries
+            additionalProperties: false
+    FnFallbackAlwaysFails:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnFallbackAlwaysFailsRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     FnLiteralClassInputOutput:
       required: true
