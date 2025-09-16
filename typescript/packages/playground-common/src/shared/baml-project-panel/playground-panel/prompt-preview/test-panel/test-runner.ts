@@ -21,7 +21,7 @@ import { apiKeysAtom } from '../../../../../components/api-keys-dialog/atoms';
 // Helper function to clear highlights if in VSCode
 const clearHighlights = () => {
   try {
-    vscode.postMessage({
+    vscode.postMessageToHost({
       command: 'clearHighlights',
     })
   } catch (e) {
@@ -105,7 +105,7 @@ const useRunTests = (maxBatchSize = 5) => {
           //   console.error('Failed to set flashing regions in VSCode:', e)
           // }
 
-          vscode.postMessage({
+          vscode.postMessageToHost({
             command: 'telemetry',
             meta: {
               action: 'run_tests',
@@ -359,7 +359,7 @@ const useParallelRunTests = (maxBatchSize = 5) => {
             console.error("Invalid test found, so won't select this test case in the prompt preview", tests[0])
           }
 
-          vscode.postMessage({
+          vscode.postMessageToHost({
             command: 'telemetry',
             meta: {
               action: 'run_tests',
