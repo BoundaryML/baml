@@ -93,8 +93,7 @@ fn load_project_from_directory(dir_path: &'static str) -> FrontendMessage {
 
 pub async fn run_server() -> anyhow::Result<()> {
     let (to_webview_router_tx, mut to_webview_router_rx) = tokio::sync::broadcast::channel(1000);
-    let (webview_router_to_websocket_tx, webview_router_to_websocket_rx) =
-        tokio::sync::broadcast::channel(1000);
+    let (webview_router_to_websocket_tx, _) = tokio::sync::broadcast::channel(1000);
 
     let port_picks = pick_ports(PortConfiguration {
         base_port: 3900,
@@ -104,7 +103,7 @@ pub async fn run_server() -> anyhow::Result<()> {
 
     let server = Playground2Server {
         app_state: AppState {
-            webview_router_to_websocket_rx: webview_router_to_websocket_rx,
+            webview_router_to_websocket_rx_provider: webview_router_to_websocket_tx.into(),
             to_webview_router_tx: to_webview_router_tx,
             playground_port: port_picks.playground_port,
             proxy_port: port_picks.proxy_port,

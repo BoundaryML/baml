@@ -34,8 +34,8 @@ pub(crate) fn version() -> &'static str {
 pub fn run_server() -> anyhow::Result<()> {
     let tokio_runtime = tokio::runtime::Runtime::new()?;
 
-    let (webview_router_to_websocket_tx, webview_router_to_websocket_rx) = broadcast::channel(1000);
-    let (to_webview_router_tx, to_webview_router_rx) = broadcast::channel(1000);
+    let (webview_router_to_websocket_tx, _) = broadcast::channel(100);
+    let (to_webview_router_tx, to_webview_router_rx) = broadcast::channel(100);
 
     let port_config = playground_server::PortConfiguration {
         base_port: 3700,
@@ -51,7 +51,8 @@ pub fn run_server() -> anyhow::Result<()> {
                 eprintln!("Playground server started");
                 let server = playground_server::PlaygroundServer {
                     app_state: playground_server::AppState {
-                        webview_router_to_websocket_rx,
+                        webview_router_to_websocket_rx_provider: webview_router_to_websocket_tx
+                            .into(),
                         to_webview_router_tx: to_webview_router_tx.clone(),
                         playground_port: port_picks.playground_port,
                         proxy_port: port_picks.proxy_port,

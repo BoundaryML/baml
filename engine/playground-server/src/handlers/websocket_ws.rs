@@ -13,7 +13,7 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> 
 pub async fn start_client_connection(ws: axum::extract::ws::WebSocket, state: AppState) {
     tracing::info!("EventListener client connected");
     let (mut ws_tx, mut ws_rx) = ws.split();
-    let mut rx = state.webview_router_to_websocket_rx;
+    let mut rx = state.webview_router_to_websocket_rx_provider.subscribe();
 
     // Handle incoming messages and broadcast updates
     tokio::spawn(async move {
