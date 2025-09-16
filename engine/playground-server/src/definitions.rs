@@ -26,13 +26,15 @@ pub enum FrontendMessage {
 pub enum WebviewRouterMessage {
     WasmIsInitialized,
     CustomNotificationToWebview(FrontendMessage),
+    /// WebviewRouter forwards these to the IDE using an LSP notification.
     SendLspNotificationToIde(lsp_server::Notification),
+    /// WebviewRouter forwards these to the webview's EventListener using websocket_ws.rs.
     SendLspNotificationToWebview(lsp_server::Notification),
 }
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(tag = "source", content = "payload", rename_all = "snake_case")]
-/// This is equivalent to VscodeToWebviewwCommand in vscode-to-webview-rpc.ts
+/// This is equivalent to VscodeToWebviewCommand in vscode-to-webview-rpc.ts
 pub enum WebviewNotification {
     IdeMessage(FrontendMessage),
     LspMessage {
