@@ -18,12 +18,15 @@ path = "src/bin/playground_barebones.rs"
 
 [dependencies]
 anyhow.workspace = true
+aws-config = "1.1"
+aws-credential-types = "1.1"
 axum = { version = "0.8.4", features = ["ws"] }
 base64 = "0.21"
 bytes.workspace = true
 dirs = "5.0"
 flate2 = "1.0"
 futures.workspace = true
+google-cloud-auth.workspace = true
 mime_guess = "2.0.4"
 reqwest.workspace = true
 serde.workspace = true

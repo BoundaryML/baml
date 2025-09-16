@@ -21,7 +21,7 @@ internal-baml-codegen.workspace = true
 internal-baml-core.workspace = true
 jsonish = { path = "../baml-lib/jsonish" }
 internal-llm-client = { path = "../baml-lib/llm-client" }
-js-sys = "=0.3.69"
+js-sys.workspace = true
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true

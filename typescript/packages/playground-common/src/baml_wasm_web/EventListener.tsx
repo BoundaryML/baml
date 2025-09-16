@@ -258,6 +258,13 @@ export const EventListener: React.FC = () => {
               test_name: string;
             };
           }
+        | {
+            command: 'lsp_message';
+            content: {
+              method: string;
+              params: any;
+            }
+          }
       >,
     ) => {
       const { command, content } = event.data;
@@ -334,6 +341,24 @@ export const EventListener: React.FC = () => {
               { functionName: content.function_name, testName: content.test_name },
             ]);
           }, 1000);
+          break;
+
+        case 'lsp_message':
+          // TODO(sam): this is only textDocument/codeAction right now, but we want to add the others here (e.g. runtime_updated)
+          console.debug('lsp_message', content);
+
+          const fileName = content.params.textDocument.uri.replace('file://', '');
+          const fileText = bamlFileMap[fileName];
+
+          if (fileText) {
+            updateCursor({
+              fileName,
+              fileText,
+              // TODO: this should really use the start column as well
+              line: content.params.range.start.line,
+              column: 0,
+            });
+          }
           break;
       }
     };

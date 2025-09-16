@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use lsp_server::ErrorCode;
 use lsp_types::{request, ExecuteCommandParams, MessageType};
-use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
+use playground_server::{FrontendMessage, WebviewRouterMessage};
 use tokio::time::sleep;
 use webbrowser;
 
@@ -37,7 +37,7 @@ impl SyncRequestHandler for ExecuteCommand {
             // Get the actual playground port from session (determined by server after availability check)
             // Fall back to configured port if actual port not set yet
 
-            use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
+            use playground_server::{FrontendMessage, WebviewRouterMessage};
 
             // Construct the URL
             let url = format!("http://localhost:{}", session.playground_port);
@@ -62,8 +62,8 @@ impl SyncRequestHandler for ExecuteCommand {
                 .and_then(|arg| arg.as_str().map(|s| s.to_string()))
             {
                 session
-                    .playground_tx
-                    .send(PreLangServerToWasmMessage::FrontendMessage(
+                    .to_webview_router_tx
+                    .send(WebviewRouterMessage::CustomNotificationToWebview(
                         FrontendMessage::select_function {
                             // TODO: this can't be correct... but it looks like it is
                             root_path: function_name.to_string(),
@@ -84,28 +84,26 @@ impl SyncRequestHandler for ExecuteCommand {
                 });
             }
             Ok(RegisteredCommands::OpenBamlPanel(args)) => {
-                let tx = session
-                    .playground_tx
-                    .send(PreLangServerToWasmMessage::FrontendMessage(
+                let tx = session.to_webview_router_tx.send(
+                    WebviewRouterMessage::CustomNotificationToWebview(
                         FrontendMessage::select_function {
                             // TODO: this can't be correct... but it looks like it is
                             root_path: args.project_id,
                             function_name: args.function_name,
                         },
-                    ));
+                    ),
+                );
                 if let Err(e) = tx {
                     tracing::warn!("Error forwarding OpenBamlPanel to playground: {}", e);
                 }
             }
             Ok(RegisteredCommands::RunTest(args)) => {
-                let tx = session
-                    .playground_tx
-                    .send(PreLangServerToWasmMessage::FrontendMessage(
-                        FrontendMessage::run_test {
-                            function_name: args.function_name,
-                            test_name: args.test_case_name,
-                        },
-                    ));
+                let tx = session.to_webview_router_tx.send(
+                    WebviewRouterMessage::CustomNotificationToWebview(FrontendMessage::run_test {
+                        function_name: args.function_name,
+                        test_name: args.test_case_name,
+                    }),
+                );
                 if let Err(e) = tx {
                     tracing::warn!("Error forwarding RunTest to playground: {}", e);
                 }

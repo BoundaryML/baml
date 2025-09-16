@@ -102,10 +102,7 @@ export function TestItem({
                 onClick={(e) => {
                   e.stopPropagation();
                   if (tc?.span) {
-                    vscode.postMessage({
-                      command: 'jumpToFile',
-                      span: createSpan(tc.span),
-                    });
+                    vscode.jumpToFile(tc.span);
                   }
                 }}
               >

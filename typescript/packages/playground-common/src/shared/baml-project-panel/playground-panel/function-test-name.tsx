@@ -64,18 +64,6 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
   const functions = useAtomValue(functionsAtom);
   const setSelectedItem = useSetAtom(selectedItemAtom);
 
-  const createSpan = (span: {
-    start: number;
-    end: number;
-    file_path: string;
-    start_line: number;
-  }) => ({
-    start: span.start,
-    end: span.end,
-    source_file: span.file_path,
-    value: `${span.file_path.split('/').pop() ?? '<file>.baml'}:${span.start_line + 1}`,
-  });
-
   const currentFunction = functions.find((f) => f.name === functionName);
   const availableTests = currentFunction?.tests || [];
 
@@ -92,10 +80,7 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
                   className="truncate min-w-0 whitespace-nowrap cursor-pointer hover:text-primary bg-transparent border-none p-0 text-left flex-1"
                   onClick={() => {
                     if (fn?.span) {
-                      vscode.postMessage({
-                        command: 'jumpToFile',
-                        span: createSpan(fn.span),
-                      });
+                      vscode.jumpToFile(fn.span);
                     }
                   }}
                 >
@@ -162,10 +147,7 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
                     className="truncate min-w-0 whitespace-nowrap cursor-pointer hover:text-primary bg-transparent border-none p-0 text-left flex-1"
                     onClick={() => {
                       if (tc?.span) {
-                        vscode.postMessage({
-                          command: 'jumpToFile',
-                          span: createSpan(tc.span),
-                        });
+                        vscode.jumpToFile(tc.span);
                       }
                     }}
                   >

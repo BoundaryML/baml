@@ -2,7 +2,7 @@ use std::num::NonZeroUsize;
 
 use anyhow::Context;
 pub use edit::{DocumentKey, PositionEncoding, TextDocument};
-use playground_server::{LangServerToWasmMessage, PreLangServerToWasmMessage};
+use playground_server::{WebviewNotification, WebviewRouterMessage};
 pub use session::{ClientSettings, DocumentQuery, DocumentSnapshot, Session};
 use tokio::sync::broadcast;
 
@@ -34,8 +34,8 @@ pub(crate) fn version() -> &'static str {
 pub fn run_server() -> anyhow::Result<()> {
     let tokio_runtime = tokio::runtime::Runtime::new()?;
 
-    let (broadcast_tx, broadcast_rx) = broadcast::channel(1000);
-    let (playground_tx, playground_rx) = broadcast::channel(1000);
+    let (webview_router_to_websocket_tx, webview_router_to_websocket_rx) = broadcast::channel(1000);
+    let (to_webview_router_tx, to_webview_router_rx) = broadcast::channel(1000);
 
     let port_config = playground_server::PortConfiguration {
         base_port: 3700,
@@ -44,16 +44,24 @@ pub fn run_server() -> anyhow::Result<()> {
     let port_picks = tokio_runtime.block_on(playground_server::pick_ports(port_config))?;
 
     {
-        let playground_tx = playground_tx.clone();
+        let webview_router_to_websocket_tx = webview_router_to_websocket_tx.clone();
+        let to_webview_router_tx = to_webview_router_tx.clone();
         tokio_runtime.spawn(futures::future::join(
             async move {
                 eprintln!("Playground server started");
                 let server = playground_server::PlaygroundServer {
                     app_state: playground_server::AppState {
-                        broadcast_rx,
-                        playground_tx: playground_tx.clone(),
+                        webview_router_to_websocket_rx,
+                        to_webview_router_tx: to_webview_router_tx.clone(),
                         playground_port: port_picks.playground_port,
                         proxy_port: port_picks.proxy_port,
+                        editor_config: std::sync::Arc::new(std::sync::RwLock::new(
+                            playground_server::config::EditorConfig::default(),
+                        )),
+                        file_access: playground_server::fs::WorkspaceFileAccess::new(vec![
+                            std::env::current_dir()
+                                .unwrap_or_else(|_| std::path::PathBuf::from(".")),
+                        ]),
                     },
                 };
                 let fut = server.run(port_picks.playground_listener).await;
@@ -84,9 +92,9 @@ pub fn run_server() -> anyhow::Result<()> {
         worker_threads,
         ServerArgs {
             tokio_runtime,
-            broadcast_tx,
-            playground_rx,
-            playground_tx: playground_tx.clone(),
+            webview_router_to_websocket_tx,
+            to_webview_router_rx,
+            to_webview_router_tx: to_webview_router_tx.clone(),
             playground_port: port_picks.playground_port,
             proxy_port: port_picks.proxy_port,
         },
