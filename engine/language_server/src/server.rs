@@ -255,15 +255,14 @@ impl Server {
                                     })
                                     .collect();
                                 let _ = webview_router_to_websocket_tx
-                                    .send(WebviewNotification::LspMessage(
-                                        FrontendMessage::runtime_updated {
-                                            root_path: project
-                                                .root_path()
-                                                .to_string_lossy()
-                                                .to_string(),
-                                            files: files_map,
-                                        },
-                                    ))
+                                    .send(WebviewNotification::LspMessage {
+                                            method: "runtime_updated".to_string(),
+                                            params: json!({
+                                                "root_path": project.root_path().to_string_lossy().to_string(),
+                                                "files": files_map,
+                                            })
+                                        }
+                                    )
                                     .inspect_err(|e| {
                                         tracing::error!("Failed to forward add_project to playground: {e}");
                                     });
@@ -280,19 +279,17 @@ impl Server {
                         WebviewRouterMessage::SendLspNotificationToWebview(notification) => {
                             tracing::info!("Received playground SEND_LSP_NOTIFICATION_TO_WEBVIEW request: {:?}", notification);
                             let _ = webview_router_to_websocket_tx
-                                .send(WebviewNotification::LspMessage(
-                                    FrontendMessage::lsp_message {
-                                        method: notification.method,
-                                        params: notification.params,
-                                    },
-                                ))
+                                .send(WebviewNotification::LspMessage {
+                                    method: notification.method,
+                                    params: notification.params,
+                                })
                                 .inspect_err(|e| {
                                     tracing::error!("Failed to forward SEND_LSP_NOTIFICATION_TO_WEBVIEW message to webview: {e}");
                                 });
                         }
                         WebviewRouterMessage::CustomNotificationToWebview(msg) => {
                             let _ = webview_router_to_websocket_tx
-                                .send(WebviewNotification::LspMessage(msg))
+                                .send(WebviewNotification::IdeMessage(msg))
                                 .inspect_err(|e| {
                                     tracing::error!("Failed to forward FrontendMessage to playground: {e}");
                                 });

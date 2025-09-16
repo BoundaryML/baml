@@ -19,15 +19,10 @@ pub enum FrontendMessage {
         command: String,
         arguments: Vec<serde_json::Value>,
     },
-    #[serde(untagged)]
-    lsp_message {
-        method: String,
-        params: serde_json::Value,
-    },
 }
 
 #[derive(Debug, Clone)]
-/// for lang-server internal comms, before sending out to the playground
+/// Messages sent to the webview router, see language_server/src/server.rs
 pub enum WebviewRouterMessage {
     WasmIsInitialized,
     CustomNotificationToWebview(FrontendMessage),
@@ -37,6 +32,11 @@ pub enum WebviewRouterMessage {
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(tag = "source", content = "payload", rename_all = "snake_case")]
+/// This is equivalent to VscodeToWebviewwCommand in vscode-to-webview-rpc.ts
 pub enum WebviewNotification {
-    LspMessage(FrontendMessage),
+    IdeMessage(FrontendMessage),
+    LspMessage {
+        method: String,
+        params: serde_json::Value,
+    },
 }
