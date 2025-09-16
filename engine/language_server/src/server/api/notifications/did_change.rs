@@ -86,7 +86,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
             session
                 .to_webview_router_tx
                 .send(WebviewRouterMessage::CustomNotificationToWebview(
-                    FrontendMessage::add_project {
+                    FrontendMessage::runtime_updated {
                         root_path: project.root_path().to_string_lossy().to_string(),
                         files: files_map,
                     },

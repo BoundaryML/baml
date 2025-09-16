@@ -6,23 +6,20 @@ use serde::{Deserialize, Serialize};
 // EventListener.tsx command definitions due to how serde serializes these into json
 #[allow(non_camel_case_types)]
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(tag = "command", content = "content")]
+#[serde(tag = "method", content = "params")]
 pub enum FrontendMessage {
-    add_project {
+    runtime_updated {
         root_path: String,
         files: HashMap<String, String>,
-    },
-    select_function {
-        root_path: String,
-        function_name: String,
     },
     baml_settings_updated {
         settings: HashMap<String, String>,
     },
-    run_test {
-        function_name: String,
-        test_name: String,
+    execute_command {
+        command: String,
+        arguments: Vec<serde_json::Value>,
     },
+    #[serde(untagged)]
     lsp_message {
         method: String,
         params: serde_json::Value,
@@ -39,8 +36,7 @@ pub enum WebviewRouterMessage {
 }
 
 #[derive(Serialize, Debug, Clone)]
-#[serde(untagged)]
-// TODO(sam): this is an unnecessary wrapper layer
+#[serde(tag = "source", content = "payload", rename_all = "snake_case")]
 pub enum WebviewNotification {
-    PlaygroundMessage(FrontendMessage),
+    LspMessage(FrontendMessage),
 }

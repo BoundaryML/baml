@@ -85,7 +85,7 @@ fn load_project_from_directory(dir_path: &'static str) -> FrontendMessage {
 
     tracing::info!("Loaded {} .baml files from {}", files.len(), dir_path);
 
-    FrontendMessage::add_project {
+    FrontendMessage::runtime_updated {
         root_path: dir_path.to_string(),
         files,
     }

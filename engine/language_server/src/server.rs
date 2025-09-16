@@ -255,8 +255,8 @@ impl Server {
                                     })
                                     .collect();
                                 let _ = webview_router_to_websocket_tx
-                                    .send(WebviewNotification::PlaygroundMessage(
-                                        FrontendMessage::add_project {
+                                    .send(WebviewNotification::LspMessage(
+                                        FrontendMessage::runtime_updated {
                                             root_path: project
                                                 .root_path()
                                                 .to_string_lossy()
@@ -280,7 +280,7 @@ impl Server {
                         WebviewRouterMessage::SendLspNotificationToWebview(notification) => {
                             tracing::info!("Received playground SEND_LSP_NOTIFICATION_TO_WEBVIEW request: {:?}", notification);
                             let _ = webview_router_to_websocket_tx
-                                .send(WebviewNotification::PlaygroundMessage(
+                                .send(WebviewNotification::LspMessage(
                                     FrontendMessage::lsp_message {
                                         method: notification.method,
                                         params: notification.params,
@@ -292,7 +292,7 @@ impl Server {
                         }
                         WebviewRouterMessage::CustomNotificationToWebview(msg) => {
                             let _ = webview_router_to_websocket_tx
-                                .send(WebviewNotification::PlaygroundMessage(msg))
+                                .send(WebviewNotification::LspMessage(msg))
                                 .inspect_err(|e| {
                                     tracing::error!("Failed to forward FrontendMessage to playground: {e}");
                                 });
@@ -399,6 +399,8 @@ impl Server {
         worker_threads: NonZeroUsize,
         webview_router_to_websocket_tx: broadcast::Sender<WebviewNotification>,
     ) -> anyhow::Result<()> {
+        let to_webview_router_tx = session.to_webview_router_tx.clone();
+
         // Ensure we have a notifier for reload operations
         let client = client::Client::new(connection.make_sender());
         let notifier = client.notifier();
@@ -415,9 +417,26 @@ impl Server {
             }
             // webview_router_to_websocket_tx.send(LangServerToWasmMessage::LspMessage(msg.clone()))?;
             let tasks = match msg {
-                Message::Request(req) => vec![api::request(req)],
+                Message::Request(req) => {
+                    if req.method == "workspace/executeCommand" {
+                        let _ = to_webview_router_tx
+                            .send(WebviewRouterMessage::SendLspNotificationToWebview(
+                                lsp_server::Notification::new(
+                                    req.method.clone(),
+                                    req.params.clone(),
+                                ),
+                            ))
+                            .inspect_err(|e| {
+                                tracing::error!("Failed to forward LSP request to webview: {e}");
+                            });
+                    }
+                    vec![api::request(req)]
+                }
                 Message::Notification(notification) => api::notification(notification),
-                Message::Response(response) => vec![scheduler.response(response)],
+                Message::Response(response) => {
+                    tracing::info!("Preparing to send response: {:?}", response);
+                    vec![scheduler.response(response)]
+                }
             };
 
             // Dispatch each task in the vector
