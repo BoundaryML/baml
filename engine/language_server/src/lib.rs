@@ -51,7 +51,7 @@ pub fn run_server() -> anyhow::Result<()> {
                 eprintln!("Playground server started");
                 let server = playground_server::PlaygroundServer {
                     app_state: playground_server::AppState {
-                        webview_router_to_websocket_rx: webview_router_to_websocket_rx,
+                        webview_router_to_websocket_rx,
                         to_webview_router_tx: to_webview_router_tx.clone(),
                         playground_port: port_picks.playground_port,
                         proxy_port: port_picks.proxy_port,
