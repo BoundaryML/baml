@@ -7,7 +7,7 @@ import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import svgPanZoom from 'svg-pan-zoom';
 import { functionGraphAtom } from '../../../atoms-orch-graph';
 import { vscode } from '../../../../vscode';
-import { flashRangesAtom } from 'src/shared/baml-project-panel';
+import { flashRangesAtom } from '../../../atoms';
 
 // === BAML Mermaid CSS Override (media-like styling) ===
 // This CSS is injected into the generated Mermaid SVG so it overrides Mermaid's defaults.
