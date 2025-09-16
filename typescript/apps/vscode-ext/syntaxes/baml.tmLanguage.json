@@ -1279,7 +1279,19 @@
           "include": "#comment"
         },
         {
+          "include": "#for_c_init_statement"
+        },
+        {
+          "include": "#for_c_condition"
+        },
+        {
+          "include": "#for_c_update"
+        },
+        {
           "include": "#let_declaration"
+        },
+        {
+          "include": "#assignment_statement"
         },
         {
           "include": "#binary_operators"
@@ -1580,6 +1592,78 @@
             },
             "2": {
               "name": "entity.name.section.markdown.h1"
+            }
+          }
+        }
+      ]
+    },
+    "for_c_init_statement": {
+      "comment": "C-style for loop initialization statement",
+      "patterns": [
+        {
+          "comment": "Let declaration in for loop (preferred)",
+          "match": "(let)\\s+(\\w+)\\s*(=)",
+          "captures": {
+            "1": {
+              "name": "storage.type.declaration.let"
+            },
+            "2": {
+              "name": "variable.other.readwrite"
+            },
+            "3": {
+              "name": "keyword.operator.assignment"
+            }
+          }
+        },
+        {
+          "comment": "Variable assignment in for loop (requires existing variable)",
+          "match": "(\\w+)\\s*(=|\\+=|-=|\\*=|/=|%=)",
+          "captures": {
+            "1": {
+              "name": "variable.other.readwrite"
+            },
+            "2": {
+              "name": "keyword.operator.assignment"
+            }
+          }
+        }
+      ]
+    },
+    "for_c_condition": {
+      "comment": "C-style for loop condition",
+      "patterns": [
+        {
+          "include": "#expression"
+        },
+        {
+          "include": "#binary_operators"
+        }
+      ]
+    },
+    "for_c_update": {
+      "comment": "C-style for loop update statement",
+      "patterns": [
+        {
+          "comment": "Increment/decrement operators",
+          "match": "(\\w+)(\\+\\+|--)",
+          "captures": {
+            "1": {
+              "name": "variable.other.readwrite"
+            },
+            "2": {
+              "name": "keyword.operator.increment"
+            }
+          }
+        },
+        {
+          "comment": "Assignment operators in update",
+          "match": "(\\w+)\\s*(\\+=|-=|\\*=|/=|%=)",
+          "captures": {
+            "1": {
+              "name": "variable.other.readwrite"
+            },
+            "2": {
+              "name": "keyword.operator.assignment"
             }
           }
         }
