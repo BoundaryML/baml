@@ -141,11 +141,13 @@ impl zed::Extension for BamlExtension {
     ) -> Result<zed::Command> {
         let baml_binary = self.language_server_binary(language_server_id, worktree)?;
         Ok(zed::Command {
-            // command: baml_binary.path,
+            #[cfg(feature = "debug")]
             command: format!(
                 "{}/../target/debug/language-server-hot-reload",
                 env!("CARGO_MANIFEST_DIR")
             ),
+            #[cfg(not(feature = "debug"))]
+            command: baml_binary.path,
             args: baml_binary.args.unwrap_or_else(|| vec!["lsp".into()]),
             env: vec![("VSCODE_DEBUG_MODE".to_string(), "true".to_string())],
         })
