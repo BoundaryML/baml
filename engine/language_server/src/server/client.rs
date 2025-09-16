@@ -59,7 +59,6 @@ impl Client<'_> {
     }
 }
 
-#[allow(dead_code)] // we'll need to use `Notifier` in the future
 impl Notifier {
     pub(crate) fn notify<N>(&self, params: N::Params) -> anyhow::Result<()>
     where
@@ -72,15 +71,11 @@ impl Notifier {
 
         // Send to both client and webview router
         self.client_sender.send(message)?;
-        let _ = self.to_webview_router_tx.send(WebviewRouterMessage::SendLspNotificationToWebview(notification));
-        Ok(())
-    }
-
-    pub(crate) fn notify_method(&self, method: String) -> anyhow::Result<()> {
-        let notification = Notification::new(method.clone(), Value::Null);
-        self.client_sender
-            .send(lsp_server::Message::Notification(notification.clone()))?;
-        let _ = self.to_webview_router_tx.send(WebviewRouterMessage::SendLspNotificationToWebview(notification));
+        let _ = self
+            .to_webview_router_tx
+            .send(WebviewRouterMessage::SendLspNotificationToWebview(
+                notification,
+            ));
         Ok(())
     }
 
@@ -95,7 +90,11 @@ impl Notifier {
         );
         self.client_sender
             .send(lsp_server::Message::Notification(notification.clone()))?;
-        let _ = self.to_webview_router_tx.send(WebviewRouterMessage::SendLspNotificationToWebview(notification));
+        let _ = self
+            .to_webview_router_tx
+            .send(WebviewRouterMessage::SendLspNotificationToWebview(
+                notification,
+            ));
         Ok(())
     }
     pub(crate) fn notify_baml_info(&self, msg: &str) -> anyhow::Result<()> {
@@ -109,7 +108,11 @@ impl Notifier {
         );
         self.client_sender
             .send(lsp_server::Message::Notification(notification.clone()))?;
-        let _ = self.to_webview_router_tx.send(WebviewRouterMessage::SendLspNotificationToWebview(notification));
+        let _ = self
+            .to_webview_router_tx
+            .send(WebviewRouterMessage::SendLspNotificationToWebview(
+                notification,
+            ));
         Ok(())
     }
 

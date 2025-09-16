@@ -67,6 +67,84 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
   const currentFunction = functions.find((f) => f.name === functionName);
   const availableTests = currentFunction?.tests || [];
 
+  // Component for function dropdown items with jumpToFile
+  const FunctionDropdownItem = ({ func }: { func: { name: string; tests: string[] } }) => {
+    const fnAtom = useMemo(() => functionObjectAtom(func.name), [func.name]);
+    const fn = useAtomValue(fnAtom);
+    
+    return (
+      <CommandItem
+        key={func.name}
+        value={func.name}
+        onSelect={() => {
+          const firstTest = func.tests[0];
+          if (firstTest) {
+            setSelectedItem(func.name, firstTest);
+          } else {
+            setSelectedItem(func.name, undefined);
+          }
+          setFunctionOpen(false);
+        }}
+      >
+        <Check
+          className={cn(
+            'mr-2 h-4 w-4',
+            functionName === func.name ? 'opacity-100' : 'opacity-0',
+          )}
+        />
+        <span 
+          className="text-sm truncate cursor-pointer hover:text-primary hover:underline"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (fn?.span) {
+              vscode.jumpToFile(fn.span);
+            }
+          }}
+        >
+          {func.name}
+        </span>
+      </CommandItem>
+    );
+  };
+
+  // Component for test dropdown items with jumpToFile
+  const TestDropdownItem = ({ test, functionName }: { test: string; functionName: string }) => {
+    const tcAtom = useMemo(
+      () => testcaseObjectAtom({ functionName, testcaseName: test }),
+      [functionName, test]
+    );
+    const tc = useAtomValue(tcAtom);
+    
+    return (
+      <CommandItem
+        key={test}
+        value={test}
+        onSelect={() => {
+          setSelectedItem(functionName, test);
+          setTestOpen(false);
+        }}
+      >
+        <Check
+          className={cn(
+            'mr-2 h-4 w-4',
+            testName === test ? 'opacity-100' : 'opacity-0',
+          )}
+        />
+        <span 
+          className="text-sm truncate cursor-pointer hover:text-primary hover:underline"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (tc?.span) {
+              vscode.jumpToFile(tc.span);
+            }
+          }}
+        >
+          {test}
+        </span>
+      </CommandItem>
+    );
+  };
+
   return (
     <Breadcrumb>
       <BreadcrumbList className="flex flex-nowrap overflow-hidden min-w-0">
@@ -105,29 +183,7 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
                     <CommandEmpty>No function found.</CommandEmpty>
                     <CommandGroup>
                       {functions.map((func) => (
-                        <CommandItem
-                          key={func.name}
-                          value={func.name}
-                          onSelect={() => {
-                            const firstTest = func.tests[0];
-                            if (firstTest) {
-                              setSelectedItem(func.name, firstTest);
-                            } else {
-                              setSelectedItem(func.name, undefined);
-                            }
-                            setFunctionOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              'mr-2 h-4 w-4',
-                              functionName === func.name
-                                ? 'opacity-100'
-                                : 'opacity-0',
-                            )}
-                          />
-                          <span className="text-sm truncate">{func.name}</span>
-                        </CommandItem>
+                        <FunctionDropdownItem key={func.name} func={func} />
                       ))}
                     </CommandGroup>
                   </CommandList>
@@ -172,22 +228,7 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
                       <CommandEmpty>No test found.</CommandEmpty>
                       <CommandGroup>
                         {availableTests.map((test) => (
-                          <CommandItem
-                            key={test}
-                            value={test}
-                            onSelect={() => {
-                              setSelectedItem(functionName, test);
-                              setTestOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                'mr-2 h-4 w-4',
-                                testName === test ? 'opacity-100' : 'opacity-0',
-                              )}
-                            />
-                            <span className="text-sm truncate">{test}</span>
-                          </CommandItem>
+                          <TestDropdownItem key={test} test={test} functionName={functionName} />
                         ))}
                       </CommandGroup>
                     </CommandList>

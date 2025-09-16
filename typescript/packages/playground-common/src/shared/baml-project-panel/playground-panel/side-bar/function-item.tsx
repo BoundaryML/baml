@@ -1,7 +1,7 @@
 import { SidebarMenuButton } from '@baml/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
 import { useAtomValue } from 'jotai';
-import { CheckCircle2, FunctionSquare, XCircle } from 'lucide-react';
+import { FunctionSquare } from 'lucide-react';
 import * as React from 'react';
 import { vscode } from '../../vscode';
 import { functionObjectAtom } from '../atoms';
