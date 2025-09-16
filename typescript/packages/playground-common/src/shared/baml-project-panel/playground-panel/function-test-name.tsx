@@ -67,11 +67,12 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
   const currentFunction = functions.find((f) => f.name === functionName);
   const availableTests = currentFunction?.tests || [];
 
+
   // Component for function dropdown items with jumpToFile
   const FunctionDropdownItem = ({ func }: { func: { name: string; tests: string[] } }) => {
     const fnAtom = useMemo(() => functionObjectAtom(func.name), [func.name]);
     const fn = useAtomValue(fnAtom);
-    
+
     return (
       <CommandItem
         key={func.name}
@@ -84,6 +85,9 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
             setSelectedItem(func.name, undefined);
           }
           setFunctionOpen(false);
+          if (fn?.span) {
+            vscode.jumpToFile(fn.span);
+          }
         }}
       >
         <Check
@@ -92,14 +96,8 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
             functionName === func.name ? 'opacity-100' : 'opacity-0',
           )}
         />
-        <span 
+        <span
           className="text-sm truncate cursor-pointer hover:text-primary hover:underline"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (fn?.span) {
-              vscode.jumpToFile(fn.span);
-            }
-          }}
         >
           {func.name}
         </span>
@@ -114,7 +112,7 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
       [functionName, test]
     );
     const tc = useAtomValue(tcAtom);
-    
+
     return (
       <CommandItem
         key={test}
@@ -122,6 +120,9 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
         onSelect={() => {
           setSelectedItem(functionName, test);
           setTestOpen(false);
+          if (tc?.span) {
+            vscode.jumpToFile(tc.span);
+          }
         }}
       >
         <Check
@@ -130,14 +131,8 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
             testName === test ? 'opacity-100' : 'opacity-0',
           )}
         />
-        <span 
+        <span
           className="text-sm truncate cursor-pointer hover:text-primary hover:underline"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (tc?.span) {
-              vscode.jumpToFile(tc.span);
-            }
-          }}
         >
           {test}
         </span>
