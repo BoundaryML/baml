@@ -93,7 +93,8 @@ fn load_project_from_directory(dir_path: &'static str) -> FrontendMessage {
 
 pub async fn run_server() -> anyhow::Result<()> {
     let (to_webview_router_tx, mut to_webview_router_rx) = tokio::sync::broadcast::channel(1000);
-    let (webview_router_to_websocket_tx, webview_router_to_websocket_rx) = tokio::sync::broadcast::channel(1000);
+    let (webview_router_to_websocket_tx, webview_router_to_websocket_rx) =
+        tokio::sync::broadcast::channel(1000);
 
     let port_picks = pick_ports(PortConfiguration {
         base_port: 3900,
@@ -135,9 +136,11 @@ pub async fn run_server() -> anyhow::Result<()> {
                 match msg {
                     WebviewRouterMessage::WasmIsInitialized => {
                         tracing::info!("Playground initialized");
-                        let _ = webview_router_to_websocket_tx.send(WebviewNotification::PlaygroundMessage(
-                            load_project_from_directory(PROJECT_DIR),
-                        ));
+                        let _ = webview_router_to_websocket_tx.send(
+                            WebviewNotification::PlaygroundMessage(load_project_from_directory(
+                                PROJECT_DIR,
+                            )),
+                        );
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                         // let playground_message =
                         //     LangServerToWasmMessage::PlaygroundMessage(FrontendMessage::run_test {
@@ -192,9 +195,11 @@ pub async fn run_server() -> anyhow::Result<()> {
                     test_name: "TestFnNamedArgsSingleClass".to_string(),
                 });
             tracing::info!("Sending playground message: {:?}", playground_message);
-            let _ = webview_router_to_websocket_tx.send(playground_message).inspect_err(|e| {
-                tracing::error!("Error sending playground message: {:?}", e);
-            });
+            let _ = webview_router_to_websocket_tx
+                .send(playground_message)
+                .inspect_err(|e| {
+                    tracing::error!("Error sending playground message: {:?}", e);
+                });
             // tracing::info!("Sending samtest_update_project {}", chrono::Local::now());
             // if let Err(e) = webview_router_to_websocket_tx.send(LangServerToWasmMessage::PlaygroundMessage(
             //     FrontendMessage::samtest_update_project {

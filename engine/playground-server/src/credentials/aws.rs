@@ -1,6 +1,7 @@
-use crate::api::{LoadAwsCredsRequest, LoadAwsCredsResponse};
 use aws_config::BehaviorVersion;
 use aws_credential_types::provider::ProvideCredentials;
+
+use crate::api::{LoadAwsCredsRequest, LoadAwsCredsResponse};
 
 pub async fn load_aws_credentials(request: LoadAwsCredsRequest) -> LoadAwsCredsResponse {
     let mut loader = aws_config::defaults(BehaviorVersion::latest());

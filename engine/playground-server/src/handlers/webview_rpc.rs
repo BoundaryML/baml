@@ -1,12 +1,15 @@
-use crate::api::*;
-use crate::server::AppState;
-use crate::{api::errors::ApiError, WebviewRouterMessage};
 use axum::{
     extract::{Path, State},
     Json,
 };
 use lsp_server::Notification;
 use serde_json::Value;
+
+use crate::{
+    api::{errors::ApiError, *},
+    server::AppState,
+    WebviewRouterMessage,
+};
 
 pub async fn webview_rpc_handler(
     Path(command): Path<String>,

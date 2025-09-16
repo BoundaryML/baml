@@ -11,7 +11,7 @@ use tar::Archive;
 use tokio::{net::TcpListener, sync::broadcast};
 use tower_http::services::ServeDir;
 
-use crate::definitions::{WebviewRouterMessage, WebviewNotification};
+use crate::definitions::{WebviewNotification, WebviewRouterMessage};
 
 #[derive(Debug)]
 pub struct AppState {
