@@ -129,19 +129,57 @@ export class WebviewPanelHost {
     }
   }
 
-  public sendCommandToWebview({ source, payload }: VscodeToWebviewCommand) {
-    if (!this._isInitialized && source === 'lsp_message' && payload.method === 'workspace/executeCommand' && payload.params.command === 'baml.openBamlPanel') {
+  public sendCommandToWebview(cmd: VscodeToWebviewCommand) {
+    if (!this._isInitialized &&
+      cmd.source === 'lsp_message' &&
+      cmd.payload.method === 'workspace/executeCommand' &&
+      cmd.payload.params.command === 'baml.openBamlPanel'
+    ) {
       // Queue select_function commands until initialized
-      this._pendingCommands.push({ source, payload });
+      this._pendingCommands.push(cmd);
       return;
     }
 
-    this._panel.webview.postMessage({ source, payload });
+    this._panel.webview.postMessage(cmd);
     // TODO(sam): restore vscode telemetry
-    // this.reporter?.sendTelemetryEvent({
-    //   event: `baml.webview.${command}`,
-    //   properties: {},
-    // });
+
+    this.recordTelemetry(cmd);
+  }
+
+  private recordTelemetry({ source, payload }: VscodeToWebviewCommand) {
+    // backwards compatibility for telemetry
+    const command = (() => {
+      switch (source) {
+        case 'ide_message':
+          return payload.command;
+        case 'lsp_message':
+          const { method } = payload;
+          switch (method) {
+            case 'runtime_updated':
+              return 'runtime_updated';
+            case 'workspace/executeCommand':
+              const { command } = payload.params;
+              switch (command) {
+                case 'baml.openBamlPanel':
+                  return 'select_function';
+                case 'baml.runBamlTest':
+                  return 'run_test';
+                default:
+                  return command;
+              }
+            case 'textDocument/codeAction':
+              return 'update_cursor';
+            default:
+              return method;
+          }
+        default:
+          return source;
+      }
+    })();
+    this.reporter?.sendTelemetryEvent({
+      event: `baml.webview.${command}`,
+      properties: {},
+    });
   }
 
   /**
