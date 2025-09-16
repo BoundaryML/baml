@@ -1,12 +1,13 @@
 use std::fmt;
 
-use super::{Expression, ExpressionBlock, Identifier, Span};
+use super::{Expression, ExpressionBlock, FieldType, Identifier, Span};
 
 #[derive(Debug, Clone)]
 pub struct LetStmt {
     pub identifier: Identifier,
     /// Always true after mut keyword removal
     pub is_mutable: bool,
+    pub annotation: Option<FieldType>,
     pub expr: Expression,
     pub span: Span,
     pub annotations: Vec<std::sync::Arc<Header>>,
@@ -142,7 +143,13 @@ pub struct Header {
 impl fmt::Display for Stmt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Stmt::Let(stmt) => write!(f, "let {} = {}", stmt.identifier, stmt.expr),
+            Stmt::Let(stmt) => {
+                if let Some(ann) = &stmt.annotation {
+                    write!(f, "let {}: {} = {}", stmt.identifier, ann, stmt.expr)
+                } else {
+                    write!(f, "let {} = {}", stmt.identifier, stmt.expr)
+                }
+            }
             Stmt::ForLoop(stmt) => write!(f, "for {} in {}", stmt.identifier, stmt.iterator),
             Stmt::CForLoop(stmt) => {
                 f.write_str("for (")?;
@@ -197,6 +204,12 @@ impl Stmt {
         match (self, other) {
             (Stmt::Let(stmt1), Stmt::Let(stmt2)) => {
                 stmt1.identifier.assert_eq_up_to_span(&stmt2.identifier);
+                // Compare annotations if both present
+                match (&stmt1.annotation, &stmt2.annotation) {
+                    (Some(a1), Some(a2)) => a1.assert_eq_up_to_span(a2),
+                    (None, None) => {}
+                    _ => panic!("Let annotations do not match up to span"),
+                }
                 stmt1.expr.assert_eq_up_to_span(&stmt2.expr);
             }
             (Stmt::ForLoop(stmt1), Stmt::ForLoop(stmt2)) => {

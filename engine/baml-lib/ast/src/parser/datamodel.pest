@@ -379,8 +379,10 @@ stmt = {
     ~ NEWLINE?
 }
 
-// Let-binding statement.
-let_expr = { "let" ~ identifier ~ "=" ~ expression }
+// Let-binding statement with optional type annotation.
+// e.g. `let x: int|float = 10.0;` or `let x = 10.0;`
+let_type_annotation = { COLON ~ field_type_chain }
+let_expr = { "let" ~ identifier ~ let_type_annotation? ~ "=" ~ expression }
 
 // NOTE: Needs to supports things like `object.getter().field[x + y] = value`,
 // so can't be just `identifier ~ "=" ~ expression`.

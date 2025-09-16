@@ -179,21 +179,48 @@ pub fn typecheck_returning_context<'a>(
         typing_context.symbols.insert(name, function_type);
     }
 
-    // Add global assignments to typing context
-    for (name, global_expr) in &hir.global_assignments {
-        // First typecheck the global assignment to infer its type
-        let typed_global_expr = typecheck_expression(global_expr, &typing_context, diagnostics);
+    // Add global assignments to typing context and build typed versions
+    let mut typed_globals: BamlMap<String, thir::GlobalAssignment<ExprMetadata>> = BamlMap::new();
+    for (name, ga) in &hir.global_assignments {
+        // Typecheck the global assignment to infer its type
+        let typed_global_expr = typecheck_expression(&ga.value, &typing_context, diagnostics);
 
-        // Add the inferred type to the context
+        // If annotated, ensure compatibility
+        if let (Some(annot), Some(inferred)) = (
+            ga.annotated_type.as_ref(),
+            typed_global_expr.meta().1.as_ref(),
+        ) {
+            if !inferred.is_subtype(annot) {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    &format!(
+                        "Type mismatch: global '{}' annotated as {} but got {}",
+                        name,
+                        annot.diagnostic_repr(),
+                        inferred.diagnostic_repr(),
+                    ),
+                    ga.span.clone(),
+                ));
+            }
+        }
+
+        // Add the type to the context (prefer annotation if present)
         if let Some(inferred_type) = typed_global_expr.meta().1.clone() {
             typing_context.vars.insert(
                 name.clone(),
                 VarInfo {
-                    ty: inferred_type,
+                    ty: ga.annotated_type.clone().unwrap_or(inferred_type),
                     mut_var_info: None,
                 },
             );
         }
+
+        typed_globals.insert(
+            name.clone(),
+            thir::GlobalAssignment {
+                expr: typed_global_expr,
+                annotated_type: ga.annotated_type.clone(),
+            },
+        );
     }
 
     // Typecheck expr functions
@@ -340,7 +367,7 @@ pub fn typecheck_returning_context<'a>(
             classes: thir_classes,
             enums: thir_enums,
             expr_functions,
-            global_assignments: BamlMap::new(),
+            global_assignments: typed_globals,
         },
         typing_context,
     )
@@ -462,13 +489,17 @@ impl TypeContext<'_> {
         }
 
         // Add global assignments to variable context
-        for (name, _expr) in &thir.global_assignments {
-            // For now, we'll assume string type for global assignments
-            // TODO: Properly infer type from expression
+        for (name, g) in &thir.global_assignments {
+            // Prefer annotated type; else use inferred type from expr meta
+            let ty = g
+                .annotated_type
+                .clone()
+                .or_else(|| g.expr.meta().1.clone())
+                .unwrap_or_else(TypeIR::string);
             context.vars.insert(
                 name.clone(),
                 VarInfo {
-                    ty: TypeIR::string(),
+                    ty,
                     mut_var_info: None,
                 },
             );
@@ -752,8 +783,29 @@ fn typecheck_statement(
     diagnostics: &mut Diagnostics,
 ) -> Option<thir::Statement<ExprMetadata>> {
     match stmt {
-        hir::Statement::Let { name, value, span } => {
+        hir::Statement::Let {
+            name,
+            value,
+            annotated_type,
+            span,
+        } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
+
+            if let (Some(annot), Some(inferred)) =
+                (annotated_type.as_ref(), typed_value.meta().1.as_ref())
+            {
+                if !inferred.is_subtype(annot) {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!(
+                            "Type mismatch: variable '{}' annotated as {} but got {}",
+                            name,
+                            annot.diagnostic_repr(),
+                            inferred.diagnostic_repr(),
+                        ),
+                        span.clone(),
+                    ));
+                }
+            }
 
             // Always add to context, even if type is unknown
             // This ensures the variable is defined even if its initializer has errors
@@ -761,7 +813,7 @@ fn typecheck_statement(
                 context.vars.insert(
                     name.clone(),
                     VarInfo {
-                        ty: inferred_type,
+                        ty: annotated_type.clone().unwrap_or(inferred_type),
                         // All variables are mutable now
                         mut_var_info: Some(MutableVarInfo {
                             ty_infer_span: Some(span.clone()),
@@ -774,7 +826,7 @@ fn typecheck_statement(
                 context.vars.insert(
                     name.clone(),
                     VarInfo {
-                        ty: TypeIR::int(),
+                        ty: annotated_type.clone().unwrap_or(TypeIR::int()),
                         // All variables are mutable now
                         mut_var_info: Some(MutableVarInfo {
                             ty_infer_span: Some(span.clone()),
@@ -884,8 +936,29 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-        hir::Statement::DeclareAndAssign { name, value, span } => {
+        hir::Statement::DeclareAndAssign {
+            name,
+            value,
+            annotated_type,
+            span,
+        } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
+
+            if let (Some(annot), Some(inferred)) =
+                (annotated_type.as_ref(), typed_value.meta().1.as_ref())
+            {
+                if !inferred.is_subtype(annot) {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!(
+                            "Type mismatch: variable '{}' annotated as {} but got {}",
+                            name,
+                            annot.diagnostic_repr(),
+                            inferred.diagnostic_repr(),
+                        ),
+                        span.clone(),
+                    ));
+                }
+            }
 
             // Always add to context, even if type is unknown
             // This ensures the variable is defined even if its initializer has errors
@@ -893,7 +966,7 @@ fn typecheck_statement(
                 context.vars.insert(
                     name.clone(),
                     VarInfo {
-                        ty: inferred_type,
+                        ty: annotated_type.clone().unwrap_or(inferred_type),
                         mut_var_info: Some(MutableVarInfo {
                             ty_infer_span: Some(typed_value.span().clone()),
                         }),
@@ -905,7 +978,7 @@ fn typecheck_statement(
                 context.vars.insert(
                     name.clone(),
                     VarInfo {
-                        ty: TypeIR::int(),
+                        ty: annotated_type.clone().unwrap_or(TypeIR::int()),
                         mut_var_info: Some(MutableVarInfo {
                             ty_infer_span: None,
                         }),
@@ -2459,6 +2532,80 @@ mod tests {
         }
     }
 
+    #[test]
+    fn let_annotation_ok() {
+        let source = r##"
+        function test() -> int {
+          let x: int | float = 10.0;
+          1
+        }
+        "##;
+
+        let (hir, mut diagnostics) = hir_from_source(source);
+        assert!(!diagnostics.has_errors(), "Should parse without errors");
+
+        let _thir = typecheck(&hir, &mut diagnostics);
+        assert!(
+            !diagnostics.has_errors(),
+            "Typecheck should not produce errors for compatible let annotation"
+        );
+    }
+
+    #[test]
+    fn let_annotation_mismatch() {
+        let source = r##"
+        function test() -> int {
+          let x: int = 10.0;
+          1
+        }
+        "##;
+
+        let (hir, mut diagnostics) = hir_from_source(source);
+        assert!(!diagnostics.has_errors(), "Should parse without errors");
+
+        let _thir = typecheck(&hir, &mut diagnostics);
+        assert!(diagnostics.has_errors(), "Expected type mismatch error");
+    }
+
+    #[test]
+    fn global_annotation_ok() {
+        let source = r##"
+        let G: int = 10;
+
+        function test() -> int {
+          G
+        }
+        "##;
+
+        let (hir, mut diagnostics) = hir_from_source(source);
+        assert!(!diagnostics.has_errors(), "Should parse without errors");
+
+        let _thir = typecheck(&hir, &mut diagnostics);
+        assert!(
+            !diagnostics.has_errors(),
+            "Typecheck should not produce errors for compatible global annotation"
+        );
+    }
+
+    #[test]
+    fn global_annotation_mismatch() {
+        let source = r##"
+        let G: int = 10.0;
+
+        function test() -> int {
+          1
+        }
+        "##;
+
+        let (hir, mut diagnostics) = hir_from_source(source);
+        assert!(!diagnostics.has_errors(), "Should parse without errors");
+
+        let _thir = typecheck(&hir, &mut diagnostics);
+        assert!(
+            diagnostics.has_errors(),
+            "Expected type mismatch error for global annotation"
+        );
+    }
     #[test]
     fn typecheck_array_access() {
         let source = r##"

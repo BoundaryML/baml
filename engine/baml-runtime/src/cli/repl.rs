@@ -295,8 +295,13 @@ impl ReplState {
         // Display global assignments
         if !thir.global_assignments.is_empty() {
             output.push_str("Global Assignments:\n");
-            for (name, expr) in &thir.global_assignments {
-                output.push_str(&format!("  {} = {}\n", name, expr.dump_str()));
+            for (name, ga) in &thir.global_assignments {
+                let ann = ga
+                    .annotated_type
+                    .as_ref()
+                    .map(|t| format!(": {}", t.diagnostic_repr()))
+                    .unwrap_or_default();
+                output.push_str(&format!("  {}{} = {}\n", name, ann, ga.expr.dump_str()));
             }
             output.push('\n');
         }

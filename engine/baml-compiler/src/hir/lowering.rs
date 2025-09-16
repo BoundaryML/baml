@@ -43,8 +43,15 @@ impl Hir {
                 ast::Top::TopLevelAssignment(assignment) => {
                     // Add toplevel assignments to global_assignments for HIR typechecking
                     let value = Expression::from_ast(&assignment.stmt.expr);
-                    hir.global_assignments
-                        .insert(assignment.stmt.identifier.to_string(), value);
+                    let annotated_type = assignment.stmt.annotation.as_ref().map(type_ir_from_ast);
+                    hir.global_assignments.insert(
+                        assignment.stmt.identifier.to_string(),
+                        crate::hir::GlobalAssignment {
+                            value,
+                            annotated_type,
+                            span: assignment.stmt.span.clone(),
+                        },
+                    );
                 }
                 _ => {}
             }
@@ -181,14 +188,7 @@ pub fn type_ir_from_ast(type_: &ast::FieldType) -> TypeIR {
         ),
         ast::FieldType::Union(_, types, _, _) => {
             let union_types: Vec<TypeIR> = types.iter().map(type_ir_from_ast).collect();
-            // For now, create a simple union by taking the first type if only one
-            if union_types.len() == 1 {
-                union_types.into_iter().next().unwrap()
-            } else {
-                // Create a union - we'll use unsafe new_unsafe if available
-                // or fall back to a simpler approach
-                TypeIR::Primitive(baml_types::TypeValue::String, meta) // Fallback
-            }
+            TypeIR::union_with_meta(union_types, meta)
         }
         _ => TypeIR::Primitive(TypeValue::String, meta), // Default case for other variants
     }
@@ -397,22 +397,26 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
         ast::Stmt::Let(ast::LetStmt {
             identifier,
             is_mutable,
+            annotation,
             expr,
             span,
             annotations: _,
         }) => {
             let lifted_expr = Expression::from_ast(expr);
+            let annotated_type = annotation.as_ref().map(type_ir_from_ast);
 
             if *is_mutable {
                 Statement::DeclareAndAssign {
                     name: identifier.to_string(),
                     value: lifted_expr,
+                    annotated_type,
                     span: span.clone(),
                 }
             } else {
                 Statement::Let {
                     name: identifier.to_string(),
                     value: lifted_expr,
+                    annotated_type,
                     span: span.clone(),
                 }
             }

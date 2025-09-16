@@ -24,7 +24,7 @@ use itertools::join;
 pub struct THir<T> {
     pub expr_functions: Vec<ExprFunction<T>>,
     pub llm_functions: Vec<LlmFunction>,
-    pub global_assignments: BamlMap<String, Expr<ExprMetadata>>,
+    pub global_assignments: BamlMap<String, GlobalAssignment<T>>,
     pub classes: BamlMap<String, Class<T>>,
     pub enums: BamlMap<String, Enum>,
 }
@@ -60,6 +60,12 @@ pub struct Enum {
     pub variants: Vec<hir::EnumVariant>,
     pub span: Span,
     pub ty: TypeIR, // TODO: Used for type checking, but do we need this?
+}
+
+#[derive(Clone, Debug)]
+pub struct GlobalAssignment<T> {
+    pub expr: Expr<T>,
+    pub annotated_type: Option<TypeIR>,
 }
 
 /// A BAML expression term.
