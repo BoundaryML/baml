@@ -5,12 +5,6 @@ export type VscodeToWebviewCommand =
 	| {
 		source: 'ide_message';
 		payload: | {
-			command: 'proxy_port';
-			content: {
-				port: number;
-			};
-		}
-		| {
 			command: 'update_cursor';
 			content: {
 				fileName: string;

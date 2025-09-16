@@ -117,9 +117,6 @@ export const EventListener: React.FC = () => {
         case 'ide_message':
           const { command, content } = payload;
           switch (command) {
-            case 'proxy_port':
-              // TODO: how is this handled?
-              break;
             case 'update_cursor':
               updateCursor(content);
               break;

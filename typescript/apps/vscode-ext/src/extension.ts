@@ -43,15 +43,6 @@ export function activate(context: vscode.ExtensionContext) {
 	app.use(cors());
 	const server = app.listen(0, () => {
 		console.log("Server started on port " + getPort());
-		WebviewPanelHost.currentPanel?.sendCommandToWebview({
-			source: "ide_message",
-			payload: {
-				command: "proxy_port",
-				content: {
-					port: getPort(),
-				},
-			}
-		});
 	});
 
 	const getPort = () => {

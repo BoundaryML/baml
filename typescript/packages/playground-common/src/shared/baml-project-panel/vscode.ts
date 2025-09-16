@@ -349,7 +349,7 @@ class VSCodeAPIWrapper {
       try {
         if (this.isVscode()) {
           // Use VSCode webview messaging
-          this.postMessage(message);
+          this.postMessageToHost(message);
         } else {
           // Use WebSocket RPC for other editors (like Zed)
           const ws = await this.ensureWebSocketRpcConnection();
@@ -394,7 +394,7 @@ class VSCodeAPIWrapper {
    *
    * @param message Abitrary data (must be JSON serializable) to send to the extension context.
    */
-  public postMessage(message: unknown) {
+  private postMessageToHost(message: unknown) {
     if (this.vsCodeApi) {
       this.vsCodeApi.postMessage(message)
     } else {

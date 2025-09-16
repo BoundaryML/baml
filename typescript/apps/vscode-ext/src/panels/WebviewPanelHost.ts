@@ -47,7 +47,7 @@ export class WebviewPanelHost {
   private _disposables: Disposable[] = [];
   private _port: () => number;
   private _isInitialized: boolean = false;
-  private _pendingCommands: Array<{ command: string; content: any }> = [];
+  private _pendingCommands: Array<VscodeToWebviewCommand> = [];
 
   /**
    * The WebPanelView class private constructor (called only from the render method).
@@ -129,18 +129,19 @@ export class WebviewPanelHost {
     }
   }
 
-  public sendCommandToWebview({ command, content }: VscodeToWebviewCommand) {
-    if (!this._isInitialized && command === 'select_function') {
+  public sendCommandToWebview({ source, payload }: VscodeToWebviewCommand) {
+    if (!this._isInitialized && source === 'lsp_message' && payload.method === 'workspace/executeCommand' && payload.params.command === 'baml.openBamlPanel') {
       // Queue select_function commands until initialized
-      this._pendingCommands.push({ command, content });
+      this._pendingCommands.push({ source, payload });
       return;
     }
 
-    this._panel.webview.postMessage({ command: command, content });
-    this.reporter?.sendTelemetryEvent({
-      event: `baml.webview.${command}`,
-      properties: {},
-    });
+    this._panel.webview.postMessage({ source, payload });
+    // TODO(sam): restore vscode telemetry
+    // this.reporter?.sendTelemetryEvent({
+    //   event: `baml.webview.${command}`,
+    //   properties: {},
+    // });
   }
 
   /**
@@ -667,15 +668,7 @@ export class WebviewPanelHost {
             // Mark as initialized and process pending commands
             this._isInitialized = true;
             for (const pending of this._pendingCommands) {
-              console.log(
-                'sending pending command',
-                pending.command,
-                pending.content,
-              );
-              this._panel.webview.postMessage({
-                command: pending.command,
-                content: pending.content,
-              });
+              this.sendCommandToWebview(pending);
             }
             this._pendingCommands = [];
 
