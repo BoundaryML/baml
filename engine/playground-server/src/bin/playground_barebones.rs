@@ -169,8 +169,8 @@ pub async fn run_server() -> anyhow::Result<()> {
                         //     tokio::time::sleep(std::time::Duration::from_secs(10)).await;
                         // }
                     }
-                    WebviewRouterMessage::CustomNotificationToWebview(msg) => {
-                        tracing::info!("Received frontend message: {:?}", msg);
+                    msg => {
+                        tracing::info!("Router received: {:?}", msg);
                     }
                 }
             }
