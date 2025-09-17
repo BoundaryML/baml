@@ -161,7 +161,7 @@ config_expression = { config_primary_expression }
 config_primary_expression = {
     jinja_expression |
     config_map_expression |
-    array_expression |
+    config_array_expression |
     numeric_literal |
     string_literal |
     identifier
@@ -171,6 +171,9 @@ config_map_key   = { identifier | quoted_string_literal }
 config_map_entry = { (comment_block | empty_lines)* ~ config_map_key ~ (config_expression | ENTRY_CATCH_ALL)? ~ trailing_comment? }
 
 config_map_expression    =  { "{" ~ empty_lines? ~ (config_map_entry ~ (splitter ~ config_map_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
+
+// Array expression that nests config expressions for elements
+config_array_expression  =  { "[" ~ empty_lines? ~ ((config_expression | ARRAY_CATCH_ALL) ~ trailing_comment? ~ (splitter ~ (comment_block | empty_lines)* ~ (config_expression | ARRAY_CATCH_ALL) ~ trailing_comment?)*)? ~ (comment_block | empty_lines)* ~ splitter? ~ "]" }
 
 // ######################################
 // Literals / Values
