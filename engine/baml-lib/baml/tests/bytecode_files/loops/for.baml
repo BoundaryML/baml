@@ -51,7 +51,7 @@ fn NestedFor(as: int[], bs: int[]) -> int {
 // 1   0    LOAD_CONST 0         (0)
 //
 // 3   1    LOAD_VAR 1           (xs)
-//     2    LOAD_GLOBAL 6        (<fn std.Array.len>)
+//     2    LOAD_GLOBAL 6        (<fn baml.Array.length>)
 //     3    LOAD_VAR 3           (__baml for loop iterated array 0)
 //     4    CALL 1               
 //     5    LOAD_CONST 0         (0)
@@ -84,7 +84,7 @@ fn NestedFor(as: int[], bs: int[]) -> int {
 // 11   0    LOAD_CONST 0         (0)
 //
 // 13   1    LOAD_VAR 1           (xs)
-//      2    LOAD_GLOBAL 6        (<fn std.Array.len>)
+//      2    LOAD_GLOBAL 6        (<fn baml.Array.length>)
 //      3    LOAD_VAR 3           (__baml for loop iterated array 1)
 //      4    CALL 1               
 //      5    LOAD_CONST 0         (0)
@@ -127,7 +127,7 @@ fn NestedFor(as: int[], bs: int[]) -> int {
 // 24   0    LOAD_CONST 0         (0)
 //
 // 26   1    LOAD_VAR 1           (xs)
-//      2    LOAD_GLOBAL 6        (<fn std.Array.len>)
+//      2    LOAD_GLOBAL 6        (<fn baml.Array.length>)
 //      3    LOAD_VAR 3           (__baml for loop iterated array 2)
 //      4    CALL 1               
 //      5    LOAD_CONST 0         (0)
@@ -170,7 +170,7 @@ fn NestedFor(as: int[], bs: int[]) -> int {
 // 38   0    LOAD_CONST 0         (0)
 //
 // 40   1    LOAD_VAR 1           (as)
-//      2    LOAD_GLOBAL 6        (<fn std.Array.len>)
+//      2    LOAD_GLOBAL 6        (<fn baml.Array.length>)
 //      3    LOAD_VAR 4           (__baml for loop iterated array 3)
 //      4    CALL 1               
 //      5    LOAD_CONST 0         (0)
@@ -188,7 +188,7 @@ fn NestedFor(as: int[], bs: int[]) -> int {
 //      17   STORE_VAR 6          (__baml for loop index 3)
 //
 // 41   18   LOAD_VAR 2           (bs)
-//      19   LOAD_GLOBAL 6        (<fn std.Array.len>)
+//      19   LOAD_GLOBAL 6        (<fn baml.Array.length>)
 //      20   LOAD_VAR 8           (__baml for loop iterated array 4)
 //      21   CALL 1               
 //      22   LOAD_CONST 0         (0)
@@ -225,64 +225,70 @@ fn NestedFor(as: int[], bs: int[]) -> int {
 //
 // Class: std::Request with 3 fields
 // Enum std::HttpMethod
-// Function: std.Array.len
+// Function: baml.Array.length
 //
-// Function: std.Map.len
+// Function: baml.Map.length
 //
-// Function: std.Map.contains
+// Function: baml.Map.has
 //
-// Function: std.media.image.from_url
+// Function: baml.media.image.from_url
 //
-// Function: std.media.audio.from_url
+// Function: baml.media.audio.from_url
 //
-// Function: std.media.video.from_url
+// Function: baml.media.video.from_url
 //
-// Function: std.media.pdf.from_url
+// Function: baml.media.pdf.from_url
 //
-// Function: std.media.image.from_base64
+// Function: baml.media.image.from_base64
 //
-// Function: std.media.audio.from_base64
+// Function: baml.media.audio.from_base64
 //
-// Function: std.media.video.from_base64
+// Function: baml.media.video.from_base64
 //
-// Function: std.media.pdf.from_base64
+// Function: baml.media.pdf.from_base64
 //
-// Function: std.media.image.is_url
+// Function: baml.media.image.is_url
 //
-// Function: std.media.video.is_url
+// Function: baml.media.video.is_url
 //
-// Function: std.media.audio.is_url
+// Function: baml.media.audio.is_url
 //
-// Function: std.media.pdf.is_url
+// Function: baml.media.pdf.is_url
 //
-// Function: std.media.image.is_base64
+// Function: baml.media.image.is_base64
 //
-// Function: std.media.video.is_base64
+// Function: baml.media.video.is_base64
 //
-// Function: std.media.audio.is_base64
+// Function: baml.media.audio.is_base64
 //
-// Function: std.media.pdf.is_base64
+// Function: baml.media.pdf.is_base64
 //
-// Function: std.media.image.as_url
+// Function: baml.media.image.as_url
 //
-// Function: std.media.video.as_url
+// Function: baml.media.video.as_url
 //
-// Function: std.media.audio.as_url
+// Function: baml.media.audio.as_url
 //
-// Function: std.media.pdf.as_url
+// Function: baml.media.pdf.as_url
 //
-// Function: std.media.image.as_base64
+// Function: baml.media.image.as_base64
 //
-// Function: std.media.video.as_base64
+// Function: baml.media.video.as_base64
 //
-// Function: std.media.audio.as_base64
+// Function: baml.media.audio.as_base64
 //
-// Function: std.media.pdf.as_base64
+// Function: baml.media.pdf.as_base64
 //
-// Function: std.media.image.mime
+// Function: baml.media.image.mime
 //
-// Function: std.media.video.mime
+// Function: baml.media.video.mime
 //
-// Function: std.media.audio.mime
+// Function: baml.media.audio.mime
 //
-// Function: std.media.pdf.mime
+// Function: baml.media.pdf.mime
+//
+// Function: baml.deep_copy
+//
+// Function: baml.unstable.string
+//
+// Function: baml.fetch_as

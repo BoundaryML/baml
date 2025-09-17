@@ -28,7 +28,7 @@ fn EditMapKey() -> int {
 
 fn UseMapContains() -> string {
     let map = CreateMapJSON();
-    if (map.contains("hello")) {
+    if (map.has("hello")) {
         map["hello"]
     } else {
         "hi"
@@ -37,7 +37,7 @@ fn UseMapContains() -> string {
 
 fn Len() -> int {
     let map = CreateMap();
-    map.len()
+    map.length()
 }
 
 // function CreateMap() {
@@ -70,7 +70,7 @@ fn Len() -> int {
 //
 // function UseMapContains() {
 //   let map = CreateMapJSON();
-//   if map.contains("hello") {
+//   if map.has("hello") {
 //   
 //     map["hello"]
 //   } else {
@@ -82,7 +82,7 @@ fn Len() -> int {
 // function Len() {
 //   let map = CreateMap();
 //
-//   map.len()
+//   map.length()
 // }
 //
 // class std::Request {

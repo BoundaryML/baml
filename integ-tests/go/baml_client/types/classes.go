@@ -1253,6 +1253,73 @@ func (u Document1559) BamlEncodeName() *cffi.CFFITypeName {
 	}
 }
 
+type DummyJsonTodo struct {
+	Id        int64  `json:"id"`
+	Todo      string `json:"todo"`
+	Completed bool   `json:"completed"`
+	UserId    int64  `json:"userId"`
+}
+
+func (c *DummyJsonTodo) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
+	typeName := holder.Name
+	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
+	}
+	if typeName.Name != "DummyJsonTodo" {
+		panic(fmt.Sprintf("expected DummyJsonTodo, got %s", typeName.Name))
+	}
+
+	for _, field := range holder.Fields {
+		key := field.Key
+		valueHolder := field.Value
+		switch key {
+
+		case "id":
+			c.Id = baml.Decode(valueHolder).Interface().(int64)
+
+		case "todo":
+			c.Todo = baml.Decode(valueHolder).Interface().(string)
+
+		case "completed":
+			c.Completed = baml.Decode(valueHolder).Interface().(bool)
+
+		case "userId":
+			c.UserId = baml.Decode(valueHolder).Interface().(int64)
+
+		default:
+
+			panic(fmt.Sprintf("unexpected field: %s in class DummyJsonTodo", key))
+
+		}
+	}
+
+}
+
+func (c DummyJsonTodo) Encode() (*cffi.CFFIValueHolder, error) {
+	fields := map[string]any{}
+
+	fields["id"] = c.Id
+
+	fields["todo"] = c.Todo
+
+	fields["completed"] = c.Completed
+
+	fields["userId"] = c.UserId
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+}
+
+func (c DummyJsonTodo) BamlTypeName() string {
+	return "DummyJsonTodo"
+}
+
+func (u DummyJsonTodo) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+		Name:      "DummyJsonTodo",
+	}
+}
+
 type DummyOutput struct {
 	Nonce             string `json:"nonce"`
 	Nonce2            string `json:"nonce2"`

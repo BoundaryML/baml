@@ -495,13 +495,32 @@ fn parse_statement_inner_rule(
 
             let identifier = parse_identifier(let_binding_tokens.next()?, diagnostics);
 
-            let rhs = let_binding_tokens.next()?;
-            let rhs_span = diagnostics.span(rhs.as_span());
-            let maybe_body = parse_assignment_expr(diagnostics, rhs, rhs_span);
+            // Optional type annotation: `: <field_type_chain>`
+            // Grammar packs this as a `let_type_annotation` pair if present.
+            let mut annotation = None;
+            let next_pair = let_binding_tokens.next()?;
+            let rhs_pair = if next_pair.as_rule() == Rule::let_type_annotation {
+                // Parse annotation's inner field_type_chain (skip the COLON token)
+                let ann_inner = next_pair.clone().into_inner();
+                for inner in ann_inner {
+                    if inner.as_rule() == Rule::field_type_chain {
+                        annotation = super::parse_field::parse_field_type_chain(inner, diagnostics);
+                        break;
+                    }
+                }
+                // The next token must be the RHS expression.
+                let_binding_tokens.next()?
+            } else {
+                next_pair
+            };
+
+            let rhs_span = diagnostics.span(rhs_pair.as_span());
+            let maybe_body = parse_assignment_expr(diagnostics, rhs_pair, rhs_span);
             maybe_body.map(|body| {
                 Stmt::Let(LetStmt {
                     identifier,
                     is_mutable,
+                    annotation,
                     expr: body,
                     span: span.clone(),
                     annotations: vec![],

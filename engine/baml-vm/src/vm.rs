@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 pub(super) mod indexable;
 
-use baml_types::{BamlMap, BamlMedia};
+use baml_types::{BamlMap, BamlMedia, TypeIR};
 use indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 
 use crate::{
@@ -11,7 +11,7 @@ use crate::{
 };
 
 /// Max call stack size.
-const MAX_FRAMES: usize = 256;
+pub const MAX_FRAMES: usize = 256;
 
 /// Function type.
 #[derive(Clone, Copy, Debug)]
@@ -27,13 +27,12 @@ pub enum FunctionKind {
     /// result and then push it on top of the eval stack.
     Llm,
 
-    /// Builtin or OS interfacing function.
+    /// Built-in `baml.fetch_as` function.
+    Future,
+
+    /// Builtin functions.
     ///
-    /// For OS interfacing, VM will handle control flow to a Rust wrapper that
-    /// calls into the OS and returns a result. Needed for features like
-    /// `fetch`.
-    ///
-    /// Builtin functions like `len` work the same way.
+    /// Contains a Rust function pointer that implements the actual logic.
     Native(crate::native::NativeFunction),
 }
 
@@ -175,11 +174,21 @@ pub enum Object {
 
     /// Images, audio, pdf, video.
     Media(BamlMedia),
+
+    /// Used for `baml.fetch_as` function.
+    BamlType(TypeIR),
 }
 
 #[derive(Clone, Debug)]
-pub struct LlmFuture {
-    pub llm_function: String,
+pub enum FutureKind {
+    Llm,
+    Network,
+}
+
+#[derive(Clone, Debug)]
+pub struct PendingFuture {
+    pub function: String,
+    pub kind: FutureKind,
     pub args: Vec<Value>,
 }
 
@@ -188,7 +197,7 @@ pub enum Future {
     /// Pending future.
     ///
     /// Only LLM calls for now.
-    Pending(LlmFuture),
+    Pending(PendingFuture),
 
     /// Ready value for the future.
     Ready(Value),
@@ -236,9 +245,13 @@ impl std::fmt::Display for Object {
             Object::Map(map) => write!(f, "{map:?}"),
             Object::Media(_media) => write!(f, "<media>"),
             Object::Future(future) => match future {
-                Future::Pending(llm_future) => write!(f, "<pending: {}>", llm_future.llm_function),
+                Future::Pending(future) => {
+                    write!(f, "<pending: {}>", future.function)
+                }
                 Future::Ready(value) => write!(f, "<ready: {value}>"),
             },
+
+            Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
         }
     }
 }
@@ -402,6 +415,7 @@ impl ObjectType {
             Object::Map(_) => Self::Map,
             Object::Media(_) => Self::Media,
             Object::Future(fut) => Self::Future(fut.into()),
+            Object::BamlType(_) => Self::Any, // TODO
         }
     }
 }
@@ -843,9 +857,9 @@ impl Vm {
     /// Returns a reference to the pending future.
     ///
     /// Returns [`InternalError::TypeError`] if the future is not pending, or not a future.
-    pub fn pending_future(&self, future: ObjectIndex) -> Result<&LlmFuture, InternalError> {
+    pub fn pending_future(&self, future: ObjectIndex) -> Result<&PendingFuture, InternalError> {
         match &self.objects[future] {
-            Object::Future(Future::Pending(llm_future)) => Ok(llm_future),
+            Object::Future(Future::Pending(future)) => Ok(future),
             other => Err(InternalError::TypeError {
                 expected: FutureType::Pending.into(),
                 got: ObjectType::of(other).into(),
@@ -1604,7 +1618,7 @@ impl Vm {
                         .as_object(&self.stack[args_offset], expected_type.into())?;
 
                     // Can't call a function if it's not a function ¯\_(ツ)_/¯
-                    let Object::Function(llm_function) = &self.objects[index] else {
+                    let Object::Function(callable_future) = &self.objects[index] else {
                         return Err(InternalError::TypeError {
                             expected: expected_type.into(),
                             got: ObjectType::of(&self.objects[index]).into(),
@@ -1614,35 +1628,42 @@ impl Vm {
 
                     // Compiler should have already checked this so we could
                     // skip it but it's an easy and fast check.
-                    if arg_count != llm_function.arity {
+                    if arg_count != callable_future.arity {
                         return Err(VmError::from(InternalError::InvalidArgumentCount {
-                            expected: llm_function.arity,
+                            expected: callable_future.arity,
                             got: arg_count,
                         }));
                     }
 
                     // Not a future.
-                    if !matches!(llm_function.kind, FunctionKind::Llm) {
+                    if !matches!(
+                        callable_future.kind,
+                        FunctionKind::Llm | FunctionKind::Future
+                    ) {
                         return Err(VmError::from(InternalError::TypeError {
-                            expected: FunctionType::Llm.into(),
-                            got: FunctionType::from(llm_function.kind).into(),
+                            expected: FunctionType::Llm.into(), // TODO: Fix this
+                            got: FunctionType::from(callable_future.kind).into(),
                         }));
                     }
 
-                    // Collect the LLM function call args and cleanup the LLM
-                    // call.
-                    let llm_args = self.stack.drain(args_offset..).skip(1).collect();
+                    // Collect the function call args and cleanup the call.
+                    let future_args = self.stack.drain(args_offset..).skip(1).collect();
 
                     // Create the pending future.
-                    let llm_future = LlmFuture {
-                        llm_function: llm_function.name.clone(),
-                        args: llm_args,
+                    let pending_future = PendingFuture {
+                        function: callable_future.name.clone(),
+                        args: future_args,
+                        kind: match callable_future.kind {
+                            FunctionKind::Llm => FutureKind::Llm,
+                            FunctionKind::Future => FutureKind::Network,
+                            _ => unreachable!(),
+                        },
                     };
 
                     // Allocate the future.
                     let object_index = self
                         .objects
-                        .insert(Object::Future(Future::Pending(llm_future)));
+                        .insert(Object::Future(Future::Pending(pending_future)));
 
                     // Now leave the future on top of the stack.
                     self.stack.push(Value::Object(object_index));
@@ -1768,7 +1789,7 @@ impl Vm {
                             function = self.objects[frame.function].as_function()?;
                         }
 
-                        FunctionKind::Llm => {
+                        FunctionKind::Llm | FunctionKind::Future => {
                             return Err(InternalError::TypeError {
                                 expected: FunctionType::Callable.into(),
                                 got: FunctionType::from(callee.kind).into(),

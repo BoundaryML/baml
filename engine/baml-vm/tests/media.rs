@@ -16,13 +16,13 @@ fn image_from_url() -> anyhow::Result<()> {
                 }
             "#,
             function: "image_from_url",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(35))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(38))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(35)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(38)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(35)]
+                    &vm.objects[ObjectIndex::from_raw(38)]
                 );
             };
 
@@ -50,13 +50,13 @@ fn audio_from_url() -> anyhow::Result<()> {
                 }
             "#,
             function: "audio_from_url",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(35))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(38))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(35)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(38)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(35)]
+                    &vm.objects[ObjectIndex::from_raw(38)]
                 );
             };
 
@@ -83,13 +83,13 @@ fn video_from_url() -> anyhow::Result<()> {
                 }
             "#,
             function: "video_from_url",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(35))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(38))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(35)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(38)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(35)]
+                    &vm.objects[ObjectIndex::from_raw(38)]
                 );
             };
 
@@ -116,13 +116,13 @@ fn pdf_from_url() -> anyhow::Result<()> {
                 }
             "#,
             function: "pdf_from_url",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(35))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(38))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(35)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(38)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(35)]
+                    &vm.objects[ObjectIndex::from_raw(38)]
                 );
             };
 
@@ -149,13 +149,13 @@ fn image_from_base64() -> anyhow::Result<()> {
                 }
             "#,
             function: "image_from_base64",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(36))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(39))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(36)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(39)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(36)]
+                    &vm.objects[ObjectIndex::from_raw(39)]
                 );
             };
 
@@ -182,13 +182,13 @@ fn pdf_from_base64() -> anyhow::Result<()> {
                 }
             "#,
             function: "pdf_from_base64",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(35))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(38))),
         },
         |vm| {
-            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(35)] else {
+            let baml_vm::Object::Media(media) = &vm.objects[ObjectIndex::from_raw(38)] else {
                 panic!(
                     "expected Media, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(35)]
+                    &vm.objects[ObjectIndex::from_raw(38)]
                 );
             };
 
@@ -247,13 +247,13 @@ fn media_as_url() -> anyhow::Result<()> {
                 }
             "#,
             function: "media_as_url",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(36))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(39))),
         },
         |vm| {
-            let baml_vm::Object::String(string) = &vm.objects[ObjectIndex::from_raw(36)] else {
+            let baml_vm::Object::String(string) = &vm.objects[ObjectIndex::from_raw(39)] else {
                 panic!(
                     "expected String, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(36)]
+                    &vm.objects[ObjectIndex::from_raw(39)]
                 );
             };
 
@@ -276,13 +276,13 @@ fn media_as_base64() -> anyhow::Result<()> {
                 }
             "#,
             function: "media_as_base64",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(37))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(40))),
         },
         |vm| {
-            let baml_vm::Object::String(string) = &vm.objects[ObjectIndex::from_raw(37)] else {
+            let baml_vm::Object::String(string) = &vm.objects[ObjectIndex::from_raw(40)] else {
                 panic!(
                     "expected String, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(37)]
+                    &vm.objects[ObjectIndex::from_raw(40)]
                 );
             };
 
@@ -305,13 +305,13 @@ fn media_as_mime() -> anyhow::Result<()> {
                 }
             "#,
             function: "media_as_mime",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(37))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(40))),
         },
         |vm| {
-            let baml_vm::Object::String(string) = &vm.objects[ObjectIndex::from_raw(37)] else {
+            let baml_vm::Object::String(string) = &vm.objects[ObjectIndex::from_raw(40)] else {
                 panic!(
                     "expected String, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(37)]
+                    &vm.objects[ObjectIndex::from_raw(40)]
                 );
             };
 

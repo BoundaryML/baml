@@ -409,7 +409,7 @@ impl Server {
         Self::try_register_capabilities(_client_capabilities, &mut scheduler);
 
         for msg in connection.incoming() {
-            tracing::info!("Received message: {:?}", msg);
+            // tracing::info!("Received message: {:?}", msg);
             if connection.handle_shutdown(&msg)? {
                 break;
             }

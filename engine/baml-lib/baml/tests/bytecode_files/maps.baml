@@ -28,7 +28,7 @@ fn EditMapKey() -> int {
 
 fn UseMapContains() -> string {
     let map = CreateMapJSON();
-    if (map.contains("hello")) {
+    if (map.has("hello")) {
         map["hello"]
     } else {
         "hi"
@@ -37,7 +37,7 @@ fn UseMapContains() -> string {
 
 fn Len() -> int {
     let map = CreateMap();
-    map.len()
+    map.length()
 }
 
 // String: "world"
@@ -113,7 +113,7 @@ fn Len() -> int {
 // 29   0    LOAD_GLOBAL 1      (<fn CreateMapJSON>)
 //      1    CALL 0             
 //
-// 30   2    LOAD_GLOBAL 11     (<fn std.Map.contains>)
+// 30   2    LOAD_GLOBAL 11     (<fn baml.Map.has>)
 //      3    LOAD_VAR 1         (map)
 //      4    LOAD_CONST 0       (hello)
 //      5    CALL 2             
@@ -133,71 +133,77 @@ fn Len() -> int {
 // 38   0   LOAD_GLOBAL 0    (<fn CreateMap>)
 //      1   CALL 0           
 //
-// 39   2   LOAD_GLOBAL 10   (<fn std.Map.len>)
+// 39   2   LOAD_GLOBAL 10   (<fn baml.Map.length>)
 //      3   LOAD_VAR 1       (map)
 //      4   CALL 1           
 //      5   RETURN           
 //
 // Class: std::Request with 3 fields
 // Enum std::HttpMethod
-// Function: std.Array.len
+// Function: baml.Array.length
 //
-// Function: std.Map.len
+// Function: baml.Map.length
 //
-// Function: std.Map.contains
+// Function: baml.Map.has
 //
-// Function: std.media.image.from_url
+// Function: baml.media.image.from_url
 //
-// Function: std.media.audio.from_url
+// Function: baml.media.audio.from_url
 //
-// Function: std.media.video.from_url
+// Function: baml.media.video.from_url
 //
-// Function: std.media.pdf.from_url
+// Function: baml.media.pdf.from_url
 //
-// Function: std.media.image.from_base64
+// Function: baml.media.image.from_base64
 //
-// Function: std.media.audio.from_base64
+// Function: baml.media.audio.from_base64
 //
-// Function: std.media.video.from_base64
+// Function: baml.media.video.from_base64
 //
-// Function: std.media.pdf.from_base64
+// Function: baml.media.pdf.from_base64
 //
-// Function: std.media.image.is_url
+// Function: baml.media.image.is_url
 //
-// Function: std.media.video.is_url
+// Function: baml.media.video.is_url
 //
-// Function: std.media.audio.is_url
+// Function: baml.media.audio.is_url
 //
-// Function: std.media.pdf.is_url
+// Function: baml.media.pdf.is_url
 //
-// Function: std.media.image.is_base64
+// Function: baml.media.image.is_base64
 //
-// Function: std.media.video.is_base64
+// Function: baml.media.video.is_base64
 //
-// Function: std.media.audio.is_base64
+// Function: baml.media.audio.is_base64
 //
-// Function: std.media.pdf.is_base64
+// Function: baml.media.pdf.is_base64
 //
-// Function: std.media.image.as_url
+// Function: baml.media.image.as_url
 //
-// Function: std.media.video.as_url
+// Function: baml.media.video.as_url
 //
-// Function: std.media.audio.as_url
+// Function: baml.media.audio.as_url
 //
-// Function: std.media.pdf.as_url
+// Function: baml.media.pdf.as_url
 //
-// Function: std.media.image.as_base64
+// Function: baml.media.image.as_base64
 //
-// Function: std.media.video.as_base64
+// Function: baml.media.video.as_base64
 //
-// Function: std.media.audio.as_base64
+// Function: baml.media.audio.as_base64
 //
-// Function: std.media.pdf.as_base64
+// Function: baml.media.pdf.as_base64
 //
-// Function: std.media.image.mime
+// Function: baml.media.image.mime
 //
-// Function: std.media.video.mime
+// Function: baml.media.video.mime
 //
-// Function: std.media.audio.mime
+// Function: baml.media.audio.mime
 //
-// Function: std.media.pdf.mime
+// Function: baml.media.pdf.mime
+//
+// Function: baml.deep_copy
+//
+// Function: baml.unstable.string
+//
+// Function: baml.fetch_as

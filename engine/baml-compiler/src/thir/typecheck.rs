@@ -91,23 +91,23 @@ pub fn typecheck_returning_context<'a>(
     // This is a generic function that takes a Request and returns any type T
     // For now, we'll add a placeholder with a Top type.
     let generic_return_type = TypeIR::Top(Default::default()); // Placeholder for generic T
-    let fetch_value_type = crate::builtin::std_fetch_value_signature(generic_return_type);
+    let fetch_as_type = crate::builtin::baml_fetch_as_signature(generic_return_type);
     typing_context.symbols.insert(
-        crate::builtin::functions::FETCH_VALUE.to_string(),
-        fetch_value_type,
+        crate::builtin::functions::FETCH_AS.to_string(),
+        fetch_as_type,
     );
 
     // Add native functions to typing context
     let native_fns = baml_vm::native::functions();
     for (name, (_, arity)) in native_fns {
         // For now, create a simple function signature
-        // std.Array.len takes an array and returns int
+        // baml.Array.length takes an array and returns int
         let function_type = match name.as_str() {
-            "std.Array.len" => TypeIR::arrow(
+            "baml.Array.length" => TypeIR::arrow(
                 vec![TypeIR::List(Box::new(TypeIR::null()), Default::default())],
                 TypeIR::int(),
             ),
-            "std.Map.len" => TypeIR::arrow(
+            "baml.Map.length" => TypeIR::arrow(
                 // map<string, V> -> int
                 // NOTE: we don't have a "top" type for map/array values, so we'll use Null.
                 vec![TypeIR::Map(
@@ -117,7 +117,7 @@ pub fn typecheck_returning_context<'a>(
                 )],
                 TypeIR::int(),
             ),
-            "std.Map.contains" => TypeIR::arrow(
+            "baml.Map.has" => TypeIR::arrow(
                 // map<string, V>, string -> bool
                 vec![
                     TypeIR::Map(
@@ -129,46 +129,46 @@ pub fn typecheck_returning_context<'a>(
                 ],
                 TypeIR::bool(),
             ),
-            "std.media.image.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::image()),
-            "std.media.audio.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::audio()),
-            "std.media.video.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::video()),
-            "std.media.pdf.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
+            "baml.media.image.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::image()),
+            "baml.media.audio.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::audio()),
+            "baml.media.video.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::video()),
+            "baml.media.pdf.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
 
-            "std.media.image.from_base64" => {
+            "baml.media.image.from_base64" => {
                 TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::image())
             }
-            "std.media.audio.from_base64" => {
+            "baml.media.audio.from_base64" => {
                 TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::audio())
             }
-            "std.media.video.from_base64" => {
+            "baml.media.video.from_base64" => {
                 TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::video())
             }
-            "std.media.pdf.from_base64" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
+            "baml.media.pdf.from_base64" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::pdf()),
 
-            "std.media.image.is_url" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::bool()),
-            "std.media.video.is_url" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::bool()),
-            "std.media.audio.is_url" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::bool()),
-            "std.media.pdf.is_url" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::bool()),
+            "baml.media.image.is_url" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::bool()),
+            "baml.media.video.is_url" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::bool()),
+            "baml.media.audio.is_url" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::bool()),
+            "baml.media.pdf.is_url" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::bool()),
 
-            "std.media.image.is_base64" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::bool()),
-            "std.media.video.is_base64" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::bool()),
-            "std.media.audio.is_base64" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::bool()),
-            "std.media.pdf.is_base64" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::bool()),
+            "baml.media.image.is_base64" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::bool()),
+            "baml.media.video.is_base64" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::bool()),
+            "baml.media.audio.is_base64" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::bool()),
+            "baml.media.pdf.is_base64" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::bool()),
 
-            "std.media.image.as_url" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
-            "std.media.video.as_url" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
-            "std.media.audio.as_url" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
-            "std.media.pdf.as_url" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+            "baml.media.image.as_url" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
+            "baml.media.video.as_url" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
+            "baml.media.audio.as_url" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
+            "baml.media.pdf.as_url" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
 
-            "std.media.image.as_base64" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
-            "std.media.video.as_base64" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
-            "std.media.audio.as_base64" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
-            "std.media.pdf.as_base64" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+            "baml.media.image.as_base64" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
+            "baml.media.video.as_base64" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
+            "baml.media.audio.as_base64" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
+            "baml.media.pdf.as_base64" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
 
-            "std.media.image.mime" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
-            "std.media.video.mime" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
-            "std.media.audio.mime" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
-            "std.media.pdf.mime" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+            "baml.media.image.mime" => TypeIR::arrow(vec![TypeIR::image()], TypeIR::string()),
+            "baml.media.video.mime" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
+            "baml.media.audio.mime" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
+            "baml.media.pdf.mime" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
 
             _ => {
                 // Generic function type for other natives
@@ -179,21 +179,48 @@ pub fn typecheck_returning_context<'a>(
         typing_context.symbols.insert(name, function_type);
     }
 
-    // Add global assignments to typing context
-    for (name, global_expr) in &hir.global_assignments {
-        // First typecheck the global assignment to infer its type
-        let typed_global_expr = typecheck_expression(global_expr, &typing_context, diagnostics);
+    // Add global assignments to typing context and build typed versions
+    let mut typed_globals: BamlMap<String, thir::GlobalAssignment<ExprMetadata>> = BamlMap::new();
+    for (name, ga) in &hir.global_assignments {
+        // Typecheck the global assignment to infer its type
+        let typed_global_expr = typecheck_expression(&ga.value, &typing_context, diagnostics);
 
-        // Add the inferred type to the context
+        // If annotated, ensure compatibility
+        if let (Some(annot), Some(inferred)) = (
+            ga.annotated_type.as_ref(),
+            typed_global_expr.meta().1.as_ref(),
+        ) {
+            if !inferred.is_subtype(annot) {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    &format!(
+                        "Type mismatch: global '{}' annotated as {} but got {}",
+                        name,
+                        annot.diagnostic_repr(),
+                        inferred.diagnostic_repr(),
+                    ),
+                    ga.span.clone(),
+                ));
+            }
+        }
+
+        // Add the type to the context (prefer annotation if present)
         if let Some(inferred_type) = typed_global_expr.meta().1.clone() {
             typing_context.vars.insert(
                 name.clone(),
                 VarInfo {
-                    ty: inferred_type,
+                    ty: ga.annotated_type.clone().unwrap_or(inferred_type),
                     mut_var_info: None,
                 },
             );
         }
+
+        typed_globals.insert(
+            name.clone(),
+            thir::GlobalAssignment {
+                expr: typed_global_expr,
+                annotated_type: ga.annotated_type.clone(),
+            },
+        );
     }
 
     // Typecheck expr functions
@@ -340,7 +367,7 @@ pub fn typecheck_returning_context<'a>(
             classes: thir_classes,
             enums: thir_enums,
             expr_functions,
-            global_assignments: BamlMap::new(),
+            global_assignments: typed_globals,
         },
         typing_context,
     )
@@ -462,13 +489,17 @@ impl TypeContext<'_> {
         }
 
         // Add global assignments to variable context
-        for (name, _expr) in &thir.global_assignments {
-            // For now, we'll assume string type for global assignments
-            // TODO: Properly infer type from expression
+        for (name, g) in &thir.global_assignments {
+            // Prefer annotated type; else use inferred type from expr meta
+            let ty = g
+                .annotated_type
+                .clone()
+                .or_else(|| g.expr.meta().1.clone())
+                .unwrap_or_else(TypeIR::string);
             context.vars.insert(
                 name.clone(),
                 VarInfo {
-                    ty: TypeIR::string(),
+                    ty,
                     mut_var_info: None,
                 },
             );
@@ -752,8 +783,29 @@ fn typecheck_statement(
     diagnostics: &mut Diagnostics,
 ) -> Option<thir::Statement<ExprMetadata>> {
     match stmt {
-        hir::Statement::Let { name, value, span } => {
+        hir::Statement::Let {
+            name,
+            value,
+            annotated_type,
+            span,
+        } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
+
+            if let (Some(annot), Some(inferred)) =
+                (annotated_type.as_ref(), typed_value.meta().1.as_ref())
+            {
+                if !inferred.is_subtype(annot) {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!(
+                            "Type mismatch: variable '{}' annotated as {} but got {}",
+                            name,
+                            annot.diagnostic_repr(),
+                            inferred.diagnostic_repr(),
+                        ),
+                        span.clone(),
+                    ));
+                }
+            }
 
             // Always add to context, even if type is unknown
             // This ensures the variable is defined even if its initializer has errors
@@ -761,7 +813,7 @@ fn typecheck_statement(
                 context.vars.insert(
                     name.clone(),
                     VarInfo {
-                        ty: inferred_type,
+                        ty: annotated_type.clone().unwrap_or(inferred_type),
                         // All variables are mutable now
                         mut_var_info: Some(MutableVarInfo {
                             ty_infer_span: Some(span.clone()),
@@ -774,7 +826,7 @@ fn typecheck_statement(
                 context.vars.insert(
                     name.clone(),
                     VarInfo {
-                        ty: TypeIR::int(),
+                        ty: annotated_type.clone().unwrap_or(TypeIR::int()),
                         // All variables are mutable now
                         mut_var_info: Some(MutableVarInfo {
                             ty_infer_span: Some(span.clone()),
@@ -884,8 +936,29 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-        hir::Statement::DeclareAndAssign { name, value, span } => {
+        hir::Statement::DeclareAndAssign {
+            name,
+            value,
+            annotated_type,
+            span,
+        } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
+
+            if let (Some(annot), Some(inferred)) =
+                (annotated_type.as_ref(), typed_value.meta().1.as_ref())
+            {
+                if !inferred.is_subtype(annot) {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!(
+                            "Type mismatch: variable '{}' annotated as {} but got {}",
+                            name,
+                            annot.diagnostic_repr(),
+                            inferred.diagnostic_repr(),
+                        ),
+                        span.clone(),
+                    ));
+                }
+            }
 
             // Always add to context, even if type is unknown
             // This ensures the variable is defined even if its initializer has errors
@@ -893,7 +966,7 @@ fn typecheck_statement(
                 context.vars.insert(
                     name.clone(),
                     VarInfo {
-                        ty: inferred_type,
+                        ty: annotated_type.clone().unwrap_or(inferred_type),
                         mut_var_info: Some(MutableVarInfo {
                             ty_infer_span: Some(typed_value.span().clone()),
                         }),
@@ -905,7 +978,7 @@ fn typecheck_statement(
                 context.vars.insert(
                     name.clone(),
                     VarInfo {
-                        ty: TypeIR::int(),
+                        ty: annotated_type.clone().unwrap_or(TypeIR::int()),
                         mut_var_info: Some(MutableVarInfo {
                             ty_infer_span: None,
                         }),
@@ -1255,7 +1328,7 @@ pub fn typecheck_expression(
             if var_type.is_none() {
                 match name.as_str() {
                     // Built-in types, you can call `image.from_url` and should work.
-                    "image" | "audio" | "video" | "pdf" => {}
+                    "image" | "audio" | "video" | "pdf" | "baml" => {}
 
                     cls if context.classes.contains_key(cls) => {}
 
@@ -1332,7 +1405,7 @@ pub fn typecheck_expression(
             let func_type = context.get_type(&func_name).cloned();
 
             // TODO: Handle generics uniformly, not with this kind of one-off handler.
-            if func_name == crate::builtin::functions::FETCH_VALUE && type_args.is_empty() {
+            if func_name == crate::builtin::functions::FETCH_AS && type_args.is_empty() {
                 diagnostics.push_error(DatamodelError::new_validation_error(
                         "Generic function std::fetch_value must have a type argument. Try adding a type argument like this: std::fetch_value<Type>",
                         function.span().clone(),
@@ -1426,6 +1499,7 @@ pub fn typecheck_expression(
             receiver,
             method,
             args,
+            type_args,
             span,
         } => {
             let typed_receiver = typecheck_expression(receiver, context, diagnostics);
@@ -1455,10 +1529,10 @@ pub fn typecheck_expression(
                 },
                 // TODO: Handle this uniformly with the other cases.
                 Some(TypeIR::List(_, _)) => match method.as_str() {
-                    "len" => Some("std.Array.len".to_string()),
+                    "length" => Some("baml.Array.length".to_string()),
                     _ => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
-                            &format!("Method `{method}` is not available on class `std.Array`"),
+                            &format!("Method `{method}` is not available on class `baml.Array`"),
                             span.clone(),
                         ));
                         None
@@ -1466,11 +1540,11 @@ pub fn typecheck_expression(
                 },
 
                 Some(TypeIR::Map(_, _, _)) => match method.as_str() {
-                    "len" => Some("std.Map.len".to_string()),
-                    "contains" => Some("std.Map.contains".to_string()),
+                    "length" => Some("baml.Map.length".to_string()),
+                    "has" => Some("baml.Map.has".to_string()),
                     _ => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
-                            &format!("Method `{method}` is not available on class `std.Map`"),
+                            &format!("Method `{method}` is not available on class `baml.Map`"),
                             span.clone(),
                         ));
                         None
@@ -1479,10 +1553,10 @@ pub fn typecheck_expression(
 
                 Some(TypeIR::Primitive(TypeValue::Media(media_type), _)) => {
                     let subtype = match media_type {
-                        BamlMediaType::Image => "std.media.image",
-                        BamlMediaType::Video => "std.media.video",
-                        BamlMediaType::Audio => "std.media.audio",
-                        BamlMediaType::Pdf => "std.media.pdf",
+                        BamlMediaType::Image => "baml.media.image",
+                        BamlMediaType::Video => "baml.media.video",
+                        BamlMediaType::Audio => "baml.media.audio",
+                        BamlMediaType::Pdf => "baml.media.pdf",
                     };
 
                     match method.as_str() {
@@ -1517,21 +1591,29 @@ pub fn typecheck_expression(
                     // Check if it's media.
                     match &typed_receiver {
                         thir::Expr::Var(name, _) => match (name.as_str(), method.as_str()) {
-                            ("image", "from_url") => Some("std.media.image.from_url".to_string()),
-                            ("audio", "from_url") => Some("std.media.audio.from_url".to_string()),
-                            ("video", "from_url") => Some("std.media.video.from_url".to_string()),
-                            ("pdf", "from_url") => Some("std.media.pdf.from_url".to_string()),
+                            ("image", "from_url") => Some("baml.media.image.from_url".to_string()),
+                            ("audio", "from_url") => Some("baml.media.audio.from_url".to_string()),
+                            ("video", "from_url") => Some("baml.media.video.from_url".to_string()),
+                            ("pdf", "from_url") => Some("baml.media.pdf.from_url".to_string()),
 
                             ("image", "from_base64") => {
-                                Some("std.media.image.from_base64".to_string())
+                                Some("baml.media.image.from_base64".to_string())
                             }
                             ("audio", "from_base64") => {
-                                Some("std.media.audio.from_base64".to_string())
+                                Some("baml.media.audio.from_base64".to_string())
                             }
                             ("video", "from_base64") => {
-                                Some("std.media.video.from_base64".to_string())
+                                Some("baml.media.video.from_base64".to_string())
                             }
-                            ("pdf", "from_base64") => Some("std.media.pdf.from_base64".to_string()),
+                            ("pdf", "from_base64") => {
+                                Some("baml.media.pdf.from_base64".to_string())
+                            }
+
+                            ("baml", "deep_copy") => Some("baml.deep_copy".to_string()),
+
+                            ("baml", "fetch_as") => Some("baml.fetch_as".to_string()),
+
+                            ("baml.unstable", "string") => Some("baml.unstable.string".to_string()),
 
                             _ => {
                                 diagnostics.push_error(DatamodelError::new_validation_error(
@@ -1561,7 +1643,7 @@ pub fn typecheck_expression(
                 };
             };
 
-            let func_type = context.get_type(&full_name).cloned();
+            let mut func_type = context.get_type(&full_name).cloned();
 
             let (param_types, return_type, is_known_function) = match &func_type {
                 Some(TypeIR::Arrow(arrow, _)) => (
@@ -1583,9 +1665,11 @@ pub fn typecheck_expression(
                 &typed_receiver,
                 thir::Expr::Var(name, _) if matches!(
                     name.as_str(),
-                    "image" | "audio" | "video" | "pdf"
+                    "image" | "audio" | "video" | "pdf" | "baml.unstable"
                 )
             );
+
+            let mut generic_return_type_inferred = None;
 
             let typed_args: Vec<_> = if is_known_function {
                 // Only validate arguments for known functions. Skip the first argument since that's going to be
@@ -1602,20 +1686,86 @@ pub fn typecheck_expression(
 
                         // Check if argument type matches expected type
                         if let Some(arg_type) = typed_arg.meta().1.as_ref() {
-                            if !types_compatible(arg_type, expected_type) {
-                                diagnostics.push_error(DatamodelError::new_validation_error(
-                                    &format!(
-                                        "Type mismatch in argument, expected: {}, got: {}",
-                                        expected_type.name_for_user(),
-                                        typed_arg
-                                            .meta()
-                                            .1
-                                            .as_ref()
-                                            .map(|t| t.name_for_user())
-                                            .unwrap_or("unknown".to_string())
-                                    ),
-                                    arg.span(),
-                                ));
+                            match full_name.as_str() {
+                                "baml.deep_copy" => match arg_type {
+                                    TypeIR::Class { name, .. } => {
+                                        generic_return_type_inferred = Some(TypeIR::class(name));
+
+                                        func_type = Some(TypeIR::arrow(
+                                            vec![TypeIR::class(name)],
+                                            TypeIR::class(name),
+                                        ));
+                                    }
+                                    _ => {
+                                        diagnostics.push_error(
+                                            DatamodelError::new_validation_error(
+                                                "deep_copy expects an instance of a class",
+                                                arg.span(),
+                                            ),
+                                        );
+                                    }
+                                },
+                                "baml.unstable.string" => {
+                                    generic_return_type_inferred = Some(TypeIR::string());
+
+                                    func_type = Some(TypeIR::arrow(
+                                        vec![arg_type.clone()],
+                                        TypeIR::string(),
+                                    ));
+                                }
+                                "baml.fetch_as" => {
+                                    generic_return_type_inferred = match &type_args[0] {
+                                        hir::TypeArg::Type(t) => Some(t.to_owned()),
+                                        hir::TypeArg::TypeName(n) => context
+                                            .classes
+                                            .get(n)
+                                            .map(|c| TypeIR::class(c.name.clone()))
+                                            .or_else(|| {
+                                                context
+                                                    .enums
+                                                    .get(n)
+                                                    .map(|e| TypeIR::r#enum(&e.name))
+                                            })
+                                            .or_else(|| context.get_type(n).map(|t| t.to_owned())),
+                                    };
+
+                                    match &generic_return_type_inferred {
+                                        Some(t) => {
+                                            func_type = Some(TypeIR::arrow(
+                                                vec![TypeIR::string()],
+                                                t.clone(),
+                                            ));
+                                        }
+
+                                        None => {
+                                            diagnostics.push_error(
+                                                DatamodelError::new_validation_error(
+                                                    "could not infer return type of baml.fetch_as",
+                                                    arg.span(),
+                                                ),
+                                            );
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    if !types_compatible(arg_type, expected_type) {
+                                        diagnostics.push_error(
+                                            DatamodelError::new_validation_error(
+                                                &format!(
+                                                "Type mismatch in argument, expected: {}, got: {}",
+                                                expected_type.name_for_user(),
+                                                typed_arg
+                                                    .meta()
+                                                    .1
+                                                    .as_ref()
+                                                    .map(|t| t.name_for_user())
+                                                    .unwrap_or("unknown".to_string())
+                                            ),
+                                                arg.span(),
+                                            ),
+                                        );
+                                    }
+                                }
                             }
                         }
 
@@ -1634,7 +1784,7 @@ pub fn typecheck_expression(
                 &typed_receiver,
                 thir::Expr::Var(name, _) if matches!(
                     name.as_str(),
-                    "image" | "audio" | "video" | "pdf"
+                    "image" | "audio" | "video" | "pdf" | "baml" | "baml.unstable"
                 )
             );
 
@@ -1666,9 +1816,15 @@ pub fn typecheck_expression(
                         full_name.clone(),
                         (span.clone(), func_type.clone()),
                     )),
-                    type_args: vec![],
+                    type_args: if full_name == "baml.fetch_as"
+                        && generic_return_type_inferred.is_some()
+                    {
+                        vec![generic_return_type_inferred.clone().unwrap()]
+                    } else {
+                        vec![]
+                    },
                     args: typed_args,
-                    meta: (span.clone(), return_type),
+                    meta: (span.clone(), generic_return_type_inferred.or(return_type)),
                 };
             }
 
@@ -1679,7 +1835,7 @@ pub fn typecheck_expression(
                     (span.clone(), func_type.clone()),
                 )),
                 args: typed_args,
-                meta: (span.clone(), return_type),
+                meta: (span.clone(), generic_return_type_inferred.or(return_type)),
             }
         }
         hir::Expression::ClassConstructor(constructor, span) => {
@@ -1946,11 +2102,37 @@ pub fn typecheck_expression(
                         None
                     }
                 }
+
                 _ => {
-                    diagnostics.push_error(DatamodelError::new_validation_error(
-                        "Can only access fields on class instances",
-                        base.span(),
-                    ));
+                    let mut is_namespace = false;
+
+                    if let hir::Expression::Identifier(name, _) = base.as_ref() {
+                        if name == "baml" {
+                            is_namespace = true;
+
+                            if field == "unstable" {
+                                // Typecheck as var and then next thing is MethodCall.
+                                // MethodCall figures out this is function on namespace.
+                                return thir::Expr::Var(
+                                    "baml.unstable".to_string(),
+                                    (base.span(), None),
+                                );
+                            } else {
+                                diagnostics.push_error(DatamodelError::new_validation_error(
+                                    &format!("Unknown namespace baml.{field}"),
+                                    base.span(),
+                                ));
+                            }
+                        }
+                    }
+
+                    if !is_namespace {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            "Can only access fields on class instances",
+                            base.span(),
+                        ));
+                    }
+
                     None
                 }
             };
@@ -2459,6 +2641,80 @@ mod tests {
         }
     }
 
+    #[test]
+    fn let_annotation_ok() {
+        let source = r##"
+        function test() -> int {
+          let x: int | float = 10.0;
+          1
+        }
+        "##;
+
+        let (hir, mut diagnostics) = hir_from_source(source);
+        assert!(!diagnostics.has_errors(), "Should parse without errors");
+
+        let _thir = typecheck(&hir, &mut diagnostics);
+        assert!(
+            !diagnostics.has_errors(),
+            "Typecheck should not produce errors for compatible let annotation"
+        );
+    }
+
+    #[test]
+    fn let_annotation_mismatch() {
+        let source = r##"
+        function test() -> int {
+          let x: int = 10.0;
+          1
+        }
+        "##;
+
+        let (hir, mut diagnostics) = hir_from_source(source);
+        assert!(!diagnostics.has_errors(), "Should parse without errors");
+
+        let _thir = typecheck(&hir, &mut diagnostics);
+        assert!(diagnostics.has_errors(), "Expected type mismatch error");
+    }
+
+    #[test]
+    fn global_annotation_ok() {
+        let source = r##"
+        let G: int = 10;
+
+        function test() -> int {
+          G
+        }
+        "##;
+
+        let (hir, mut diagnostics) = hir_from_source(source);
+        assert!(!diagnostics.has_errors(), "Should parse without errors");
+
+        let _thir = typecheck(&hir, &mut diagnostics);
+        assert!(
+            !diagnostics.has_errors(),
+            "Typecheck should not produce errors for compatible global annotation"
+        );
+    }
+
+    #[test]
+    fn global_annotation_mismatch() {
+        let source = r##"
+        let G: int = 10.0;
+
+        function test() -> int {
+          1
+        }
+        "##;
+
+        let (hir, mut diagnostics) = hir_from_source(source);
+        assert!(!diagnostics.has_errors(), "Should parse without errors");
+
+        let _thir = typecheck(&hir, &mut diagnostics);
+        assert!(
+            diagnostics.has_errors(),
+            "Expected type mismatch error for global annotation"
+        );
+    }
     #[test]
     fn typecheck_array_access() {
         let source = r##"

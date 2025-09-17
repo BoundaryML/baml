@@ -48,7 +48,7 @@ impl Vm {
         Ok(Value::Int(map.len() as i64))
     }
     /// Map `contains`
-    pub fn map_contains(&mut self, args: &[Value]) -> Result<Value, VmError> {
+    pub fn map_has(&mut self, args: &[Value]) -> Result<Value, VmError> {
         // Arity is already checked by the VM.
 
         let expected = ObjectType::Map;
@@ -196,6 +196,133 @@ impl Vm {
 
         Ok(self.alloc_string(media.mime_type.clone().unwrap_or("".to_string())))
     }
+
+    pub fn deep_copy_object(&mut self, args: &[Value]) -> Result<Value, VmError> {
+        // Arity is already checked by the VM.
+        let index = self.objects.as_object(&args[0], ObjectType::Any)?;
+
+        let object = self.objects[index].clone();
+
+        Ok(Value::Object(self.objects.insert(object)))
+    }
+
+    pub fn any_value_to_string(&mut self, args: &[Value]) -> Result<Value, VmError> {
+        // Arity is already checked by the VM.
+
+        fn format_value_recursive(
+            vm: &mut Vm,
+            value: &Value,
+            depth: usize,
+        ) -> Result<String, VmError> {
+            // Check available stack space (MAX_FRAMES - current_frames)
+            let available_frames = crate::vm::MAX_FRAMES.saturating_sub(vm.frames.len());
+
+            if depth >= available_frames {
+                return Err(VmError::RuntimeError(RuntimeError::StackOverflow));
+            }
+
+            match value {
+                Value::Null => Ok("null".to_string()),
+                Value::Int(i) => Ok(i.to_string()),
+                Value::Float(f) => Ok(f.to_string()),
+                Value::Bool(b) => Ok(b.to_string()),
+
+                Value::Object(obj_idx) => match &vm.objects[*obj_idx] {
+                    Object::Instance(instance) => {
+                        let Object::Class(class) = &vm.objects[instance.class] else {
+                            return Err(VmError::RuntimeError(RuntimeError::Other(
+                                "Invalid class reference".to_string(),
+                            )));
+                        };
+
+                        let class_name = class.name.clone();
+                        let field_names = class.field_names.clone();
+                        let fields = instance.fields.clone();
+
+                        let mut result = format!("{class_name} {{\n");
+                        let field_indent = "    ".repeat(depth + 1);
+
+                        for (i, field_value) in fields.iter().enumerate() {
+                            let field_name = match field_names.get(i) {
+                                Some(name) => name.as_str(),
+                                None => {
+                                    let fallback = format!("field_{i}");
+                                    let formatted_value =
+                                        format_value_recursive(vm, field_value, depth + 1)?;
+                                    result.push_str(&format!(
+                                        "{field_indent}{fallback}: {formatted_value}\n"
+                                    ));
+                                    continue;
+                                }
+                            };
+                            let formatted_value =
+                                format_value_recursive(vm, field_value, depth + 1)?;
+                            result.push_str(&format!(
+                                "{field_indent}{field_name}: {formatted_value}\n"
+                            ));
+                        }
+
+                        let indent = "    ".repeat(depth);
+                        result.push_str(&format!("{indent}}}"));
+                        Ok(result)
+                    }
+
+                    Object::Array(values) => {
+                        let values = values.clone();
+                        let mut result = String::from("[");
+                        for (i, value) in values.iter().enumerate() {
+                            if i > 0 {
+                                result.push_str(", ");
+                            }
+                            result.push_str(&format_value_recursive(vm, value, depth)?);
+                        }
+                        result.push(']');
+                        Ok(result)
+                    }
+
+                    Object::Map(map) => {
+                        let map = map.clone();
+                        let mut result = String::from("{\n");
+                        let field_indent = "    ".repeat(depth + 1);
+
+                        for (key, value) in map.iter() {
+                            let formatted_value = format_value_recursive(vm, value, depth + 1)?;
+                            result
+                                .push_str(&format!("{field_indent}\"{key}\": {formatted_value}\n"));
+                        }
+
+                        let indent = "    ".repeat(depth);
+                        result.push_str(&format!("{indent}}}"));
+                        Ok(result)
+                    }
+
+                    Object::String(s) => Ok(format!("\"{s}\"")),
+                    Object::Enum(e) => Ok(e.name.clone()),
+                    Object::Variant(variant) => {
+                        let Object::Enum(enm) = &vm.objects[variant.enm] else {
+                            return Err(VmError::RuntimeError(RuntimeError::Other(
+                                "Invalid enum reference".to_string(),
+                            )));
+                        };
+
+                        let variant_name = match enm.variant_names.get(variant.index) {
+                            Some(name) => name.clone(),
+                            None => format!("variant_{}", variant.index),
+                        };
+                        Ok(variant_name)
+                    }
+                    Object::Function(f) => Ok(format!("<function {}>", f.name)),
+                    Object::Class(c) => Ok(format!("<class {}>", c.name)),
+                    Object::Media(_) => Ok("<media>".to_string()),
+                    Object::Future(_) => Ok("<future>".to_string()),
+                    Object::BamlType(_) => Ok("<baml type>".to_string()),
+                },
+            }
+        }
+
+        let formatted = format_value_recursive(self, &args[0], 0)?;
+        Ok(self.alloc_string(formatted))
+    }
 }
 
 pub type NativeFunction = fn(&mut Vm, &[Value]) -> Result<Value, VmError>;
@@ -203,39 +330,42 @@ pub type NativeFunction = fn(&mut Vm, &[Value]) -> Result<Value, VmError>;
 pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
     let fns: &[(&str, (NativeFunction, usize))] = &[
         // Array.
-        ("std.Array.len", (Vm::array_len, 1)),
+        ("baml.Array.length", (Vm::array_len, 1)),
         // Map.
-        ("std.Map.len", (Vm::map_len, 1)),
-        ("std.Map.contains", (Vm::map_contains, 2)),
+        ("baml.Map.length", (Vm::map_len, 1)),
+        ("baml.Map.has", (Vm::map_has, 2)),
         // Media
-        ("std.media.image.from_url", (Vm::image_from_url, 1)),
-        ("std.media.audio.from_url", (Vm::audio_from_url, 1)),
-        ("std.media.video.from_url", (Vm::video_from_url, 1)),
-        ("std.media.pdf.from_url", (Vm::pdf_from_url, 1)),
-        ("std.media.image.from_base64", (Vm::image_from_base64, 2)),
-        ("std.media.audio.from_base64", (Vm::audio_from_base64, 2)),
-        ("std.media.video.from_base64", (Vm::video_from_base64, 2)),
-        ("std.media.pdf.from_base64", (Vm::pdf_from_base64, 1)),
-        ("std.media.image.is_url", (Vm::media_is_url, 1)),
-        ("std.media.video.is_url", (Vm::media_is_url, 1)),
-        ("std.media.audio.is_url", (Vm::media_is_url, 1)),
-        ("std.media.pdf.is_url", (Vm::media_is_url, 1)),
-        ("std.media.image.is_base64", (Vm::media_is_base64, 1)),
-        ("std.media.video.is_base64", (Vm::media_is_base64, 1)),
-        ("std.media.audio.is_base64", (Vm::media_is_base64, 1)),
-        ("std.media.pdf.is_base64", (Vm::media_is_base64, 1)),
-        ("std.media.image.as_url", (Vm::media_as_url, 1)),
-        ("std.media.video.as_url", (Vm::media_as_url, 1)),
-        ("std.media.audio.as_url", (Vm::media_as_url, 1)),
-        ("std.media.pdf.as_url", (Vm::media_as_url, 1)),
-        ("std.media.image.as_base64", (Vm::media_as_base64, 1)),
-        ("std.media.video.as_base64", (Vm::media_as_base64, 1)),
-        ("std.media.audio.as_base64", (Vm::media_as_base64, 1)),
-        ("std.media.pdf.as_base64", (Vm::media_as_base64, 1)),
-        ("std.media.image.mime", (Vm::media_mime_type, 1)),
-        ("std.media.video.mime", (Vm::media_mime_type, 1)),
-        ("std.media.audio.mime", (Vm::media_mime_type, 1)),
-        ("std.media.pdf.mime", (Vm::media_mime_type, 1)),
+        ("baml.media.image.from_url", (Vm::image_from_url, 1)),
+        ("baml.media.audio.from_url", (Vm::audio_from_url, 1)),
+        ("baml.media.video.from_url", (Vm::video_from_url, 1)),
+        ("baml.media.pdf.from_url", (Vm::pdf_from_url, 1)),
+        ("baml.media.image.from_base64", (Vm::image_from_base64, 2)),
+        ("baml.media.audio.from_base64", (Vm::audio_from_base64, 2)),
+        ("baml.media.video.from_base64", (Vm::video_from_base64, 2)),
+        ("baml.media.pdf.from_base64", (Vm::pdf_from_base64, 1)),
+        ("baml.media.image.is_url", (Vm::media_is_url, 1)),
+        ("baml.media.video.is_url", (Vm::media_is_url, 1)),
+        ("baml.media.audio.is_url", (Vm::media_is_url, 1)),
+        ("baml.media.pdf.is_url", (Vm::media_is_url, 1)),
+        ("baml.media.image.is_base64", (Vm::media_is_base64, 1)),
+        ("baml.media.video.is_base64", (Vm::media_is_base64, 1)),
+        ("baml.media.audio.is_base64", (Vm::media_is_base64, 1)),
+        ("baml.media.pdf.is_base64", (Vm::media_is_base64, 1)),
+        ("baml.media.image.as_url", (Vm::media_as_url, 1)),
+        ("baml.media.video.as_url", (Vm::media_as_url, 1)),
+        ("baml.media.audio.as_url", (Vm::media_as_url, 1)),
+        ("baml.media.pdf.as_url", (Vm::media_as_url, 1)),
+        ("baml.media.image.as_base64", (Vm::media_as_base64, 1)),
+        ("baml.media.video.as_base64", (Vm::media_as_base64, 1)),
+        ("baml.media.audio.as_base64", (Vm::media_as_base64, 1)),
+        ("baml.media.pdf.as_base64", (Vm::media_as_base64, 1)),
+        ("baml.media.image.mime", (Vm::media_mime_type, 1)),
+        ("baml.media.video.mime", (Vm::media_mime_type, 1)),
+        ("baml.media.audio.mime", (Vm::media_mime_type, 1)),
+        ("baml.media.pdf.mime", (Vm::media_mime_type, 1)),
+        // Utility functions.
+        ("baml.deep_copy", (Vm::deep_copy_object, 1)),
+        ("baml.unstable.string", (Vm::any_value_to_string, 1)),
     ];
 
     BamlMap::from_iter(

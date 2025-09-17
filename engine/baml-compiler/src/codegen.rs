@@ -108,6 +108,10 @@ fn compile_thir_to_bytecode(
     for name in native_fns.keys() {
         resolved_globals.insert(name.clone(), GlobalIndex::from_raw(resolved_globals.len()));
     }
+    resolved_globals.insert(
+        "baml.fetch_as".to_string(),
+        GlobalIndex::from_raw(resolved_globals.len()),
+    );
 
     let mut objects = ObjectPool::from_vec(Vec::with_capacity(resolved_globals.len()));
     let mut globals = GlobalPool::from_vec(Vec::with_capacity(resolved_globals.len()));
@@ -231,6 +235,13 @@ fn compile_thir_to_bytecode(
         let object_index = objects.insert(native_function);
         globals.push(Value::Object(object_index));
     }
+    globals.push(Value::Object(objects.insert(Object::Function(Function {
+        name: "baml.fetch_as".to_string(),
+        arity: 2,
+        bytecode: Bytecode::new(),
+        kind: FunctionKind::Future,
+        locals_in_scope: vec![],
+    }))));
 
     let mut resolved_class_names = HashMap::new();
     let mut resolved_function_names = HashMap::new();
@@ -731,8 +742,8 @@ impl<'g> HirCompiler<'g> {
 
                 let len_method = *self
                     .globals
-                    .get("std.Array.len")
-                    .expect("native std.Array.len() for array length is not in globals?");
+                    .get("baml.Array.length")
+                    .expect("native baml.Array.length() for array length is not in globals?");
 
                 // {
 
@@ -1115,7 +1126,12 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::AllocMap(pairs.len()));
             }
 
-            thir::Expr::Call { func, args, .. } => {
+            thir::Expr::Call {
+                func,
+                args,
+                type_args,
+                ..
+            } => {
                 let name = match func.as_ref() {
                     thir::Expr::Var(name, _) => name,
                     _ => panic!("expressions that evaluate to functions are not supported yet"),
@@ -1133,9 +1149,22 @@ impl<'g> HirCompiler<'g> {
                     self.compile_expression(arg);
                 }
 
+                // Type parameter. TODO: Generic way of handling this?
+                if name == "baml.fetch_as" {
+                    let type_index = self.objects.insert(Object::BamlType(type_args[0].clone()));
+                    let const_index = self.add_constant(Value::Object(type_index));
+                    self.emit(Instruction::LoadConst(const_index));
+                }
+
                 // Either async LLM call or regular function call.
-                if self.llm_functions.contains(name) {
-                    self.emit(Instruction::DispatchFuture(args.len()));
+                if self.llm_functions.contains(name) || name == "baml.fetch_as" {
+                    let count = if name == "baml.fetch_as" {
+                        2
+                    } else {
+                        args.len()
+                    };
+
+                    self.emit(Instruction::DispatchFuture(count));
                     self.emit(Instruction::Await);
                 } else {
                     self.emit(Instruction::Call(args.len()));
@@ -1157,16 +1186,16 @@ impl<'g> HirCompiler<'g> {
                         name: class_name, ..
                     }) => format!("{class_name}.{method}"),
 
-                    Some(TypeIR::List(_, _)) => format!("std.Array.{method}"),
+                    Some(TypeIR::List(_, _)) => format!("baml.Array.{method}"),
 
-                    Some(TypeIR::Map(_, _, _)) => format!("std.Map.{method}"),
+                    Some(TypeIR::Map(_, _, _)) => format!("baml.Map.{method}"),
 
                     Some(TypeIR::Primitive(TypeValue::Media(media_type), _)) => {
                         let subtype = match media_type {
-                            BamlMediaType::Image => "std.media.image",
-                            BamlMediaType::Video => "std.media.video",
-                            BamlMediaType::Audio => "std.media.audio",
-                            BamlMediaType::Pdf => "std.media.pdf",
+                            BamlMediaType::Image => "baml.media.image",
+                            BamlMediaType::Video => "baml.media.video",
+                            BamlMediaType::Audio => "baml.media.audio",
+                            BamlMediaType::Pdf => "baml.media.pdf",
                         };
 
                         format!("{subtype}.{method}")

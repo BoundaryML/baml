@@ -18,13 +18,13 @@ fn concat_strings() -> anyhow::Result<()> {
                 }
             "#,
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(36))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(39))),
         },
         |vm| {
-            let baml_vm::Object::String(s) = &vm.objects[ObjectIndex::from_raw(36)] else {
+            let baml_vm::Object::String(s) = &vm.objects[ObjectIndex::from_raw(39)] else {
                 panic!(
                     "expected string, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(36)]
+                    &vm.objects[ObjectIndex::from_raw(39)]
                 );
             };
 

@@ -342,15 +342,22 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                 *val,
                 (span.clone(), Some(TypeIR::bool())),
             ))),
-            ast::Expression::NumericValue(val, span) => val
-                .parse::<i64>()
-                .map(|v| {
-                    Expr::Atom(BamlValueWithMeta::Int(
+            ast::Expression::NumericValue(val, span) => {
+                // Prefer int when it parses cleanly; otherwise fall back to float.
+                if let Ok(v) = val.parse::<i64>() {
+                    Ok(Expr::Atom(BamlValueWithMeta::Int(
                         v,
                         (span.clone(), Some(TypeIR::int())),
-                    ))
-                })
-                .map_err(|_| anyhow!("Invalid numeric value: {}", val)),
+                    )))
+                } else if let Ok(f) = val.parse::<f64>() {
+                    Ok(Expr::Atom(BamlValueWithMeta::Float(
+                        f,
+                        (span.clone(), Some(TypeIR::float())),
+                    )))
+                } else {
+                    Err(anyhow!("Invalid numeric value: {}", val))
+                }
+            }
             ast::Expression::StringValue(val, span) => Ok(Expr::Atom(BamlValueWithMeta::String(
                 val.to_string(),
                 (span.clone(), Some(TypeIR::string())),
