@@ -705,7 +705,10 @@ pub fn evaluate_type(expr: &ast::Expr, types: &PredefinedTypes) -> Result<Type, 
         if let Some((_, _)) = types.as_function(var.id) {
             state
                 .errors
-                .push(TypeError::new_function_reference_without_call(var.id, var.span()));
+                .push(TypeError::new_function_reference_without_call(
+                    var.id,
+                    var.span(),
+                ));
         }
     }
     let result = tracker_visit_expr(expr, &mut state, types);

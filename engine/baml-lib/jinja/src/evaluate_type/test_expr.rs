@@ -378,6 +378,9 @@ fn test_function_reference_without_call_expr() {
         .collect();
     assert_eq!(
         msgs,
-        vec!["Function 'SomeFunc' referenced without parentheses. Did you mean 'SomeFunc()'?".to_string()]
+        vec![
+            "Function 'SomeFunc' referenced without parentheses. Did you mean 'SomeFunc()'?"
+                .to_string()
+        ]
     );
 }
