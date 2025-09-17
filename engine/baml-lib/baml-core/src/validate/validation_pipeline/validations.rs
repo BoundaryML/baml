@@ -5,6 +5,7 @@ mod cycle;
 mod enums;
 mod expr_fns;
 mod functions;
+pub mod identifiers;
 mod reserved_names;
 mod template_strings;
 mod tests;
