@@ -700,6 +700,14 @@ fn infer_const_type(v: &minijinja::value::Value) -> Type {
 
 pub fn evaluate_type(expr: &ast::Expr, types: &PredefinedTypes) -> Result<Type, Vec<TypeError>> {
     let mut state = ScopeTracker::new();
+    // Lint: bare function reference without call, e.g. `{{ MyTemplateString }}` vs `{{ MyTemplateString() }}`
+    if let ast::Expr::Var(var) = expr {
+        if let Some((_, _)) = types.as_function(var.id) {
+            state
+                .errors
+                .push(TypeError::new_function_reference_without_call(var.id, var.span()));
+        }
+    }
     let result = tracker_visit_expr(expr, &mut state, types);
 
     if state.errors.is_empty() {
