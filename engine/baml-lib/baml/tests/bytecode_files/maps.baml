@@ -203,3 +203,7 @@ fn Len() -> int {
 // Function: baml.media.pdf.mime
 //
 // Function: baml.deep_copy
+//
+// Function: baml.unstable.string
+//
+// Function: baml.fetch_as
