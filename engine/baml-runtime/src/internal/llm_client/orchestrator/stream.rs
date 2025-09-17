@@ -3,12 +3,13 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_std::stream::StreamExt;
 use baml_ids::HttpRequestId;
-use baml_types::{BamlValue, BamlValueWithMeta};
+use baml_types::BamlValue;
 use futures::StreamExt as FuturesStreamExt;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
 use serde_json::json;
 use stream_cancel::Tripwire;
+use tokio::time::MissedTickBehavior;
 use web_time::Duration;
 
 use super::{call::CtxWithHttpRequestId, OrchestrationScope, OrchestratorNodeIterator};
@@ -101,12 +102,17 @@ where
                         let mut last_response: Option<LLMResponse> = None;
                         let mut latest_success_snapshot: Option<crate::internal::llm_client::LLMCompleteResponse> = None;
                         let mut latest_content_for_parse: Option<String> = None;
+                        // Track last parsed payload surfaced to downstream listeners so we can dedupe events
+                        let mut last_sent_partial_serialized: Option<String> = None;
+                        let mut parse_interval = tokio::time::interval(std::time::Duration::from_millis(20));
+                        // If parsing falls behind, skip missed ticks so we only parse latest.
+                        parse_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
                         loop {
                             tokio::select! {
+                                // Prioritize consuming SSE events over parsing.
                                 biased;
-
-                                maybe_item = response_stream.next() => {
+                                maybe_item = FuturesStreamExt::next(&mut response_stream) => {
                                     match maybe_item {
                                         Some(stream_part) => {
                                             if let Some(on_tick) = on_tick_fn.as_ref() {
@@ -130,19 +136,65 @@ where
                                         }
                                     }
                                 }
-                                // When there's a lull in incoming SSE events, parse only the latest content.
-                                _ = tokio::time::sleep(std::time::Duration::from_millis(0)), if latest_content_for_parse.is_some() && on_event.is_some() => {
-                                    if let (Some(on_event), Some(snap), Some(content)) = (on_event.as_ref(), latest_success_snapshot.as_ref(), latest_content_for_parse.take()) {
-                                        if let Ok(baml_value) = partial_parse_fn(&content) {
-                                            // Strip flags to reduce memory usage
-                                            let parsed = ResponseBamlValue(baml_value.0.map_meta_owned(|m| {
-                                                jsonish::ResponseValueMeta(vec![], m.1, m.2, m.3)
-                                            }));
-                                            on_event(FunctionResult::new(
-                                                node.scope.clone(),
-                                                LLMResponse::Success(snap.clone()),
-                                                Some(Ok(parsed)),
-                                            ));
+                                // Periodically surface the latest partial parse to downstream listeners.
+                                _ = parse_interval.tick(), if on_event.is_some() => {
+                                    if let Some(on_event) = on_event.as_ref() {
+                                        if let Some(snap) = latest_success_snapshot.as_ref() {
+                                            if let Some(mut content) = latest_content_for_parse.take() {
+                                                match partial_parse_fn(&content) {
+                                                    Ok(baml_value) => {
+                                                        // Strip flags to reduce memory usage
+                                                        let parsed = ResponseBamlValue(baml_value.0.map_meta_owned(|m| {
+                                                            jsonish::ResponseValueMeta(vec![], m.1, m.2, m.3)
+                                                        }));
+                                                        if let Ok(serialized) = serde_json::to_string(&parsed.serialize_partial()) {
+                                                            if last_sent_partial_serialized
+                                                                .as_deref()
+                                                                != Some(serialized.as_str())
+                                                            {
+                                                                // only successful events sent to the client
+                                                                on_event(FunctionResult::new(
+                                                                    node.scope.clone(),
+                                                                    LLMResponse::Success(snap.clone()),
+                                                                    Some(Ok(parsed)),
+                                                                ));
+                                                                last_sent_partial_serialized = Some(serialized);
+                                                            }
+                                                        }
+                                                    }
+                                                    Err(_) => {
+                                                        // Put content back so we can retry on the next tick.
+                                                        latest_content_for_parse = Some(content);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if let Some(on_event) = on_event.as_ref() {
+                            if let Some(snap) = latest_success_snapshot.as_ref() {
+                                if let Some(mut content) = latest_content_for_parse.take() {
+                                    if let Ok(baml_value) = partial_parse_fn(&content) {
+                                        // Strip flags to reduce memory usage
+                                        let parsed = ResponseBamlValue(baml_value.0.map_meta_owned(|m| {
+                                            jsonish::ResponseValueMeta(vec![], m.1, m.2, m.3)
+                                        }));
+                                        if let Ok(serialized) = serde_json::to_string(&parsed.serialize_partial()) {
+                                            if last_sent_partial_serialized
+                                                .as_deref()
+                                                != Some(serialized.as_str())
+                                            {
+                                                // Only successful events should reach downstream listeners
+                                                on_event(FunctionResult::new(
+                                                    node.scope.clone(),
+                                                    LLMResponse::Success(snap.clone()),
+                                                    Some(Ok(parsed)),
+                                                ));
+                                                last_sent_partial_serialized = Some(serialized);
+                                            }
                                         }
                                     }
                                 }

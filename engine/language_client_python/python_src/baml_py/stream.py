@@ -81,12 +81,32 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
             while True:
                 try:
                     event = self.__event_queue.get_nowait()
-                    if event is None:
-                        break
-                    if event.is_ok():
-                        yield self.__partial_coerce(event)
                 except queue.Empty:
-                    await asyncio.sleep(0.050)
+                    await asyncio.sleep(0.010)
+                    continue
+
+                if event is None:
+                    break
+
+                # Drain the queue to coalesce and keep only the most recent successful event.
+                latest_ok: Optional[FunctionResult] = event if event.is_ok() else None
+                done_seen = False
+                while True:
+                    try:
+                        nxt = self.__event_queue.get_nowait()
+                        if nxt is None:
+                            done_seen = True
+                            break
+                        if nxt.is_ok():
+                            latest_ok = nxt
+                    except queue.Empty:
+                        break
+
+                if latest_ok is not None:
+                    yield self.__partial_coerce(latest_ok)
+
+                if done_seen:
+                    break
         except Exception as e:
             raise e
         finally:
@@ -163,8 +183,26 @@ class BamlSyncStream(Generic[PartialOutputType, FinalOutputType]):
                 event = self.__event_queue.get()
                 if event is None:
                     break
-                if event.is_ok():
-                    yield self.__partial_coerce(event)
+
+                # Drain the queue to coalesce and keep only the most recent successful event.
+                latest_ok: Optional[FunctionResult] = event if event.is_ok() else None
+                done_seen = False
+                while True:
+                    try:
+                        nxt = self.__event_queue.get_nowait()
+                        if nxt is None:
+                            done_seen = True
+                            break
+                        if nxt.is_ok():
+                            latest_ok = nxt
+                    except queue.Empty:
+                        break
+
+                if latest_ok is not None:
+                    yield self.__partial_coerce(latest_ok)
+
+                if done_seen:
+                    break
         except Exception as e:
             raise e
         finally:
