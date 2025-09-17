@@ -458,7 +458,9 @@ impl BamlAsyncVmRuntime {
                             let url = match &vm.objects[*url_str_index] {
                                 baml_vm::Object::String(url) => url.to_owned(),
                                 _ => {
-                                    break 'mainloop Err(anyhow::anyhow!("baml.fetch_as: failed to get URL from VM value"))
+                                    break 'mainloop Err(anyhow::anyhow!(
+                                        "baml.fetch_as: failed to get URL from VM value"
+                                    ))
                                 }
                             };
 
