@@ -232,9 +232,8 @@ impl Server {
             let webview_router_to_websocket_tx = server.args.webview_router_to_websocket_tx.clone();
             let mut session = server.session.clone();
             server.args.tokio_runtime.spawn(async move {
-                tracing::info!("Starting playground rx loop");
+                tracing::info!("Starting the webview router loop: will dispatch messages to the webview and IDE");
                 while let Ok(msg) = to_webview_router_rx.recv().await {
-                    tracing::info!("playground rx loop: {:?}", msg);
                     match msg {
                         WebviewRouterMessage::WasmIsInitialized => {
                             // Reloading the session publishes a runtime_updated notification to the webview
@@ -242,23 +241,20 @@ impl Server {
                                 tracing::error!("Failed to reload session: {e}");
                             });
                         }
-                        WebviewRouterMessage::SendLspNotificationToIde(notification) => {
-                            tracing::info!("Received playground SEND_LSP_NOTIFICATION request: {:?}", notification);
+                        WebviewRouterMessage::SendLspNotificationToIde (notification) => {
+                            tracing::info!("Received playground SEND_LSP_NOTIFICATION_TO_IDE request: {:?}", notification);
                             let _ = lsp_sender
                                 .send(Message::Notification(notification))
                                 .inspect_err(|e| {
-                                    tracing::error!("Failed to forward SEND_LSP_NOTIFICATION message to language-server: {e}");
+                                    tracing::error!("Failed to forward SEND_LSP_NOTIFICATION_TO_IDE message to language-server: {e}");
                                 });
                         }
-                        WebviewRouterMessage::SendLspNotificationToWebview(notification) => {
-                            tracing::info!("Received playground SEND_LSP_NOTIFICATION_TO_WEBVIEW request: {:?}", notification);
+                        WebviewRouterMessage::SendLspNotificationToWebview (notification) => {
+                            tracing::info!("Received playground SEND_LSP_MESSAGE_TO_WEBVIEW request: {:?}", notification);
                             let _ = webview_router_to_websocket_tx
-                                .send(WebviewNotification::LspMessage {
-                                    method: notification.method,
-                                    params: notification.params,
-                                })
+                                .send(WebviewNotification::LspMessage(notification))
                                 .inspect_err(|e| {
-                                    tracing::error!("Failed to forward SEND_LSP_NOTIFICATION_TO_WEBVIEW message to webview: {e}");
+                                    tracing::error!("Failed to forward SEND_LSP_MESSAGE_TO_WEBVIEW message to webview: {e}");
                                 });
                         }
                         WebviewRouterMessage::CustomNotificationToWebview(msg) => {
@@ -389,7 +385,9 @@ impl Server {
             // webview_router_to_websocket_tx.send(LangServerToWasmMessage::LspMessage(msg.clone()))?;
             let tasks = match msg {
                 Message::Request(req) => {
-                    if req.method == "workspace/executeCommand" {
+                    if vec!["textDocument/codeAction", "workspace/executeCommand"]
+                        .contains(&req.method.as_str())
+                    {
                         let _ = to_webview_router_tx
                             .send(WebviewRouterMessage::SendLspNotificationToWebview(
                                 lsp_server::Notification::new(

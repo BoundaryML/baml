@@ -386,6 +386,13 @@ class VSCodeAPIWrapper {
     }
   }
 
+  public sendTelemetry(meta: unknown) {
+    this.postMessageToHost({
+      command: 'telemetry',
+      meta,
+    });
+  }
+
   /**
    * Post a message (i.e. send arbitrary data) to the owner of the webview.
    *
@@ -394,7 +401,7 @@ class VSCodeAPIWrapper {
    *
    * @param message Abitrary data (must be JSON serializable) to send to the extension context.
    */
-  public postMessageToHost(message: unknown) {
+  private postMessageToHost(message: unknown) {
     if (this.vsCodeApi) {
       this.vsCodeApi.postMessage(message)
     } else {

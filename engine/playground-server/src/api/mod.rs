@@ -2,16 +2,6 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
-pub struct EchoRequest {
-    pub message: String,
-}
-
-#[derive(Serialize)]
-pub struct EchoResponse {
-    pub message: String,
-}
-
-#[derive(Deserialize)]
 pub struct GetPlaygroundPortRequest {}
 
 #[derive(Serialize)]
@@ -122,6 +112,16 @@ pub struct SendLspNotificationToIdeRequest {
 
 #[derive(Serialize)]
 pub struct SendLspNotificationToIdeResponse {
+    pub ok: bool,
+}
+
+#[derive(Deserialize)]
+pub struct SendLspNotificationToWebviewRequest {
+    pub notification: lsp_server::Notification,
+}
+
+#[derive(Serialize)]
+pub struct SendLspNotificationToWebviewResponse {
     pub ok: bool,
 }
 

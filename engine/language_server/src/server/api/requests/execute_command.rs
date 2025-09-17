@@ -1,8 +1,9 @@
 use std::time::Duration;
 
-use lsp_server::ErrorCode;
+use lsp_server::{ErrorCode, Notification};
 use lsp_types::{request, ExecuteCommandParams, MessageType};
 use playground_server::{FrontendMessage, WebviewRouterMessage};
+use serde_json::json;
 use tokio::time::sleep;
 use webbrowser;
 
@@ -56,22 +57,28 @@ impl SyncRequestHandler for ExecuteCommand {
                 });
             }
 
-            // if let Some(function_name) = params
-            //     .arguments
-            //     .first()
-            //     .and_then(|arg| arg.as_str().map(|s| s.to_string()))
-            // {
-            //     session
-            //         .to_webview_router_tx
-            //         .send(WebviewRouterMessage::CustomNotificationToWebview(
-            //             FrontendMessage::select_function {
-            //                 // TODO: this can't be correct... but it looks like it is
-            //                 root_path: function_name.to_string(),
-            //                 function_name,
-            //             },
-            //         ))
-            //         .unwrap();
-            // }
+            if let Some(function_name) = params
+                .arguments
+                .first()
+                .and_then(|arg| arg.as_str().map(|s| s.to_string()))
+            {
+                session
+                    .to_webview_router_tx
+                    .send(WebviewRouterMessage::SendLspNotificationToWebview(
+                        Notification::new(
+                            "workspace/executeCommand".to_string(),
+                            json!({
+                                "command": "baml.openBamlPanel",
+                                "arguments": [
+                                    {
+                                        "function_name": function_name,
+                                    }
+                                ]
+                            }),
+                        ),
+                    ))
+                    .unwrap();
+            }
             return Ok(None);
         }
 

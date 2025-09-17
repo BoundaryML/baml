@@ -33,8 +33,5 @@ pub enum WebviewRouterMessage {
 /// This is equivalent to VscodeToWebviewCommand in vscode-to-webview-rpc.ts
 pub enum WebviewNotification {
     IdeMessage(FrontendMessage),
-    LspMessage {
-        method: String,
-        params: serde_json::Value,
-    },
+    LspMessage(lsp_server::Notification),
 }

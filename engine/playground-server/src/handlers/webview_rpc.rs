@@ -2,7 +2,6 @@ use axum::{
     extract::{Path, State},
     Json,
 };
-use lsp_server::Notification;
 use serde_json::Value;
 
 use crate::{
@@ -134,7 +133,9 @@ pub async fn webview_rpc_handler(
 
         "SEND_LSP_NOTIFICATION_TO_IDE" => {
             let request: SendLspNotificationToIdeRequest = serde_json::from_value(payload)
-                .map_err(|_| ApiError::BadRequest("Invalid jump to file request".to_string()))?;
+                .map_err(|_| {
+                    ApiError::BadRequest("Invalid SendLspNotificationToIde request".to_string())
+                })?;
 
             let _ = state
                 .to_webview_router_tx
@@ -148,27 +149,19 @@ pub async fn webview_rpc_handler(
         }
 
         "SEND_LSP_NOTIFICATION_TO_WEBVIEW" => {
+            let request: SendLspNotificationToWebviewRequest = serde_json::from_value(payload)
+                .map_err(|_| {
+                    ApiError::BadRequest("Invalid SendLspNotificationToWebview request".to_string())
+                })?;
+
             let _ = state
                 .to_webview_router_tx
-                .send(WebviewRouterMessage::SendLspNotificationToWebview(Notification::new(
-                    "textDocument/codeAction".to_string(),
-                    payload,
-                )))
+                .send(WebviewRouterMessage::SendLspNotificationToWebview(request.notification))
                 .inspect_err(|e| {
                     tracing::error!("Failed to send SEND_LSP_NOTIFICATION_TO_IDE message to language-server: {e}");
                 });
 
             let response = SendLspNotificationToIdeResponse { ok: true };
-            Ok(Json(serde_json::to_value(response)?))
-        }
-
-        "ECHO" => {
-            let request: EchoRequest = serde_json::from_value(payload)
-                .map_err(|_| ApiError::BadRequest("Invalid echo request".to_string()))?;
-
-            let response = EchoResponse {
-                message: request.message,
-            };
             Ok(Json(serde_json::to_value(response)?))
         }
 

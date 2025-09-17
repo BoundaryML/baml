@@ -62,6 +62,24 @@ data class CursorNotificationPayload(
     val range: Range
 )
 
+// Wrapper structures for LSP notification
+@Serializable
+data class LspParams(
+    val textDocument: TextDocument,
+    val range: Range
+)
+
+@Serializable
+data class LspPayload(
+    val method: String,
+    val params: LspParams
+)
+
+@Serializable
+data class WrappedNotification(
+    val notification: LspPayload
+)
+
 class BamlLanguageClient(project: Project) :
     LanguageClientImpl(project) {
 
@@ -139,7 +157,19 @@ class BamlLanguageClient(project: Project) :
     private fun sendCursorNotification(port: Int, payload: CursorNotificationPayload) {
         try {
             val webviewUrl = "http://localhost:$port/webview/SEND_LSP_NOTIFICATION_TO_WEBVIEW"
-            val jsonBody = json.encodeToString(CursorNotificationPayload.serializer(), payload)
+            
+            // Wrap the payload in the required structure
+            val wrappedNotification = WrappedNotification(
+                notification = LspPayload(
+                    method = "textDocument/codeAction",
+                    params = LspParams(
+                        textDocument = payload.textDocument,
+                        range = payload.range
+                    )
+                )
+            )
+
+            val jsonBody = json.encodeToString(WrappedNotification.serializer(), wrappedNotification)
             
             log.debug("Sending cursor notification to $webviewUrl: $jsonBody")
             

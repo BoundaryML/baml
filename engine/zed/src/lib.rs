@@ -134,7 +134,7 @@ impl zed::Extension for BamlExtension {
         language_server_id: &zed::LanguageServerId,
         worktree: &zed::Worktree,
     ) -> Result<zed::Command> {
-        #[cfg(feature = "debug")]
+        // #[cfg(feature = "debug")]
         {
             Ok(zed::Command {
                 command: format!(
@@ -146,15 +146,15 @@ impl zed::Extension for BamlExtension {
             })
         }
 
-        #[cfg(not(feature = "debug"))]
-        {
-            let baml_binary = self.language_server_binary(language_server_id, worktree)?;
-            Ok(zed::Command {
-                command: baml_binary.path,
-                args: baml_binary.args.unwrap_or_else(|| vec!["lsp".into()]),
-                env: Default::default(),
-            })
-        }
+        // #[cfg(not(feature = "debug"))]
+        // {
+        //     let baml_binary = self.language_server_binary(language_server_id, worktree)?;
+        //     Ok(zed::Command {
+        //         command: baml_binary.path,
+        //         args: baml_binary.args.unwrap_or_else(|| vec!["lsp".into()]),
+        //         env: Default::default(),
+        //     })
+        // }
     }
 
     // fn language_server_initialization_options(
