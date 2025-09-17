@@ -361,7 +361,7 @@ impl Server {
     #[allow(clippy::needless_pass_by_value)] // this is because we aren't using `next_request_id` yet.
     fn event_loop(
         connection: &Connection,
-        _client_capabilities: &ClientCapabilities,
+        client_capabilities: &ClientCapabilities,
         mut session: Session,
         worker_threads: NonZeroUsize,
         webview_router_to_websocket_tx: broadcast::Sender<WebviewNotification>,
@@ -375,7 +375,7 @@ impl Server {
         session.reload(Some(notifier.clone()))?;
         let mut scheduler =
             schedule::Scheduler::new(&mut session, worker_threads, connection.make_sender());
-        Self::try_register_capabilities(_client_capabilities, &mut scheduler);
+        Self::try_register_capabilities(client_capabilities, &mut scheduler);
 
         for msg in connection.incoming() {
             tracing::info!("Received message: {:?}", msg);
@@ -512,10 +512,7 @@ impl Server {
             }),
             code_action_provider: Some(lsp_types::CodeActionProviderCapability::Simple(true)),
             execute_command_provider: Some(lsp_types::ExecuteCommandOptions {
-                commands: vec![
-                    "openPlayground".to_string(),
-                    "baml.changeFunction".to_string(),
-                ],
+                commands: vec!["baml.openBamlPanel".to_string()],
                 work_done_progress_options: Default::default(),
             }),
             definition_provider: Some(lsp_types::OneOf::Left(true)),

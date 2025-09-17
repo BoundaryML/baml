@@ -34,7 +34,7 @@ impl SyncRequestHandler for ExecuteCommand {
     ) -> Result<Option<serde_json::Value>> {
         use crate::server::commands::RegisteredCommands;
 
-        if params.command == "openPlayground" {
+        if params.command == "baml.openBamlPanel" {
             // Get the actual playground port from session (determined by server after availability check)
             // Fall back to configured port if actual port not set yet
 
