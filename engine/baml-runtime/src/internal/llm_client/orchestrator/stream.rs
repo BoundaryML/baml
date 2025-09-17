@@ -160,11 +160,21 @@ where
                                                                 ));
                                                                 last_sent_partial_serialized = Some(serialized);
                                                             }
+                                                        } else {
+                                                            // If serialization fails, still emit the parsed event instead of dropping it.
+                                                            on_event(FunctionResult::new(
+                                                                node.scope.clone(),
+                                                                LLMResponse::Success(snap.clone()),
+                                                                Some(Ok(parsed)),
+                                                            ));
+                                                            // Intentionally do not update last_sent_partial_serialized here.
                                                         }
                                                     }
                                                     Err(_) => {
-                                                        // Put content back so we can retry on the next tick.
-                                                        latest_content_for_parse = Some(content);
+                                                        // Only restore the content if nothing newer has arrived since we took it.
+                                                        if latest_content_for_parse.is_none() {
+                                                            latest_content_for_parse = Some(content);
+                                                        }
                                                     }
                                                 }
                                             }
@@ -195,6 +205,14 @@ where
                                                 ));
                                                 last_sent_partial_serialized = Some(serialized);
                                             }
+                                        } else {
+                                            // If serialization fails, still emit the parsed event instead of dropping it.
+                                            on_event(FunctionResult::new(
+                                                node.scope.clone(),
+                                                LLMResponse::Success(snap.clone()),
+                                                Some(Ok(parsed)),
+                                            ));
+                                            // Intentionally do not update last_sent_partial_serialized here.
                                         }
                                     }
                                 }
