@@ -60,7 +60,7 @@ impl SyncRequestHandler for CodeActionHandler {
             kind: Some(CodeActionKind::EMPTY),
             command: Some(Command {
                 title: "Open Playground".to_string(),
-                command: "openPlayground".to_string(),
+                command: "baml.openBamlPanel".to_string(),
                 arguments: function_name.map(|name| vec![Value::String(name)]),
             }),
             edit: None,
