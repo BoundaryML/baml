@@ -7210,6 +7210,23 @@ components:
       - client_details
       - notes
       additionalProperties: false
+    DummyJsonTodo:
+      type: object
+      properties:
+        completed:
+          type: boolean
+        id:
+          type: integer
+        todo:
+          type: string
+        userId:
+          type: integer
+      required:
+      - completed
+      - id
+      - todo
+      - userId
+      additionalProperties: false
     DummyOutput:
       type: object
       properties:

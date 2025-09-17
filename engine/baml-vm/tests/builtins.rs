@@ -59,20 +59,20 @@ fn deep_copy_object() -> anyhow::Result<()> {
             }
         "#,
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(46))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(47))),
         },
         |vm| {
-            let baml_vm::Object::Instance(tree) = &vm.objects[ObjectIndex::from_raw(46)] else {
+            let baml_vm::Object::Instance(tree) = &vm.objects[ObjectIndex::from_raw(47)] else {
                 panic!(
                     "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(46)]
+                    &vm.objects[ObjectIndex::from_raw(47)]
                 );
             };
 
-            let baml_vm::Object::Instance(copy) = &vm.objects[ObjectIndex::from_raw(43)] else {
+            let baml_vm::Object::Instance(copy) = &vm.objects[ObjectIndex::from_raw(44)] else {
                 panic!(
                     "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(43)]
+                    &vm.objects[ObjectIndex::from_raw(44)]
                 );
             };
 
@@ -115,13 +115,13 @@ fn any_value_to_string() -> anyhow::Result<()> {
             }
         "#,
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(47))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(48))),
         },
         |vm| {
-            let baml_vm::Object::String(result) = &vm.objects[ObjectIndex::from_raw(47)] else {
+            let baml_vm::Object::String(result) = &vm.objects[ObjectIndex::from_raw(48)] else {
                 panic!(
                     "expected String, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(47)]
+                    &vm.objects[ObjectIndex::from_raw(48)]
                 );
             };
 

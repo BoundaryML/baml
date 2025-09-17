@@ -476,11 +476,16 @@ impl Expression {
                 receiver,
                 method,
                 args,
+                type_args,
                 span,
             } => Expression::MethodCall {
                 receiver: Box::new(Self::from_ast(receiver)),
                 method: method.to_string(),
                 args: args.iter().map(Self::from_ast).collect(),
+                type_args: type_args
+                    .iter()
+                    .map(|arg| TypeArg::Type(type_ir_from_ast(arg)))
+                    .collect(),
                 span: span.clone(),
             },
             ast::Expression::BoolValue(value, span) => Expression::BoolValue(*value, span.clone()),

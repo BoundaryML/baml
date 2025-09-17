@@ -130,7 +130,7 @@ prefix_operator = _{ NOT | NEG }
 
 array_accessor = { "[" ~ expression ~ "]" }
 field_accessor = { "." ~ identifier }
-method_call    = { "." ~ fn_app }
+method_call    = { "." ~ (generic_fn_app | fn_app) }
 
 primary_expression = {
     if_expression |

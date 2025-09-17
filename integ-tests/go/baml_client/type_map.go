@@ -63,6 +63,8 @@ var typeMap = map[string]reflect.Type{
 	"STREAM_TYPES.CustomTaskResult":              reflect.TypeOf(stream_types.CustomTaskResult{}),
 	"TYPES.Document1559":                         reflect.TypeOf(types.Document1559{}),
 	"STREAM_TYPES.Document1559":                  reflect.TypeOf(stream_types.Document1559{}),
+	"TYPES.DummyJsonTodo":                        reflect.TypeOf(types.DummyJsonTodo{}),
+	"STREAM_TYPES.DummyJsonTodo":                 reflect.TypeOf(stream_types.DummyJsonTodo{}),
 	"TYPES.DummyOutput":                          reflect.TypeOf(types.DummyOutput{}),
 	"STREAM_TYPES.DummyOutput":                   reflect.TypeOf(stream_types.DummyOutput{}),
 	"TYPES.DynInputOutput":                       reflect.TypeOf(types.DynInputOutput{}),

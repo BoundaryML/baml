@@ -95,15 +95,38 @@ pub(crate) fn parse_expression(
                 }
 
                 Rule::method_call => {
-                    match parse_fn_app(operator.into_inner().next()?, diagnostics)? {
-                        Expression::App(fn_call) => Expression::MethodCall {
-                            receiver: Box::new(left),
-                            method: fn_call.name,
-                            args: fn_call.args,
-                            span: span.clone(),
+                    let inner = operator.into_inner().next()?;
+
+                    match inner.as_rule() {
+                        Rule::fn_app => match parse_fn_app(inner, diagnostics)? {
+                            Expression::App(fn_call) => Expression::MethodCall {
+                                receiver: Box::new(left),
+                                method: fn_call.name,
+                                args: fn_call.args,
+                                type_args: fn_call.type_args,
+                                span: span.clone(),
+                            },
+
+                            _ => {
+                                unreachable!("expected function call when parsing method call")
+                            }
                         },
 
-                        _ => unreachable!("expected function call when parsing method call"),
+                        Rule::generic_fn_app => match parse_generic_fn_app(inner, diagnostics)? {
+                            Expression::App(fn_call) => Expression::MethodCall {
+                                receiver: Box::new(left),
+                                method: fn_call.name,
+                                args: fn_call.args,
+                                type_args: fn_call.type_args,
+                                span: span.clone(),
+                            },
+
+                            _ => {
+                                unreachable!("expected function call when parsing method call")
+                            }
+                        },
+
+                        _ => unreachable_rule!(inner, Rule::method_call),
                     }
                 }
                 _ => unreachable_rule!(operator, Rule::postfix_operator),

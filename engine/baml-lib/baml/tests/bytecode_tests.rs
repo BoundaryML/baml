@@ -131,6 +131,9 @@ fn get_bytecode_output(content: &str) -> Result<String, String> {
                     baml_vm::Object::Media(_) => {
                         output.push_str("Media\n");
                     }
+                    baml_vm::Object::BamlType(_) => {
+                        output.push_str("BamlType\n");
+                    }
                 }
             }
 

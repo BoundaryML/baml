@@ -30,3 +30,32 @@ fn builtin_method_call() -> anyhow::Result<()> {
         )],
     })
 }
+
+#[test]
+fn fetch_as() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            class DummyJsonTodo {
+                id int
+                todo string
+                completed bool
+                userId int
+            }
+
+            fn main() -> DummyJsonTodo {
+                baml.fetch_as<DummyJsonTodo>("https://dummyjson.com/todos/1")
+            }
+        "#,
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::LoadGlobal(GlobalIndex::from_raw(37)),
+                Instruction::LoadConst(0),
+                Instruction::LoadConst(1),
+                Instruction::DispatchFuture(2),
+                Instruction::Await,
+                Instruction::Return,
+            ],
+        )],
+    })
+}

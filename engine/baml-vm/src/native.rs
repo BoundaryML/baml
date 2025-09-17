@@ -315,6 +315,7 @@ impl Vm {
                     Object::Class(c) => Ok(format!("<class {}>", c.name)),
                     Object::Media(_) => Ok("<media>".to_string()),
                     Object::Future(_) => Ok("<future>".to_string()),
+                    Object::BamlType(_) => Ok("<baml type>".to_string()),
                 },
             }
         }

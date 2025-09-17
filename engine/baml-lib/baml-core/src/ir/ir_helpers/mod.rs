@@ -450,7 +450,7 @@ fn get_dummy_value(
             }
         }
         TypeIR::Literal(literal_value, _) => match literal_value {
-            LiteralValue::String(s) => format!("\"{}\"", s),
+            LiteralValue::String(s) => format!("\"{s}\""),
             LiteralValue::Int(i) => i.to_string(),
             LiteralValue::Bool(b) => b.to_string(),
         },
@@ -1908,7 +1908,7 @@ mod subtype_tests {
         assert!(result.contains("0.5")); // float value
         assert!(result.contains("name") && result.contains("age")); // Person class fields
 
-        println!("Generated dummy args:\n{}", result);
+        println!("Generated dummy args:\n{result}");
     }
 
     #[test]

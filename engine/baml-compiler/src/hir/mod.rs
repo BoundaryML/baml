@@ -228,6 +228,7 @@ pub enum Expression {
     MethodCall {
         receiver: Box<Expression>,
         method: String,
+        type_args: Vec<TypeArg>,
         args: Vec<Expression>,
         span: Span,
     },

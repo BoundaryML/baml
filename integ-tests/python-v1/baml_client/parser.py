@@ -1398,6 +1398,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def ExecFetchAs(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.DummyJsonTodo:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAs", llm_response=llm_response, mode="request")
+        return typing.cast(types.DummyJsonTodo, result)
+
     def IterativeFibonacci(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
@@ -2851,6 +2857,12 @@ class LlmStreamParser:
     ) -> typing.Optional[str]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[str], result)
+
+    def ExecFetchAs(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional["stream_types.DummyJsonTodo"]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAs", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], result)
 
     def IterativeFibonacci(
         self, llm_response: str, baml_options: BamlCallOptions = {},
