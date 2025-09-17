@@ -2856,6 +2856,19 @@ paths:
                 title: TestOpenRouterMistralSmall3_1_24bResponse
                 type: string
       operationId: TestOpenRouterMistralSmall3_1_24b
+  /call/TestOpenaiResponsesPdfs:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenaiResponsesPdfs'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenaiResponsesPdfsResponse
+                type: string
+      operationId: TestOpenaiResponsesPdfs
   /call/TestRetryConstant:
     post:
       requestBody:
@@ -6483,6 +6496,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    TestOpenaiResponsesPdfs:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenaiResponsesPdfsRequest
+            type: object
+            properties:
+              pdf:
+                $ref: '#/components/schemas/BamlPdf'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - pdf
             additionalProperties: false
     TestRetryConstant:
       required: true

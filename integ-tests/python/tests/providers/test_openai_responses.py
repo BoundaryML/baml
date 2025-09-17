@@ -15,7 +15,7 @@ async def test_expose_request_openai_responses_multimodal():
         request.body.json(),
         equal_to(
             {
-                "model": "o1-mini",
+                "model": "gpt-5",
                 "input": [
                     {
                         "role": "user",
@@ -43,7 +43,7 @@ async def test_expose_request_openai_responses_audio():
         request.body.json(),
         equal_to(
             {
-                "model": "o1-mini",
+                "model": "gpt-5",
                 "input": [
                     {
                         "role": "user",
@@ -75,7 +75,7 @@ async def test_expose_request_openai_responses_pdf_base64():
         request.body.json(),
         equal_to(
             {
-                "model": "o1-mini",
+                "model": "gpt-5",
                 "input": [
                     {
                         "role": "user",
@@ -83,7 +83,7 @@ async def test_expose_request_openai_responses_pdf_base64():
                             {"type": "input_text", "text": "what is in this content?"},
                             {
                                 "type": "input_file",
-                                "file_url": f"data:application/pdf;base64,{test_pdf_b64}",
+                                "file_data": f"data:application/pdf;base64,{test_pdf_b64}",
                             },
                         ],
                     }
@@ -101,7 +101,7 @@ async def test_openai_responses_basic():
         request.body.json(),
         equal_to(
             {
-                "model": "gpt-4.1",
+                "model": "gpt-5-mini",
                 "input": [
                     {
                         "role": "user",
@@ -126,7 +126,7 @@ async def test_openai_responses_explicit():
         request.body.json(),
         equal_to(
             {
-                "model": "gpt-4.1",
+                "model": "gpt-5-mini",
                 "input": [
                     {
                         "role": "user",
@@ -151,7 +151,7 @@ async def test_openai_responses_custom_url():
         request.body.json(),
         equal_to(
             {
-                "model": "gpt-4.1",
+                "model": "gpt-5-mini",
                 "input": [
                     {
                         "role": "user",
@@ -176,7 +176,7 @@ async def test_openai_responses_conversation():
         request.body.json(),
         equal_to(
             {
-                "model": "gpt-4.1",
+                "model": "gpt-5-mini",
                 "input": [
                     {
                         "role": "system",
@@ -257,7 +257,7 @@ async def test_expose_request_openai_responses_pdf_url():
         request.body.json(),
         equal_to(
             {
-                "model": "o1-mini",
+                "model": "gpt-5",
                 "input": [
                     {
                         "role": "user",

@@ -231,6 +231,7 @@ export type StreamingServerTypes = {
   TestOpenAIWithMaxTokens: string,
   TestOpenAIWithNullMaxTokens: string,
   TestOpenRouterMistralSmall3_1_24b: string,
+  TestOpenaiResponsesPdfs: string,
   TestRetryConstant: string,
   TestRetryExponential: string,
   TestRoundRobinStrategy: string,
