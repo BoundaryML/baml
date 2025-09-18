@@ -341,10 +341,6 @@ pub struct WasmSpan {
 
 impl WasmSpan {
     fn contains(&self, file_path: &str, cursor_idx: usize) -> bool {
-        if self.file_path.as_str().ends_with(file_path) {
-            log::info!("WasmSpan::contains: file_path: {file_path}, cursor_idx: {cursor_idx}, self: {self:#?}");
-        }
-
         // NB(sam): we should probably do an == comparison, but ends_with is the
         // existing behavior and handles file:// ambiguity
         self.file_path.as_str().ends_with(file_path)
