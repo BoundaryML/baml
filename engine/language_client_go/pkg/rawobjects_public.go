@@ -62,8 +62,8 @@ type Collector interface {
 	Last() (FunctionLog, error)
 	// ID looks up a function log by ID
 	Id(functionId string) (FunctionLog, error)
-    // Clear removes all logs and frees memory
-    Clear() error
+	// Clear removes all logs and frees memory
+	Clear() (int64, error)
 }
 
 type Usage interface {
