@@ -104,17 +104,18 @@ impl Server {
             .initialization_options
             .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::default()));
 
-        tracing::info!("--- Received initialization options: {:?}", init_options);
+        eprintln!("--- Received initialization options: {:?}", init_options);
+        crate::logging::init_logging(crate::logging::LogLevel::Debug, None);
 
         let AllSettings {
             global_settings,
             mut workspace_settings,
         } = AllSettings::from_value(init_options);
 
-        crate::logging::init_logging(
-            global_settings.tracing.log_level.unwrap_or_default(),
-            global_settings.tracing.log_file.as_deref(),
-        );
+        // crate::logging::init_logging(
+        //     global_settings.tracing.log_level.unwrap_or_default(),
+        //     global_settings.tracing.log_file.as_deref(),
+        // );
         if let Err(e) = tracing_log::LogTracer::init() {
             eprintln!("Failed to initialize log tracer: {e}");
             // Decide how to handle this error - maybe log it via tracing if possible,

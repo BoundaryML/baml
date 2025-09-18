@@ -163,7 +163,7 @@ impl zed::Extension for BamlExtension {
         _worktree: &zed::Worktree,
     ) -> Result<Option<zed::serde_json::Value>> {
         Ok(Some(zed::serde_json::json!({
-            "baml": {
+            "settings": {
                 "featureFlags": ["beta"],
                 "generateCodeOnSave": "always",
                 "lspMethodsToForwardToWebview": [

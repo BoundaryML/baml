@@ -122,7 +122,7 @@ impl Session {
                     global_settings.baml
                 );
                 let baml_settings = global_settings.baml.clone().unwrap_or_default();
-                tracing::info!("--- Session::new final baml_settings: {:?}", baml_settings);
+                tracing::info!("--- Session::new final baml_settings: {:#?}", baml_settings);
                 baml_settings
             },
             playground_port,

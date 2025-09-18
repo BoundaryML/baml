@@ -26,7 +26,7 @@ class BamlLanguageServerFactory : LanguageServerFactory {
             override fun initializeParams(params: org.eclipse.lsp4j.InitializeParams) {
                 // Add initialization options for BAML settings
                 params.initializationOptions = mapOf(
-                    "baml" to mapOf(
+                    "settings" to mapOf(
                         "featureFlags" to listOf("beta"),
                         "generateCodeOnSave" to "always",
                         "lspMethodsToForwardToWebview" to listOf("runtime_updated") // Default behavior
