@@ -41,7 +41,8 @@ impl CollectorWrapper {
 
     #[export_baml_fn]
     fn clear(&self) -> BamlValue {
-        BamlValue::Int(self.inner.clear() as i64)
+        let _ = self.inner.clear();
+        BamlValue::Null
     }
 
     #[export_baml_fn]

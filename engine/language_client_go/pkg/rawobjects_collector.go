@@ -109,16 +109,10 @@ func (c *collector) Id(functionId string) (FunctionLog, error) {
 	return log, nil
 }
 
-func (c *collector) Clear() (int64, error) {
-	result, err := raw_objects.CallMethod(c, "clear", nil)
-	if err != nil {
-		return 0, fmt.Errorf("failed to clear: %w", err)
-	}
-
-	count, ok := result.(int64)
-	if !ok {
-		return 0, fmt.Errorf("unexpected type for clear result: %T", result)
-	}
-
-	return count, nil
+func (c *collector) Clear() error {
+    _, err := raw_objects.CallMethod(c, "clear", nil)
+    if err != nil {
+        return fmt.Errorf("failed to clear: %w", err)
+    }
+    return nil
 }

@@ -33,8 +33,8 @@ impl Collector {
     }
 
     #[napi]
-    pub fn clear(&self) -> u32 {
-        self.inner.clear() as u32
+    pub fn clear(&self) {
+        self.inner.clear();
     }
 
     #[napi(getter)]

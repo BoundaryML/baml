@@ -85,8 +85,8 @@ impl Collector {
         })
     }
 
-    pub fn clear(&self) -> i64 {
-        self.inner.clear() as i64
+    pub fn clear(&self) {
+        let _ = self.inner.clear();
     }
 
     pub fn logs(&self) -> RArray {

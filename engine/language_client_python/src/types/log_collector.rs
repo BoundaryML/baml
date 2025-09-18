@@ -31,9 +31,9 @@ impl Collector {
         }
     }
 
-    /// Clear all tracked logs from this collector and return the number removed
-    pub fn clear(&self) -> usize {
-        self.inner.clear()
+    /// Clear all tracked logs from this collector
+    pub fn clear(&self) {
+        self.inner.clear();
     }
 
     /// For Python: `repr(log_collector)`

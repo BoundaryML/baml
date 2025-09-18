@@ -184,8 +184,6 @@ from baml_py import Collector
 def run():
     collector = Collector(name="reusable-collector")
     res = b.ExtractResume("...", baml_options={"collector": collector})
-    # Remove all logs and free up memory
-    collector.clear()
 
     # Reuse the same collector
     res = b.TestOpenAIGPT4oMini("Second call", baml_options={"collector": collector})
@@ -200,8 +198,6 @@ import {Collector} from '@boundaryml/baml'
 async function run() {
     const collector = new Collector("reusable-collector")
     const res = await b.ExtractResume("...", { collector })
-    // Remove all logs and free up memory
-    collector.clear()
 
     // Reuse the same collector
     const res2 = await b.ExtractResume("...", { collector })
@@ -217,8 +213,6 @@ b = Baml.Client
 def run
     collector = Baml::Collector.new(name: "reusable-collector")
     res = b.ExtractResume(input: 'First call', baml_options: { collector: collector })
-    # Remove all logs and free up memory
-    collector.clear()
 
     # Reuse the same collector
     res = b.ExtractResume(input: 'Second call', baml_options: { collector: collector })
