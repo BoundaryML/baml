@@ -1,3 +1,4 @@
+import { WasmSpan } from '@gloo-ai/baml-schema-wasm-web';
 import {
   type GetPlaygroundPortRequest,
   type GetPlaygroundPortResponse,
@@ -147,20 +148,14 @@ class VSCodeAPIWrapper {
     return this.vsCodeApi !== undefined
   }
 
-  public async jumpToFile(span: {
-    start: number;
-    end: number;
-    file_path: string;
-    start_line: number;
-  }) {
+  public async jumpToFile(span: WasmSpan) {
     if (this.isVscode()) {
       await this.rpc<JumpToFileRequest, JumpToFileResponse>({
         vscodeCommand: 'JUMP_TO_FILE',
         span: {
-          start: span.start,
-          end: span.end,
           file_path: span.file_path,
           start_line: span.start_line,
+          start_column: span.start_column,
         },
       });
     } else {
@@ -172,11 +167,11 @@ class VSCodeAPIWrapper {
           selection: {
             start: {
               line: span.start_line,
-              character: 0
+              character: span.start_column,
             },
             end: {
               line: span.start_line,
-              character: 0
+              character: span.start_column,
             }
           },
         }

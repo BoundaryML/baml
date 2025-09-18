@@ -332,7 +332,11 @@ pub struct WasmSpan {
     #[wasm_bindgen(readonly)]
     pub start_line: usize,
     #[wasm_bindgen(readonly)]
+    pub start_column: usize,
+    #[wasm_bindgen(readonly)]
     pub end_line: usize,
+    #[wasm_bindgen(readonly)]
+    pub end_column: usize,
 }
 
 impl WasmSpan {
@@ -367,7 +371,9 @@ impl From<&baml_runtime::internal_baml_diagnostics::Span> for WasmSpan {
             start: span.start,
             end: span.end,
             start_line: start.0,
+            start_column: start.1,
             end_line: end.0,
+            end_column: end.1,
         }
     }
 }
@@ -379,7 +385,9 @@ impl Default for WasmSpan {
             start: 0,
             end: 0,
             start_line: 0,
+            start_column: 0,
             end_line: 0,
+            end_column: 0,
         }
     }
 }
@@ -1073,7 +1081,9 @@ impl WasmRuntime {
                     start: generator.span.start,
                     end: generator.span.end,
                     start_line: generator.span.line_and_column().0 .0,
+                    start_column: generator.span.line_and_column().0 .1,
                     end_line: generator.span.line_and_column().1 .0,
+                    end_column: generator.span.line_and_column().1 .1,
                 },
             })
             .collect()

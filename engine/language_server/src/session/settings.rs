@@ -27,6 +27,7 @@ pub struct BamlSettings {
     /// Jetbrains and Zed, and 'textDocument/codeAction' to the webview in Zed for cursor
     /// updates.
     pub(crate) lsp_methods_to_forward_to_webview: Vec<String>,
+    #[serde(default)]
     pub(crate) open_baml_panel_in_browser: bool,
 }
 

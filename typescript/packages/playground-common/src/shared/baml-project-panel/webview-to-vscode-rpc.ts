@@ -112,10 +112,9 @@ export interface InitializedResponse {
 export interface JumpToFileRequest {
   vscodeCommand: 'JUMP_TO_FILE';
   span: {
-    start: number;
-    end: number;
     file_path: string;
     start_line: number;
+    start_column: number;
   };
 }
 

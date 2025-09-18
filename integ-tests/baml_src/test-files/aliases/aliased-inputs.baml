@@ -11,7 +11,7 @@ class InputClassNested {
 }
  
 
-function AliasedInputClass(input: InputClass) -> string {
+  function AliasedInputClass(input: InputClass) -> string {
   client GPT35
   prompt #"
 

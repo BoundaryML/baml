@@ -98,6 +98,7 @@ impl Server {
 
         let client_capabilities = init_params.capabilities.clone();
         let position_encoding = Self::find_best_position_encoding(&client_capabilities);
+        // crate::logging::init_logging(crate::logging::LogLevel::Debug, None);
 
         let init_options = init_params
             .clone()

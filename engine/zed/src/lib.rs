@@ -174,6 +174,7 @@ impl zed::Extension for BamlExtension {
                     // for custom cursor update listeners.
                     "textDocument/codeAction"
                 ]
+                "openBamlPanelInBrowser": true,
             }
         })))
     }

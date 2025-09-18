@@ -42,30 +42,6 @@ data class GeneratorVersionPayload(
     val root_path: String
 )
 
-// Data classes for cursor position notification
-@Serializable
-data class Position(
-    val line: Int,
-    val character: Int
-)
-
-@Serializable
-data class Range(
-    val start: Position,
-    val end: Position
-)
-
-@Serializable
-data class TextDocument(
-    val uri: String
-)
-
-@Serializable
-data class CursorNotificationPayload(
-    val textDocument: TextDocument,
-    val range: Range
-)
-
 // No need for data classes - we'll build JSON directly using buildJsonObject()
 
 class BamlLanguageClient(project: Project) :
@@ -118,19 +94,7 @@ class BamlLanguageClient(project: Project) :
             
             // Get cursor position
             val caret = event.caret ?: return
-            val logicalPosition = caret.logicalPosition
-            val line = logicalPosition.line
-            val character = logicalPosition.column
-            
-            // Create the payload
-            val payload = CursorNotificationPayload(
-                textDocument = TextDocument(uri = "file://${virtualFile.path}"),
-                range = Range(
-                    start = Position(line = line, character = character),
-                    end = Position(line = line, character = character)
-                )
-            )
-            
+
             // Send POST request asynchronously
             val portValue = port // capture the non-null value
             ApplicationManager.getApplication().executeOnPooledThread {

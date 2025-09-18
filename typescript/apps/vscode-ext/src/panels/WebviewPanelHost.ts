@@ -721,8 +721,8 @@ export class WebviewPanelHost {
             const fileUri = vscode.Uri.parse(span.file_path);
             const doc = await vscode.workspace.openTextDocument(fileUri);
             const range = new vscode.Range(
-              new vscode.Position(span.start_line, 0),
-              new vscode.Position(span.start_line, 0),
+              new vscode.Position(span.start_line, span.start_column),
+              new vscode.Position(span.start_line, span.start_column),
             );
             vscode.window.showTextDocument(doc, {
               selection: range,
