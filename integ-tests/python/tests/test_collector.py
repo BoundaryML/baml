@@ -122,6 +122,25 @@ async def test_collector_async_no_stream_success():
 
 
 @pytest.mark.asyncio
+async def test_collector_clear():
+    collector = Collector(name="my-collector")
+    function_logs = collector.logs
+    assert len(function_logs) == 0
+
+    await b.TestOpenAIGPT4oMini("hi there", baml_options={"collector": collector})
+    function_logs = collector.logs
+    assert len(function_logs) == 1
+    collector.clear()
+    function_logs = collector.logs
+    assert len(function_logs) == 0
+
+    gc.collect()
+    print("----- gc.collect() -----", file=sys.stderr)
+    # still not collected cause it's in use
+    assert function_call_count() == 0
+
+
+@pytest.mark.asyncio
 async def test_collector_async_no_stream_no_getting_logs():
     collector = Collector(name="my-collector")
     function_logs = collector.logs
