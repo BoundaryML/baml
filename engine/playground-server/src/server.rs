@@ -65,7 +65,9 @@ impl PlaygroundServer {
 
         tracing::info!(
             "Starting Playground server on {}",
-            listener.local_addr().unwrap()
+            listener.local_addr()
+                .map(|addr| addr.to_string())
+                .unwrap_or_else(|_| "unknown address".to_string())
         );
         axum::serve(listener, app)
             .await

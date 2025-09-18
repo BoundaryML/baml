@@ -29,6 +29,7 @@ pub struct SetFeatureFlagsRequest {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetWebviewUriRequest {
     pub baml_src: String,
     pub path: String,

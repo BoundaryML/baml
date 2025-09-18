@@ -215,18 +215,20 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
       setOptimizedMediaUrl(mediaUrl);
     }
 
-    // Restore image stats from stored map if available
-    if (bamlMediaType === 'image' && imageStatsMap.has(mediaUrl)) {
-      const storedStats = imageStatsMap.get(mediaUrl);
-      if (storedStats) {
-        setImageStats({
-          width: storedStats.width,
-          height: storedStats.height,
-          size: storedStats.size,
-        });
-      }
-    }
-  }, [mediaUrl, bamlMediaType, imageStatsMap]);
+    // triggers infinite loop to refresh mediaUrl
+    // // Restore image stats from stored map if available
+    // if (bamlMediaType === 'image' && imageStatsMap.has(mediaUrl)) {
+    //   const storedStats = imageStatsMap.get(mediaUrl);
+    //   if (storedStats) {
+    //     setImageStats({
+    //       width: storedStats.width,
+    //       height: storedStats.height,
+    //       size: storedStats.size,
+    //     });
+    //   }
+    // }
+    // }, [mediaUrl, bamlMediaType, imageStatsMap]);
+  }, [mediaUrl, bamlMediaType]);
 
   // Cleanup blob URLs on unmount
   useEffect(() => {
@@ -655,13 +657,12 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   const fileSize = isBase64 ? getDataUriSize(mediaUrl || '') : '';
 
   return (
-      <div className="w-full flex justify-center p-4 bg-[var(--vscode-sideBar-background)]">
+    <div className="w-full flex justify-center p-4 bg-[var(--vscode-sideBar-background)]">
       <div
-          className={`border-2 border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] space-y-3 ${
-          bamlMediaType === 'image'
-            ? ' max-w-[64vw] min-w-[200px]'
-            : 'max-w-lg w-full'
-        }`}
+        className={`border-2 border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] space-y-3 ${bamlMediaType === 'image'
+          ? ' max-w-[64vw] min-w-[200px]'
+          : 'max-w-lg w-full'
+          }`}
       >
         {/* Header with file type icon and link/copy */}
         {mediaUrl && (
@@ -731,13 +732,12 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                   variant="outline"
                   size="xs"
                   className={`flex gap-1 items-center text-xs px-2 py-0 rounded flex-shrink-0 h-7 transition-all duration-200
-                  ${
-                    copyStatus === 'success'
+                  ${copyStatus === 'success'
                       ? 'border-[var(--vscode-charts-green)] text-[var(--vscode-charts-green)] bg-[var(--vscode-editor-background)]'
                       : copyStatus === 'error'
                         ? 'border-[var(--vscode-charts-red)] text-[var(--vscode-charts-red)] bg-[var(--vscode-editor-background)]'
                         : ''
-                  }`}
+                    }`}
                   style={{ minWidth: 0, maxWidth: 140 }}
                 >
                   {copyStatus === 'copying' && (

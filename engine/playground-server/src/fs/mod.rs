@@ -26,7 +26,8 @@ impl WorkspaceFileAccess {
     pub fn resolve_path(&self, path: &str) -> Result<PathBuf, ApiError> {
         if path.starts_with("baml_src://") {
             // Handle baml_src:// URI scheme
-            let relative_path = path.strip_prefix("baml_src://").unwrap();
+            let relative_path = path.strip_prefix("baml_src://")
+                .ok_or_else(|| ApiError::BadRequest("Invalid baml_src:// URI format".to_string()))?;
             // Find baml_src directory in workspace
             for root in &self.workspace_roots {
                 let baml_src = root.join("baml_src");

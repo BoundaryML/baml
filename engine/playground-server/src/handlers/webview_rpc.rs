@@ -4,11 +4,21 @@ use axum::{
 };
 use serde_json::Value;
 
+use anyhow::Context;
 use crate::{
     api::{errors::ApiError, *},
     server::AppState,
     WebviewRouterMessage,
 };
+
+// Helper function to convert anyhow::Error to ApiError for internal operations
+fn anyhow_to_internal_error(err: anyhow::Error) -> ApiError {
+    ApiError::InternalError(format!("{:#}", err))
+}
+
+fn anyhow_to_bad_request(err: anyhow::Error) -> ApiError {
+    ApiError::BadRequest(format!("{:#}", err))
+}
 
 pub async fn webview_rpc_handler(
     Path(command): Path<String>,
@@ -20,7 +30,8 @@ pub async fn webview_rpc_handler(
             let config = state
                 .editor_config
                 .read()
-                .map_err(|_| ApiError::InternalError("Failed to read config".to_string()))?;
+                .map_err(|_| anyhow::anyhow!("Failed to read editor config"))
+                .map_err(anyhow_to_internal_error)?;
 
             let response = GetVSCodeSettingsResponse {
                 enable_playground_proxy: config.enable_playground_proxy,
@@ -31,12 +42,14 @@ pub async fn webview_rpc_handler(
 
         "SET_PROXY_SETTINGS" => {
             let request: SetProxySettingsRequest = serde_json::from_value(payload)
-                .map_err(|_| ApiError::BadRequest("Invalid request format".to_string()))?;
+                .context("Failed to parse SetProxySettingsRequest")
+                .map_err(anyhow_to_bad_request)?;
 
             let mut config = state
                 .editor_config
                 .write()
-                .map_err(|_| ApiError::InternalError("Failed to write config".to_string()))?;
+                .map_err(|_| anyhow::anyhow!("Failed to acquire write lock on editor config"))
+                .map_err(anyhow_to_internal_error)?;
             config.enable_playground_proxy = request.proxy_enabled;
 
             Ok(Json(Value::Null)) // No response body for settings updates
@@ -44,12 +57,14 @@ pub async fn webview_rpc_handler(
 
         "SET_FEATURE_FLAGS" => {
             let request: SetFeatureFlagsRequest = serde_json::from_value(payload)
-                .map_err(|_| ApiError::BadRequest("Invalid feature flags request".to_string()))?;
+                .context("Failed to parse SetFeatureFlagsRequest")
+                .map_err(anyhow_to_bad_request)?;
 
             let mut config = state
                 .editor_config
                 .write()
-                .map_err(|_| ApiError::InternalError("Failed to write config".to_string()))?;
+                .map_err(|_| anyhow::anyhow!("Failed to acquire write lock on editor config"))
+                .map_err(anyhow_to_internal_error)?;
             config.feature_flags = request.feature_flags;
 
             Ok(Json(Value::Null)) // No response body for settings updates
@@ -64,7 +79,8 @@ pub async fn webview_rpc_handler(
 
         "GET_WEBVIEW_URI" => {
             let request: GetWebviewUriRequest = serde_json::from_value(payload)
-                .map_err(|_| ApiError::BadRequest("Invalid webview URI request".to_string()))?;
+                .context("Failed to parse GetWebviewUriRequest")
+                .map_err(anyhow_to_bad_request)?;
 
             let file_access = &state.file_access;
 
@@ -133,9 +149,8 @@ pub async fn webview_rpc_handler(
 
         "SEND_LSP_NOTIFICATION_TO_IDE" => {
             let request: SendLspNotificationToIdeRequest = serde_json::from_value(payload)
-                .map_err(|_| {
-                    ApiError::BadRequest("Invalid SendLspNotificationToIde request".to_string())
-                })?;
+                .context("Failed to parse SendLspNotificationToIdeRequest")
+                .map_err(anyhow_to_bad_request)?;
 
             let _ = state
                 .to_webview_router_tx
@@ -150,9 +165,8 @@ pub async fn webview_rpc_handler(
 
         "SEND_COMMAND_TO_WEBVIEW" => {
             let request: SendCommandToWebviewRequest = serde_json::from_value(payload)
-                .map_err(|_| {
-                    ApiError::BadRequest("Invalid SendCommandToWebview request".to_string())
-                })?;
+                .context("Failed to parse SendCommandToWebviewRequest")
+                .map_err(anyhow_to_bad_request)?;
 
             let _ = state
                 .to_webview_router_tx
@@ -167,9 +181,8 @@ pub async fn webview_rpc_handler(
 
         "SEND_LSP_NOTIFICATION_TO_WEBVIEW" => {
             let request: SendLspNotificationToWebviewRequest = serde_json::from_value(payload)
-                .map_err(|_| {
-                    ApiError::BadRequest("Invalid SendLspNotificationToWebview request".to_string())
-                })?;
+                .context("Failed to parse SendLspNotificationToWebviewRequest")
+                .map_err(anyhow_to_bad_request)?;
 
             // Convert LSP notification to WebviewCommand::LspMessage
             let webview_command = crate::definitions::WebviewCommand::LspMessage(request.notification);
