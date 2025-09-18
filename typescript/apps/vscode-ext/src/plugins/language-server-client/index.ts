@@ -203,7 +203,10 @@ const getClientOptions = (): LanguageClientOptions => {
       fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.baml'),
     },
     initializationOptions: {
-      baml: currentBamlSettings
+      baml: {
+        ...currentBamlSettings,
+        lspMethodsToForwardToWebview: [], // Empty - VSCode handles webview communication directly
+      }
     },
   };
 };

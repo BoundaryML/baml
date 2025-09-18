@@ -181,8 +181,13 @@ impl Server {
             client_version,
         )?;
 
-        let client =
-            client::Client::new(connection.make_sender(), args.to_webview_router_tx.clone());
+        let lsp_methods_to_forward_to_webview = session.baml_settings.lsp_methods_to_forward_to_webview.clone();
+
+        let client = client::Client::new(
+            connection.make_sender(),
+            args.to_webview_router_tx.clone(),
+            lsp_methods_to_forward_to_webview,
+        );
         let notifier = client.notifier();
 
         session.reload(Some(notifier))?;
@@ -367,9 +372,14 @@ impl Server {
         webview_router_to_websocket_tx: broadcast::Sender<WebviewNotification>,
     ) -> anyhow::Result<()> {
         let to_webview_router_tx = session.to_webview_router_tx.clone();
+        let lsp_methods_to_forward_to_webview = session.baml_settings.lsp_methods_to_forward_to_webview.clone();
 
         // Ensure we have a notifier for reload operations
-        let client = client::Client::new(connection.make_sender(), to_webview_router_tx.clone());
+        let client = client::Client::new(
+            connection.make_sender(),
+            to_webview_router_tx.clone(),
+            lsp_methods_to_forward_to_webview,
+        );
         let notifier = client.notifier();
         // Make sure the session is properly loaded after initialization
         session.reload(Some(notifier.clone()))?;

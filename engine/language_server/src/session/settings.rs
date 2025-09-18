@@ -16,6 +16,17 @@ pub struct BamlSettings {
     #[serde(default = "default_feature_flags")]
     pub(crate) feature_flags: Option<Vec<String>>,
     pub(crate) client_version: Option<String>,
+    /// When the language server receives a request or sends a notification to the IDE,
+    /// it will also forward them to the webview if they're present in this list.
+    ///
+    /// We do this because we expect users to run evergreen extensions, but old language
+    /// servers, so this will allow us to keep configuration in the extension as much as
+    /// possible.
+    ///
+    /// Currently, this is used to forward 'runtime_updated' to the webview in both
+    /// Jetbrains and Zed, and 'textDocument/codeAction' to the webview in Zed for cursor
+    /// updates.
+    pub(crate) lsp_methods_to_forward_to_webview: Vec<String>,
 }
 
 impl Default for BamlSettings {
@@ -25,6 +36,7 @@ impl Default for BamlSettings {
             generate_code_on_save: None,
             feature_flags: Some(vec!["beta".to_string()]),
             client_version: None,
+            lsp_methods_to_forward_to_webview: vec![],
         }
     }
 }

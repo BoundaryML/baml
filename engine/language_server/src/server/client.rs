@@ -20,6 +20,7 @@ pub(crate) struct Client<'s> {
 pub struct Notifier {
     client_sender: ClientSender,
     to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
+    lsp_methods_to_forward_to_webview: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -35,11 +36,13 @@ impl Client<'_> {
     pub(super) fn new(
         sender: ClientSender,
         to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
+        lsp_methods_to_forward_to_webview: Vec<String>,
     ) -> Self {
         Self {
             notifier: Notifier {
                 client_sender: sender.clone(),
                 to_webview_router_tx,
+                lsp_methods_to_forward_to_webview,
             },
             responder: Responder(sender.clone()),
             requester: Requester {
@@ -71,7 +74,8 @@ impl Notifier {
 
         // Send to both client and webview router
         self.client_sender.send(message)?;
-        if vec!["runtime_updated", "textDocument/codeAction"].contains(&method.as_str()) {
+        // Use configuration instead of hardcoded list
+        if self.lsp_methods_to_forward_to_webview.contains(&method) {
             let _ = self
                 .to_webview_router_tx
                 .send(WebviewRouterMessage::SendLspNotificationToWebview(
