@@ -2,7 +2,7 @@ use std::num::NonZeroUsize;
 
 use anyhow::Context;
 pub use edit::{DocumentKey, PositionEncoding, TextDocument};
-use playground_server::{WebviewNotification, WebviewRouterMessage};
+use playground_server::{WebviewCommand, WebviewRouterMessage};
 pub use session::{ClientSettings, DocumentQuery, DocumentSnapshot, Session};
 use tokio::sync::broadcast;
 

@@ -2,7 +2,7 @@ use std::{collections::HashMap, fs, path::Path};
 
 use playground_server::{
     pick_ports, AppState, FrontendMessage, PlaygroundServer, PortConfiguration,
-    WebviewNotification, WebviewRouterMessage,
+    WebviewCommand, WebviewRouterMessage,
 };
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
@@ -103,7 +103,7 @@ pub async fn run_server() -> anyhow::Result<()> {
 
     let server = Playground2Server {
         app_state: AppState {
-            webview_router_to_websocket_rx_provider: webview_router_to_websocket_tx.into(),
+            webview_router_to_websocket_rx_provider: webview_router_to_websocket_tx.clone().into(),
             to_webview_router_tx: to_webview_router_tx,
             playground_port: port_picks.playground_port,
             proxy_port: port_picks.proxy_port,
@@ -136,9 +136,9 @@ pub async fn run_server() -> anyhow::Result<()> {
                     WebviewRouterMessage::WasmIsInitialized => {
                         tracing::info!("Playground initialized");
                         let _ = webview_router_to_websocket_tx.send(
-                            WebviewNotification::PlaygroundMessage(load_project_from_directory(
+                            WebviewCommand::IdeMessage(serde_json::to_value(load_project_from_directory(
                                 PROJECT_DIR,
-                            )),
+                            )).unwrap()),
                         );
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                         // let playground_message =
@@ -189,10 +189,10 @@ pub async fn run_server() -> anyhow::Result<()> {
                 break;
             };
             let playground_message =
-                WebviewNotification::PlaygroundMessage(FrontendMessage::run_test {
+                WebviewCommand::IdeMessage(serde_json::to_value(FrontendMessage::run_test {
                     function_name: "TestFnNamedArgsSingleClass".to_string(),
                     test_name: "TestFnNamedArgsSingleClass".to_string(),
-                });
+                }).unwrap());
             tracing::info!("Sending playground message: {:?}", playground_message);
             let _ = webview_router_to_websocket_tx
                 .send(playground_message)

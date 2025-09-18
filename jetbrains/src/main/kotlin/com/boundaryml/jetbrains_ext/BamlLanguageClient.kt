@@ -62,22 +62,23 @@ data class CursorNotificationPayload(
     val range: Range
 )
 
-// Wrapper structures for LSP notification
+// VscodeToWebviewCommand structure matching TypeScript interface
 @Serializable
-data class LspParams(
+data class VscodeToWebviewCommand(
+    val source: String,
+    val payload: kotlinx.serialization.json.JsonElement
+)
+
+@Serializable
+data class CodeActionPayload(
+    val method: String,
+    val params: CodeActionParams
+)
+
+@Serializable
+data class CodeActionParams(
     val textDocument: TextDocument,
     val range: Range
-)
-
-@Serializable
-data class LspPayload(
-    val method: String,
-    val params: LspParams
-)
-
-@Serializable
-data class WrappedNotification(
-    val notification: LspPayload
 )
 
 class BamlLanguageClient(project: Project) :
@@ -156,20 +157,23 @@ class BamlLanguageClient(project: Project) :
 
     private fun sendCursorNotification(port: Int, payload: CursorNotificationPayload) {
         try {
-            val webviewUrl = "http://localhost:$port/webview/SEND_LSP_NOTIFICATION_TO_WEBVIEW"
+            val webviewUrl = "http://localhost:$port/webview/SEND_COMMAND_TO_WEBVIEW"
             
-            // Wrap the payload in the required structure
-            val wrappedNotification = WrappedNotification(
-                notification = LspPayload(
-                    method = "textDocument/codeAction",
-                    params = LspParams(
-                        textDocument = payload.textDocument,
-                        range = payload.range
-                    )
+            // Construct proper VscodeToWebviewCommand structure
+            val codeActionPayload = CodeActionPayload(
+                method = "textDocument/codeAction",
+                params = CodeActionParams(
+                    textDocument = payload.textDocument,
+                    range = payload.range
                 )
             )
-
-            val jsonBody = json.encodeToString(WrappedNotification.serializer(), wrappedNotification)
+            
+            val command = VscodeToWebviewCommand(
+                source = "lsp_message",
+                payload = json.encodeToJsonElement(CodeActionPayload.serializer(), codeActionPayload)
+            )
+            
+            val jsonBody = json.encodeToString(VscodeToWebviewCommand.serializer(), command)
             
             log.debug("Sending cursor notification to $webviewUrl: $jsonBody")
             

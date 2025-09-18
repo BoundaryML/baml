@@ -78,8 +78,8 @@ impl Notifier {
         if self.lsp_methods_to_forward_to_webview.contains(&method) {
             let _ = self
                 .to_webview_router_tx
-                .send(WebviewRouterMessage::SendLspNotificationToWebview(
-                    notification,
+                .send(WebviewRouterMessage::SendMessageToWebview(
+                    playground_server::WebviewCommand::LspMessage(notification),
                 ))
                 .inspect_err(|e| {
                     tracing::error!(
@@ -103,8 +103,8 @@ impl Notifier {
             .send(lsp_server::Message::Notification(notification.clone()))?;
         let _ = self
             .to_webview_router_tx
-            .send(WebviewRouterMessage::SendLspNotificationToWebview(
-                notification,
+            .send(WebviewRouterMessage::SendMessageToWebview(
+                playground_server::WebviewCommand::LspMessage(notification),
             ));
         Ok(())
     }
@@ -121,8 +121,8 @@ impl Notifier {
             .send(lsp_server::Message::Notification(notification.clone()))?;
         let _ = self
             .to_webview_router_tx
-            .send(WebviewRouterMessage::SendLspNotificationToWebview(
-                notification,
+            .send(WebviewRouterMessage::SendMessageToWebview(
+                playground_server::WebviewCommand::LspMessage(notification),
             ));
         Ok(())
     }

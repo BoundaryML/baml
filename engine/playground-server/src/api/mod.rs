@@ -125,4 +125,12 @@ pub struct SendLspNotificationToWebviewResponse {
     pub ok: bool,
 }
 
+#[derive(Deserialize)]
+pub struct SendCommandToWebviewRequest(pub crate::definitions::WebviewCommand);
+
+#[derive(Serialize)]
+pub struct SendCommandToWebviewResponse {
+    pub ok: bool,
+}
+
 pub mod errors;

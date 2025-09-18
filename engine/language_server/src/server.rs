@@ -19,7 +19,7 @@ use lsp_types::{
     TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url,
     WorkspaceClientCapabilities, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
-use playground_server::{FrontendMessage, WebviewNotification, WebviewRouterMessage};
+use playground_server::{FrontendMessage, WebviewCommand, WebviewRouterMessage};
 use schedule::Task;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -50,7 +50,7 @@ pub type Result<T> = std::result::Result<T, api::Error>;
 
 pub(crate) struct ServerArgs {
     pub tokio_runtime: tokio::runtime::Runtime,
-    pub webview_router_to_websocket_tx: broadcast::Sender<WebviewNotification>,
+    pub webview_router_to_websocket_tx: broadcast::Sender<WebviewCommand>,
     pub to_webview_router_rx: broadcast::Receiver<WebviewRouterMessage>,
     pub to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
     pub playground_port: u16,
@@ -181,7 +181,10 @@ impl Server {
             client_version,
         )?;
 
-        let lsp_methods_to_forward_to_webview = session.baml_settings.lsp_methods_to_forward_to_webview.clone();
+        let lsp_methods_to_forward_to_webview = session
+            .baml_settings
+            .lsp_methods_to_forward_to_webview
+            .clone();
 
         let client = client::Client::new(
             connection.make_sender(),
@@ -254,19 +257,13 @@ impl Server {
                                     tracing::error!("Failed to forward SEND_LSP_NOTIFICATION_TO_IDE message to language-server: {e}");
                                 });
                         }
-                        WebviewRouterMessage::SendLspNotificationToWebview (notification) => {
-                            tracing::info!("Received playground SEND_LSP_MESSAGE_TO_WEBVIEW request: {:?}", notification);
+                        WebviewRouterMessage::SendMessageToWebview(command) => {
+                            tracing::info!("Received playground SEND_MESSAGE_TO_WEBVIEW request: {:?}", command);
+                            // Simply forward the WebviewCommand to the websocket - no processing needed
                             let _ = webview_router_to_websocket_tx
-                                .send(WebviewNotification::LspMessage(notification))
+                                .send(command)
                                 .inspect_err(|e| {
-                                    tracing::error!("Failed to forward SEND_LSP_MESSAGE_TO_WEBVIEW message to webview: {e}");
-                                });
-                        }
-                        WebviewRouterMessage::CustomNotificationToWebview(msg) => {
-                            let _ = webview_router_to_websocket_tx
-                                .send(WebviewNotification::IdeMessage(msg))
-                                .inspect_err(|e| {
-                                    tracing::error!("Failed to forward FrontendMessage to playground: {e}");
+                                    tracing::error!("Failed to send WebviewCommand to websocket: {e}");
                                 });
                         }
                     }
@@ -369,10 +366,13 @@ impl Server {
         client_capabilities: &ClientCapabilities,
         mut session: Session,
         worker_threads: NonZeroUsize,
-        webview_router_to_websocket_tx: broadcast::Sender<WebviewNotification>,
+        webview_router_to_websocket_tx: broadcast::Sender<WebviewCommand>,
     ) -> anyhow::Result<()> {
         let to_webview_router_tx = session.to_webview_router_tx.clone();
-        let lsp_methods_to_forward_to_webview = session.baml_settings.lsp_methods_to_forward_to_webview.clone();
+        let lsp_methods_to_forward_to_webview = session
+            .baml_settings
+            .lsp_methods_to_forward_to_webview
+            .clone();
 
         // Ensure we have a notifier for reload operations
         let client = client::Client::new(
@@ -399,10 +399,12 @@ impl Server {
                         .contains(&req.method.as_str())
                     {
                         let _ = to_webview_router_tx
-                            .send(WebviewRouterMessage::SendLspNotificationToWebview(
-                                lsp_server::Notification::new(
-                                    req.method.clone(),
-                                    req.params.clone(),
+                            .send(WebviewRouterMessage::SendMessageToWebview(
+                                playground_server::WebviewCommand::LspMessage(
+                                    lsp_server::Notification::new(
+                                        req.method.clone(),
+                                        req.params.clone(),
+                                    ),
                                 ),
                             ))
                             .inspect_err(|e| {

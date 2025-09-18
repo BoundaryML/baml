@@ -11,7 +11,7 @@ use tar::Archive;
 use tokio::{net::TcpListener, sync::broadcast};
 use tower_http::services::ServeDir;
 
-use crate::definitions::{WebviewNotification, WebviewRouterMessage};
+use crate::definitions::{WebviewCommand, WebviewRouterMessage};
 
 #[derive(Debug, Clone)]
 /// Wraps a broadcast::Sender but bans access to send(). This is effectively a weak pointer
@@ -20,16 +20,16 @@ use crate::definitions::{WebviewNotification, WebviewRouterMessage};
 /// It's important we use this instead of passing around a broadcast::Receiver that we
 /// clone, because every unused Receiver will fill the broadcast buffer and cause
 /// hard-to-reproduce lost-message bugs.
-pub struct ReceiverProvider(broadcast::Sender<WebviewNotification>);
+pub struct ReceiverProvider(broadcast::Sender<WebviewCommand>);
 
-impl From<broadcast::Sender<WebviewNotification>> for ReceiverProvider {
-    fn from(sender: broadcast::Sender<WebviewNotification>) -> Self {
+impl From<broadcast::Sender<WebviewCommand>> for ReceiverProvider {
+    fn from(sender: broadcast::Sender<WebviewCommand>) -> Self {
         Self(sender)
     }
 }
 
 impl ReceiverProvider {
-    pub fn subscribe(&self) -> broadcast::Receiver<WebviewNotification> {
+    pub fn subscribe(&self) -> broadcast::Receiver<WebviewCommand> {
         self.0.subscribe()
     }
 }

@@ -57,28 +57,19 @@ impl SyncRequestHandler for ExecuteCommand {
                 });
             }
 
-            if let Some(function_name) = params
-                .arguments
-                .first()
-                .and_then(|arg| arg.as_str().map(|s| s.to_string()))
-            {
-                session
-                    .to_webview_router_tx
-                    .send(WebviewRouterMessage::SendLspNotificationToWebview(
-                        Notification::new(
-                            "workspace/executeCommand".to_string(),
-                            json!({
-                                "command": "baml.openBamlPanel",
-                                "arguments": [
-                                    {
-                                        "function_name": function_name,
-                                    }
-                                ]
-                            }),
-                        ),
-                    ))
-                    .unwrap();
-            }
+            let _ = session
+                .to_webview_router_tx
+                .send(WebviewRouterMessage::SendMessageToWebview(
+                    playground_server::WebviewCommand::LspMessage(Notification::new(
+                        "workspace/executeCommand".to_string(),
+                        json!(params),
+                    )),
+                ))
+                .inspect_err(|e| {
+                    tracing::error!(
+                        "Failed to send SEND_MESSAGE_TO_WEBVIEW message to webview: {e}"
+                    );
+                });
             return Ok(None);
         }
 

@@ -13,7 +13,7 @@ use index::DocumentController;
 use itertools::any;
 use lsp_types::{ClientCapabilities, TextDocumentContentChangeEvent, Url};
 use parking_lot::Mutex;
-use playground_server::{FrontendMessage, WebviewNotification, WebviewRouterMessage};
+use playground_server::{FrontendMessage, WebviewCommand, WebviewRouterMessage};
 use serde_json::Value;
 
 pub(crate) use self::{capabilities::ResolvedClientCapabilities, settings::AllSettings};

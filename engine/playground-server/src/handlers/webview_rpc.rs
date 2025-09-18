@@ -148,20 +148,40 @@ pub async fn webview_rpc_handler(
             Ok(Json(serde_json::to_value(response)?))
         }
 
+        "SEND_COMMAND_TO_WEBVIEW" => {
+            let request: SendCommandToWebviewRequest = serde_json::from_value(payload)
+                .map_err(|_| {
+                    ApiError::BadRequest("Invalid SendCommandToWebview request".to_string())
+                })?;
+
+            let _ = state
+                .to_webview_router_tx
+                .send(WebviewRouterMessage::SendMessageToWebview(request.0))
+                .inspect_err(|e| {
+                    tracing::error!("Failed to send SEND_COMMAND_TO_WEBVIEW message to language-server: {e}");
+                });
+
+            let response = SendCommandToWebviewResponse { ok: true };
+            Ok(Json(serde_json::to_value(response)?))
+        }
+
         "SEND_LSP_NOTIFICATION_TO_WEBVIEW" => {
             let request: SendLspNotificationToWebviewRequest = serde_json::from_value(payload)
                 .map_err(|_| {
                     ApiError::BadRequest("Invalid SendLspNotificationToWebview request".to_string())
                 })?;
 
+            // Convert LSP notification to WebviewCommand::LspMessage
+            let webview_command = crate::definitions::WebviewCommand::LspMessage(request.notification);
+
             let _ = state
                 .to_webview_router_tx
-                .send(WebviewRouterMessage::SendLspNotificationToWebview(request.notification))
+                .send(WebviewRouterMessage::SendMessageToWebview(webview_command))
                 .inspect_err(|e| {
-                    tracing::error!("Failed to send SEND_LSP_NOTIFICATION_TO_IDE message to language-server: {e}");
+                    tracing::error!("Failed to send SEND_LSP_NOTIFICATION_TO_WEBVIEW message to language-server: {e}");
                 });
 
-            let response = SendLspNotificationToIdeResponse { ok: true };
+            let response = SendLspNotificationToWebviewResponse { ok: true };
             Ok(Json(serde_json::to_value(response)?))
         }
 

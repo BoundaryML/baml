@@ -335,6 +335,15 @@ pub struct WasmSpan {
     pub end_line: usize,
 }
 
+impl WasmSpan {
+    fn contains(&self, file_path: &str, cursor_idx: usize) -> bool {
+        // NB(sam): we should probably do an == comparison, but ends_with is the
+        // existing behavior and handles file:// ambiguity
+        span.file_path.as_str().ends_with(file_name)
+            && ((self.start)..=(self.end)).contains(&cursor_idx)
+    }
+}
+
 #[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Clone, Debug)]
 pub struct WasmGeneratorConfig {
@@ -1314,9 +1323,7 @@ impl WasmRuntime {
         for function in functions.clone() {
             let span = function.span.clone(); // Clone the span
 
-            if span.file_path.as_str().ends_with(file_name)
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
-            {
+            if span.contains(file_name, cursor_idx) {
                 return Some(function);
             }
         }
@@ -1325,9 +1332,7 @@ impl WasmRuntime {
 
         for tc in testcases {
             let span = tc.span;
-            if span.file_path.as_str().ends_with(file_name)
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
-            {
+            if span.contains(file_name, cursor_idx) {
                 if let Some(_parent_function) =
                     tc.parent_functions.iter().find(|f| f.name == selected_func)
                 {
@@ -1344,9 +1349,7 @@ impl WasmRuntime {
 
         for tc in testcases {
             let span = tc.span;
-            if span.file_path.as_str().ends_with(file_name)
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
-            {
+            if span.contains(file_name, cursor_idx) {
                 if let Some(_parent_function) =
                     tc.parent_functions.iter().find(|f| f.name == selected_func)
                 {
@@ -1461,9 +1464,7 @@ impl WasmRuntime {
         for testcase in testcases {
             let span = testcase.clone().span;
 
-            if span.file_path.as_str() == (parent_function.span.file_path)
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
-            {
+            if span.contains(&parent_function.span.file_path, cursor_idx) {
                 return Some(testcase);
             }
         }
@@ -1480,9 +1481,7 @@ impl WasmRuntime {
 
         for tc in testcases {
             let span = tc.span;
-            if span.file_path.as_str().ends_with(file_name)
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
-            {
+            if span.contains(file_name, cursor_idx) {
                 let first_function = tc
                     .parent_functions
                     .iter()
