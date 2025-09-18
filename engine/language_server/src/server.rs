@@ -378,7 +378,7 @@ impl Server {
         let client = client::Client::new(
             connection.make_sender(),
             to_webview_router_tx.clone(),
-            lsp_methods_to_forward_to_webview,
+            lsp_methods_to_forward_to_webview.clone(),
         );
         let notifier = client.notifier();
         // Make sure the session is properly loaded after initialization
@@ -395,9 +395,7 @@ impl Server {
             // webview_router_to_websocket_tx.send(LangServerToWasmMessage::LspMessage(msg.clone()))?;
             let tasks = match msg {
                 Message::Request(req) => {
-                    if vec!["textDocument/codeAction", "workspace/executeCommand"]
-                        .contains(&req.method.as_str())
-                    {
+                    if lsp_methods_to_forward_to_webview.contains(&req.method) {
                         let _ = to_webview_router_tx
                             .send(WebviewRouterMessage::SendMessageToWebview(
                                 playground_server::WebviewCommand::LspMessage(

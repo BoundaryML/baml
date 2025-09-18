@@ -27,6 +27,7 @@ pub struct BamlSettings {
     /// Jetbrains and Zed, and 'textDocument/codeAction' to the webview in Zed for cursor
     /// updates.
     pub(crate) lsp_methods_to_forward_to_webview: Vec<String>,
+    pub(crate) open_baml_panel_in_browser: bool,
 }
 
 impl Default for BamlSettings {
@@ -37,6 +38,7 @@ impl Default for BamlSettings {
             feature_flags: Some(vec!["beta".to_string()]),
             client_version: None,
             lsp_methods_to_forward_to_webview: vec![],
+            open_baml_panel_in_browser: false,
         }
     }
 }

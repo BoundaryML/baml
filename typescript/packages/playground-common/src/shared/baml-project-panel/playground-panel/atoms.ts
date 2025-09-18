@@ -95,6 +95,10 @@ export const updateCursorAtom = atom(
       return;
     }
 
+    console.debug('updateCursor', cursor);
+
+
+
     const fileName = cursor.fileName;
     const lines = fileContent.split('\n');
 

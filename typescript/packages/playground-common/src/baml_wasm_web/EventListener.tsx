@@ -168,7 +168,7 @@ export const EventListener: React.FC = () => {
               updateCursor({
                 fileName,
                 line: range.start.line,
-                column: 0,
+                column: range.start.character,
               });
               break;
             }

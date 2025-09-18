@@ -29,7 +29,7 @@ class BamlLanguageServerFactory : LanguageServerFactory {
                     "settings" to mapOf(
                         "featureFlags" to listOf("beta"),
                         "generateCodeOnSave" to "always",
-                        "lspMethodsToForwardToWebview" to listOf("runtime_updated") // Default behavior
+                        "lspMethodsToForwardToWebview" to listOf("runtime_updated", "workspace/executeCommand")
                     )
                 )
             }
