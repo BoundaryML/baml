@@ -32,7 +32,7 @@ function AliasedInputClass2(input: InputClass) -> string {
   "#
 }
  
- function AliasedInputClassNested(input: InputClassNested) -> string {
+  function AliasedInputClassNested(input: InputClassNested) -> string {
   client GPT35
   prompt #"
     {{ _.role("user")}}

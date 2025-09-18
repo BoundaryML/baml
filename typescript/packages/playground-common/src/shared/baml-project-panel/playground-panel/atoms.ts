@@ -103,11 +103,13 @@ export const updateCursorAtom = atom(
     const lines = fileContent.split('\n');
 
     let cursorIdx = 0;
-    for (let i = 0; i < cursor.line - 1; i++) {
+    for (let i = 0; i < cursor.line; i++) {
       cursorIdx += (lines[i]?.length ?? 0) + 1; // +1 for the newline character
+      console.debug('cursorIdx +=', { cursorIdx, linesLength: lines[i]?.length, line: lines[i], i });
     }
 
     cursorIdx += cursor.column;
+    console.debug('cursorIdx after lines', cursorIdx);
 
     const selectedFunc = runtime.get_function_at_position(
       fileName,
