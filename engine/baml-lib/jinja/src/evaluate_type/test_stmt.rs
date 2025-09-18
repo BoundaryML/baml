@@ -269,3 +269,17 @@ fn if_else() {
         types
     );
 }
+
+#[test]
+fn function_reference_without_call_in_template() {
+    let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+    types.add_function("MyTemplateString", Type::String, vec![]);
+    assert_fails_to!(
+        r#"
+{{ MyTemplateString }}
+"#
+        .trim(),
+        types,
+        vec!["Function 'MyTemplateString' referenced without parentheses. Did you mean 'MyTemplateString()'?".to_string()]
+    );
+}

@@ -3389,7 +3389,7 @@ mod tests {
     fn test_expr_fn_tests() {
         let ir = make_test_ir(
             r##"
-            fn Foo(x: int) -> int {
+            function Foo(x: int) -> int {
                 x
             }
 

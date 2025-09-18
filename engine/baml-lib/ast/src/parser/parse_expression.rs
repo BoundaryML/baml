@@ -394,12 +394,38 @@ pub fn parse_config_primary_expression(
     match token.as_rule() {
         Rule::numeric_literal => Some(Expression::NumericValue(token.as_str().into(), span)),
         Rule::string_literal => Some(parse_string_literal(token, diagnostics)),
-        Rule::array_expression => Some(parse_array(token, diagnostics)),
+        Rule::config_array_expression => Some(parse_config_array(token, diagnostics)),
         Rule::jinja_expression => Some(parse_jinja_expression(token, diagnostics)),
         Rule::config_map_expression => Some(parse_config_map(token, diagnostics)),
         Rule::identifier => Some(Expression::Identifier(parse_identifier(token, diagnostics))),
         _ => unreachable_rule!(token, Rule::config_primary_expression),
     }
+}
+
+fn parse_config_array(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
+    let mut elements: Vec<Expression> = vec![];
+    let span = token.as_span();
+
+    for current in token.into_inner() {
+        match current.as_rule() {
+            Rule::config_expression => {
+                if let Some(expr) = parse_config_expression(current, diagnostics) {
+                    elements.push(expr);
+                }
+            }
+            Rule::ARRAY_CATCH_ALL => {
+                diagnostics.push_error(
+                    internal_baml_diagnostics::DatamodelError::new_validation_error(
+                        "Invalid array syntax detected.",
+                        diagnostics.span(current.as_span()),
+                    ),
+                );
+            }
+            _ => parsing_catch_all(current, "array"),
+        }
+    }
+
+    Expression::Array(elements, diagnostics.span(span))
 }
 
 fn parse_config_map(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {

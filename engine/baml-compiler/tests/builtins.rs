@@ -9,7 +9,7 @@ use common::{assert_compiles, Program};
 fn builtin_method_call() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let arr = [1, 2, 3];
                 arr.length()
             }
@@ -42,7 +42,7 @@ fn fetch_as() -> anyhow::Result<()> {
                 userId int
             }
 
-            fn main() -> DummyJsonTodo {
+            function main() -> DummyJsonTodo {
                 baml.fetch_as<DummyJsonTodo>("https://dummyjson.com/todos/1")
             }
         "#,

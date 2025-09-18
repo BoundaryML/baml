@@ -6,7 +6,7 @@ use baml_vm::{BamlVmProgram, EvalStack};
 #[test]
 fn locals_in_scope() -> anyhow::Result<()> {
     let ast = ast(r#"
-        fn main() -> int {
+        function main() -> int {
             let x = 0;
 
             let a = {

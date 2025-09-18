@@ -16,7 +16,7 @@ fn return_enum_variant() -> anyhow::Result<()> {
                     Circle
                 }
 
-                fn main() -> Shape {
+                function main() -> Shape {
                     Shape.Rectangle
                 }
             "#,
@@ -49,7 +49,7 @@ fn assign_enum_variant() -> anyhow::Result<()> {
                     Circle
                 }
 
-                fn main() -> Shape {
+                function main() -> Shape {
                     let s = Shape.Rectangle;
                     s
                 }
@@ -87,7 +87,7 @@ fn take_and_return_enum_variant() -> anyhow::Result<()> {
                     shape
                 }
 
-                fn main() -> Shape {
+                function main() -> Shape {
                     return_shape(Shape.Rectangle)
                 }
             "#,

@@ -11,7 +11,7 @@ use crate::common::assert_vm_executes_with_inspection;
 fn builtin_method_call() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let arr = [1, 2, 3];
                 arr.length()
             }
@@ -25,7 +25,7 @@ fn builtin_method_call() -> anyhow::Result<()> {
 fn bind_method_call() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let arr = [1, 2, 3];
                 let v = arr.length();
 
@@ -47,7 +47,7 @@ fn deep_copy_object() -> anyhow::Result<()> {
                 children Tree[]
             }
 
-            fn main() -> Tree {
+            function main() -> Tree {
                 let t = Tree { value: "1", children: [
                     Tree { value: "2", children: [] },
                     Tree { value: "3", children: [] },
@@ -101,7 +101,7 @@ fn any_value_to_string() -> anyhow::Result<()> {
                 scores map<string, int>
             }
 
-            fn main() -> string {
+            function main() -> string {
                 let p = Point { x: 10, y: 20 };
                 let person = Person {
                     name: "Alice",

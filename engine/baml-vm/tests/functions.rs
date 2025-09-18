@@ -13,11 +13,11 @@ use common::{assert_vm_executes, assert_vm_executes_with_inspection, Program};
 fn return_function_call() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
-            fn one() -> int {
+            function one() -> int {
                 1
             }
 
-            fn main() -> int {
+            function main() -> int {
                 one()
             }
         ",
@@ -30,12 +30,12 @@ fn return_function_call() -> anyhow::Result<()> {
 fn function_call_without_parameters() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
-            fn two() -> int {
+            function two() -> int {
                 let v = 2;
                 v
             }
 
-            fn main() -> int {
+            function main() -> int {
                 let v = two();
                 v
             }
@@ -49,11 +49,11 @@ fn function_call_without_parameters() -> anyhow::Result<()> {
 fn function_call_with_parameters() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
-            fn one_of(a: int, b: int) -> int {
+            function one_of(a: int, b: int) -> int {
                 a
             }
 
-            fn main() -> int {
+            function main() -> int {
                 let v = one_of(1, 2);
                 v
             }
@@ -68,7 +68,7 @@ fn function_returning_string() -> anyhow::Result<()> {
     assert_vm_executes_with_inspection(
         Program {
             source: r#"
-                fn main() -> string {
+                function main() -> string {
                     "hello"
                 }
             "#,
@@ -95,11 +95,11 @@ fn multiple_strings() -> anyhow::Result<()> {
     assert_vm_executes_with_inspection(
         Program {
             source: r#"
-                fn get_greeting() -> string {
+                function get_greeting() -> string {
                     "Hello"
                 }
 
-                fn main() -> string {
+                function main() -> string {
                     let greeting = get_greeting();
                     let name = "World";
                     greeting
@@ -131,13 +131,13 @@ fn multiple_strings() -> anyhow::Result<()> {
 fn early_return() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn EarlyReturn(x: int) -> int {
+            function EarlyReturn(x: int) -> int {
                if (x == 42) { return 1; }
 
                x + 5
             }
 
-            fn main() -> int {
+            function main() -> int {
                 EarlyReturn(42)
             }"#,
         function: "main",
@@ -149,7 +149,7 @@ fn early_return() -> anyhow::Result<()> {
 fn return_with_stack() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn WithStack() -> int {
+            function WithStack() -> int {
                let a = 1;
 
                if (a == 0) { return 0; }

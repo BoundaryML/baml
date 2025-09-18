@@ -14,10 +14,10 @@ fn create_and_access() -> anyhow::Result<()> {
     assert_vm_executes_with_inspection(
         Program {
             source: r#"
-                fn CreateMap() -> map<string, string> {
+                function CreateMap() -> map<string, string> {
                     { hello "world" }
                 }
-                fn UseMap() -> string {
+                function UseMap() -> string {
                     let map = CreateMap();
                     map["hello"]
                 }
@@ -36,11 +36,11 @@ fn create_and_access() -> anyhow::Result<()> {
 fn access_no_key() -> anyhow::Result<()> {
     assert_vm_fails(FailingProgram {
         source: r#"
-            fn CreateMap() -> map<string, string> {
+            function CreateMap() -> map<string, string> {
                 { hello "world" }
             }
 
-            fn UseMapNoKey() -> string {
+            function UseMapNoKey() -> string {
                 let map = CreateMap();
                 map["world"]
             }
@@ -56,10 +56,10 @@ fn contains() -> anyhow::Result<()> {
     assert_vm_executes_with_inspection(
         Program {
             source: r#"
-                fn CreateMapJSON() -> map<string, string> {
+                function CreateMapJSON() -> map<string, string> {
                     {"hello": "world"}
                 }
-                fn UseMapContains() -> string {
+                function UseMapContains() -> string {
                     let map = CreateMapJSON();
                     if (map.has("hello")) {
                         map["hello"]
@@ -82,7 +82,7 @@ fn contains() -> anyhow::Result<()> {
 fn modify() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn EditMapKey() -> int {
+            function EditMapKey() -> int {
                 let map = { hi 123 };
 
                 map["hi"] = 42 - 4;
@@ -101,7 +101,7 @@ fn modify() -> anyhow::Result<()> {
 fn len() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn Len() -> int {
+            function Len() -> int {
                 let map = {
                     hi 123
                     it_works 456

@@ -361,3 +361,26 @@ fn sum_filter() {
         vec![r#"'[hi,1]' is a list[(literal["hi"] | literal[1])], expected (int|float)[]"#]
     );
 }
+
+#[test]
+fn test_function_reference_without_call_expr() {
+    let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+    types.add_function("SomeFunc", Type::Float, vec![]);
+
+    let parsed = parse_expr("SomeFunc").unwrap();
+    let result = evaluate_type(&parsed, &types);
+    assert!(result.is_err());
+    let msgs: Vec<_> = result
+        .err()
+        .unwrap()
+        .into_iter()
+        .map(|e| e.message)
+        .collect();
+    assert_eq!(
+        msgs,
+        vec![
+            "Function 'SomeFunc' referenced without parentheses. Did you mean 'SomeFunc()'?"
+                .to_string()
+        ]
+    );
+}

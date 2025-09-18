@@ -10,7 +10,7 @@ fn concat_strings() -> anyhow::Result<()> {
     assert_vm_executes_with_inspection(
         Program {
             source: r#"
-                fn main() -> string {
+                function main() -> string {
                     let a = "Hello";
                     let b = " World";
 
@@ -39,7 +39,7 @@ fn concat_strings() -> anyhow::Result<()> {
 fn string_equality_true() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-                fn main() -> bool {
+                function main() -> bool {
                     "Hello" == "Hello"
                 }
             "#,
@@ -52,7 +52,7 @@ fn string_equality_true() -> anyhow::Result<()> {
 fn string_equality_false() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 "Hello" == "World"
             }
         "#,
@@ -65,7 +65,7 @@ fn string_equality_false() -> anyhow::Result<()> {
 fn string_not_equal_true() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-                fn main() -> bool {
+                function main() -> bool {
                     "Hello" != "World"
                 }
             "#,
@@ -78,7 +78,7 @@ fn string_not_equal_true() -> anyhow::Result<()> {
 fn string_less_than() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-                fn main() -> bool {
+                function main() -> bool {
                     "a" < "b"
                 }
             "#,
@@ -91,7 +91,7 @@ fn string_less_than() -> anyhow::Result<()> {
 fn string_less_than_or_equal() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-                fn main() -> bool {
+                function main() -> bool {
                     "a" <= "b"
                 }
             "#,
@@ -104,7 +104,7 @@ fn string_less_than_or_equal() -> anyhow::Result<()> {
 fn string_greater_than() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-                fn main() -> bool {
+                function main() -> bool {
                     "b" > "a"
                 }
             "#,
@@ -117,7 +117,7 @@ fn string_greater_than() -> anyhow::Result<()> {
 fn string_greater_than_or_equal() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-                fn main() -> bool {
+                function main() -> bool {
                     "b" >= "a"
                 }
             "#,

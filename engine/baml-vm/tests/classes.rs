@@ -16,7 +16,7 @@ fn class_constructor() -> anyhow::Result<()> {
                     y int
                 }
 
-                fn main() -> Point {
+                function main() -> Point {
                     let p = Point { x: 1, y: 2 };
                     p
                 }
@@ -51,11 +51,11 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                     w int
                 }
 
-                fn default_point() -> Point {
+                function default_point() -> Point {
                     Point { x: 0, y: 0, z: 0, w: 0 }
                 }
 
-                fn main() -> Point {
+                function main() -> Point {
                     let p = Point { x: 1, y: 2, ..default_point() };
                     p
                 }
@@ -92,11 +92,11 @@ fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Res
                     w int
                 }
 
-                fn default_point() -> Point {
+                function default_point() -> Point {
                     Point { x: 0, y: 0, z: 0, w: 0 }
                 }
 
-                fn main() -> int {
+                function main() -> int {
                     let p = Point { x: 1, y: 2, ..default_point() };
                     let x = 0;
                     x
