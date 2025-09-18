@@ -293,27 +293,25 @@ export function activate(context: vscode.ExtensionContext) {
     const position = event.selections[0]?.active;
 
     const editor = vscode.window.activeTextEditor;
+    if (!editor) { return; }
 
-    if (editor) {
-      const name = editor.document.fileName;
-      if (name.endsWith(".baml")) {
-        const text = editor.document.getText();
-
-        // TODO: buggy when used with multiple functions, needs a fix.
-        WebviewPanelHost.currentPanel?.sendCommandToWebview({
-          source: "ide_message",
-          payload: {
-            command: "update_cursor",
-            content: {
-              fileName: name,
-              fileText: text,
-              line: position?.line ?? 0 + 1,
-              column: position?.character ?? 0,
-            },
-          }
-        });
-      }
+    const name = editor.document.fileName;
+    if (!name.endsWith(".baml")) {
+      return;
     }
+
+    // TODO: buggy when used with multiple functions, needs a fix.
+    WebviewPanelHost.currentPanel?.sendCommandToWebview({
+      source: "ide_message",
+      payload: {
+        command: "update_cursor",
+        content: {
+          fileName: name,
+          line: position?.line ?? 0 + 1,
+          column: position?.character ?? 0,
+        },
+      }
+    });
   });
 
   const config = vscode.workspace.getConfiguration("editor", {

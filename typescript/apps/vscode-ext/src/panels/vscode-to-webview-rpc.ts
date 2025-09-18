@@ -8,7 +8,6 @@ export type VscodeToWebviewCommand =
 			command: 'update_cursor';
 			content: {
 				fileName: string;
-				fileText: string;
 				line: number;
 				column: number;
 			};

@@ -339,7 +339,7 @@ impl WasmSpan {
     fn contains(&self, file_path: &str, cursor_idx: usize) -> bool {
         // NB(sam): we should probably do an == comparison, but ends_with is the
         // existing behavior and handles file:// ambiguity
-        span.file_path.as_str().ends_with(file_name)
+        self.file_path.as_str().ends_with(file_path)
             && ((self.start)..=(self.end)).contains(&cursor_idx)
     }
 }

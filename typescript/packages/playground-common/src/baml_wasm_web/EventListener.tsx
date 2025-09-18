@@ -2,9 +2,8 @@
 // import * as vscode from 'vscode'
 
 import { vscode } from '@baml/playground-common';
-import { diagnosticsAtom, filesAtom, wasmAtom } from '@baml/playground-common';
 import {
-  flashRangesAtom,
+  diagnosticsAtom, filesAtom, wasmAtom,
   selectedFunctionAtom,
   selectedTestcaseAtom,
   updateCursorAtom,
@@ -14,8 +13,6 @@ import { orchIndexAtom } from '@baml/playground-common';
 import { useDebounceCallback } from '@react-hook/debounce';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
-import { AlertTriangle, XCircle } from 'lucide-react';
-import { CheckCircle } from 'lucide-react';
 import { useEffect } from 'react';
 import { vscodeLocalStorageStore } from './JotaiProvider';
 import { type BamlConfigAtom, bamlConfig } from './bamlConfig';
@@ -168,15 +165,11 @@ export const EventListener: React.FC = () => {
               const { textDocument, range } = params;
               // TODO: this needs testing for escaped file paths!
               const fileName = textDocument.uri.replace('file://', '');
-              const fileText = bamlFileMap[fileName];
-              if (fileText) {
-                updateCursor({
-                  fileName,
-                  fileText,
-                  line: range.start.line,
-                  column: 0,
-                });
-              }
+              updateCursor({
+                fileName,
+                line: range.start.line,
+                column: 0,
+              });
               break;
             }
           }
