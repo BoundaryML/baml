@@ -6,11 +6,13 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.event.CaretEvent
 import com.intellij.openapi.editor.event.CaretListener
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import com.redhat.devtools.lsp4ij.LanguageServerManager
 import com.redhat.devtools.lsp4ij.LanguageServerManager.StartOptions
 import com.redhat.devtools.lsp4ij.LanguageServerManager.StopOptions
@@ -21,6 +23,8 @@ import com.redhat.devtools.lsp4ij.installation.ServerInstallationStatus
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -62,24 +66,7 @@ data class CursorNotificationPayload(
     val range: Range
 )
 
-// VscodeToWebviewCommand structure matching TypeScript interface
-@Serializable
-data class VscodeToWebviewCommand(
-    val source: String,
-    val payload: kotlinx.serialization.json.JsonElement
-)
-
-@Serializable
-data class CodeActionPayload(
-    val method: String,
-    val params: CodeActionParams
-)
-
-@Serializable
-data class CodeActionParams(
-    val textDocument: TextDocument,
-    val range: Range
-)
+// No need for data classes - we'll build JSON directly using buildJsonObject()
 
 class BamlLanguageClient(project: Project) :
     LanguageClientImpl(project) {
@@ -147,7 +134,7 @@ class BamlLanguageClient(project: Project) :
             // Send POST request asynchronously
             val portValue = port // capture the non-null value
             ApplicationManager.getApplication().executeOnPooledThread {
-                sendCursorNotification(portValue, payload)
+                sendCursorNotification(portValue, virtualFile, caret)
             }
             
         } catch (e: Exception) {
@@ -155,25 +142,24 @@ class BamlLanguageClient(project: Project) :
         }
     }
 
-    private fun sendCursorNotification(port: Int, payload: CursorNotificationPayload) {
+    private fun sendCursorNotification(port: Int, file: VirtualFile, caret: Caret) {
         try {
             val webviewUrl = "http://localhost:$port/webview/SEND_COMMAND_TO_WEBVIEW"
             
-            // Construct proper VscodeToWebviewCommand structure
-            val codeActionPayload = CodeActionPayload(
-                method = "textDocument/codeAction",
-                params = CodeActionParams(
-                    textDocument = payload.textDocument,
-                    range = payload.range
-                )
-            )
+            // See vscode-to-webview-rpc.ts for the structure of this message
+            val command = buildJsonObject {
+                put("source", JsonPrimitive("ide_message"))
+                put("payload", buildJsonObject {
+                    put("command", JsonPrimitive("update_cursor"))
+                    put("content", buildJsonObject {
+                        put("fileName", JsonPrimitive(file.path))
+                        put("line", JsonPrimitive(caret.logicalPosition.line))
+                        put("column", JsonPrimitive(caret.logicalPosition.column))
+                    })
+                })
+            }
             
-            val command = VscodeToWebviewCommand(
-                source = "lsp_message",
-                payload = json.encodeToJsonElement(CodeActionPayload.serializer(), codeActionPayload)
-            )
-            
-            val jsonBody = json.encodeToString(VscodeToWebviewCommand.serializer(), command)
+            val jsonBody = json.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), command)
             
             log.debug("Sending cursor notification to $webviewUrl: $jsonBody")
             
