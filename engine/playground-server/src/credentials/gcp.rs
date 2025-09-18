@@ -17,31 +17,41 @@ pub async fn load_gcp_credentials(_request: LoadGcpCredsRequest) -> LoadGcpCreds
             message: "TODO implement cache handling".to_string(),
         },
         Ok(CacheableResource::New { data: headers, .. }) => {
-            let access_token = match headers.get("Authorization")
+            let access_token = match headers
+                .get("Authorization")
                 .and_then(|h| h.to_str().ok())
-                .map(|s| s.replace("Bearer ", "")) {
+                .map(|s| s.replace("Bearer ", ""))
+            {
                 Some(token) if !token.is_empty() => token,
-                _ => return LoadGcpCredsResponse::Error {
-                    name: "MissingAuthHeader".to_string(),
-                    message: "Missing or invalid Authorization header".to_string(),
-                },
+                _ => {
+                    return LoadGcpCredsResponse::Error {
+                        name: "CredentialLoadError".to_string(),
+                        message: "MissingAccessTokenError: missing or invalid Authorization header"
+                            .to_string(),
+                    }
+                }
             };
 
-            let project_id = match headers.get("X-Goog-User-Project")
-                .and_then(|h| h.to_str().ok())
-                .map(|s| s.to_string()) {
-                Some(project) if !project.is_empty() => project,
-                _ => return LoadGcpCredsResponse::Error {
-                    name: "MissingProjectHeader".to_string(),
-                    message: "Missing or invalid X-Goog-User-Project header".to_string(),
-                },
-            };
+            let project_id =
+                match headers
+                    .get("X-Goog-User-Project")
+                    .and_then(|h| h.to_str().ok())
+                    .map(|s| s.to_string())
+                {
+                    Some(project) if !project.is_empty() => project,
+                    _ => return LoadGcpCredsResponse::Error {
+                        name: "CredentialLoadError".to_string(),
+                        message:
+                            "MissingProjectIdError: missing or invalid X-Goog-User-Project header"
+                                .to_string(),
+                    },
+                };
 
             LoadGcpCredsResponse::Ok {
                 access_token,
                 project_id,
             }
-        },
+        }
         Err(e) => LoadGcpCredsResponse::Error {
             name: "CredentialLoadError".to_string(),
             message: e.to_string(),
