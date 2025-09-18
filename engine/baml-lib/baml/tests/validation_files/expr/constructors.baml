@@ -5,7 +5,7 @@ class MyClass {
 
 let x = MyClass { a: 1, b: "2" };
 
-let y = MyClass { a: 1, ..x };
+let y = MyClass { a: 1, ...x };
 
 
 let default_person = Person {

@@ -470,7 +470,7 @@ class_field_value_pair = { (identifier ~ COLON ~ expression) | struct_spread }
 // e.g. `..other_struct`
 // Used in constructors to initialize fields of a new struct from some other struct.
 // e.g. `new MyClass { a: 1, b: 2, ..other_struct }`
-struct_spread = { ".." ~ expression }
+struct_spread = { "..." ~ expression }
 
 // No whitespaces for "func_call<", needs to be atomic.
 // Actually "compound atomic" because of Pest stuff, read here:

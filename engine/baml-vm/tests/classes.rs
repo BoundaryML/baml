@@ -56,7 +56,7 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                 }
 
                 function main() -> Point {
-                    let p = Point { x: 1, y: 2, ..default_point() };
+                    let p = Point { x: 1, y: 2, ...default_point() };
                     p
                 }
             ",
