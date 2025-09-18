@@ -2,28 +2,34 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetPlaygroundPortRequest {}
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetPlaygroundPortResponse {
     pub port: u16,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetVSCodeSettingsRequest {}
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetVSCodeSettingsResponse {
     pub enable_playground_proxy: bool,
     pub feature_flags: Vec<String>,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SetProxySettingsRequest {
     pub proxy_enabled: bool,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SetFeatureFlagsRequest {
     pub feature_flags: Vec<String>,
 }
@@ -37,6 +43,7 @@ pub struct GetWebviewUriRequest {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetWebviewUriResponse {
     pub uri: String,
     pub contents: Option<String>,
@@ -44,6 +51,7 @@ pub struct GetWebviewUriResponse {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LoadAwsCredsRequest {
     pub profile: Option<String>,
 }
@@ -64,6 +72,7 @@ pub enum LoadAwsCredsResponse {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LoadGcpCredsRequest {}
 
 #[derive(Serialize)]
@@ -81,48 +90,36 @@ pub enum LoadGcpCredsResponse {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct InitializedRequest {}
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct InitializedResponse {
     pub ack: bool,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OpenPlaygroundRequest {}
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OpenPlaygroundResponse {
     pub success: bool,
     pub url: Option<String>,
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Span {
-    pub start: usize,
-    pub end: usize,
-    pub file_path: String,
-    pub start_line: usize,
-}
-
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SendLspNotificationToIdeRequest {
     pub notification: lsp_server::Notification,
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SendLspNotificationToIdeResponse {
-    pub ok: bool,
-}
-
-#[derive(Deserialize)]
-pub struct SendLspNotificationToWebviewRequest {
-    pub notification: lsp_server::Notification,
-}
-
-#[derive(Serialize)]
-pub struct SendLspNotificationToWebviewResponse {
     pub ok: bool,
 }
 

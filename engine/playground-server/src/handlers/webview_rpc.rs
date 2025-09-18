@@ -4,12 +4,13 @@ use axum::{
 };
 use serde_json::Value;
 
-use anyhow::Context;
 use crate::{
     api::{errors::ApiError, *},
     server::AppState,
     WebviewRouterMessage,
 };
+use anyhow::Context;
+use mime_guess;
 
 // Helper function to convert anyhow::Error to ApiError for internal operations
 fn anyhow_to_internal_error(err: anyhow::Error) -> ApiError {
@@ -18,6 +19,14 @@ fn anyhow_to_internal_error(err: anyhow::Error) -> ApiError {
 
 fn anyhow_to_bad_request(err: anyhow::Error) -> ApiError {
     ApiError::BadRequest(format!("{:#}", err))
+}
+
+// Helper function to get MIME type from file path
+fn get_mime_type(path: &std::path::Path) -> Option<String> {
+    // Get MIME type from file extension
+    mime_guess::from_path(path)
+        .first()
+        .map(|mime| mime.to_string())
 }
 
 pub async fn webview_rpc_handler(
@@ -82,11 +91,45 @@ pub async fn webview_rpc_handler(
                 .context("Failed to parse GetWebviewUriRequest")
                 .map_err(anyhow_to_bad_request)?;
 
-            let file_access = &state.file_access;
+            tracing::debug!("GET_WEBVIEW_URI request for path: {}", request.path);
 
-            // Generate webview-compatible URI (for JCEF, this is just a file:// URI)
-            let resolved_path = file_access.resolve_path(&request.path)?;
-            let uri = format!("file://{}", resolved_path.display());
+            // Use the path directly from the request
+            let path = std::path::Path::new(&request.path);
+
+            // Check if we can determine the MIME type
+            let uri = if let Some(mime_type) = get_mime_type(path) {
+                tracing::debug!("Returning data URL for {}: {}", mime_type, request.path);
+
+                // For files with detectable MIME types, read the file and create a data URL
+                match tokio::fs::read(&request.path).await {
+                    Ok(contents) => {
+                        use base64::{engine::general_purpose, Engine as _};
+                        let encoded = general_purpose::STANDARD.encode(&contents);
+                        let data_url = format!("data:{};base64,{}", mime_type, encoded);
+
+                        // Log if the data URL is large
+                        if data_url.len() > 1_000_000 {
+                            // 1MB
+                            tracing::warn!(
+                                "Large data URL generated for {}: {} bytes",
+                                request.path,
+                                data_url.len()
+                            );
+                        }
+
+                        data_url
+                    }
+                    Err(e) => {
+                        // Fall back to file:// URI if we can't read the file
+                        tracing::warn!("Failed to read file for data URL: {}", e);
+                        format!("file://{}", request.path)
+                    }
+                }
+            } else {
+                // For files without detectable MIME types, use file:// URI as before
+                tracing::debug!("Returning file URI for unknown type: {}", request.path);
+                format!("file://{}", request.path)
+            };
 
             let mut response = GetWebviewUriResponse {
                 uri,
@@ -94,10 +137,10 @@ pub async fn webview_rpc_handler(
                 read_error: None,
             };
 
-            if request.contents.unwrap_or(false) {
-                match file_access.read_file(&request.path).await {
+            // Still support the optional contents field for backward compatibility
+            if request.contents.unwrap_or(false) && get_mime_type(path).is_none() {
+                match tokio::fs::read(&request.path).await {
                     Ok(contents) => {
-                        // Encode binary data as base64 for JSON transport
                         use base64::{engine::general_purpose, Engine as _};
                         response.contents = Some(general_purpose::STANDARD.encode(contents));
                     }
@@ -172,29 +215,12 @@ pub async fn webview_rpc_handler(
                 .to_webview_router_tx
                 .send(WebviewRouterMessage::SendMessageToWebview(request.0))
                 .inspect_err(|e| {
-                    tracing::error!("Failed to send SEND_COMMAND_TO_WEBVIEW message to language-server: {e}");
+                    tracing::error!(
+                        "Failed to send SEND_COMMAND_TO_WEBVIEW message to language-server: {e}"
+                    );
                 });
 
             let response = SendCommandToWebviewResponse { ok: true };
-            Ok(Json(serde_json::to_value(response)?))
-        }
-
-        "SEND_LSP_NOTIFICATION_TO_WEBVIEW" => {
-            let request: SendLspNotificationToWebviewRequest = serde_json::from_value(payload)
-                .context("Failed to parse SendLspNotificationToWebviewRequest")
-                .map_err(anyhow_to_bad_request)?;
-
-            // Convert LSP notification to WebviewCommand::LspMessage
-            let webview_command = crate::definitions::WebviewCommand::LspMessage(request.notification);
-
-            let _ = state
-                .to_webview_router_tx
-                .send(WebviewRouterMessage::SendMessageToWebview(webview_command))
-                .inspect_err(|e| {
-                    tracing::error!("Failed to send SEND_LSP_NOTIFICATION_TO_WEBVIEW message to language-server: {e}");
-                });
-
-            let response = SendLspNotificationToWebviewResponse { ok: true };
             Ok(Json(serde_json::to_value(response)?))
         }
 
