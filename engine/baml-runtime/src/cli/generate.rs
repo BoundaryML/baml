@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use generators_lib::version_check::GeneratorType;
 use internal_baml_core::configuration::GeneratorDefaultClientMode;
 
 use crate::{baml_src_files, BamlRuntime, InternalRuntimeInterface};
@@ -72,7 +73,7 @@ impl GenerateArgs {
             .collect::<Result<_>>()
             .context("Failed while reading .baml files in baml_src/")?;
         let generated = runtime
-            .run_codegen(&all_files, self.no_version_check)
+            .run_codegen(&all_files, self.no_version_check, GeneratorType::CLI)
             .context("Client generation failed")?;
 
         // give the user a working config to copy-paste (so we need to run it through generator again)
@@ -129,6 +130,7 @@ impl GenerateArgs {
                         None,
                     )
                     .context("Failed while resolving .baml paths in baml_src/")?,
+                    GeneratorType::CLI,
                 )
                 .context(format!(
                     "Failed to run generator for {client_type} in {}",

@@ -48,7 +48,6 @@ baml-runtime = { path = "../baml-runtime", features = [
 baml-lsp-types = { path = "../baml-lsp-types" }
 internal-baml-core = { path = "../baml-lib/baml-core" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
-internal-baml-codegen = { workspace = true }
 crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
 ignore = { version = "0.4.22" }
 parking_lot = { version = "0.12", features = ["deadlock_detection"] }

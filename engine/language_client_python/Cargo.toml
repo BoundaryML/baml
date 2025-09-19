@@ -29,7 +29,6 @@ baml-runtime = { path = "../baml-runtime", default-features = false, features = 
   "internal",
 ] }
 baml-types.workspace = true
-internal-baml-codegen.workspace = true
 dashmap = "5.5"
 internal-baml-core.workspace = true
 env_logger.workspace = true

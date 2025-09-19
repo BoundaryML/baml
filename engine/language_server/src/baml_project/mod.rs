@@ -24,7 +24,7 @@ use baml_runtime::{
 };
 use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, TypeValue};
 use file_utils::gather_files;
-use internal_baml_codegen::{
+use generators_lib::{
     version_check::{check_version, GeneratorType, VersionCheckMode},
     GenerateOutput,
 };
@@ -170,7 +170,11 @@ impl BamlProject {
         }
         let runtime = runtime.unwrap();
 
-        let generated = match runtime.run_codegen(&all_files, no_version_check.unwrap_or(false)) {
+        let generated = match runtime.run_codegen(
+            &all_files,
+            no_version_check.unwrap_or(false),
+            GeneratorType::VSCode,
+        ) {
             Ok(gen) => {
                 let elapsed = start_time.elapsed();
                 tracing::debug!(

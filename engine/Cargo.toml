@@ -12,7 +12,6 @@ members = [
   "bstd",
   "cli",
   "tools",
-  "language_client_codegen",
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
@@ -42,7 +41,6 @@ default-members = [
   "bstd",
   "cli",
   "language_client_cffi",
-  "language_client_codegen",
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
@@ -89,7 +87,6 @@ http = "1.1.0"
 http-body = "1.0.0"
 indexmap = { version = "2.1.0", features = ["serde"] }
 indoc = "2.0.5"
-internal-baml-codegen = { path = "language_client_codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }
 internal-baml-jinja = { path = "baml-lib/jinja-runtime" }
 playground-server = { path = "playground-server" }

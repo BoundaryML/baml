@@ -1,4 +1,4 @@
-use internal_baml_codegen::GenerateOutput;
+use generators_lib::GenerateOutput;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(getter_with_clone, inspectable)]

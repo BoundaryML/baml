@@ -21,7 +21,6 @@ baml-types.workspace = true
 baml-runtime = { path = "../baml-runtime", default-features = false, features = [
   "internal",
 ] }
-internal-baml-codegen.workspace = true
 internal-baml-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true

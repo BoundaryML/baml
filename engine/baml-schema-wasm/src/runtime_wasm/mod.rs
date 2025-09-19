@@ -17,8 +17,8 @@ use baml_runtime::{
 };
 use baml_types::{BamlValue, GeneratorOutputType, ResponseCheck};
 use futures::{channel::mpsc, StreamExt};
+use generators_lib::version_check::{check_version, GeneratorType, VersionCheckMode};
 use indexmap::IndexMap;
-use internal_baml_codegen::version_check::{check_version, GeneratorType, VersionCheckMode};
 use internal_baml_core::{feature_flags::FeatureFlags, ir::repr::Walker};
 use internal_llm_client::AllowedRoleMetadata;
 use itertools::join;
@@ -865,6 +865,7 @@ impl WasmRuntime {
                     .map(|(k, v)| (PathBuf::from(k), v.clone()))
                     .collect(),
                 no_version_check,
+                GeneratorType::VSCodeCLI,
             )
             .map_err(|e| JsError::new(format!("{e:#}").as_str()))?
             .into_iter()

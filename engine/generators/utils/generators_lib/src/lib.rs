@@ -1,13 +1,25 @@
 use std::{path::PathBuf, sync::Arc};
 
+pub mod version_check;
+
 pub use dir_writer::GeneratorArgs;
 use dir_writer::{IntermediateRepr, LanguageFeatures};
+use indexmap::IndexMap;
 use internal_baml_core::configuration::GeneratorOutputType;
+
+pub struct GenerateOutput {
+    pub client_type: GeneratorOutputType,
+    /// Relative path to the output directory (output_dir in the generator)
+    pub output_dir_shorthand: PathBuf,
+    /// The absolute path that the generated baml client was written to
+    pub output_dir_full: PathBuf,
+    pub files: IndexMap<PathBuf, String>,
+}
 
 pub fn generate_sdk(
     ir: Arc<IntermediateRepr>,
     gen: &GeneratorArgs,
-) -> Result<indexmap::IndexMap<PathBuf, String>, anyhow::Error> {
+) -> Result<IndexMap<PathBuf, String>, anyhow::Error> {
     let res = match gen.client_type {
         GeneratorOutputType::Go => {
             use generators_go::GoLanguageFeatures;

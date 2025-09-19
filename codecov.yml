@@ -12,15 +12,15 @@ coverage:
         informational: true
 
 comment:
-  layout: "header, diff, flags, components"  # show component info in the PR comment
+  layout: "header, diff, flags, components" # show component info in the PR comment
   behavior: default
-  require_changes: false  # if true: only post the comment if coverage changes
-  require_base: false     # [true :: must have a base report to post]
-  require_head: true      # [true :: must have a head report to post]
+  require_changes: false # if true: only post the comment if coverage changes
+  require_base: false # [true :: must have a base report to post]
+  require_head: true # [true :: must have a head report to post]
   hide_project_coverage: false # [true :: only show coverage on the git diff aka patch coverage]
 
 component_management:
-  default_rules:  # default rules that will be inherited by all components
+  default_rules: # default rules that will be inherited by all components
     statuses:
       - type: project # in this case every component that doesn't have a status defined will have a project type one
         target: auto
@@ -40,7 +40,7 @@ component_management:
       name: Sandbox
       paths:
         - engine/sandbox/**
-    
+
     # Core libraries
     - component_id: baml_core
       name: Core
@@ -58,13 +58,13 @@ component_management:
       name: Types
       paths:
         - engine/baml-lib/baml-types/**
-    
+
     # Runtime components
     - component_id: baml_runtime
       name: Runtime
       paths:
         - engine/baml-runtime/**
-      statuses:           # runtime is critical
+      statuses: # runtime is critical
         - type: project
           target: auto
         - type: patch
@@ -72,7 +72,7 @@ component_management:
       name: RPC
       paths:
         - engine/baml-rpc/**
-    
+
     # Parsers and processors
     - component_id: prompt_parser
       name: Prompt Parser
@@ -86,13 +86,13 @@ component_management:
       name: LLM Response Parser
       paths:
         - engine/llm-response-parser/**
-    
+
     # LLM client
     - component_id: llm_client
       name: LLM Client
       paths:
         - engine/baml-lib/llm-client/**
-    
+
     # Template engines
     - component_id: jinja
       name: Jinja
@@ -102,16 +102,13 @@ component_management:
       name: Jinja Runtime
       paths:
         - engine/baml-lib/jinja-runtime/**
-    
+
     # Language clients
     - component_id: language_client_cffi
       name: CFFI Client
       paths:
         - engine/language_client_cffi/**
-    - component_id: language_client_codegen
-      name: Language Client Codegen
-      paths:
-        - engine/language_client_codegen/**
+
     - component_id: language_client_python
       name: Python Client
       paths:
@@ -124,7 +121,7 @@ component_management:
       name: Ruby Client
       paths:
         - engine/language_client_ruby/ext/ruby_ffi/**
-    
+
     # Code generators by language
     - component_id: generator_python
       name: Python Generator
@@ -146,7 +143,7 @@ component_management:
       name: OpenAPI Generator
       paths:
         - engine/generators/languages/openapi/**
-    
+
     # Generator utilities
     - component_id: generators_lib
       name: Generators Library
@@ -160,7 +157,7 @@ component_management:
       name: Test Harness
       paths:
         - engine/generators/utils/test_harness/**
-    
+
     # Other components
     - component_id: baml_diagnostics
       name: Diagnostics

@@ -1,9 +1,0 @@
-
-file_map = {
-    {% for (path, contents) in file_map %}
-    {{ path }}: {{ contents }},
-    {%- endfor %}
-}
-
-def get_baml_files():
-    return file_map

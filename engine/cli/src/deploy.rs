@@ -87,11 +87,11 @@ impl Deployer {
         let version_check_errors = cloud_projects
             .iter()
             .filter_map(|cloud_project| {
-                internal_baml_codegen::version_check::check_version(
+                generators_lib::version_check::check_version(
                     &cloud_project.version,
                     env!("CARGO_PKG_VERSION"),
-                    internal_baml_codegen::version_check::GeneratorType::CLI,
-                    internal_baml_codegen::version_check::VersionCheckMode::Strict,
+                    generators_lib::version_check::GeneratorType::CLI,
+                    generators_lib::version_check::VersionCheckMode::Strict,
                     baml_types::GeneratorOutputType::OpenApi,
                     false,
                 )

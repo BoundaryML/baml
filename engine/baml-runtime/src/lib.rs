@@ -31,6 +31,11 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
+use crate::{
+    errors::IntoBamlError,
+    internal::llm_client::{LLMCompleteResponse, LLMCompleteResponseMetadata, LLMResponse},
+    test_constraints::{evaluate_test_constraints, TestConstraintsResult},
+};
 use anyhow::{Context, Result};
 use baml_ids::{FunctionCallId, HttpRequestId};
 use baml_types::{
@@ -48,6 +53,8 @@ use futures::{
     channel::mpsc,
     future::{join, join_all},
 };
+use generators_lib::version_check::{self, GeneratorType, VersionCheckMode};
+use generators_lib::{GenerateOutput, GeneratorArgs};
 use indexmap::IndexMap;
 use internal::{
     llm_client::{
@@ -96,12 +103,6 @@ use tracingv2::{
 use type_builder::TypeBuilder;
 pub use types::*;
 use web_time::{Duration, SystemTime};
-
-use crate::{
-    errors::IntoBamlError,
-    internal::llm_client::{LLMCompleteResponse, LLMCompleteResponseMetadata, LLMResponse},
-    test_constraints::{evaluate_test_constraints, TestConstraintsResult},
-};
 
 #[cfg(not(target_arch = "wasm32"))]
 static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
@@ -1126,10 +1127,24 @@ impl BamlRuntime {
     fn generate_client(
         &self,
         client_type: &GeneratorOutputType,
-        args: &generators_lib::GeneratorArgs,
-    ) -> Result<internal_baml_codegen::GenerateOutput> {
+        args: &GeneratorArgs,
+        generator_type: GeneratorType,
+    ) -> Result<GenerateOutput> {
+        if !args.no_version_check {
+            if let Some(error) = version_check::check_version(
+                &args.version,
+                env!("CARGO_PKG_VERSION"),
+                generator_type,
+                VersionCheckMode::Strict,
+                *client_type,
+                false,
+            ) {
+                return Err(anyhow::anyhow!(error.msg()));
+            }
+        }
+
         let files = generators_lib::generate_sdk(self.inner.ir.clone(), args)?;
-        Ok(internal_baml_codegen::GenerateOutput {
+        Ok(GenerateOutput {
             client_type: *client_type,
             output_dir_shorthand: args.output_dir().to_path_buf(),
             output_dir_full: args.output_dir().to_path_buf(),
@@ -1196,15 +1211,14 @@ impl BamlRuntime {
         &self,
         input_files: &IndexMap<PathBuf, String>,
         no_version_check: bool,
-    ) -> Result<Vec<internal_baml_codegen::GenerateOutput>> {
-        use internal_baml_codegen::GenerateClient;
-
-        let client_types: Vec<(&CodegenGenerator, internal_baml_codegen::GeneratorArgs)> = self
+        generator_type: GeneratorType,
+    ) -> Result<Vec<GenerateOutput>> {
+        let client_types: Vec<(&CodegenGenerator, GeneratorArgs)> = self
             .codegen_generators()
             .map(|generator| {
                 Ok((
                     generator,
-                    internal_baml_codegen::GeneratorArgs::new(
+                    GeneratorArgs::new(
                         generator.output_dir(),
                         generator.baml_src.clone(),
                         input_files.iter(),
@@ -1244,8 +1258,21 @@ impl BamlRuntime {
         client_types
             .iter()
             .map(|(generator, args)| {
+                if !args.no_version_check {
+                    if let Some(error) = version_check::check_version(
+                        &args.version,
+                        env!("CARGO_PKG_VERSION"),
+                        generator_type,
+                        VersionCheckMode::Strict,
+                        generator.output_type,
+                        false,
+                    ) {
+                        return Err(anyhow::anyhow!(error.msg()));
+                    }
+                }
+
                 let files = generators_lib::generate_sdk(self.inner.ir.clone(), args)?;
-                Ok(internal_baml_codegen::GenerateOutput {
+                Ok(GenerateOutput {
                     client_type: generator.output_type,
                     output_dir_shorthand: generator.output_dir(),
                     output_dir_full: generator.output_dir(),
