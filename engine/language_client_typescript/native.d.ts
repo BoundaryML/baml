@@ -83,6 +83,7 @@ export declare class ClientRegistry {
 
 export declare class Collector {
   constructor(name?: string | undefined | null)
+  clear(): void
   get logs(): Array<FunctionLog>
   get last(): FunctionLog | null
   id(functionLogId: string): FunctionLog | null
