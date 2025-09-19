@@ -31,11 +31,6 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
-use crate::{
-    errors::IntoBamlError,
-    internal::llm_client::{LLMCompleteResponse, LLMCompleteResponseMetadata, LLMResponse},
-    test_constraints::{evaluate_test_constraints, TestConstraintsResult},
-};
 use anyhow::{Context, Result};
 use baml_ids::{FunctionCallId, HttpRequestId};
 use baml_types::{
@@ -53,8 +48,10 @@ use futures::{
     channel::mpsc,
     future::{join, join_all},
 };
-use generators_lib::version_check::{self, GeneratorType, VersionCheckMode};
-use generators_lib::{GenerateOutput, GeneratorArgs};
+use generators_lib::{
+    version_check::{self, GeneratorType, VersionCheckMode},
+    GenerateOutput, GeneratorArgs,
+};
 use indexmap::IndexMap;
 use internal::{
     llm_client::{
@@ -103,6 +100,12 @@ use tracingv2::{
 use type_builder::TypeBuilder;
 pub use types::*;
 use web_time::{Duration, SystemTime};
+
+use crate::{
+    errors::IntoBamlError,
+    internal::llm_client::{LLMCompleteResponse, LLMCompleteResponseMetadata, LLMResponse},
+    test_constraints::{evaluate_test_constraints, TestConstraintsResult},
+};
 
 #[cfg(not(target_arch = "wasm32"))]
 static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
