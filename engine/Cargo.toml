@@ -202,6 +202,3 @@ inherits = "dev"
 
 [profile.release]
 lto = true
-
-[target.x86_64-unknown-linux-gnu]
-rustflags = ["-Clinker-features=-lld"]
