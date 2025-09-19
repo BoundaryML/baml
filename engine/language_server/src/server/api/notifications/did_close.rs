@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
 use lsp_server::ErrorCode;
-use lsp_types::{notification::DidCloseTextDocument, DidCloseTextDocumentParams};
+use lsp_types::{
+    notification::DidCloseTextDocument, DidCloseTextDocumentParams, PublishDiagnosticsParams,
+};
 
 // use crate::server::api::diagnostics::clear_diagnostics;
 use crate::server::api::traits::{NotificationHandler, SyncNotificationHandler};
@@ -27,37 +29,31 @@ impl NotificationHandler for DidCloseTextDocumentHandler {
 impl SyncNotificationHandler for DidCloseTextDocumentHandler {
     fn run(
         session: &mut Session,
-        _notifier: Notifier,
+        notifier: Notifier,
         _requester: &mut Requester,
         params: DidCloseTextDocumentParams,
     ) -> Result<()> {
         let url = params.text_document.uri;
-        if !url.to_string().contains("baml_src") {
-            return Ok(());
-        }
-
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
+        let Ok(project) = session.get_or_create_project(&path) else {
+            return Ok(());
+        };
 
-        match session.get_or_create_project(&path) {
-            None => {}
-            Some(project) => {
-                let document_key =
-                    DocumentKey::from_url(&PathBuf::from(project.lock().root_path()), &url)
-                        .internal_error()?;
-                session
-                    .close_document(&document_key)
-                    .with_failure_code(ErrorCode::InternalError)?;
-                // Remove the unsaved file from the project as well
-                // TODO: ideally the baml project just has a view of unsaved files directly from the Session itself, and not maintain its own state / copy of the unsaved files
-                project
-                    .lock()
-                    .baml_project
-                    .remove_unsaved_file(&document_key);
-            }
-        }
-        session.reload(Some(_notifier)).internal_error()?;
+        let document_key = DocumentKey::from_url(&PathBuf::from(project.lock().root_path()), &url)
+            .internal_error()?;
+        session
+            .close_document(&document_key)
+            .with_failure_code(ErrorCode::InternalError)?;
+        // Remove the unsaved file from the project as well
+        // TODO: ideally the baml project just has a view of unsaved files directly from the Session itself, and not maintain its own state / copy of the unsaved files
+        project
+            .lock()
+            .baml_project
+            .remove_unsaved_file(&document_key);
+
+        session.reload(Some(notifier)).internal_error()?;
 
         Ok(())
     }

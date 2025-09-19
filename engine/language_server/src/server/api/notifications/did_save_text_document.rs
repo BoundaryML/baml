@@ -1,11 +1,17 @@
 use std::borrow::Cow;
 
-use lsp_types::{self as types, notification as notif, request::Request, ConfigurationParams};
+use lsp_types::{
+    self as types, notification as notif, request::Request, ConfigurationParams,
+    PublishDiagnosticsParams,
+};
 
 use crate::{
     baml_project::{common_version_up_to_patch, Project},
     server::{
-        api::{self, notifications::baml_src_version::BamlSrcVersionPayload, ResultExt},
+        api::{
+            self, diagnostics::not_in_baml_src_diagnostic,
+            notifications::baml_src_version::BamlSrcVersionPayload, ResultExt,
+        },
         client::{Notifier, Requester},
         Result, Task,
     },
@@ -27,13 +33,18 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
     ) -> Result<()> {
         tracing::info!("Did save text document---------");
         let url = params.text_document.uri;
-        if !url.to_string().contains("baml_src") {
-            return Ok(());
-        }
-
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
+        let Ok(project) = session.get_or_create_project(&path) else {
+            notifier
+                .notify::<lsp_types::notification::PublishDiagnostics>(not_in_baml_src_diagnostic(
+                    &url,
+                ))
+                .internal_error()?;
+            return Ok(());
+        };
+
         session.clear_unsaved_files();
         session.reload(Some(notifier.clone())).internal_error()?;
 
@@ -45,9 +56,6 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
         }
 
         tracing::info!("About to run generator. URL path: {:?}", path);
-        let project = session
-            .get_or_create_project(&path)
-            .expect("Ensured that a project db exists");
         let mut locked = project.lock();
 
         let default_flags = vec!["beta".to_string()];
@@ -160,30 +168,32 @@ impl super::BackgroundDocumentNotificationHandler for DidSaveTextDocument {
 
         // Note: In the background version, we need to get the project from the snapshot
         // instead of modifying the session directly
-        if let Some(project) = snapshot.project() {
-            let default_flags = vec!["beta".to_string()];
-            let effective_flags = snapshot
-                .session_baml_settings()
-                .feature_flags
-                .as_ref()
-                .unwrap_or(&default_flags);
-            project.lock().run_generators_without_debounce(
-                effective_flags,
-                |message| {
-                    tracing::info!("About to notify client that generator has run.");
-                    notifier.notify_baml_info(&message).unwrap_or(())
-                },
-                |e| {
-                    tracing::error!("Error generating: {e}");
-                    notifier.notify_baml_error(&e).unwrap_or(())
-                },
-            );
-        } else {
+
+        let Ok(project) = snapshot.project() else {
             tracing::error!("No project found in snapshot for file {:?}", path);
             notifier
                 .notify_baml_error(&format!("No project found for file {path:?}"))
                 .unwrap_or(());
-        }
+            return Ok(());
+        };
+
+        let default_flags = vec!["beta".to_string()];
+        let effective_flags = snapshot
+            .session_baml_settings()
+            .feature_flags
+            .as_ref()
+            .unwrap_or(&default_flags);
+        project.lock().run_generators_without_debounce(
+            effective_flags,
+            |message| {
+                tracing::info!("About to notify client that generator has run.");
+                notifier.notify_baml_info(&message).unwrap_or(())
+            },
+            |e| {
+                tracing::error!("Error generating: {e}");
+                notifier.notify_baml_error(&e).unwrap_or(())
+            },
+        );
 
         Ok(())
     }
