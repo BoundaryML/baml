@@ -60,20 +60,22 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
             "main",
             vec![
                 Instruction::AllocInstance(ObjectIndex::from_raw(3)),
-                Instruction::Copy(0),
-                Instruction::LoadConst(0),
-                Instruction::StoreField(0),
-                Instruction::Copy(0),
-                Instruction::LoadConst(1),
-                Instruction::StoreField(1),
                 Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                 Instruction::Call(0),
-                Instruction::Copy(1), // Copy instance from under spread
-                Instruction::Copy(1), // Copy spread from under instance
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(0),
+                Instruction::StoreField(0),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(1),
+                Instruction::StoreField(1),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
                 Instruction::LoadField(2),
                 Instruction::StoreField(2),
-                Instruction::Copy(1), // Copy instance from under spread
-                Instruction::Copy(1), // Copy spread from under instance
+                Instruction::Copy(1),
+                Instruction::Copy(1),
                 Instruction::LoadField(3),
                 Instruction::StoreField(3),
                 Instruction::Pop(1),
@@ -81,6 +83,192 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                 Instruction::Return,
             ],
         )],
+    })
+}
+
+#[test]
+fn class_constructor_with_spread_before_named_fields() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            class Point {
+                x int
+                y int
+                z int
+                w int
+            }
+
+            function default_point() -> Point {
+                Point { x: 0, y: 0, z: 0, w: 0 }
+            }
+
+            function main() -> Point {
+                let p = Point { ...default_point(), x: 1, y: 2 };
+                p
+            }
+        "#,
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::AllocInstance(ObjectIndex::from_raw(3)),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                Instruction::Call(0),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(2),
+                Instruction::StoreField(2),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(3),
+                Instruction::StoreField(3),
+                Instruction::Pop(1),
+                Instruction::Copy(0),
+                Instruction::LoadConst(0),
+                Instruction::StoreField(0),
+                Instruction::Copy(0),
+                Instruction::LoadConst(1),
+                Instruction::StoreField(1),
+                Instruction::LoadVar(1),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+fn class_constructor_with_spread_after_named_fields() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            class Point {
+                x int
+                y int
+                z int
+                w int
+            }
+
+            function default_point() -> Point {
+                Point { x: 0, y: 0, z: 0, w: 0 }
+            }
+
+            function main() -> Point {
+                let p = Point { x: 1, y: 2, ...default_point() };
+                p
+            }
+        "#,
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::AllocInstance(ObjectIndex::from_raw(3)),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                Instruction::Call(0),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(0),
+                Instruction::StoreField(0),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(1),
+                Instruction::StoreField(1),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(2),
+                Instruction::StoreField(2),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(3),
+                Instruction::StoreField(3),
+                Instruction::Pop(1),
+                Instruction::LoadVar(1),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            class Point {
+                x int
+                y int
+                z int
+                w int
+            }
+
+            function x_one() -> Point {
+                Point { x: 0, y: 0, z: 0, w: 0 }
+            }
+
+            function xy_one() -> Point {
+                Point { x: 1, y: 1, z: 0, w: 0 }
+            }
+
+            function xy_one_last() -> Point {
+                let p = Point { ...x_one(), ...xy_one() };
+                p
+            }
+
+            function x_one_last() -> Point {
+                let p = Point { ...xy_one(), ...x_one() };
+                p
+            }
+        "#,
+        expected: vec![
+            (
+                "xy_one_last",
+                vec![
+                    Instruction::AllocInstance(ObjectIndex::from_raw(5)),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(1)),
+                    Instruction::Call(0),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(0),
+                    Instruction::StoreField(0),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(1),
+                    Instruction::StoreField(1),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(2),
+                    Instruction::StoreField(2),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(3),
+                    Instruction::StoreField(3),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(1),
+                    Instruction::Return,
+                ],
+            ),
+            (
+                "x_one_last",
+                vec![
+                    Instruction::AllocInstance(ObjectIndex::from_raw(5)),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                    Instruction::Call(0),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(0),
+                    Instruction::StoreField(0),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(1),
+                    Instruction::StoreField(1),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(2),
+                    Instruction::StoreField(2),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(3),
+                    Instruction::StoreField(3),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(1),
+                    Instruction::Return,
+                ],
+            ),
+        ],
     })
 }
 
@@ -109,24 +297,26 @@ fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Res
             "main",
             vec![
                 Instruction::AllocInstance(ObjectIndex::from_raw(3)),
-                Instruction::Copy(0),
-                Instruction::LoadConst(0),
-                Instruction::StoreField(0),
-                Instruction::Copy(0),
-                Instruction::LoadConst(1),
-                Instruction::StoreField(1),
                 Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                 Instruction::Call(0),
-                Instruction::Copy(1), // Copy instance from under spread
-                Instruction::Copy(1), // Copy spread from under instance
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(0),
+                Instruction::StoreField(0),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(1),
+                Instruction::StoreField(1),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
                 Instruction::LoadField(2),
                 Instruction::StoreField(2),
-                Instruction::Copy(1), // Copy instance from under spread
-                Instruction::Copy(1), // Copy spread from under instance
+                Instruction::Copy(1),
+                Instruction::Copy(1),
                 Instruction::LoadField(3),
                 Instruction::StoreField(3),
                 Instruction::Pop(1),
-                Instruction::LoadConst(2),
+                Instruction::LoadConst(0),
                 Instruction::LoadVar(2),
                 Instruction::Return,
             ],

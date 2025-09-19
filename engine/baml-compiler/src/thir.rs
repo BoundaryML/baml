@@ -68,6 +68,12 @@ pub struct GlobalAssignment<T> {
     pub annotated_type: Option<TypeIR>,
 }
 
+#[derive(Debug, Clone)]
+pub enum ClassConstructorField<T> {
+    Named { name: String, value: Expr<T> },
+    Spread { value: Expr<T> },
+}
+
 /// A BAML expression term.
 /// T is the type of the metadata.
 #[derive(Debug, Clone)]
@@ -78,8 +84,7 @@ pub enum Expr<T> {
     Block(Box<Block<T>>, T),
     ClassConstructor {
         name: String,
-        fields: BamlMap<String, Expr<T>>,
-        spread: Option<Box<Expr<T>>>,
+        fields: Vec<ClassConstructorField<T>>,
         meta: T,
     },
     Var(Name, T),
@@ -269,6 +274,17 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
     }
 }
 
+impl<T: Clone + std::fmt::Debug> ClassConstructorField<T> {
+    pub fn dump_str(&self) -> String {
+        match self {
+            ClassConstructorField::Named { name, value } => {
+                format!("{}: {}", name, value.dump_str())
+            }
+            ClassConstructorField::Spread { value } => format!("...{}", value.dump_str()),
+        }
+    }
+}
+
 impl<T: Clone + std::fmt::Debug> Expr<T> {
     /// A very rough pretty-printer for debugging expressions.
     pub fn dump_str(&self) -> String {
@@ -304,22 +320,14 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                     .join(", ");
                 format!("{{{entries}}}")
             }
-            Expr::ClassConstructor {
-                name,
-                fields,
-                spread,
-                ..
-            } => {
-                let fields = fields
+            Expr::ClassConstructor { name, fields, .. } => {
+                let fields_string = fields
                     .iter()
-                    .map(|(key, value)| format!("{}: {}", key, value.dump_str()))
+                    .map(|field| field.dump_str())
                     .collect::<Vec<_>>()
                     .join(", ");
-                let spread = match spread {
-                    Some(expr) => format!("..{}", expr.dump_str()),
-                    None => String::new(),
-                };
-                format!("Class({name} {{ {fields}{spread} }}")
+
+                format!("Class({name} {{ {fields_string}}}")
             }
             Expr::If(cond, then, else_, _) => {
                 format!(
@@ -366,6 +374,15 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
     }
 }
 
+impl<T: Clone> ClassConstructorField<T> {
+    pub fn variables(&self) -> HashSet<Name> {
+        match self {
+            ClassConstructorField::Named { value, .. } => value.variables(),
+            ClassConstructorField::Spread { value } => value.variables(),
+        }
+    }
+}
+
 impl<T: Clone> Expr<T> {
     pub fn variables(&self) -> HashSet<Name> {
         match self {
@@ -376,15 +393,8 @@ impl<T: Clone> Expr<T> {
                 .iter()
                 .flat_map(|(_, value)| value.variables())
                 .collect(),
-            Expr::ClassConstructor { fields, spread, .. } => {
-                let mut field_vars = fields
-                    .iter()
-                    .flat_map(|(_, value)| value.variables())
-                    .collect::<HashSet<_>>();
-                if let Some(spread) = spread {
-                    field_vars.extend(spread.variables());
-                }
-                field_vars
+            Expr::ClassConstructor { fields, .. } => {
+                fields.iter().flat_map(|field| field.variables()).collect()
             }
             Expr::Builtin(_, _) => HashSet::new(),
             Expr::Var(name, _) => HashSet::from([name.clone()]),
@@ -451,28 +461,27 @@ impl Expr<ExprMetadata> {
                 Some(BamlValueWithMeta::Map(atom_entries, meta.clone()))
             }
             // A class constructor may not be evaluated into an atom if it still contains a spread.
-            Expr::ClassConstructor {
-                name,
-                fields,
-                spread,
-                meta,
-            } => {
-                if spread.is_some() {
-                    None
-                } else {
-                    let atom_entries = fields
-                        .iter()
-                        .map(|(key, value)| {
+            Expr::ClassConstructor { name, fields, meta } => 'contructor: {
+                let mut atom_entries = BamlMap::new();
+
+                for field in fields {
+                    match field {
+                        // Short circuit on spreads.
+                        ClassConstructorField::Spread { .. } => {
+                            break 'contructor None;
+                        }
+                        ClassConstructorField::Named { name, value } => {
                             let atom = value.as_value()?;
-                            Some((key.clone(), atom))
-                        })
-                        .collect::<Option<BamlMap<String, BamlValueWithMeta<ExprMetadata>>>>()?;
-                    Some(BamlValueWithMeta::Class(
-                        name.clone(),
-                        atom_entries,
-                        meta.clone(),
-                    ))
+                            atom_entries.insert(name.clone(), atom);
+                        }
+                    }
                 }
+
+                Some(BamlValueWithMeta::Class(
+                    name.clone(),
+                    atom_entries,
+                    meta.clone(),
+                ))
             }
             _ => None,
         }
@@ -547,12 +556,16 @@ impl<T: Clone> Iterator for ExprIterator<T> {
                     self.stack.push_back(value);
                 }
             }
-            Expr::ClassConstructor { fields, spread, .. } => {
-                for (_, value) in fields.into_iter() {
-                    self.stack.push_back(value);
-                }
-                if let Some(spread) = spread {
-                    self.stack.push_back(*spread);
+            Expr::ClassConstructor { fields, .. } => {
+                for field in fields {
+                    match field {
+                        ClassConstructorField::Named { value, .. } => {
+                            self.stack.push_back(value);
+                        }
+                        ClassConstructorField::Spread { value } => {
+                            self.stack.push_back(value);
+                        }
+                    }
                 }
             }
             Expr::Var(_, _) => {}

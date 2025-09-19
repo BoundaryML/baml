@@ -1839,8 +1839,7 @@ pub fn typecheck_expression(
             }
         }
         hir::Expression::ClassConstructor(constructor, span) => {
-            let mut typed_fields = BamlMap::new();
-            let mut spread = None;
+            let mut typed_fields = Vec::new();
 
             // Look up class definition to validate fields
             let class_def = context.classes.get(&constructor.class_name).cloned();
@@ -1855,6 +1854,8 @@ pub fn typecheck_expression(
 
                 // Track which required fields have been provided
                 let mut provided_fields = std::collections::HashSet::new();
+
+                let mut has_spread = false;
 
                 // Validate each field in the constructor
                 for field in &constructor.fields {
@@ -1911,17 +1912,60 @@ pub fn typecheck_expression(
                                 }
                             }
 
-                            typed_fields.insert(name.clone(), typed_value);
+                            typed_fields.push(thir::ClassConstructorField::Named {
+                                name: name.clone(),
+                                value: typed_value,
+                            });
                         }
                         hir::ClassConstructorField::Spread { value } => {
+                            has_spread = true;
                             let typed_value = typecheck_expression(value, context, diagnostics);
-                            spread = Some(Box::new(typed_value));
+
+                            match typed_value.meta().1.as_ref() {
+                                Some(TypeIR::Class { name, .. }) => {
+                                    if name != &constructor.class_name {
+                                        diagnostics.push_error(
+                                            DatamodelError::new_validation_error(
+                                                &format!(
+                                                    "Spread must be of type `class {}` but found `class {}`",
+                                                    constructor.class_name,
+                                                    name
+                                                ),
+                                                value.span(),
+                                            ),
+                                        );
+                                    }
+
+                                    typed_fields.push(thir::ClassConstructorField::Spread {
+                                        value: typed_value,
+                                    });
+                                }
+                                Some(other) => {
+                                    diagnostics.push_error(DatamodelError::new_validation_error(
+                                        &format!(
+                                            "Spread must be of type `class {}` but found {}",
+                                            constructor.class_name,
+                                            other.name_for_user()
+                                        ),
+                                        value.span(),
+                                    ));
+                                }
+                                None => {
+                                    diagnostics.push_error(DatamodelError::new_validation_error(
+                                        &format!(
+                                            "Could not infer type of spread which should be `class {}`",
+                                            constructor.class_name
+                                        ),
+                                        value.span(),
+                                    ));
+                                }
+                            }
                         }
                     }
                 }
 
                 // Check for missing required fields only if there's no spread
-                if spread.is_none() {
+                if !has_spread {
                     let mut missing_fields = vec![];
                     for field in &class_def.fields {
                         if !provided_fields.contains(&field.name) && !field.r#type.is_optional() {
@@ -1947,12 +1991,15 @@ pub fn typecheck_expression(
                 for field in &constructor.fields {
                     match field {
                         hir::ClassConstructorField::Named { name, value } => {
-                            let typed_value = typecheck_expression(value, context, diagnostics);
-                            typed_fields.insert(name.clone(), typed_value);
+                            typed_fields.push(thir::ClassConstructorField::Named {
+                                name: name.clone(),
+                                value: typecheck_expression(value, context, diagnostics),
+                            });
                         }
                         hir::ClassConstructorField::Spread { value } => {
-                            let typed_value = typecheck_expression(value, context, diagnostics);
-                            spread = Some(Box::new(typed_value));
+                            typed_fields.push(thir::ClassConstructorField::Spread {
+                                value: typecheck_expression(value, context, diagnostics),
+                            });
                         }
                     }
                 }
@@ -1961,7 +2008,6 @@ pub fn typecheck_expression(
             thir::Expr::ClassConstructor {
                 name: constructor.class_name.clone(),
                 fields: typed_fields,
-                spread,
                 meta: (
                     span.clone(),
                     Some(TypeIR::Class {

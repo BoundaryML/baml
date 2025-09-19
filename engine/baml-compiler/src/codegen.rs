@@ -9,10 +9,11 @@ use baml_vm::{
 };
 use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_parser_database::ParserDatabase;
+use itertools::Itertools;
 
 use crate::{
     hir::{self},
-    thir,
+    thir::{self, ClassConstructorField},
 };
 
 /// Compile a Baml AST into bytecode.
@@ -1224,7 +1225,6 @@ impl<'g> HirCompiler<'g> {
             thir::Expr::ClassConstructor {
                 name: class_name,
                 fields,
-                spread,
                 meta: _,
             } => {
                 // TODO: Long-term solution - Refactor AllocInstance to consume fields from stack
@@ -1238,6 +1238,10 @@ impl<'g> HirCompiler<'g> {
                     panic!("undefined class: {class_name}");
                 };
 
+                let Some(resolved_fields) = self.classes.get(class_name) else {
+                    panic!("undefined class: {class_name}");
+                };
+
                 // Emit allocation with bogus index. It will be patched later.
                 let allocation_loc = self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(
                     usize::MAX,
@@ -1247,82 +1251,101 @@ impl<'g> HirCompiler<'g> {
                     global: class_index,
                 });
 
-                // All constructors now use Copy to access the instance
-                // The instance is always on the stack after AllocInstance
+                // Evaluate only needed expressions. For example:
+                //
+                // let object = Obj {
+                //     ...spread_one(),
+                //     ...spread_two(),
+                //     x: 1,
+                // }
+                //
+                // Would only really need to evaluate spread_two() because it
+                // would override all the values in spread_one().
+                let mut evaluate_fields = Vec::new();
+                let mut defined_named_fields = HashSet::new();
 
-                let mut defined_named_fields = std::collections::HashSet::new();
+                for field in fields.iter().rev() {
+                    match field {
+                        ClassConstructorField::Named { name, .. } => {
+                            // Dedup named fields.
+                            if defined_named_fields.insert(name.clone()) {
+                                evaluate_fields.push(field);
+                            }
+                        }
+                        ClassConstructorField::Spread { .. } => {
+                            // Eval spread only if we're missing some field.
+                            if resolved_fields
+                                .keys()
+                                .any(|name| !defined_named_fields.contains(name))
+                            {
+                                evaluate_fields.push(field);
+                            }
 
-                // Process fields in order
-                for (field_name, value) in fields {
-                    let Some(resolved_fields) = self.classes.get(class_name) else {
-                        panic!("undefined class: {class_name}");
-                    };
-
-                    let Some(&field_index) = resolved_fields.get(field_name) else {
-                        panic!("undefined field: {class_name}.{field_name}");
-                    };
-
-                    // Instance is always on top of stack after AllocInstance
-                    // Copy it to work with it
-                    self.emit(Instruction::Copy(0));
-                    self.compile_expression(value);
-                    self.emit(Instruction::StoreField(field_index));
-
-                    defined_named_fields.insert(field_name.as_str());
-                }
-
-                if let Some(spread) = spread {
-                    let Some(resolved_fields) = self.classes.get(class_name) else {
-                        panic!("undefined class: {class_name}");
-                    };
-
-                    self.compile_expression(spread);
-
-                    // Stack state after compiling spread:
-                    // [locals..., allocated_instance, spread_value]
-                    //                                       ^-- position 0 from top (Copy(0))
-                    //                    ^-- position 1 from top (Copy(1))
-                    //
-                    // We'll use Copy to access both values regardless of nesting level
-                    // This is simpler than calculating pseudo-local indices
-
-                    let mut pop_tmp_spread_value = false;
-
-                    // Not sorted cause of hashmap, tried using sorted map and
-                    // it didn't work either, figure out what's going on.
-                    let mut sorted_fields = resolved_fields
-                        .iter()
-                        .map(|(name, index)| (name, *index))
-                        .collect::<Vec<_>>();
-                    sorted_fields.sort_by_key(|(_, index)| *index);
-
-                    for (field_name, field_index) in sorted_fields {
-                        if !defined_named_fields.contains(field_name.as_str()) {
-                            // Current stack: [locals..., allocated_instance, spread_value]
-
-                            // Copy instance from position 1 (under spread)
-                            // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance]
-                            self.emit(Instruction::Copy(1));
-
-                            // Copy spread from position 1 (now under instance copy)
-                            // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance, spread_value]
-                            self.emit(Instruction::Copy(1));
-
-                            // Load field from spread
-                            // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance, field_value]
-                            self.emit(Instruction::LoadField(field_index));
-
-                            // Store field to instance
-                            // Stack becomes: [locals..., allocated_instance, spread_value]
-                            self.emit(Instruction::StoreField(field_index));
-
-                            pop_tmp_spread_value = true;
+                            // Short circuit on spreads.
+                            break;
                         }
                     }
+                }
 
-                    // Get rid of spread local, won't be used anymore.
-                    if pop_tmp_spread_value {
-                        self.emit(Instruction::Pop(1));
+                // Not sorted cause of hashmap, tried using sorted map and
+                // it didn't work either, figure out what's going on.
+                let mut sorted_fields = resolved_fields
+                    .iter()
+                    .map(|(name, index)| (name, *index))
+                    .collect::<Vec<_>>();
+                sorted_fields.sort_by_key(|(_, index)| *index);
+
+                for field in evaluate_fields.iter().rev() {
+                    match field {
+                        ClassConstructorField::Named {
+                            name: field_name,
+                            value,
+                        } => {
+                            let Some(&field_index) = resolved_fields.get(field_name) else {
+                                panic!("undefined field: {class_name}.{field_name}");
+                            };
+
+                            // Instance is always on top of stack after AllocInstance
+                            // Copy it to work with it
+                            self.emit(Instruction::Copy(0));
+                            self.compile_expression(value);
+                            self.emit(Instruction::StoreField(field_index));
+                        }
+
+                        ClassConstructorField::Spread { value } => {
+                            self.compile_expression(value);
+
+                            // Stack state after compiling spread:
+                            // [locals..., allocated_instance, spread_value]
+                            //                                       ^-- position 0 from top (Copy(0))
+                            //                    ^-- position 1 from top (Copy(1))
+                            //
+                            // We'll use Copy to access both values regardless of nesting level
+                            for (field_name, field_index) in &sorted_fields {
+                                if !defined_named_fields.contains(*field_name) {
+                                    // Current stack: [locals..., allocated_instance, spread_value]
+
+                                    // Copy instance from position 1 (under spread)
+                                    // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance]
+                                    self.emit(Instruction::Copy(1));
+
+                                    // Copy spread from position 1 (now under instance copy)
+                                    // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance, spread_value]
+                                    self.emit(Instruction::Copy(1));
+
+                                    // Load field from spread
+                                    // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance, field_value]
+                                    self.emit(Instruction::LoadField(*field_index));
+
+                                    // Store field to instance
+                                    // Stack becomes: [locals..., allocated_instance, spread_value]
+                                    self.emit(Instruction::StoreField(*field_index));
+                                }
+                            }
+
+                            // Get rid of spread local, won't be used anymore.
+                            self.emit(Instruction::Pop(1));
+                        }
                     }
                 }
             }

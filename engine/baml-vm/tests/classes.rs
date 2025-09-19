@@ -73,6 +73,94 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
 
             assert_eq!(
                 instance.fields,
+                &[Value::Int(0), Value::Int(0), Value::Int(0), Value::Int(0)],
+            );
+
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
+    assert_vm_executes_with_inspection(
+        Program {
+            source: "
+                class Point {
+                    x int
+                    y int
+                    z int
+                    w int
+                }
+
+                function x_one() -> Point {
+                    Point { x: 1, y: 0, z: 0, w: 0 }
+                }
+
+                function xy_one() -> Point {
+                    Point { x: 1, y: 1, z: 0, w: 0 }
+                }
+
+                function main() -> Point {
+                    let p = Point { ...x_one(), ...xy_one() };
+                    p
+                }
+            ",
+            function: "main",
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(40))),
+        },
+        |vm| {
+            let baml_vm::Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(40)] else {
+                panic!(
+                    "expected Instance, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(39)]
+                );
+            };
+
+            assert_eq!(
+                instance.fields,
+                &[Value::Int(1), Value::Int(1), Value::Int(0), Value::Int(0)],
+            );
+
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn class_constructor_with_spread_operator_before_named_fields() -> anyhow::Result<()> {
+    assert_vm_executes_with_inspection(
+        Program {
+            source: "
+                class Point {
+                    x int
+                    y int
+                    z int
+                    w int
+                }
+
+                function default_point() -> Point {
+                    Point { x: 0, y: 0, z: 0, w: 0 }
+                }
+
+                function main() -> Point {
+                    let p = Point { ...default_point(), x: 1, y: 2 };
+                    p
+                }
+            ",
+            function: "main",
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(39))),
+        },
+        |vm| {
+            let baml_vm::Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(39)] else {
+                panic!(
+                    "expected Instance, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(39)]
+                );
+            };
+
+            assert_eq!(
+                instance.fields,
                 &[Value::Int(1), Value::Int(2), Value::Int(0), Value::Int(0)],
             );
 
@@ -97,7 +185,7 @@ fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Res
                 }
 
                 function main() -> int {
-                    let p = Point { x: 1, y: 2, ..default_point() };
+                    let p = Point { x: 1, y: 2, ...default_point() };
                     let x = 0;
                     x
                 }

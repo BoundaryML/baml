@@ -3,7 +3,7 @@ use std::{cell::RefCell, future::Future, sync::Arc};
 use anyhow::{anyhow, bail, Context, Result};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
 
-use crate::thir::{Block, Expr, ExprMetadata, Statement, THir};
+use crate::thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, THir};
 
 /// A scope is a map of variable names to their values.
 ///
@@ -848,45 +848,44 @@ where
                     _ => bail!("field access on non-map/class at {:?}", meta.0),
                 }
             }
-            Expr::ClassConstructor {
-                name,
-                fields,
-                spread,
-                meta,
-            } => {
+            Expr::ClassConstructor { name, fields, meta } => {
                 let mut field_map: BamlMap<String, BamlValueWithMeta<ExprMetadata>> =
                     BamlMap::new();
 
-                // Handle spread first if present
-                if let Some(spread_expr) = spread {
-                    let spread_val = expect_value(
-                        evaluate_expr(spread_expr, scopes, thir, run_llm_function).await?,
-                    )?;
-                    match spread_val.clone() {
-                        BamlValueWithMeta::Class(_, spread_fields, _) => {
-                            for (k, v) in spread_fields.iter() {
-                                field_map.insert(k.clone(), v.clone());
+                for field in fields {
+                    match field {
+                        ClassConstructorField::Named { name, value } => {
+                            field_map.insert(
+                                name.clone(),
+                                expect_value(
+                                    evaluate_expr(value, scopes, thir, run_llm_function).await?,
+                                )?,
+                            );
+                        }
+
+                        ClassConstructorField::Spread { value } => {
+                            let spread_val = expect_value(
+                                evaluate_expr(value, scopes, thir, run_llm_function).await?,
+                            )?;
+                            match spread_val.clone() {
+                                BamlValueWithMeta::Class(_, spread_fields, _) => {
+                                    for (k, v) in spread_fields.iter() {
+                                        field_map.insert(k.clone(), v.clone());
+                                    }
+                                }
+                                // // TODO: Allow maps to be spread?
+                                // BamlValueWithMeta::Map(spread_fields) => {
+                                //     for (k, v) in spread_fields.iter() {
+                                //         field_map.insert(k.clone(), v.clone());
+                                //     }
+                                // }
+                                _ => bail!(
+                                    "spread operator can only be used on classes at {:?}",
+                                    meta.0
+                                ),
                             }
                         }
-                        // // TODO: Allow maps to be spread?
-                        // BamlValueWithMeta::Map(spread_fields) => {
-                        //     for (k, v) in spread_fields.iter() {
-                        //         field_map.insert(k.clone(), v.clone());
-                        //     }
-                        // }
-                        _ => bail!(
-                            "spread operator can only be used on classes at {:?}",
-                            meta.0
-                        ),
                     }
-                }
-
-                // Evaluate and insert explicit fields (these override spread fields)
-                for (k, v) in fields.iter() {
-                    field_map.insert(
-                        k.clone(),
-                        expect_value(evaluate_expr(v, scopes, thir, run_llm_function).await?)?,
-                    );
                 }
 
                 EvalValue::Value(BamlValueWithMeta::Class(
