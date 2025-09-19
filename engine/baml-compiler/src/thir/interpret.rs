@@ -44,9 +44,9 @@ where
     }];
 
     // Seed scope with global assignments
-    for (name, gexpr) in thir.global_assignments.iter() {
+    for (name, g) in thir.global_assignments.iter() {
         let v =
-            expect_value(evaluate_expr(gexpr, &mut scopes, &thir, &mut run_llm_function).await?)?;
+            expect_value(evaluate_expr(&g.expr, &mut scopes, &thir, &mut run_llm_function).await?)?;
         declare(&mut scopes, name, v);
     }
 
@@ -1265,7 +1265,7 @@ mod tests {
     use internal_baml_diagnostics::Span;
 
     use super::*;
-    use crate::thir::THir;
+    use crate::thir::{GlobalAssignment, THir};
 
     fn meta() -> ExprMetadata {
         (Span::fake(), None)
@@ -1337,7 +1337,10 @@ mod tests {
         let mut thir = empty_thir();
         thir.global_assignments.insert(
             "x".to_string(),
-            Expr::Value(BamlValueWithMeta::Int(7, meta())),
+            GlobalAssignment {
+                expr: Expr::Value(BamlValueWithMeta::Int(7, meta())),
+                annotated_type: None,
+            },
         );
 
         // Function with arity 0 returning free var `x`

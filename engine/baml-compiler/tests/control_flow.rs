@@ -10,7 +10,7 @@ use common::{assert_compiles, Program};
 fn if_else_return_expr() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(b: bool) -> int {
+            function main(b: bool) -> int {
                 if (b) { 1 } else { 2 }
             }
         ",
@@ -34,7 +34,7 @@ fn if_else_return_expr() -> anyhow::Result<()> {
 fn if_else_return_expr_with_locals() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(b: bool) -> int {
+            function main(b: bool) -> int {
                 if (b) {
                     let a = 1;
                     a
@@ -68,7 +68,7 @@ fn if_else_return_expr_with_locals() -> anyhow::Result<()> {
 fn if_else_assignment() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(b: bool) -> int {
+            function main(b: bool) -> int {
                 let i = if (b) { 1 } else { 2 };
                 i
             }
@@ -94,7 +94,7 @@ fn if_else_assignment() -> anyhow::Result<()> {
 fn if_else_assignment_with_locals() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(b: bool) -> int {
+            function main(b: bool) -> int {
                 let i = if (b) {
                     let a = 1;
                     a
@@ -131,11 +131,11 @@ fn if_else_assignment_with_locals() -> anyhow::Result<()> {
 fn if_else_normal_statement() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn identity(i: int) -> int {
+            function identity(i: int) -> int {
                 i
             }
 
-            fn main(b: bool) -> int {
+            function main(b: bool) -> int {
                 let a = 1;
 
                 if (b) {
@@ -185,7 +185,7 @@ fn if_else_normal_statement() -> anyhow::Result<()> {
 fn else_if_return_expr() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(a: bool, b: bool) -> int {
+            function main(a: bool, b: bool) -> int {
                 if (a) {
                     1
                 } else if (b) {
@@ -221,7 +221,7 @@ fn else_if_return_expr() -> anyhow::Result<()> {
 fn else_if_return_expr_with_locals() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(a: bool, b: bool) -> int {
+            function main(a: bool, b: bool) -> int {
                 if (a) {
                     let x = 1;
                     x
@@ -266,7 +266,7 @@ fn else_if_return_expr_with_locals() -> anyhow::Result<()> {
 fn else_if_assignment() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(a: bool, b: bool) -> int {
+            function main(a: bool, b: bool) -> int {
                 let result = if (a) {
                     1
                 } else if (b) {
@@ -305,7 +305,7 @@ fn else_if_assignment() -> anyhow::Result<()> {
 fn else_if_assignment_with_locals() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(a: bool, b: bool) -> int {
+            function main(a: bool, b: bool) -> int {
                 let result = if (a) {
                     let x = 1;
                     x
@@ -353,7 +353,7 @@ fn else_if_assignment_with_locals() -> anyhow::Result<()> {
 fn while_loop_gcd() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn GCD(a: int, b: int) -> int {
+            function GCD(a: int, b: int) -> int {
                 while (a != b) {
                     if (a > b) {
                         a = a - b;
@@ -403,7 +403,7 @@ fn while_loop_gcd() -> anyhow::Result<()> {
 fn nested_block_expr_with_ending_normal_if() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main() -> int {
+            function main() -> int {
                 let a = 1;
 
                 {
@@ -452,7 +452,7 @@ fn nested_block_expr_with_ending_normal_if() -> anyhow::Result<()> {
 fn while_loop_with_ending_if() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main() -> int {
+            function main() -> int {
                 let a = 1;
 
                 while (a < 5) {
@@ -500,7 +500,7 @@ fn while_loop_with_ending_if() -> anyhow::Result<()> {
 fn break_factorial() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn Factorial(limit: int) -> int {
+            function Factorial(limit: int) -> int {
                 let result = 1;
 
                 while (true) {
@@ -557,7 +557,7 @@ fn break_factorial() -> anyhow::Result<()> {
 fn continue_factorial() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn Factorial(limit: int) -> int {
+            function Factorial(limit: int) -> int {
                 let result = 1;
 
                 // used to make the loop break without relying on `break` implementation.
@@ -622,7 +622,7 @@ fn continue_factorial() -> anyhow::Result<()> {
 fn continue_nested() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn Nested() -> int {
+            function Nested() -> int {
                 while (true) {
                     while (false) {
                         continue;
@@ -665,7 +665,7 @@ fn continue_nested() -> anyhow::Result<()> {
 fn break_nested() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn Nested() -> int {
+            function Nested() -> int {
                 let a = 5;
                 while (true) {
                     while (true) {
@@ -714,7 +714,7 @@ fn break_nested() -> anyhow::Result<()> {
 fn block_expr() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main() -> int {
+            function main() -> int {
                 let a = {
                     let b = 1;
                     b
@@ -741,7 +741,7 @@ fn block_expr() -> anyhow::Result<()> {
 fn early_return() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn EarlyReturn(x: int) -> int {
+            function EarlyReturn(x: int) -> int {
               if (x == 42) { return 1; }
 
               x + 5
@@ -772,7 +772,7 @@ fn early_return() -> anyhow::Result<()> {
 fn return_with_stack() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn WithStack(x: int) -> int {
+            function WithStack(x: int) -> int {
               let a = 1;
 
               // NOTE: currently there's no empty returns.
@@ -852,7 +852,7 @@ fn return_with_stack() -> anyhow::Result<()> {
 fn for_loop_sum() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn Sum(xs: int[]) -> int {
+            function Sum(xs: int[]) -> int {
                 let result = 0;
 
                 for (x in xs) {
@@ -902,7 +902,7 @@ fn for_loop_sum() -> anyhow::Result<()> {
 fn for_with_break() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn ForWithBreak(xs: int[]) -> int {
+            function ForWithBreak(xs: int[]) -> int {
                 let result = 0;
 
                 for (x in xs) {
@@ -964,7 +964,7 @@ fn for_with_break() -> anyhow::Result<()> {
 fn for_with_continue() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn ForWithContinue(xs: int[]) -> int {
+            function ForWithContinue(xs: int[]) -> int {
                 let result = 0;
 
                 for (x in xs) {
@@ -1026,7 +1026,7 @@ fn for_with_continue() -> anyhow::Result<()> {
 fn for_nested() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn NestedFor(as: int[], bs: int[]) -> int {
+            function NestedFor(as: int[], bs: int[]) -> int {
 
                 let result = 0;
 

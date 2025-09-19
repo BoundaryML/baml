@@ -10,7 +10,7 @@ use common::{assert_vm_executes, Program};
 fn basic_add() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 1 + 2
             }
         "#,
@@ -23,7 +23,7 @@ fn basic_add() -> anyhow::Result<()> {
 fn basic_sub() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 1 - 2
             }
         "#,
@@ -36,7 +36,7 @@ fn basic_sub() -> anyhow::Result<()> {
 fn basic_mul() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 1 * 2
             }
         "#,
@@ -49,7 +49,7 @@ fn basic_mul() -> anyhow::Result<()> {
 fn basic_div() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 10 / 2
             }
         "#,
@@ -62,7 +62,7 @@ fn basic_div() -> anyhow::Result<()> {
 fn basic_mod() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 10 % 3
             }
         "#,
@@ -76,7 +76,7 @@ fn basic_mod() -> anyhow::Result<()> {
 fn basic_bit_and() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 10 & 3
             }
         "#,
@@ -89,7 +89,7 @@ fn basic_bit_and() -> anyhow::Result<()> {
 fn basic_bit_or() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 10 | 3
             }
         "#,
@@ -102,7 +102,7 @@ fn basic_bit_or() -> anyhow::Result<()> {
 fn basic_bit_xor() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 10 ^ 3
             }
         "#,
@@ -115,7 +115,7 @@ fn basic_bit_xor() -> anyhow::Result<()> {
 fn basic_bit_shift_left() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 10 << 3
             }
         "#,
@@ -128,7 +128,7 @@ fn basic_bit_shift_left() -> anyhow::Result<()> {
 fn basic_bit_shift_right() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 10 >> 3
             }
         "#,
@@ -142,7 +142,7 @@ fn basic_bit_shift_right() -> anyhow::Result<()> {
 fn unary_neg() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 -1
             }
         "#,
@@ -155,7 +155,7 @@ fn unary_neg() -> anyhow::Result<()> {
 fn unary_not() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 !true
             }
         "#,
@@ -169,7 +169,7 @@ fn unary_not() -> anyhow::Result<()> {
 fn basic_eq() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 1 == 2
             }
         "#,
@@ -182,7 +182,7 @@ fn basic_eq() -> anyhow::Result<()> {
 fn basic_not_eq() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 1 != 2
             }
         "#,
@@ -195,7 +195,7 @@ fn basic_not_eq() -> anyhow::Result<()> {
 fn basic_gt() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 1 > 2
             }
         "#,
@@ -208,7 +208,7 @@ fn basic_gt() -> anyhow::Result<()> {
 fn basic_gt_eq() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 1 >= 2
             }
         "#,
@@ -221,7 +221,7 @@ fn basic_gt_eq() -> anyhow::Result<()> {
 fn basic_lt() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 1 < 2
             }
         "#,
@@ -234,7 +234,7 @@ fn basic_lt() -> anyhow::Result<()> {
 fn basic_lt_eq() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 1 <= 2
             }
         "#,
@@ -248,7 +248,7 @@ fn basic_lt_eq() -> anyhow::Result<()> {
 fn basic_and() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 true && false
             }
         "#,
@@ -261,7 +261,7 @@ fn basic_and() -> anyhow::Result<()> {
 fn basic_or() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 true || false
             }
         "#,
@@ -275,7 +275,7 @@ fn basic_or() -> anyhow::Result<()> {
 fn basic_assign_add() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 1;
                 x += 2;
                 x
@@ -290,7 +290,7 @@ fn basic_assign_add() -> anyhow::Result<()> {
 fn basic_assign_sub() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 1;
                 x -= 2;
                 x
@@ -305,7 +305,7 @@ fn basic_assign_sub() -> anyhow::Result<()> {
 fn basic_assign_mul() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 1;
                 x *= 2;
                 x
@@ -320,7 +320,7 @@ fn basic_assign_mul() -> anyhow::Result<()> {
 fn basic_assign_div() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 10;
                 x /= 2;
                 x
@@ -335,7 +335,7 @@ fn basic_assign_div() -> anyhow::Result<()> {
 fn basic_assign_mod() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 10;
                 x %= 3;
                 x
@@ -350,7 +350,7 @@ fn basic_assign_mod() -> anyhow::Result<()> {
 fn basic_assign_bit_and() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 10;
                 x &= 3;
                 x
@@ -365,7 +365,7 @@ fn basic_assign_bit_and() -> anyhow::Result<()> {
 fn basic_assign_bit_or() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 10;
                 x |= 3;
                 x
@@ -380,7 +380,7 @@ fn basic_assign_bit_or() -> anyhow::Result<()> {
 fn basic_assign_bit_xor() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 10;
                 x ^= 3;
                 x
@@ -399,7 +399,7 @@ fn instance_of_returns_true() -> anyhow::Result<()> {
                 action "stop"
             }
 
-            fn main() -> bool {
+            function main() -> bool {
                 let t = StopTool { action: "stop" };
 
                 t instanceof StopTool
@@ -422,7 +422,7 @@ fn instance_of_returns_false() -> anyhow::Result<()> {
                 action "start"
             }
 
-            fn main() -> bool {
+            function main() -> bool {
                 let t = StopTool { action: "stop" };
 
                 t instanceof StartTool

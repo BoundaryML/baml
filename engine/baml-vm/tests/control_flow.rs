@@ -9,11 +9,11 @@ use common::{assert_vm_executes, assert_vm_fails, FailingProgram, Program};
 fn exec_if_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
-            fn run_if(b: bool) -> int {
+            function run_if(b: bool) -> int {
                 if (b) { 1 } else { 2 }
             }
 
-            fn main() -> int {
+            function main() -> int {
                 let a = run_if(true);
                 a
             }
@@ -27,11 +27,11 @@ fn exec_if_branch() -> anyhow::Result<()> {
 fn exec_else_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
-            fn run_if(b: bool) -> int {
+            function run_if(b: bool) -> int {
                 if (b) { 1 } else { 2 }
             }
 
-            fn main() -> int {
+            function main() -> int {
                 let a = run_if(false);
                 a
             }
@@ -45,7 +45,7 @@ fn exec_else_branch() -> anyhow::Result<()> {
 fn exec_else_if_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
-            fn run_if(a: bool, b: bool) -> int {
+            function run_if(a: bool, b: bool) -> int {
                 if (a) {
                     1
                 } else if (b) {
@@ -55,7 +55,7 @@ fn exec_else_if_branch() -> anyhow::Result<()> {
                 }
             }
 
-            fn main() -> int {
+            function main() -> int {
                 let a = run_if(false, true);
                 a
             }
@@ -68,7 +68,7 @@ fn exec_else_if_branch() -> anyhow::Result<()> {
 #[test]
 fn while_loop() -> anyhow::Result<()> {
     const SOURCE: &str = r#"
-        fn GCD(a: int, b: int) -> int {
+        function GCD(a: int, b: int) -> int {
 
             while (a != b) {
 
@@ -83,7 +83,7 @@ fn while_loop() -> anyhow::Result<()> {
             a
         }
 
-        fn main() -> int {
+        function main() -> int {
             GCD(21, 15)
         }
     "#;
@@ -98,7 +98,7 @@ fn while_loop() -> anyhow::Result<()> {
 #[test]
 fn while_with_scope() -> anyhow::Result<()> {
     const SOURCE: &str = r#"
-        fn Fib(n: int) -> int {
+        function Fib(n: int) -> int {
 
             let a = 0;
             let b = 1;
@@ -113,7 +113,7 @@ fn while_with_scope() -> anyhow::Result<()> {
             a
         }
 
-        fn main() -> int {
+        function main() -> int {
             Fib(5)
         }
     "#;
@@ -129,7 +129,7 @@ fn while_with_scope() -> anyhow::Result<()> {
 fn break_factorial() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn Factorial(limit: int) -> int {
+            function Factorial(limit: int) -> int {
                 let result = 1;
 
                 while (true) {
@@ -143,7 +143,7 @@ fn break_factorial() -> anyhow::Result<()> {
                 result
             }
 
-            fn main() -> int {
+            function main() -> int {
                 Factorial(5)
             }
         "#,
@@ -156,7 +156,7 @@ fn break_factorial() -> anyhow::Result<()> {
 fn break_nested_loops() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn Nested() -> int {
+            function Nested() -> int {
                 let a = 5;
                 while (true) {
                     while (true) {
@@ -169,7 +169,7 @@ fn break_nested_loops() -> anyhow::Result<()> {
                 a
             }
 
-            fn main() -> int {
+            function main() -> int {
                 Nested()
             }
         "#,
@@ -182,7 +182,7 @@ fn break_nested_loops() -> anyhow::Result<()> {
 fn continue_factorial() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn Factorial(limit: int) -> int {
+            function Factorial(limit: int) -> int {
                 let result = 1;
 
                 // used to make the loop break without relying on `break` implementation.
@@ -201,7 +201,7 @@ fn continue_factorial() -> anyhow::Result<()> {
                 result
             }
 
-            fn main() -> int {
+            function main() -> int {
                 Factorial(5)
             }
         "#,
@@ -214,7 +214,7 @@ fn continue_factorial() -> anyhow::Result<()> {
 fn continue_nested() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn ContinueNested() -> int {
+            function ContinueNested() -> int {
                 let execute = true;
                 while (execute) {
                     while (false) {
@@ -228,7 +228,7 @@ fn continue_nested() -> anyhow::Result<()> {
                 5
             }
 
-            fn main() -> int {
+            function main() -> int {
                 ContinueNested()
             }
         "#,
@@ -241,7 +241,7 @@ fn continue_nested() -> anyhow::Result<()> {
 fn for_loop_sum() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn Sum(xs: int[]) -> int {
+            function Sum(xs: int[]) -> int {
                 let result = 0;
 
                 for (x in xs) {
@@ -251,7 +251,7 @@ fn for_loop_sum() -> anyhow::Result<()> {
                 result
             }
 
-            fn main() -> int {
+            function main() -> int {
                 Sum([1, 2, 3, 4])
             }
         "#,
@@ -264,7 +264,7 @@ fn for_loop_sum() -> anyhow::Result<()> {
 fn for_loop_with_break() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn ForWithBreak(xs: int[]) -> int {
+            function ForWithBreak(xs: int[]) -> int {
                 let result = 0;
 
                 for (x in xs) {
@@ -277,7 +277,7 @@ fn for_loop_with_break() -> anyhow::Result<()> {
                 result
             }
 
-            fn main() -> int {
+            function main() -> int {
                 ForWithBreak([3, 4, 11, 100])
             }
         "#,
@@ -290,7 +290,7 @@ fn for_loop_with_break() -> anyhow::Result<()> {
 fn for_loop_with_continue() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn ForWithContinue(xs: int[]) -> int {
+            function ForWithContinue(xs: int[]) -> int {
                 let result = 0;
 
                 for (x in xs) {
@@ -303,7 +303,7 @@ fn for_loop_with_continue() -> anyhow::Result<()> {
                 result
             }
 
-            fn main() -> int {
+            function main() -> int {
                 ForWithContinue([5, 20, 6])
             }
         "#,
@@ -316,7 +316,7 @@ fn for_loop_with_continue() -> anyhow::Result<()> {
 fn for_loop_nested() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn NestedFor(arr_a: int[], arr_b: int[]) -> int {
+            function NestedFor(arr_a: int[], arr_b: int[]) -> int {
 
                 let result =  0;
 
@@ -329,7 +329,7 @@ fn for_loop_nested() -> anyhow::Result<()> {
                 result
             }
 
-            fn main() -> int {
+            function main() -> int {
                 NestedFor([1, 2], [3, 4])
             }
         "#,
@@ -343,7 +343,7 @@ fn for_loop_nested() -> anyhow::Result<()> {
 fn c_for_sum_to_ten() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn SumToTen() -> int {
+            function SumToTen() -> int {
                 let s = 0;
 
                 for (let i = 1; i <= 10; i += 1) {
@@ -361,7 +361,7 @@ fn c_for_sum_to_ten() -> anyhow::Result<()> {
 fn c_for_after_with_break_continue() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn SumToTen() -> int {
+            function SumToTen() -> int {
                 let s = 0;
 
                 for (let i = 0; ; s += i) {
@@ -389,7 +389,7 @@ fn c_for_after_with_break_continue() -> anyhow::Result<()> {
 fn c_for_only_cond() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn OnlyCond() -> int {
+            function OnlyCond() -> int {
                 let s = 0;
 
                 for (; false;) {
@@ -406,7 +406,7 @@ fn c_for_only_cond() -> anyhow::Result<()> {
 fn c_for_endless() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn Nothing() -> int {
+            function Nothing() -> int {
                 let s = 0;
 
                 for (;;) {
@@ -425,7 +425,7 @@ fn c_for_endless() -> anyhow::Result<()> {
 fn block_expr() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
-            fn main() -> int {
+            function main() -> int {
                 let a = {
                     let b = 1;
                     b

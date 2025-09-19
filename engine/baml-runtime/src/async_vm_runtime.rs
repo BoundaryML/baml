@@ -18,7 +18,7 @@ use baml_ids::FunctionCallId;
 use baml_types::{tracing::events::HTTPRequest, BamlMap, BamlValue, BamlValueWithMeta, Completion};
 use baml_vm::{BamlVmProgram, EvalStack, FunctionKind, ObjectIndex, Vm, VmExecState};
 use internal_baml_core::ir::IRHelper;
-use jsonish::{ResponseBamlValue, ResponseValueMeta};
+use jsonish::{deserializer::deserialize_flags::Flag, ResponseBamlValue, ResponseValueMeta};
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::on_log_event::LogEventCallbackSync;
@@ -327,104 +327,270 @@ impl BamlAsyncVmRuntime {
                         }
                     };
 
-                    let llm_fn = match self
-                        .llm_runtime
-                        .inner
-                        .ir()
-                        .find_function(&pending_future.llm_function)
-                    {
-                        Ok(f) => f,
-                        Err(e) => {
-                            break 'mainloop Err(e.context(format!(
-                                "Failed scheduling LLM future: {}",
-                                pending_future.llm_function
-                            )))
+                    match pending_future.kind {
+                        baml_vm::FutureKind::Llm => {
+                            let llm_fn = match self
+                                .llm_runtime
+                                .inner
+                                .ir()
+                                .find_function(&pending_future.function)
+                            {
+                                Ok(f) => f,
+                                Err(e) => {
+                                    break 'mainloop Err(e.context(format!(
+                                        "Failed scheduling LLM future: {}",
+                                        pending_future.function
+                                    )))
+                                }
+                            };
+
+                            let llm_args = match pending_future
+                                .args
+                                .iter()
+                                .map(|v| try_baml_value_from_vm_value(&vm, v))
+                                .collect::<Result<Vec<_>, _>>()
+                            {
+                                Ok(args) => args,
+                                Err(e) => {
+                                    break 'mainloop Err(
+                                        e.context("failed to convert VM args to baml values")
+                                    )
+                                }
+                            }
+                            .into_iter()
+                            .zip(llm_fn.inputs().iter().map(|(name, _)| name.to_owned()))
+                            .map(|(arg, param_name)| (param_name, arg))
+                            .collect::<BamlMap<_, _>>();
+
+                            let future = {
+                                let llm_runtime = Arc::clone(&self.llm_runtime);
+                                let llm_fn_name = llm_fn.name().to_owned();
+                                let ctx = ctx.clone();
+                                let tb = tb.cloned();
+                                let cb = cb.cloned();
+
+                                // TODO: Collectors are not supported yet.
+                                // let collectors = collectors.clone();
+                                let env_vars = env_vars.clone();
+
+                                let futures_tx = futures_tx.clone();
+
+                                let cancel_tripwire = cancel_tripwire.to_owned();
+
+                                // Spanwed future basically awaits the LLM call and
+                                // sends the result to the futures channel.
+                                async move {
+                                    let result = llm_runtime
+                                        .call_function(
+                                            llm_fn_name,
+                                            &llm_args,
+                                            &ctx,
+                                            tb.as_ref(),
+                                            cb.as_ref(),
+                                            None,
+                                            env_vars,
+                                            cancel_tripwire,
+                                        )
+                                        .await;
+
+                                    // TODO: Handle panic somehow.
+                                    futures_tx.send((idx, result)).unwrap_or_else(|e| {
+                                        panic!("failed to send LLM function result to futures channel: {e}")
+                                    });
+                                }
+                            };
+
+                            // Multi threaded runtime spawn.
+                            #[cfg(not(target_arch = "wasm32"))]
+                            self.async_runtime.spawn(future);
+
+                            // Spawning futures on WASM is a little bit more
+                            // complicated. In WASM, Tokio does not support multi
+                            // threaded runtimes, only single threaded, but the usual
+                            // tokio::spawn API requires futures to impl Send, which in
+                            // this case we do not because of how the
+                            // RuntimeContextManager is built for WASM.
+                            //
+                            // So, instead of tokio::spawn, we use tokio::spawn_local
+                            // which does not require Send and makes sure the future
+                            // runs on the same thread that called tokio::spawn_local.
+                            //
+                            // The only difference is that the returned task JoinHandle
+                            // is itself !Send, which means it can't be awaited from
+                            // other threads.
+                            //
+                            // But it does not matter because in WASM we're not gonna
+                            // await the task from another thread, wasm-bindgen-futures
+                            // basically turns Rust futures into JavaScript promises,
+                            // which are supposed to be single threaded. So, on WASM,
+                            // except for compilation required types, spawn and
+                            // spawn_local are essentially equivalent.
+                            #[cfg(target_arch = "wasm32")]
+                            tokio::task::spawn_local(future);
                         }
-                    };
 
-                    let llm_args = match pending_future
-                        .args
-                        .iter()
-                        .map(|v| try_baml_value_from_vm_value(&vm, v))
-                        .collect::<Result<Vec<_>, _>>()
-                    {
-                        Ok(args) => args,
-                        Err(e) => {
-                            break 'mainloop Err(
-                                e.context("failed to convert VM args to baml values")
-                            )
-                        }
-                    }
-                    .into_iter()
-                    .zip(llm_fn.inputs().iter().map(|(name, _)| name.to_owned()))
-                    .map(|(arg, param_name)| (param_name, arg))
-                    .collect::<BamlMap<_, _>>();
+                        baml_vm::FutureKind::Network => {
+                            // Only `baml.fetch_as` is supported for now.
+                            if pending_future.function != "baml.fetch_as" {
+                                break 'mainloop Err(anyhow!(
+                                    "unkown function: {}",
+                                    pending_future.function
+                                ));
+                            }
 
-                    let future = {
-                        let llm_runtime = Arc::clone(&self.llm_runtime);
-                        let llm_fn_name = llm_fn.name().to_owned();
-                        let ctx = ctx.clone();
-                        let tb = tb.cloned();
-                        let cb = cb.cloned();
+                            if pending_future.args.len() != 2 {
+                                break 'mainloop Err(anyhow!(
+                                    "expected 2 arguments for `baml.fetch_as`, got {}",
+                                    pending_future.args.len()
+                                ));
+                            }
 
-                        // TODO: Collectors are not supported yet.
-                        // let collectors = collectors.clone();
-                        let env_vars = env_vars.clone();
+                            let url_str_index = match &pending_future.args[0] {
+                                baml_vm::Value::Object(url_str_index) => url_str_index,
+                                _ => {
+                                    break 'mainloop Err(anyhow!(
+                                        "baml.fetch_as: expected URL to be a string, got {}",
+                                        pending_future.args[0]
+                                    ));
+                                }
+                            };
 
-                        let futures_tx = futures_tx.clone();
+                            let url = match &vm.objects[*url_str_index] {
+                                baml_vm::Object::String(url) => url.to_owned(),
+                                _ => {
+                                    break 'mainloop Err(anyhow::anyhow!(
+                                        "baml.fetch_as: failed to get URL from VM value"
+                                    ))
+                                }
+                            };
 
-                        let cancel_tripwire = cancel_tripwire.to_owned();
+                            let parse_as_type = match vm.objects.as_object(&pending_future.args[1], baml_vm::ObjectType::Any) {
+                                Ok(idx) => match &vm.objects[idx] {
+                                    baml_vm::Object::BamlType(type_ir) => type_ir.to_owned(),
+                                    _ => {
+                                        break 'mainloop Err(anyhow!(
+                                            "baml.fetch_as: expected type parameter to be a Baml type, got {}",
+                                            vm.objects[idx]
+                                        ))
+                                    }
+                                },
+                                Err(e) => {
+                                    break 'mainloop Err(anyhow::Error::from(e)
+                                        .context("baml.fetch_as: failed to get type parameter from VM value"))
+                                }
+                            };
 
-                        // Spanwed future basically awaits the LLM call and
-                        // sends the result to the futures channel.
-                        async move {
-                            let result = llm_runtime
-                                .call_function(
-                                    llm_fn_name,
-                                    &llm_args,
-                                    &ctx,
-                                    tb.as_ref(),
-                                    cb.as_ref(),
-                                    None,
-                                    env_vars,
-                                    cancel_tripwire,
+                            let future = {
+                                let futures_tx = futures_tx.clone();
+                                let cancel_tripwire = cancel_tripwire.to_owned();
+                                let current_call_id = current_call_id.to_owned();
+
+                                let output_format = jsonish::helpers::render_output_format(
+                                    &self.llm_runtime.inner.ir,
+                                    &parse_as_type,
+                                    &baml_types::EvaluationContext::default(),
+                                    baml_types::StreamingMode::NonStreaming,
                                 )
-                                .await;
+                                .unwrap();
 
-                            // TODO: Handle panic somehow.
-                            futures_tx.send((idx, result)).unwrap_or_else(|e| {
-                                panic!("failed to send LLM function result to futures channel: {e}")
-                            });
+                                async move {
+                                    let client = reqwest::Client::new();
+
+                                    let response = 'res: {
+                                        let res = match client.get(url).send().await {
+                                            Ok(res) => res,
+                                            Err(e) => {
+                                                break 'res Err(anyhow::Error::from(e).context(
+                                                    "baml.fetch_as: failed to send request",
+                                                ));
+                                            }
+                                        };
+
+                                        let status = res.status();
+
+                                        let body = match res.text().await {
+                                            Ok(body) => body,
+                                            Err(e) => {
+                                                break 'res Err(anyhow::Error::from(e).context(
+                                                    "baml.fetch_as: failed to read response body",
+                                                ));
+                                            }
+                                        };
+
+                                        if status.is_client_error() || status.is_server_error() {
+                                            break 'res Err(anyhow::anyhow!(
+                                                "baml.fetch_as: HTTP request failed: HTTP {status}\nBody: {body}"
+                                            ));
+                                        }
+
+                                        jsonish::from_str(
+                                            &output_format,
+                                            &parse_as_type,
+                                            &body,
+                                            true,
+                                        )
+                                        .context(
+                                            "(jsonish) Failed parsing response of fetch_value call",
+                                        )
+                                    };
+
+                                    let response_baml_value = response.map(|r| {
+                                        ResponseBamlValue(
+                                            BamlValueWithMeta::<Vec<Flag>>::from(r).map_meta(
+                                                |_| {
+                                                    ResponseValueMeta(
+                                                        vec![],
+                                                        vec![],
+                                                        Completion::default(),
+                                                        parse_as_type.clone(),
+                                                    )
+                                                },
+                                            ),
+                                        )
+                                    });
+
+                                    let result = FunctionResult::new(
+                                        Default::default(),
+                                        LlmRuntime::dummy_llm_placeholder_for_expr_fn(),
+                                        Some(response_baml_value),
+                                    );
+
+                                    // TODO: Handle panic somehow.
+                                    futures_tx.send((idx, (Ok(result), current_call_id))).unwrap_or_else(|e| {
+                                        panic!("failed to send LLM function result to futures channel: {e}")
+                                    });
+                                }
+                            };
+
+                            // Multi threaded runtime spawn.
+                            #[cfg(not(target_arch = "wasm32"))]
+                            self.async_runtime.spawn(future);
+
+                            // Spawning futures on WASM is a little bit more
+                            // complicated. In WASM, Tokio does not support multi
+                            // threaded runtimes, only single threaded, but the usual
+                            // tokio::spawn API requires futures to impl Send, which in
+                            // this case we do not because of how the
+                            // RuntimeContextManager is built for WASM.
+                            //
+                            // So, instead of tokio::spawn, we use tokio::spawn_local
+                            // which does not require Send and makes sure the future
+                            // runs on the same thread that called tokio::spawn_local.
+                            //
+                            // The only difference is that the returned task JoinHandle
+                            // is itself !Send, which means it can't be awaited from
+                            // other threads.
+                            //
+                            // But it does not matter because in WASM we're not gonna
+                            // await the task from another thread, wasm-bindgen-futures
+                            // basically turns Rust futures into JavaScript promises,
+                            // which are supposed to be single threaded. So, on WASM,
+                            // except for compilation required types, spawn and
+                            // spawn_local are essentially equivalent.
+                            #[cfg(target_arch = "wasm32")]
+                            tokio::task::spawn_local(future);
                         }
                     };
-
-                    // Multi threaded runtime spawn.
-                    #[cfg(not(target_arch = "wasm32"))]
-                    self.async_runtime.spawn(future);
-
-                    // Spawning futures on WASM is a little bit more
-                    // complicated. In WASM, Tokio does not support multi
-                    // threaded runtimes, only single threaded, but the usual
-                    // tokio::spawn API requires futures to impl Send, which in
-                    // this case we do not because of how the
-                    // RuntimeContextManager is built for WASM.
-                    //
-                    // So, instead of tokio::spawn, we use tokio::spawn_local
-                    // which does not require Send and makes sure the future
-                    // runs on the same thread that called tokio::spawn_local.
-                    //
-                    // The only difference is that the returned task JoinHandle
-                    // is itself !Send, which means it can't be awaited from
-                    // other threads.
-                    //
-                    // But it does not matter because in WASM we're not gonna
-                    // await the task from another thread, wasm-bindgen-futures
-                    // basically turns Rust futures into JavaScript promises,
-                    // which are supposed to be single threaded. So, on WASM,
-                    // except for compilation required types, spawn and
-                    // spawn_local are essentially equivalent.
-                    #[cfg(target_arch = "wasm32")]
-                    tokio::task::spawn_local(future);
                 }
 
                 // VM completed execution, get the final result.
@@ -718,7 +884,8 @@ fn try_baml_value_from_vm_value(vm: &Vm, value: &baml_vm::Value) -> anyhow::Resu
             baml_vm::Object::Future(_)
             | baml_vm::Object::Class(_)
             | baml_vm::Object::Enum(_)
-            | baml_vm::Object::Function(_) => anyhow::bail!(
+            | baml_vm::Object::Function(_)
+            | baml_vm::Object::BamlType(_) => anyhow::bail!(
                 "internal error: unsupported VM object to BamlValue convertion: {}",
                 vm.objects[*obj_index]
             ),

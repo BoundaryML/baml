@@ -751,6 +751,21 @@ class BamlAsyncClient:
                 "resume": resume,
             })
             return typing.cast(types.Resume, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def FnAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.FnAlwaysFails(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="FnAlwaysFails", args={
+                "input": input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def FnClassOptionalOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Optional["types.ClassOptionalOutput"]:
@@ -839,6 +854,21 @@ class BamlAsyncClient:
             # Original non-streaming code
             result = await self.__options.merge_options(baml_options).call_function_async(function_name="FnFailRetryExponentialDelay", args={
                 "retries": retries,"initial_delay_ms": initial_delay_ms,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def FnFallbackAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.FnFallbackAlwaysFails(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="FnFallbackAlwaysFails", args={
+                "input": input,
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def FnLiteralClassInputOutput(self, input: types.LiteralClassHello,
@@ -3106,6 +3136,21 @@ class BamlAsyncClient:
                 "input": input,
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestOpenaiResponsesPdfs(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestOpenaiResponsesPdfs(pdf=pdf,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenaiResponsesPdfs", args={
+                "pdf": pdf,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestRetryConstant(self, 
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -3481,6 +3526,21 @@ class BamlAsyncClient:
                 
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ExecFetchAs(self, url: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.DummyJsonTodo:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.ExecFetchAs(url=url,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="ExecFetchAs", args={
+                "url": url,
+            })
+            return typing.cast(types.DummyJsonTodo, result.cast_to(types, types, stream_types, False, __runtime__))
     async def IterativeFibonacci(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -4210,6 +4270,18 @@ class BamlStreamClient:
           lambda x: typing.cast(types.Resume, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def FnAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="FnAlwaysFails", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def FnClassOptionalOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional["stream_types.ClassOptionalOutput"], typing.Optional["types.ClassOptionalOutput"]]:
@@ -4275,6 +4347,18 @@ class BamlStreamClient:
     ) -> baml_py.BamlStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="FnFailRetryExponentialDelay", args={
             "retries": retries,"initial_delay_ms": initial_delay_ms,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def FnFallbackAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="FnFallbackAlwaysFails", args={
+            "input": input,
         })
         return baml_py.BamlStream[str, str](
           result,
@@ -6094,6 +6178,18 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def TestOpenaiResponsesPdfs(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenaiResponsesPdfs", args={
+            "pdf": pdf,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def TestRetryConstant(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[str, str]:
@@ -6392,6 +6488,18 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ExecFetchAs(self, url: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ExecFetchAs", args={
+            "url": url,
+        })
+        return baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo](
+          result,
+          lambda x: typing.cast(typing.Optional["stream_types.DummyJsonTodo"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.DummyJsonTodo, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def IterativeFibonacci(self, n: int,
@@ -6861,6 +6969,13 @@ class BamlHttpRequestClient:
             "resume": resume,
         }, mode="request")
         return result
+    async def FnAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnAlwaysFails", args={
+            "input": input,
+        }, mode="request")
+        return result
     async def FnClassOptionalOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -6901,6 +7016,13 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnFailRetryExponentialDelay", args={
             "retries": retries,"initial_delay_ms": initial_delay_ms,
+        }, mode="request")
+        return result
+    async def FnFallbackAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnFallbackAlwaysFails", args={
+            "input": input,
         }, mode="request")
         return result
     async def FnLiteralClassInputOutput(self, input: types.LiteralClassHello,
@@ -7960,6 +8082,13 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
+    async def TestOpenaiResponsesPdfs(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenaiResponsesPdfs", args={
+            "pdf": pdf,
+        }, mode="request")
+        return result
     async def TestRetryConstant(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -8133,6 +8262,13 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="EchoWorkflow", args={
             
+        }, mode="request")
+        return result
+    async def ExecFetchAs(self, url: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAs", args={
+            "url": url,
         }, mode="request")
         return result
     async def IterativeFibonacci(self, n: int,
@@ -8542,6 +8678,13 @@ class BamlHttpStreamRequestClient:
             "resume": resume,
         }, mode="stream")
         return result
+    async def FnAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnAlwaysFails", args={
+            "input": input,
+        }, mode="stream")
+        return result
     async def FnClassOptionalOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -8582,6 +8725,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnFailRetryExponentialDelay", args={
             "retries": retries,"initial_delay_ms": initial_delay_ms,
+        }, mode="stream")
+        return result
+    async def FnFallbackAlwaysFails(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnFallbackAlwaysFails", args={
+            "input": input,
         }, mode="stream")
         return result
     async def FnLiteralClassInputOutput(self, input: types.LiteralClassHello,
@@ -9641,6 +9791,13 @@ class BamlHttpStreamRequestClient:
             "input": input,
         }, mode="stream")
         return result
+    async def TestOpenaiResponsesPdfs(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenaiResponsesPdfs", args={
+            "pdf": pdf,
+        }, mode="stream")
+        return result
     async def TestRetryConstant(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -9814,6 +9971,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="EchoWorkflow", args={
             
+        }, mode="stream")
+        return result
+    async def ExecFetchAs(self, url: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAs", args={
+            "url": url,
         }, mode="stream")
         return result
     async def IterativeFibonacci(self, n: int,

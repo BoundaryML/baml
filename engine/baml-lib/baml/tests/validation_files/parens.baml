@@ -1,4 +1,4 @@
-fn foo() -> int {
+function foo() -> int {
 
    // if
 

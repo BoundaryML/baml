@@ -23,7 +23,7 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
     value: StreamStateValueT
     state: typing_extensions.Literal["Pending", "Incomplete", "Complete"]
 # #########################################################################
-# Generated classes (101)
+# Generated classes (102)
 # #########################################################################
 
 class AnotherObject(BaseModel):
@@ -122,6 +122,12 @@ class CustomTaskResult(BaseModel):
 class Document1559(BaseModel):
     client_details: typing.Optional["ClientDetails1559"] = None
     notes: typing.List["Note1599"]
+
+class DummyJsonTodo(BaseModel):
+    id: typing.Optional[int] = None
+    todo: typing.Optional[str] = None
+    completed: typing.Optional[bool] = None
+    userId: typing.Optional[int] = None
 
 class DummyOutput(BaseModel):
     model_config = ConfigDict(extra='allow')

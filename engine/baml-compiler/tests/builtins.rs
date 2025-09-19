@@ -9,9 +9,9 @@ use common::{assert_compiles, Program};
 fn builtin_method_call() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let arr = [1, 2, 3];
-                arr.len()
+                arr.length()
             }
         "#,
         expected: vec![(
@@ -25,6 +25,35 @@ fn builtin_method_call() -> anyhow::Result<()> {
                 Instruction::LoadVar(1),
                 // call with one argument (self)
                 Instruction::Call(1),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+fn fetch_as() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            class DummyJsonTodo {
+                id int
+                todo string
+                completed bool
+                userId int
+            }
+
+            function main() -> DummyJsonTodo {
+                baml.fetch_as<DummyJsonTodo>("https://dummyjson.com/todos/1")
+            }
+        "#,
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::LoadGlobal(GlobalIndex::from_raw(37)),
+                Instruction::LoadConst(0),
+                Instruction::LoadConst(1),
+                Instruction::DispatchFuture(2),
+                Instruction::Await,
                 Instruction::Return,
             ],
         )],

@@ -167,6 +167,20 @@ export type LoadGcpCredsResponse =
       };
     };
 
+export interface JumpToFileRequest {
+  vscodeCommand: 'JUMP_TO_FILE';
+  span: {
+    start: number;
+    end: number;
+    file_path: string;
+    start_line: number;
+  };
+}
+
+export interface JumpToFileResponse {
+  ok: true;
+}
+
 export interface InitializedRequest {
   vscodeCommand: 'INITIALIZED';
 }
@@ -188,6 +202,7 @@ type ApiPairs = [
   [LoadAwsCredsRequest, LoadAwsCredsResponse],
   [LoadGcpCredsRequest, LoadGcpCredsResponse],
   [InitializedRequest, InitializedResponse],
+  [JumpToFileRequest, JumpToFileResponse],
 ];
 
 // Serialization for binary data (like images)

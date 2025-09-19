@@ -15,7 +15,11 @@ import {
   type OpenPlaygroundResponse,
   type SetProxySettingsRequest,
   type SetFeatureFlagsRequest,
+  type SendLspNotificationToIdeRequest,
+  type SendLspNotificationToIdeResponse,
   decodeBuffer,
+  type JumpToFileRequest,
+  type JumpToFileResponse,
 } from './vscode-rpc';
 
 // Define WebviewApi type for VSCode webview context
@@ -148,6 +152,57 @@ class VSCodeAPIWrapper {
     return this.vsCodeApi !== undefined
   }
 
+  public async jumpToFile(span: {
+    start: number;
+    end: number;
+    file_path: string;
+    start_line: number;
+  }) {
+    if (this.isVscode()) {
+      await this.rpc<JumpToFileRequest, JumpToFileResponse>({
+        vscodeCommand: 'JUMP_TO_FILE',
+        span: {
+          start: span.start,
+          end: span.end,
+          file_path: span.file_path,
+          start_line: span.start_line,
+        },
+      });
+    } else {
+      await this.sendLspNotification({
+        method: 'window/showDocument',
+        params: {
+          uri: `file://${span.file_path}`,
+          takeFocus: true,
+          selection: {
+            start: {
+              line: span.start_line,
+              character: 0
+            },
+            end: {
+              line: span.start_line,
+              character: 0
+            }
+          },
+        }
+      });
+    }
+  }
+
+  // Ask the language server to send an LSP notification to the IDE.  In
+  // non-VSCode environments (Jetbrains and Zed), the webview has no way of
+  // directly asking the IDE to do something, so instead we ask the language
+  // server to forward our notification to the IDE.
+  private async sendLspNotification({method, params}: {method: string, params: Record<string, any>}) {
+    await this.rpc<SendLspNotificationToIdeRequest, SendLspNotificationToIdeResponse>({
+      vscodeCommand: 'SEND_LSP_NOTIFICATION_TO_IDE',
+      notification: {
+        method,
+        params,
+      },
+    });
+  }
+
   public async readFile(path: string): Promise<Uint8Array> {
     const uri = await this.readLocalFile('', path);
 
@@ -224,6 +279,7 @@ class VSCodeAPIWrapper {
   }
 
   public loadAwsCreds = async (profile: string | null) => {
+    console.log('calling loadAwsCreds', profile);
     const resp = await this.rpc<LoadAwsCredsRequest, LoadAwsCredsResponse>({
       vscodeCommand: 'LOAD_AWS_CREDS',
       profile,
@@ -232,6 +288,7 @@ class VSCodeAPIWrapper {
   };
 
   public loadGcpCreds = async () => {
+    console.log('calling loadGcpCreds');
     const resp = await this.rpc<LoadGcpCredsRequest, LoadGcpCredsResponse>({
       vscodeCommand: 'LOAD_GCP_CREDS',
     });
@@ -266,6 +323,10 @@ class VSCodeAPIWrapper {
   }
 
   public rpc<TRequest, TResponse>(data: TRequest): Promise<TResponse> {
+    if (!this.isVscode()) {
+      return this.httpPostRpc(data);
+    }
+
     return new Promise(async (resolve, reject) => {
       const rpcId = this.rpcId++;
       this.rpcTable.set(rpcId, { resolve: resolve as (resp: unknown) => void });
@@ -330,6 +391,26 @@ class VSCodeAPIWrapper {
     } else {
       window.postMessage(message)
     }
+  }
+
+  private async httpPostRpc<TRequest, TResponse>(data: TRequest): Promise<TResponse> {
+    const command = (data as unknown as { vscodeCommand: string }).vscodeCommand;
+    
+    const response = await fetch(`/webview/${command}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+  
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP RPC failed for ${command}: ${response.status} ${errorText}`);
+    }
+  
+    const result = await response.json();
+    return result as TResponse;
   }
 
   /**

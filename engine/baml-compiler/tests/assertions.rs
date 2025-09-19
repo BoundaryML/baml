@@ -9,7 +9,7 @@ use common::{assert_compiles, Program};
 fn assert_statement_ok() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn assertOk() -> int {
+            function assertOk() -> int {
                 assert 2 + 2 == 4;
                 3
             }
@@ -34,7 +34,7 @@ fn assert_statement_ok() -> anyhow::Result<()> {
 fn assert_statement_not_ok() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn assertNotOk() -> int {
+            function assertNotOk() -> int {
                 assert 3 == 1;
                 2
             }

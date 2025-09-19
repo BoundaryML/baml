@@ -130,7 +130,7 @@ prefix_operator = _{ NOT | NEG }
 
 array_accessor = { "[" ~ expression ~ "]" }
 field_accessor = { "." ~ identifier }
-method_call    = { "." ~ fn_app }
+method_call    = { "." ~ (generic_fn_app | fn_app) }
 
 primary_expression = {
     if_expression |
@@ -161,7 +161,7 @@ config_expression = { config_primary_expression }
 config_primary_expression = {
     jinja_expression |
     config_map_expression |
-    array_expression |
+    config_array_expression |
     numeric_literal |
     string_literal |
     identifier
@@ -171,6 +171,9 @@ config_map_key   = { identifier | quoted_string_literal }
 config_map_entry = { (comment_block | empty_lines)* ~ config_map_key ~ (config_expression | ENTRY_CATCH_ALL)? ~ trailing_comment? }
 
 config_map_expression    =  { "{" ~ empty_lines? ~ (config_map_entry ~ (splitter ~ config_map_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
+
+// Array expression that nests config expressions for elements
+config_array_expression  =  { "[" ~ empty_lines? ~ ((config_expression | ARRAY_CATCH_ALL) ~ trailing_comment? ~ (splitter ~ (comment_block | empty_lines)* ~ (config_expression | ARRAY_CATCH_ALL) ~ trailing_comment?)*)? ~ (comment_block | empty_lines)* ~ splitter? ~ "]" }
 
 // ######################################
 // Literals / Values
@@ -330,7 +333,7 @@ top_level_stmt = {
 // function foo(x:int, y: bool?) -> string {
 //   go(x,y)
 // }
-expr_fn = { ("function" | "fn") ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_block }
+expr_fn = { "function" ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_block }
 
 // Body of a function (including curly brackets).
 expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (mdx_header | expr_body_stmt | stmt | comment_block | empty_lines)* ~ expression? ~ (comment_block | empty_lines)* ~ BLOCK_CLOSE }
@@ -379,8 +382,10 @@ stmt = {
     ~ NEWLINE?
 }
 
-// Let-binding statement.
-let_expr = { "let" ~ identifier ~ "=" ~ expression }
+// Let-binding statement with optional type annotation.
+// e.g. `let x: int|float = 10.0;` or `let x = 10.0;`
+let_type_annotation = { COLON ~ field_type_chain }
+let_expr = { "let" ~ identifier ~ let_type_annotation? ~ "=" ~ expression }
 
 // NOTE: Needs to supports things like `object.getter().field[x + y] = value`,
 // so can't be just `identifier ~ "=" ~ expression`.

@@ -1,5 +1,5 @@
 # Main Function
-fn NestedIfStatements() -> string {
+function NestedIfStatements() -> string {
     ## If statement 1
     let e = if (true) {
 
@@ -54,6 +54,6 @@ fn NestedIfStatements() -> string {
         };
         13
     };
-    
+
     e
-} 
+}

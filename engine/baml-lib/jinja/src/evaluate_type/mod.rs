@@ -191,6 +191,15 @@ impl TypeError {
         Self { message: format!("{message}\n\nSee: https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions for the compelete list"), span }
     }
 
+    pub fn new_function_reference_without_call(func: &str, span: Span) -> Self {
+        Self {
+            message: format!(
+                "Function '{func}' referenced without parentheses. Did you mean '{func}()'?"
+            ),
+            span,
+        }
+    }
+
     fn new_enum_literal_suggestion(
         expr: &Expr,
         enum_name: &str,

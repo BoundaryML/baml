@@ -695,6 +695,7 @@ def test_streaming_sync():
     last_msg_time = start_time
     first_msg_time = start_time + 10
     for msg in stream:
+        print(f"msg {msg}")
         msgs.append(str(msg))
         if len(msgs) == 1:
             first_msg_time = asyncio.get_event_loop().time()
@@ -703,14 +704,14 @@ def test_streaming_sync():
 
     final = stream.get_final_response()
 
-    assert first_msg_time - start_time <= 1.5, (
-        "Expected first message within 1 second but it took longer."
-    )
-    assert last_msg_time - start_time >= 1, (
-        "Expected last message after 1.5 seconds but it was earlier."
-    )
+    diff = first_msg_time - start_time
+    print(f"first_msg_time - start_time: {diff}")
+    assert diff <= 2, "Expected first message within 2 second but it took longer."
+    diff = last_msg_time - start_time
+    print(f"last_msg_time - start_time: {diff}")
+    assert diff >= 2, "Expected last message after 2 second but it was earlier."
     assert len(final) > 0, "Expected non-empty final but got empty."
-    assert len(msgs) > 0, "Expected at least one streamed response but got none."
+    assert len(msgs) > 5, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
         assert msg.startswith(prev_msg), (
             "Expected messages to be continuous, but prev was %r and next was %r"

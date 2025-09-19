@@ -1,4 +1,4 @@
-fn SumToTen() -> int {
+function SumToTen() -> int {
 	let s = 0;
 
 	for (let i = 1; i <= 10; i += 1) {
@@ -8,14 +8,14 @@ fn SumToTen() -> int {
 	s
 }
 
-fn InfiniteFor() -> int {
+function InfiniteFor() -> int {
 	for (;;) {}
 
 	0
 }
 
 // should error everywhere `i` is used.
-fn NoIteratorDeclared() -> int {
+function NoIteratorDeclared() -> int {
 	let s = 0;
 
 	for (; i <= 10; i += 1) {
@@ -26,7 +26,7 @@ fn NoIteratorDeclared() -> int {
 }
 
 // should be fine
-fn LoopHeaderScope() -> int {
+function LoopHeaderScope() -> int {
 	let s = 0;
 
 	for (let i = 0; i <= 10; s += i) {
@@ -36,7 +36,7 @@ fn LoopHeaderScope() -> int {
 }
 
 // should error in `i += x` (no `x` in scope)
-fn LoopHeaderScopeUnavailable() -> int {
+function LoopHeaderScopeUnavailable() -> int {
 	let s = 0;
 
 	for (let i = 0; i <= 10; i += x) {
@@ -46,7 +46,7 @@ fn LoopHeaderScopeUnavailable() -> int {
 	s
 }
 
-fn BreakContinue() -> int {
+function BreakContinue() -> int {
 
 	for (;;) {
 		break;

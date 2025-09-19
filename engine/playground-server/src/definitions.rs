@@ -30,20 +30,24 @@ pub enum FrontendMessage {
         function_name: String,
         test_name: String,
     },
+    lsp_message {
+        method: String,
+        params: serde_json::Value,
+    },
 }
 
 #[derive(Debug, Clone)]
 /// for lang-server internal comms, before sending out to the playground
-pub enum PreLangServerToWasmMessage {
+pub enum WebviewRouterMessage {
     WasmIsInitialized,
-    FrontendMessage(FrontendMessage),
+    CustomNotificationToWebview(FrontendMessage),
+    SendLspNotificationToIde(lsp_server::Notification),
+    SendLspNotificationToWebview(lsp_server::Notification),
 }
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
-pub enum LangServerToWasmMessage {
-    LspMessage(lsp_server::Message),
+// TODO(sam): this is an unnecessary wrapper layer
+pub enum WebviewNotification {
     PlaygroundMessage(FrontendMessage),
 }
-
-// Default type for backward compatibility - removed since we no longer use generics

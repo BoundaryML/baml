@@ -660,6 +660,19 @@ paths:
                 title: ExtractResume2Response
                 $ref: '#/components/schemas/Resume'
       operationId: ExtractResume2
+  /call/FnAlwaysFails:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnAlwaysFails'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnAlwaysFailsResponse
+                type: string
+      operationId: FnAlwaysFails
   /call/FnClassOptionalOutput:
     post:
       requestBody:
@@ -748,6 +761,19 @@ paths:
                 title: FnFailRetryExponentialDelayResponse
                 type: string
       operationId: FnFailRetryExponentialDelay
+  /call/FnFallbackAlwaysFails:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnFallbackAlwaysFails'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnFallbackAlwaysFailsResponse
+                type: string
+      operationId: FnFallbackAlwaysFails
   /call/FnLiteralClassInputOutput:
     post:
       requestBody:
@@ -2830,6 +2856,19 @@ paths:
                 title: TestOpenRouterMistralSmall3_1_24bResponse
                 type: string
       operationId: TestOpenRouterMistralSmall3_1_24b
+  /call/TestOpenaiResponsesPdfs:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenaiResponsesPdfs'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenaiResponsesPdfsResponse
+                type: string
+      operationId: TestOpenaiResponsesPdfs
   /call/TestRetryConstant:
     post:
       requestBody:
@@ -3823,6 +3862,22 @@ components:
             required:
             - resume
             additionalProperties: false
+    FnAlwaysFails:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnAlwaysFailsRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     FnClassOptionalOutput:
       required: true
       content:
@@ -3924,6 +3979,22 @@ components:
             required:
             - initial_delay_ms
             - retries
+            additionalProperties: false
+    FnFallbackAlwaysFails:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnFallbackAlwaysFailsRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     FnLiteralClassInputOutput:
       required: true
@@ -6426,6 +6497,22 @@ components:
             required:
             - input
             additionalProperties: false
+    TestOpenaiResponsesPdfs:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenaiResponsesPdfsRequest
+            type: object
+            properties:
+              pdf:
+                $ref: '#/components/schemas/BamlPdf'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - pdf
+            additionalProperties: false
     TestRetryConstant:
       required: true
       content:
@@ -7151,6 +7238,23 @@ components:
       required:
       - client_details
       - notes
+      additionalProperties: false
+    DummyJsonTodo:
+      type: object
+      properties:
+        completed:
+          type: boolean
+        id:
+          type: integer
+        todo:
+          type: string
+        userId:
+          type: integer
+      required:
+      - completed
+      - id
+      - todo
+      - userId
       additionalProperties: false
     DummyOutput:
       type: object

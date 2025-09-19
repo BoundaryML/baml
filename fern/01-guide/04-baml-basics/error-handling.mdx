@@ -23,6 +23,8 @@ except BamlValidationError as e:
   print(e.raw_output)
   # A human-readable error message
   print(e.message)
+  # Complete error history (includes fallback attempts)
+  print(e.detailed_message)
 ```
 
 
@@ -55,6 +57,8 @@ async function example() {
       console.log(e.raw_output)
       // A human-readable error message
       console.log(e.message)
+      // Complete error history (includes fallback attempts)
+      console.log(e.detailed_message)
     } else {
       // Handle other BAML errors
       console.log(e)
@@ -99,7 +103,7 @@ Subclass of `BamlError`.
 Raised when a client fails to return a valid response.
 
 <Warning>
-In the case of aggregate clients like `fallback` or those with `retry_policy`, only the last client's error is raised.
+In the case of aggregate clients like `fallback` or those with `retry_policy`, only the last client's error **type** is raised. However, the complete history of all failed attempts is preserved in the `detailed_message` field, allowing you to debug the entire fallback chain.
 </Warning>
 
 #### BamlClientHttpError
@@ -161,6 +165,13 @@ Raised when the finish reason of the LLM response is not allowed.
   The raw text from the LLM that failed to parse into the expected return type of a function.
 </ParamField>
 
+<ParamField
+  path="detailed_message"
+  type="string"
+>
+  Comprehensive error information that includes the complete history of all failed attempts when using fallback clients or retry policies. When multiple attempts are made, this field contains formatted details about each failed attempt, making it invaluable for debugging complex client configurations.
+</ParamField>
+
 ### BamlValidationError
 
 Subclass of `BamlError`.
@@ -186,6 +197,13 @@ Raised when BAML fails to parse a string from the LLM into the specified object.
   type="string"
 >
   The original prompt that was sent to the LLM, formatted as a plain string. Images sent as base64-encoded strings are not serialized into this field.
+</ParamField>
+
+<ParamField
+  path="detailed_message"
+  type="string"
+>
+  Comprehensive error information that includes the complete history of all failed attempts when using fallback clients or retry policies. When multiple attempts are made, this field contains formatted details about each failed attempt, making it invaluable for debugging complex client configurations.
 </ParamField>
 
 ### BamlAbortError

@@ -134,6 +134,7 @@ pub enum Expression {
         receiver: Box<Expression>,
         method: Identifier,
         args: Vec<Expression>,
+        type_args: Vec<super::FieldType>,
         span: Span,
     },
     /// Any form of binary operation.

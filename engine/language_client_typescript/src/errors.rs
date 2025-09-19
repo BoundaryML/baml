@@ -21,24 +21,59 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                 prompt,
                 message,
                 raw_output: raw_response,
-            } => throw_baml_validation_error(prompt, raw_response, message),
+                detailed_message,
+                ..
+            } => throw_baml_validation_error(
+                prompt,
+                raw_response,
+                message,
+                if detailed_message.is_empty() {
+                    None
+                } else {
+                    Some(detailed_message.as_str())
+                },
+            ),
             ExposedError::FinishReasonError {
                 prompt,
                 message,
                 raw_output: raw_response,
                 finish_reason,
+                detailed_message,
+                ..
             } => throw_baml_client_finish_reason_error(
                 prompt,
                 raw_response,
                 message,
                 finish_reason.as_ref().map(|f| f.as_str()),
+                if detailed_message.is_empty() {
+                    None
+                } else {
+                    Some(detailed_message.as_str())
+                },
             ),
             ExposedError::ClientHttpError {
                 client_name,
                 message,
                 status_code,
-            } => throw_baml_client_http_error(client_name, message, status_code),
-            ExposedError::AbortError => throw_baml_abort_error(),
+                detailed_message,
+                ..
+            } => throw_baml_client_http_error(
+                client_name,
+                message,
+                status_code,
+                if detailed_message.is_empty() {
+                    None
+                } else {
+                    Some(detailed_message.as_str())
+                },
+            ),
+            ExposedError::AbortError {
+                detailed_message, ..
+            } => throw_baml_abort_error(if detailed_message.is_empty() {
+                None
+            } else {
+                Some(detailed_message.as_str())
+            }),
         }
     } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
         invalid_argument_error(&format!("{er}"))
@@ -67,6 +102,7 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                         failed.client.as_str(),
                         failed.message.as_str(),
                         &failed.code,
+                        None,
                     )
                 }
             },
@@ -90,12 +126,18 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
     }
 }
 
-fn throw_baml_validation_error(prompt: &str, raw_output: &str, message: &str) -> napi::Error {
+fn throw_baml_validation_error(
+    prompt: &str,
+    raw_output: &str,
+    message: &str,
+    detailed_message: Option<&str>,
+) -> napi::Error {
     let error_json = serde_json::json!({
         "type": "BamlValidationError",
         "prompt": prompt,
         "raw_output": raw_output,
         "message": format!("BamlValidationError: {}", message),
+        "detailed_message": detailed_message,
     });
     napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
 }
@@ -105,6 +147,7 @@ fn throw_baml_client_finish_reason_error(
     raw_output: &str,
     message: &str,
     finish_reason: Option<&str>,
+    detailed_message: Option<&str>,
 ) -> napi::Error {
     let error_json = serde_json::json!({
         "type": "BamlClientFinishReasonError",
@@ -112,6 +155,7 @@ fn throw_baml_client_finish_reason_error(
         "raw_output": raw_output,
         "message": format!("BamlError: BamlClientError: BamlClientFinishReasonError: {}", message),
         "finish_reason": finish_reason,
+        "detailed_message": detailed_message,
     });
     napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
 }
@@ -120,19 +164,22 @@ fn throw_baml_client_http_error(
     client_name: &str,
     message: &str,
     status_code: &ErrorCode,
+    detailed_message: Option<&str>,
 ) -> napi::Error {
     let error_json = serde_json::json!({
         "type": "BamlClientHttpError",
         "client_name": client_name,
         "message": format!("BamlError: BamlClientError: BamlClientHttpError: {}", message),
         "status_code": status_code.to_u16(),
+        "detailed_message": detailed_message,
     });
     napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
 }
 
-fn throw_baml_abort_error() -> napi::Error {
+fn throw_baml_abort_error(detailed_message: Option<&str>) -> napi::Error {
     let error_json = serde_json::json!({
         "type": "BamlAbortError",
+        "detailed_message": detailed_message,
     });
     napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
 }

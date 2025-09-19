@@ -801,7 +801,7 @@ impl WithRenderError for baml_runtime::TestFailReason<'_> {
                         baml_runtime::errors::ExposedError::ClientHttpError { message, .. } => {
                             Some(message.clone())
                         }
-                        baml_runtime::errors::ExposedError::AbortError => {
+                        baml_runtime::errors::ExposedError::AbortError { .. } => {
                             Some("AbortError".to_string())
                         }
                     },

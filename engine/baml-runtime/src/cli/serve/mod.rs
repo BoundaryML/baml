@@ -375,6 +375,7 @@ Streaming is available via http://localhost:{port}/stream/{{FunctionName}}, but 
                                 prompt,
                                 raw_output: raw_response,
                                 message,
+                                ..
                             }) = e.downcast_ref::<ExposedError>()
                             {
                                 BamlError::ValidationFailure {
@@ -500,6 +501,7 @@ Streaming is available via http://localhost:{port}/stream/{{FunctionName}}, but 
                                             prompt,
                                             raw_output: raw_response,
                                             message,
+                                            ..
                                         }) = e.downcast_ref::<ExposedError>()
                                         {
                                             BamlError::ValidationFailure {

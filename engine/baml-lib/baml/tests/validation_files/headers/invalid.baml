@@ -8,19 +8,19 @@ function HeaderInPrompt() -> string {
     "#
 }
 
-fn MixedOnSameLine() -> string {
+function MixedOnSameLine() -> string {
     let x = "hello" ## Inline Header // Should fail
     x
 }
 
-fn HeaderWithoutSpace() -> string {
+function HeaderWithoutSpace() -> string {
     #No Space After Hash // Should potentially fail depending on grammar rules
     let x = "test"
     x
 }
 
-fn EmptyHeader() -> string {
-    # 
+function EmptyHeader() -> string {
+    #
     // Empty header title - this should fail
     let x = "test"
     ##
@@ -29,13 +29,13 @@ fn EmptyHeader() -> string {
 }
 
 // Test headers in places they shouldn't parse
-fn HeaderInExpression() -> string {
+function HeaderInExpression() -> string {
     let x = "start" + # Middle Header // Should fail
         "end"
     x
 }
 
-fn HeaderInStringLiteral() -> string {
+function HeaderInStringLiteral() -> string {
     let x = "This string contains # Header Text"
     let y = #"
         Raw string with # Header
@@ -59,4 +59,3 @@ client<llm> GPT4 {
         api_key env.OPENAI_API_KEY
     }
 }
-

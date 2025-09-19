@@ -11,19 +11,19 @@ fn array_constructor() -> anyhow::Result<()> {
     assert_vm_executes_with_inspection(
         Program {
             source: "
-                fn main() -> int[] {
+                function main() -> int[] {
                     let a = [1, 2, 3];
                     a
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(34))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(37))),
         },
         |vm| {
-            let baml_vm::Object::Array(array) = &vm.objects[ObjectIndex::from_raw(34)] else {
+            let baml_vm::Object::Array(array) = &vm.objects[ObjectIndex::from_raw(37)] else {
                 panic!(
                     "expected Array, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(34)]
+                    &vm.objects[ObjectIndex::from_raw(37)]
                 );
             };
 

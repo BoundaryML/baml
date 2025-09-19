@@ -1,5 +1,5 @@
 # AI Content Pipeline
-fn AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript: string?, title: string?) -> string {
+function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript: string?, title: string?) -> string {
     # Fetch Resources
 
     ## Retrieve Emails and Posts from Database
@@ -59,5 +59,3 @@ fn AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript: stri
     # Complete
     "done"
 }
-
-

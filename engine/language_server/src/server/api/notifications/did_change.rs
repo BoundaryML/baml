@@ -3,7 +3,7 @@ use std::{collections::HashMap, time::Instant};
 use lsp_types::{
     notification::DidChangeTextDocument, DidChangeTextDocumentParams, PublishDiagnosticsParams,
 };
-use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
+use playground_server::{FrontendMessage, WebviewRouterMessage};
 
 use crate::{
     server::{
@@ -84,8 +84,8 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
                 })
                 .collect();
             session
-                .playground_tx
-                .send(PreLangServerToWasmMessage::FrontendMessage(
+                .to_webview_router_tx
+                .send(WebviewRouterMessage::CustomNotificationToWebview(
                     FrontendMessage::add_project {
                         root_path: project.root_path().to_string_lossy().to_string(),
                         files: files_map,

@@ -7,6 +7,7 @@ from baml_py import Image
 
 from ..baml_client import b
 from ..baml_client.runtime import disassemble
+from ..baml_client.types import DummyJsonTodo
 
 
 @pytest.mark.asyncio
@@ -35,3 +36,17 @@ async def test_call_llm_describe_image():
     )
 
     assert "ogre" in description.lower()
+
+
+@pytest.mark.asyncio
+async def test_baml_fetch_as():
+    disassemble(b.ExecFetchAs)
+
+    result = await b.ExecFetchAs("https://dummyjson.com/todos/1")
+
+    assert result == DummyJsonTodo(
+        id=1,
+        todo="Do something nice for someone you care about",
+        completed=False,
+        userId=152,
+    )

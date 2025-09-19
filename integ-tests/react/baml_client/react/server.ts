@@ -24,7 +24,7 @@ import { b } from '../index';
 import type { Check, Checked  } from "../types";
 import type { Image, Audio, Pdf, Video } from "@boundaryml/baml";
 
-import type {  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
+import type {  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
 
 import type * as types from "../types"
 
@@ -867,6 +867,24 @@ export const ExtractResume2 = async (
 };
 
 /**
+ * Executes the "FnAlwaysFails" BAML action.
+ *
+ * This server action calls the underlying BAML function "FnAlwaysFails"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const FnAlwaysFails = async (
+  input: string,
+): Promise<string> => {
+  return b.FnAlwaysFails(
+    input,
+  );
+};
+
+/**
  * Executes the "FnClassOptionalOutput" BAML action.
  *
  * This server action calls the underlying BAML function "FnClassOptionalOutput"
@@ -977,6 +995,24 @@ export const FnFailRetryExponentialDelay = async (
   return b.FnFailRetryExponentialDelay(
     retries,
     initial_delay_ms,
+  );
+};
+
+/**
+ * Executes the "FnFallbackAlwaysFails" BAML action.
+ *
+ * This server action calls the underlying BAML function "FnFallbackAlwaysFails"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const FnFallbackAlwaysFails = async (
+  input: string,
+): Promise<string> => {
+  return b.FnFallbackAlwaysFails(
+    input,
   );
 };
 
@@ -3701,6 +3737,24 @@ export const TestOpenRouterMistralSmall3_1_24b = async (
 ): Promise<string> => {
   return b.TestOpenRouterMistralSmall3_1_24b(
     input,
+  );
+};
+
+/**
+ * Executes the "TestOpenaiResponsesPdfs" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenaiResponsesPdfs"
+ * with the specified parameters.
+ *
+ * @param { Pdf } pdf - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenaiResponsesPdfs = async (
+  pdf: Pdf,
+): Promise<string> => {
+  return b.TestOpenaiResponsesPdfs(
+    pdf,
   );
 };
 

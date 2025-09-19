@@ -139,3 +139,18 @@ function StoreLlmCallInLocalVar(n: int) -> int {
 function BoolToIntWithIfElseCallingLlm(b: bool) -> int {
     if (b) { LlmReturnNumber(1) } else { LlmReturnNumber(0) }
 }
+
+/// Other builtins
+
+class DummyJsonTodo {
+    id int
+    todo string
+    completed bool
+    userId int
+}
+
+function ExecFetchAs(url: string) -> DummyJsonTodo {
+    let todo = baml.fetch_as<DummyJsonTodo>(url);
+
+    todo
+}

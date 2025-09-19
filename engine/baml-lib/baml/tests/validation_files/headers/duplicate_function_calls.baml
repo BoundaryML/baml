@@ -1,5 +1,5 @@
 # Pipeline
-fn CallsDedup() -> string {
+function CallsDedup() -> string {
     ## Step A
     let a = Foo();
 
@@ -11,5 +11,3 @@ fn CallsDedup() -> string {
 
     a + b
 }
-
-

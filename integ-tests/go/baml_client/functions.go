@@ -2813,6 +2813,68 @@ func ExtractResume2(ctx context.Context, resume string, opts ...CallOptionFunc) 
 	}
 }
 
+func FnAlwaysFails(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnAlwaysFails", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnAlwaysFails", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
+	}
+}
+
 func FnClassOptionalOutput(ctx context.Context, input string, opts ...CallOptionFunc) (*types.ClassOptionalOutput, error) {
 
 	var callOpts callOption
@@ -3167,6 +3229,68 @@ func FnFailRetryExponentialDelay(ctx context.Context, retries int64, initial_del
 		return casted, nil
 	} else {
 		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnFailRetryExponentialDelay", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
+	}
+}
+
+func FnFallbackAlwaysFails(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnFallbackAlwaysFails", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnFallbackAlwaysFails", encoded, callOpts.onTick)
 		if err != nil {
 			return "", err
 		}
@@ -12535,6 +12659,68 @@ func TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input string, opts .
 		return casted, nil
 	} else {
 		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenRouterMistralSmall3_1_24b", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
+	}
+}
+
+func TestOpenaiResponsesPdfs(ctx context.Context, pdf types.PDF, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"pdf": pdf},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenaiResponsesPdfs", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenaiResponsesPdfs", encoded, callOpts.onTick)
 		if err != nil {
 			return "", err
 		}

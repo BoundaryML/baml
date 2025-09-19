@@ -4,12 +4,24 @@ set -eu
 
 show_help() {
   cat <<EOF
-Usage: build [options]
+Usage: build [options] [path]
 
 Options:
     --help      Display this help message and exit.
     --watch     Watch dependencies and rebuild on demand.
     --test      In addition to build, run tests
+
+Examples:
+    tools/build integ-tests/go           # Build Go client and CFFI library
+    tools/build integ-tests/go --test    # Build and run Go integration tests
+    tools/build integ-tests/go --watch   # Watch mode for Go development
+
+Go Integration Tests:
+    The Go tests require BAML_LIBRARY_PATH to be set to the compiled CFFI library.
+    This is handled automatically when using 'tools/build integ-tests/go --test'.
+    
+    For manual testing:
+    BAML_LIBRARY_PATH=\$PWD/engine/target/debug/libbaml_cffi.dylib go test -v ./integ-tests/go
 EOF
 }
 
@@ -208,7 +220,8 @@ case "$_path" in
     if [ "$_test_mode" -eq 1 ]; then
       #command="${command} && BAML_LOG=trace infisical run --env=test -- uv run python baml_example_tracing.py"
       # command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=dev -- uv run pytest -s"
-      command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=dev -- uv run pytest -s tests/test_functions.py::test_openai_responses_all_roles"
+      # command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=dev -- uv run pytest -s tests/test_functions.py::test_openai_responses_all_roles"
+      command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=dev -- uv run pytest -s tests/test_errors.py"
       # command="${command} && BAML_LOG=debug,baml_runtime=trace  uv run pytest -s tests/test_functions.py::test_should_work_with_vertex_claude"
       # command="${command} && BAML_LOG=info infisical run --env=dev -- uv run pytest"
       # command="${command} && BAML_LOG=info  uv run pytest -s tests/test_dynamic_enum_request.py"
@@ -282,16 +295,22 @@ case "$_path" in
     ;;
   
   /integ-tests/go | /integ-tests/go/* )
+    # Build the CFFI library that Go depends on
     command="(cd ${_repo_root}/engine/language_client_cffi && cargo make)"
 
     if [ "$_test_mode" -eq 1 ]; then
-      command="${command} && BAML_LIBRARY_PATH=${_repo_root}/engine/target/debug/libbaml_cffi.dylib infisical run --env=test -- go test -timeout 0"
+      # Set BAML_LIBRARY_PATH and run tests with verbose output
+      # The library path must point to the compiled CFFI shared library
+      command="${command} && BAML_LIBRARY_PATH=${_repo_root}/engine/target/debug/libbaml_cffi.dylib infisical run --env=test -- go test -timeout 0 -v -run TestTimeoutBehavior"
     fi
 
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
-        --ext rs,toml,j2 \
+        --ext rs,toml,j2,go,baml \
         --watch "${_repo_root}/engine" \
+        --watch "${_repo_root}/integ-tests/baml_src" \
+        --watch "${_repo_root}/integ-tests/go" \
+        --ignore "${_repo_root}/integ-tests/go/baml_client" \
         --exec "${command}"
     else
       eval "${command}"

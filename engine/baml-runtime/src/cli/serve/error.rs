@@ -53,6 +53,7 @@ impl BamlError {
                     prompt,
                     raw_output,
                     message,
+                    ..
                 } => Self::ValidationFailure {
                     prompt: prompt.to_string(),
                     raw_output: raw_output.to_string(),
@@ -63,6 +64,7 @@ impl BamlError {
                     raw_output,
                     message,
                     finish_reason,
+                    ..
                 } => Self::FinishReasonError {
                     prompt: prompt.to_string(),
                     raw_output: raw_output.to_string(),
@@ -73,12 +75,13 @@ impl BamlError {
                     client_name,
                     message,
                     status_code,
+                    ..
                 } => Self::ClientHttpError {
                     client_name: client_name.to_string(),
                     message: message.to_string(),
                     status_code: status_code.to_u16(),
                 },
-                ExposedError::AbortError => Self::InternalError {
+                ExposedError::AbortError { .. } => Self::InternalError {
                     message: "AbortError".into(),
                 },
             }

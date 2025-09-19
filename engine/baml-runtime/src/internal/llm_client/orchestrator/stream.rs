@@ -3,11 +3,13 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_std::stream::StreamExt;
 use baml_ids::HttpRequestId;
-use baml_types::{BamlValue, BamlValueWithMeta};
+use baml_types::BamlValue;
+use futures::StreamExt as FuturesStreamExt;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
 use serde_json::json;
 use stream_cancel::Tripwire;
+use tokio::time::MissedTickBehavior;
 use web_time::Duration;
 
 use super::{call::CtxWithHttpRequestId, OrchestrationScope, OrchestratorNodeIterator};
@@ -73,7 +75,9 @@ where
                     cancel_scope,
                     LLMResponse::Cancelled("Operation cancelled".to_string()),
                     Some(Err(anyhow::anyhow!(
-                        crate::errors::ExposedError::AbortError
+                        crate::errors::ExposedError::AbortError {
+                            detailed_message: String::new()
+                        }
                     ))),
                 ));
                 break;
@@ -94,32 +98,128 @@ where
                 let ctx = CtxWithHttpRequestId::from(ctx);
                 let stream_res = node.stream(&ctx, &prompt).await;
                 let final_response = match stream_res {
-                    Ok(response) => response
-                        .map(|stream_part| {
-                            if let Some(on_tick) = on_tick_fn.as_ref() {
-                                on_tick();
-                            }
-                            if let Some(on_event) = on_event.as_ref() {
-                                if let LLMResponse::Success(s) = &stream_part {
-                                    let response_value = partial_parse_fn(&s.content);
-                                    // Flags seem to use a ton of memory, so we strip them here.
-                                    if let Ok(baml_value) = response_value {
-                                        // only success events are sent to the stream
-                                        on_event(FunctionResult::new(
-                                            node.scope.clone(),
-                                            LLMResponse::Success(s.clone()),
-                                            Some(Ok(ResponseBamlValue(baml_value.0.map_meta_owned(|m| {
-                                                jsonish::ResponseValueMeta(vec![], m.1, m.2, m.3)
-                                            })))),
-                                        ));
+                    Ok(mut response_stream) => {
+                        let mut last_response: Option<LLMResponse> = None;
+                        let mut latest_success_snapshot: Option<crate::internal::llm_client::LLMCompleteResponse> = None;
+                        let mut latest_content_for_parse: Option<String> = None;
+                        // Track last parsed payload surfaced to downstream listeners so we can dedupe events
+                        let mut last_sent_partial_serialized: Option<String> = None;
+                        let mut parse_interval = tokio::time::interval(std::time::Duration::from_millis(20));
+                        // If parsing falls behind, skip missed ticks so we only parse latest.
+                        parse_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
+                        loop {
+                            tokio::select! {
+                                // Prioritize consuming SSE events over parsing.
+                                biased;
+                                maybe_item = FuturesStreamExt::next(&mut response_stream) => {
+                                    match maybe_item {
+                                        Some(stream_part) => {
+                                            if let Some(on_tick) = on_tick_fn.as_ref() {
+                                                on_tick();
+                                            }
+                                            match &stream_part {
+                                                LLMResponse::Success(s) => {
+                                                    // Track latest snapshot and content
+                                                    latest_success_snapshot = Some(s.clone());
+                                                    latest_content_for_parse = Some(s.content.clone());
+                                                    last_response = Some(LLMResponse::Success(s.clone()));
+                                                }
+                                                other => {
+                                                    last_response = Some(other.clone());
+                                                }
+                                            }
+                                        }
+                                        None => {
+                                            // End of stream
+                                            break;
+                                        }
+                                    }
+                                }
+                                // Periodically surface the latest partial parse to downstream listeners.
+                                _ = parse_interval.tick(), if on_event.is_some() => {
+                                    if let Some(on_event) = on_event.as_ref() {
+                                        if let Some(snap) = latest_success_snapshot.as_ref() {
+                                            if let Some(mut content) = latest_content_for_parse.take() {
+                                                match partial_parse_fn(&content) {
+                                                    Ok(baml_value) => {
+                                                        // Strip flags to reduce memory usage
+                                                        let parsed = ResponseBamlValue(baml_value.0.map_meta_owned(|m| {
+                                                            jsonish::ResponseValueMeta(vec![], m.1, m.2, m.3)
+                                                        }));
+                                                        if let Ok(serialized) = serde_json::to_string(&parsed.serialize_partial()) {
+                                                            if last_sent_partial_serialized
+                                                                .as_deref()
+                                                                != Some(serialized.as_str())
+                                                            {
+                                                                // only successful events sent to the client
+                                                                on_event(FunctionResult::new(
+                                                                    node.scope.clone(),
+                                                                    LLMResponse::Success(snap.clone()),
+                                                                    Some(Ok(parsed)),
+                                                                ));
+                                                                last_sent_partial_serialized = Some(serialized);
+                                                            }
+                                                        } else {
+                                                            // If serialization fails, still emit the parsed event instead of dropping it.
+                                                            on_event(FunctionResult::new(
+                                                                node.scope.clone(),
+                                                                LLMResponse::Success(snap.clone()),
+                                                                Some(Ok(parsed)),
+                                                            ));
+                                                            // Intentionally do not update last_sent_partial_serialized here.
+                                                        }
+                                                    }
+                                                    Err(_) => {
+                                                        // Only restore the content if nothing newer has arrived since we took it.
+                                                        if latest_content_for_parse.is_none() {
+                                                            latest_content_for_parse = Some(content);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
-                            stream_part
-                        })
-                        .fold(None, |_, current| Some(current))
-                        .await
-                        .unwrap_or_else(|| {
+                        }
+
+                        if let Some(on_event) = on_event.as_ref() {
+                            if let Some(snap) = latest_success_snapshot.as_ref() {
+                                if let Some(mut content) = latest_content_for_parse.take() {
+                                    if let Ok(baml_value) = partial_parse_fn(&content) {
+                                        // Strip flags to reduce memory usage
+                                        let parsed = ResponseBamlValue(baml_value.0.map_meta_owned(|m| {
+                                            jsonish::ResponseValueMeta(vec![], m.1, m.2, m.3)
+                                        }));
+                                        if let Ok(serialized) = serde_json::to_string(&parsed.serialize_partial()) {
+                                            if last_sent_partial_serialized
+                                                .as_deref()
+                                                != Some(serialized.as_str())
+                                            {
+                                                // Only successful events should reach downstream listeners
+                                                on_event(FunctionResult::new(
+                                                    node.scope.clone(),
+                                                    LLMResponse::Success(snap.clone()),
+                                                    Some(Ok(parsed)),
+                                                ));
+                                                last_sent_partial_serialized = Some(serialized);
+                                            }
+                                        } else {
+                                            // If serialization fails, still emit the parsed event instead of dropping it.
+                                            on_event(FunctionResult::new(
+                                                node.scope.clone(),
+                                                LLMResponse::Success(snap.clone()),
+                                                Some(Ok(parsed)),
+                                            ));
+                                            // Intentionally do not update last_sent_partial_serialized here.
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        last_response.unwrap_or_else(|| {
                             LLMResponse::LLMFailure(LLMErrorResponse {
                                 client: node.provider.name().into(),
                                 model: None,
@@ -130,7 +230,8 @@ where
                                 message: "Stream ended without response".to_string(),
                                 code: crate::internal::llm_client::ErrorCode::from_u16(2),
                             })
-                        }),
+                        })
+                    }
                     Err(response) => response,
                 };
 
@@ -140,11 +241,13 @@ where
                             .finish_reason_filter()
                             .is_allowed(s.metadata.finish_reason.as_ref())
                         {
+                            let message = "Finish reason not allowed".to_string();
                             Some(Err(anyhow::anyhow!(
                                 crate::errors::ExposedError::FinishReasonError {
                                     prompt: s.prompt.to_string(),
                                     raw_output: s.content.clone(),
-                                    message: "Finish reason not allowed".to_string(),
+                                    detailed_message: message.clone(),
+                                    message,
                                     finish_reason: s.metadata.finish_reason.clone(),
                                 }
                             )))
@@ -168,6 +271,7 @@ where
                                     client_name: client.clone(),
                                     message: message.clone(),
                                     status_code: code.clone(),
+                                    detailed_message: message.clone(),
                                 }
                             ))),
                         }

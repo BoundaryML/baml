@@ -167,6 +167,32 @@ export interface InitializedResponse {
   ack: true;
 }
 
+export interface JumpToFileRequest {
+  vscodeCommand: 'JUMP_TO_FILE';
+  span: {
+    start: number;
+    end: number;
+    file_path: string;
+    start_line: number;
+  };
+}
+
+export interface JumpToFileResponse {
+  ok: true;
+}
+
+export interface SendLspNotificationToIdeRequest {
+  vscodeCommand: 'SEND_LSP_NOTIFICATION_TO_IDE';
+  notification: {
+    method: string;
+    params: Record<string, any>;
+  }
+}
+
+export interface SendLspNotificationToIdeResponse {
+  ok: true;
+}
+
 export interface OpenPlaygroundRequest {
   vscodeCommand: 'OPEN_PLAYGROUND';
 }
@@ -190,6 +216,8 @@ type ApiPairs = [
   [LoadGcpCredsRequest, LoadGcpCredsResponse],
   [InitializedRequest, InitializedResponse],
   [OpenPlaygroundRequest, OpenPlaygroundResponse],
+  [JumpToFileRequest, JumpToFileResponse],
+  [SendLspNotificationToIdeRequest, SendLspNotificationToIdeResponse],
 ];
 
 // Serialization for binary data (like images)
