@@ -5,7 +5,7 @@ inputs:
   toolchain:
     description: "Rust toolchain version"
     required: false
-    default: "stable"
+    default: "1.89.0"
   enable-wasm:
     description: "Enable WASM support (adds wasm32-unknown-unknown target and wasm-pack)"
     required: false
@@ -56,7 +56,7 @@ runs:
 
     - name: Setup Rust toolchain
       # if: steps.check-rust.outputs.rust-installed != 'true'
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ inputs.toolchain }}
         targets: ${{ inputs.targets }}
