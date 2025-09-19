@@ -17,8 +17,8 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::{
     ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
 };
-use shell_escape::escape;
 use serde_json::Value as JsonValue;
+use shell_escape::escape;
 
 pub use self::{
     chat::{WithChat, WithStreamChat},
@@ -207,11 +207,8 @@ fn to_curl_command(
     for (key, value) in headers.iter() {
         let key_str = key.as_str();
         let value_str = value.to_str().unwrap_or("");
-        let value_str = if expose_secrets {
-            value_str.to_string()
-        } else {
-            scrub_header_value(key_str, value_str, env_vars)
-        };
+        let value_str =
+            crate::redaction::scrub_header_value(key_str, value_str, env_vars, expose_secrets);
         let header = format!(" -H \"{}: {}\"", key_str, value_str);
         curl_command.push_str(&header);
     }
@@ -223,100 +220,13 @@ fn to_curl_command(
         Err(_) => body_json,
     };
 
-    if !expose_secrets {
-        if let Ok(mut v) = serde_json::from_str::<JsonValue>(&pretty_body_json) {
-            v = scrub_json_value_for_curl(&v, env_vars, None);
-            pretty_body_json = serde_json::to_string_pretty(&v).unwrap_or(pretty_body_json);
-        } else {
-            // Non-JSON body; best-effort: if exact env value appears, replace with $NAME
-            for (k, v) in env_vars {
-                if !v.is_empty() && pretty_body_json.contains(v) {
-                    pretty_body_json = pretty_body_json.replace(v, &format!("${}", k));
-                }
-            }
-        }
-    }
+    pretty_body_json =
+        crate::redaction::scrub_body_string(&pretty_body_json, env_vars, expose_secrets);
     let fully_escaped_body_json = escape_single_quotes(&pretty_body_json);
     let body_part = format!(" -d {fully_escaped_body_json}");
     curl_command.push_str(&body_part);
 
     curl_command
-}
-
-fn is_sensitive_header_name(key: &str) -> bool {
-    let k = key.to_ascii_lowercase();
-    matches!(
-        k.as_str(),
-        "authorization" | "x-api-key" | "x_api_key" | "api_key" | "api-key" | "access_token" | "token" | "secret"
-    )
-}
-
-fn redact_by_env(value: &str, env_vars: &std::collections::HashMap<String, String>) -> Option<String> {
-    for (k, v) in env_vars {
-        if value == v {
-            return Some(format!("${}", k));
-        }
-        if let Some(stripped) = value.strip_prefix("Bearer ") {
-            if stripped == v {
-                return Some(format!("Bearer ${}", k));
-            }
-        }
-    }
-    None
-}
-
-fn scrub_header_value(
-    key: &str,
-    value: &str,
-    env_vars: &std::collections::HashMap<String, String>,
-) -> String {
-    if let Some(redacted) = redact_by_env(value, env_vars) {
-        return redacted;
-    }
-    if is_sensitive_header_name(key) {
-        // If we couldn't determine provenance, mask generically
-        return "$REDACTED".to_string();
-    }
-    value.to_string()
-}
-
-fn is_sensitive_json_key(key: &str) -> bool {
-    let k = key.to_ascii_lowercase();
-    matches!(
-        k.as_str(),
-        "api_key" | "apikey" | "x-api-key" | "x_api_key" | "authorization" | "access_token" | "secret" | "token"
-    )
-}
-
-fn scrub_json_value_for_curl(
-    value: &serde_json::Value,
-    env_vars: &std::collections::HashMap<String, String>,
-    parent_key: Option<&str>,
-) -> serde_json::Value {
-    match value {
-        JsonValue::String(s) => {
-            if let Some(r) = redact_by_env(s, env_vars) {
-                JsonValue::String(r)
-            } else if parent_key.map_or(false, is_sensitive_json_key) {
-                JsonValue::String("$REDACTED".to_string())
-            } else {
-                value.clone()
-            }
-        }
-        JsonValue::Array(arr) => JsonValue::Array(
-            arr.iter()
-                .map(|v| scrub_json_value_for_curl(v, env_vars, parent_key))
-                .collect(),
-        ),
-        JsonValue::Object(map) => {
-            let mut out = serde_json::Map::new();
-            for (k, v) in map.iter() {
-                out.insert(k.clone(), scrub_json_value_for_curl(v, env_vars, Some(k)));
-            }
-            JsonValue::Object(out)
-        }
-        _ => value.clone(),
-    }
 }
 
 impl<'ir, T> WithPrompt<'ir> for T
@@ -881,4 +791,88 @@ async fn fetch_with_proxy(
 
     let response = request.send().await?;
     Ok(response)
+}
+
+#[cfg(test)]
+mod tests_scrub {
+    use std::collections::HashMap;
+
+    use baml_types::BamlMap;
+    use serde_json::json;
+
+    use crate::redaction::scrub_baml_options;
+
+    #[test]
+    fn test_scrub_exact_match_and_bearer() {
+        let mut opts: BamlMap<String, serde_json::Value> = BamlMap::new();
+        opts.insert("api_key".to_string(), json!("secret-xyz"));
+        opts.insert(
+            "headers".to_string(),
+            json!({
+                "x-api-key": "sek-parallel",
+                "authorization": "Bearer sek-openai",
+                "other": "ok"
+            }),
+        );
+        opts.insert("model".to_string(), json!("gpt-5-2025-08-07"));
+
+        let mut envs = HashMap::new();
+        envs.insert("OPENAI_API_KEY".to_string(), "sek-openai".to_string());
+        envs.insert("PARALLEL_API_KEY".to_string(), "sek-parallel".to_string());
+        envs.insert("SOME_OTHER".to_string(), "secret-xyz".to_string());
+
+        let scrubbed = scrub_baml_options(&opts, &envs, false);
+
+        // api_key matches SOME_OTHER
+        assert_eq!(
+            scrubbed.get("api_key").and_then(|v| v.as_str()),
+            Some("$SOME_OTHER")
+        );
+
+        // headers.x-api-key matches PARALLEL_API_KEY
+        assert_eq!(
+            scrubbed
+                .get("headers")
+                .and_then(|h| h.get("x-api-key"))
+                .and_then(|v| v.as_str()),
+            Some("$PARALLEL_API_KEY")
+        );
+
+        // headers.authorization matches OPENAI_API_KEY with Bearer prefix
+        assert_eq!(
+            scrubbed
+                .get("headers")
+                .and_then(|h| h.get("authorization"))
+                .and_then(|v| v.as_str()),
+            Some("Bearer $OPENAI_API_KEY")
+        );
+
+        // Non-sensitive key remains unchanged
+        assert_eq!(
+            scrubbed.get("model").and_then(|v| v.as_str()),
+            Some("gpt-5-2025-08-07")
+        );
+
+        // headers.other remains unchanged
+        assert_eq!(
+            scrubbed
+                .get("headers")
+                .and_then(|h| h.get("other"))
+                .and_then(|v| v.as_str()),
+            Some("ok")
+        );
+    }
+
+    #[test]
+    fn test_scrub_sensitive_no_match() {
+        let mut opts: BamlMap<String, serde_json::Value> = BamlMap::new();
+        opts.insert("api_key".to_string(), json!("plain-secret"));
+        let envs: HashMap<String, String> = HashMap::new();
+
+        let scrubbed = scrub_baml_options(&opts, &envs, false);
+        assert_eq!(
+            scrubbed.get("api_key").and_then(|v| v.as_str()),
+            Some("$REDACTED")
+        );
+    }
 }

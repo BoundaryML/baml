@@ -461,6 +461,17 @@ fn parse_config_map_entry(
         match current.as_rule() {
             Rule::config_map_key => key = Some(parse_config_map_key(current, diagnostics)),
             Rule::config_expression => value = parse_config_expression(current, diagnostics),
+            Rule::COLON => {
+                if key.is_none() {
+                    diagnostics.push_error(
+                        internal_baml_diagnostics::DatamodelError::new_validation_error(
+                            "This map entry is missing a valid key or has an incorrect syntax.",
+                            diagnostics.span(token_span), // Use the stored span here
+                        ),
+                    );
+                    return None;
+                }
+            }
             Rule::ENTRY_CATCH_ALL => {
                 diagnostics.push_error(
                     internal_baml_diagnostics::DatamodelError::new_validation_error(
