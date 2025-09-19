@@ -67,7 +67,7 @@ def get_current_version() -> Optional[str]:
 def check_git_changes(pre_bump_version: str) -> int:
     try:
         diff_output = run(
-            f"git diff {pre_bump_version} -- engine/languages",
+            f"git diff {pre_bump_version} -- engine/generators/languages",
             capture_output=True,
         ).stdout
     except sp.CalledProcessError:
