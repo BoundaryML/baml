@@ -107,6 +107,154 @@ use crate::{
     test_constraints::{evaluate_test_constraints, TestConstraintsResult},
 };
 
+// Redaction helpers for printing request options safely
+fn redact_value_by_env(value: &str, env_vars: &std::collections::HashMap<String, String>) -> Option<String> {
+    for (k, v) in env_vars {
+        if value == v {
+            return Some(format!("${}", k));
+        }
+        if let Some(stripped) = value.strip_prefix("Bearer ") {
+            if stripped == v {
+                return Some(format!("Bearer ${}", k));
+            }
+        }
+    }
+    None
+}
+
+fn is_sensitive_key(key: &str) -> bool {
+    let k = key.to_ascii_lowercase();
+    matches!(
+        k.as_str(),
+        "api_key" | "apikey" | "x-api-key" | "x_api_key" | "authorization" | "access_token" | "secret" | "token"
+    )
+}
+
+fn scrub_json_value(
+    value: &serde_json::Value,
+    env_vars: &std::collections::HashMap<String, String>,
+    parent_key: Option<&str>,
+) -> serde_json::Value {
+    match value {
+        serde_json::Value::String(s) => {
+            if let Some(redacted) = redact_value_by_env(s, env_vars) {
+                serde_json::Value::String(redacted)
+            } else if parent_key.map_or(false, is_sensitive_key) {
+                serde_json::Value::String("$REDACTED".to_string())
+            } else {
+                value.clone()
+            }
+        }
+        serde_json::Value::Array(arr) => serde_json::Value::Array(
+            arr.iter()
+                .map(|v| scrub_json_value(v, env_vars, parent_key))
+                .collect(),
+        ),
+        serde_json::Value::Object(map) => {
+            let mut out = serde_json::Map::new();
+            for (k, v) in map.iter() {
+                let scrubbed = scrub_json_value(v, env_vars, Some(k));
+                out.insert(k.clone(), scrubbed);
+            }
+            serde_json::Value::Object(out)
+        }
+        _ => value.clone(),
+    }
+}
+
+fn scrub_request_options(
+    options: &baml_types::BamlMap<String, serde_json::Value>,
+    env_vars: &std::collections::HashMap<String, String>,
+) -> serde_json::Value {
+    let mut obj = serde_json::Map::new();
+    for (k, v) in options.iter() {
+        obj.insert(k.clone(), scrub_json_value(v, env_vars, Some(k)));
+    }
+    serde_json::Value::Object(obj)
+}
+
+#[cfg(test)]
+mod tests_scrub {
+    use super::scrub_request_options;
+    use baml_types::BamlMap;
+    use serde_json::json;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_scrub_exact_match_and_bearer() {
+        let mut opts: BamlMap<String, serde_json::Value> = BamlMap::new();
+        opts.insert("api_key".to_string(), json!("secret-xyz"));
+        opts.insert(
+            "headers".to_string(),
+            json!({
+                "x-api-key": "sek-parallel",
+                "authorization": "Bearer sek-openai",
+                "other": "ok"
+            }),
+        );
+        opts.insert("model".to_string(), json!("gpt-5-2025-08-07"));
+
+        let mut envs = HashMap::new();
+        envs.insert("OPENAI_API_KEY".to_string(), "sek-openai".to_string());
+        envs.insert("PARALLEL_API_KEY".to_string(), "sek-parallel".to_string());
+        envs.insert("SOME_OTHER".to_string(), "secret-xyz".to_string());
+
+        let scrubbed = scrub_request_options(&opts, &envs);
+
+        // api_key matches SOME_OTHER
+        assert_eq!(
+            scrubbed.get("api_key").and_then(|v| v.as_str()),
+            Some("$SOME_OTHER")
+        );
+
+        // headers.x-api-key matches PARALLEL_API_KEY
+        assert_eq!(
+            scrubbed
+                .get("headers")
+                .and_then(|h| h.get("x-api-key"))
+                .and_then(|v| v.as_str()),
+            Some("$PARALLEL_API_KEY")
+        );
+
+        // headers.authorization matches OPENAI_API_KEY with Bearer prefix
+        assert_eq!(
+            scrubbed
+                .get("headers")
+                .and_then(|h| h.get("authorization"))
+                .and_then(|v| v.as_str()),
+            Some("Bearer $OPENAI_API_KEY")
+        );
+
+        // Non-sensitive key remains unchanged
+        assert_eq!(
+            scrubbed.get("model").and_then(|v| v.as_str()),
+            Some("gpt-5-2025-08-07")
+        );
+
+        // headers.other remains unchanged
+        assert_eq!(
+            scrubbed
+                .get("headers")
+                .and_then(|h| h.get("other"))
+                .and_then(|v| v.as_str()),
+            Some("ok")
+        );
+    }
+
+    #[test]
+    fn test_scrub_sensitive_no_match() {
+        let mut opts: BamlMap<String, serde_json::Value> = BamlMap::new();
+        opts.insert("api_key".to_string(), json!("plain-secret"));
+        let envs: HashMap<String, String> = HashMap::new();
+
+        let scrubbed = scrub_request_options(&opts, &envs);
+        assert_eq!(
+            scrubbed.get("api_key").and_then(|v| v.as_str()),
+            Some("$REDACTED")
+        );
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
 
@@ -601,12 +749,15 @@ impl BamlRuntime {
                 LLMResponse::InternalFailure(e) => Err(anyhow::anyhow!("{}", e)),
                 LLMResponse::UserFailure(e) => Err(anyhow::anyhow!("{}", e)),
                 LLMResponse::Cancelled(e) => Err(anyhow::anyhow!("Cancelled: {}", e)),
-                LLMResponse::LLMFailure(e) => Err(anyhow::anyhow!(
-                    "{} {}\n\nRequest options: {}",
-                    e.code.to_string(),
-                    e.message,
-                    serde_json::to_string(&e.request_options).unwrap_or_default()
-                )),
+                LLMResponse::LLMFailure(e) => Err(anyhow::anyhow!({
+                    let scrubbed_opts = scrub_request_options(&e.request_options, &env_vars);
+                    format!(
+                        "{} {}\n\nRequest options: {}",
+                        e.code.to_string(),
+                        e.message,
+                        serde_json::to_string(&scrubbed_opts).unwrap_or_default()
+                    )
+                })),
             }?;
             let test_constraints_result = if constraints.is_empty() {
                 TestConstraintsResult::empty()

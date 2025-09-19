@@ -18,6 +18,7 @@ use internal_baml_jinja::{
     ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
 };
 use shell_escape::escape;
+use serde_json::Value as JsonValue;
 
 pub use self::{
     chat::{WithChat, WithStreamChat},
@@ -197,24 +198,125 @@ fn to_curl_command(
     method: &str,
     headers: &reqwest::header::HeaderMap,
     body: Vec<u8>,
+    env_vars: &std::collections::HashMap<String, String>,
+    expose_secrets: bool,
 ) -> String {
     let mut curl_command = format!("curl -X {method} '{url}'");
 
+    // Prepare headers, scrubbing if secrets should not be exposed
     for (key, value) in headers.iter() {
-        let header = format!(" -H \"{}: {}\"", key.as_str(), value.to_str().unwrap());
+        let key_str = key.as_str();
+        let value_str = value.to_str().unwrap_or("");
+        let value_str = if expose_secrets {
+            value_str.to_string()
+        } else {
+            scrub_header_value(key_str, value_str, env_vars)
+        };
+        let header = format!(" -H \"{}: {}\"", key_str, value_str);
         curl_command.push_str(&header);
     }
 
-    let body_json = String::from_utf8_lossy(&body).to_string(); // Convert body to string
-    let pretty_body_json = match serde_json::from_str::<serde_json::Value>(&body_json) {
+    // Body: pretty print JSON if possible, then scrub if secrets shouldn't be exposed
+    let body_json = String::from_utf8_lossy(&body).to_string();
+    let mut pretty_body_json = match serde_json::from_str::<serde_json::Value>(&body_json) {
         Ok(json_value) => serde_json::to_string_pretty(&json_value).unwrap_or(body_json),
         Err(_) => body_json,
     };
+
+    if !expose_secrets {
+        if let Ok(mut v) = serde_json::from_str::<JsonValue>(&pretty_body_json) {
+            v = scrub_json_value_for_curl(&v, env_vars, None);
+            pretty_body_json = serde_json::to_string_pretty(&v).unwrap_or(pretty_body_json);
+        } else {
+            // Non-JSON body; best-effort: if exact env value appears, replace with $NAME
+            for (k, v) in env_vars {
+                if !v.is_empty() && pretty_body_json.contains(v) {
+                    pretty_body_json = pretty_body_json.replace(v, &format!("${}", k));
+                }
+            }
+        }
+    }
     let fully_escaped_body_json = escape_single_quotes(&pretty_body_json);
     let body_part = format!(" -d {fully_escaped_body_json}");
     curl_command.push_str(&body_part);
 
     curl_command
+}
+
+fn is_sensitive_header_name(key: &str) -> bool {
+    let k = key.to_ascii_lowercase();
+    matches!(
+        k.as_str(),
+        "authorization" | "x-api-key" | "x_api_key" | "api_key" | "api-key" | "access_token" | "token" | "secret"
+    )
+}
+
+fn redact_by_env(value: &str, env_vars: &std::collections::HashMap<String, String>) -> Option<String> {
+    for (k, v) in env_vars {
+        if value == v {
+            return Some(format!("${}", k));
+        }
+        if let Some(stripped) = value.strip_prefix("Bearer ") {
+            if stripped == v {
+                return Some(format!("Bearer ${}", k));
+            }
+        }
+    }
+    None
+}
+
+fn scrub_header_value(
+    key: &str,
+    value: &str,
+    env_vars: &std::collections::HashMap<String, String>,
+) -> String {
+    if let Some(redacted) = redact_by_env(value, env_vars) {
+        return redacted;
+    }
+    if is_sensitive_header_name(key) {
+        // If we couldn't determine provenance, mask generically
+        return "$REDACTED".to_string();
+    }
+    value.to_string()
+}
+
+fn is_sensitive_json_key(key: &str) -> bool {
+    let k = key.to_ascii_lowercase();
+    matches!(
+        k.as_str(),
+        "api_key" | "apikey" | "x-api-key" | "x_api_key" | "authorization" | "access_token" | "secret" | "token"
+    )
+}
+
+fn scrub_json_value_for_curl(
+    value: &serde_json::Value,
+    env_vars: &std::collections::HashMap<String, String>,
+    parent_key: Option<&str>,
+) -> serde_json::Value {
+    match value {
+        JsonValue::String(s) => {
+            if let Some(r) = redact_by_env(s, env_vars) {
+                JsonValue::String(r)
+            } else if parent_key.map_or(false, is_sensitive_json_key) {
+                JsonValue::String("$REDACTED".to_string())
+            } else {
+                value.clone()
+            }
+        }
+        JsonValue::Array(arr) => JsonValue::Array(
+            arr.iter()
+                .map(|v| scrub_json_value_for_curl(v, env_vars, parent_key))
+                .collect(),
+        ),
+        JsonValue::Object(map) => {
+            let mut out = serde_json::Map::new();
+            for (k, v) in map.iter() {
+                out.insert(k.clone(), scrub_json_value_for_curl(v, env_vars, Some(k)));
+            }
+            JsonValue::Object(out)
+        }
+        _ => value.clone(),
+    }
 }
 
 impl<'ir, T> WithPrompt<'ir> for T
@@ -334,7 +436,14 @@ where
             .body()
             .map(|b| b.as_bytes().unwrap_or_default().to_vec())
             .unwrap_or_default(); // Add this line to handle the Option
-        let request_str = to_curl_command(&url_str, "POST", request.headers(), body);
+        let request_str = to_curl_command(
+            &url_str,
+            "POST",
+            request.headers(),
+            body,
+            ctx.env_vars(),
+            render_settings.expose_secrets,
+        );
 
         Ok(request_str)
     }
