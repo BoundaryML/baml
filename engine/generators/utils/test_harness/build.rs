@@ -45,24 +45,13 @@ fn main() {
     if dylib_path.exists() {
         fs::copy(&dylib_path, &dest).unwrap();
 
-        // Also copy to the expected location for tests when needed.
-        // On Linux with Rust 1.90+ the entry under target/debug/deps is a symlink
-        // that resolves to target/debug/libbaml_cffi.so. Copying a symlink over
-        // its canonical target will truncate the actual library to zero bytes, so
-        // skip the extra copy when both paths resolve to the same file.
+        // Also copy to the expected location for tests
         let expected_path = cargo_root.join("target/debug").join(dylib_name);
-        let source_real = fs::canonicalize(&dylib_path).unwrap_or_else(|_| dylib_path.clone());
-        let dest_real = fs::canonicalize(&expected_path).unwrap_or_else(|_| expected_path.clone());
-        if source_real != dest_real {
+        if dylib_path != expected_path {
             fs::create_dir_all(expected_path.parent().unwrap()).unwrap();
             fs::copy(&dylib_path, &expected_path).unwrap();
             println!(
                 "Copied dylib to expected location: {}",
-                expected_path.display()
-            );
-        } else {
-            println!(
-                "Skipping dylib copy: source and destination resolve to the same file ({})",
                 expected_path.display()
             );
         }

@@ -42,5 +42,5 @@ prost-build = "0.14.1"
 protoc-bin-vendored = "3"
 protoc = "2"
 
-# [target.x86_64-unknown-linux-gnu]
-# linker = "clang"
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
