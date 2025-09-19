@@ -1,7 +1,7 @@
 generator lang_python {
   output_type python/pydantic
   output_dir "../python"
-  version "0.207.2"
+  version "0.207.1"
 }
 
 generator lang_python_v1 {

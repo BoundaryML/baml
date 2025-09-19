@@ -71,7 +71,7 @@ pub fn check_version(
 
     if gen_version.major != runtime_version.major || gen_version.minor != runtime_version.minor {
         let base_message = format!(
-            "Generator version ({}) does not match the {} version ({}). Major and minor versions must match.",
+            "Generator version ({}) !== the {} version ({}). Major and minor versions must match.\n\n",
             gen_version,
             match generator_type {
                 GeneratorType::VSCode => "VSCode extension",
@@ -143,13 +143,12 @@ pub fn check_version(
             )
         };
 
-        let mut msg =
-            format!("{base_message} {update_message} See {docs_link} for upgrade instructions.");
+        let mut msg = format!(
+            "{base_message} {update_message} \n\nSee {docs_link} for upgrade instructions."
+        );
 
         if !is_diagnostic {
-            msg = format!(
-                "⚠️⚠️⚠️ BAML GENERATION DISABLED: {msg}. Add 'no_version_check true' to your generator config to bypass this check."
-            );
+            msg = format!("⚠️⚠️⚠️ BAML GENERATION DISABLED: {msg}");
         }
 
         return Some(VersionCheckError { msg });
