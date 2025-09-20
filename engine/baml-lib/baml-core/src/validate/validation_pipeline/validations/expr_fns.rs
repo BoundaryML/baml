@@ -33,6 +33,21 @@ fn baml_prelude() -> HashSet<String> {
     )
 }
 
+/// Validate that the left-hand side of an assignment refers to a declared variable
+/// when it is a bare identifier. This is used to enforce that C-style for-loop
+/// headers either declare their iterator with `let` in the init statement, or
+/// use a variable already declared in the containing scope.
+fn validate_assign_lhs_in_scope(ctx: &mut Context<'_>, left: &Expression, scope: &HashSet<String>) {
+    if let Expression::Identifier(identifier) = left {
+        if !scope.contains(&identifier.to_string()) {
+            ctx.push_error(DatamodelError::new_anyhow_error(
+                anyhow::anyhow!("Unknown variable {}", &identifier.to_string()),
+                identifier.span().clone(),
+            ));
+        }
+    }
+}
+
 // An expr_fn is valid if:
 //   - Its parameters have valid types.
 //   - Its parameter names are not reserved keywords.
@@ -183,6 +198,19 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
                 if let Stmt::Let(LetStmt { identifier, .. }) = init {
                     loop_scope.insert(identifier.to_string());
                 }
+
+                // If init is an assignment without declaration, ensure the LHS is declared
+                // in the containing scope. This enforces `for (let i = ...)` unless `i` is
+                // already declared outside.
+                match init {
+                    Stmt::Assign(assign) => {
+                        validate_assign_lhs_in_scope(ctx, &assign.left, scope);
+                    }
+                    Stmt::AssignOp(assign_op) => {
+                        validate_assign_lhs_in_scope(ctx, &assign_op.left, scope);
+                    }
+                    _ => {}
+                }
             }
 
             // validate the condition & after statement in the loop header's scope:
@@ -194,6 +222,16 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
             }
 
             if let Some(after) = &stmt.after_stmt {
+                // For `i += 1` (or similar) in the after-statement, ensure `i` is declared
+                match after.as_ref() {
+                    Stmt::Assign(assign) => {
+                        validate_assign_lhs_in_scope(ctx, &assign.left, &loop_scope);
+                    }
+                    Stmt::AssignOp(assign_op) => {
+                        validate_assign_lhs_in_scope(ctx, &assign_op.left, &loop_scope);
+                    }
+                    _ => {}
+                }
                 validate_stmt(ctx, after, &loop_scope);
             }
 

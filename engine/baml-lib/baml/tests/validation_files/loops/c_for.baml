@@ -57,6 +57,12 @@ function BreakContinue() -> int {
 }
 
 // error: Unknown variable i
+//   -->  loops/c_for.baml:21
+//    | 
+// 20 | 
+// 21 | for (; i <= 10; i += 1) {
+//    | 
+// error: Unknown variable i
 //   -->  loops/c_for.baml:22
 //    | 
 // 21 | for (; i <= 10; i += 1) {
