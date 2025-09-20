@@ -32,6 +32,11 @@ impl Collector {
         }
     }
 
+    #[napi]
+    pub fn clear(&self) {
+        self.inner.clear();
+    }
+
     #[napi(getter)]
     pub fn logs(&self) -> Vec<FunctionLog> {
         self.inner

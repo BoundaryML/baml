@@ -35,8 +35,8 @@ console_log = { version = "1", features = ["color"] }
 futures.workspace = true
 getrandom = { version = "0.2.15", features = ["js"] }
 indexmap.workspace = true
-internal-baml-codegen.workspace = true
 internal-baml-core.workspace = true
+generators-lib = { path = "../generators/utils/generators_lib" }
 jsonish = { path = "../baml-lib/jsonish" }
 internal-llm-client = { path = "../baml-lib/llm-client" }
 js-sys.workspace = true

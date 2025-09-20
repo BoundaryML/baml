@@ -6,7 +6,15 @@ use internal_baml_ast::ast::{
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
 use itertools::Itertools;
 
-use crate::{ir, validate::validation_pipeline::context::Context};
+use crate::{
+    ir,
+    validate::validation_pipeline::{
+        context::Context,
+        validations::{
+            identifiers::validate_identifier_not_keyword, reserved_names::baml_keywords,
+        },
+    },
+};
 
 /// Builtin functions.
 ///
@@ -26,11 +34,12 @@ fn baml_prelude() -> HashSet<String> {
 }
 
 // An expr_fn is valid if:
-//   - Its arguments have valid types.
+//   - Its parameters have valid types.
+//   - Its parameter names are not reserved keywords.
 //   - Its return type is valid.
 //   - Its body is a valid function body (series of statements ending in an
 //     expression). Bodies are valid if they refer only to variables defined
-//     in the argument list and in the current scope.
+//     in the parameter list and in the current scope.
 //   - It does not share a name with any other expr_fn or LLM function.
 pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
     let mut defined_types = internal_baml_jinja_types::PredefinedTypes::default(
@@ -78,6 +87,22 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
             .map(|(arg_name, _arg)| arg_name.to_string())
             .collect();
 
+        // Check for reserved keywords in argument names.
+        for arg_name in expr_fn
+            .expr_fn()
+            .args
+            .args
+            .iter()
+            .map(|(arg_name, _arg)| arg_name.to_string())
+        {
+            if baml_keywords().contains(arg_name.as_str()) {
+                ctx.push_error(DatamodelError::new_validation_error(
+                    &format!("'{}' is a reserved keyword.", arg_name),
+                    expr_fn.expr_fn().span.clone(),
+                ));
+            }
+        }
+
         scope.insert("true".to_string());
         scope.insert("false".to_string());
 
@@ -124,6 +149,8 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
             validate_expression(ctx, &stmt.expr, scope);
         }
         Stmt::Let(stmt) => {
+            validate_identifier_not_keyword(ctx, &stmt.identifier);
+
             validate_expression(ctx, &stmt.expr, scope);
         }
         Stmt::ForLoop(stmt) => {

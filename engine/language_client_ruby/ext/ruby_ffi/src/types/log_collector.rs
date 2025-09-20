@@ -85,6 +85,10 @@ impl Collector {
         })
     }
 
+    pub fn clear(&self) {
+        let _ = self.inner.clear();
+    }
+
     pub fn logs(&self) -> RArray {
         let function_logs = self.inner.function_logs();
         function_logs
@@ -145,6 +149,7 @@ impl Collector {
         cls.define_method("last", method!(Collector::last, 0))?;
         cls.define_method("id", method!(Collector::id, 1))?;
         cls.define_method("usage", method!(Collector::usage, 0))?;
+        cls.define_method("clear", method!(Collector::clear, 0))?;
         cls.define_method("to_s", method!(Collector::to_s, 0))?;
         cls.define_singleton_method(
             "__function_call_count",

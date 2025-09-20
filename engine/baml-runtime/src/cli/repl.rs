@@ -189,6 +189,38 @@ fn color_for_level(level: u8) -> Style {
     }
 }
 
+// Ghostty Graphical Progress Bar (OSC 9;4)
+// See Ghostty 1.2.0 release notes: supports ConEmu/CorEMU OSC 9;4 sequences
+// Command format: ESC ] 9 ; 4 ; <percent> BEL
+// We treat 0 as hidden and 1..99 as active. 100 is treated as complete then hidden.
+fn terminal_supports_graphical_progress() -> bool {
+    // Allow override via env var for testing or disabling.
+    if let Ok(v) = std::env::var("BAML_REPL_PROGRESS") {
+        if v == "0" || v.eq_ignore_ascii_case("false") {
+            return false;
+        }
+        if v == "1" || v.eq_ignore_ascii_case("true") {
+            return true;
+        }
+    }
+    if let Ok(tp) = std::env::var("TERM_PROGRAM") {
+        if tp.to_ascii_lowercase().contains("ghostty") {
+            return true;
+        }
+    }
+    // Default off to avoid spamming BEL on unknown terminals.
+    false
+}
+
+fn send_graphical_progress(percent: i32) {
+    // Clamp to 0..100 range; 0 hides in Ghostty's implementation.
+    let p = percent.clamp(0, 100);
+    // OSC 9;4;P BEL (ConEmu/CorEMU percentage mode)
+    let seq = format!("\x1b]9;4;{}\x07", p);
+    let _ = std::io::stdout().write_all(seq.as_bytes());
+    let _ = std::io::stdout().flush();
+}
+
 #[derive(Args, Clone, Debug)]
 pub struct ReplArgs {
     #[arg(
@@ -818,6 +850,11 @@ impl ReplArgs {
         let tick_rate = Duration::from_millis(80);
         let mut last_tick = Instant::now();
 
+        // Graphical progress (Ghostty OSC 9;4)
+        let supports_progress = terminal_supports_graphical_progress();
+        let mut progress_active = false;
+        let mut progress_percent: i32 = 0;
+
         // Channel for LLM status updates
         let (status_tx, status_rx) = std::sync::mpsc::channel::<LlmStatusEvent>();
 
@@ -861,6 +898,11 @@ impl ReplArgs {
                     LlmStatusEvent::Started(_run_id, name) => {
                         busy = true;
                         status = Some(format!("Calling {name}"));
+                        if supports_progress {
+                            progress_active = true;
+                            progress_percent = 1;
+                            send_graphical_progress(progress_percent);
+                        }
                     }
                     LlmStatusEvent::Finished(_run_id, usage) => {
                         if let Some(u) = usage {
@@ -871,6 +913,10 @@ impl ReplArgs {
                             status = Some("Evaluating expression".into());
                         }
                         // No explicit anchor; shimmer inserted relative to last user prompt
+                        if supports_progress && progress_active {
+                            send_graphical_progress(0);
+                            progress_active = false;
+                        }
                     }
                 }
             }
@@ -1124,6 +1170,16 @@ impl ReplArgs {
                 spinner_idx = (spinner_idx + 1) % spinner_frames.len();
                 if busy {
                     shimmer_pos = shimmer_pos.wrapping_add(1);
+                    if supports_progress && progress_active {
+                        // Animate an indeterminate progress by sweeping 5..95
+                        let step = 7;
+                        let mut next = progress_percent + step;
+                        if next >= 95 {
+                            next = 5;
+                        }
+                        progress_percent = next.clamp(1, 99);
+                        send_graphical_progress(progress_percent);
+                    }
                 }
                 last_tick = Instant::now();
             }
@@ -1137,6 +1193,10 @@ impl ReplArgs {
                 }
                 busy = false;
                 status = None;
+                if supports_progress && progress_active {
+                    send_graphical_progress(0);
+                    progress_active = false;
+                }
             }
 
             // Input events with short poll to keep spinner smooth
@@ -1513,6 +1573,10 @@ impl ReplArgs {
         // Cleanup terminal
         disable_raw_mode()?;
         execute!(std::io::stdout(), DisableMouseCapture, LeaveAlternateScreen)?;
+        // Ensure the progress bar is hidden on exit
+        if supports_progress && progress_active {
+            send_graphical_progress(0);
+        }
         println!("Goodbye!");
         Ok(())
     }
