@@ -383,6 +383,10 @@ export const importApiKeysAtom = atom(
     set(hasLocalChangesAtom, true);
     // Mark imported keys as recently added
     set(recentlyAddedKeysAtom, (prev) => new Set([...prev, ...newKeys]));
+
+    const localApiKeys = get(localApiKeysAtom);
+    // Set this otherwise changes won't take effect.
+    set(userApiKeysAtom, localApiKeys);
   }
 );
 
