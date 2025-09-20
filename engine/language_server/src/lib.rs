@@ -59,10 +59,6 @@ pub fn run_server() -> anyhow::Result<()> {
                         editor_config: std::sync::Arc::new(std::sync::RwLock::new(
                             playground_server::config::EditorConfig::default(),
                         )),
-                        file_access: playground_server::fs::WorkspaceFileAccess::new(vec![
-                            std::env::current_dir()
-                                .unwrap_or_else(|_| std::path::PathBuf::from(".")),
-                        ]),
                     },
                 };
                 let fut = server.run(port_picks.playground_listener).await;
