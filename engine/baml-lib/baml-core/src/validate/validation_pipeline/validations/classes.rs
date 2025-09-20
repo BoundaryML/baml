@@ -6,13 +6,14 @@ use internal_baml_diagnostics::DatamodelError;
 use itertools::join;
 
 use super::{
-    reserved_names::{reserved_names, ReservedNamesMode},
+    reserved_names::{reserved_client_code_names, ReservedNamesMode},
     types::validate_type,
 };
 use crate::validate::validation_pipeline::{
     context::Context,
     validations::reserved_names::{
-        RESERVED_NAMES_FUNCTION_PARAMETERS, RESERVED_NAMES_PYTHON, RESERVED_NAMES_TYPESCRIPT,
+        baml_keywords, RESERVED_NAMES_FUNCTION_PARAMETERS, RESERVED_NAMES_PYTHON,
+        RESERVED_NAMES_TYPESCRIPT,
     },
 };
 pub(super) fn validate(ctx: &mut Context<'_>) {
@@ -65,7 +66,8 @@ pub(super) fn assert_no_field_name_collisions(
     generator_output_types: &HashSet<GeneratorOutputType>,
 ) {
     // The list of reserved words for all user-requested codegen targets.
-    let reserved = reserved_names(generator_output_types, ReservedNamesMode::FieldNames);
+    let reserved =
+        reserved_client_code_names(generator_output_types, ReservedNamesMode::FieldNames);
 
     for cls in ctx.db.walk_classes() {
         for c in cls.static_fields() {
@@ -105,11 +107,22 @@ pub(super) fn assert_no_field_name_collisions(
                     ))
                 }
             }
+
+            // Check for BAML language keywords.
+            if baml_keywords().contains(field.name()) {
+                ctx.push_error(DatamodelError::new_field_validation_error(
+                    "Field name cannot be a BAML language keyword.".to_string(),
+                    "class",
+                    c.name(),
+                    field.name(),
+                    field.identifier().span().clone(),
+                ))
+            }
         }
     }
 
     // check for reserved names in function parameters
-    let reserved = reserved_names(
+    let reserved = reserved_client_code_names(
         generator_output_types,
         ReservedNamesMode::FunctionParameters,
     );

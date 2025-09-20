@@ -23,7 +23,7 @@ function InputObject(email: Email) -> string {
 }
 
 enum Color {
-  RED 
+  RED
   BLUE
   GREEN
 }
@@ -36,7 +36,7 @@ function InputEnum(color: Color) -> string {
 // Try it with wierd spacing and comments
 
 function InputEnum2(
-  color: Color, 
+  color: Color,
   bar: string, // ok
 
   // This param is great!
@@ -46,7 +46,7 @@ function InputEnum2(
   baz: (string | int?)[]
 )
 // Err
--> 
+->
 // Do something
 string
 
@@ -57,9 +57,9 @@ string
 }
 
 
-function InputImage(image: image) -> string {
+function InputImage(img: image) -> string {
   client Bar
-  prompt #" image {{ image }} "#
+  prompt #" image {{ img }} "#
 }
 
 // Test enum-string comparisons
@@ -67,28 +67,28 @@ function TestEnumStringEquality(color: Color) -> string {
   client Bar
   prompt #"
     Testing enum-string comparisons:
-    
+
     {% if color == "RED" %}
       Color is RED (comparing to value name)
     {% endif %}
-    
+
     {% if "BLUE" == color %}
       Color is BLUE (reverse comparison)
     {% endif %}
-    
+
     {% if color != "GREEN" %}
       Color is not GREEN
     {% endif %}
-    
+
     // Test ordering
     {% if color < "YELLOW" %}
       Color comes before YELLOW alphabetically
     {% endif %}
-    
+
     {% if color >= "BLUE" %}
       Color is BLUE or comes after it
     {% endif %}
-    
+
     // Display enum directly
     The color is: {{ color }}
   "#
@@ -102,15 +102,15 @@ function TestEnumInExpressions(color: Color) -> string {
     {% if is_primary %}
       This is a primary color
     {% endif %}
-    
+
     // Ternary with enum comparison
     Result: {{ "Primary" if color == "RED" or color == "BLUE" else "Secondary" }}
-    
+
     // Multiple comparisons
     {% if color == "RED" and true %}
       Color is RED and condition is true
     {% endif %}
-    
+
     // Nested conditions
     {% if color != "GREEN" %}
       {% if color == "RED" %}
@@ -125,19 +125,19 @@ function TestEnumInExpressions(color: Color) -> string {
 // warning: Use `Color.RED` instead of "RED" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:71
 //    | 
-// 70 |     
+// 70 | 
 // 71 |     {% if color == "RED" %}
 //    | 
 // warning: Use `Color.BLUE` instead of "BLUE" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:75
 //    | 
-// 74 |     
+// 74 | 
 // 75 |     {% if "BLUE" == color %}
 //    | 
 // warning: Use `Color.GREEN` instead of "GREEN" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:79
 //    | 
-// 78 |     
+// 78 | 
 // 79 |     {% if color != "GREEN" %}
 //    | 
 // warning: Use one of: Color.RED, Color.BLUE, Color.GREEN - comparing enums with strings will soon be deprecated.
@@ -149,7 +149,7 @@ function TestEnumInExpressions(color: Color) -> string {
 // warning: Use `Color.BLUE` instead of "BLUE" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:88
 //    | 
-// 87 |     
+// 87 | 
 // 88 |     {% if color >= "BLUE" %}
 //    | 
 // warning: Use `Color.RED` instead of "RED" - comparing enums with strings will soon be deprecated.

@@ -23,7 +23,7 @@ function InputObject(email: Email) -> string {
 }
 
 enum Color {
-  RED 
+  RED
   BLUE
   GREEN
 }
@@ -36,7 +36,7 @@ function InputEnum(color: Color) -> string {
 // Try it with wierd spacing and comments
 
 function InputEnum2(
-  color: Color, 
+  color: Color,
   bar: string, // ok
 
   // This param is great!
@@ -46,7 +46,7 @@ function InputEnum2(
   baz: (string | int?)[]
 )
 // Err
--> 
+->
 // Do something
 string
 
@@ -57,9 +57,9 @@ string
 }
 
 
-function InputImage(image: image) -> string {
+function InputImage(img: image) -> string {
   client Bar
-  prompt #" image {{ image }} "#
+  prompt #" image {{ img }} "#
 }
 
 test Foo {
