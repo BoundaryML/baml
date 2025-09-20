@@ -12,9 +12,11 @@ pub async fn load_gcp_credentials(_request: LoadGcpCredsRequest) -> LoadGcpCreds
     };
     let headers = creds.headers(Extensions::new()).await;
     match headers {
+        // google-cloud-auth is never supposed to return NotModified
+        // see https://github.com/googleapis/google-cloud-rust/issues/3361
         Ok(CacheableResource::NotModified) => LoadGcpCredsResponse::Error {
             name: "CredentialLoadError".to_string(),
-            message: "TODO implement cache handling".to_string(),
+            message: "unreacahble!".to_string(),
         },
         Ok(CacheableResource::New { data: headers, .. }) => {
             let access_token = match headers
@@ -54,7 +56,7 @@ pub async fn load_gcp_credentials(_request: LoadGcpCredsRequest) -> LoadGcpCreds
         }
         Err(e) => LoadGcpCredsResponse::Error {
             name: "CredentialLoadError".to_string(),
-            message: e.to_string(),
+            message: format!("Have you run `gcloud auth application-default login`? Failed to load credentials: {:?}", e),
         },
     }
 }

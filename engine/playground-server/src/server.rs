@@ -40,7 +40,6 @@ pub struct AppState {
     pub playground_port: u16,
     pub proxy_port: u16,
     pub editor_config: crate::config::SharedConfig,
-    pub file_access: crate::fs::WorkspaceFileAccess,
 }
 
 pub struct PlaygroundServer {
@@ -65,7 +64,8 @@ impl PlaygroundServer {
 
         tracing::info!(
             "Starting Playground server on {}",
-            listener.local_addr()
+            listener
+                .local_addr()
                 .map(|addr| addr.to_string())
                 .unwrap_or_else(|_| "unknown address".to_string())
         );
