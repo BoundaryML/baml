@@ -31,6 +31,11 @@ impl Collector {
         }
     }
 
+    /// Clear all tracked logs from this collector
+    pub fn clear(&self) {
+        self.inner.clear();
+    }
+
     /// For Python: `repr(log_collector)`
     fn __repr__(&self) -> String {
         let logs = self.logs();

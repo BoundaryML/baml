@@ -1177,7 +1177,7 @@ impl ReplArgs {
                         if next >= 95 {
                             next = 5;
                         }
-                        progress_percent = next.max(1).min(99);
+                        progress_percent = next.clamp(1, 99);
                         send_graphical_progress(progress_percent);
                     }
                 }

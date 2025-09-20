@@ -168,7 +168,9 @@ config_primary_expression = {
 }
 
 config_map_key   = { identifier | quoted_string_literal }
-config_map_entry = { (comment_block | empty_lines)* ~ config_map_key ~ (config_expression | ENTRY_CATCH_ALL)? ~ trailing_comment? }
+// Allow an optional colon between key and value. Without this, a leading ':'
+// could be captured into the value token (e.g., ": env.MY_KEY").
+config_map_entry = { (comment_block | empty_lines)* ~ config_map_key ~ COLON? ~ (config_expression | ENTRY_CATCH_ALL)? ~ trailing_comment? }
 
 config_map_expression    =  { "{" ~ empty_lines? ~ (config_map_entry ~ (splitter ~ config_map_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
 

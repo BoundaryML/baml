@@ -961,6 +961,7 @@ dependencies = [
  "expect-test",
  "fastrand",
  "futures",
+ "generators-lib",
  "http 1.3.1",
  "http-body 1.0.1",
  "indexmap 2.9.0",
@@ -968,7 +969,6 @@ dependencies = [
  "indicatif-log-bridge",
  "indoc",
  "infer",
- "internal-baml-codegen",
  "internal-baml-core",
  "jsonwebtoken",
  "language-server",
@@ -1088,7 +1088,6 @@ dependencies = [
  "expect-test",
  "indexmap 2.9.0",
  "indoc",
- "internal-baml-codegen",
  "internal-baml-core",
  "internal-llm-client",
  "itertools 0.13.0",
@@ -1121,7 +1120,6 @@ dependencies = [
  "env_logger",
  "futures",
  "indexmap 2.9.0",
- "internal-baml-codegen",
  "internal-baml-core",
  "jsonish",
  "libc",
@@ -1250,7 +1248,6 @@ dependencies = [
  "indoc",
  "infer",
  "internal-baml-ast",
- "internal-baml-codegen",
  "internal-baml-core",
  "internal-baml-diagnostics",
  "internal-baml-jinja",
@@ -1333,10 +1330,10 @@ dependencies = [
  "expect-test",
  "futures",
  "futures-timer",
+ "generators-lib",
  "getrandom 0.2.16",
  "indexmap 2.9.0",
  "indoc",
- "internal-baml-codegen",
  "internal-baml-core",
  "internal-llm-client",
  "itertools 0.13.0",
@@ -1403,7 +1400,6 @@ dependencies = [
  "env_logger",
  "futures",
  "indexmap 2.9.0",
- "internal-baml-codegen",
  "internal-baml-core",
  "log",
  "napi",
@@ -1447,7 +1443,6 @@ dependencies = [
  "dashmap 6.1.0",
  "env_logger",
  "indexmap 2.9.0",
- "internal-baml-codegen",
  "internal-baml-core",
  "libc",
  "once_cell",
@@ -3046,6 +3041,7 @@ dependencies = [
  "generators-typescript",
  "indexmap 2.9.0",
  "internal-baml-core",
+ "semver",
  "serde_json",
 ]
 
@@ -3946,35 +3942,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "internal-baml-codegen"
-version = "0.207.1"
-dependencies = [
- "anyhow",
- "askama",
- "baml-log",
- "baml-types",
- "base64 0.22.1",
- "cfg-if",
- "colored",
- "either",
- "env_logger",
- "filetime",
- "generators-lib",
- "indexmap 2.9.0",
- "internal-baml-core",
- "itertools 0.14.0",
- "log",
- "pathdiff 0.2.3",
- "regex",
- "semver",
- "serde",
- "serde_json",
- "serde_yaml",
- "sugar_path",
- "walkdir",
-]
-
-[[package]]
 name = "internal-baml-core"
 version = "0.207.1"
 dependencies = [
@@ -4410,10 +4377,10 @@ dependencies = [
  "crossbeam-channel",
  "filetime",
  "futures",
+ "generators-lib",
  "ignore",
  "indexmap 2.9.0",
  "insta",
- "internal-baml-codegen",
  "internal-baml-core",
  "internal-baml-diagnostics",
  "is-macro",
@@ -5404,7 +5371,6 @@ dependencies = [
  "google-cloud-auth",
  "ignore",
  "indexmap 2.9.0",
- "internal-baml-codegen",
  "internal-baml-core",
  "internal-baml-diagnostics",
  "jod-thread",
