@@ -57,6 +57,10 @@ const isRpcResponse = (eventData: unknown): eventData is RpcResponse => {
  * This utility also enables webview code to be run in a web browser-based
  * dev server by using native web browser features that mock the functionality
  * enabled by acquireVsCodeApi.
+ * 
+ * File loading is handled via the loadMediaFile() method which automatically
+ * detects the platform (VSCode vs JetBrains/Zed) and uses the appropriate
+ * access method internally.
  */
 class VSCodeAPIWrapper {
   private readonly vsCodeApi: any | undefined
@@ -336,6 +340,59 @@ class VSCodeAPIWrapper {
       spans,
     });
     return resp;
+  }
+
+  /**
+   * Load a media file as binary data, handling platform differences automatically.
+   * 
+   * @param path File path to load (relative to workspace or absolute)
+   * @returns Promise<Uint8Array> Binary file contents
+   * @throws Error if file cannot be read or loaded
+   */
+  public async loadMediaFile(path: string): Promise<Uint8Array> {
+    try {
+      if (this.isVscode()) {
+        // VSCode: Request file contents directly via workspace API
+        const response = await this.rpc<GetWebviewUriRequest, GetWebviewUriResponse>({
+          vscodeCommand: 'GET_WEBVIEW_URI',
+          bamlSrc: '', // Keep for API compatibility but always empty
+          path,
+          contents: true, // Request file contents along with URI
+        });
+        
+        if (response.readError) {
+          throw new Error(`Failed to read file: ${path}\n${response.readError}`);
+        }
+        
+        if (response.contents) {
+          return decodeBuffer(response.contents);
+        }
+        
+        // Handle case where no contents or error returned
+        throw new Error(`File not found or unable to read: '${path}'`);
+      } else {
+        // Non-VSCode (JetBrains/Zed): Get URI and fetch via HTTP
+        const response = await this.rpc<GetWebviewUriRequest, GetWebviewUriResponse>({
+          vscodeCommand: 'GET_WEBVIEW_URI',
+          bamlSrc: '', // Keep for API compatibility
+          path,
+          // Don't request contents - server will return data URL automatically
+        });
+        
+        // Server returns data URL for media files, fetch it
+        const httpResponse = await fetch(response.uri);
+        if (!httpResponse.ok) {
+          throw new Error(`HTTP ${httpResponse.status}: ${httpResponse.statusText}`);
+        }
+        
+        const arrayBuffer = await httpResponse.arrayBuffer();
+        return new Uint8Array(arrayBuffer);
+      }
+    } catch (error) {
+      // Wrap all errors with context
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to load media file '${path}': ${message}`);
+    }
   }
 
   public rpc<TRequest, TResponse>(data: TRequest): Promise<TResponse> {

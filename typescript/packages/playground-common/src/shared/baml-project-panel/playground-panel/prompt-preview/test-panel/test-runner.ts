@@ -1,6 +1,5 @@
 import type { WasmFunctionResponse, WasmSpan, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { findMediaFile } from '../media-utils'
 import { ctxAtom, runtimeAtom, wasmAtom } from '../../../atoms';
 import { useAtomCallback } from 'jotai/utils'
 import { vscode } from '../../../vscode'
@@ -123,7 +122,7 @@ const useRunTests = (maxBatchSize = 5) => {
               (partial: WasmFunctionResponse) => {
                 setState(test, { status: 'running', response: partial })
               },
-              findMediaFile,
+              vscode.loadMediaFile,
               (spans: WasmSpan[]) => {
                 // Send spans to VSCode for highlighting if we're in the VSCode environment
                 const spans_to_send = spans.map((span) => ({
@@ -378,7 +377,7 @@ const useParallelRunTests = (maxBatchSize = 5) => {
                   { status: 'running', response: partial },
                 )
               },
-              findMediaFile,
+              vscode.loadMediaFile,
               apiKeys,
               controller.signal, // Now supported!
             )

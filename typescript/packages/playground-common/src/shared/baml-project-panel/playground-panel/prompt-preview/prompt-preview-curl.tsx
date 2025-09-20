@@ -11,14 +11,14 @@ import { ctxAtom, filesAtom, runtimeAtom } from '../../atoms';
 import { selectionAtom } from '../atoms';
 import { TruncatedString } from './TruncatedString';
 import { Loader } from './components';
-import { findMediaFile } from './media-utils';
+import { vscode } from '../../vscode';
 import { EnhancedErrorRenderer } from './test-panel/components/EnhancedErrorRenderer';
 
 type CurlResult =
   | {
-      curlTextWithoutSecrets: string;
-      curlTextWithSecrets: string;
-    }
+    curlTextWithoutSecrets: string;
+    curlTextWithSecrets: string;
+  }
   | undefined
   | Error;
 
@@ -51,7 +51,7 @@ const baseCurlAtom = atom<Promise<CurlResult>>(async (get) => {
       ctx,
       false,
       false,
-      findMediaFile,
+      vscode.loadMediaFile,
       envVars,
       false, // Pass flag to indicate whether to expose secrets
     );
@@ -62,7 +62,7 @@ const baseCurlAtom = atom<Promise<CurlResult>>(async (get) => {
       ctx,
       false,
       false,
-      findMediaFile,
+      vscode.loadMediaFile,
       envVars,
       true, // Pass flag to indicate whether to expose secrets
     );
