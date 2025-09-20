@@ -46,12 +46,19 @@ impl<'s> Scheduler<'s> {
     ) -> Self {
         const FMT_THREADS: usize = 1;
         let to_webview_router_tx = session.to_webview_router_tx.clone();
-        let lsp_methods_to_forward_to_webview = session.baml_settings.lsp_methods_to_forward_to_webview.clone();
+        let lsp_methods_to_forward_to_webview = session
+            .baml_settings
+            .lsp_methods_to_forward_to_webview
+            .clone();
         Self {
             session,
             fmt_pool: thread::Pool::new(NonZeroUsize::try_from(FMT_THREADS).unwrap()),
             background_pool: thread::Pool::new(worker_threads),
-            client: Client::new(sender, to_webview_router_tx, lsp_methods_to_forward_to_webview),
+            client: Client::new(
+                sender,
+                to_webview_router_tx,
+                lsp_methods_to_forward_to_webview.unwrap_or_default(),
+            ),
         }
     }
 

@@ -492,7 +492,7 @@ export class WebviewPanelHost {
             });
             return;
           case 'SET_PROXY_SETTINGS':
-            const { proxyEnabled } = vscodeMessage;
+            const { enablePlaygroundProxy: proxyEnabled } = vscodeMessage;
             const config = vscode.workspace.getConfiguration();
             config.update(
               'baml.enablePlaygroundProxy',

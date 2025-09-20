@@ -125,15 +125,19 @@ pub(crate) fn send_generator_version(
     opt_version: Option<&impl ToOwned<Owned = String>>,
 ) {
     if let Some(version) = opt_version.map(ToOwned::to_owned) {
-        let _ = notifier.send_message(lsp_server::Message::Notification(
-            lsp_server::Notification::new(
+        let _ = notifier
+            .notify_raw(
                 "baml_src_generator_version".to_string(),
                 BamlSrcVersionPayload {
                     version,
                     root_path: project.root_path().to_string_lossy().to_string(),
                 },
-            ),
-        ));
+            )
+            .inspect_err(|e| {
+                tracing::error!(
+                    "Failed to send baml_src_generator_version notification to IDE: {e}"
+                );
+            });
     }
 }
 

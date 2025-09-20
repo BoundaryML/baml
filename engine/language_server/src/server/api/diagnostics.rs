@@ -74,13 +74,13 @@ pub fn publish_diagnostics(
     tracing::info!("sending status bar diagnostics");
     // Update status bar
     notifier
-        .send_message(lsp_server::Message::Notification(Notification::new(
+        .notify_raw(
             "runtime_diagnostics".to_string(),
             serde_json::json!({
                 "errors": error_count,
                 "warnings": warning_count,
             }),
-        )))
+        )
         .internal_error()?;
 
     Ok(())

@@ -18,9 +18,15 @@ export interface EchoResponse {
   message: string;
 }
 
+export interface UpdateSettingsRequest {
+  vscodeCommand: 'UPDATE_SETTINGS';
+  settings: Record<string, any>
+}
+
+
 export interface SetProxySettingsRequest {
   vscodeCommand: 'SET_PROXY_SETTINGS';
-  proxyEnabled: boolean;
+  enablePlaygroundProxy: boolean;
 }
 
 export interface SetFeatureFlagsRequest {

@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State},
     Json,
 };
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::{
     api::{errors::ApiError, *},
@@ -36,30 +36,43 @@ pub async fn webview_rpc_handler(
 ) -> Result<Json<Value>, ApiError> {
     match command.as_str() {
         "GET_VSCODE_SETTINGS" => {
-            let config = state
-                .editor_config
-                .read()
-                .map_err(|_| anyhow::anyhow!("Failed to read editor config"))
-                .map_err(anyhow_to_internal_error)?;
+            let (tx, mut rx) = tokio::sync::broadcast::channel(1);
+            let _ = state
+                .to_webview_router_tx
+                .send(WebviewRouterMessage::GetLanguageServerSettings(tx))
+                .inspect_err(|e| {
+                    tracing::error!(
+                        "Failed to send GET_LANGUAGE_SERVER_SETTINGS message to WebviewRouter: {e}"
+                    );
+                });
+            let response = rx
+                .recv()
+                .await
+                .map_err(|e| anyhow_to_internal_error(e.into()))?;
 
-            let response = GetVSCodeSettingsResponse {
-                enable_playground_proxy: config.enable_playground_proxy,
-                feature_flags: config.feature_flags.clone(),
-            };
-            Ok(Json(serde_json::to_value(response)?))
+            Ok(Json(response))
+        }
+
+        "UPDATE_SETTINGS" => {
+            tracing::info!("UPDATE_SETTINGS: {:#?}", payload);
+            let _ = state
+                .to_webview_router_tx
+                .send(WebviewRouterMessage::UpdateLanguageServerSettings(payload))
+                .inspect_err(|e| {
+                    tracing::error!("Failed to send UPDATE_LANGUAGE_SERVER_SETTINGS message to WebviewRouter: {e}");
+                });
+
+            Ok(Json(Value::Null)) // No response body for settings updates
         }
 
         "SET_PROXY_SETTINGS" => {
-            let request: SetProxySettingsRequest = serde_json::from_value(payload)
-                .context("Failed to parse SetProxySettingsRequest")
-                .map_err(anyhow_to_bad_request)?;
-
-            let mut config = state
-                .editor_config
-                .write()
-                .map_err(|_| anyhow::anyhow!("Failed to acquire write lock on editor config"))
-                .map_err(anyhow_to_internal_error)?;
-            config.enable_playground_proxy = request.proxy_enabled;
+            tracing::info!("SET_PROXY_SETTINGS: {:#?}", payload);
+            let _ = state
+                .to_webview_router_tx
+                .send(WebviewRouterMessage::UpdateLanguageServerSettings(payload))
+                .inspect_err(|e| {
+                    tracing::error!("Failed to send UPDATE_LANGUAGE_SERVER_SETTINGS message to WebviewRouter: {e}");
+                });
 
             Ok(Json(Value::Null)) // No response body for settings updates
         }
@@ -75,6 +88,24 @@ pub async fn webview_rpc_handler(
                 .map_err(|_| anyhow::anyhow!("Failed to acquire write lock on editor config"))
                 .map_err(anyhow_to_internal_error)?;
             config.feature_flags = request.feature_flags;
+
+            let _ = state
+                .to_webview_router_tx
+                .send(WebviewRouterMessage::UpdateLanguageServerSettings(json!(*config)))
+                .inspect_err(|e| {
+                    tracing::error!("Failed to send UPDATE_LANGUAGE_SERVER_SETTINGS message to WebviewRouter: {e}");
+                });
+
+            Ok(Json(Value::Null)) // No response body for settings updates
+        }
+
+        "UPDATE_LANGUAGE_SERVER_SETTINGS" => {
+            let _ = state
+                .to_webview_router_tx
+                .send(WebviewRouterMessage::UpdateLanguageServerSettings(payload))
+                .inspect_err(|e| {
+                    tracing::error!("Failed to send UPDATE_LANGUAGE_SERVER_SETTINGS message to WebviewRouter: {e}");
+                });
 
             Ok(Json(Value::Null)) // No response body for settings updates
         }

@@ -23,6 +23,7 @@ import {
   type SetFlashingRegionsRequest,
   type SetFlashingRegionsResponse,
   decodeBuffer,
+  UpdateSettingsRequest,
 } from './webview-to-vscode-rpc';
 
 // Declare the global acquireVsCodeApi function provided by VSCode webviews
@@ -159,7 +160,7 @@ class VSCodeAPIWrapper {
         },
       });
     } else {
-      await this.sendLspNotification({
+      await this.sendLspNotificationToIde({
         method: 'window/showDocument',
         params: {
           uri: `file://${span.file_path}`,
@@ -183,7 +184,7 @@ class VSCodeAPIWrapper {
   // non-VSCode environments (Jetbrains and Zed), the webview has no way of
   // directly asking the IDE to do something, so instead we ask the language
   // server to forward our notification to the IDE.
-  private async sendLspNotification({ method, params }: { method: string, params: Record<string, any> }) {
+  private async sendLspNotificationToIde({ method, params }: { method: string, params: Record<string, any> }) {
     await this.rpc<SendLspNotificationToIdeRequest, SendLspNotificationToIdeResponse>({
       vscodeCommand: 'SEND_LSP_NOTIFICATION_TO_IDE',
       notification: {
@@ -262,10 +263,21 @@ class VSCodeAPIWrapper {
   }
 
   public async setProxySettings(proxyEnabled: boolean) {
-    await this.rpc<SetProxySettingsRequest, void>({
-      vscodeCommand: 'SET_PROXY_SETTINGS',
-      proxyEnabled,
-    });
+    if (this.isVscode()) {
+      await this.rpc<SetProxySettingsRequest, void>({
+        vscodeCommand: 'SET_PROXY_SETTINGS',
+        enablePlaygroundProxy: proxyEnabled,
+      });
+    } else {
+      await this.rpc<UpdateSettingsRequest, void>({
+        vscodeCommand: 'UPDATE_SETTINGS',
+        settings: {
+          baml: {
+            enablePlaygroundProxy: proxyEnabled,
+          },
+        },
+      });
+    }
   }
 
   public loadAwsCreds = async (profile: string | null) => {

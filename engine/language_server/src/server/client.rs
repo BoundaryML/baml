@@ -3,7 +3,7 @@ use std::any::TypeId;
 use lsp_server::{Notification, RequestId};
 use playground_server::WebviewRouterMessage;
 use rustc_hash::FxHashMap;
-use serde_json::Value;
+use serde_json::{json, Value};
 use tokio::sync::broadcast;
 
 use super::{schedule::Task, ClientSender};
@@ -67,11 +67,17 @@ impl Notifier {
     where
         N: lsp_types::notification::Notification,
     {
-        let method = N::METHOD.to_string();
+        self.notify_raw(N::METHOD.to_string(), params)
+    }
 
+    /// Type-unsafe version of self.notify(). We have too many things that just do json!-style notifications.
+    pub(crate) fn notify_raw(
+        &self,
+        method: String,
+        params: impl serde::Serialize,
+    ) -> anyhow::Result<()> {
         let notification = Notification::new(method.clone(), params);
         let message = lsp_server::Message::Notification(notification.clone());
-
         // Send to both client and webview router
         self.client_sender.send(message)?;
         // Use configuration instead of hardcoded list
@@ -91,45 +97,24 @@ impl Notifier {
     }
 
     pub(crate) fn notify_baml_error(&self, msg: &str) -> anyhow::Result<()> {
-        let notification = Notification::new(
+        self.notify_raw(
             "baml/message".to_string(),
-            serde_json::json!({
+            json!({
                 "type": "error",
                 "message": msg,
                 "durationMs": 7000,
             }),
-        );
-        self.client_sender
-            .send(lsp_server::Message::Notification(notification.clone()))?;
-        let _ = self
-            .to_webview_router_tx
-            .send(WebviewRouterMessage::SendMessageToWebview(
-                playground_server::WebviewCommand::LspMessage(notification),
-            ));
-        Ok(())
+        )
     }
     pub(crate) fn notify_baml_info(&self, msg: &str) -> anyhow::Result<()> {
-        let notification = Notification::new(
+        self.notify_raw(
             "baml/message".to_string(),
-            serde_json::json!({
+            json!({
                 "type": "info",
                 "message": msg,
                 "durationMs": 4000,
             }),
-        );
-        self.client_sender
-            .send(lsp_server::Message::Notification(notification.clone()))?;
-        let _ = self
-            .to_webview_router_tx
-            .send(WebviewRouterMessage::SendMessageToWebview(
-                playground_server::WebviewCommand::LspMessage(notification),
-            ));
-        Ok(())
-    }
-
-    /// Send a notification directly to the client without sending to webview router
-    pub(crate) fn send_message(&self, message: lsp_server::Message) -> anyhow::Result<()> {
-        self.client_sender.send(message)
+        )
     }
 }
 

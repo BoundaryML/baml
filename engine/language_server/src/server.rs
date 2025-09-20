@@ -190,7 +190,7 @@ impl Server {
         let client = client::Client::new(
             connection.make_sender(),
             args.to_webview_router_tx.clone(),
-            lsp_methods_to_forward_to_webview,
+            lsp_methods_to_forward_to_webview.unwrap_or_default(),
         );
         let notifier = client.notifier();
 
@@ -250,12 +250,27 @@ impl Server {
                                 tracing::error!("Failed to reload session: {e}");
                             });
                         }
+                        WebviewRouterMessage::GetLanguageServerSettings(sender) => {
+                            tracing::info!("Received playground GET_LANGUAGE_SERVER_SETTINGS request");
+                            let _ = sender.send(json!(&session.baml_settings)).inspect_err(|e| {
+                                tracing::error!("Failed to send GET_LANGUAGE_SERVER_SETTINGS response to WebviewRouter: {e}");
+                            });
+                        }
+                        WebviewRouterMessage::UpdateLanguageServerSettings(settings) => {
+                            tracing::info!("Received playground UPDATE_LANGUAGE_SERVER_SETTINGS request: {:?}", settings);
+                            let _ = session.update_baml_settings(settings.clone());
+                            let _ = notifier
+                                .notify_raw("baml_settings_updated".to_string(), settings.clone())
+                                .inspect_err(|e| {
+                                    tracing::error!("Failed to send baml_settings_updated notification to IDE: {e}");
+                                });
+                        }
                         WebviewRouterMessage::SendLspNotificationToIde (notification) => {
                             tracing::info!("Received playground SEND_LSP_NOTIFICATION_TO_IDE request: {:?}", notification);
                             let _ = lsp_sender
                                 .send(Message::Notification(notification))
                                 .inspect_err(|e| {
-                                    tracing::error!("Failed to forward SEND_LSP_NOTIFICATION_TO_IDE message to language-server: {e}");
+                                    tracing::error!("Failed to forward SEND_LSP_NOTIFICATION_TO_IDE message to IDE: {e}");
                                 });
                         }
                         WebviewRouterMessage::SendMessageToWebview(command) => {
@@ -379,7 +394,9 @@ impl Server {
         let client = client::Client::new(
             connection.make_sender(),
             to_webview_router_tx.clone(),
-            lsp_methods_to_forward_to_webview.clone(),
+            lsp_methods_to_forward_to_webview
+                .clone()
+                .unwrap_or_default(),
         );
         let notifier = client.notifier();
         // Make sure the session is properly loaded after initialization
@@ -396,7 +413,11 @@ impl Server {
             // webview_router_to_websocket_tx.send(LangServerToWasmMessage::LspMessage(msg.clone()))?;
             let tasks = match msg {
                 Message::Request(req) => {
-                    if lsp_methods_to_forward_to_webview.contains(&req.method) {
+                    if lsp_methods_to_forward_to_webview
+                        .clone()
+                        .unwrap_or_default()
+                        .contains(&req.method)
+                    {
                         let _ = to_webview_router_tx
                             .send(WebviewRouterMessage::SendMessageToWebview(
                                 playground_server::WebviewCommand::LspMessage(

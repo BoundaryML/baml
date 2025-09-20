@@ -16,7 +16,7 @@ export interface EchoRequest {
 
 export interface SetProxySettingsRequest {
   vscodeCommand: 'SET_PROXY_SETTINGS';
-  proxyEnabled: boolean;
+  enablePlaygroundProxy: boolean;
 }
 
 export interface SetFeatureFlagsRequest {
