@@ -15,7 +15,7 @@ describe("OpenAI Provider", () => {
           role: "user",
         },
       ],
-      model: "gpt-4.1",
+      model: "gpt-5-mini",
     });
   });
 
@@ -81,7 +81,7 @@ describe("OpenAI Provider", () => {
           content: [
             {
               text: "lorem ipsum is a fascinating subject. Let me explain briefly.",
-              type: "input_text",
+              type: "output_text",
             },
           ],
           role: "assistant",
@@ -96,7 +96,7 @@ describe("OpenAI Provider", () => {
           role: "user",
         },
       ],
-      model: "gpt-4.1",
+      model: "gpt-5-mini",
     });
   });
 
