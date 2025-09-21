@@ -182,7 +182,7 @@ web-sys = { version = "0.3.78", features = [
 web-time = "1.1.0"
 
 [workspace.package]
-version = "0.207.1"
+version = "0.208.0"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"
