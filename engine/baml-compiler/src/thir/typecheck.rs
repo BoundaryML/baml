@@ -169,6 +169,7 @@ pub fn typecheck_returning_context<'a>(
             "baml.media.video.mime" => TypeIR::arrow(vec![TypeIR::video()], TypeIR::string()),
             "baml.media.audio.mime" => TypeIR::arrow(vec![TypeIR::audio()], TypeIR::string()),
             "baml.media.pdf.mime" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
+            "env.get" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::string()),
 
             _ => {
                 // Generic function type for other natives

@@ -111,6 +111,11 @@ function ReturnImageFromUrl(url: string) -> image {
     image.from_url(url)
 }
 
+function HomeEnvVarIsEmpty() -> bool {
+    let home = env.HOME;
+    home == ""
+}
+
 // --------------------------------
 // Expression Functions with LLM calls.
 // --------------------------------

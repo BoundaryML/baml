@@ -108,6 +108,8 @@ function ArrayAccessWithVariable(arr: float[], idx: int) -> float {
 //
 // Function: baml.media.pdf.mime
 //
+// Function: env.get
+//
 // Function: baml.deep_copy
 //
 // Function: baml.unstable.string

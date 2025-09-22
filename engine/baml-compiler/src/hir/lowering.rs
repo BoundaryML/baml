@@ -116,7 +116,9 @@ pub fn type_ir_from_ast(type_: &ast::FieldType) -> TypeIR {
                 };
 
                 // Extract label and expression from arguments
-                let arguments: Vec<&ast::Expression> = attr.arguments.arguments
+                let arguments: Vec<&ast::Expression> = attr
+                    .arguments
+                    .arguments
                     .iter()
                     .map(|arg| &arg.value)
                     .collect();
@@ -127,9 +129,10 @@ pub fn type_ir_from_ast(type_: &ast::FieldType) -> TypeIR {
                         (None, Some(jinja_expr.clone()))
                     }
                     // Two arguments: label and expression
-                    [ast::Expression::Identifier(label_id), ast::Expression::JinjaExpressionValue(jinja_expr, _)] => {
-                        (Some(label_id.to_string()), Some(jinja_expr.clone()))
-                    }
+                    [
+                        ast::Expression::Identifier(label_id),
+                        ast::Expression::JinjaExpressionValue(jinja_expr, _),
+                    ] => (Some(label_id.to_string()), Some(jinja_expr.clone())),
                     _ => {
                         // Skip invalid constraint formats
                         (None, None)
@@ -472,11 +475,30 @@ impl Expression {
                 index: Box::new(Self::from_ast(index)),
                 span: span.clone(),
             },
-            ast::Expression::FieldAccess(base, field, span) => Expression::FieldAccess {
-                base: Box::new(Self::from_ast(base)),
-                field: field.to_string(),
-                span: span.clone(),
-            },
+            ast::Expression::FieldAccess(base, field, span) => {
+                if let ast::Expression::Identifier(identifier) = base.as_ref() {
+                    if identifier.name() == "env" {
+                        return Expression::Call {
+                            function: Box::new(Expression::Identifier(
+                                "env.get".to_string(),
+                                identifier.span().clone(),
+                            )),
+                            type_args: vec![],
+                            args: vec![Expression::StringValue(
+                                field.name().to_string(),
+                                field.span().clone(),
+                            )],
+                            span: span.clone(),
+                        };
+                    }
+                }
+
+                Expression::FieldAccess {
+                    base: Box::new(Self::from_ast(base)),
+                    field: field.to_string(),
+                    span: span.clone(),
+                }
+            }
             ast::Expression::MethodCall {
                 receiver,
                 method,

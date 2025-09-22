@@ -574,6 +574,7 @@ impl ReplState {
             input_expr_thir,
             handle_llm_function,
             variables,
+            self.env_vars.clone(),
         )
         .await?;
 

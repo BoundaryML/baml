@@ -10,6 +10,7 @@ pub struct Program {
 
 /// Helper function to assert that source code compiles to expected bytecode
 /// instructions.
+#[track_caller]
 pub fn assert_compiles(input: Program) -> anyhow::Result<()> {
     let ast = baml_compiler::test::ast(input.source)?;
 

@@ -89,3 +89,6 @@ def test_return_image_from_url():
 
     assert img.is_url()
     assert img.as_url() == url
+
+def test_home_env_var_length():
+    assert not b.HomeEnvVarIsEmpty()

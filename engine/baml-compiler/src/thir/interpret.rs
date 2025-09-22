@@ -1,7 +1,8 @@
-use std::{cell::RefCell, future::Future, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, future::Future, sync::Arc};
 
 use anyhow::{anyhow, bail, Context, Result};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
+use internal_baml_diagnostics::Span;
 
 use crate::thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, THir};
 
@@ -30,11 +31,13 @@ pub async fn interpret_thir<F, Fut>(
     expr: Expr<ExprMetadata>,
     mut run_llm_function: F,
     extra_bindings: BamlMap<String, BamlValueWithMeta<ExprMetadata>>,
+    env_vars: HashMap<String, String>,
 ) -> Result<BamlValueWithMeta<ExprMetadata>>
 where
     F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync,
     Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send,
 {
+    let env_vars_map = env_vars;
     let mut scopes = vec![Scope {
         variables: BamlMap::from_iter(
             extra_bindings
@@ -42,6 +45,18 @@ where
                 .map(|(k, v)| (k, RefCell::new(v))),
         ),
     }];
+
+    let mut env_entries = BamlMap::new();
+    for (key, value) in env_vars_map {
+        env_entries.insert(
+            key,
+            BamlValueWithMeta::String(value, (internal_baml_diagnostics::Span::fake(), None)),
+        );
+    }
+    scopes[0].variables.insert(
+        "__env_vars__".to_string(),
+        RefCell::new(BamlValueWithMeta::Map(env_entries, (Span::fake(), None))),
+    );
 
     // Seed scope with global assignments
     for (name, g) in thir.global_assignments.iter() {
@@ -87,7 +102,7 @@ where
                         _ => {
                             return Err(anyhow::anyhow!(
                                 "Complex assignment targets not yet supported"
-                            ))
+                            ));
                         }
                     };
                     let v =
@@ -205,7 +220,7 @@ where
                         _ => {
                             return Err(anyhow::anyhow!(
                                 "Complex assignment targets not yet supported"
-                            ))
+                            ));
                         }
                     };
 
@@ -395,8 +410,8 @@ where
                                                 Expr::Var(name, _) => name,
                                                 _ => {
                                                     return Err(anyhow::anyhow!(
-                                                    "Complex assignment targets not yet supported"
-                                                ))
+                                                        "Complex assignment targets not yet supported"
+                                                    ));
                                                 }
                                             };
 
@@ -417,13 +432,20 @@ where
                                             )?;
 
                                             let result_val = match assign_op {
-                                                AssignOp::AddAssign => match (current_val.clone(), rhs_val.clone()) {
-                                                    (BamlValueWithMeta::Int(a, meta), BamlValueWithMeta::Int(b, _)) => {
-                                                        BamlValueWithMeta::Int(a + b, meta)
+                                                AssignOp::AddAssign => {
+                                                    match (current_val.clone(), rhs_val.clone()) {
+                                                        (
+                                                            BamlValueWithMeta::Int(a, meta),
+                                                            BamlValueWithMeta::Int(b, _),
+                                                        ) => BamlValueWithMeta::Int(a + b, meta),
+                                                        _ => bail!(
+                                                            "unsupported types for += in C-for after clause"
+                                                        ),
                                                     }
-                                                    _ => bail!("unsupported types for += in C-for after clause"),
-                                                },
-                                                _ => bail!("unsupported assign op in C-for after clause"),
+                                                }
+                                                _ => bail!(
+                                                    "unsupported assign op in C-for after clause"
+                                                ),
                                             };
                                             assign(scopes, var_name, result_val)?;
                                         }
@@ -433,8 +455,8 @@ where
                                                 Expr::Var(name, _) => name,
                                                 _ => {
                                                     return Err(anyhow::anyhow!(
-                                                    "Complex assignment targets not yet supported"
-                                                ))
+                                                        "Complex assignment targets not yet supported"
+                                                    ));
                                                 }
                                             };
                                             let v = expect_value(
@@ -473,8 +495,8 @@ where
                                                 Expr::Var(name, _) => name,
                                                 _ => {
                                                     return Err(anyhow::anyhow!(
-                                                    "Complex assignment targets not yet supported"
-                                                ))
+                                                        "Complex assignment targets not yet supported"
+                                                    ));
                                                 }
                                             };
 
@@ -495,13 +517,20 @@ where
                                             )?;
 
                                             let result_val = match assign_op {
-                                                AssignOp::AddAssign => match (current_val.clone(), rhs_val.clone()) {
-                                                    (BamlValueWithMeta::Int(a, meta), BamlValueWithMeta::Int(b, _)) => {
-                                                        BamlValueWithMeta::Int(a + b, meta)
+                                                AssignOp::AddAssign => {
+                                                    match (current_val.clone(), rhs_val.clone()) {
+                                                        (
+                                                            BamlValueWithMeta::Int(a, meta),
+                                                            BamlValueWithMeta::Int(b, _),
+                                                        ) => BamlValueWithMeta::Int(a + b, meta),
+                                                        _ => bail!(
+                                                            "unsupported types for += in C-for after clause"
+                                                        ),
                                                     }
-                                                    _ => bail!("unsupported types for += in C-for after clause"),
-                                                },
-                                                _ => bail!("unsupported assign op in C-for after clause"),
+                                                }
+                                                _ => bail!(
+                                                    "unsupported assign op in C-for after clause"
+                                                ),
                                             };
                                             assign(scopes, var_name, result_val)?;
                                         }
@@ -511,8 +540,8 @@ where
                                                 Expr::Var(name, _) => name,
                                                 _ => {
                                                     return Err(anyhow::anyhow!(
-                                                    "Complex assignment targets not yet supported"
-                                                ))
+                                                        "Complex assignment targets not yet supported"
+                                                    ));
                                                 }
                                             };
                                             let v = expect_value(
@@ -720,6 +749,37 @@ where
                 args,
                 meta: _,
             } => {
+                if let Expr::Var(func_name, _) = func.as_ref() {
+                    if func_name == "env.get" {
+                        if args.len() != 1 {
+                            bail!("env.get expects exactly one argument");
+                        }
+
+                        let key_val = expect_value(
+                            evaluate_expr(&args[0], scopes, thir, run_llm_function).await?,
+                        )?;
+
+                        let key = match key_val {
+                            BamlValueWithMeta::String(value, _) => value,
+                            _ => bail!("env.get argument must be a string"),
+                        };
+
+                        let env_map = lookup(scopes, "__env_vars__")
+                            .ok_or_else(|| anyhow!("environment context missing"))?;
+
+                        let map = match env_map {
+                            BamlValueWithMeta::Map(ref entries, _) => entries,
+                            _ => bail!("environment context corrupted"),
+                        };
+
+                        if let Some(value) = map.get(&key) {
+                            return Ok(EvalValue::Value(value.clone()));
+                        } else {
+                            bail!("Environment variable '{}' not found", key);
+                        }
+                    }
+                }
+
                 let callee = evaluate_expr(func, scopes, thir, run_llm_function).await?;
                 let (arity, body, meta) = match callee {
                     EvalValue::Function(a, b, m) => (a, b, m),
@@ -899,7 +959,10 @@ where
                 match builtin {
                     Builtin::FetchValue => {
                         // FetchValue requires network access and is not supported in the interpreter
-                        bail!("builtin function std::fetch_value is not supported in interpreter at {:?}", meta.0)
+                        bail!(
+                            "builtin function std::fetch_value is not supported in interpreter at {:?}",
+                            meta.0
+                        )
                     }
                 }
             }
@@ -1292,9 +1355,15 @@ mod tests {
     async fn eval_atom_int() {
         let thir = empty_thir();
         let expr = Expr::Value(BamlValueWithMeta::Int(1, meta()));
-        let out = super::interpret_thir(thir, expr, mock_llm_function, BamlMap::new())
-            .await
-            .unwrap();
+        let out = super::interpret_thir(
+            thir,
+            expr,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
         match out {
             BamlValueWithMeta::Int(i, _) => assert_eq!(i, 1),
             v => panic!("expected int, got {v:?}"),
@@ -1322,9 +1391,15 @@ mod tests {
             meta: meta(),
         };
 
-        let out = super::interpret_thir(thir, call, mock_llm_function, BamlMap::new())
-            .await
-            .unwrap();
+        let out = super::interpret_thir(
+            thir,
+            call,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
         match out {
             BamlValueWithMeta::Int(i, _) => assert_eq!(i, 99),
             v => panic!("expected int, got {v:?}"),
@@ -1358,9 +1433,15 @@ mod tests {
             meta: meta(),
         };
 
-        let out = super::interpret_thir(thir, call, mock_llm_function, BamlMap::new())
-            .await
-            .unwrap();
+        let out = super::interpret_thir(
+            thir,
+            call,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
         match out {
             BamlValueWithMeta::Int(i, _) => assert_eq!(i, 7),
             v => panic!("expected int, got {v:?}"),
@@ -1405,7 +1486,14 @@ mod tests {
         };
 
         // Since the interpreter uses our mock LLM function, this should fail with our mock error message
-        let result = super::interpret_thir(thir, call, mock_llm_function, BamlMap::new()).await;
+        let result = super::interpret_thir(
+            thir,
+            call,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await;
         assert!(result.is_ok());
         let out = result.unwrap();
         match out {
@@ -1434,9 +1522,15 @@ mod tests {
             meta: meta(),
         };
 
-        let result = super::interpret_thir(thir, method_call, mock_llm_function, BamlMap::new())
-            .await
-            .unwrap();
+        let result = super::interpret_thir(
+            thir,
+            method_call,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
 
         match result {
             BamlValueWithMeta::Int(len, _) => assert_eq!(len, 3),
@@ -1457,13 +1551,45 @@ mod tests {
             meta: meta(),
         };
 
-        let result = super::interpret_thir(thir, method_call, mock_llm_function, BamlMap::new())
-            .await
-            .unwrap();
+        let result = super::interpret_thir(
+            thir,
+            method_call,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
 
         match result {
             BamlValueWithMeta::Int(len, _) => assert_eq!(len, 5),
             v => panic!("expected int, got {v:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn env_get_returns_value() {
+        let thir = empty_thir();
+        let call = Expr::Call {
+            func: Arc::new(Expr::Var("env.get".to_string(), meta())),
+            type_args: vec![],
+            args: vec![Expr::Value(BamlValueWithMeta::String(
+                "API_KEY".to_string(),
+                meta(),
+            ))],
+            meta: meta(),
+        };
+
+        let mut env_vars = HashMap::new();
+        env_vars.insert("API_KEY".to_string(), "secret123".to_string());
+
+        let result = super::interpret_thir(thir, call, mock_llm_function, BamlMap::new(), env_vars)
+            .await
+            .unwrap();
+
+        match result {
+            BamlValueWithMeta::String(value, _) => assert_eq!(value, "secret123"),
+            v => panic!("expected string, got {v:?}"),
         }
     }
 
@@ -1480,8 +1606,14 @@ mod tests {
             meta: meta(),
         };
 
-        let result =
-            super::interpret_thir(thir, method_call, mock_llm_function, BamlMap::new()).await;
+        let result = super::interpret_thir(
+            thir,
+            method_call,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("unknown method"));
     }
@@ -1611,10 +1743,15 @@ mod tests {
                 meta: meta(),
             };
 
-            let result =
-                super::interpret_thir(thir.clone(), fib_call, mock_llm_function, BamlMap::new())
-                    .await
-                    .unwrap();
+            let result = super::interpret_thir(
+                thir.clone(),
+                fib_call,
+                mock_llm_function,
+                BamlMap::new(),
+                HashMap::new(),
+            )
+            .await
+            .unwrap();
 
             match result {
                 BamlValueWithMeta::Int(actual, _) => {

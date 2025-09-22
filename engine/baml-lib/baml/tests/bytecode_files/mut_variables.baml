@@ -92,6 +92,8 @@ function MutableInArg(x: int) -> int {
 //
 // Function: baml.media.pdf.mime
 //
+// Function: env.get
+//
 // Function: baml.deep_copy
 //
 // Function: baml.unstable.string
