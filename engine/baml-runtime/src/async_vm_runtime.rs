@@ -212,7 +212,7 @@ impl BamlAsyncVmRuntime {
         //
         // TODO: This is expensive for big programs, figure out how to share
         // compiler produced objects betweeen VMs. We know they are read only.
-        let mut vm = Vm::new(self.program.clone());
+        let mut vm = Vm::new(self.program.clone(), env_vars.clone());
 
         // TODO: We can't assume ordering of `params` is correct, figure out why.
         let args = match expr_fn
@@ -284,7 +284,7 @@ impl BamlAsyncVmRuntime {
                             None => {
                                 break 'mainloop Err(anyhow!(
                                     "failed to receive function result from futures channel (channel closed)"
-                                ))
+                                ));
                             }
                         };
 
@@ -298,7 +298,7 @@ impl BamlAsyncVmRuntime {
                             Err(e) => {
                                 break 'mainloop Err(
                                     e.context("failed to convert function result to vm value")
-                                )
+                                );
                             }
                         };
 
@@ -323,7 +323,7 @@ impl BamlAsyncVmRuntime {
                         Err(e) => {
                             break 'mainloop Err(
                                 anyhow::Error::from(e).context("failed to get pending future")
-                            )
+                            );
                         }
                     };
 
@@ -340,7 +340,7 @@ impl BamlAsyncVmRuntime {
                                     break 'mainloop Err(e.context(format!(
                                         "Failed scheduling LLM future: {}",
                                         pending_future.function
-                                    )))
+                                    )));
                                 }
                             };
 
@@ -354,7 +354,7 @@ impl BamlAsyncVmRuntime {
                                 Err(e) => {
                                     break 'mainloop Err(
                                         e.context("failed to convert VM args to baml values")
-                                    )
+                                    );
                                 }
                             }
                             .into_iter()
@@ -460,23 +460,27 @@ impl BamlAsyncVmRuntime {
                                 _ => {
                                     break 'mainloop Err(anyhow::anyhow!(
                                         "baml.fetch_as: failed to get URL from VM value"
-                                    ))
+                                    ));
                                 }
                             };
 
-                            let parse_as_type = match vm.objects.as_object(&pending_future.args[1], baml_vm::ObjectType::Any) {
+                            let parse_as_type = match vm
+                                .objects
+                                .as_object(&pending_future.args[1], baml_vm::ObjectType::Any)
+                            {
                                 Ok(idx) => match &vm.objects[idx] {
                                     baml_vm::Object::BamlType(type_ir) => type_ir.to_owned(),
                                     _ => {
                                         break 'mainloop Err(anyhow!(
                                             "baml.fetch_as: expected type parameter to be a Baml type, got {}",
                                             vm.objects[idx]
-                                        ))
+                                        ));
                                     }
                                 },
                                 Err(e) => {
-                                    break 'mainloop Err(anyhow::Error::from(e)
-                                        .context("baml.fetch_as: failed to get type parameter from VM value"))
+                                    break 'mainloop Err(anyhow::Error::from(e).context(
+                                        "baml.fetch_as: failed to get type parameter from VM value",
+                                    ));
                                 }
                             };
 
@@ -856,7 +860,10 @@ fn try_baml_value_from_vm_value(vm: &Vm, value: &baml_vm::Value) -> anyhow::Resu
 
             baml_vm::Object::Instance(instance) => {
                 let baml_vm::Object::Class(class) = &vm.objects[instance.class] else {
-                    anyhow::bail!("internal error: cannot convert VM value {value} to Baml value: class ID '{}' not found in VM objects", instance.class);
+                    anyhow::bail!(
+                        "internal error: cannot convert VM value {value} to Baml value: class ID '{}' not found in VM objects",
+                        instance.class
+                    );
                 };
 
                 let mut fields = BamlMap::new();
@@ -872,7 +879,10 @@ fn try_baml_value_from_vm_value(vm: &Vm, value: &baml_vm::Value) -> anyhow::Resu
 
             baml_vm::Object::Variant(variant) => {
                 let baml_vm::Object::Enum(enm) = &vm.objects[variant.enm] else {
-                    anyhow::bail!("internal error: cannot convert VM value {value} to Baml value: enum ID '{}' not found in VM objects", variant.enm);
+                    anyhow::bail!(
+                        "internal error: cannot convert VM value {value} to Baml value: enum ID '{}' not found in VM objects",
+                        variant.enm
+                    );
                 };
 
                 Ok(BamlValue::Enum(
@@ -946,13 +956,17 @@ fn try_vm_value_from_baml_value(
             };
 
             let baml_vm::Object::Class(class) = &vm.objects[*class_index] else {
-                anyhow::bail!("internal error: cannot convert value {value} to VM value: class '{name}' not found in VM objects");
+                anyhow::bail!(
+                    "internal error: cannot convert value {value} to VM value: class '{name}' not found in VM objects"
+                );
             };
 
             let mut ordered_field_values = Vec::new();
             for field_name in &class.field_names {
                 let Some(value) = fields.get(field_name) else {
-                    anyhow::bail!("cannot convert value {value} to VM value: class '{name}' has no field '{field_name}'");
+                    anyhow::bail!(
+                        "cannot convert value {value} to VM value: class '{name}' has no field '{field_name}'"
+                    );
                 };
 
                 ordered_field_values.push(value);
@@ -977,11 +991,15 @@ fn try_vm_value_from_baml_value(
             };
 
             let baml_vm::Object::Enum(enm) = &vm.objects[*enum_index] else {
-                anyhow::bail!("internal error: cannot convert value {value} to VM value: enum '{enm}' not found in VM objects");
+                anyhow::bail!(
+                    "internal error: cannot convert value {value} to VM value: enum '{enm}' not found in VM objects"
+                );
             };
 
             let Some(variant_index) = enm.variant_names.iter().position(|v| v == variant) else {
-                anyhow::bail!("cannot convert value {value} to VM value: enum '{enm}' has no variant '{variant}'");
+                anyhow::bail!(
+                    "cannot convert value {value} to VM value: enum '{enm}' has no variant '{variant}'"
+                );
             };
 
             Ok(vm.alloc_variant(*enum_index, variant_index))

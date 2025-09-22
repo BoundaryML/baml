@@ -34,6 +34,7 @@ fn bootstrap_vm(input: Program) -> Vm {
         runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
         objects,
         globals,
+        env_vars: Default::default(),
     }
 }
 

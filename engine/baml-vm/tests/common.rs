@@ -22,6 +22,7 @@ pub fn assert_vm_executes(input: Program) -> anyhow::Result<()> {
 }
 
 /// Helper function for VM execution with custom inspection.
+#[track_caller]
 pub fn assert_vm_executes_with_inspection(
     input: Program,
     inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
@@ -86,6 +87,7 @@ fn setup_and_exec_program(
         runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
         objects,
         globals,
+        env_vars: Default::default(),
     };
     let result = vm.exec();
     Ok((vm, result))
@@ -143,6 +145,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
         objects: ObjectPool::from_vec(objects),
         globals: GlobalPool::from_vec(globals),
+        env_vars: Default::default(),
     };
 
     let result = vm.exec()?;

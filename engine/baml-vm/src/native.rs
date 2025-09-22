@@ -67,6 +67,17 @@ pub fn map_has(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     Ok(Value::Bool(map.contains_key(key)))
 }
 
+pub fn env_get(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    let key = vm.objects.as_string(&args[0])?;
+
+    match vm.env_vars.get(key) {
+        Some(value) => Ok(vm.alloc_string(value.clone())),
+        None => Err(VmError::RuntimeError(RuntimeError::Other(format!(
+            "Environment variable '{key}' not found",
+        )))),
+    }
+}
+
 pub fn image_from_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
     let url = vm.objects.as_string(&args[0])?;
@@ -352,6 +363,8 @@ pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
         ("baml.media.video.mime", (media_mime_type, 1)),
         ("baml.media.audio.mime", (media_mime_type, 1)),
         ("baml.media.pdf.mime", (media_mime_type, 1)),
+        // Environment
+        ("env.get", (env_get, 1)),
         // Utility functions.
         ("baml.deep_copy", (deep_copy_object, 1)),
         ("baml.unstable.string", (any_value_to_string, 1)),

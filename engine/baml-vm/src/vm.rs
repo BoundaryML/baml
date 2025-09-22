@@ -183,6 +183,9 @@ pub struct Vm {
     /// When the embedder calls [`Vm::collect_garbage`] it will drop all values
     /// after this offset.
     pub runtime_allocs_offset: ObjectIndex,
+
+    /// Environment variables available during execution.
+    pub env_vars: HashMap<String, String>,
 }
 
 /// VM execution state.
@@ -224,6 +227,7 @@ impl Vm {
         BamlVmProgram {
             objects, globals, ..
         }: BamlVmProgram,
+        env_vars: HashMap<String, String>,
     ) -> Self {
         Self {
             frames: Vec::new(),
@@ -231,6 +235,7 @@ impl Vm {
             runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
             objects,
             globals,
+            env_vars,
         }
     }
 
@@ -575,7 +580,7 @@ impl Vm {
                             return Err(VmError::from(InternalError::TypeError {
                                 expected: Type::Bool,
                                 got: self.objects.type_of(other),
-                            }))
+                            }));
                         }
                     }
                 }
@@ -685,7 +690,7 @@ impl Vm {
                                     right: Type::Int,
                                     op,
                                 }
-                                .into())
+                                .into());
                             }
                         }),
 
@@ -703,7 +708,7 @@ impl Vm {
                                     right: Type::Float,
                                     op,
                                 }
-                                .into())
+                                .into());
                             }
                         }),
 
@@ -727,7 +732,7 @@ impl Vm {
                                         right: Type::Object(ObjectType::String),
                                         op,
                                     }
-                                    .into())
+                                    .into());
                                 }
                             })
                         }
@@ -757,7 +762,7 @@ impl Vm {
                                     left: self.objects.type_of(&left),
                                     right: self.objects.type_of(&right),
                                     op,
-                                }))
+                                }));
                             }
                         }),
                     };

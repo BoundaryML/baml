@@ -22,13 +22,13 @@ fn class_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(38))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(39))),
         },
         |vm| {
-            let baml_vm::Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(38)] else {
+            let baml_vm::Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(39)] else {
                 panic!(
                     "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(38)]
+                    &vm.objects[ObjectIndex::from_raw(39)]
                 );
             };
 
@@ -61,13 +61,13 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(39))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(40))),
         },
         |vm| {
-            let baml_vm::Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(39)] else {
+            let baml_vm::Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(40)] else {
                 panic!(
                     "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(39)]
+                    &vm.objects[ObjectIndex::from_raw(40)]
                 );
             };
 
@@ -107,13 +107,13 @@ fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(40))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(41))),
         },
         |vm| {
-            let baml_vm::Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(40)] else {
+            let baml_vm::Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(41)] else {
                 panic!(
                     "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(39)]
+                    &vm.objects[ObjectIndex::from_raw(41)]
                 );
             };
 
@@ -149,13 +149,13 @@ fn class_constructor_with_spread_operator_before_named_fields() -> anyhow::Resul
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(39))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(40))),
         },
         |vm| {
-            let baml_vm::Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(39)] else {
+            let baml_vm::Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(40)] else {
                 panic!(
                     "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(39)]
+                    &vm.objects[ObjectIndex::from_raw(40)]
                 );
             };
 

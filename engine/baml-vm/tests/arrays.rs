@@ -17,13 +17,13 @@ fn array_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(37))),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(38))),
         },
         |vm| {
-            let baml_vm::Object::Array(array) = &vm.objects[ObjectIndex::from_raw(37)] else {
+            let baml_vm::Object::Array(array) = &vm.objects[ObjectIndex::from_raw(38)] else {
                 panic!(
                     "expected Array, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(37)]
+                    &vm.objects[ObjectIndex::from_raw(38)]
                 );
             };
 
