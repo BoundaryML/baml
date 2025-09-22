@@ -50,7 +50,7 @@ fn locals_in_scope() -> anyhow::Result<()> {
     } = baml_compiler::compile(&ast)?;
 
     let main = objects[resolved_function_names["main"].0].as_function()?;
-    baml_vm::debug::disassemble(main, &EvalStack::default(), &objects, &globals);
+    baml_vm::debug::disassemble(main, &EvalStack::new(), &objects, &globals);
 
     let expected_locals_in_scope = [
         vec!["<fn main>", "x", "a", "h"],

@@ -96,7 +96,7 @@ impl BamlAsyncVmRuntime {
 
         baml_vm::debug::disassemble(
             function,
-            &EvalStack::default(),
+            &EvalStack::new(),
             &self.program.objects,
             &self.program.globals,
         );

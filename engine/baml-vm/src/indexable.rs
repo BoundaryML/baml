@@ -1,189 +1,218 @@
+//! The VM has 3 different "indexable" pools.
+//!
+//! One of them is the object pool, the other one is the globals pool, and
+//! finally we have the evaluation stack (not a "pool" but behaves the same).
+//!
+//! Problem is that different bytecode instructions can contain parameters that
+//! point to one of these 3 "pools" or vectors. If instructions used usize to
+//! index into the pools, then it would be very easy to mistakenly use a
+//! "global" index to access the "objects" vec and viceversa.
+//!
+//! This module provides a vector wrapper that needs specific types to index
+//! into it, thus solving the problem mentioned above at compile time.
+
+use std::marker::PhantomData;
+
 use baml_types::BamlMedia;
 
 use crate::{types::Type, InternalError, Object, ObjectType, Value};
 
-macro_rules! impl_indexable_wrapper {
-    ($name:ident, $value_type:ident, $index_name:ident) => {
-        #[derive(Clone, Default)]
-        #[repr(transparent)]
-        pub struct $name(pub(crate) Vec<$value_type>);
+// Marker types for different pool kinds
 
-        // forward debug implementation
-        impl std::fmt::Debug for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                std::fmt::Debug::fmt(&self.0, f)
-            }
-        }
+/// Evaluation stack index type.
+#[derive(Copy, Clone, Debug)]
+pub struct StackKind;
 
-        // deref(mut) for vec
-        impl std::ops::Deref for $name {
-            type Target = Vec<$value_type>;
+/// Global pool index type.
+#[derive(Copy, Clone, Debug)]
+pub struct GlobalKind;
 
-            fn deref(&self) -> &Self::Target {
-                &self.0
-            }
-        }
+/// Object pool index type.
+#[derive(Copy, Clone, Debug)]
+pub struct ObjectKind;
 
-        impl std::ops::DerefMut for $name {
-            fn deref_mut(&mut self) -> &mut Self::Target {
-                &mut self.0
-            }
-        }
+/// Generic index type that forces a subtype during compilation.
+#[derive(Clone, Copy, Debug, Eq)]
+pub struct Index<K>(pub(crate) usize, PhantomData<K>);
 
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-        pub struct $index_name(pub(crate) usize);
+impl<K> Index<K> {
+    /// Create an index from a raw usize value.
+    pub fn from_raw(raw: usize) -> Self {
+        Self(raw, PhantomData)
+    }
 
-        impl $name {
-            /// Create a new wrapper from a Vec.
-            pub fn from_vec(vec: Vec<$value_type>) -> Self {
-                Self(vec)
-            }
-        }
+    /// Get the raw usize value.
+    pub fn raw(self) -> usize {
+        self.0
+    }
 
-        impl $index_name {
-            /// Pinky promise that the given index is safe to interpret.
-            pub fn from_raw(raw: usize) -> Self {
-                Self(raw)
-            }
-        }
+    /// Helper method to convert [`Index<K>`] range bounds to usize ranges.
+    fn usize_range<R>(range: R) -> (std::ops::Bound<usize>, std::ops::Bound<usize>)
+    where
+        R: std::ops::RangeBounds<Index<K>>,
+    {
+        use std::ops::Bound::*;
 
-        impl std::ops::Add<usize> for $index_name {
-            type Output = Self;
-            fn add(self, rhs: usize) -> Self {
-                Self(self.0 + rhs)
-            }
-        }
+        let start = match range.start_bound() {
+            Unbounded => Unbounded,
+            Included(idx) => Included(idx.0),
+            Excluded(idx) => Excluded(idx.0),
+        };
 
-        impl std::fmt::Display for $index_name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", self.0)
-            }
-        }
+        let end = match range.end_bound() {
+            Unbounded => Unbounded,
+            Included(idx) => Included(idx.0),
+            Excluded(idx) => Excluded(idx.0),
+        };
 
-        // index(mut)
-        impl std::ops::Index<$index_name> for $name {
-            type Output = $value_type;
-
-            fn index(&self, index: $index_name) -> &Self::Output {
-                &self.0[index.0]
-            }
-        }
-
-        impl std::ops::IndexMut<$index_name> for $name {
-            fn index_mut(&mut self, index: $index_name) -> &mut Self::Output {
-                &mut self.0[index.0]
-            }
-        }
-
-        // index(mut), range.
-        // All methods are marked inline so that the match expression is simplified through
-        // monomorphization.
-        impl<R> std::ops::Index<R> for $name
-        where
-            R: std::ops::RangeBounds<$index_name>,
-        {
-            type Output = [$value_type];
-
-            #[inline]
-            fn index(&self, r: R) -> &Self::Output {
-                let start = r.start_bound().map(|i| i.0);
-                let end = r.end_bound().map(|i| i.0);
-
-                use std::ops::Bound::*;
-                match (start, end) {
-                    (Unbounded, Unbounded) => &self.0,
-                    (Unbounded, Included(end)) => &self.0[..=end],
-                    (Unbounded, Excluded(end)) => &self.0[..end],
-                    (Included(start), Unbounded) => &self.0[start..],
-                    (Included(start), Included(end)) => &self.0[start..=end],
-                    (Included(start), Excluded(end)) => &self.0[start..end],
-                    (Excluded(start), Unbounded) => &self.0[start + 1..],
-                    (Excluded(start), Included(end)) => &self.0[start + 1..=end],
-                    (Excluded(start), Excluded(end)) => &self.0[start + 1..end],
-                }
-            }
-        }
-
-        impl<R> std::ops::IndexMut<R> for $name
-        where
-            R: std::ops::RangeBounds<$index_name>,
-        {
-            #[inline]
-            fn index_mut(&mut self, r: R) -> &mut Self::Output {
-                let start = r.start_bound().map(|i| i.0);
-                let end = r.end_bound().map(|i| i.0);
-
-                use std::ops::Bound::*;
-                match (start, end) {
-                    (Unbounded, Unbounded) => &mut self.0,
-                    (Unbounded, Included(end)) => &mut self.0[..=end],
-                    (Unbounded, Excluded(end)) => &mut self.0[..end],
-                    (Included(start), Unbounded) => &mut self.0[start..],
-                    (Included(start), Included(end)) => &mut self.0[start..=end],
-                    (Included(start), Excluded(end)) => &mut self.0[start..end],
-                    (Excluded(start), Unbounded) => &mut self.0[start + 1..],
-                    (Excluded(start), Included(end)) => &mut self.0[start + 1..=end],
-                    (Excluded(start), Excluded(end)) => &mut self.0[start + 1..end],
-                }
-            }
-        }
-
-        impl $name {
-            #[inline]
-            pub fn drain<R>(&mut self, range: R) -> std::vec::Drain<'_, $value_type>
-            where
-                R: std::ops::RangeBounds<$index_name>,
-            {
-                let start = range.start_bound().map(|i| i.0);
-                let end = range.end_bound().map(|i| i.0);
-                use std::ops::Bound::*;
-                match (start, end) {
-                    (Unbounded, Unbounded) => self.0.drain(..),
-                    (Unbounded, Included(end)) => self.0.drain(..=end),
-                    (Unbounded, Excluded(end)) => self.0.drain(..end),
-                    (Included(start), Unbounded) => self.0.drain(start..),
-                    (Included(start), Included(end)) => self.0.drain(start..=end),
-                    (Included(start), Excluded(end)) => self.0.drain(start..end),
-                    (Excluded(start), Unbounded) => self.0.drain(start + 1..),
-                    (Excluded(start), Included(end)) => self.0.drain(start + 1..=end),
-                    (Excluded(start), Excluded(end)) => self.0.drain(start + 1..end),
-                }
-            }
-        }
-
-        // IntoIterator since deref isn't enough
-        impl std::iter::IntoIterator for $name {
-            type Item = $value_type;
-            type IntoIter = <Vec<$value_type> as IntoIterator>::IntoIter;
-
-            fn into_iter(self) -> Self::IntoIter {
-                self.0.into_iter()
-            }
-        }
-
-        impl<'a> std::iter::IntoIterator for &'a $name {
-            type Item = &'a $value_type;
-            type IntoIter = std::slice::Iter<'a, $value_type>;
-
-            fn into_iter(self) -> Self::IntoIter {
-                self.0.iter()
-            }
-        }
-
-        impl<'a> std::iter::IntoIterator for &'a mut $name {
-            type Item = &'a mut $value_type;
-            type IntoIter = std::slice::IterMut<'a, $value_type>;
-
-            fn into_iter(self) -> Self::IntoIter {
-                self.0.iter_mut()
-            }
-        }
-    };
+        (start, end)
+    }
 }
 
-impl_indexable_wrapper!(EvalStack, Value, StackIndex);
-impl_indexable_wrapper!(GlobalPool, Value, GlobalIndex);
-impl_indexable_wrapper!(ObjectPool, Object, ObjectIndex);
+impl<K> std::ops::Add<usize> for Index<K> {
+    type Output = Self;
+    fn add(self, rhs: usize) -> Self {
+        Self(self.0 + rhs, PhantomData)
+    }
+}
+
+impl<K> PartialEq for Index<K> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<K> std::hash::Hash for Index<K> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<K> std::fmt::Display for Index<K> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.0, f)
+    }
+}
+
+/// Generic pool type that uses a concrete [`Index`] for indexing.
+#[derive(Clone, Default)]
+#[repr(transparent)]
+pub struct Pool<T, K>(pub(crate) Vec<T>, PhantomData<K>);
+
+impl<T, K> Pool<T, K> {
+    /// Creates a new empty vec.
+    pub fn new() -> Self {
+        Self(Vec::new(), PhantomData)
+    }
+
+    /// Create a new pool from a [`Vec`].
+    pub fn from_vec(vec: Vec<T>) -> Self {
+        Self(vec, PhantomData)
+    }
+}
+
+impl<T, K> std::fmt::Debug for Pool<T, K>
+where
+    T: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl<T, K> std::ops::Deref for Pool<T, K> {
+    type Target = Vec<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T, K> std::ops::DerefMut for Pool<T, K> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T, K> std::ops::Index<Index<K>> for Pool<T, K> {
+    type Output = T;
+
+    fn index(&self, index: Index<K>) -> &Self::Output {
+        &self.0[index.0]
+    }
+}
+
+impl<T, K> std::ops::IndexMut<Index<K>> for Pool<T, K> {
+    fn index_mut(&mut self, index: Index<K>) -> &mut Self::Output {
+        &mut self.0[index.0]
+    }
+}
+
+impl<T, K, R> std::ops::Index<R> for Pool<T, K>
+where
+    R: std::ops::RangeBounds<Index<K>>,
+{
+    type Output = [T];
+
+    fn index(&self, range: R) -> &Self::Output {
+        self.0.index(Index::usize_range(range))
+    }
+}
+
+impl<T, K, R> std::ops::IndexMut<R> for Pool<T, K>
+where
+    R: std::ops::RangeBounds<Index<K>>,
+{
+    fn index_mut(&mut self, range: R) -> &mut Self::Output {
+        self.0.index_mut(Index::usize_range(range))
+    }
+}
+
+impl<T, K> Pool<T, K> {
+    pub fn drain<R>(&mut self, range: R) -> std::vec::Drain<'_, T>
+    where
+        R: std::ops::RangeBounds<Index<K>>,
+    {
+        self.0.drain(Index::usize_range(range))
+    }
+}
+
+impl<T, K> std::iter::IntoIterator for Pool<T, K> {
+    type Item = T;
+    type IntoIter = <Vec<T> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a, T, K> std::iter::IntoIterator for &'a Pool<T, K> {
+    type Item = &'a T;
+    type IntoIter = std::slice::Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl<'a, T, K> std::iter::IntoIterator for &'a mut Pool<T, K> {
+    type Item = &'a mut T;
+    type IntoIter = std::slice::IterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter_mut()
+    }
+}
+
+// Type aliases for specific pools and indices
+
+pub type EvalStack = Pool<Value, StackKind>;
+pub type GlobalPool = Pool<Value, GlobalKind>;
+pub type ObjectPool = Pool<Object, ObjectKind>;
+
+pub type StackIndex = Index<StackKind>;
+pub type GlobalIndex = Index<GlobalKind>;
+pub type ObjectIndex = Index<ObjectKind>;
 
 impl ObjectPool {
     /// If `value` is an object, returns a reference to the object.
@@ -223,8 +252,8 @@ impl ObjectPool {
         Ok(media)
     }
 
-    /// Inspects the type of a value, including the [`ObjectType`] if the object reference is
-    /// valid.
+    /// Inspects the type of a value, including the [`ObjectType`] if the object
+    /// reference is valid.
     pub fn type_of(&self, value: &Value) -> Type {
         Type::of(value, |index| ObjectType::of(&self[index]))
     }
@@ -248,6 +277,6 @@ impl EvalStack {
         self.len()
             .checked_sub(index_from_top + 1)
             .ok_or(InternalError::NotEnoughItemsOnStack(index_from_top))
-            .map(StackIndex)
+            .map(StackIndex::from_raw)
     }
 }

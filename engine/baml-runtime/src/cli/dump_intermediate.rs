@@ -124,7 +124,7 @@ impl DumpIntermediateArgs {
                 "{}",
                 baml_vm::debug::display_bytecode(
                     function,
-                    &EvalStack::default(),
+                    &EvalStack::new(),
                     &program.objects,
                     &program.globals,
                     true

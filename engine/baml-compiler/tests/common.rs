@@ -34,13 +34,7 @@ pub fn assert_compiles(input: Program) -> anyhow::Result<()> {
 
         eprintln!(
             "---- fn {function_name}() ----\n{}",
-            baml_vm::debug::display_bytecode(
-                function,
-                &EvalStack::default(),
-                &objects,
-                &globals,
-                true
-            )
+            baml_vm::debug::display_bytecode(function, &EvalStack::new(), &objects, &globals, true)
         );
 
         assert_eq!(

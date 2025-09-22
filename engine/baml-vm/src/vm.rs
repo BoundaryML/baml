@@ -227,8 +227,8 @@ impl Vm {
     ) -> Self {
         Self {
             frames: Vec::new(),
-            stack: EvalStack(Vec::new()),
-            runtime_allocs_offset: ObjectIndex(objects.len()),
+            stack: EvalStack::new(),
+            runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
             objects,
             globals,
         }
@@ -253,7 +253,7 @@ impl Vm {
         self.frames.push(Frame {
             function,
             instruction_ptr: 0,
-            locals_offset: StackIndex(0),
+            locals_offset: StackIndex::from_raw(0),
         });
     }
 
@@ -494,7 +494,7 @@ impl Vm {
                 }
 
                 Instruction::Pop(n) => {
-                    let drain_range = StackIndex(self.stack.len() - n)..;
+                    let drain_range = StackIndex::from_raw(self.stack.len() - n)..;
                     self.stack.drain(drain_range);
                 }
 
@@ -508,7 +508,7 @@ impl Vm {
                     let value = self.stack.ensure_pop()?;
 
                     // Pop the last `n` locals from the stack.
-                    let drain_range = StackIndex(self.stack.len() - n)..;
+                    let drain_range = StackIndex::from_raw(self.stack.len() - n)..;
                     self.stack.drain(drain_range);
 
                     // Push the value back on top of the stack.
@@ -747,7 +747,7 @@ impl Vm {
 
                 Instruction::AllocArray(size) => {
                     // Pop all the elements from the stack and create an array.
-                    let drain_range = StackIndex(self.stack.len() - size)..;
+                    let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
                     let array = self.stack.drain(drain_range).collect();
 
                     // Allocate it on the heap.
@@ -755,7 +755,7 @@ impl Vm {
 
                     // Push the array object on top of the stack.
                     self.stack
-                        .push(Value::Object(ObjectIndex(self.objects.len() - 1)));
+                        .push(Value::Object(ObjectIndex::from_raw(self.objects.len() - 1)));
 
                     // objects.push() above might've reallocated the vector so
                     // borrow checker complains. Restore the reference.
@@ -971,7 +971,7 @@ impl Vm {
 
                     // Push the instance object on top of the stack.
                     self.stack
-                        .push(Value::Object(ObjectIndex(self.objects.len() - 1)));
+                        .push(Value::Object(ObjectIndex::from_raw(self.objects.len() - 1)));
 
                     // borrow check.
                     function = self.objects[frame.function].as_function()?;
@@ -1164,7 +1164,8 @@ impl Vm {
                         FunctionKind::Native(func) => {
                             // NOTE: (perf) could use drain(..) instead, or even maintain the arguments
                             // reference in the stack, using `swap` to insert the result.
-                            let args = self.stack[StackIndex(locals_offset.0 + 1)..].to_owned();
+                            let args =
+                                self.stack[StackIndex::from_raw(locals_offset.0 + 1)..].to_owned();
 
                             // Run Rust native function.
                             let result = func(self, &args)?;
