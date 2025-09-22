@@ -1,7 +1,4 @@
-use serde::{
-    de::{self, Deserializer},
-    Deserialize, Serialize,
-};
+use serde::{de::Deserializer, Deserialize, Serialize};
 
 pub type CompletionResponse = ChatCompletionGeneric<CompletionChoice>;
 pub type ChatCompletionResponse = ChatCompletionGeneric<ChatCompletionChoice>;
@@ -149,8 +146,8 @@ pub struct ContentPart {
 pub struct ResponsesApiStreamResponse {
     pub id: String,
     pub object: String,
-    #[serde(deserialize_with = "deserialize_float_to_u32_required")]
-    pub created_at: u32,
+    #[serde(default, deserialize_with = "deserialize_float_to_u32")]
+    pub created_at: Option<u32>,
     pub status: String,
     pub model: String,
     pub output: Vec<ResponseOutput>,
@@ -222,13 +219,6 @@ where
         Some(FloatOrInt::Float(f)) => Ok(Some(f.floor() as u32)),
         None => Ok(None),
     }
-}
-
-fn deserialize_float_to_u32_required<'de, D>(deserializer: D) -> Result<u32, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    deserialize_float_to_u32(deserializer)?.ok_or_else(|| de::Error::missing_field("created_at"))
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
