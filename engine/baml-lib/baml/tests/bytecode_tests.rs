@@ -89,7 +89,7 @@ fn get_bytecode_output(content: &str) -> Result<String, String> {
                         output.push_str(&format!("Function: {}\n", func.name));
                         output.push_str(&baml_vm::debug::display_bytecode(
                             func,
-                            &baml_vm::EvalStack::default(),
+                            &baml_vm::EvalStack::new(),
                             &objects,
                             &globals,
                             false, // no colors for golden tests
