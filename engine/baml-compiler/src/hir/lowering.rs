@@ -426,6 +426,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
             iterator,
             body,
             span,
+            has_let: _,
             annotations: _,
         }) => {
             // Lower for loop to HIR

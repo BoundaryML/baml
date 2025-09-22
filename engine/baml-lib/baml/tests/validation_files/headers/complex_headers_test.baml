@@ -6,7 +6,7 @@ function ComplexHeaderTest() -> string {
     let result = "";
 
     ## Processing Loop
-    for (item in items) {
+    for (let item in items) {
 
         # Markdown Header tester
         let hello = "Hello";
@@ -50,7 +50,7 @@ function ForLoopWithHeaders() -> int {
     let result = 0;
 
     ## Main Loop
-    for (item in items) {
+    for (let item in items) {
         ### Item Processing
         let processed = item * 2;
 

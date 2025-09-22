@@ -239,7 +239,15 @@ fn parse_iterator_for_loop(
 
     let mut header = token.into_inner();
 
-    let identifier = parse_identifier(header.next()?, diagnostics);
+    // Support optional `let` before the identifier
+    let first = header.next()?;
+    let (has_let, ident_pair) = if first.as_rule() == Rule::LET_KEYWORD {
+        (true, header.next()?)
+    } else {
+        (false, first)
+    };
+
+    let identifier = parse_identifier(ident_pair, diagnostics);
     let iterator = parse_block_aware_tail_expression(header.next()?, diagnostics)?;
 
     Some(ForLoopStmt {
@@ -247,6 +255,7 @@ fn parse_iterator_for_loop(
         iterator,
         body,
         span,
+        has_let,
         annotations: vec![],
     })
 }

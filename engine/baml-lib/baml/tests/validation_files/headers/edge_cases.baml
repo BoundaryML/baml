@@ -122,7 +122,7 @@ function HeadersAroundExpressions() -> string {
     ### After If
 
     ## Before For
-    for (i in [1, 2, 3]) {
+    for (let i in [1, 2, 3]) {
         ### Inside For
         i
     }

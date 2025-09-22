@@ -87,7 +87,7 @@ function IterativeFibonacci(n: int) -> int {
 
 function SumArray(arr: int[]) -> int {
     let sum = 0;
-    for (a in arr) {
+    for (let a in arr) {
         sum += a;
     }
     sum

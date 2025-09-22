@@ -4,7 +4,7 @@ function ForLoopWithHeaders() -> int {
     let result = 0;
 
     ## Main Loop
-    for (item in items) {
+    for (let item in items) {
         ### Item Processing
         let processed = item * 2;
 

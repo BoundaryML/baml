@@ -52,13 +52,13 @@ function foo() -> int {
 
    // iter-for, trailing identifier
 
-   for a in as {}
+   for let a in as {}
 
-   for (a in as {}
+   for (let a in as {}
 
-   for a in as) {}
+   for let a in as) {}
 
-   for (a in as) {}
+   for (let a in as) {}
 
 }
 
@@ -156,17 +156,17 @@ function foo() -> int {
 //   -->  parens.baml:55
 //    | 
 // 54 | 
-// 55 |    for a in as {}
+// 55 |    for let a in as {}
 //    | 
 // error: Error validating: expected closing parentheses for this opening parentheses
 //   -->  parens.baml:57
 //    | 
 // 56 | 
-// 57 |    for (a in as {}
+// 57 |    for (let a in as {}
 //    | 
 // error: Error validating: expected opening parentheses for this closing parentheses
 //   -->  parens.baml:59
 //    | 
 // 58 | 
-// 59 |    for a in as) {}
+// 59 |    for let a in as) {}
 //    | 

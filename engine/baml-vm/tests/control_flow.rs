@@ -244,7 +244,7 @@ fn for_loop_sum() -> anyhow::Result<()> {
             function Sum(xs: int[]) -> int {
                 let result = 0;
 
-                for (x in xs) {
+                for (let x in xs) {
                     result += x;
                 }
 
@@ -267,7 +267,7 @@ fn for_loop_with_break() -> anyhow::Result<()> {
             function ForWithBreak(xs: int[]) -> int {
                 let result = 0;
 
-                for (x in xs) {
+                for (let x in xs) {
                     if (x > 10) {
                         break;
                     }
@@ -293,7 +293,7 @@ fn for_loop_with_continue() -> anyhow::Result<()> {
             function ForWithContinue(xs: int[]) -> int {
                 let result = 0;
 
-                for (x in xs) {
+                for (let x in xs) {
                     if (x > 10) {
                         continue;
                     }
@@ -320,8 +320,8 @@ fn for_loop_nested() -> anyhow::Result<()> {
 
                 let result =  0;
 
-                for (a in arr_a) {
-                    for (b in arr_b) {
+                for (let a in arr_a) {
+                    for (let b in arr_b) {
                         result += a * b;
                     }
                 }

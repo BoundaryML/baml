@@ -1,7 +1,7 @@
 function Sum(xs: int[]) -> int {
 	let result = 0;
 
-	for (x in xs) {
+	for (let x in xs) {
 		result += x;
 	}
 
@@ -11,7 +11,7 @@ function Sum(xs: int[]) -> int {
 function ForWithBreak(xs: int[]) -> int {
 	let result = 0;
 
-	for (x in xs) {
+	for (let x in xs) {
 		if (x > 10) {
 			break;
 		}
@@ -24,7 +24,7 @@ function ForWithBreak(xs: int[]) -> int {
 function ForWithContinue(xs: int[]) -> int {
 	let result = 0;
 
-	for (x in xs) {
+	for (let x in xs) {
 		if (x > 10) {
 			continue;
 		}
@@ -38,8 +38,8 @@ function NestedFor(as: int[], bs: int[]) -> int {
 
 	let result = 0;
 
-	for (a in as) {
-		for (b in bs) {
+	for (let a in as) {
+		for (let b in bs) {
 			result += a * b;
 		}
 	}

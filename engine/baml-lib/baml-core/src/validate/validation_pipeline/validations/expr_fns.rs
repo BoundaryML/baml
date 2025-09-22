@@ -124,8 +124,17 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
         scope.extend(taken_names.iter().cloned());
         expr_fn.expr_fn().body.stmts.iter().for_each(|s| {
             validate_stmt(ctx, s, &scope);
-            if matches!(s, Stmt::ForLoop(_) | Stmt::Let(_)) {
-                scope.insert(s.identifier().name().to_string());
+            match s {
+                Stmt::Let(_) => {
+                    scope.insert(s.identifier().name().to_string());
+                }
+                Stmt::ForLoop(fl) => {
+                    // Only treat as declaration if header included `let`
+                    if fl.has_let {
+                        scope.insert(fl.identifier.name().to_string());
+                    }
+                }
+                _ => {}
             }
         });
         if let Some(expr) = &expr_fn.expr_fn().body.expr {
@@ -172,9 +181,17 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
             // First validate the iterator expression
             validate_expression(ctx, &stmt.iterator, scope);
 
-            // Create a new scope that includes the loop variable
+            // Create loop scope. If `let` is present, introduce the loop variable.
+            // Otherwise, require it to already exist in the outer scope.
             let mut loop_scope = scope.clone();
-            loop_scope.insert(stmt.identifier.name().to_string());
+            if stmt.has_let {
+                loop_scope.insert(stmt.identifier.name().to_string());
+            } else if !scope.contains(&stmt.identifier.name().to_string()) {
+                ctx.push_error(DatamodelError::new_anyhow_error(
+                    anyhow::anyhow!("Unknown variable {}", &stmt.identifier.to_string()),
+                    stmt.identifier.span().clone(),
+                ));
+            }
 
             let body = &stmt.body;
             validate_expr_block(ctx, body, loop_scope);
@@ -250,8 +267,16 @@ fn validate_expr_block(
 ) {
     for stmt in &body.stmts {
         validate_stmt(ctx, stmt, &scope_for_block);
-        if matches!(stmt, Stmt::ForLoop(_) | Stmt::Let(_)) {
-            scope_for_block.insert(stmt.identifier().name().to_string());
+        match stmt {
+            Stmt::Let(_) => {
+                scope_for_block.insert(stmt.identifier().name().to_string());
+            }
+            Stmt::ForLoop(fl) => {
+                if fl.has_let {
+                    scope_for_block.insert(fl.identifier.name().to_string());
+                }
+            }
+            _ => {}
         }
     }
 

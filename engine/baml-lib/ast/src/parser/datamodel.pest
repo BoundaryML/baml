@@ -442,7 +442,9 @@ while_loop = { "while" ~ condition_and_block }
 //   ExtractResume(x)
 // }
 for_loop = { "for" ~ openParen? ~ (iterator_for_loop | c_for_loop) ~ closeParen? ~ expr_block }
-iterator_for_loop = { identifier ~ "in" ~ block_aware_tail_expression }
+// Allow optional `let` before the loop variable in iterator-style for loops
+LET_KEYWORD = { "let" }
+iterator_for_loop = { (LET_KEYWORD ~ identifier | identifier) ~ "in" ~ block_aware_tail_expression }
 c_for_loop = { c_for_init_stmt? ~ ";" ~ expression? ~ ";" ~ c_for_after_stmt?  }
 // NOTE: let_expr ... list copied from `stmt` rule, discarding nonsensical stmts
 c_for_init_stmt = { let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app }

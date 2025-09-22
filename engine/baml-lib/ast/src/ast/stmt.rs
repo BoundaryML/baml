@@ -58,6 +58,8 @@ pub struct ForLoopStmt {
     pub iterator: Expression,
     pub body: ExpressionBlock,
     pub span: Span,
+    // Whether the source had an explicit `let` in the loop header: `for (let x in xs)`
+    pub has_let: bool,
     pub annotations: Vec<std::sync::Arc<Header>>,
 }
 
@@ -150,7 +152,13 @@ impl fmt::Display for Stmt {
                     write!(f, "let {} = {}", stmt.identifier, stmt.expr)
                 }
             }
-            Stmt::ForLoop(stmt) => write!(f, "for {} in {}", stmt.identifier, stmt.iterator),
+            Stmt::ForLoop(stmt) => {
+                if stmt.has_let {
+                    write!(f, "for let {} in {}", stmt.identifier, stmt.iterator)
+                } else {
+                    write!(f, "for {} in {}", stmt.identifier, stmt.iterator)
+                }
+            }
             Stmt::CForLoop(stmt) => {
                 f.write_str("for (")?;
 
