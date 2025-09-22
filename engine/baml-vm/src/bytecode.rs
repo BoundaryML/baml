@@ -1,9 +1,6 @@
 //! Instruction set and bytecode representation.
 
-use crate::{
-    vm::{indexable::GlobalIndex, Value},
-    ObjectIndex,
-};
+use crate::{types::Value, GlobalIndex, ObjectIndex};
 
 /// Individual bytecode instruction.
 ///

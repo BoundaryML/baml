@@ -10,14 +10,18 @@
 //!
 //! The instructions that the VM runs are defined in [`Instruction`] enum.
 
-mod bytecode;
+pub mod bytecode;
 pub mod debug;
+pub mod errors;
+pub mod indexable;
 pub mod native;
-pub(crate) mod vm;
+pub mod types;
+pub mod vm;
 
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, UnaryOp};
-pub use vm::{
-    indexable::{EvalStack, GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex},
-    BamlVmProgram, Class, Enum, Frame, Function, FunctionKind, FutureKind, Instance, InternalError,
-    Object, ObjectType, RuntimeError, Value, Vm, VmError, VmExecState,
+pub use errors::{InternalError, RuntimeError, VmError};
+pub use indexable::{EvalStack, GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
+pub use types::{
+    Class, Enum, Function, FunctionKind, Future, FutureKind, Object, ObjectType, Value, Variant,
 };
+pub use vm::{BamlVmProgram, Frame, Vm, VmExecState};

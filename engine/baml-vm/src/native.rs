@@ -5,8 +5,9 @@
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
 
 use crate::{
-    vm::{InternalError, Object, ObjectType, Vm, VmError},
-    RuntimeError, Value,
+    errors::{InternalError, RuntimeError, VmError},
+    types::{Object, ObjectType, Value},
+    vm::Vm,
 };
 
 impl Vm {

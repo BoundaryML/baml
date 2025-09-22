@@ -1,7 +1,6 @@
 use baml_types::BamlMedia;
 
-use super::{InternalError, ObjectType, Type};
-use crate::{Object, Value};
+use crate::{types::Type, InternalError, Object, ObjectType, Value};
 
 macro_rules! impl_indexable_wrapper {
     ($name:ident, $value_type:ident, $index_name:ident) => {
