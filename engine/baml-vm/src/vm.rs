@@ -4,13 +4,13 @@ use baml_types::{BamlMap, BamlMedia};
 
 use crate::{
     bytecode::{BinOp, CmpOp, Instruction},
-    errors::{InternalError, RuntimeError, VmError},
+    errors::{ErrorLocation, InternalError, RuntimeError, VmError},
     indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex},
     types::{
         FunctionKind, FunctionType, Future, FutureKind, FutureType, Instance, Object, ObjectType,
         PendingFuture, Type, Value, Variant,
     },
-    UnaryOp,
+    StackTrace, UnaryOp,
 };
 
 /// Max call stack size.
@@ -349,6 +349,44 @@ impl Vm {
         Value::Object(self.objects.insert(Object::Media(media)))
     }
 
+    /// Builds a stack trace for the given error.
+    ///
+    /// The error is assumed to have happened wherever the instruction pointer
+    /// was left at.
+    ///
+    /// TODO: Not a clean API for the caller, VM should ideally return some kind
+    /// of error struct that contains the error and trace and this would not
+    /// be needed. That requires some refactoring though.
+    pub fn stack_trace(&self, error: VmError) -> StackTrace {
+        let trace = self
+            .frames
+            .iter()
+            .map(|frame| {
+                let function = self.objects[frame.function].as_function()?;
+
+                // VM increments instruction pointer as soon as it reads the
+                // instruction. So in reality the error ocurred on the previous
+                // instruction. The saturating sub is just in case the code has
+                // a bug somewhere.
+                let last_executed_instruction = frame.instruction_ptr.saturating_sub(1);
+
+                Ok(ErrorLocation {
+                    function_name: function.name.to_owned(),
+                    function_span: function.span.to_owned(),
+                    error_line: function.bytecode.source_lines[last_executed_instruction as usize],
+                })
+            })
+            .collect::<Result<Vec<_>, VmError>>()
+            .map_err(|e| {
+                RuntimeError::Other(format!(
+                    "internal error: Vm::stack_trace() failed to build stack trace: {e}\n\noriginal error: {error}"
+                ))
+            })
+            .unwrap_or_default();
+
+        StackTrace { error, trace }
+    }
+
     /// Main VM execution loop.
     ///
     /// Each "cycle" (loop iteration) executes a single instruction.
@@ -380,16 +418,16 @@ impl Vm {
             // Current instruction pointer.
             let instruction_ptr = frame.instruction_ptr;
 
+            // Move the frame's IP to the next instruction. We'll deal with
+            // jump offsets later.
+            frame.instruction_ptr += 1;
+
             // NOTE: `core::intrinsics::unlikely` is only available on nightly.
             // This branch is a big annoyance for small functions (like pushing the frame)
             // and gets smaller the bigger the function due to branch (mis)prediction.
             if instruction_ptr < 0 {
                 return Err(InternalError::NegativeInstructionPtr(instruction_ptr).into());
             }
-
-            // Move the frame's IP to the next instruction. We'll deal with
-            // jump offsets later.
-            frame.instruction_ptr += 1;
 
             // Runtime debugging information.
             // #[cfg(debug_assertions)]
@@ -1069,7 +1107,7 @@ impl Vm {
                         args: future_args,
                         kind: match callable_future.kind {
                             FunctionKind::Llm => FutureKind::Llm,
-                            FunctionKind::Future => FutureKind::FetchAs,
+                            FunctionKind::Future => FutureKind::Net,
                             _ => unreachable!(),
                         },
                     };

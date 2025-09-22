@@ -78,6 +78,15 @@ impl Span {
         let fake_source = ("fake-file.baml".into(), "fake contents").into();
         Span::empty(fake_source)
     }
+
+    /// Fake file for stack traces in case our functions are bugged.
+    pub fn fake_builtin_baml() -> Span {
+        Span::empty(("builtin.baml".into(), "<builtin>").into())
+    }
+
+    pub fn file_name(&self) -> String {
+        self.file.path().to_string()
+    }
 }
 
 impl From<(SourceFile, pest::Span<'_>)> for Span {

@@ -50,6 +50,9 @@ pub struct Function {
     ///
     /// This is basically debug info, VM doesn't need it all to run.
     pub locals_in_scope: Vec<Vec<String>>,
+
+    /// Span of the function as computed by the parser.
+    pub span: internal_baml_diagnostics::Span,
 }
 
 impl std::fmt::Display for Function {
@@ -125,7 +128,7 @@ impl std::fmt::Display for Variant {
 /// Runtime values.
 ///
 /// This struct should not contain allocated objects and should be [`Copy`].
-/// Read the documentation of [`Vm::objects`] to understand how allocated
+/// Read the documentation of [`crate::vm::Vm::objects`] to understand how allocated
 /// objects work in the virtual machine.
 ///
 /// # On `Hash`
@@ -140,7 +143,7 @@ pub enum Value {
     Float(f64),
     Bool(bool),
 
-    /// Index into the [`Vm::objects`] vec.
+    /// Index into the [`crate::vm::Vm::objects`] vec.
     ///
     /// Strings are also objects, don't add `Value::String`.
     Object(ObjectIndex),
@@ -160,12 +163,12 @@ impl std::fmt::Display for Value {
 
 /// Any data that the Baml program can reference and is allocated on heap.
 ///
-/// [`Vm`] should own objects and give references to them to the running Baml
-/// program. Internally, in the [`Vm`] code, note that by reference I don't mean
+/// [`crate::vm::Vm`] should own objects and give references to them to the running Baml
+/// program. Internally, in the [`crate::vm::Vm`] code, note that by reference I don't mean
 /// a Rust reference (& or &mut), but rather a [`usize`] that is used to index
-/// into the [`Vm::objects`] pool.
+/// into the [`crate::vm::Vm::objects`] pool.
 ///
-/// Read [`Vm::objects`] for more information.
+/// Read [`crate::vm::Vm::objects`] for more information.
 #[derive(Clone, Debug)]
 pub enum Object {
     /// Function object.
@@ -186,11 +189,12 @@ pub enum Object {
     /// Heap allocated string.
     ///
     /// TODO: Add [`Vm::strings`] interner to avoid allocating duplicates.
-    /// In Rust it's not easy to implement because [`Vm::objects`] owns the
-    /// strings allocated on heap, but the interner would be something like
-    /// HashSet<&str> and it would store pointers to the strings. That reference
-    /// will cause some lifetime issues because the VM would have pointers to
-    /// itself, so we'd have to figure how to implement it otherwise.
+    /// In Rust it's not easy to implement because [`crate::vm::Vm::objects`]
+    /// owns the strings allocated on heap, but the interner would be something
+    /// like HashSet<&str> and it would store pointers to the strings. That
+    /// reference will cause some lifetime issues because the VM would have
+    /// pointers to itself, so we'd have to figure how to implement it
+    /// otherwise.
     String(String),
 
     /// List of values.
@@ -211,7 +215,7 @@ pub enum Object {
 impl Object {
     /// Helper to unwrap an [`Object::Function`].
     ///
-    /// Used to deal with some borrow checker issues in the [`Vm::exec`]
+    /// Used to deal with some borrow checker issues in the [`crate::vm::Vm::exec`]
     /// function.
     #[inline]
     pub fn as_function(&self) -> Result<&Function, VmError> {
@@ -275,7 +279,7 @@ pub enum Future {
 #[derive(Clone, Debug)]
 pub enum FutureKind {
     Llm,
-    FetchAs,
+    Net,
 }
 
 #[derive(Clone, Debug)]

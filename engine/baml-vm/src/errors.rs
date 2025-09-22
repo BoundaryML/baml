@@ -6,7 +6,7 @@ use crate::{
 /// Bug in the VM or somehow invalid source code got compiled and executed.
 ///
 /// If the VM throws this it's either a bug in the compiler or in the VM itself.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum InternalError {
     /// The number of arguments passed to a function doesn't match the function
     /// arity.
@@ -51,7 +51,7 @@ pub enum InternalError {
 ///
 /// Either logic errors in the user's source code or bugs in our compiler/VM
 /// stack.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum RuntimeError {
     /// Ah yes, classic stack overflow.
     StackOverflow,
@@ -73,15 +73,9 @@ pub enum RuntimeError {
 }
 
 /// Any kind of virtual machine error.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum VmError {
     RuntimeError(RuntimeError),
-}
-
-impl From<InternalError> for VmError {
-    fn from(error: InternalError) -> Self {
-        VmError::RuntimeError(RuntimeError::InternalError(error))
-    }
 }
 
 impl From<RuntimeError> for VmError {
@@ -90,12 +84,52 @@ impl From<RuntimeError> for VmError {
     }
 }
 
+impl From<InternalError> for VmError {
+    fn from(error: InternalError) -> Self {
+        VmError::RuntimeError(RuntimeError::InternalError(error))
+    }
+}
+
+impl std::error::Error for VmError {}
+
 impl std::fmt::Display for VmError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Figure out something nicer here.
         match self {
             VmError::RuntimeError(error) => write!(f, "{error:?}"),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ErrorLocation {
+    pub function_name: String,
+    pub function_span: internal_baml_diagnostics::Span,
+    pub error_line: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct StackTrace {
+    pub error: VmError,
+    pub trace: Vec<ErrorLocation>,
+}
+
+impl std::fmt::Display for StackTrace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Figure out something nicer here.
+        f.write_str("Traceback (most recent call last):\n")?;
+
+        for location in &self.trace {
+            writeln!(
+                f,
+                "  File \"{}\", line {}, in {}",
+                location.function_span.file_name(),
+                location.error_line,
+                location.function_name
+            )?;
+        }
+
+        writeln!(f, "{}", self.error)
     }
 }
 
@@ -142,6 +176,6 @@ impl std::fmt::Display for InternalError {
     }
 }
 
-impl std::error::Error for VmError {}
+impl std::error::Error for StackTrace {}
 
 impl std::error::Error for InternalError {}

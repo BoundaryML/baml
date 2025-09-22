@@ -1,10 +1,6 @@
 //! VM tests for function calls, parameters, and return statements.
 
-use baml_compiler::test::ast;
-use baml_vm::{
-    BamlVmProgram, EvalStack, Frame, GlobalPool, ObjectIndex, ObjectPool, StackIndex, Value, Vm,
-    VmExecState,
-};
+use baml_vm::{ObjectIndex, Value, VmExecState};
 
 mod common;
 use common::{assert_vm_executes, assert_vm_executes_with_inspection, Program};
