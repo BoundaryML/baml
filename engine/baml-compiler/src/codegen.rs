@@ -9,7 +9,6 @@ use baml_vm::{
 };
 use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_parser_database::ParserDatabase;
-use itertools::Itertools;
 
 use crate::{
     hir::{self},
@@ -149,6 +148,7 @@ fn compile_thir_to_bytecode(
             bytecode: Bytecode::new(),
             kind: FunctionKind::Llm,
             locals_in_scope: vec![func.parameters.iter().map(|p| p.name.clone()).collect()],
+            span: func.span.clone(),
         });
 
         let object_index = objects.insert(bytecode_llm_function);
@@ -231,6 +231,7 @@ fn compile_thir_to_bytecode(
             bytecode: Bytecode::new(),
             kind: FunctionKind::Native(func),
             locals_in_scope: vec![], // TODO.
+            span: Span::fake_builtin_baml(),
         });
 
         let object_index = objects.insert(native_function);
@@ -242,6 +243,7 @@ fn compile_thir_to_bytecode(
         bytecode: Bytecode::new(),
         kind: FunctionKind::Future,
         locals_in_scope: vec![],
+        span: Span::fake_builtin_baml(),
     }))));
 
     let mut resolved_class_names = HashMap::new();
@@ -501,6 +503,8 @@ impl<'g> HirCompiler<'g> {
 
                 names
             })),
+
+            span: func.span.clone(),
         })
     }
 

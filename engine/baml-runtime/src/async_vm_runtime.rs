@@ -429,7 +429,7 @@ impl BamlAsyncVmRuntime {
                             tokio::task::spawn_local(future);
                         }
 
-                        baml_vm::FutureKind::FetchAs => {
+                        baml_vm::FutureKind::Net => {
                             // Only `baml.fetch_as` is supported for now.
                             if pending_future.function != "baml.fetch_as" {
                                 break 'mainloop Err(anyhow!(

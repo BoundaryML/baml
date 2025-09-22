@@ -10,6 +10,7 @@ license-file.workspace = true
 colored.workspace = true
 tokio = { workspace = true }
 baml-types = { path = "../baml-lib/baml-types" }
+internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 
 [lints.clippy]
 new_without_default = "allow"

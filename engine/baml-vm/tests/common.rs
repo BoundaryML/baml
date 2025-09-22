@@ -2,8 +2,8 @@
 
 use baml_compiler::test::ast;
 use baml_vm::{
-    BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool, Instruction,
-    Object, ObjectIndex, ObjectPool, StackIndex, Value, Vm, VmError, VmExecState,
+    errors::VmError, BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool,
+    Instruction, Object, ObjectIndex, ObjectPool, StackIndex, Value, Vm, VmExecState,
 };
 
 /// Helper struct for testing VM execution.
@@ -42,7 +42,14 @@ pub fn assert_vm_executes_with_inspection(
 }
 
 pub fn assert_vm_fails(input: FailingProgram) -> anyhow::Result<()> {
-    let (_, result) = setup_and_exec_program(input.source, input.function)?;
+    assert_vm_fails_with_inspection(input, |_vm| Ok(()))
+}
+
+pub fn assert_vm_fails_with_inspection(
+    input: FailingProgram,
+    inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let (vm, result) = setup_and_exec_program(input.source, input.function)?;
 
     assert_eq!(
         result,
@@ -50,6 +57,8 @@ pub fn assert_vm_fails(input: FailingProgram) -> anyhow::Result<()> {
         "VM execution result mismatch for function '{}'",
         input.function
     );
+
+    inspect(&vm)?;
 
     Ok(())
 }
@@ -117,6 +126,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
             names.resize_with(names.capacity(), String::new);
             vec![names]
         },
+        span: internal_baml_diagnostics::Span::fake(),
     };
 
     let objects = vec![Object::Function(function)];
