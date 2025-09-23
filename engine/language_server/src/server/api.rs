@@ -3,6 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use anyhow::Context;
 use diagnostics::{file_diagnostics, project_diagnostics};
 use log::info;
 use lsp_server;
@@ -134,12 +135,12 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
 
                     let params = serde_json::from_value::<DiagnosticRequestParams>(req.params)
                         .map_err(|e| anyhow::anyhow!("Failed to parse JSON: {e}"))?;
-                    let url = Url::parse(&params.project_id)
-                        .map_err(|e| anyhow::anyhow!("Failed to parse URL: {e}"))?;
-                    if !url.to_string().contains("baml_src") {
-                        return Ok(());
-                    }
+                    let url = Url::parse(&params.project_id).context("Failed to parse URL")?;
 
+                    let Ok(project) = session.get_or_create_project(url.to_file_path().unwrap())
+                    else {
+                        return Ok(());
+                    };
                     let project = session
                         .get_or_create_project(url.to_file_path().unwrap())
                         .expect("Already checked for project's existence");
@@ -298,22 +299,19 @@ fn background_request_task<'a, R: traits::BackgroundDocumentRequestHandler>(
         .to_file_path()
         .internal_error_msg("Could not convert URL to path")?;
     Ok(Task::background(schedule, move |session: &Session| {
-        let Some(_snapshot) = session.take_snapshot(url) else {
+        let Some(snapshot) = session.take_snapshot(url) else {
             return Box::new(|_, _| {});
         };
         // info!(
         //     "session.projects.len(): {:?}",
         //     session.baml_src_projects.lock().len()
         // );
-        let _db = session.get_or_create_project(&path).clone();
-        if _db.is_none() {
-            tracing::error!("Could not find project for path");
+        let Ok(project) = session.get_or_create_project(&path) else {
             return Box::new(|_, _| {});
-        }
-        let _db = _db.unwrap();
+        };
 
-        Box::new(move |_notifier, _responder| {
-            let _ = R::run_with_snapshot(_snapshot, _db, _notifier, params);
+        Box::new(move |notifier, _responder| {
+            let _ = R::run_with_snapshot(snapshot, project, notifier, params);
         })
     }))
 }

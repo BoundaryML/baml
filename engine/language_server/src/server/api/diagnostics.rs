@@ -96,13 +96,13 @@ pub fn publish_session_lsp_diagnostics(
 ) -> Result<()> {
     // let keys = session.index().documents.keys();
     let path = file_url.to_file_path().unwrap_or_default();
-    if !file_url.to_string().contains("baml_src") {
+    let Ok(project) = session.get_or_create_project(&path) else {
+        tracing::info!(
+            "BAML file not in baml_src directory, not publishing diagnostics: {}",
+            file_url
+        );
         return Ok(());
-    }
-    tracing::info!("publishing diagnostics for {}", file_url);
-    let project = session
-        .get_or_create_project(&path)
-        .expect("We just ensured the session is valid.");
+    };
 
     let default_flags = vec!["beta".to_string()];
     let feature_flags = session
@@ -458,4 +458,28 @@ fn ensure_absolute(project_root: &Path, file_path: &Path) -> PathBuf {
     } else {
         project_root.join(file_path_relative)
     }
+}
+
+/// Creates an error diagnostic for BAML files outside baml_src directories
+pub fn not_in_baml_src_diagnostic(file_url: &Url) -> lsp_types::PublishDiagnosticsParams {
+    let range = lsp_types::Range::new(
+        lsp_types::Position::new(0, 0),
+        // Choose a position reasonably likely to be either at or past the end of the file.
+        // IDEs should correctly defend against this, ideally clamping it to the end of the file.
+        lsp_types::Position::new(10_000, 0),
+    );
+
+    lsp_types::PublishDiagnosticsParams {
+                        uri: file_url.clone(),
+                        diagnostics: vec![lsp_types::Diagnostic::new(
+            range,
+            Some(lsp_types::DiagnosticSeverity::ERROR),
+            None,
+            None,
+            "BAML files must be placed in a baml_src/ directory, see https://docs.boundaryml.com/guide/introduction/baml_src.".to_string(),
+            None,
+            None,
+        )],
+                        version: None,
+                    }
 }

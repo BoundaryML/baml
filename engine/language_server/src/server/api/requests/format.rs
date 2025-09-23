@@ -29,9 +29,6 @@ impl SyncRequestHandler for DocumentFormatting {
         params: DocumentFormattingParams,
     ) -> Result<Option<Vec<lsp_types::TextEdit>>> {
         let url = params.text_document.uri;
-        if !url.to_string().contains("baml_src") {
-            return Ok(None);
-        }
 
         // let url = &params.text_document.uri;
         // let path = url

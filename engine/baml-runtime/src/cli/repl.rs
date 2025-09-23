@@ -123,7 +123,7 @@ fn append_history_line(path: &Path, line: &str) {
         let _ = create_dir_all(parent);
     }
     if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(path) {
-        let _ = writeln!(f, "{}", line);
+        let _ = writeln!(f, "{line}");
     }
 }
 
@@ -971,7 +971,7 @@ impl ReplArgs {
                 if busy {
                     let s = status.clone().unwrap_or_else(|| "Working...".into());
                     let status_icon = spinner_frames[spinner_idx % spinner_frames.len()];
-                    let spans = shimmer_spans(&format!(" {} {}", status_icon, s));
+                    let spans = shimmer_spans(&format!(" {status_icon} {s}"));
                     let idx = last_user_insert_idx.unwrap_or(lines.len());
                     let idx = idx.min(lines.len());
                     lines.insert(idx, Line::from(spans));
@@ -1125,7 +1125,7 @@ impl ReplArgs {
 
                 if search_mode {
                     let preview = input.clone();
-                    let left_text = format!(" (reverse-i-search)`{}`: {}", search_query, preview);
+                    let left_text = format!(" (reverse-i-search)`{search_query}`: {preview}");
                     let left_para = Paragraph::new(Line::from(vec![TuiSpan::styled(
                         left_text,
                         Style::default()
