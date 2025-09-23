@@ -1,6 +1,6 @@
 [project]
 name = "baml-py"
-version = "0.208.2"
+version = "0.208.3"
 description = "BAML python bindings (pyproject.toml)"
 readme = "README.md"
 authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]

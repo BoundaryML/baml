@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.208.3](https://github.com/boundaryml/baml/compare/0.208.2..0.208.3) - 2025-09-23
+
+### Bug Fixes
+
+- **(lang-server)** handle non-baml-src baml files (#2486) - ([6bf3299](https://github.com/boundaryml/baml/commit/6bf32994d9411eddd2384552822a3e50a84f790f)) - Samuel Lijin
+- Fix wasm integ tests, fix playground not streaming (#2504) - ([f892440](https://github.com/boundaryml/baml/commit/f892440721dca21c53b57e3521176bb8dc03bb38)) - aaronvg
+
+- Bump version to 0.208.3 - ([f983b84](https://github.com/boundaryml/baml/commit/f983b8463db412ff469944acc16a031aa027f89d)) - Aaron Villalpando
+
 ## [0.208.2](https://github.com/boundaryml/baml/compare/0.208.0..0.208.2) - 2025-09-23
 
 
