@@ -16,7 +16,7 @@ pub(crate) mod tests {
     use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
     use baml_schema_build::runtime_wasm::WasmProject;
     use serde_wasm_bindgen::to_value;
-    use wasm_bindgen::{JsCast, JsValue, closure::Closure};
+    use wasm_bindgen::{closure::Closure, JsCast, JsValue};
     use wasm_bindgen_test::*;
 
     // instantiate logger
