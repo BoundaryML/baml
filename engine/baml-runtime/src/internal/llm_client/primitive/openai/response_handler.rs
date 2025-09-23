@@ -312,7 +312,10 @@ pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
                 ResponseOutputType::WebSearchCall
                 | ResponseOutputType::FileSearchCall
                 | ResponseOutputType::ComputerCall
-                | ResponseOutputType::Reasoning => {
+                | ResponseOutputType::Reasoning
+                | ResponseOutputType::McpListTools
+                | ResponseOutputType::McpCall
+                | ResponseOutputType::Unknown => {
                     // Tool calls and reasoning outputs don't have text content, skip them
                     None
                 }
@@ -687,4 +690,169 @@ mod responses_tests {
   "metadata": {}
 }
     "#;
+
+    const RESPONSES_API_RESPONSE_MCP: &str = r#"
+{
+  "id": "resp_68d21b0cb6908190a158e3c0e30a0b4c08c9448688b650fd",
+  "object": "response",
+  "created_at": 1758599948,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "openai"
+  },
+  "error": null,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": null,
+  "max_tool_calls": null,
+  "model": "gpt-5-2025-08-07",
+  "output": [
+    {
+      "id": "mcpl_68d21b0cf4d481909eb46c32be22366c08c9448688b650fd",
+      "type": "mcp_list_tools",
+      "server_label": "dmcp",
+      "tools": [
+        {
+          "annotations": {
+            "read_only": false
+          },
+          "description": "\n  Given a string of text describing a dice roll in \n  Dungeons and Dragons, provide a result of the roll.\n\n  Example input: 2d6 + 1d4\n  Example output: 14\n",
+          "input_schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "diceRollExpression": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "diceRollExpression"
+            ],
+            "additionalProperties": false
+          },
+          "name": "roll"
+        }
+      ]
+    },
+    {
+      "id": "rs_68d21b0f30b8819096dbfa580d1b67c108c9448688b650fd",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "mcp_68d21b104b288190b5bd03dd7a40686508c9448688b650fd",
+      "type": "mcp_call",
+      "approval_request_id": null,
+      "arguments": "{\"diceRollExpression\":\"2d4+1\"}",
+      "error": null,
+      "name": "roll",
+      "output": "5",
+      "server_label": "dmcp"
+    },
+    {
+      "id": "msg_68d21b11c3e8819094fd64757eee9c4608c9448688b650fd",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "You rolled 5."
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "reasoning": {
+    "effort": "medium",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1.0,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [
+    {
+      "type": "mcp",
+      "allowed_tools": null,
+      "headers": null,
+      "require_approval": "never",
+      "server_description": "A Dungeons and Dragons MCP server to assist with dice rolling.",
+      "server_label": "dmcp",
+      "server_url": "https://dmcp-server.deno.dev/<redacted>"
+    }
+  ],
+  "top_logprobs": 0,
+  "top_p": 1.0,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 480,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 100,
+    "output_tokens_details": {
+      "reasoning_tokens": 64
+    },
+    "total_tokens": 580
+  },
+  "user": null,
+  "metadata": {}
+}
+    "#;
+
+    #[test]
+    fn test_parse_openai_responses_with_mcp_payload() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body = serde_json::from_str(RESPONSES_API_RESPONSE_MCP.trim()).unwrap();
+        let system_now = web_time::SystemTime::now();
+        let instant_now = web_time::Instant::now();
+
+        let result = parse_openai_responses_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            system_now,
+            instant_now,
+            Some("gpt-5-2025-08-07".to_string()),
+        );
+
+        let expected = LLMCompleteResponse {
+            client: "mock".to_string(),
+            prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
+            content: "You rolled 5.".to_string(),
+            start_time: system_now,
+            latency: std::time::Duration::ZERO,
+            model: "gpt-5-2025-08-07".to_string(),
+            request_options: client.request_options().clone(),
+            metadata: LLMCompleteResponseMetadata {
+                baml_is_complete: true,
+                finish_reason: Some("completed".to_string()),
+                prompt_tokens: Some(480),
+                output_tokens: Some(100),
+                total_tokens: Some(580),
+                cached_input_tokens: Some(0),
+            },
+        };
+
+        if let LLMResponse::Success(mut actual_result) = result {
+            actual_result.latency = std::time::Duration::ZERO;
+            assert_eq!(actual_result, expected);
+        } else {
+            panic!("Expected LLMResponse::Success, got {result:?}");
+        }
+    }
 }

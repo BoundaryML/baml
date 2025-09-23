@@ -27,6 +27,10 @@ pub enum ResponseOutputType {
     FunctionCall,
     Reasoning,
     ComputerCall,
+    McpListTools,
+    McpCall,
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -49,6 +53,20 @@ pub struct ResponseOutput {
     pub arguments: Option<String>,
     // For reasoning outputs
     pub summary: Option<Vec<serde_json::Value>>,
+    // For MCP outputs
+    pub server_label: Option<String>,
+    pub tools: Option<Vec<McpToolDescriptor>>, // mcp_list_tools
+    pub approval_request_id: Option<String>,   // mcp_call
+    pub output: Option<String>,                // mcp_call output text
+    pub error: Option<serde_json::Value>,      // mcp_call error
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct McpToolDescriptor {
+    pub annotations: Option<serde_json::Value>,
+    pub description: Option<String>,
+    pub input_schema: Option<serde_json::Value>,
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
