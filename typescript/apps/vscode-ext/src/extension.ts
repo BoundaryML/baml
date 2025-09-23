@@ -198,6 +198,7 @@ export function activate(context: vscode.ExtensionContext) {
   } catch (e) {
     console.error("custom sam Error registering baml.openBamlPanel command:", e);
   }
+  console.log("sam is done registering baml.runBamlTest command");
 
   const bamlTestcaseCommand = vscode.commands.registerCommand(
     "baml.runBamlTest",

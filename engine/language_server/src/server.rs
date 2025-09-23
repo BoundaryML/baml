@@ -544,7 +544,7 @@ impl Server {
             }),
             code_action_provider: Some(lsp_types::CodeActionProviderCapability::Simple(true)),
             execute_command_provider: Some(lsp_types::ExecuteCommandOptions {
-                commands: vec!["baml.openBamlPanel".to_string()],
+                commands: vec!["baml.openBamlPanelInBrowser".to_string()],
                 work_done_progress_options: Default::default(),
             }),
             definition_provider: Some(lsp_types::OneOf::Left(true)),
