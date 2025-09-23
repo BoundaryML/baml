@@ -159,17 +159,7 @@ impl Session {
             }
         }
     }
-}
-#[derive(Debug, Clone)]
-pub struct NotInBamlSrc;
 
-impl std::fmt::Display for NotInBamlSrc {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Cannot resolve baml project")
-    }
-}
-
-impl Session {
     /// Gets or creates a project for the given path.
     ///
     /// This is the primary method for working with projects, replacing the multiple
@@ -181,33 +171,30 @@ impl Session {
     pub fn get_or_create_project(
         &self,
         path: impl AsRef<Path> + std::fmt::Debug,
-    ) -> Result<Arc<Mutex<Project>>, NotInBamlSrc> {
+    ) -> Option<Arc<Mutex<Project>>> {
         // Try to find the baml_src directory
-        let baml_src_root_path = find_top_level_parent(path.as_ref()).ok_or(NotInBamlSrc)?;
+        let baml_src = find_top_level_parent(path.as_ref())?;
 
         // Lock once and perform all operations within this scope
         let mut projects = self.baml_src_projects.lock();
 
         // If project exists, return it
-        if let Some(project) = projects.get(&baml_src_root_path) {
-            return Ok(project.clone());
+        if let Some(project) = projects.get(&baml_src) {
+            return Some(project.clone());
         }
 
         // Create a new project if needed
-        tracing::info!(
-            "Creating new project for baml_src: {:?}",
-            baml_src_root_path
-        );
+        tracing::info!("Creating new project for baml_src path: {:?}", baml_src);
         let new_project = Arc::new(Mutex::new(Project::new(BamlProject {
-            root_dir_name: baml_src_root_path.clone(),
+            root_dir_name: baml_src.clone(),
             files: HashMap::new(),
             unsaved_files: HashMap::new(),
             cached_runtime: None,
         })));
 
         // Insert and return the new project
-        projects.insert(baml_src_root_path, new_project.clone());
-        Ok(new_project)
+        projects.insert(baml_src, new_project.clone());
+        Some(new_project)
     }
 
     pub fn print_baml_projects(&self) {
@@ -313,7 +300,7 @@ impl Session {
     /// Creates a document snapshot with the URL referencing the document to snapshot.
     pub fn take_snapshot(&self, url: Url) -> Option<DocumentSnapshot> {
         let file_path = url.to_file_path().ok()?;
-        let project = self.get_or_create_project(&file_path).ok()?;
+        let project = self.get_or_create_project(&file_path)?;
 
         let document_key =
             DocumentKey::from_url(&project.lock().baml_project.root_dir_name, &url).ok()?;
@@ -453,12 +440,8 @@ impl DocumentSnapshot {
         self.position_encoding
     }
 
-    pub(crate) fn project(&self) -> Result<Arc<Mutex<Project>>, NotInBamlSrc> {
-        let file_path = self
-            .document_ref
-            .file_url()
-            .to_file_path()
-            .expect("Failed to convert URL to path");
+    pub(crate) fn project(&self) -> Option<Arc<Mutex<Project>>> {
+        let file_path = self.document_ref.file_url().to_file_path().ok()?;
         self.session.get_or_create_project(&file_path)
     }
 
@@ -522,21 +505,21 @@ mod tests {
 
         // Create a project for key1
         let project1 = session.get_or_create_project(&key1);
-        assert!(project1.is_ok(), "Project should be created for key1");
+        assert!(project1.is_some(), "Project should be created for key1");
 
         // Verify that get_or_create_project returns the same project when called again
         let project1_again = session.get_or_create_project(&key1);
-        assert!(project1_again.is_ok(), "Project should be found for key1");
+        assert!(project1_again.is_some(), "Project should be found for key1");
 
         // Create a project for key2
         let project2 = session.get_or_create_project(&key2);
-        assert!(project2.is_ok(), "Project should be created for key2");
+        assert!(project2.is_some(), "Project should be created for key2");
 
         // Test with a file path inside key2
         let file_path_in_key2 = key2.join("chat.baml");
         let found_project = session.get_or_create_project(&file_path_in_key2);
         assert!(
-            found_project.is_ok(),
+            found_project.is_some(),
             "Project should be found for file path within key2"
         );
 

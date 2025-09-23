@@ -46,14 +46,19 @@ impl SyncRequestHandler for CodeActionHandler {
         //         tracing::error!("Failed to send codeAction notification to playground: {e}");
         //     });
 
+        let mut actions = vec![];
+
         let uri = params.text_document.uri.clone();
+        if !uri.to_string().contains("baml_src") {
+            return Ok(None);
+        }
+
         let path = uri
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
-        let Ok(project) = session.get_or_create_project(&path) else {
-            return Ok(None);
-        };
-
+        let project = session
+            .get_or_create_project(&path)
+            .expect("Ensured that a project db exists");
         let document_key =
             DocumentKey::from_url(project.lock().root_path(), &uri).internal_error()?;
 
@@ -80,7 +85,8 @@ impl SyncRequestHandler for CodeActionHandler {
             disabled: None,
             data: None,
         });
+        actions.push(action);
 
-        Ok(Some(vec![action]))
+        Ok(Some(actions))
     }
 }

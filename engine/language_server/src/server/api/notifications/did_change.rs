@@ -8,7 +8,7 @@ use playground_server::{FrontendMessage, WebviewRouterMessage};
 use crate::{
     server::{
         api::{
-            diagnostics::{not_in_baml_src_diagnostic, publish_diagnostics},
+            diagnostics::publish_diagnostics,
             traits::{NotificationHandler, SyncNotificationHandler},
             ResultExt,
         },
@@ -36,19 +36,22 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
         let start_time_total = Instant::now();
 
         let url = params.text_document.uri;
+        if !url.to_string().contains("baml_src") {
+            return Ok(());
+        }
+
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
 
         // Get or create the project using the unified method
-        let Ok(project) = session.get_or_create_project(&path) else {
-            notifier
-                .notify::<lsp_types::notification::PublishDiagnostics>(not_in_baml_src_diagnostic(
-                    &url,
-                ))
-                .internal_error()?;
-            return Ok(());
-        };
+        let project = session.get_or_create_project(&path);
+        if project.is_none() {
+            tracing::error!("Failed to get or create project for path: {:?}", path);
+            show_err_msg!("Failed to get or create project for path: {:?}", path);
+        }
+
+        let project = project.unwrap();
         let document_key =
             DocumentKey::from_url(project.lock().root_path(), &url).internal_error()?;
 

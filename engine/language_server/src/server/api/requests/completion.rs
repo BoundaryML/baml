@@ -28,12 +28,9 @@ impl SyncRequestHandler for Completion {
         params: CompletionParams,
     ) -> Result<Option<lsp_types::CompletionResponse>> {
         let url = params.text_document_position.text_document.uri;
-        let path = url
-            .to_file_path()
-            .internal_error_msg("Could not convert URL to path")?;
-        let Ok(project) = session.get_or_create_project(&path) else {
+        if !url.to_string().contains("baml_src") {
             return Ok(None);
-        };
+        }
 
         // TODO: Enable this only if you
         // 1. test on windows, with chinese characters

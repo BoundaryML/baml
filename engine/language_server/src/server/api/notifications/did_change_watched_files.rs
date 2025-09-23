@@ -24,12 +24,11 @@ impl super::SyncNotificationHandler for DidChangeWatchedFiles {
         params: types::DidChangeWatchedFilesParams,
     ) -> Result<()> {
         tracing::info!("#### DidChangeWatchedFiles {:?}", params.changes);
-        if params.changes.iter().any(|change| {
-            let Ok(path) = change.uri.to_file_path() else {
-                return true;
-            };
-            session.get_or_create_project(&path).is_err()
-        }) {
+        if !params
+            .changes
+            .iter()
+            .any(|change| change.uri.to_string().contains("baml_src"))
+        {
             return Ok(());
         }
 
