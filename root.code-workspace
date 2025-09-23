@@ -42,7 +42,6 @@
     }
   ],
   "settings": {
-    "baml.cliPath": "/Users/sam/baml2/engine/target/debug/baml-cli",
     "window.title": "${dirty}${activeFolderMedium}${separator}${rootPath}${separator}${appName}",
     "[rust]": {
       "editor.defaultFormatter": "rust-lang.rust-analyzer",
