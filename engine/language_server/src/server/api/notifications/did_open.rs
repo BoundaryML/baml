@@ -76,17 +76,19 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             .internal_error()?;
 
         // tracing::info!("before get_or_create_project");
-        let locked = project.lock();
-        let default_flags = vec!["beta".to_string()];
-        let effective_flags = session
-            .baml_settings
-            .feature_flags
-            .as_ref()
-            .unwrap_or(&default_flags);
-        let client_version = session.baml_settings.get_client_version();
+        {
+            let locked = project.lock();
+            let default_flags = vec!["beta".to_string()];
+            let effective_flags = session
+                .baml_settings
+                .feature_flags
+                .as_ref()
+                .unwrap_or(&default_flags);
+            let client_version = session.baml_settings.get_client_version();
 
-        let generator_version = locked.get_common_generator_version();
-        send_generator_version(&notifier, &locked, generator_version.as_ref().ok());
+            let generator_version = locked.get_common_generator_version();
+            send_generator_version(&notifier, &locked, generator_version.as_ref().ok());
+        }
 
         // session.open_text_document(
         //     DocumentKey::from_path(&file_path, &file_path).internal_error()?,

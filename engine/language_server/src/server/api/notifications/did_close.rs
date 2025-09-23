@@ -48,10 +48,13 @@ impl SyncNotificationHandler for DidCloseTextDocumentHandler {
             .with_failure_code(ErrorCode::InternalError)?;
         // Remove the unsaved file from the project as well
         // TODO: ideally the baml project just has a view of unsaved files directly from the Session itself, and not maintain its own state / copy of the unsaved files
-        project
-            .lock()
-            .baml_project
-            .remove_unsaved_file(&document_key);
+        {
+            // nested to block to ensure the project is unlocked before session.reload()
+            project
+                .lock()
+                .baml_project
+                .remove_unsaved_file(&document_key);
+        }
 
         session.reload(Some(notifier)).internal_error()?;
 
