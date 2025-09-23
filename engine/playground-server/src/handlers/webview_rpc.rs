@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State},
     Json,
 };
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use crate::{
     api::{errors::ApiError, *},
@@ -55,51 +55,7 @@ pub async fn webview_rpc_handler(
 
         "UPDATE_SETTINGS" => {
             tracing::info!("UPDATE_SETTINGS: {:#?}", payload);
-            let _ = state
-                .to_webview_router_tx
-                .send(WebviewRouterMessage::UpdateLanguageServerSettings(payload))
-                .inspect_err(|e| {
-                    tracing::error!("Failed to send UPDATE_LANGUAGE_SERVER_SETTINGS message to WebviewRouter: {e}");
-                });
 
-            Ok(Json(Value::Null)) // No response body for settings updates
-        }
-
-        "SET_PROXY_SETTINGS" => {
-            tracing::info!("SET_PROXY_SETTINGS: {:#?}", payload);
-            let _ = state
-                .to_webview_router_tx
-                .send(WebviewRouterMessage::UpdateLanguageServerSettings(payload))
-                .inspect_err(|e| {
-                    tracing::error!("Failed to send UPDATE_LANGUAGE_SERVER_SETTINGS message to WebviewRouter: {e}");
-                });
-
-            Ok(Json(Value::Null)) // No response body for settings updates
-        }
-
-        "SET_FEATURE_FLAGS" => {
-            let request: SetFeatureFlagsRequest = serde_json::from_value(payload)
-                .context("Failed to parse SetFeatureFlagsRequest")
-                .map_err(anyhow_to_bad_request)?;
-
-            let mut config = state
-                .editor_config
-                .write()
-                .map_err(|_| anyhow::anyhow!("Failed to acquire write lock on editor config"))
-                .map_err(anyhow_to_internal_error)?;
-            config.feature_flags = request.feature_flags;
-
-            let _ = state
-                .to_webview_router_tx
-                .send(WebviewRouterMessage::UpdateLanguageServerSettings(json!(*config)))
-                .inspect_err(|e| {
-                    tracing::error!("Failed to send UPDATE_LANGUAGE_SERVER_SETTINGS message to WebviewRouter: {e}");
-                });
-
-            Ok(Json(Value::Null)) // No response body for settings updates
-        }
-
-        "UPDATE_LANGUAGE_SERVER_SETTINGS" => {
             let _ = state
                 .to_webview_router_tx
                 .send(WebviewRouterMessage::UpdateLanguageServerSettings(payload))

@@ -24,16 +24,6 @@ export interface UpdateSettingsRequest {
 }
 
 
-export interface SetProxySettingsRequest {
-  vscodeCommand: 'SET_PROXY_SETTINGS';
-  enablePlaygroundProxy: boolean;
-}
-
-export interface SetFeatureFlagsRequest {
-  vscodeCommand: 'SET_FEATURE_FLAGS';
-  featureFlags: string[];
-}
-
 export interface GetBamlSrcRequest {
   vscodeCommand: 'GET_BAML_SRC';
   path: string;
@@ -168,8 +158,7 @@ export interface SetFlashingRegionsResponse {
 type ApiPairs = [
   // Echo is included here as an example of what a request/response pair looks like
   [EchoRequest, EchoResponse],
-  [SetProxySettingsRequest, void],
-  [SetFeatureFlagsRequest, void],
+  [UpdateSettingsRequest, void],
   [GetBamlSrcRequest, GetBamlSrcResponse],
   [GetWebviewUriRequest, GetWebviewUriResponse],
   [GetVSCodeSettingsRequest, GetVSCodeSettingsResponse],

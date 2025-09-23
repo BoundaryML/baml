@@ -14,8 +14,6 @@ import {
   type LoadGcpCredsResponse,
   type OpenPlaygroundRequest,
   type OpenPlaygroundResponse,
-  type SetProxySettingsRequest,
-  type SetFeatureFlagsRequest,
   type SendLspNotificationToIdeRequest,
   type SendLspNotificationToIdeResponse,
   type JumpToFileRequest,
@@ -267,21 +265,14 @@ class VSCodeAPIWrapper {
   }
 
   public async setProxySettings(proxyEnabled: boolean) {
-    if (this.isVscode()) {
-      await this.rpc<SetProxySettingsRequest, void>({
-        vscodeCommand: 'SET_PROXY_SETTINGS',
-        enablePlaygroundProxy: proxyEnabled,
-      });
-    } else {
-      await this.rpc<UpdateSettingsRequest, void>({
-        vscodeCommand: 'UPDATE_SETTINGS',
-        settings: {
-          baml: {
-            enablePlaygroundProxy: proxyEnabled,
-          },
+    await this.rpc<UpdateSettingsRequest, void>({
+      vscodeCommand: 'UPDATE_SETTINGS',
+      settings: {
+        baml: {
+          enablePlaygroundProxy: proxyEnabled,
         },
-      });
-    }
+      },
+    });
   }
 
   public loadAwsCreds = async (profile: string | null) => {
@@ -322,9 +313,13 @@ class VSCodeAPIWrapper {
   }
 
   public async setFeatureFlags(featureFlags: string[]) {
-    await this.rpc<SetFeatureFlagsRequest, void>({
-      vscodeCommand: 'SET_FEATURE_FLAGS',
-      featureFlags,
+    await this.rpc<UpdateSettingsRequest, void>({
+      vscodeCommand: 'UPDATE_SETTINGS',
+      settings: {
+        baml: {
+          featureFlags,
+        },
+      },
     });
   }
 

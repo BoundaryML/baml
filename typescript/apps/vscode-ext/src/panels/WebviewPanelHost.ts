@@ -491,23 +491,33 @@ export class WebviewPanelHost {
               data: echoresp,
             });
             return;
-          case 'SET_PROXY_SETTINGS':
-            const { enablePlaygroundProxy: proxyEnabled } = vscodeMessage;
+          case 'UPDATE_SETTINGS': {
+            const { settings } = vscodeMessage;
             const config = vscode.workspace.getConfiguration();
-            config.update(
-              'baml.enablePlaygroundProxy',
-              proxyEnabled,
-              vscode.ConfigurationTarget.Workspace,
-            );
-            return;
-          case 'SET_FEATURE_FLAGS': {
-            const { featureFlags } = vscodeMessage;
-            const config = vscode.workspace.getConfiguration();
-            config.update(
-              'baml.featureFlags',
-              featureFlags,
-              vscode.ConfigurationTarget.Workspace,
-            );
+            
+            // Handle baml settings
+            if (settings.baml) {
+              if ('enablePlaygroundProxy' in settings.baml) {
+                await config.update(
+                  'baml.enablePlaygroundProxy',
+                  settings.baml.enablePlaygroundProxy,
+                  vscode.ConfigurationTarget.Workspace,
+                );
+              }
+              if ('featureFlags' in settings.baml) {
+                await config.update(
+                  'baml.featureFlags',
+                  settings.baml.featureFlags,
+                  vscode.ConfigurationTarget.Workspace,
+                );
+              }
+            }
+            
+            this._panel.webview.postMessage({
+              rpcId: message.rpcId,
+              rpcMethod: vscodeCommand,
+              data: undefined,
+            });
             return;
           }
           case 'GET_VSCODE_SETTINGS': {

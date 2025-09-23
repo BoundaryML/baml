@@ -22,17 +22,6 @@ pub struct GetVSCodeSettingsResponse {
     pub feature_flags: Vec<String>,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetProxySettingsRequest {
-    pub proxy_enabled: bool,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetFeatureFlagsRequest {
-    pub feature_flags: Vec<String>,
-}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]

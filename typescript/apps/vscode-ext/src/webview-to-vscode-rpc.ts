@@ -14,15 +14,11 @@ export interface EchoRequest {
   message: string;
 }
 
-export interface SetProxySettingsRequest {
-  vscodeCommand: 'SET_PROXY_SETTINGS';
-  enablePlaygroundProxy: boolean;
+export interface UpdateSettingsRequest {
+  vscodeCommand: 'UPDATE_SETTINGS';
+  settings: Record<string, any>;
 }
 
-export interface SetFeatureFlagsRequest {
-  vscodeCommand: 'SET_FEATURE_FLAGS';
-  featureFlags: string[];
-}
 
 export interface EchoResponse {
   message: string;
@@ -149,8 +145,7 @@ export interface SetFlashingRegionsResponse {
 type ApiPairs = [
   // Echo is included here as an example of what a request/response pair looks like
   [EchoRequest, EchoResponse],
-  [SetProxySettingsRequest, void],
-  [SetFeatureFlagsRequest, void],
+  [UpdateSettingsRequest, void],
   [GetBamlSrcRequest, GetBamlSrcResponse],
   [GetWebviewUriRequest, GetWebviewUriResponse],
   [GetVSCodeSettingsRequest, GetVSCodeSettingsResponse],
