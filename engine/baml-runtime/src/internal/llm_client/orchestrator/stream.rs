@@ -9,7 +9,10 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
 use serde_json::json;
 use stream_cancel::Tripwire;
-use tokio::time::MissedTickBehavior;
+#[cfg(not(target_family = "wasm"))]
+use tokio::time::*;
+#[cfg(target_family = "wasm")]
+use wasmtimer::tokio::*;
 use web_time::Duration;
 
 use super::{call::CtxWithHttpRequestId, OrchestrationScope, OrchestratorNodeIterator};
@@ -51,7 +54,7 @@ where
     G: Fn(),
 {
     let mut results = Vec::new();
-    let mut total_sleep_duration = std::time::Duration::from_secs(0);
+    let mut total_sleep_duration = web_time::Duration::from_secs(0);
 
     // Create a future that either waits for cancellation or never completes
     let cancel_future = match cancel_tripwire {
@@ -104,7 +107,7 @@ where
                         let mut latest_content_for_parse: Option<String> = None;
                         // Track last parsed payload surfaced to downstream listeners so we can dedupe events
                         let mut last_sent_partial_serialized: Option<String> = None;
-                        let mut parse_interval = tokio::time::interval(std::time::Duration::from_millis(20));
+                        let mut parse_interval = interval(web_time::Duration::from_millis(20));
                         // If parsing falls behind, skip missed ticks so we only parse latest.
                         parse_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
