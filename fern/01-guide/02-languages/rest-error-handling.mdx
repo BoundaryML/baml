@@ -1,0 +1,416 @@
+---
+title: "HTTP API Error Handling"
+description: "Understanding and handling errors from the BAML HTTP API"
+---
+
+The BAML HTTP API (also known as the REST API) provides structured error responses to help you handle different failure scenarios when calling BAML functions over HTTP.
+
+## Error Response Format
+
+All BAML HTTP API errors return JSON responses with a consistent structure:
+
+```json
+{
+  "error": "error_type",
+  "message": "Human-readable error description",
+  "documentation_url": "https://docs.boundaryml.com/get-started/debugging/exception-handling"
+}
+```
+
+Additional fields may be present depending on the specific error type.
+
+## HTTP Status Codes
+
+The BAML HTTP API uses standard HTTP status codes to indicate the outcome of requests:
+
+| Status Code | Meaning | When Used |
+|-------------|---------|-----------|
+| `200` | OK | Request succeeded |
+| `400` | Bad Request | Invalid request format or arguments |
+| `403` | Forbidden | Authentication failed |
+| `500` | Internal Server Error | Server-side processing errors |
+| `502` | Bad Gateway | LLM client errors |
+| `XXX` | Variable | HTTP errors from LLM providers (preserves original status) |
+
+## Error Types
+
+### `invalid_argument`
+
+**HTTP Status:** `400 Bad Request`
+
+Returned when the request contains invalid arguments or malformed data.
+
+```json
+{
+  "error": "invalid_argument",
+  "message": "POST data must be valid JSON: expected value at line 1 column 1"
+}
+```
+
+**Common causes:**
+- Malformed JSON in request body
+- Missing required function arguments
+- Arguments that don't match expected types
+- Invalid `__baml_options__` format
+
+**Example:**
+```bash
+curl -X POST http://localhost:2024/call/ExtractName \
+  -H "Content-Type: application/json" \
+  -d '{"invalid_json": }'
+```
+
+### `client_error`
+
+**HTTP Status:** `502 Bad Gateway`
+
+Returned when the LLM client fails to return a valid response.
+
+```json
+{
+  "error": "client_error",
+  "message": "LLMFailure(ErrorCode::RateLimited, \"Rate limit exceeded\")"
+}
+```
+
+**Common causes:**
+- LLM provider rate limiting
+- Invalid API credentials
+- LLM provider service unavailable
+- Network timeouts
+- Unsupported model parameters
+
+**Example scenarios:**
+- OpenAI returns 429 (rate limited)
+- Anthropic returns 401 (invalid API key)
+- Provider returns 503 (service unavailable)
+
+### `client_http_error`
+
+**HTTP Status:** Matches the original LLM provider's status code
+
+Returned when an HTTP request to an LLM provider fails with a non-200 status code.
+
+```json
+{
+  "error": "client_http_error",
+  "message": "HTTP 429: Rate limit exceeded",
+  "client_name": "gpt_4o",
+  "status_code": 429
+}
+```
+
+**Additional fields:**
+- `client_name`: Name of the BAML client that failed
+- `status_code`: Original HTTP status code from the provider
+
+### `validation_failure`
+
+**HTTP Status:** `500 Internal Server Error`
+
+Returned when BAML successfully receives a response from the LLM but fails to parse it into the expected output format.
+
+```json
+{
+  "error": "validation_failure",
+  "message": "Failed to parse response into Person schema",
+  "prompt": "Extract the person's name from: John Doe is 30 years old",
+  "raw_output": "The person is named John"
+}
+```
+
+**Additional fields:**
+- `prompt`: The original prompt sent to the LLM
+- `raw_output`: The raw text response from the LLM
+
+**Common causes:**
+- LLM returns unstructured text instead of expected JSON
+- LLM output doesn't match the defined schema
+- Parsing errors due to malformed LLM responses
+
+### `finish_reason_error`
+
+**HTTP Status:** `500 Internal Server Error`
+
+Returned when the LLM terminates with a disallowed finish reason (e.g., length limit reached when only "stop" is allowed).
+
+```json
+{
+  "error": "finish_reason_error",
+  "message": "LLM finished with reason 'length' but only 'stop' is allowed",
+  "prompt": "Write a long story about...",
+  "raw_output": "Once upon a time there was a",
+  "finish_reason": "length"
+}
+```
+
+**Additional fields:**
+- `prompt`: The original prompt sent to the LLM
+- `raw_output`: The partial response received before termination
+- `finish_reason`: The actual finish reason that caused the error
+
+### `internal_error`
+
+**HTTP Status:** `500 Internal Server Error`
+
+Returned for unexpected server-side errors that don't fit other categories.
+
+```json
+{
+  "error": "internal_error",
+  "message": "Unexpected error during function execution: connection timeout"
+}
+```
+
+**Common causes:**
+- Server configuration issues
+- Unexpected runtime exceptions
+- Resource exhaustion
+- Database connectivity issues
+
+## Authentication Errors
+
+When authentication is enabled via `BAML_PASSWORD`, authentication failures return:
+
+**HTTP Status:** `403 Forbidden`
+
+```json
+{
+  "authz": {
+    "enforcement": "active",
+    "outcome": "fail",
+    "reason": "Incorrect x-baml-api-key"
+  }
+}
+```
+
+**Authentication methods:**
+1. **API Key Header (Recommended):**
+   ```bash
+   curl -H "x-baml-api-key: your-api-key" \
+     http://localhost:2024/call/MyFunction
+   ```
+
+2. **Basic Authentication:**
+   ```bash
+   curl -u "username:your-api-key" \
+     http://localhost:2024/call/MyFunction
+   ```
+
+## Error Handling Best Practices
+
+### 1. Handle Specific Error Types
+
+```python
+import requests
+import json
+
+def call_baml_function(function_name, args):
+    try:
+        response = requests.post(
+            f"http://localhost:2024/call/{function_name}",
+            json=args,
+            headers={"x-baml-api-key": "your-key"}
+        )
+        
+        if response.status_code == 200:
+            return response.json()
+        
+        error_data = response.json()
+        error_type = error_data.get("error")
+        
+        if error_type == "invalid_argument":
+            # Handle bad request - fix arguments and retry
+            print(f"Invalid arguments: {error_data['message']}")
+            return None
+            
+        elif error_type == "client_error":
+            # Handle LLM client errors - possibly retry with backoff
+            print(f"LLM client error: {error_data['message']}")
+            return None
+            
+        elif error_type == "validation_failure":
+            # Handle parsing errors - maybe use a fixup function
+            print(f"Validation failed: {error_data['message']}")
+            print(f"Raw output: {error_data['raw_output']}")
+            return None
+            
+        elif error_type == "client_http_error":
+            status_code = error_data.get("status_code", 0)
+            if status_code == 429:
+                # Rate limited - implement backoff
+                print("Rate limited, waiting before retry...")
+                return None
+            else:
+                print(f"HTTP error {status_code}: {error_data['message']}")
+                return None
+        
+        else:
+            # Handle unknown errors
+            print(f"Unknown error: {error_data}")
+            return None
+            
+    except requests.exceptions.RequestException as e:
+        print(f"Network error: {e}")
+        return None
+    except json.JSONDecodeError:
+        print("Invalid JSON response")
+        return None
+```
+
+### 2. Implement Retry Logic
+
+```python
+import time
+import random
+
+def call_with_retry(function_name, args, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(
+                f"http://localhost:2024/call/{function_name}",
+                json=args,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            
+            error_data = response.json()
+            error_type = error_data.get("error")
+            
+            # Don't retry client errors (bad arguments)
+            if error_type == "invalid_argument":
+                raise ValueError(f"Invalid arguments: {error_data['message']}")
+            
+            # Retry server errors and rate limits
+            if error_type in ["client_error", "client_http_error", "internal_error"]:
+                if attempt < max_retries - 1:
+                    # Exponential backoff with jitter
+                    delay = (2 ** attempt) + random.uniform(0, 1)
+                    time.sleep(delay)
+                    continue
+            
+            # Don't retry validation failures
+            raise Exception(f"BAML error: {error_data}")
+            
+        except requests.exceptions.Timeout:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+                continue
+            raise
+    
+    raise Exception(f"Failed after {max_retries} attempts")
+```
+
+### 3. Handle Validation Failures with Fixup
+
+When you receive a `validation_failure`, you can use a fixup function to correct the LLM output:
+
+```python
+def call_with_fixup(function_name, args):
+    try:
+        # Try the main function
+        response = requests.post(
+            f"http://localhost:2024/call/{function_name}",
+            json=args
+        )
+        
+        if response.status_code == 200:
+            return response.json()
+        
+        error_data = response.json()
+        
+        # If validation failed, try fixup function
+        if error_data.get("error") == "validation_failure":
+            fixup_args = {
+                "error_message": error_data["message"],
+                "raw_output": error_data["raw_output"],
+                "expected_format": "Person with name and age fields"
+            }
+            
+            fixup_response = requests.post(
+                f"http://localhost:2024/call/Fixup{function_name}",
+                json=fixup_args
+            )
+            
+            if fixup_response.status_code == 200:
+                return fixup_response.json()
+        
+        # Handle other errors normally
+        raise Exception(f"BAML error: {error_data}")
+        
+    except Exception as e:
+        print(f"Error calling BAML function: {e}")
+        return None
+```
+
+## Debugging Errors
+
+### 1. Use Debug Endpoints
+
+Check server status and authentication:
+```bash
+curl http://localhost:2024/_debug/status
+```
+
+Test connectivity:
+```bash
+curl http://localhost:2024/_debug/ping
+```
+
+### 2. Enable Detailed Logging
+
+Set environment variable for verbose logging:
+```bash
+export BAML_LOG=trace
+baml-cli serve --port 2024
+```
+
+### 3. Use Interactive Documentation
+
+Visit `http://localhost:2024/docs` to test functions interactively and see detailed error responses.
+
+## Streaming Errors
+
+When using the streaming endpoint (`POST /stream/:function_name`), errors are returned as Server-Sent Events:
+
+```
+data: {"error": "validation_failure", "message": "Failed to parse", ...}
+```
+
+Handle streaming errors in your client:
+
+```javascript
+const eventSource = new EventSource('/stream/MyFunction');
+
+eventSource.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    
+    if (data.error) {
+        console.error('Streaming error:', data);
+        eventSource.close();
+        return;
+    }
+    
+    // Handle successful data
+    console.log('Received:', data);
+};
+
+eventSource.onerror = function(event) {
+    console.error('EventSource failed:', event);
+};
+```
+
+## Error Reference Summary
+
+| Error Type | Status | Retry? | Common Cause |
+|------------|---------|---------|--------------|
+| `invalid_argument` | 400 | No | Bad request format |
+| `client_error` | 502 | Yes | LLM provider issues |
+| `client_http_error` | Variable | Depends | HTTP errors from providers |
+| `validation_failure` | 500 | Fixup | LLM output parsing failed |
+| `finish_reason_error` | 500 | No | LLM terminated unexpectedly |
+| `internal_error` | 500 | Yes | Server-side issues |
+
+For more information about BAML error handling in general, see the [Error Handling Guide](/guide/baml-basics/error-handling).

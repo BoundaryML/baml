@@ -318,9 +318,14 @@ navigation:
           - page: Ruby
             icon: fa-regular fa-gem
             path: 01-guide/02-languages/ruby.mdx
-          - page: REST API (other languages)
+          - section: REST API (other languages)
             icon: fa-regular fa-network-wired
-            path: 01-guide/02-languages/rest.mdx
+            contents:
+              - page: Getting Started
+                path: 01-guide/02-languages/rest.mdx
+              - page: Error Handling
+                icon: fa-solid fa-exclamation-triangle
+                path: 01-guide/02-languages/rest-error-handling.mdx
           - page: Elixir
             icon: fa-brands fa-erlang
             path: 01-guide/02-languages/elixir.mdx
