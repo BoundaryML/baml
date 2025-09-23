@@ -150,6 +150,8 @@ pub enum ResponsesApiStreamEvent {
         part: ContentPart,
         sequence_number: u32,
     },
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]

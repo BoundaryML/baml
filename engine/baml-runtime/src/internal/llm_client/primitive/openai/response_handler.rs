@@ -498,6 +498,9 @@ pub fn scan_openai_responses_stream(
                 inner.content = part.text;
             }
         }
+        Unknown => {
+            // We don't need to do anything for unknown events
+        }
     }
 
     inner.latency = instant_now.elapsed();
