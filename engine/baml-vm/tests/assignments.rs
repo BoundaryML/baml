@@ -10,7 +10,7 @@ use common::{assert_vm_executes, Program};
 fn mutable_var_in_function() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let y = 3;
                 y = 5;
                 y
@@ -25,12 +25,12 @@ fn mutable_var_in_function() -> anyhow::Result<()> {
 fn mutable_param() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn MutableInArg(x: int) -> int {
+            function MutableInArg(x: int) -> int {
                 x = 3;
                 x
             }
 
-            fn main() -> int {
+            function main() -> int {
                 let r = MutableInArg(42);
                 r
             }

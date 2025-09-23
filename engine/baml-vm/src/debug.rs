@@ -27,8 +27,10 @@ use std::io::IsTerminal;
 use colored::{Color, Colorize};
 
 use crate::{
-    vm::indexable::GlobalPool, EvalStack, Function, Instruction, Object, ObjectIndex, ObjectPool,
-    StackIndex, Value,
+    bytecode::Instruction,
+    indexable::{EvalStack, GlobalPool},
+    types::{Function, Object, Value},
+    ObjectIndex, ObjectPool, StackIndex,
 };
 
 /// Context aware instruction display.

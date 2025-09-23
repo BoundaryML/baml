@@ -228,6 +228,8 @@ class DoNotUseDirectlyCallManager:
             # on_tick
             # always None! sync streams don't support on_tick
             None,
+            # abort_controller
+            resolved_options.abort_controller,
         )
         return ctx, result
 

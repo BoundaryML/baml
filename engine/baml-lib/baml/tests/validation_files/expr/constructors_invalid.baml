@@ -3,7 +3,7 @@ class Bar {
     b string
 }
 
-fn Foo() -> Bar {
+function Foo() -> Bar {
   let x = Bar { a: "hello", c: 12 };
   let req_bad = std::Request { 
     base_url: 10,
@@ -21,19 +21,19 @@ fn Foo() -> Bar {
 // error: Error validating: Bar.a expected type int, but found string
 //   -->  expr/constructors_invalid.baml:7
 //    | 
-//  6 | fn Foo() -> Bar {
+//  6 | function Foo() -> Bar {
 //  7 |   let x = Bar { a: "hello", c: 12 };
 //    | 
 // error: Error validating: Class Bar has no field c
 //   -->  expr/constructors_invalid.baml:7
 //    | 
-//  6 | fn Foo() -> Bar {
+//  6 | function Foo() -> Bar {
 //  7 |   let x = Bar { a: "hello", c: 12 };
 //    | 
 // error: Error validating: Class Bar is missing fields: b
 //   -->  expr/constructors_invalid.baml:7
 //    | 
-//  6 | fn Foo() -> Bar {
+//  6 | function Foo() -> Bar {
 //  7 |   let x = Bar { a: "hello", c: 12 };
 //    | 
 // error: Error validating: std::Request.base_url expected type string, but found int

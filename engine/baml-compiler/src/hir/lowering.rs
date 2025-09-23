@@ -43,8 +43,15 @@ impl Hir {
                 ast::Top::TopLevelAssignment(assignment) => {
                     // Add toplevel assignments to global_assignments for HIR typechecking
                     let value = Expression::from_ast(&assignment.stmt.expr);
-                    hir.global_assignments
-                        .insert(assignment.stmt.identifier.to_string(), value);
+                    let annotated_type = assignment.stmt.annotation.as_ref().map(type_ir_from_ast);
+                    hir.global_assignments.insert(
+                        assignment.stmt.identifier.to_string(),
+                        crate::hir::GlobalAssignment {
+                            value,
+                            annotated_type,
+                            span: assignment.stmt.span.clone(),
+                        },
+                    );
                 }
                 _ => {}
             }
@@ -109,7 +116,9 @@ pub fn type_ir_from_ast(type_: &ast::FieldType) -> TypeIR {
                 };
 
                 // Extract label and expression from arguments
-                let arguments: Vec<&ast::Expression> = attr.arguments.arguments
+                let arguments: Vec<&ast::Expression> = attr
+                    .arguments
+                    .arguments
                     .iter()
                     .map(|arg| &arg.value)
                     .collect();
@@ -120,9 +129,10 @@ pub fn type_ir_from_ast(type_: &ast::FieldType) -> TypeIR {
                         (None, Some(jinja_expr.clone()))
                     }
                     // Two arguments: label and expression
-                    [ast::Expression::Identifier(label_id), ast::Expression::JinjaExpressionValue(jinja_expr, _)] => {
-                        (Some(label_id.to_string()), Some(jinja_expr.clone()))
-                    }
+                    [
+                        ast::Expression::Identifier(label_id),
+                        ast::Expression::JinjaExpressionValue(jinja_expr, _),
+                    ] => (Some(label_id.to_string()), Some(jinja_expr.clone())),
                     _ => {
                         // Skip invalid constraint formats
                         (None, None)
@@ -181,14 +191,7 @@ pub fn type_ir_from_ast(type_: &ast::FieldType) -> TypeIR {
         ),
         ast::FieldType::Union(_, types, _, _) => {
             let union_types: Vec<TypeIR> = types.iter().map(type_ir_from_ast).collect();
-            // For now, create a simple union by taking the first type if only one
-            if union_types.len() == 1 {
-                union_types.into_iter().next().unwrap()
-            } else {
-                // Create a union - we'll use unsafe new_unsafe if available
-                // or fall back to a simpler approach
-                TypeIR::Primitive(baml_types::TypeValue::String, meta) // Fallback
-            }
+            TypeIR::union_with_meta(union_types, meta)
         }
         _ => TypeIR::Primitive(TypeValue::String, meta), // Default case for other variants
     }
@@ -397,22 +400,26 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
         ast::Stmt::Let(ast::LetStmt {
             identifier,
             is_mutable,
+            annotation,
             expr,
             span,
             annotations: _,
         }) => {
             let lifted_expr = Expression::from_ast(expr);
+            let annotated_type = annotation.as_ref().map(type_ir_from_ast);
 
             if *is_mutable {
                 Statement::DeclareAndAssign {
                     name: identifier.to_string(),
                     value: lifted_expr,
+                    annotated_type,
                     span: span.clone(),
                 }
             } else {
                 Statement::Let {
                     name: identifier.to_string(),
                     value: lifted_expr,
+                    annotated_type,
                     span: span.clone(),
                 }
             }
@@ -422,6 +429,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
             iterator,
             body,
             span,
+            has_let: _,
             annotations: _,
         }) => {
             // Lower for loop to HIR
@@ -467,20 +475,44 @@ impl Expression {
                 index: Box::new(Self::from_ast(index)),
                 span: span.clone(),
             },
-            ast::Expression::FieldAccess(base, field, span) => Expression::FieldAccess {
-                base: Box::new(Self::from_ast(base)),
-                field: field.to_string(),
-                span: span.clone(),
-            },
+            ast::Expression::FieldAccess(base, field, span) => {
+                if let ast::Expression::Identifier(identifier) = base.as_ref() {
+                    if identifier.name() == "env" {
+                        return Expression::Call {
+                            function: Box::new(Expression::Identifier(
+                                "env.get".to_string(),
+                                identifier.span().clone(),
+                            )),
+                            type_args: vec![],
+                            args: vec![Expression::StringValue(
+                                field.name().to_string(),
+                                field.span().clone(),
+                            )],
+                            span: span.clone(),
+                        };
+                    }
+                }
+
+                Expression::FieldAccess {
+                    base: Box::new(Self::from_ast(base)),
+                    field: field.to_string(),
+                    span: span.clone(),
+                }
+            }
             ast::Expression::MethodCall {
                 receiver,
                 method,
                 args,
+                type_args,
                 span,
             } => Expression::MethodCall {
                 receiver: Box::new(Self::from_ast(receiver)),
                 method: method.to_string(),
                 args: args.iter().map(Self::from_ast).collect(),
+                type_args: type_args
+                    .iter()
+                    .map(|arg| TypeArg::Type(type_ir_from_ast(arg)))
+                    .collect(),
                 span: span.clone(),
             },
             ast::Expression::BoolValue(value, span) => Expression::BoolValue(*value, span.clone()),
@@ -712,7 +744,7 @@ mod tests {
               result
           }
 
-          fn add(x: int, y: int) -> int {
+          function add(x: int, y: int) -> int {
               x
           }
       "#;

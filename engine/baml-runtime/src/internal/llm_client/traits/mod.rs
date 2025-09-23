@@ -17,6 +17,7 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::{
     ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
 };
+use serde_json::Value as JsonValue;
 use shell_escape::escape;
 
 pub use self::{
@@ -197,19 +198,30 @@ fn to_curl_command(
     method: &str,
     headers: &reqwest::header::HeaderMap,
     body: Vec<u8>,
+    env_vars: &std::collections::HashMap<String, String>,
+    expose_secrets: bool,
 ) -> String {
     let mut curl_command = format!("curl -X {method} '{url}'");
 
+    // Prepare headers, scrubbing if secrets should not be exposed
     for (key, value) in headers.iter() {
-        let header = format!(" -H \"{}: {}\"", key.as_str(), value.to_str().unwrap());
+        let key_str = key.as_str();
+        let value_str = value.to_str().unwrap_or("");
+        let value_str =
+            crate::redaction::scrub_header_value(key_str, value_str, env_vars, expose_secrets);
+        let header = format!(" -H \"{}: {}\"", key_str, value_str);
         curl_command.push_str(&header);
     }
 
-    let body_json = String::from_utf8_lossy(&body).to_string(); // Convert body to string
-    let pretty_body_json = match serde_json::from_str::<serde_json::Value>(&body_json) {
+    // Body: pretty print JSON if possible, then scrub if secrets shouldn't be exposed
+    let body_json = String::from_utf8_lossy(&body).to_string();
+    let mut pretty_body_json = match serde_json::from_str::<serde_json::Value>(&body_json) {
         Ok(json_value) => serde_json::to_string_pretty(&json_value).unwrap_or(body_json),
         Err(_) => body_json,
     };
+
+    pretty_body_json =
+        crate::redaction::scrub_body_string(&pretty_body_json, env_vars, expose_secrets);
     let fully_escaped_body_json = escape_single_quotes(&pretty_body_json);
     let body_part = format!(" -d {fully_escaped_body_json}");
     curl_command.push_str(&body_part);
@@ -334,7 +346,14 @@ where
             .body()
             .map(|b| b.as_bytes().unwrap_or_default().to_vec())
             .unwrap_or_default(); // Add this line to handle the Option
-        let request_str = to_curl_command(&url_str, "POST", request.headers(), body);
+        let request_str = to_curl_command(
+            &url_str,
+            "POST",
+            request.headers(),
+            body,
+            ctx.env_vars(),
+            render_settings.expose_secrets,
+        );
 
         Ok(request_str)
     }
@@ -772,4 +791,88 @@ async fn fetch_with_proxy(
 
     let response = request.send().await?;
     Ok(response)
+}
+
+#[cfg(test)]
+mod tests_scrub {
+    use std::collections::HashMap;
+
+    use baml_types::BamlMap;
+    use serde_json::json;
+
+    use crate::redaction::scrub_baml_options;
+
+    #[test]
+    fn test_scrub_exact_match_and_bearer() {
+        let mut opts: BamlMap<String, serde_json::Value> = BamlMap::new();
+        opts.insert("api_key".to_string(), json!("secret-xyz"));
+        opts.insert(
+            "headers".to_string(),
+            json!({
+                "x-api-key": "sek-parallel",
+                "authorization": "Bearer sek-openai",
+                "other": "ok"
+            }),
+        );
+        opts.insert("model".to_string(), json!("gpt-5-2025-08-07"));
+
+        let mut envs = HashMap::new();
+        envs.insert("OPENAI_API_KEY".to_string(), "sek-openai".to_string());
+        envs.insert("PARALLEL_API_KEY".to_string(), "sek-parallel".to_string());
+        envs.insert("SOME_OTHER".to_string(), "secret-xyz".to_string());
+
+        let scrubbed = scrub_baml_options(&opts, &envs, false);
+
+        // api_key matches SOME_OTHER
+        assert_eq!(
+            scrubbed.get("api_key").and_then(|v| v.as_str()),
+            Some("$SOME_OTHER")
+        );
+
+        // headers.x-api-key matches PARALLEL_API_KEY
+        assert_eq!(
+            scrubbed
+                .get("headers")
+                .and_then(|h| h.get("x-api-key"))
+                .and_then(|v| v.as_str()),
+            Some("$PARALLEL_API_KEY")
+        );
+
+        // headers.authorization matches OPENAI_API_KEY with Bearer prefix
+        assert_eq!(
+            scrubbed
+                .get("headers")
+                .and_then(|h| h.get("authorization"))
+                .and_then(|v| v.as_str()),
+            Some("Bearer $OPENAI_API_KEY")
+        );
+
+        // Non-sensitive key remains unchanged
+        assert_eq!(
+            scrubbed.get("model").and_then(|v| v.as_str()),
+            Some("gpt-5-2025-08-07")
+        );
+
+        // headers.other remains unchanged
+        assert_eq!(
+            scrubbed
+                .get("headers")
+                .and_then(|h| h.get("other"))
+                .and_then(|v| v.as_str()),
+            Some("ok")
+        );
+    }
+
+    #[test]
+    fn test_scrub_sensitive_no_match() {
+        let mut opts: BamlMap<String, serde_json::Value> = BamlMap::new();
+        opts.insert("api_key".to_string(), json!("plain-secret"));
+        let envs: HashMap<String, String> = HashMap::new();
+
+        let scrubbed = scrub_baml_options(&opts, &envs, false);
+        assert_eq!(
+            scrubbed.get("api_key").and_then(|v| v.as_str()),
+            Some("$REDACTED")
+        );
+    }
 }

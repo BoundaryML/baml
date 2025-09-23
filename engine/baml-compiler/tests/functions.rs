@@ -9,11 +9,11 @@ use common::{assert_compiles, Program};
 fn return_function_call() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn one() -> int {
+            function one() -> int {
                 1
             }
 
-            fn main() -> int {
+            function main() -> int {
                 one()
             }
         ",
@@ -35,11 +35,11 @@ fn return_function_call() -> anyhow::Result<()> {
 fn call_function() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn two() -> int {
+            function two() -> int {
                 2
             }
 
-            fn main() -> int {
+            function main() -> int {
                 let a = two();
                 a
             }
@@ -63,7 +63,7 @@ fn call_function() -> anyhow::Result<()> {
 fn function_returning_string() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn main() -> string {
+            function main() -> string {
                 "hello"
             }
         "#,
@@ -75,7 +75,7 @@ fn function_returning_string() -> anyhow::Result<()> {
 fn mutable_variables() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn DeclareMutableInFunction(x: int) -> int {
+            function DeclareMutableInFunction(x: int) -> int {
 
                 let y = 3;
 
@@ -84,7 +84,7 @@ fn mutable_variables() -> anyhow::Result<()> {
                 y
             }
 
-            fn MutableInArg(x: int) -> int {
+            function MutableInArg(x: int) -> int {
                 x = 3;
                 x
             }

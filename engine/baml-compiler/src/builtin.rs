@@ -4,7 +4,7 @@ use internal_baml_diagnostics::Span;
 use crate::hir::{Class, Enum, EnumVariant, Field};
 
 pub mod functions {
-    pub const FETCH_VALUE: &str = "std::fetch_value";
+    pub const FETCH_AS: &str = "baml.fetch_as";
 }
 
 pub mod classes {
@@ -57,8 +57,8 @@ pub fn std_request_type() -> TypeIR {
 }
 
 /// Create a function signature for std::fetch_value<T>
-pub fn std_fetch_value_signature(return_type: TypeIR) -> TypeIR {
-    TypeIR::arrow(vec![std_request_type()], return_type)
+pub fn baml_fetch_as_signature(return_type: TypeIR) -> TypeIR {
+    TypeIR::arrow(vec![TypeIR::string()], return_type)
 }
 
 pub fn is_builtin_identifier(identifier: &str) -> bool {

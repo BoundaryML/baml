@@ -1,7 +1,7 @@
-fn Sum(xs: int[]) -> int {
+function Sum(xs: int[]) -> int {
 	let result = 0;
 
-	for (x in xs) {
+	for (let x in xs) {
 		result += x;
 	}
 

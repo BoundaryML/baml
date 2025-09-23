@@ -71,7 +71,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             .to_file_path()
             .internal_error_msg(&format!("Could not convert URL '{url}' to file path"))?;
 
-        tracing::info!("before get_or_create_project");
+        // tracing::info!("before get_or_create_project");
         if let Some(project) = session.get_or_create_project(&file_path) {
             let locked = project.lock();
             let default_flags = vec!["beta".to_string()];

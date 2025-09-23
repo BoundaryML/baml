@@ -79,6 +79,9 @@ type_map = {
     "types.Document1559": types.Document1559,
     "stream_types.Document1559": stream_types.Document1559,
 
+    "types.DummyJsonTodo": types.DummyJsonTodo,
+    "stream_types.DummyJsonTodo": stream_types.DummyJsonTodo,
+
     "types.DummyOutput": types.DummyOutput,
     "stream_types.DummyOutput": stream_types.DummyOutput,
 

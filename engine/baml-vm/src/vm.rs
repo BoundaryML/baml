@@ -1,592 +1,20 @@
 use std::collections::HashMap;
 
-pub(super) mod indexable;
-
 use baml_types::{BamlMap, BamlMedia};
-use indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 
 use crate::{
-    bytecode::{BinOp, Bytecode, CmpOp, Instruction},
-    UnaryOp,
+    bytecode::{BinOp, CmpOp, Instruction},
+    errors::{ErrorLocation, InternalError, RuntimeError, VmError},
+    indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex},
+    types::{
+        FunctionKind, FunctionType, Future, FutureKind, FutureType, Instance, Object, ObjectType,
+        PendingFuture, Type, Value, Variant,
+    },
+    StackTrace, UnaryOp,
 };
 
 /// Max call stack size.
-const MAX_FRAMES: usize = 256;
-
-/// Function type.
-#[derive(Clone, Copy, Debug)]
-pub enum FunctionKind {
-    /// Regular executable function.
-    ///
-    /// The VM pushes a call frame onto the call stack and runs the bytecode.
-    Exec,
-
-    /// LLM function.
-    ///
-    /// The VM will handle control flow to the Baml runtime to produce the
-    /// result and then push it on top of the eval stack.
-    Llm,
-
-    /// Builtin or OS interfacing function.
-    ///
-    /// For OS interfacing, VM will handle control flow to a Rust wrapper that
-    /// calls into the OS and returns a result. Needed for features like
-    /// `fetch`.
-    ///
-    /// Builtin functions like `len` work the same way.
-    Native(crate::native::NativeFunction),
-}
-
-/// Represents any Baml function.
-#[derive(Clone, Debug)]
-pub struct Function {
-    /// Function name.
-    pub name: String,
-
-    /// Number of arguments the function accepts.
-    pub arity: usize,
-
-    /// Bytecode to execute.
-    ///
-    /// Only relevant if [`Self::kind`] is [`FunctionKind::Exec`].
-    pub bytecode: Bytecode,
-
-    /// Type of function.
-    pub kind: FunctionKind,
-
-    /// Local variable names.
-    ///
-    /// This is basically debug info, VM doesn't need it all to run.
-    pub locals_in_scope: Vec<Vec<String>>,
-}
-
-impl std::fmt::Display for Function {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<fn {}>", self.name)
-    }
-}
-
-/// Runtime class representation.
-#[derive(Clone, Debug)]
-pub struct Class {
-    /// Class name.
-    pub name: String,
-
-    /// Class field names. Debug info, VM doesn't need this.
-    pub field_names: Vec<String>,
-}
-
-impl std::fmt::Display for Class {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<class {}>", self.name)
-    }
-}
-
-/// Runtime instance representation.
-#[derive(Clone, Debug)]
-pub struct Instance {
-    /// Class index in the [`Vm::objects`] pool.
-    pub class: ObjectIndex,
-
-    /// Fields are accessed by index. No string lookups.
-    pub fields: Vec<Value>,
-}
-
-impl std::fmt::Display for Instance {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<instance of {}>", self.class)
-    }
-}
-
-/// Runtime class representation.
-#[derive(Clone, Debug)]
-pub struct Enum {
-    /// Enum name.
-    pub name: String,
-
-    /// Enum variant names. Debug info, VM doesn't need this.
-    pub variant_names: Vec<String>,
-}
-
-/// Same as [`Instance`] but for enums.
-#[derive(Clone, Debug)]
-pub struct Variant {
-    /// Locate the enum.
-    pub enm: ObjectIndex,
-
-    /// Index of the variant in the ordered list of variants.
-    pub index: usize,
-}
-
-impl std::fmt::Display for Variant {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<variant of {}>", self.enm)
-    }
-}
-
-impl std::fmt::Display for Enum {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<enum {}>", self.name)
-    }
-}
-
-/// Any data that the Baml program can reference and is allocated on heap.
-///
-/// [`Vm`] should own objects and give references to them to the running Baml
-/// program. Internally, in the [`Vm`] code, note that by reference I don't mean
-/// a Rust reference (& or &mut), but rather a [`usize`] that is used to index
-/// into the [`Vm::objects`] pool.
-///
-/// Read [`Vm::objects`] for more information.
-#[derive(Clone, Debug)]
-pub enum Object {
-    /// Function object.
-    Function(Function),
-
-    /// Class object.
-    Class(Class),
-
-    /// Class instance object.
-    Instance(Instance),
-
-    /// Enum object.
-    Enum(Enum),
-
-    /// Enum value object.
-    Variant(Variant),
-
-    /// Heap allocated string.
-    ///
-    /// TODO: Add [`Vm::strings`] interner to avoid allocating duplicates.
-    /// In Rust it's not easy to implement because [`Vm::objects`] owns the
-    /// strings allocated on heap, but the interner would be something like
-    /// HashSet<&str> and it would store pointers to the strings. That reference
-    /// will cause some lifetime issues because the VM would have pointers to
-    /// itself, so we'd have to figure how to implement it otherwise.
-    String(String),
-
-    /// List of values.
-    Array(Vec<Value>),
-
-    /// Map of values.
-    Map(BamlMap<String, Value>),
-
-    Future(Future),
-
-    /// Images, audio, pdf, video.
-    Media(BamlMedia),
-}
-
-#[derive(Clone, Debug)]
-pub struct LlmFuture {
-    pub llm_function: String,
-    pub args: Vec<Value>,
-}
-
-#[derive(Clone, Debug)]
-pub enum Future {
-    /// Pending future.
-    ///
-    /// Only LLM calls for now.
-    Pending(LlmFuture),
-
-    /// Ready value for the future.
-    Ready(Value),
-}
-
-impl Object {
-    /// Helper to unwrap an [`Object::Function`].
-    ///
-    /// Used to deal with some borrow checker issues in the [`Vm::exec`]
-    /// function.
-    #[inline]
-    pub fn as_function(&self) -> Result<&Function, VmError> {
-        match self {
-            Object::Function(function) => Ok(function),
-            _ => Err(InternalError::TypeError {
-                expected: FunctionType::Any.into(),
-                got: ObjectType::of(self).into(),
-            }
-            .into()),
-        }
-    }
-
-    pub fn as_string(&self) -> Result<&String, InternalError> {
-        let Self::String(str) = self else {
-            return Err(InternalError::TypeError {
-                expected: ObjectType::String.into(),
-                got: ObjectType::of(self).into(),
-            });
-        };
-
-        Ok(str)
-    }
-}
-
-impl std::fmt::Display for Object {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Object::Function(function) => function.fmt(f),
-            Object::Class(class) => class.fmt(f),
-            Object::Instance(instance) => instance.fmt(f),
-            Object::Enum(enm) => enm.fmt(f),
-            Object::Variant(value) => value.fmt(f),
-            Object::String(string) => string.fmt(f),
-            Object::Array(array) => write!(f, "{array:?}"),
-            Object::Map(map) => write!(f, "{map:?}"),
-            Object::Media(_media) => write!(f, "<media>"),
-            Object::Future(future) => match future {
-                Future::Pending(llm_future) => write!(f, "<pending: {}>", llm_future.llm_function),
-                Future::Ready(value) => write!(f, "<ready: {value}>"),
-            },
-        }
-    }
-}
-
-/// Runtime values.
-///
-/// This struct should not contain allocated objects and should be [`Copy`].
-/// Read the documentation of [`Vm::objects`] to understand how allocated
-/// objects work in the virtual machine.
-///
-/// # On `Hash`
-/// `Value` does not yet implement `Hash`, and should not implement `Eq`. Besides floating point which can be addressed,
-/// strings do not yet have referential equality, i.e "hello" can be represented with two different
-/// object indices. This makes comparisons nontrivial since they have to fetch the string. Same
-/// would happen with any other object type that we don't want to have referential equality for.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Value {
-    Null,
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-
-    /// Index into the [`Vm::objects`] vec.
-    ///
-    /// Strings are also objects, don't add `Value::String`.
-    Object(ObjectIndex),
-}
-
-impl std::fmt::Display for Value {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Value::Null => write!(f, "null"),
-            Value::Int(int) => write!(f, "{int}"),
-            Value::Float(float) => write!(f, "{float}"),
-            Value::Bool(bool) => write!(f, "{bool}"),
-            Value::Object(object) => write!(f, "{object}"),
-        }
-    }
-}
-
-/// Types of values.
-///
-/// Used for checking type errors at runtime. We can probably use some lib
-/// that creates this automatically based on the [`Value`] enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Type {
-    Int,
-    Float,
-    Bool,
-    Object(ObjectType),
-}
-
-impl std::fmt::Display for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Type::Int => write!(f, "int"),
-            Type::Float => write!(f, "float"),
-            Type::Bool => write!(f, "bool"),
-            Type::Object(object_type) => write!(f, "{object_type}"),
-        }
-    }
-}
-
-/// Object type lattice.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ObjectType {
-    /// Top type of the lattice. It is castable to any of the other
-    /// types.
-    Any,
-    Instance,
-    Array,
-    Map,
-    Function(FunctionType),
-    Class,
-    String,
-    Enum,
-    Variant,
-    Media,
-    Future(FutureType),
-}
-
-impl std::fmt::Display for ObjectType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ObjectType::Any => write!(f, "any"),
-            ObjectType::Instance => write!(f, "instance"),
-            ObjectType::Array => write!(f, "array"),
-            ObjectType::Map => write!(f, "map"),
-            ObjectType::Function(function_type) => write!(f, "{function_type}"),
-            ObjectType::Class => write!(f, "class"),
-            ObjectType::Enum => write!(f, "enum"),
-            ObjectType::Variant => write!(f, "variant"),
-            ObjectType::Future(future_type) => write!(f, "{future_type}"),
-            ObjectType::String => write!(f, "string"),
-            ObjectType::Media => write!(f, "media"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FunctionType {
-    /// Top of function type lattice: represents all function types.
-    Any,
-    Callable,
-    Llm,
-}
-
-impl std::fmt::Display for FunctionType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FunctionType::Any => write!(f, "any"),
-            FunctionType::Callable => write!(f, "callable"),
-            FunctionType::Llm => write!(f, "llm"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FutureType {
-    /// Top of future type lattice: represents all future types.
-    Any,
-    Pending,
-    Ready,
-}
-
-impl std::fmt::Display for FutureType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FutureType::Any => write!(f, "any"),
-            FutureType::Pending => write!(f, "pending"),
-            FutureType::Ready => write!(f, "ready"),
-        }
-    }
-}
-
-impl From<&Future> for FutureType {
-    fn from(value: &Future) -> Self {
-        match value {
-            Future::Pending(_) => Self::Pending,
-            Future::Ready(_) => Self::Ready,
-        }
-    }
-}
-
-impl From<FutureType> for ObjectType {
-    fn from(value: FutureType) -> Self {
-        ObjectType::Future(value)
-    }
-}
-
-impl ObjectType {
-    pub fn of(ob: &Object) -> Self {
-        match ob {
-            Object::Function(func) => Self::Function(func.kind.into()),
-            Object::Class(_) => Self::Class,
-            Object::Instance(_) => Self::Instance,
-            Object::Enum(_) => Self::Enum,
-            Object::Variant(_) => Self::Enum,
-            Object::String(_) => Self::String,
-            Object::Array(_) => Self::Array,
-            Object::Map(_) => Self::Map,
-            Object::Media(_) => Self::Media,
-            Object::Future(fut) => Self::Future(fut.into()),
-        }
-    }
-}
-
-impl From<FunctionKind> for FunctionType {
-    fn from(value: FunctionKind) -> Self {
-        if matches!(value, FunctionKind::Llm) {
-            FunctionType::Llm
-        } else {
-            FunctionType::Callable
-        }
-    }
-}
-
-impl From<FunctionType> for ObjectType {
-    fn from(value: FunctionType) -> Self {
-        ObjectType::Function(value)
-    }
-}
-
-impl<Ob> From<Ob> for Type
-where
-    Ob: Into<ObjectType>,
-{
-    fn from(value: Ob) -> Self {
-        Type::Object(value.into())
-    }
-}
-
-impl Type {
-    /// Get the type of a value.
-    pub fn of(value: &Value, when_object: impl FnOnce(ObjectIndex) -> ObjectType) -> Self {
-        match value {
-            Value::Int(_) => Type::Int,
-            Value::Float(_) => Type::Float,
-            Value::Bool(_) => Type::Bool,
-            Value::Object(index) => Type::Object(when_object(*index)),
-            // TODO: Actually?
-            Value::Null => Type::Object(ObjectType::Any),
-        }
-    }
-}
-
-/// Bug in the VM or somehow invalid source code got compiled and executed.
-///
-/// If the VM throws this it's either a bug in the compiler or in the VM itself.
-#[derive(Debug, PartialEq)]
-pub enum InternalError {
-    /// The number of arguments passed to a function doesn't match the function
-    /// arity.
-    InvalidArgumentCount { expected: usize, got: usize },
-
-    /// Attempt to access the top of the stack but it's empty.
-    UnexpectedEmptyStack,
-
-    /// Attempt to access a stack slot from the top of the stack,
-    /// and stack doesn't have enough items.
-    /// Argument is the amount of slots from the top of the stack (inclusive - 0 is top itself)
-    /// that were queried.
-    NotEnoughItemsOnStack(usize),
-
-    /// Reference an object that does not exist in the object pool.
-    /// Argument is the reference index.
-    InvalidObjectRef(usize),
-
-    /// Attempt to use a value but it's not the expected type.
-    TypeError { expected: Type, got: Type },
-
-    /// Attempt to apply a binary operation to two values of different types.
-    CannotApplyBinOp { left: Type, right: Type, op: BinOp },
-
-    /// Attempt to apply a comparison operation to two values of different types.
-    CannotApplyCmpOp { left: Type, right: Type, op: CmpOp },
-
-    /// Attempt to apply a unary operation to a value of the wrong type.
-    CannotApplyUnaryOp { op: UnaryOp, value: Type },
-
-    /// Array index out of bounds.
-    ArrayIndexOutOfBounds { index: usize, length: usize },
-
-    /// Array index is negative.
-    ArrayIndexIsNegative(i64),
-
-    /// Instruction pointer is negative.
-    NegativeInstructionPtr(isize),
-}
-
-/// Errors that can happen at runtime.
-///
-/// Either logic errors in the user's source code or bugs in our compiler/VM
-/// stack.
-#[derive(Debug, PartialEq)]
-pub enum RuntimeError {
-    /// Ah yes, classic stack overflow.
-    StackOverflow,
-
-    /// User code triggered an assertion failure via the [`Instruction::Assert`] opcode.
-    AssertionError,
-
-    /// VM internal error.
-    InternalError(InternalError),
-
-    /// Map does not contain the requested key.
-    NoSuchKeyInMap,
-
-    /// Right hand side of division operation is zero.
-    DivisionByZero { left: Value, right: Value },
-
-    /// Any error, provide a custom message for this one.
-    Other(String),
-}
-
-/// Any kind of virtual machine error.
-#[derive(Debug, PartialEq)]
-pub enum VmError {
-    RuntimeError(RuntimeError),
-}
-
-impl From<InternalError> for VmError {
-    fn from(error: InternalError) -> Self {
-        VmError::RuntimeError(RuntimeError::InternalError(error))
-    }
-}
-
-impl From<RuntimeError> for VmError {
-    fn from(error: RuntimeError) -> Self {
-        VmError::RuntimeError(error)
-    }
-}
-
-impl std::fmt::Display for VmError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Figure out something nicer here.
-        match self {
-            VmError::RuntimeError(error) => write!(f, "{error:?}"),
-        }
-    }
-}
-
-impl std::fmt::Display for InternalError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Internal VM Erorr: ")?;
-
-        match self {
-            InternalError::InvalidArgumentCount { expected, got } => {
-                write!(
-                    f,
-                    "invalid argument count: expected {expected} arguments, got {got}"
-                )
-            }
-            InternalError::UnexpectedEmptyStack => write!(f, "unexpected empty eval stack"),
-            InternalError::NotEnoughItemsOnStack(count) => {
-                write!(f, "not enough items on stack: {count}")
-            }
-            InternalError::InvalidObjectRef(index) => {
-                write!(f, "invalid object reference: {index}")
-            }
-            InternalError::TypeError { expected, got } => {
-                write!(f, "type error: expected {expected}, got {got}")
-            }
-            InternalError::CannotApplyBinOp { left, right, op } => {
-                write!(f, "cannot apply binary operation: {left} {op} {right}")
-            }
-            InternalError::CannotApplyCmpOp { left, right, op } => {
-                write!(f, "cannot apply comparison operation: {left} {op} {right}")
-            }
-            InternalError::CannotApplyUnaryOp { op, value } => {
-                write!(f, "cannot apply unary operation: {op} {value}")
-            }
-            InternalError::ArrayIndexOutOfBounds { index, length } => {
-                write!(f, "array index out of bounds: {index} of {length}")
-            }
-            InternalError::ArrayIndexIsNegative(index) => {
-                write!(f, "array index is negative: {index}")
-            }
-            InternalError::NegativeInstructionPtr(ptr) => {
-                write!(f, "negative instruction pointer: {ptr}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for VmError {}
-
-impl std::error::Error for InternalError {}
+pub const MAX_FRAMES: usize = 256;
 
 /// Call frame.
 ///
@@ -755,6 +183,9 @@ pub struct Vm {
     /// When the embedder calls [`Vm::collect_garbage`] it will drop all values
     /// after this offset.
     pub runtime_allocs_offset: ObjectIndex,
+
+    /// Environment variables available during execution.
+    pub env_vars: HashMap<String, String>,
 }
 
 /// VM execution state.
@@ -796,13 +227,15 @@ impl Vm {
         BamlVmProgram {
             objects, globals, ..
         }: BamlVmProgram,
+        env_vars: HashMap<String, String>,
     ) -> Self {
         Self {
             frames: Vec::new(),
-            stack: EvalStack(Vec::new()),
-            runtime_allocs_offset: ObjectIndex(objects.len()),
+            stack: EvalStack::new(),
+            runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
             objects,
             globals,
+            env_vars,
         }
     }
 
@@ -825,7 +258,7 @@ impl Vm {
         self.frames.push(Frame {
             function,
             instruction_ptr: 0,
-            locals_offset: StackIndex(0),
+            locals_offset: StackIndex::from_raw(0),
         });
     }
 
@@ -843,9 +276,9 @@ impl Vm {
     /// Returns a reference to the pending future.
     ///
     /// Returns [`InternalError::TypeError`] if the future is not pending, or not a future.
-    pub fn pending_future(&self, future: ObjectIndex) -> Result<&LlmFuture, InternalError> {
+    pub fn pending_future(&self, future: ObjectIndex) -> Result<&PendingFuture, InternalError> {
         match &self.objects[future] {
-            Object::Future(Future::Pending(llm_future)) => Ok(llm_future),
+            Object::Future(Future::Pending(future)) => Ok(future),
             other => Err(InternalError::TypeError {
                 expected: FutureType::Pending.into(),
                 got: ObjectType::of(other).into(),
@@ -921,6 +354,44 @@ impl Vm {
         Value::Object(self.objects.insert(Object::Media(media)))
     }
 
+    /// Builds a stack trace for the given error.
+    ///
+    /// The error is assumed to have happened wherever the instruction pointer
+    /// was left at.
+    ///
+    /// TODO: Not a clean API for the caller, VM should ideally return some kind
+    /// of error struct that contains the error and trace and this would not
+    /// be needed. That requires some refactoring though.
+    pub fn stack_trace(&self, error: VmError) -> StackTrace {
+        let trace = self
+            .frames
+            .iter()
+            .map(|frame| {
+                let function = self.objects[frame.function].as_function()?;
+
+                // VM increments instruction pointer as soon as it reads the
+                // instruction. So in reality the error ocurred on the previous
+                // instruction. The saturating sub is just in case the code has
+                // a bug somewhere.
+                let last_executed_instruction = frame.instruction_ptr.saturating_sub(1);
+
+                Ok(ErrorLocation {
+                    function_name: function.name.to_owned(),
+                    function_span: function.span.to_owned(),
+                    error_line: function.bytecode.source_lines[last_executed_instruction as usize],
+                })
+            })
+            .collect::<Result<Vec<_>, VmError>>()
+            .map_err(|e| {
+                RuntimeError::Other(format!(
+                    "internal error: Vm::stack_trace() failed to build stack trace: {e}\n\noriginal error: {error}"
+                ))
+            })
+            .unwrap_or_default();
+
+        StackTrace { error, trace }
+    }
+
     /// Main VM execution loop.
     ///
     /// Each "cycle" (loop iteration) executes a single instruction.
@@ -952,16 +423,16 @@ impl Vm {
             // Current instruction pointer.
             let instruction_ptr = frame.instruction_ptr;
 
+            // Move the frame's IP to the next instruction. We'll deal with
+            // jump offsets later.
+            frame.instruction_ptr += 1;
+
             // NOTE: `core::intrinsics::unlikely` is only available on nightly.
             // This branch is a big annoyance for small functions (like pushing the frame)
             // and gets smaller the bigger the function due to branch (mis)prediction.
             if instruction_ptr < 0 {
                 return Err(InternalError::NegativeInstructionPtr(instruction_ptr).into());
             }
-
-            // Move the frame's IP to the next instruction. We'll deal with
-            // jump offsets later.
-            frame.instruction_ptr += 1;
 
             // Runtime debugging information.
             // #[cfg(debug_assertions)]
@@ -1066,7 +537,7 @@ impl Vm {
                 }
 
                 Instruction::Pop(n) => {
-                    let drain_range = StackIndex(self.stack.len() - n)..;
+                    let drain_range = StackIndex::from_raw(self.stack.len() - n)..;
                     self.stack.drain(drain_range);
                 }
 
@@ -1080,7 +551,7 @@ impl Vm {
                     let value = self.stack.ensure_pop()?;
 
                     // Pop the last `n` locals from the stack.
-                    let drain_range = StackIndex(self.stack.len() - n)..;
+                    let drain_range = StackIndex::from_raw(self.stack.len() - n)..;
                     self.stack.drain(drain_range);
 
                     // Push the value back on top of the stack.
@@ -1109,7 +580,7 @@ impl Vm {
                             return Err(VmError::from(InternalError::TypeError {
                                 expected: Type::Bool,
                                 got: self.objects.type_of(other),
-                            }))
+                            }));
                         }
                     }
                 }
@@ -1219,7 +690,7 @@ impl Vm {
                                     right: Type::Int,
                                     op,
                                 }
-                                .into())
+                                .into());
                             }
                         }),
 
@@ -1237,7 +708,7 @@ impl Vm {
                                     right: Type::Float,
                                     op,
                                 }
-                                .into())
+                                .into());
                             }
                         }),
 
@@ -1261,7 +732,7 @@ impl Vm {
                                         right: Type::Object(ObjectType::String),
                                         op,
                                     }
-                                    .into())
+                                    .into());
                                 }
                             })
                         }
@@ -1291,7 +762,7 @@ impl Vm {
                                     left: self.objects.type_of(&left),
                                     right: self.objects.type_of(&right),
                                     op,
-                                }))
+                                }));
                             }
                         }),
                     };
@@ -1319,7 +790,7 @@ impl Vm {
 
                 Instruction::AllocArray(size) => {
                     // Pop all the elements from the stack and create an array.
-                    let drain_range = StackIndex(self.stack.len() - size)..;
+                    let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
                     let array = self.stack.drain(drain_range).collect();
 
                     // Allocate it on the heap.
@@ -1327,7 +798,7 @@ impl Vm {
 
                     // Push the array object on top of the stack.
                     self.stack
-                        .push(Value::Object(ObjectIndex(self.objects.len() - 1)));
+                        .push(Value::Object(ObjectIndex::from_raw(self.objects.len() - 1)));
 
                     // objects.push() above might've reallocated the vector so
                     // borrow checker complains. Restore the reference.
@@ -1543,7 +1014,7 @@ impl Vm {
 
                     // Push the instance object on top of the stack.
                     self.stack
-                        .push(Value::Object(ObjectIndex(self.objects.len() - 1)));
+                        .push(Value::Object(ObjectIndex::from_raw(self.objects.len() - 1)));
 
                     // borrow check.
                     function = self.objects[frame.function].as_function()?;
@@ -1604,7 +1075,7 @@ impl Vm {
                         .as_object(&self.stack[args_offset], expected_type.into())?;
 
                     // Can't call a function if it's not a function ¯\_(ツ)_/¯
-                    let Object::Function(llm_function) = &self.objects[index] else {
+                    let Object::Function(callable_future) = &self.objects[index] else {
                         return Err(InternalError::TypeError {
                             expected: expected_type.into(),
                             got: ObjectType::of(&self.objects[index]).into(),
@@ -1614,35 +1085,42 @@ impl Vm {
 
                     // Compiler should have already checked this so we could
                     // skip it but it's an easy and fast check.
-                    if arg_count != llm_function.arity {
+                    if arg_count != callable_future.arity {
                         return Err(VmError::from(InternalError::InvalidArgumentCount {
-                            expected: llm_function.arity,
+                            expected: callable_future.arity,
                             got: arg_count,
                         }));
                     }
 
                     // Not a future.
-                    if !matches!(llm_function.kind, FunctionKind::Llm) {
+                    if !matches!(
+                        callable_future.kind,
+                        FunctionKind::Llm | FunctionKind::Future
+                    ) {
                         return Err(VmError::from(InternalError::TypeError {
-                            expected: FunctionType::Llm.into(),
-                            got: FunctionType::from(llm_function.kind).into(),
+                            expected: FunctionType::Llm.into(), // TODO: Fix this
+                            got: FunctionType::from(callable_future.kind).into(),
                         }));
                     }
 
-                    // Collect the LLM function call args and cleanup the LLM
-                    // call.
-                    let llm_args = self.stack.drain(args_offset..).skip(1).collect();
+                    // Collect the function call args and cleanup the call.
+                    let future_args = self.stack.drain(args_offset..).skip(1).collect();
 
                     // Create the pending future.
-                    let llm_future = LlmFuture {
-                        llm_function: llm_function.name.clone(),
-                        args: llm_args,
+                    let pending_future = PendingFuture {
+                        function: callable_future.name.clone(),
+                        args: future_args,
+                        kind: match callable_future.kind {
+                            FunctionKind::Llm => FutureKind::Llm,
+                            FunctionKind::Future => FutureKind::Net,
+                            _ => unreachable!(),
+                        },
                     };
 
                     // Allocate the future.
                     let object_index = self
                         .objects
-                        .insert(Object::Future(Future::Pending(llm_future)));
+                        .insert(Object::Future(Future::Pending(pending_future)));
 
                     // Now leave the future on top of the stack.
                     self.stack.push(Value::Object(object_index));
@@ -1729,7 +1207,8 @@ impl Vm {
                         FunctionKind::Native(func) => {
                             // NOTE: (perf) could use drain(..) instead, or even maintain the arguments
                             // reference in the stack, using `swap` to insert the result.
-                            let args = self.stack[StackIndex(locals_offset.0 + 1)..].to_owned();
+                            let args =
+                                self.stack[StackIndex::from_raw(locals_offset.0 + 1)..].to_owned();
 
                             // Run Rust native function.
                             let result = func(self, &args)?;
@@ -1768,7 +1247,7 @@ impl Vm {
                             function = self.objects[frame.function].as_function()?;
                         }
 
-                        FunctionKind::Llm => {
+                        FunctionKind::Llm | FunctionKind::Future => {
                             return Err(InternalError::TypeError {
                                 expected: FunctionType::Callable.into(),
                                 got: FunctionType::from(callee.kind).into(),

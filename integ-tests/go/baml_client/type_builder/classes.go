@@ -823,6 +823,50 @@ func (t *Document1559ClassView) Type() (baml.Type, error) {
 	return t.inner.Type()
 }
 
+type DummyJsonTodoClassView struct {
+	inner baml.ClassBuilder
+}
+
+func (t *DummyJsonTodoClassView) ListProperties() ([]ClassPropertyView, error) {
+	result, err := t.inner.ListProperties()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]ClassPropertyView, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+func (t *DummyJsonTodoClassView) PropertyId() (ClassPropertyView, error) {
+	return t.inner.Property("id")
+}
+
+func (t *DummyJsonTodoClassView) PropertyTodo() (ClassPropertyView, error) {
+	return t.inner.Property("todo")
+}
+
+func (t *DummyJsonTodoClassView) PropertyCompleted() (ClassPropertyView, error) {
+	return t.inner.Property("completed")
+}
+
+func (t *DummyJsonTodoClassView) PropertyUserId() (ClassPropertyView, error) {
+	return t.inner.Property("userId")
+}
+
+func (t *TypeBuilder) DummyJsonTodo() (*DummyJsonTodoClassView, error) {
+	bld, err := t.inner.Class("DummyJsonTodo")
+	if err != nil {
+		return nil, err
+	}
+	return &DummyJsonTodoClassView{inner: bld}, nil
+}
+
+func (t *DummyJsonTodoClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+
 type DummyOutputClassBuilder struct {
 	inner baml.ClassBuilder
 }

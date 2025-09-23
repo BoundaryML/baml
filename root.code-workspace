@@ -108,11 +108,6 @@
         ]
       }
     ],
-    "workbench.colorCustomizations": {
-      "activityBar.background": "#630001",
-      "titleBar.activeBackground": "#8B0002",
-      "titleBar.activeForeground": "#FFFBFB"
-    },
     "biome.lsp.bin": "typescript/node_modules/@biomejs/biome/bin/biome",
 
     "biome.lspBin": "typescript/node_modules/@biomejs/biome/bin/biome",

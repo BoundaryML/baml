@@ -58,7 +58,6 @@ indoc.workspace = true
 json_comments = "0.2.2"
 jsonish.workspace = true
 generators-lib = { path = "../generators/utils/generators_lib" }
-internal-baml-codegen.workspace = true
 generators-openapi = { path = "../generators/languages/openapi" }
 internal-llm-client.workspace = true
 internal-baml-core.workspace = true
@@ -158,7 +157,7 @@ uuid = { workspace = true, features = ["v4", "serde", "js"] }
 wasm-bindgen = "^0.2.74"
 wasm-bindgen-futures = "0.4"
 web-sys.workspace = true
-wasmtimer = "0.4.1"
+wasmtimer = "0.4.3"
 tokio = { version = "1", features = ["rt", "sync"] }
 
 

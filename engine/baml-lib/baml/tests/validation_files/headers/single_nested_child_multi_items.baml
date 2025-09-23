@@ -1,8 +1,8 @@
 # Parent
-fn SingleNestedChildMultiItems() -> string {
+function SingleNestedChildMultiItems() -> string {
     let items = [1, 2, 3];
 
-    for (item in items) {
+    for (let item in items) {
         ## First
         let x = item;
 
@@ -12,5 +12,3 @@ fn SingleNestedChildMultiItems() -> string {
 
     "done"
 }
-
-

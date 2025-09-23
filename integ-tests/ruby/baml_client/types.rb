@@ -207,7 +207,7 @@ module BamlClient
   end
 
   # #########################################################################
-  # Generated classes (101)
+  # Generated classes (102)
   # #########################################################################
 
 
@@ -368,6 +368,15 @@ module BamlClient
       include Baml::Sorbet::Struct
       const :client_details, ClientDetails1559
       const :notes, T::Array[Note1599]
+  end
+
+
+  class DummyJsonTodo < T::Struct
+      include Baml::Sorbet::Struct
+      const :id, Integer
+      const :todo, String
+      const :completed, T::Boolean
+      const :userId, Integer
   end
 
 

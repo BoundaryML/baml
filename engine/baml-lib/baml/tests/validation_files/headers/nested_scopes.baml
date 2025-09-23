@@ -1,7 +1,7 @@
-fn NestedScopes() -> string {
+function NestedScopes() -> string {
     # Top Level
     let x = "hello";
-    
+
     ## First Section
     let z = if (x == "hello") {
         ### Inside If Block
@@ -14,5 +14,3 @@ fn NestedScopes() -> string {
 
     z
 }
-
-

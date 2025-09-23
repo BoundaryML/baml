@@ -15,7 +15,7 @@ fn return_enum_variant() -> anyhow::Result<()> {
                 Circle
             }
 
-            fn main() -> Shape {
+            function main() -> Shape {
                 Shape.Rectangle
             }
         "#,
@@ -40,7 +40,7 @@ fn assign_enum_variant() -> anyhow::Result<()> {
                 Circle
             }
 
-            fn main() -> Shape {
+            function main() -> Shape {
                 let s = Shape.Rectangle;
                 s
             }

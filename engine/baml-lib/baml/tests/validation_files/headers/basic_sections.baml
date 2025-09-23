@@ -1,10 +1,10 @@
-fn BasicSections() -> string {
+function BasicSections() -> string {
     # Main Processing
     let title = "hello";
-    
+
     ## Generate Summary
     let summary = "world";
-    
+
     ## Make Space
     let space = " ";
 
@@ -21,5 +21,3 @@ fn BasicSections() -> string {
 //    | 
 //  1 | function BasicSections() -> string {
 //    | 
-
-

@@ -1,4 +1,4 @@
-fn GCD(a: int, b: int) -> int {
+function GCD(a: int, b: int) -> int {
 
 	while (a != b) {
 	   if (a > b) {

@@ -87,7 +87,7 @@ function IterativeFibonacci(n: int) -> int {
 
 function SumArray(arr: int[]) -> int {
     let sum = 0;
-    for (a in arr) {
+    for (let a in arr) {
         sum += a;
     }
     sum
@@ -109,6 +109,11 @@ function ReturnCategory(category: Category) -> Category {
 
 function ReturnImageFromUrl(url: string) -> image {
     image.from_url(url)
+}
+
+function HomeEnvVarIsEmpty() -> bool {
+    let home = env.HOME;
+    home == ""
 }
 
 // --------------------------------
@@ -138,4 +143,19 @@ function StoreLlmCallInLocalVar(n: int) -> int {
 
 function BoolToIntWithIfElseCallingLlm(b: bool) -> int {
     if (b) { LlmReturnNumber(1) } else { LlmReturnNumber(0) }
+}
+
+/// Other builtins
+
+class DummyJsonTodo {
+    id int
+    todo string
+    completed bool
+    userId int
+}
+
+function ExecFetchAs(url: string) -> DummyJsonTodo {
+    let todo = baml.fetch_as<DummyJsonTodo>(url);
+
+    todo
 }

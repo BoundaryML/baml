@@ -124,9 +124,18 @@ impl TypeDocumentRender for TypeIR {
 impl Statement {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
         match self {
-            Statement::Let { name, value, .. } => RcDoc::text("let")
+            Statement::Let {
+                name,
+                value,
+                annotated_type,
+                ..
+            } => RcDoc::text("let")
                 .append(RcDoc::space())
                 .append(RcDoc::text(name.clone()))
+                .append(match annotated_type {
+                    Some(t) => RcDoc::text(": ").append(t.to_doc()),
+                    None => RcDoc::nil(),
+                })
                 .append(RcDoc::space())
                 .append(RcDoc::text("="))
                 .append(RcDoc::space())
@@ -155,9 +164,18 @@ impl Statement {
                 .append(RcDoc::space())
                 .append(value.to_doc())
                 .append(RcDoc::text(";")),
-            Statement::DeclareAndAssign { name, value, .. } => RcDoc::text("let")
+            Statement::DeclareAndAssign {
+                name,
+                value,
+                annotated_type,
+                ..
+            } => RcDoc::text("let")
                 .append(RcDoc::space())
                 .append(RcDoc::text(name.clone()))
+                .append(match annotated_type {
+                    Some(t) => RcDoc::text(": ").append(t.to_doc()),
+                    None => RcDoc::nil(),
+                })
                 .append(RcDoc::space())
                 .append(RcDoc::text("="))
                 .append(RcDoc::space())

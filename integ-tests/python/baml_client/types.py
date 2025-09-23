@@ -153,7 +153,7 @@ class TestEnum(str, Enum):
     G = "G"
 
 # #########################################################################
-# Generated classes (101)
+# Generated classes (102)
 # #########################################################################
 
 class AnotherObject(BaseModel):
@@ -252,6 +252,12 @@ class CustomTaskResult(BaseModel):
 class Document1559(BaseModel):
     client_details: "ClientDetails1559"
     notes: typing.List["Note1599"]
+
+class DummyJsonTodo(BaseModel):
+    id: int
+    todo: str
+    completed: bool
+    userId: int
 
 class DummyOutput(BaseModel):
     model_config = ConfigDict(extra='allow')

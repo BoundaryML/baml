@@ -1,4 +1,4 @@
-fn DeclareMutableInFunction(x: int) -> int {
+function DeclareMutableInFunction(x: int) -> int {
 
 	let y = 3;
 
@@ -7,7 +7,7 @@ fn DeclareMutableInFunction(x: int) -> int {
 	y
 }
 
-fn MutableInArg(x: int) -> int {
+function MutableInArg(x: int) -> int {
 	x = 3;
 	x
 }

@@ -27,7 +27,7 @@ pub struct Hir {
     pub llm_functions: Vec<LlmFunction>,
     pub classes: Vec<Class>,
     pub enums: Vec<Enum>,
-    pub global_assignments: baml_types::BamlMap<String, Expression>,
+    pub global_assignments: baml_types::BamlMap<String, GlobalAssignment>,
 }
 
 impl Hir {
@@ -121,6 +121,7 @@ pub enum Statement {
     Let {
         name: String,
         value: Expression,
+        annotated_type: Option<TypeIR>,
         span: Span,
     },
     /// Declare a (mutable) reference.
@@ -146,6 +147,7 @@ pub enum Statement {
     DeclareAndAssign {
         name: String,
         value: Expression,
+        annotated_type: Option<TypeIR>,
         span: Span,
     },
     /// Return from a function.
@@ -188,6 +190,13 @@ pub enum Statement {
     },
 }
 
+#[derive(Clone, Debug)]
+pub struct GlobalAssignment {
+    pub value: Expression,
+    pub annotated_type: Option<TypeIR>,
+    pub span: Span,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum AssignOp {
     /// The `+=` operator (addition)
@@ -228,6 +237,7 @@ pub enum Expression {
     MethodCall {
         receiver: Box<Expression>,
         method: String,
+        type_args: Vec<TypeArg>,
         args: Vec<Expression>,
         span: Span,
     },

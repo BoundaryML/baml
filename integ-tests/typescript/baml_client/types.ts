@@ -322,6 +322,14 @@ export interface Document1559 {
   
 }
 
+export interface DummyJsonTodo {
+  id: number
+  todo: string
+  completed: boolean
+  userId: number
+  
+}
+
 export interface DummyOutput {
   nonce: string
   nonce2: string

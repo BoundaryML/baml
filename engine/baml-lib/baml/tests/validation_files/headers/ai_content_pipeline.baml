@@ -1,5 +1,5 @@
 # AI Content Pipeline
-fn AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript: string?, title: string?) -> string {
+function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript: string?, title: string?) -> string {
     # Fetch Resources
 
     ## Retrieve Emails and Posts from Database
@@ -35,7 +35,7 @@ fn AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript: stri
     let content_types = ["email", "x", "linkedin"];
 
     ## Generate Drafts for Posts
-    for (kind in content_types) {
+    for (let kind in content_types) {
         ### Get Content Type and Generate Draft
         let structure = GetStructure(kind);
         let draft = GenerateContent(kind, video_id, summary);
@@ -59,5 +59,3 @@ fn AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript: stri
     # Complete
     "done"
 }
-
-

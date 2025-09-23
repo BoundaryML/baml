@@ -588,6 +588,16 @@ async fn eval_args(
     Ok(evaluated_args)
 }
 
+fn resolve_env_variable<'a>(
+    env: &EvalEnv<'a>,
+    var_name: &str,
+) -> anyhow::Result<BamlValueWithMeta<()>> {
+    match env.env_vars.get(var_name) {
+        Some(value) => Ok(BamlValueWithMeta::String(value.clone(), ())),
+        None => Err(anyhow!("Environment variable '{var_name}' not found")),
+    }
+}
+
 pub async fn eval_to_value_or_llm_call<'a>(
     env: &EvalEnv<'a>,
     expr: &Expr<ExprMetadata>,

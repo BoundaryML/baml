@@ -9,11 +9,11 @@ use common::{assert_compiles, Program};
 fn basic_and() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn ret_bool() -> bool {
+            function ret_bool() -> bool {
                 true
             }
 
-            fn main() -> bool {
+            function main() -> bool {
                 true && ret_bool()
             }
         "#,
@@ -35,11 +35,11 @@ fn basic_and() -> anyhow::Result<()> {
 fn basic_or() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn ret_bool() -> bool {
+            function ret_bool() -> bool {
                 true
             }
 
-            fn main() -> bool {
+            function main() -> bool {
                 true || ret_bool()
             }
         "#,
@@ -62,7 +62,7 @@ fn basic_or() -> anyhow::Result<()> {
 fn basic_add() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let a = 1 + 2;
                 a
             }
@@ -84,7 +84,7 @@ fn basic_add() -> anyhow::Result<()> {
 fn basic_assign_add() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 1;
                 x += 2;
                 x

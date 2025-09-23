@@ -2,8 +2,8 @@
 
 use baml_compiler::test::ast;
 use baml_vm::{
-    BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool, Instruction,
-    Object, ObjectIndex, ObjectPool, StackIndex, Value, Vm, VmError, VmExecState,
+    errors::VmError, BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool,
+    Instruction, Object, ObjectIndex, ObjectPool, StackIndex, Value, Vm, VmExecState,
 };
 
 /// Helper struct for testing VM execution.
@@ -22,6 +22,7 @@ pub fn assert_vm_executes(input: Program) -> anyhow::Result<()> {
 }
 
 /// Helper function for VM execution with custom inspection.
+#[track_caller]
 pub fn assert_vm_executes_with_inspection(
     input: Program,
     inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
@@ -42,7 +43,14 @@ pub fn assert_vm_executes_with_inspection(
 }
 
 pub fn assert_vm_fails(input: FailingProgram) -> anyhow::Result<()> {
-    let (_, result) = setup_and_exec_program(input.source, input.function)?;
+    assert_vm_fails_with_inspection(input, |_vm| Ok(()))
+}
+
+pub fn assert_vm_fails_with_inspection(
+    input: FailingProgram,
+    inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let (vm, result) = setup_and_exec_program(input.source, input.function)?;
 
     assert_eq!(
         result,
@@ -50,6 +58,8 @@ pub fn assert_vm_fails(input: FailingProgram) -> anyhow::Result<()> {
         "VM execution result mismatch for function '{}'",
         input.function
     );
+
+    inspect(&vm)?;
 
     Ok(())
 }
@@ -77,6 +87,7 @@ fn setup_and_exec_program(
         runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
         objects,
         globals,
+        env_vars: Default::default(),
     };
     let result = vm.exec();
     Ok((vm, result))
@@ -117,6 +128,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
             names.resize_with(names.capacity(), String::new);
             vec![names]
         },
+        span: internal_baml_diagnostics::Span::fake(),
     };
 
     let objects = vec![Object::Function(function)];
@@ -133,6 +145,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
         objects: ObjectPool::from_vec(objects),
         globals: GlobalPool::from_vec(globals),
+        env_vars: Default::default(),
     };
 
     let result = vm.exec()?;

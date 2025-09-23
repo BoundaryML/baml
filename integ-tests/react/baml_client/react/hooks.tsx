@@ -10572,6 +10572,56 @@ export function useTestOpenRouterMistralSmall3_1_24b(
   }
 }
 /**
+ * A specialized hook for the TestOpenaiResponsesPdfs BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - pdf: Pdf
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestOpenaiResponsesPdfs({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestOpenaiResponsesPdfs({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestOpenaiResponsesPdfs(props: HookInput<'TestOpenaiResponsesPdfs', { stream: false }>): HookOutput<'TestOpenaiResponsesPdfs', { stream: false }>
+export function useTestOpenaiResponsesPdfs(props?: HookInput<'TestOpenaiResponsesPdfs', { stream?: true }>): HookOutput<'TestOpenaiResponsesPdfs', { stream: true }>
+export function useTestOpenaiResponsesPdfs(
+  props: HookInput<'TestOpenaiResponsesPdfs', { stream?: boolean }> = {},
+): HookOutput<'TestOpenaiResponsesPdfs', { stream: true }> | HookOutput<'TestOpenaiResponsesPdfs', { stream: false }> {
+  let action: ServerAction = Actions.TestOpenaiResponsesPdfs;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestOpenaiResponsesPdfs;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TestOpenaiResponsesPdfs', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the TestRetryConstant BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**

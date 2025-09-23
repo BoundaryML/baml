@@ -26,7 +26,7 @@ module BamlClient
       const :state, Symbol
   end
   # #########################################################################
-  # Generated classes (101)
+  # Generated classes (102)
   # #########################################################################
 
 
@@ -187,6 +187,15 @@ module BamlClient
       include Baml::Sorbet::Struct
       const :client_details, T.nilable(ClientDetails1559)
       const :notes, T::Array[Note1599]
+  end
+
+
+  class DummyJsonTodo < T::Struct
+      include Baml::Sorbet::Struct
+      const :id, T.nilable(Integer)
+      const :todo, T.nilable(String)
+      const :completed, T.nilable(T::Boolean)
+      const :userId, T.nilable(Integer)
   end
 
 

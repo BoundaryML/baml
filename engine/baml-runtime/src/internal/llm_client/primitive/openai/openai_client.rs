@@ -203,7 +203,7 @@ impl ProviderStrategy {
                                                             baml_types::BamlMediaContent::Base64(b64_media) => {
                                                                 Ok(json!({
                                                                     "type": if msg.role == "assistant" { "output_file" } else { "input_file" },
-                                                                    "file_url": format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
+                                                                    "file_data": format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
                                                                 }))
                                                             }
                                                         }

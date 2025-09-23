@@ -1248,6 +1248,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenRouterMistralSmall3_1_24b", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def TestOpenaiResponsesPdfs(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenaiResponsesPdfs", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def TestRetryConstant(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -1397,6 +1403,18 @@ class LlmResponseParser:
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
+
+    def ExecFetchAs(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.DummyJsonTodo:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAs", llm_response=llm_response, mode="request")
+        return typing.cast(types.DummyJsonTodo, result)
+
+    def HomeEnvVarIsEmpty(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> bool:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="HomeEnvVarIsEmpty", llm_response=llm_response, mode="request")
+        return typing.cast(bool, result)
 
     def IterativeFibonacci(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2702,6 +2720,12 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenRouterMistralSmall3_1_24b", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
+    def TestOpenaiResponsesPdfs(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenaiResponsesPdfs", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
     def TestRetryConstant(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -2851,6 +2875,18 @@ class LlmStreamParser:
     ) -> typing.Optional[str]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[str], result)
+
+    def ExecFetchAs(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional["stream_types.DummyJsonTodo"]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAs", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], result)
+
+    def HomeEnvVarIsEmpty(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[bool]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="HomeEnvVarIsEmpty", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[bool], result)
 
     def IterativeFibonacci(
         self, llm_response: str, baml_options: BamlCallOptions = {},

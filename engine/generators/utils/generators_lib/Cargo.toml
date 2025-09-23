@@ -18,3 +18,4 @@ generators-typescript = { path = "../../languages/typescript" }
 generators-ruby = { path = "../../languages/ruby" }
 internal-baml-core.workspace = true
 indexmap.workspace = true
+semver.workspace = true

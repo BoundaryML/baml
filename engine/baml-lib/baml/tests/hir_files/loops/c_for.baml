@@ -1,4 +1,4 @@
-fn SumToTen() -> int {
+function SumToTen() -> int {
 	let s = 0;
 
 	for (let i = 1; i <= 10; i += 1) {
@@ -8,7 +8,7 @@ fn SumToTen() -> int {
 	s
 }
 
-fn NoCondition() -> int {
+function NoCondition() -> int {
 	let s = 0;
 
 	for (let i = 0; ; s += i) {
@@ -17,7 +17,7 @@ fn NoCondition() -> int {
 	s
 }
 
-fn NoAfter() -> int {
+function NoAfter() -> int {
 	let s = 0;
 
 	for (let i = 0; i <= 10;) {
@@ -27,7 +27,7 @@ fn NoAfter() -> int {
 }
 
 
-fn OnlyCond() -> int {
+function OnlyCond() -> int {
 	let s = 0;
 
 	for (; false;) {
@@ -37,7 +37,7 @@ fn OnlyCond() -> int {
 }
 
 
-fn Nothing() -> int {
+function Nothing() -> int {
 	let s = 0;
 
 	for (;;) {
