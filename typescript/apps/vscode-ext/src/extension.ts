@@ -157,41 +157,47 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  const bamlPlaygroundCommand = vscode.commands.registerCommand(
-    "baml.openBamlPanel",
-    (args?: { projectId: string; functionName: string }) => {
-      const config = vscode.workspace.getConfiguration();
-      config.update(
-        "baml.bamlPanelOpen",
-        true,
-        vscode.ConfigurationTarget.Global,
-      );
+  console.log("sam is registering baml.openBamlPanel command");
+  let bamlPlaygroundCommand: vscode.Disposable | null = null;
+  try {
+    bamlPlaygroundCommand = vscode.commands.registerCommand(
+      "baml.openBamlPanel",
+      (args?: { projectId: string; functionName: string }) => {
+        const config = vscode.workspace.getConfiguration();
+        config.update(
+          "baml.bamlPanelOpen",
+          true,
+          vscode.ConfigurationTarget.Global,
+        );
 
-      console.info("context.extensionUri", context.extensionUri);
-      WebviewPanelHost.render(context.extensionUri, getPort, telemetry);
-      if (telemetry) {
-        telemetry.sendTelemetryEvent({
-          event: "baml.openBamlPanel",
-          properties: {},
-        });
-      }
-      // sends project files as well to webview
-      requestDiagnostics();
-
-      if (!args) return;
-
-      WebviewPanelHost.currentPanel?.sendCommandToWebview({
-        source: "lsp_message",
-        payload: {
-          method: "workspace/executeCommand",
-          params: {
-            command: "baml.openBamlPanel",
-            arguments: [args],
-          },
+        console.info("context.extensionUri", context.extensionUri);
+        WebviewPanelHost.render(context.extensionUri, getPort, telemetry);
+        if (telemetry) {
+          telemetry.sendTelemetryEvent({
+            event: "baml.openBamlPanel",
+            properties: {},
+          });
         }
-      });
-    },
-  );
+        // sends project files as well to webview
+        requestDiagnostics();
+
+        if (!args) return;
+
+        WebviewPanelHost.currentPanel?.sendCommandToWebview({
+          source: "lsp_message",
+          payload: {
+            method: "workspace/executeCommand",
+            params: {
+              command: "baml.openBamlPanel",
+              arguments: [args],
+            },
+          }
+        });
+      },
+    );
+  } catch (e) {
+    console.error("custom sam Error registering baml.openBamlPanel command:", e);
+  }
 
   const bamlTestcaseCommand = vscode.commands.registerCommand(
     "baml.runBamlTest",
@@ -267,7 +273,9 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
-  context.subscriptions.push(bamlPlaygroundCommand);
+  if (bamlPlaygroundCommand) {
+    context.subscriptions.push(bamlPlaygroundCommand);
+  }
   context.subscriptions.push(bamlTestcaseCommand);
   context.subscriptions.push(bamlSetFlashingRegionsCommand);
 
