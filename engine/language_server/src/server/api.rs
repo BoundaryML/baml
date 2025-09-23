@@ -137,7 +137,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                         .map_err(|e| anyhow::anyhow!("Failed to parse JSON: {e}"))?;
                     let url = Url::parse(&params.project_id).context("Failed to parse URL")?;
 
-                    let Ok(project) = session.get_or_create_project(&url.to_file_path().unwrap())
+                    let Ok(project) = session.get_or_create_project(url.to_file_path().unwrap())
                     else {
                         return Ok(());
                     };
