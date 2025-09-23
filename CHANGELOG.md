@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.208.2](https://github.com/boundaryml/baml/compare/0.208.0..0.208.2) - 2025-09-23
+
+
+### Bugfixes
+- Add mcp types (#2500) - ([0501d6d](https://github.com/boundaryml/baml/commit/0501d6db3c66cd21b02f88e2316d0bda167d56a5)) - aaronvg
+- Bump version to 0.208.2 - ([1624f6c](https://github.com/boundaryml/baml/commit/1624f6c60c1874ff92ae6b02366f19769c0cb9df)) - Aaron Villalpando
+
 ## [0.208.1](https://github.com/boundaryml/baml/compare/0.208.0..0.208.1) - 2025-09-22
 
 
