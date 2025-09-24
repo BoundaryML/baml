@@ -11,7 +11,7 @@ class InputClassNested {
 }
  
 
-  function AliasedInputClass(input: InputClass) -> string {
+function AliasedInputClass(input: InputClass) -> string {
   client GPT35
   prompt #"
 
@@ -32,7 +32,7 @@ function AliasedInputClass2(input: InputClass) -> string {
   "#
 }
  
-  function AliasedInputClassNested(input: InputClassNested) -> string {
+ function AliasedInputClassNested(input: InputClassNested) -> string {
   client GPT35
   prompt #"
     {{ _.role("user")}}
@@ -53,7 +53,8 @@ function AliasedInputEnum(input: AliasedEnum) -> string {
   client GPT4o
   prompt #"
     {{ _.role("user")}}
-a
+
+
     Write out this word only in your response, in lowercase:
     ---
     {{input}}
