@@ -1,26 +1,5 @@
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
-
-// Note: the name add_project should match exactly to the
-// EventListener.tsx command definitions due to how serde serializes these into json
-#[allow(non_camel_case_types)]
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(tag = "method", content = "params")]
-pub enum FrontendMessage {
-    runtime_updated {
-        root_path: String,
-        files: HashMap<String, String>,
-    },
-    baml_settings_updated {
-        settings: HashMap<String, String>,
-    },
-    run_test {
-        function_name: String,
-        test_name: String,
-    },
-}
 
 #[derive(Debug, Clone)]
 /// Messages sent to the webview router, see language_server/src/server.rs

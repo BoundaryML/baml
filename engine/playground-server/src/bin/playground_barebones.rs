@@ -1,8 +1,8 @@
 use std::{collections::HashMap, fs, path::Path};
 
+use baml_lsp_types::BamlNotification;
 use playground_server::{
-    pick_ports, AppState, FrontendMessage, PlaygroundServer, PortConfiguration, WebviewCommand,
-    WebviewRouterMessage,
+    pick_ports, AppState, PlaygroundServer, PortConfiguration, WebviewCommand, WebviewRouterMessage,
 };
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
@@ -40,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn load_project_from_directory(dir_path: &'static str) -> FrontendMessage {
+fn load_project_from_directory(dir_path: &'static str) -> BamlNotification {
     let mut files = HashMap::new();
     let base_path = Path::new(dir_path);
 
@@ -85,7 +85,7 @@ fn load_project_from_directory(dir_path: &'static str) -> FrontendMessage {
 
     tracing::info!("Loaded {} .baml files from {}", files.len(), dir_path);
 
-    FrontendMessage::runtime_updated {
+    BamlNotification::RuntimeUpdated {
         root_path: dir_path.to_string(),
         files,
     }

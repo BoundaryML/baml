@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use lsp_server::{ErrorCode, Notification};
 use lsp_types::{request, ExecuteCommandParams, MessageType};
-use playground_server::{FrontendMessage, WebviewRouterMessage};
+use playground_server::WebviewRouterMessage;
 use serde_json::json;
 use tokio::time::sleep;
 use webbrowser;

@@ -3,7 +3,7 @@ use std::{collections::HashMap, time::Instant};
 use lsp_types::{
     notification::DidChangeTextDocument, DidChangeTextDocumentParams, PublishDiagnosticsParams,
 };
-use playground_server::{FrontendMessage, WebviewRouterMessage};
+use playground_server::WebviewRouterMessage;
 
 use crate::{
     server::{

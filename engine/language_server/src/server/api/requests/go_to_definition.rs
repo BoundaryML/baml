@@ -4,7 +4,7 @@ use lsp_types::{
     self, request as req, GotoDefinitionParams, GotoDefinitionResponse, Location, Position, Range,
     Url,
 };
-use playground_server::{FrontendMessage, WebviewRouterMessage};
+use playground_server::WebviewRouterMessage;
 
 use crate::{
     baml_project::{position_utils::get_word_at_position, trim_line, BamlRuntimeExt},

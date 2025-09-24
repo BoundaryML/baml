@@ -20,7 +20,7 @@ use lsp_types::{
     TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url,
     WorkspaceClientCapabilities, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
-use playground_server::{FrontendMessage, WebviewCommand, WebviewRouterMessage};
+use playground_server::{WebviewCommand, WebviewRouterMessage};
 use schedule::Task;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
