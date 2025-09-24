@@ -255,22 +255,29 @@ class VSCodeAPIWrapper {
   }
 
   public async getVSCodeSettings() {
-    const resp = await this.rpc<
-      GetVSCodeSettingsRequest,
-      GetVSCodeSettingsResponse
-    >({
-      vscodeCommand: 'GET_VSCODE_SETTINGS',
-    });
-    return resp;
+    if (this.isVscode()) {
+      const resp = await this.rpc<
+        GetVSCodeSettingsRequest,
+        GetVSCodeSettingsResponse
+      >({
+        vscodeCommand: 'GET_VSCODE_SETTINGS',
+      });
+      return resp;
+    } else {
+      // TODO: this is hardcoded because setting toggles are broken in vscode right now
+      // If we fix these in vscode, we should also fix them in jetbrains and zed
+      return {
+        enablePlaygroundProxy: true,
+        featureFlags: ["beta"],
+      };
+    }
   }
 
   public async setProxySettings(proxyEnabled: boolean) {
     await this.rpc<UpdateSettingsRequest, void>({
       vscodeCommand: 'UPDATE_SETTINGS',
       settings: {
-        baml: {
-          enablePlaygroundProxy: proxyEnabled,
-        },
+        enablePlaygroundProxy: proxyEnabled,
       },
     });
   }
@@ -316,9 +323,7 @@ class VSCodeAPIWrapper {
     await this.rpc<UpdateSettingsRequest, void>({
       vscodeCommand: 'UPDATE_SETTINGS',
       settings: {
-        baml: {
-          featureFlags,
-        },
+        featureFlags,
       },
     });
   }
@@ -354,15 +359,15 @@ class VSCodeAPIWrapper {
           path,
           contents: true, // Request file contents along with URI
         });
-        
+
         if (response.readError) {
           throw new Error(`Failed to read file: ${path}\n${response.readError}`);
         }
-        
+
         if (response.contents) {
           return decodeBuffer(response.contents);
         }
-        
+
         // Handle case where no contents or error returned
         throw new Error(`File not found or unable to read: '${path}'`);
       } else {
@@ -373,13 +378,13 @@ class VSCodeAPIWrapper {
           path,
           // Don't request contents - server will return data URL automatically
         });
-        
+
         // Server returns data URL for media files, fetch it
         const httpResponse = await fetch(response.uri);
         if (!httpResponse.ok) {
           throw new Error(`HTTP ${httpResponse.status}: ${httpResponse.statusText}`);
         }
-        
+
         const arrayBuffer = await httpResponse.arrayBuffer();
         return new Uint8Array(arrayBuffer);
       }
