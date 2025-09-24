@@ -1,19 +1,16 @@
 //! VM tests for map operations.
 
-use baml_vm::{ObjectIndex, RuntimeError, Value, VmExecState};
+use baml_vm::RuntimeError;
 
 mod common;
-use common::{
-    assert_vm_executes, assert_vm_executes_with_inspection, assert_vm_fails, FailingProgram,
-    Program,
-};
+use common::{assert_vm_executes, assert_vm_fails, ExecState, FailingProgram, Program, Value};
+
+use crate::common::Object;
 
 #[test]
 fn create_and_access() -> anyhow::Result<()> {
-    let str_index = ObjectIndex::from_raw(0);
-    assert_vm_executes_with_inspection(
-        Program {
-            source: r#"
+    assert_vm_executes(Program {
+        source: r#"
                 function CreateMap() -> map<string, string> {
                     { hello "world" }
                 }
@@ -22,14 +19,9 @@ fn create_and_access() -> anyhow::Result<()> {
                     map["hello"]
                 }
             "#,
-            function: "UseMap",
-            expected: VmExecState::Complete(Value::Object(str_index)),
-        },
-        |vm| {
-            assert_eq!(vm.objects[str_index].as_string().unwrap(), "world");
-            Ok(())
-        },
-    )
+        function: "UseMap",
+        expected: ExecState::Complete(Value::Object(Object::String(String::from("world")))),
+    })
 }
 
 #[test]
@@ -52,30 +44,23 @@ fn access_no_key() -> anyhow::Result<()> {
 
 #[test]
 fn contains() -> anyhow::Result<()> {
-    let str_index = ObjectIndex::from_raw(0);
-    assert_vm_executes_with_inspection(
-        Program {
-            source: r#"
-                function CreateMapJSON() -> map<string, string> {
-                    {"hello": "world"}
+    assert_vm_executes(Program {
+        source: r#"
+            function CreateMapJSON() -> map<string, string> {
+                {"hello": "world"}
+            }
+            function UseMapContains() -> string {
+                let map = CreateMapJSON();
+                if (map.has("hello")) {
+                    map["hello"]
+                } else {
+                    "hi"
                 }
-                function UseMapContains() -> string {
-                    let map = CreateMapJSON();
-                    if (map.has("hello")) {
-                        map["hello"]
-                    } else {
-                        "hi"
-                    }
-                }
-            "#,
-            function: "UseMapContains",
-            expected: VmExecState::Complete(Value::Object(str_index)),
-        },
-        |vm| {
-            assert_eq!(vm.objects[str_index].as_string().unwrap(), "world");
-            Ok(())
-        },
-    )
+            }
+        "#,
+        function: "UseMapContains",
+        expected: ExecState::Complete(Value::Object(Object::String(String::from("world")))),
+    })
 }
 
 #[test]
@@ -93,7 +78,7 @@ fn modify() -> anyhow::Result<()> {
             }
         "#,
         function: "EditMapKey",
-        expected: VmExecState::Complete(Value::Int(42)),
+        expected: ExecState::Complete(Value::Int(42)),
     })
 }
 
@@ -110,6 +95,6 @@ fn len() -> anyhow::Result<()> {
             }
         "#,
         function: "Len",
-        expected: VmExecState::Complete(Value::Int(2)),
+        expected: ExecState::Complete(Value::Int(2)),
     })
 }

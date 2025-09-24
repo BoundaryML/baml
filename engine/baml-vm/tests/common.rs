@@ -1,10 +1,162 @@
 //! Common test utilities for VM tests.
 
 use baml_compiler::test::ast;
+use baml_types::{BamlMap, BamlMedia};
 use baml_vm::{
     errors::VmError, BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool,
-    Instruction, Object, ObjectIndex, ObjectPool, StackIndex, Value, Vm, VmExecState,
+    Instruction, Object as VmObject, ObjectIndex, ObjectPool, StackIndex, Value as VmValue, Vm,
+    VmExecState,
 };
+use indexmap::IndexMap;
+
+/// Test-friendly representation of VM values that doesn't rely on object
+/// indices.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Value {
+    Null,
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+    Object(Object),
+}
+
+impl Value {
+    /// Convert a VM Value to a TestValue by following object references.
+    pub fn from_vm_value(value: &VmValue, vm: &Vm) -> anyhow::Result<Self> {
+        match value {
+            VmValue::Null => Ok(Value::Null),
+            VmValue::Int(i) => Ok(Value::Int(*i)),
+            VmValue::Float(f) => Ok(Value::Float(*f)),
+            VmValue::Bool(b) => Ok(Value::Bool(*b)),
+            VmValue::Object(index) => Object::from_vm_object(*index, vm).map(Value::Object),
+        }
+    }
+}
+
+/// Test-friendly representation of VM objects.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Object {
+    String(String),
+    Array(Vec<Value>),
+    Map(BamlMap<String, Value>),
+    Instance(Instance),
+    Variant(Variant),
+    Media(BamlMedia),
+    // We can extend this with more object types as needed
+}
+
+impl Object {
+    pub fn from_vm_object(index: ObjectIndex, vm: &Vm) -> anyhow::Result<Self> {
+        let obj = &vm.objects[index];
+        match obj {
+            VmObject::String(s) => Ok(Object::String(s.clone())),
+
+            VmObject::Array(arr) => arr
+                .iter()
+                .map(|v| Value::from_vm_value(v, vm))
+                .collect::<anyhow::Result<Vec<_>>>()
+                .map(Object::Array),
+
+            VmObject::Map(map) => map
+                .iter()
+                .map(|(key, value)| {
+                    Value::from_vm_value(value, vm).map(|value| (key.clone(), value))
+                })
+                .collect::<anyhow::Result<BamlMap<String, Value>>>()
+                .map(Object::Map),
+
+            VmObject::Instance(instance) => {
+                let VmObject::Class(vm_class) = &vm.objects[instance.class] else {
+                    anyhow::bail!("Class not found for instance: {:?}", instance);
+                };
+
+                let mut fields = BamlMap::new();
+
+                for (i, value) in instance.fields.iter().enumerate() {
+                    let value = Value::from_vm_value(value, vm)?;
+                    fields.insert(vm_class.field_names[i].clone(), value);
+                }
+
+                Ok(Object::Instance(Instance {
+                    class: vm_class.name.clone(),
+                    fields,
+                }))
+            }
+
+            VmObject::Variant(variant) => {
+                let VmObject::Enum(vm_enum) = &vm.objects[variant.enm] else {
+                    anyhow::bail!("Enum not found for variant: {:?}", variant);
+                };
+
+                Ok(Object::Variant(Variant {
+                    enm: vm_enum.name.clone(),
+                    variant: vm_enum.variant_names[variant.index].clone(),
+                }))
+            }
+
+            VmObject::Media(media) => Ok(Object::Media(media.clone())),
+
+            _ => anyhow::bail!("Unsupported object type for testing: {:?}", obj),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Instance {
+    pub class: String,
+    pub fields: IndexMap<String, Value>,
+}
+
+impl Instance {
+    pub fn fields(from: IndexMap<&str, Value>) -> IndexMap<String, Value> {
+        from.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Variant {
+    pub enm: String,
+    pub variant: String,
+}
+
+/// Enhanced test execution state that supports TestValue comparisons.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExecState {
+    /// VM cannot proceed. It is awaiting a pending future to complete.
+    Await(Object),
+    /// VM notifies caller about a future that needs to be scheduled.
+    ScheduleFuture(Object),
+    /// VM has completed the execution with a test-friendly value.
+    Complete(Value),
+}
+
+impl ExecState {
+    /// Convert from VmExecState, converting Value to TestValue for Complete case.
+    pub fn from_vm_exec_state(state: VmExecState, vm: &Vm) -> anyhow::Result<Self> {
+        match state {
+            VmExecState::Await(index) => Ok(ExecState::Await(Object::from_vm_object(index, vm)?)),
+            VmExecState::ScheduleFuture(index) => Ok(ExecState::ScheduleFuture(
+                Object::from_vm_object(index, vm)?,
+            )),
+            VmExecState::Complete(value) => {
+                Value::from_vm_value(&value, vm).map(ExecState::Complete)
+            }
+        }
+    }
+}
+
+/// Compare a VM execution result with expected test value.
+pub fn assert_vm_value_equals(vm: &Vm, actual: &VmValue, expected: &Value) -> anyhow::Result<()> {
+    let actual_test_value = Value::from_vm_value(actual, vm)?;
+    if actual_test_value != *expected {
+        anyhow::bail!(
+            "VM value mismatch!\nExpected: {:?}\nActual: {:?}",
+            expected,
+            actual_test_value
+        );
+    }
+    Ok(())
+}
 
 /// Helper struct for testing VM execution.
 pub struct ProgramInput<Expect> {
@@ -13,34 +165,8 @@ pub struct ProgramInput<Expect> {
     pub expected: Expect,
 }
 
-pub type Program = ProgramInput<VmExecState>;
+pub type Program = ProgramInput<ExecState>;
 pub type FailingProgram = ProgramInput<VmError>;
-
-/// Unified helper function for VM execution with optional inspection.
-pub fn assert_vm_executes(input: Program) -> anyhow::Result<()> {
-    assert_vm_executes_with_inspection(input, |_vm| Ok(()))
-}
-
-/// Helper function for VM execution with custom inspection.
-#[track_caller]
-pub fn assert_vm_executes_with_inspection(
-    input: Program,
-    inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
-) -> anyhow::Result<()> {
-    let (vm, result) = setup_and_exec_program(input.source, input.function)?;
-    let result = result?;
-
-    assert_eq!(
-        result, input.expected,
-        "VM execution result mismatch for function '{}'",
-        input.function
-    );
-
-    // Run custom inspection
-    inspect(&vm)?;
-
-    Ok(())
-}
 
 pub fn assert_vm_fails(input: FailingProgram) -> anyhow::Result<()> {
     assert_vm_fails_with_inspection(input, |_vm| Ok(()))
@@ -59,6 +185,32 @@ pub fn assert_vm_fails_with_inspection(
         input.function
     );
 
+    inspect(&vm)?;
+
+    Ok(())
+}
+
+pub fn assert_vm_executes(input: Program) -> anyhow::Result<()> {
+    assert_vm_executes_with_inspection(input, |_vm| Ok(()))
+}
+
+#[track_caller]
+pub fn assert_vm_executes_with_inspection(
+    input: Program,
+    inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let (vm, result) = setup_and_exec_program(input.source, input.function)?;
+    let result = result?;
+
+    let test_result = ExecState::from_vm_exec_state(result, &vm)?;
+
+    assert_eq!(
+        test_result, input.expected,
+        "VM execution result mismatch for function '{}'",
+        input.function
+    );
+
+    // Run custom inspection
     inspect(&vm)?;
 
     Ok(())
@@ -83,7 +235,7 @@ fn setup_and_exec_program(
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
         }],
-        stack: EvalStack::from_vec(vec![Value::Object(target_function_index)]),
+        stack: EvalStack::from_vec(vec![VmValue::Object(target_function_index)]),
         runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
         objects,
         globals,
@@ -97,7 +249,7 @@ fn setup_and_exec_program(
 pub struct BytecodeProgram {
     pub arity: usize,
     pub instructions: Vec<Instruction>,
-    pub constants: Vec<Value>,
+    pub constants: Vec<VmValue>,
     pub expected: VmExecState,
 }
 
@@ -131,8 +283,8 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         span: internal_baml_diagnostics::Span::fake(),
     };
 
-    let objects = vec![Object::Function(function)];
-    let globals = vec![Value::Object(ObjectIndex::from_raw(0))];
+    let objects = vec![VmObject::Function(function)];
+    let globals = vec![VmValue::Object(ObjectIndex::from_raw(0))];
 
     // Create and run the VM
     let mut vm = Vm {
@@ -141,7 +293,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
         }],
-        stack: EvalStack::from_vec(vec![Value::Object(ObjectIndex::from_raw(0))]),
+        stack: EvalStack::from_vec(vec![VmValue::Object(ObjectIndex::from_raw(0))]),
         runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
         objects: ObjectPool::from_vec(objects),
         globals: GlobalPool::from_vec(globals),

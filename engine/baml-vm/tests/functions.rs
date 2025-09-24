@@ -1,9 +1,9 @@
 //! VM tests for function calls, parameters, and return statements.
 
-use baml_vm::{ObjectIndex, Value, VmExecState};
-
 mod common;
-use common::{assert_vm_executes, assert_vm_executes_with_inspection, Program};
+use common::{assert_vm_executes, ExecState, Program, Value};
+
+use crate::common::Object;
 
 #[test]
 fn return_function_call() -> anyhow::Result<()> {
@@ -18,7 +18,7 @@ fn return_function_call() -> anyhow::Result<()> {
             }
         ",
         function: "main",
-        expected: VmExecState::Complete(Value::Int(1)),
+        expected: ExecState::Complete(Value::Int(1)),
     })
 }
 
@@ -37,7 +37,7 @@ fn function_call_without_parameters() -> anyhow::Result<()> {
             }
         ",
         function: "main",
-        expected: VmExecState::Complete(Value::Int(2)),
+        expected: ExecState::Complete(Value::Int(2)),
     })
 }
 
@@ -55,72 +55,40 @@ fn function_call_with_parameters() -> anyhow::Result<()> {
             }
         ",
         function: "main",
-        expected: VmExecState::Complete(Value::Int(1)),
+        expected: ExecState::Complete(Value::Int(1)),
     })
 }
 
 #[test]
 fn function_returning_string() -> anyhow::Result<()> {
-    assert_vm_executes_with_inspection(
-        Program {
-            source: r#"
-                function main() -> string {
-                    "hello"
-                }
-            "#,
-            function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(0))),
-        },
-        |vm| {
-            let baml_vm::Object::String(string) = &vm.objects[ObjectIndex::from_raw(0)] else {
-                panic!(
-                    "expected String, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(0)]
-                );
-            };
-
-            assert_eq!(string, "hello");
-
-            Ok(())
-        },
-    )
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> string {
+                "hello"
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::String(String::from("hello")))),
+    })
 }
 
 #[test]
 fn multiple_strings() -> anyhow::Result<()> {
-    assert_vm_executes_with_inspection(
-        Program {
-            source: r#"
-                function get_greeting() -> string {
-                    "Hello"
-                }
+    assert_vm_executes(Program {
+        source: r#"
+            function get_greeting() -> string {
+                "Hello"
+            }
 
-                function main() -> string {
-                    let greeting = get_greeting();
-                    let name = "World";
-                    greeting
-                }
-            "#,
-            function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(0))), // "Hello" should be the first string object
-        },
-        |vm| {
-            // Check that we have the expected strings in the objects pool
-            let strings: Vec<&str> = vm
-                .objects
-                .iter()
-                .filter_map(|obj| match obj {
-                    baml_vm::Object::String(s) => Some(s.as_str()),
-                    _ => None,
-                })
-                .collect();
-
-            assert!(strings.contains(&"Hello"));
-            assert!(strings.contains(&"World"));
-
-            Ok(())
-        },
-    )
+            function main() -> string {
+                let greeting = get_greeting();
+                let name = "World";
+                greeting
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::String(String::from("Hello")))),
+    })
 }
 
 #[test]
@@ -137,7 +105,7 @@ fn early_return() -> anyhow::Result<()> {
                 EarlyReturn(42)
             }"#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(1)),
+        expected: ExecState::Complete(Value::Int(1)),
     })
 }
 
@@ -170,7 +138,7 @@ fn return_with_stack() -> anyhow::Result<()> {
                 7
             }"#,
         function: "WithStack",
-        expected: VmExecState::Complete(Value::Int(0)),
+        expected: ExecState::Complete(Value::Int(0)),
     })
 }
 
@@ -191,6 +159,6 @@ fn recursive() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(2)),
+        expected: ExecState::Complete(Value::Int(2)),
     })
 }

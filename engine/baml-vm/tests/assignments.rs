@@ -1,9 +1,7 @@
 //! VM tests for field assignments and complex assignment scenarios.
 
-use baml_vm::{Value, VmExecState};
-
 mod common;
-use common::{assert_vm_executes, Program};
+use common::{assert_vm_executes, ExecState, Program, Value};
 
 // Variable mutation
 #[test]
@@ -17,7 +15,7 @@ fn mutable_var_in_function() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(5)),
+        expected: ExecState::Complete(Value::Int(5)),
     })
 }
 
@@ -36,7 +34,7 @@ fn mutable_param() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(3)),
+        expected: ExecState::Complete(Value::Int(3)),
     })
 }
 
@@ -55,7 +53,7 @@ fn field_assignment_add_assign() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(15)),
+        expected: ExecState::Complete(Value::Int(15)),
     })
 }
 
@@ -73,7 +71,7 @@ fn field_assignment_sub_assign() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(12)),
+        expected: ExecState::Complete(Value::Int(12)),
     })
 }
 
@@ -91,7 +89,7 @@ fn field_assignment_mul_assign() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(21)),
+        expected: ExecState::Complete(Value::Int(21)),
     })
 }
 
@@ -109,7 +107,7 @@ fn field_assignment_div_assign() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(6)),
+        expected: ExecState::Complete(Value::Int(6)),
     })
 }
 
@@ -127,7 +125,7 @@ fn field_assignment_mod_assign() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(2)),
+        expected: ExecState::Complete(Value::Int(2)),
     })
 }
 
@@ -146,7 +144,7 @@ fn field_assignment_simple() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(42)),
+        expected: ExecState::Complete(Value::Int(42)),
     })
 }
 
@@ -167,7 +165,7 @@ fn field_assignment_multiple_ops() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(5)),
+        expected: ExecState::Complete(Value::Int(5)),
     })
 }
 
@@ -190,7 +188,7 @@ fn nested_field_assignment_simple() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(42)),
+        expected: ExecState::Complete(Value::Int(42)),
     })
 }
 
@@ -212,7 +210,7 @@ fn nested_field_assignment_compound() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(42)),
+        expected: ExecState::Complete(Value::Int(42)),
     })
 }
 
@@ -233,7 +231,7 @@ fn field_assignment_object_field() -> anyhow::Result<()> {
                 true
             }"#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(true)),
+        expected: ExecState::Complete(Value::Bool(true)),
     })
 }
 
@@ -259,7 +257,7 @@ fn array_element_field_assignment() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(25)), // 20 + 5
+        expected: ExecState::Complete(Value::Int(25)), // 20 + 5
     })
 }
 
@@ -302,7 +300,7 @@ fn array_element_method_field_assignment() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(35)), // 20 + 5 + 10
+        expected: ExecState::Complete(Value::Int(35)), // 20 + 5 + 10
     })
 }
 
@@ -330,7 +328,7 @@ fn method_call_then_array_access_assignment() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(25)),
+        expected: ExecState::Complete(Value::Int(25)),
     })
 }
 
@@ -361,7 +359,7 @@ fn method_call_field_assignment() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(15)),
+        expected: ExecState::Complete(Value::Int(15)),
     })
 }
 
@@ -394,6 +392,6 @@ fn method_call_field_assignment_with_copy() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(15)),
+        expected: ExecState::Complete(Value::Int(15)),
     })
 }

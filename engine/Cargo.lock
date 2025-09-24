@@ -1422,6 +1422,7 @@ dependencies = [
  "baml-types",
  "colored",
  "criterion",
+ "indexmap 2.9.0",
  "internal-baml-core",
  "internal-baml-diagnostics",
  "internal-baml-parser-database",
