@@ -16,7 +16,7 @@ pub async fn load_gcp_credentials(_request: LoadGcpCredsRequest) -> LoadGcpCreds
         // see https://github.com/googleapis/google-cloud-rust/issues/3361
         Ok(CacheableResource::NotModified) => LoadGcpCredsResponse::Error {
             name: "CredentialLoadError".to_string(),
-            message: "unreacahble!".to_string(),
+            message: "unreachable!".to_string(),
         },
         Ok(CacheableResource::New { data: headers, .. }) => {
             let access_token = match headers
