@@ -412,17 +412,18 @@ export const registerClientEventHandlers = (client: LanguageClient, context: Ext
     },
   );
 
-  client.onRequest('executeCommand', async (command: string) => {
-    try {
-      console.log('Executing command requested by LSP:', command);
-      await vscode.commands.executeCommand(command);
-    } catch (e) {
-      console.error(
-        `Error executing command '${command}' requested by LSP:`,
-        e,
-      );
-    }
-  });
+  // This seems to be unused, I don't see these log lines anywhere
+  // client.onRequest('executeCommand', async (command: string) => {
+  //   try {
+  //     console.log('Executing command requested by LSP:', command);
+  //     await vscode.commands.executeCommand(command);
+  //   } catch (e) {
+  //     console.error(
+  //       `Error executing command '${command}' requested by LSP:`,
+  //       e,
+  //     );
+  //   }
+  // });
 
   client.onRequest('baml_settings_updated', (config: typeof BAML_CONFIG_SINGLETON) => {
     console.log('Received baml_settings_updated from LSP:', config)

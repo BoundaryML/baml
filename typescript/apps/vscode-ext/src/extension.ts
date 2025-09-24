@@ -13,20 +13,21 @@ import {
   telemetry,
 } from "./plugins/language-server-client";
 
+import type { Express } from "express";
+import { Socket } from "net";
+import StatusBarPanel from "./panels/StatusBarPanel";
+import { Server } from "http";
+
 const outputChannel = vscode.window.createOutputChannel("baml");
 const diagnosticsCollection =
   vscode.languages.createDiagnosticCollection("baml-diagnostics");
 
-let server: any;
+let server: Server | null = null;
 let glowOnDecoration: vscode.TextEditorDecorationType | null = null;
 let glowOffDecoration: vscode.TextEditorDecorationType | null = null;
 let isGlowOn: boolean = true;
 let animationTimer: NodeJS.Timeout | null = null;
 let highlightRanges: vscode.Range[] = [];
-
-import type { Express } from "express";
-import { Socket } from "net";
-import StatusBarPanel from "./panels/StatusBarPanel";
 
 export function activate(context: vscode.ExtensionContext) {
   console.log("BAML extension activating");
@@ -41,12 +42,12 @@ export function activate(context: vscode.ExtensionContext) {
 
   const app: Express = require("express")();
   app.use(cors());
-  const server = app.listen(0, () => {
+  server = app.listen(0, () => {
     console.log("Server started on port " + getPort());
   });
 
   const getPort = () => {
-    const addr = server.address();
+    const addr = server?.address() || null;
     if (addr === null) {
       vscode.window.showErrorMessage(
         "Failed to start BAML extension server. Please try reloading the window, or restarting VSCode.",
@@ -316,7 +317,7 @@ export function activate(context: vscode.ExtensionContext) {
         command: "update_cursor",
         content: {
           fileName: name,
-          line: position?.line ?? 0 + 1,
+          line: position?.line ?? 0,
           column: position?.character ?? 0,
         },
       }
