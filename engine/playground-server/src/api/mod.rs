@@ -22,7 +22,6 @@ pub struct GetVSCodeSettingsResponse {
     pub feature_flags: Vec<String>,
 }
 
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetWebviewUriRequest {
@@ -118,6 +117,12 @@ pub struct SendCommandToWebviewRequest(pub crate::definitions::WebviewCommand);
 #[derive(Serialize)]
 pub struct SendCommandToWebviewResponse {
     pub ok: bool,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSettingsRequest {
+    pub settings: serde_json::Value,
 }
 
 pub mod errors;

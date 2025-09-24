@@ -54,11 +54,15 @@ pub async fn webview_rpc_handler(
         }
 
         "UPDATE_SETTINGS" => {
-            tracing::info!("UPDATE_SETTINGS: {:#?}", payload);
+            let request: UpdateSettingsRequest = serde_json::from_value(payload)
+                .context("Failed to parse UpdateSettingsRequest")
+                .map_err(anyhow_to_bad_request)?;
+
+            tracing::info!("UPDATE_SETTINGS: {:#?}", request);
 
             let _ = state
                 .to_webview_router_tx
-                .send(WebviewRouterMessage::UpdateLanguageServerSettings(payload))
+                .send(WebviewRouterMessage::UpdateLanguageServerSettings(request.settings))
                 .inspect_err(|e| {
                     tracing::error!("Failed to send UPDATE_LANGUAGE_SERVER_SETTINGS message to WebviewRouter: {e}");
                 });

@@ -722,25 +722,29 @@ const plugin: BamlVSCodePlugin = {
     );
 
     let serverAbsolutePath: string | null = null;
-    try {
-      console.log(
-        `Resolving initial CLI path using bundled version: ${packageJson.version}`,
-      );
-      bamlOutputChannel.appendLine(
-        `Resolving initial CLI path using bundled version: ${packageJson.version}`,
-      );
-      serverAbsolutePath = await resolveCliPath(
-        context,
-        packageJson.version,
-        bamlOutputChannel,
-      );
-    } catch (e) {
-      console.error('Error resolving initial CLI path during activation:', e);
-      // Ensure error message is a string
-      const activationErrorMessage = e instanceof Error ? e.message : String(e);
-      bamlOutputChannel.appendLine(
-        `ERROR: Error resolving initial CLI path during activation: ${activationErrorMessage}`,
-      );
+    if (isDebugOrTest) {
+      serverAbsolutePath = process.env.VSCODE_DEBUG_BAML_CLI_PATH || null;
+    } else {
+      try {
+        console.log(
+          `Resolving initial CLI path using bundled version: ${packageJson.version}`,
+        );
+        bamlOutputChannel.appendLine(
+          `Resolving initial CLI path using bundled version: ${packageJson.version}`,
+        );
+        serverAbsolutePath = await resolveCliPath(
+          context,
+          packageJson.version,
+          bamlOutputChannel,
+        );
+      } catch (e) {
+        console.error('Error resolving initial CLI path during activation:', e);
+        // Ensure error message is a string
+        const activationErrorMessage = e instanceof Error ? e.message : String(e);
+        bamlOutputChannel.appendLine(
+          `ERROR: Error resolving initial CLI path during activation: ${activationErrorMessage}`,
+        );
+      }
     }
 
     if (!serverAbsolutePath) {
