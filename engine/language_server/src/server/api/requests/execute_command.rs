@@ -10,6 +10,7 @@ use webbrowser;
 use crate::{
     server::{
         api::{
+            requests::code_action::OPEN_IN_BROWSER_COMMAND,
             traits::{RequestHandler, SyncRequestHandler},
             ResultExt,
         },
@@ -34,7 +35,7 @@ impl SyncRequestHandler for ExecuteCommand {
     ) -> Result<Option<serde_json::Value>> {
         use crate::server::commands::RegisteredCommands;
 
-        if params.command == "baml.openBamlPanelInBrowser" {
+        if params.command == OPEN_IN_BROWSER_COMMAND {
             // Get the actual playground port from session (determined by server after availability check)
             // Fall back to configured port if actual port not set yet
 

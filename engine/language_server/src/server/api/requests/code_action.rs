@@ -23,6 +23,8 @@ impl RequestHandler for CodeActionHandler {
     type RequestType = request::CodeActionRequest;
 }
 
+pub(crate) const OPEN_IN_BROWSER_COMMAND: &str = "baml.openBamlPanelInBrowser";
+
 impl SyncRequestHandler for CodeActionHandler {
     fn run(
         session: &mut Session,
@@ -60,7 +62,7 @@ impl SyncRequestHandler for CodeActionHandler {
             kind: Some(CodeActionKind::EMPTY),
             command: Some(Command {
                 title: "Open Playground".to_string(),
-                command: "baml.openBamlPanelInBrowser".to_string(),
+                command: OPEN_IN_BROWSER_COMMAND.to_string(),
                 arguments: function_name.map(|name| vec![Value::String(name)]),
             }),
             edit: None,
