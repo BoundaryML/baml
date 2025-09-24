@@ -24,6 +24,9 @@ export type VscodeToWebviewCommand =
     | {
         source: 'lsp_message';
         payload: | {
+            // This is the core event that drives synchronization between edits/changes to files
+            // in the IDE and the runtime in the webview - yes, we really do just constantly
+            // re-compile users' entire codebases on every single keystroke
             method: "runtime_updated";
             params: {
                 root_path: string;
@@ -31,6 +34,14 @@ export type VscodeToWebviewCommand =
             };
         }
         | {
+            // Used by jetbrains/zed, in theory
+            // At the time of this writing, settings wiring is not done
+            method: 'baml_settings_updated';
+            params: Partial<BamlConfigAtom>;
+        }
+        | {
+            // In VSCode we simulate this forwarding; in Jetbrains/Zed this is
+            // forwarded directly.
             method: "workspace/executeCommand";
             params: {
                 command: "baml.openBamlPanel";
@@ -42,6 +53,8 @@ export type VscodeToWebviewCommand =
             }
         }
         | {
+            // In VSCode we simulate this forwarding; in Jetbrains/Zed this is
+            // forwarded directly.
             method: "workspace/executeCommand";
             params: {
                 command: "baml.runBamlTest";
@@ -53,6 +66,8 @@ export type VscodeToWebviewCommand =
                 ]
             }
         } | {
+            // Used by Zed instead of update_cursor, because it doesn't have
+            // support for custom cursor update listeners.
             method: "textDocument/codeAction";
             params: {
                 textDocument: {

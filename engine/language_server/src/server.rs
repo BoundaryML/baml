@@ -256,11 +256,11 @@ impl Server {
                                 tracing::error!("Failed to send GET_LANGUAGE_SERVER_SETTINGS response to WebviewRouter: {e}");
                             });
                         }
-                        WebviewRouterMessage::UpdateLanguageServerSettings(settings) => {
-                            tracing::info!("Received playground UPDATE_LANGUAGE_SERVER_SETTINGS request: {:?}", settings);
-                            let _ = session.update_baml_settings(settings.clone());
+                        WebviewRouterMessage::UpdateLanguageServerSettings(unparsed_settings) => {
+                            tracing::info!("Received playground UPDATE_LANGUAGE_SERVER_SETTINGS request: {:?}", unparsed_settings);
+                            let _ = session.update_baml_settings(unparsed_settings.clone());
                             let _ = notifier
-                                .notify_raw("baml_settings_updated".to_string(), settings.clone())
+                                .notify_raw("baml_settings_updated".to_string(), json!(&session.baml_settings))
                                 .inspect_err(|e| {
                                     tracing::error!("Failed to send baml_settings_updated notification to IDE: {e}");
                                 });

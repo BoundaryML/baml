@@ -54,5 +54,6 @@
       "editor.defaultFormatter": "vscode.typescript-language-features",
       "editor.insertSpaces": true,
       "editor.tabSize": 2
-  }
+  },
+  "baml.enablePlaygroundProxy": true,
 }

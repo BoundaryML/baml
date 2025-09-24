@@ -128,6 +128,13 @@ export const EventListener: React.FC = () => {
         case 'lsp_message':
           const { method, params } = payload;
           switch (method) {
+            case 'baml_settings_updated':
+              setBamlConfig(({ config: prevConfig, ...prevRest }) => {
+                const newConfig = { ...prevRest, config: { ...prevConfig, ...params } };
+                console.debug('baml_settings_updated', { prevConfig, params, newConfig });
+                return newConfig
+              });
+              break;
             case 'runtime_updated':
               debouncedSetBamlFileMap(
                 Object.fromEntries(
