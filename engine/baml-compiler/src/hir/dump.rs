@@ -3,6 +3,7 @@
 use baml_types::ir_type::TypeIR;
 use pretty::RcDoc;
 
+use crate::emit::{EmitSpec, EmitWhen};
 use crate::hir::{
     AssignOp, BinaryOperator, Block, Class, ClassConstructorField, Enum, EnumVariant, ExprFunction,
     Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg, UnaryOperator,
@@ -128,6 +129,7 @@ impl Statement {
                 name,
                 value,
                 annotated_type,
+                emit,
                 ..
             } => RcDoc::text("let")
                 .append(RcDoc::space())
@@ -140,6 +142,10 @@ impl Statement {
                 .append(RcDoc::text("="))
                 .append(RcDoc::space())
                 .append(value.to_doc())
+                .append(match emit {
+                    Some(emit) => emit.to_doc(),
+                    None => RcDoc::nil(),
+                })
                 .append(RcDoc::text(";")),
             Statement::Declare { name, .. } => RcDoc::text("var")
                 .append(RcDoc::space())
@@ -168,6 +174,7 @@ impl Statement {
                 name,
                 value,
                 annotated_type,
+                emit,
                 ..
             } => RcDoc::text("let")
                 .append(RcDoc::space())
@@ -180,6 +187,10 @@ impl Statement {
                 .append(RcDoc::text("="))
                 .append(RcDoc::space())
                 .append(value.to_doc())
+                .append(match emit {
+                    Some(emit) => emit.to_doc(),
+                    None => RcDoc::nil(),
+                })
                 .append(RcDoc::text(";")),
             Statement::Return { expr, .. } => RcDoc::text("return")
                 .append(RcDoc::space())
@@ -675,5 +686,27 @@ impl UnaryOperator {
 impl AssignOp {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
         RcDoc::text(self.to_string())
+    }
+}
+
+impl EmitSpec {
+    pub fn to_doc(&self) -> RcDoc<'static, ()> {
+        let mut args: Vec<String> = Vec::new();
+        if self.skip_def {
+            args.push("skip_def=true".to_string())
+        }
+        match &self.when {
+            EmitWhen::False => args.push("when=false".to_string()),
+            EmitWhen::True => {}
+            EmitWhen::FunctionName(fn_name) => args.push(format!("when={fn_name}")),
+        }
+        args.push(format!("name={}", self.name));
+        let args_doc = RcDoc::intersperse(args.iter().cloned().map(RcDoc::text), RcDoc::text(", "));
+        let doc = RcDoc::space().append(RcDoc::text("@emit"));
+        if args.len() > 0 {
+            doc.append(RcDoc::text("(").append(args_doc).append(RcDoc::text(")")))
+        } else {
+            doc
+        }
     }
 }

@@ -2,6 +2,7 @@
 ///
 use baml_types::ir_type::TypeIR;
 
+use crate::emit::EmitSpec;
 use crate::hir::{self, AssignOp, BinaryOperator, LlmFunction, UnaryOperator};
 
 pub mod interpret;
@@ -633,6 +634,7 @@ pub enum Statement<T> {
     Let {
         name: String,
         value: Expr<T>,
+        emit: Option<EmitSpec>,
         span: Span,
     },
     /// Declare a (mutable) reference.
@@ -657,6 +659,7 @@ pub enum Statement<T> {
     DeclareAndAssign {
         name: String,
         value: Expr<T>,
+        emit: Option<EmitSpec>,
         span: Span,
     },
     /// Return from a function.
@@ -708,9 +711,15 @@ impl<T: Clone> Statement<T> {
             Statement::Let {
                 name,
                 value,
+                emit,
                 span: _,
             } => {
-                format!("Let {} = {}", name, value.dump_str())
+                format!(
+                    "Let {} = {} {}",
+                    name,
+                    value.dump_str(),
+                    emit.as_ref().map_or("", |_| "<emit>").to_string()
+                )
             }
             Statement::Declare { name, span: _ } => format!("var {name}"),
             Statement::Assign { left, value } => {
@@ -725,9 +734,15 @@ impl<T: Clone> Statement<T> {
             Statement::DeclareAndAssign {
                 name,
                 value,
+                emit,
                 span: _,
             } => {
-                format!("var {} <- {}", name, value.dump_str())
+                format!(
+                    "var {} <- {} {}",
+                    name,
+                    value.dump_str(),
+                    emit.as_ref().map_or("", |_| "<emit>").to_string()
+                )
             }
             Statement::Return { expr, span: _ } => {
                 format!("return {}", expr.dump_str())

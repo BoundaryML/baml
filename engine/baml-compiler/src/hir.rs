@@ -2,6 +2,7 @@
 //!
 //! This file contains the definitions for all HIR items.
 
+use crate::emit::EmitSpec;
 use baml_types::ir_type::TypeIR;
 use internal_baml_diagnostics::Span;
 
@@ -40,12 +41,6 @@ impl Hir {
             global_assignments: baml_types::BamlMap::new(),
         }
     }
-}
-
-// TODO: Unused?
-pub struct Function {
-    pub params: Vec<TypeIR>,
-    pub return_type: Box<TypeIR>,
 }
 
 #[derive(Clone, Debug)]
@@ -122,6 +117,7 @@ pub enum Statement {
         name: String,
         value: Expression,
         annotated_type: Option<TypeIR>,
+        emit: Option<EmitSpec>,
         span: Span,
     },
     /// Declare a (mutable) reference.
@@ -148,6 +144,7 @@ pub enum Statement {
         name: String,
         value: Expression,
         annotated_type: Option<TypeIR>,
+        emit: Option<EmitSpec>,
         span: Span,
     },
     /// Return from a function.

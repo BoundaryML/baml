@@ -1,5 +1,6 @@
 pub mod builtin;
 pub mod codegen;
+pub mod emit;
 pub mod hir;
 pub mod thir;
 
