@@ -14,154 +14,159 @@
 package stream_types
 
 import (
-	"encoding/json"
-	"fmt"
+    "encoding/json"
+    "fmt"
 
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+
+    "optional_nullable/baml_client/types"
 )
 
 type Union2ProductOrUser struct {
-	variant string
-
-	variant_User *User
-
-	variant_Product *Product
+    variant string
+    
+    variant_User *User
+    
+    variant_Product *Product
+    
 }
 
 func (u *Union2ProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-	valueHolder := holder.Value
-	variantName := holder.VariantName
+    valueHolder := holder.Value
+    variantName := holder.VariantName
 	switch variantName {
-	case "User":
-		u.variant = "User"
-		value := baml.Decode(valueHolder).Interface().(User)
-		u.variant_User = &value
-	case "Product":
-		u.variant = "Product"
-		value := baml.Decode(valueHolder).Interface().(Product)
-		u.variant_Product = &value
-
-	default:
-		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+    case "User":
+            u.variant = "User"
+            value := baml.Decode(valueHolder).Interface().(User)
+            u.variant_User = &value
+    case "Product":
+            u.variant = "Product"
+            value := baml.Decode(valueHolder).Interface().(Product)
+            u.variant_Product = &value
+    
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
+
 func (u Union2ProductOrUser) Encode() (*cffi.CFFIValueHolder, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "User":
+        return baml.EncodeUnion(u.BamlEncodeName, "User", *u.variant_User)
+    
+    case "Product":
+        return baml.EncodeUnion(u.BamlEncodeName, "Product", *u.variant_Product)
+    
+    case "":
+        return nil, fmt.Errorf("invalid union variant: [unset]")
+    }
 
-	case "User":
-		return baml.EncodeUnion(u.BamlEncodeName, "User", *u.variant_User)
-
-	case "Product":
-		return baml.EncodeUnion(u.BamlEncodeName, "Product", *u.variant_Product)
-
-	case "":
-		return nil, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union2ProductOrUser) BamlTypeName() string {
-	return "Union2ProductOrUser"
+    return "Union2ProductOrUser"
 }
 
 func (u Union2ProductOrUser) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__Product__User",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Union__Product__User",
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+    }
 }
 
 func (u Union2ProductOrUser) MarshalJSON() ([]byte, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "User":
+        return json.Marshal(u.variant_User)
+    
+    case "Product":
+        return json.Marshal(u.variant_Product)
+    
+    }
 
-	case "User":
-		return json.Marshal(u.variant_User)
-
-	case "Product":
-		return json.Marshal(u.variant_Product)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union2ProductOrUser) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_User)
-	if err == nil {
-		u.variant = "User"
-		return nil
-	} else {
-		u.variant_User = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_Product)
-	if err == nil {
-		u.variant = "Product"
-		return nil
-	} else {
-		u.variant_Product = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
+    var err error
+    
+    err = json.Unmarshal(data, &u.variant_User)
+    if err == nil {
+        u.variant = "User"
+        return nil
+    } else {
+        u.variant_User = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_Product)
+    if err == nil {
+        u.variant = "Product"
+        return nil
+    } else {
+        u.variant_Product = nil
+    }
+    
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union2ProductOrUser__NewUser(v User) Union2ProductOrUser {
 
-	return Union2ProductOrUser{
-		variant:      "User",
-		variant_User: &v,
-	}
+func Union2ProductOrUser__NewUser(v User) Union2ProductOrUser {
+    
+    return Union2ProductOrUser{
+        variant: "User",
+        variant_User: &v,
+    }
 }
 
 func (u *Union2ProductOrUser) SetUser(v User) {
-
-	u.variant = "User"
-	u.variant_User = &v
-
-	u.variant_Product = nil
-
+    
+    u.variant = "User"
+    u.variant_User = &v
+    
+    u.variant_Product = nil
+    
 }
 
 func (u *Union2ProductOrUser) IsUser() bool {
-	return u.variant == "User"
+    return u.variant == "User"
 }
 
 func (u *Union2ProductOrUser) AsUser() *User {
-	if u.variant != "User" {
-		return nil
-	}
-	return u.variant_User
+    if u.variant != "User" {
+        return nil
+    }
+    return u.variant_User
 }
 
 func Union2ProductOrUser__NewProduct(v Product) Union2ProductOrUser {
-
-	return Union2ProductOrUser{
-		variant:         "Product",
-		variant_Product: &v,
-	}
+    
+    return Union2ProductOrUser{
+        variant: "Product",
+        variant_Product: &v,
+    }
 }
 
 func (u *Union2ProductOrUser) SetProduct(v Product) {
-
-	u.variant = "Product"
-	u.variant_Product = &v
-
-	u.variant_User = nil
-
+    
+    u.variant = "Product"
+    u.variant_Product = &v
+    
+    u.variant_User = nil
+    
 }
 
 func (u *Union2ProductOrUser) IsProduct() bool {
-	return u.variant == "Product"
+    return u.variant == "Product"
 }
 
 func (u *Union2ProductOrUser) AsProduct() *Product {
-	if u.variant != "Product" {
-		return nil
-	}
-	return u.variant_Product
+    if u.variant != "Product" {
+        return nil
+    }
+    return u.variant_Product
 }

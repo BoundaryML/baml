@@ -185,6 +185,18 @@ client<llm> Vertex {
   }
 }
 
+
+client<llm> VertexWithQueryParams {
+  provider vertex-ai
+  options {
+    model gemini-2.5-flash
+    location us-central1
+    query_params {
+      key env.VERTEX_API_KEY
+    }
+  }
+}
+
 client<llm> VertexClaude {
   provider vertex-ai
   options {

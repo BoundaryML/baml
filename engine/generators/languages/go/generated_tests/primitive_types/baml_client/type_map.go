@@ -14,18 +14,23 @@
 package baml_client
 
 import (
-	"primitive_types/baml_client/stream_types"
-	"primitive_types/baml_client/types"
-	"reflect"
+    "primitive_types/baml_client/types"
+    "primitive_types/baml_client/stream_types"
 )
 
 var typeMap = map[string]reflect.Type{
-	"TYPES.MixedPrimitives":        reflect.TypeOf(types.MixedPrimitives{}),
-	"STREAM_TYPES.MixedPrimitives": reflect.TypeOf(stream_types.MixedPrimitives{}),
-	"TYPES.PrimitiveArrays":        reflect.TypeOf(types.PrimitiveArrays{}),
-	"STREAM_TYPES.PrimitiveArrays": reflect.TypeOf(stream_types.PrimitiveArrays{}),
-	"TYPES.PrimitiveMaps":          reflect.TypeOf(types.PrimitiveMaps{}),
-	"STREAM_TYPES.PrimitiveMaps":   reflect.TypeOf(stream_types.PrimitiveMaps{}),
-	"TYPES.PrimitiveTypes":         reflect.TypeOf(types.PrimitiveTypes{}),
-	"STREAM_TYPES.PrimitiveTypes":  reflect.TypeOf(stream_types.PrimitiveTypes{}),
+"TYPES.MixedPrimitives": reflect.TypeOf(types.MixedPrimitives{}),
+    "STREAM_TYPES.MixedPrimitives": reflect.TypeOf(stream_types.MixedPrimitives{}),
+"TYPES.PrimitiveArrays": reflect.TypeOf(types.PrimitiveArrays{}),
+    "STREAM_TYPES.PrimitiveArrays": reflect.TypeOf(stream_types.PrimitiveArrays{}),
+"TYPES.PrimitiveMaps": reflect.TypeOf(types.PrimitiveMaps{}),
+    "STREAM_TYPES.PrimitiveMaps": reflect.TypeOf(stream_types.PrimitiveMaps{}),
+"TYPES.PrimitiveTypes": reflect.TypeOf(types.PrimitiveTypes{}),
+    "STREAM_TYPES.PrimitiveTypes": reflect.TypeOf(stream_types.PrimitiveTypes{}),
+
+
+
+
+
+
 }

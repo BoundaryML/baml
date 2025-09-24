@@ -14,186 +14,185 @@
 package baml_client
 
 import (
-	"context"
-	"fmt"
+    "context"
 
-	"union_types_extended/baml_client/stream_types"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "union_types_extended/baml_client/types"
+    "union_types_extended/baml_client/stream_types"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-type parse_stream struct{}
-
+type parse_stream struct {}
 var ParseStream = &parse_stream{}
 
-// / Parse version of TestComplexUnions (Takes in string and returns stream_types.ComplexUnions)
+
+/// Parse version of TestComplexUnions (Takes in string and returns stream_types.ComplexUnions)
 func (*parse_stream) TestComplexUnions(text string, opts ...CallOptionFunc) (stream_types.ComplexUnions, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"text": text, "stream": true},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "text": text, "stream": true },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestComplexUnions: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestComplexUnions: %w", err)
+        panic(wrapped_err)
+    }
 
-	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestComplexUnions", encoded)
-	if err != nil {
-		return stream_types.ComplexUnions{}, err
-	}
+    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestComplexUnions", encoded)
+    if err != nil {
+        return stream_types.ComplexUnions{}, err
+    }
 
-	casted := (result).(stream_types.ComplexUnions)
+    casted := (result).(stream_types.ComplexUnions)
 
-	return casted, nil
+    return casted, nil
 }
 
-// / Parse version of TestDiscriminatedUnions (Takes in string and returns stream_types.DiscriminatedUnions)
+/// Parse version of TestDiscriminatedUnions (Takes in string and returns stream_types.DiscriminatedUnions)
 func (*parse_stream) TestDiscriminatedUnions(text string, opts ...CallOptionFunc) (stream_types.DiscriminatedUnions, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"text": text, "stream": true},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "text": text, "stream": true },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestDiscriminatedUnions: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestDiscriminatedUnions: %w", err)
+        panic(wrapped_err)
+    }
 
-	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestDiscriminatedUnions", encoded)
-	if err != nil {
-		return stream_types.DiscriminatedUnions{}, err
-	}
+    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestDiscriminatedUnions", encoded)
+    if err != nil {
+        return stream_types.DiscriminatedUnions{}, err
+    }
 
-	casted := (result).(stream_types.DiscriminatedUnions)
+    casted := (result).(stream_types.DiscriminatedUnions)
 
-	return casted, nil
+    return casted, nil
 }
 
-// / Parse version of TestPrimitiveUnions (Takes in string and returns stream_types.PrimitiveUnions)
+/// Parse version of TestPrimitiveUnions (Takes in string and returns stream_types.PrimitiveUnions)
 func (*parse_stream) TestPrimitiveUnions(text string, opts ...CallOptionFunc) (stream_types.PrimitiveUnions, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"text": text, "stream": true},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "text": text, "stream": true },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestPrimitiveUnions: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestPrimitiveUnions: %w", err)
+        panic(wrapped_err)
+    }
 
-	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestPrimitiveUnions", encoded)
-	if err != nil {
-		return stream_types.PrimitiveUnions{}, err
-	}
+    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestPrimitiveUnions", encoded)
+    if err != nil {
+        return stream_types.PrimitiveUnions{}, err
+    }
 
-	casted := (result).(stream_types.PrimitiveUnions)
+    casted := (result).(stream_types.PrimitiveUnions)
 
-	return casted, nil
+    return casted, nil
 }
 
-// / Parse version of TestUnionArrays (Takes in string and returns stream_types.UnionArrays)
+/// Parse version of TestUnionArrays (Takes in string and returns stream_types.UnionArrays)
 func (*parse_stream) TestUnionArrays(text string, opts ...CallOptionFunc) (stream_types.UnionArrays, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"text": text, "stream": true},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "text": text, "stream": true },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestUnionArrays: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestUnionArrays: %w", err)
+        panic(wrapped_err)
+    }
 
-	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestUnionArrays", encoded)
-	if err != nil {
-		return stream_types.UnionArrays{}, err
-	}
+    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestUnionArrays", encoded)
+    if err != nil {
+        return stream_types.UnionArrays{}, err
+    }
 
-	casted := (result).(stream_types.UnionArrays)
+    casted := (result).(stream_types.UnionArrays)
 
-	return casted, nil
+    return casted, nil
 }

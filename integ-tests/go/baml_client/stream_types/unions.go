@@ -14,2097 +14,2124 @@
 package stream_types
 
 import (
-	"encoding/json"
-	"fmt"
+    "encoding/json"
+    "fmt"
 
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+
+    "example.com/integ-tests/baml_client/types"
 )
 
 type Union2EarthlingOrMartian struct {
-	variant string
-
-	variant_Martian *Martian
-
-	variant_Earthling *Earthling
+    variant string
+    
+    variant_Martian *Martian
+    
+    variant_Earthling *Earthling
+    
 }
 
 func (u *Union2EarthlingOrMartian) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-	valueHolder := holder.Value
-	variantName := holder.VariantName
+    valueHolder := holder.Value
+    variantName := holder.VariantName
 	switch variantName {
-	case "Martian":
-		u.variant = "Martian"
-		value := baml.Decode(valueHolder).Interface().(Martian)
-		u.variant_Martian = &value
-	case "Earthling":
-		u.variant = "Earthling"
-		value := baml.Decode(valueHolder).Interface().(Earthling)
-		u.variant_Earthling = &value
-
-	default:
-		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+    case "Martian":
+            u.variant = "Martian"
+            value := baml.Decode(valueHolder).Interface().(Martian)
+            u.variant_Martian = &value
+    case "Earthling":
+            u.variant = "Earthling"
+            value := baml.Decode(valueHolder).Interface().(Earthling)
+            u.variant_Earthling = &value
+    
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
+
 func (u Union2EarthlingOrMartian) Encode() (*cffi.CFFIValueHolder, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "Martian":
+        return baml.EncodeUnion(u.BamlEncodeName, "Martian", *u.variant_Martian)
+    
+    case "Earthling":
+        return baml.EncodeUnion(u.BamlEncodeName, "Earthling", *u.variant_Earthling)
+    
+    case "":
+        return nil, fmt.Errorf("invalid union variant: [unset]")
+    }
 
-	case "Martian":
-		return baml.EncodeUnion(u.BamlEncodeName, "Martian", *u.variant_Martian)
-
-	case "Earthling":
-		return baml.EncodeUnion(u.BamlEncodeName, "Earthling", *u.variant_Earthling)
-
-	case "":
-		return nil, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union2EarthlingOrMartian) BamlTypeName() string {
-	return "Union2EarthlingOrMartian"
+    return "Union2EarthlingOrMartian"
 }
 
 func (u Union2EarthlingOrMartian) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__Earthling__Martian",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Union__Earthling__Martian",
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+    }
 }
 
 func (u Union2EarthlingOrMartian) MarshalJSON() ([]byte, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "Martian":
+        return json.Marshal(u.variant_Martian)
+    
+    case "Earthling":
+        return json.Marshal(u.variant_Earthling)
+    
+    }
 
-	case "Martian":
-		return json.Marshal(u.variant_Martian)
-
-	case "Earthling":
-		return json.Marshal(u.variant_Earthling)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union2EarthlingOrMartian) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_Martian)
-	if err == nil {
-		u.variant = "Martian"
-		return nil
-	} else {
-		u.variant_Martian = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_Earthling)
-	if err == nil {
-		u.variant = "Earthling"
-		return nil
-	} else {
-		u.variant_Earthling = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
+    var err error
+    
+    err = json.Unmarshal(data, &u.variant_Martian)
+    if err == nil {
+        u.variant = "Martian"
+        return nil
+    } else {
+        u.variant_Martian = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_Earthling)
+    if err == nil {
+        u.variant = "Earthling"
+        return nil
+    } else {
+        u.variant_Earthling = nil
+    }
+    
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union2EarthlingOrMartian__NewMartian(v Martian) Union2EarthlingOrMartian {
 
-	return Union2EarthlingOrMartian{
-		variant:         "Martian",
-		variant_Martian: &v,
-	}
+func Union2EarthlingOrMartian__NewMartian(v Martian) Union2EarthlingOrMartian {
+    
+    return Union2EarthlingOrMartian{
+        variant: "Martian",
+        variant_Martian: &v,
+    }
 }
 
 func (u *Union2EarthlingOrMartian) SetMartian(v Martian) {
-
-	u.variant = "Martian"
-	u.variant_Martian = &v
-
-	u.variant_Earthling = nil
-
+    
+    u.variant = "Martian"
+    u.variant_Martian = &v
+    
+    u.variant_Earthling = nil
+    
 }
 
 func (u *Union2EarthlingOrMartian) IsMartian() bool {
-	return u.variant == "Martian"
+    return u.variant == "Martian"
 }
 
 func (u *Union2EarthlingOrMartian) AsMartian() *Martian {
-	if u.variant != "Martian" {
-		return nil
-	}
-	return u.variant_Martian
+    if u.variant != "Martian" {
+        return nil
+    }
+    return u.variant_Martian
 }
 
 func Union2EarthlingOrMartian__NewEarthling(v Earthling) Union2EarthlingOrMartian {
-
-	return Union2EarthlingOrMartian{
-		variant:           "Earthling",
-		variant_Earthling: &v,
-	}
+    
+    return Union2EarthlingOrMartian{
+        variant: "Earthling",
+        variant_Earthling: &v,
+    }
 }
 
 func (u *Union2EarthlingOrMartian) SetEarthling(v Earthling) {
-
-	u.variant = "Earthling"
-	u.variant_Earthling = &v
-
-	u.variant_Martian = nil
-
+    
+    u.variant = "Earthling"
+    u.variant_Earthling = &v
+    
+    u.variant_Martian = nil
+    
 }
 
 func (u *Union2EarthlingOrMartian) IsEarthling() bool {
-	return u.variant == "Earthling"
+    return u.variant == "Earthling"
 }
 
 func (u *Union2EarthlingOrMartian) AsEarthling() *Earthling {
-	if u.variant != "Earthling" {
-		return nil
-	}
-	return u.variant_Earthling
+    if u.variant != "Earthling" {
+        return nil
+    }
+    return u.variant_Earthling
 }
-
 type Union2EmailAddressOrPhoneNumber struct {
-	variant string
-
-	variant_PhoneNumber *PhoneNumber
-
-	variant_EmailAddress *EmailAddress
+    variant string
+    
+    variant_PhoneNumber *PhoneNumber
+    
+    variant_EmailAddress *EmailAddress
+    
 }
 
 func (u *Union2EmailAddressOrPhoneNumber) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-	valueHolder := holder.Value
-	variantName := holder.VariantName
+    valueHolder := holder.Value
+    variantName := holder.VariantName
 	switch variantName {
-	case "PhoneNumber":
-		u.variant = "PhoneNumber"
-		value := baml.Decode(valueHolder).Interface().(PhoneNumber)
-		u.variant_PhoneNumber = &value
-	case "EmailAddress":
-		u.variant = "EmailAddress"
-		value := baml.Decode(valueHolder).Interface().(EmailAddress)
-		u.variant_EmailAddress = &value
-
-	default:
-		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+    case "PhoneNumber":
+            u.variant = "PhoneNumber"
+            value := baml.Decode(valueHolder).Interface().(PhoneNumber)
+            u.variant_PhoneNumber = &value
+    case "EmailAddress":
+            u.variant = "EmailAddress"
+            value := baml.Decode(valueHolder).Interface().(EmailAddress)
+            u.variant_EmailAddress = &value
+    
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
+
 func (u Union2EmailAddressOrPhoneNumber) Encode() (*cffi.CFFIValueHolder, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "PhoneNumber":
+        return baml.EncodeUnion(u.BamlEncodeName, "PhoneNumber", *u.variant_PhoneNumber)
+    
+    case "EmailAddress":
+        return baml.EncodeUnion(u.BamlEncodeName, "EmailAddress", *u.variant_EmailAddress)
+    
+    case "":
+        return nil, fmt.Errorf("invalid union variant: [unset]")
+    }
 
-	case "PhoneNumber":
-		return baml.EncodeUnion(u.BamlEncodeName, "PhoneNumber", *u.variant_PhoneNumber)
-
-	case "EmailAddress":
-		return baml.EncodeUnion(u.BamlEncodeName, "EmailAddress", *u.variant_EmailAddress)
-
-	case "":
-		return nil, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union2EmailAddressOrPhoneNumber) BamlTypeName() string {
-	return "Union2EmailAddressOrPhoneNumber"
+    return "Union2EmailAddressOrPhoneNumber"
 }
 
 func (u Union2EmailAddressOrPhoneNumber) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__EmailAddress__PhoneNumber",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Union__EmailAddress__PhoneNumber",
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+    }
 }
 
 func (u Union2EmailAddressOrPhoneNumber) MarshalJSON() ([]byte, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "PhoneNumber":
+        return json.Marshal(u.variant_PhoneNumber)
+    
+    case "EmailAddress":
+        return json.Marshal(u.variant_EmailAddress)
+    
+    }
 
-	case "PhoneNumber":
-		return json.Marshal(u.variant_PhoneNumber)
-
-	case "EmailAddress":
-		return json.Marshal(u.variant_EmailAddress)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union2EmailAddressOrPhoneNumber) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_PhoneNumber)
-	if err == nil {
-		u.variant = "PhoneNumber"
-		return nil
-	} else {
-		u.variant_PhoneNumber = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_EmailAddress)
-	if err == nil {
-		u.variant = "EmailAddress"
-		return nil
-	} else {
-		u.variant_EmailAddress = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
+    var err error
+    
+    err = json.Unmarshal(data, &u.variant_PhoneNumber)
+    if err == nil {
+        u.variant = "PhoneNumber"
+        return nil
+    } else {
+        u.variant_PhoneNumber = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_EmailAddress)
+    if err == nil {
+        u.variant = "EmailAddress"
+        return nil
+    } else {
+        u.variant_EmailAddress = nil
+    }
+    
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union2EmailAddressOrPhoneNumber__NewPhoneNumber(v PhoneNumber) Union2EmailAddressOrPhoneNumber {
 
-	return Union2EmailAddressOrPhoneNumber{
-		variant:             "PhoneNumber",
-		variant_PhoneNumber: &v,
-	}
+func Union2EmailAddressOrPhoneNumber__NewPhoneNumber(v PhoneNumber) Union2EmailAddressOrPhoneNumber {
+    
+    return Union2EmailAddressOrPhoneNumber{
+        variant: "PhoneNumber",
+        variant_PhoneNumber: &v,
+    }
 }
 
 func (u *Union2EmailAddressOrPhoneNumber) SetPhoneNumber(v PhoneNumber) {
-
-	u.variant = "PhoneNumber"
-	u.variant_PhoneNumber = &v
-
-	u.variant_EmailAddress = nil
-
+    
+    u.variant = "PhoneNumber"
+    u.variant_PhoneNumber = &v
+    
+    u.variant_EmailAddress = nil
+    
 }
 
 func (u *Union2EmailAddressOrPhoneNumber) IsPhoneNumber() bool {
-	return u.variant == "PhoneNumber"
+    return u.variant == "PhoneNumber"
 }
 
 func (u *Union2EmailAddressOrPhoneNumber) AsPhoneNumber() *PhoneNumber {
-	if u.variant != "PhoneNumber" {
-		return nil
-	}
-	return u.variant_PhoneNumber
+    if u.variant != "PhoneNumber" {
+        return nil
+    }
+    return u.variant_PhoneNumber
 }
 
 func Union2EmailAddressOrPhoneNumber__NewEmailAddress(v EmailAddress) Union2EmailAddressOrPhoneNumber {
-
-	return Union2EmailAddressOrPhoneNumber{
-		variant:              "EmailAddress",
-		variant_EmailAddress: &v,
-	}
+    
+    return Union2EmailAddressOrPhoneNumber{
+        variant: "EmailAddress",
+        variant_EmailAddress: &v,
+    }
 }
 
 func (u *Union2EmailAddressOrPhoneNumber) SetEmailAddress(v EmailAddress) {
-
-	u.variant = "EmailAddress"
-	u.variant_EmailAddress = &v
-
-	u.variant_PhoneNumber = nil
-
+    
+    u.variant = "EmailAddress"
+    u.variant_EmailAddress = &v
+    
+    u.variant_PhoneNumber = nil
+    
 }
 
 func (u *Union2EmailAddressOrPhoneNumber) IsEmailAddress() bool {
-	return u.variant == "EmailAddress"
+    return u.variant == "EmailAddress"
 }
 
 func (u *Union2EmailAddressOrPhoneNumber) AsEmailAddress() *EmailAddress {
-	if u.variant != "EmailAddress" {
-		return nil
-	}
-	return u.variant_EmailAddress
+    if u.variant != "EmailAddress" {
+        return nil
+    }
+    return u.variant_EmailAddress
 }
-
 type Union2EventOrResume struct {
-	variant string
-
-	variant_Resume *Resume
-
-	variant_Event *Event
+    variant string
+    
+    variant_Resume *Resume
+    
+    variant_Event *Event
+    
 }
 
 func (u *Union2EventOrResume) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-	valueHolder := holder.Value
-	variantName := holder.VariantName
+    valueHolder := holder.Value
+    variantName := holder.VariantName
 	switch variantName {
-	case "Resume":
-		u.variant = "Resume"
-		value := baml.Decode(valueHolder).Interface().(Resume)
-		u.variant_Resume = &value
-	case "Event":
-		u.variant = "Event"
-		value := baml.Decode(valueHolder).Interface().(Event)
-		u.variant_Event = &value
-
-	default:
-		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+    case "Resume":
+            u.variant = "Resume"
+            value := baml.Decode(valueHolder).Interface().(Resume)
+            u.variant_Resume = &value
+    case "Event":
+            u.variant = "Event"
+            value := baml.Decode(valueHolder).Interface().(Event)
+            u.variant_Event = &value
+    
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
+
 func (u Union2EventOrResume) Encode() (*cffi.CFFIValueHolder, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "Resume":
+        return baml.EncodeUnion(u.BamlEncodeName, "Resume", *u.variant_Resume)
+    
+    case "Event":
+        return baml.EncodeUnion(u.BamlEncodeName, "Event", *u.variant_Event)
+    
+    case "":
+        return nil, fmt.Errorf("invalid union variant: [unset]")
+    }
 
-	case "Resume":
-		return baml.EncodeUnion(u.BamlEncodeName, "Resume", *u.variant_Resume)
-
-	case "Event":
-		return baml.EncodeUnion(u.BamlEncodeName, "Event", *u.variant_Event)
-
-	case "":
-		return nil, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union2EventOrResume) BamlTypeName() string {
-	return "Union2EventOrResume"
+    return "Union2EventOrResume"
 }
 
 func (u Union2EventOrResume) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__Event__Resume",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Union__Event__Resume",
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+    }
 }
 
 func (u Union2EventOrResume) MarshalJSON() ([]byte, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "Resume":
+        return json.Marshal(u.variant_Resume)
+    
+    case "Event":
+        return json.Marshal(u.variant_Event)
+    
+    }
 
-	case "Resume":
-		return json.Marshal(u.variant_Resume)
-
-	case "Event":
-		return json.Marshal(u.variant_Event)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union2EventOrResume) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_Resume)
-	if err == nil {
-		u.variant = "Resume"
-		return nil
-	} else {
-		u.variant_Resume = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_Event)
-	if err == nil {
-		u.variant = "Event"
-		return nil
-	} else {
-		u.variant_Event = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
+    var err error
+    
+    err = json.Unmarshal(data, &u.variant_Resume)
+    if err == nil {
+        u.variant = "Resume"
+        return nil
+    } else {
+        u.variant_Resume = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_Event)
+    if err == nil {
+        u.variant = "Event"
+        return nil
+    } else {
+        u.variant_Event = nil
+    }
+    
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union2EventOrResume__NewResume(v Resume) Union2EventOrResume {
 
-	return Union2EventOrResume{
-		variant:        "Resume",
-		variant_Resume: &v,
-	}
+func Union2EventOrResume__NewResume(v Resume) Union2EventOrResume {
+    
+    return Union2EventOrResume{
+        variant: "Resume",
+        variant_Resume: &v,
+    }
 }
 
 func (u *Union2EventOrResume) SetResume(v Resume) {
-
-	u.variant = "Resume"
-	u.variant_Resume = &v
-
-	u.variant_Event = nil
-
+    
+    u.variant = "Resume"
+    u.variant_Resume = &v
+    
+    u.variant_Event = nil
+    
 }
 
 func (u *Union2EventOrResume) IsResume() bool {
-	return u.variant == "Resume"
+    return u.variant == "Resume"
 }
 
 func (u *Union2EventOrResume) AsResume() *Resume {
-	if u.variant != "Resume" {
-		return nil
-	}
-	return u.variant_Resume
+    if u.variant != "Resume" {
+        return nil
+    }
+    return u.variant_Resume
 }
 
 func Union2EventOrResume__NewEvent(v Event) Union2EventOrResume {
-
-	return Union2EventOrResume{
-		variant:       "Event",
-		variant_Event: &v,
-	}
+    
+    return Union2EventOrResume{
+        variant: "Event",
+        variant_Event: &v,
+    }
 }
 
 func (u *Union2EventOrResume) SetEvent(v Event) {
-
-	u.variant = "Event"
-	u.variant_Event = &v
-
-	u.variant_Resume = nil
-
+    
+    u.variant = "Event"
+    u.variant_Event = &v
+    
+    u.variant_Resume = nil
+    
 }
 
 func (u *Union2EventOrResume) IsEvent() bool {
-	return u.variant == "Event"
+    return u.variant == "Event"
 }
 
 func (u *Union2EventOrResume) AsEvent() *Event {
-	if u.variant != "Event" {
-		return nil
-	}
-	return u.variant_Event
+    if u.variant != "Event" {
+        return nil
+    }
+    return u.variant_Event
 }
-
 type Union2JsonTemplateOrSimpleTag struct {
-	variant string
-
-	variant_SimpleTag *SimpleTag
-
-	variant_JsonTemplate *JsonTemplate
+    variant string
+    
+    variant_SimpleTag *SimpleTag
+    
+    variant_JsonTemplate *JsonTemplate
+    
 }
 
 func (u *Union2JsonTemplateOrSimpleTag) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-	valueHolder := holder.Value
-	variantName := holder.VariantName
+    valueHolder := holder.Value
+    variantName := holder.VariantName
 	switch variantName {
-	case "SimpleTag":
-		u.variant = "SimpleTag"
-		value := baml.Decode(valueHolder).Interface().(SimpleTag)
-		u.variant_SimpleTag = &value
-	case "JsonTemplate":
-		u.variant = "JsonTemplate"
-		value := baml.Decode(valueHolder).Interface().(JsonTemplate)
-		u.variant_JsonTemplate = &value
-
-	default:
-		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+    case "SimpleTag":
+            u.variant = "SimpleTag"
+            value := baml.Decode(valueHolder).Interface().(SimpleTag)
+            u.variant_SimpleTag = &value
+    case "JsonTemplate":
+            u.variant = "JsonTemplate"
+            value := baml.Decode(valueHolder).Interface().(JsonTemplate)
+            u.variant_JsonTemplate = &value
+    
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
+
 func (u Union2JsonTemplateOrSimpleTag) Encode() (*cffi.CFFIValueHolder, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "SimpleTag":
+        return baml.EncodeUnion(u.BamlEncodeName, "SimpleTag", *u.variant_SimpleTag)
+    
+    case "JsonTemplate":
+        return baml.EncodeUnion(u.BamlEncodeName, "JsonTemplate", *u.variant_JsonTemplate)
+    
+    case "":
+        return nil, fmt.Errorf("invalid union variant: [unset]")
+    }
 
-	case "SimpleTag":
-		return baml.EncodeUnion(u.BamlEncodeName, "SimpleTag", *u.variant_SimpleTag)
-
-	case "JsonTemplate":
-		return baml.EncodeUnion(u.BamlEncodeName, "JsonTemplate", *u.variant_JsonTemplate)
-
-	case "":
-		return nil, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union2JsonTemplateOrSimpleTag) BamlTypeName() string {
-	return "Union2JsonTemplateOrSimpleTag"
+    return "Union2JsonTemplateOrSimpleTag"
 }
 
 func (u Union2JsonTemplateOrSimpleTag) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__JsonTemplate__SimpleTag",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Union__JsonTemplate__SimpleTag",
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+    }
 }
 
 func (u Union2JsonTemplateOrSimpleTag) MarshalJSON() ([]byte, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "SimpleTag":
+        return json.Marshal(u.variant_SimpleTag)
+    
+    case "JsonTemplate":
+        return json.Marshal(u.variant_JsonTemplate)
+    
+    }
 
-	case "SimpleTag":
-		return json.Marshal(u.variant_SimpleTag)
-
-	case "JsonTemplate":
-		return json.Marshal(u.variant_JsonTemplate)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union2JsonTemplateOrSimpleTag) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_SimpleTag)
-	if err == nil {
-		u.variant = "SimpleTag"
-		return nil
-	} else {
-		u.variant_SimpleTag = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_JsonTemplate)
-	if err == nil {
-		u.variant = "JsonTemplate"
-		return nil
-	} else {
-		u.variant_JsonTemplate = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
+    var err error
+    
+    err = json.Unmarshal(data, &u.variant_SimpleTag)
+    if err == nil {
+        u.variant = "SimpleTag"
+        return nil
+    } else {
+        u.variant_SimpleTag = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_JsonTemplate)
+    if err == nil {
+        u.variant = "JsonTemplate"
+        return nil
+    } else {
+        u.variant_JsonTemplate = nil
+    }
+    
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union2JsonTemplateOrSimpleTag__NewSimpleTag(v SimpleTag) Union2JsonTemplateOrSimpleTag {
 
-	return Union2JsonTemplateOrSimpleTag{
-		variant:           "SimpleTag",
-		variant_SimpleTag: &v,
-	}
+func Union2JsonTemplateOrSimpleTag__NewSimpleTag(v SimpleTag) Union2JsonTemplateOrSimpleTag {
+    
+    return Union2JsonTemplateOrSimpleTag{
+        variant: "SimpleTag",
+        variant_SimpleTag: &v,
+    }
 }
 
 func (u *Union2JsonTemplateOrSimpleTag) SetSimpleTag(v SimpleTag) {
-
-	u.variant = "SimpleTag"
-	u.variant_SimpleTag = &v
-
-	u.variant_JsonTemplate = nil
-
+    
+    u.variant = "SimpleTag"
+    u.variant_SimpleTag = &v
+    
+    u.variant_JsonTemplate = nil
+    
 }
 
 func (u *Union2JsonTemplateOrSimpleTag) IsSimpleTag() bool {
-	return u.variant == "SimpleTag"
+    return u.variant == "SimpleTag"
 }
 
 func (u *Union2JsonTemplateOrSimpleTag) AsSimpleTag() *SimpleTag {
-	if u.variant != "SimpleTag" {
-		return nil
-	}
-	return u.variant_SimpleTag
+    if u.variant != "SimpleTag" {
+        return nil
+    }
+    return u.variant_SimpleTag
 }
 
 func Union2JsonTemplateOrSimpleTag__NewJsonTemplate(v JsonTemplate) Union2JsonTemplateOrSimpleTag {
-
-	return Union2JsonTemplateOrSimpleTag{
-		variant:              "JsonTemplate",
-		variant_JsonTemplate: &v,
-	}
+    
+    return Union2JsonTemplateOrSimpleTag{
+        variant: "JsonTemplate",
+        variant_JsonTemplate: &v,
+    }
 }
 
 func (u *Union2JsonTemplateOrSimpleTag) SetJsonTemplate(v JsonTemplate) {
-
-	u.variant = "JsonTemplate"
-	u.variant_JsonTemplate = &v
-
-	u.variant_SimpleTag = nil
-
+    
+    u.variant = "JsonTemplate"
+    u.variant_JsonTemplate = &v
+    
+    u.variant_SimpleTag = nil
+    
 }
 
 func (u *Union2JsonTemplateOrSimpleTag) IsJsonTemplate() bool {
-	return u.variant == "JsonTemplate"
+    return u.variant == "JsonTemplate"
 }
 
 func (u *Union2JsonTemplateOrSimpleTag) AsJsonTemplate() *JsonTemplate {
-	if u.variant != "JsonTemplate" {
-		return nil
-	}
-	return u.variant_JsonTemplate
+    if u.variant != "JsonTemplate" {
+        return nil
+    }
+    return u.variant_JsonTemplate
 }
-
 type Union2ListNestedOrString struct {
-	variant string
-
-	variant_String *string
-
-	variant_ListNested *[]Nested
+    variant string
+    
+    variant_String *string
+    
+    variant_ListNested *[]Nested
+    
 }
 
 func (u *Union2ListNestedOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-	valueHolder := holder.Value
-	variantName := holder.VariantName
+    valueHolder := holder.Value
+    variantName := holder.VariantName
 	switch variantName {
-	case "string":
-		u.variant = "String"
-		value := baml.Decode(valueHolder).Interface().(string)
-		u.variant_String = &value
-	case "List__Nested":
-		u.variant = "ListNested"
-		value := baml.Decode(valueHolder).Interface().([]Nested)
-		u.variant_ListNested = &value
-
-	default:
-		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+    case "string":
+            u.variant = "String"
+            value := baml.Decode(valueHolder).Interface().(string)
+            u.variant_String = &value
+    case "List__Nested":
+            u.variant = "ListNested"
+            value := baml.Decode(valueHolder).Interface().([]Nested)
+            u.variant_ListNested = &value
+    
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
+
 func (u Union2ListNestedOrString) Encode() (*cffi.CFFIValueHolder, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "String":
+        return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+    
+    case "ListNested":
+        return baml.EncodeUnion(u.BamlEncodeName, "List__Nested", *u.variant_ListNested)
+    
+    case "":
+        return nil, fmt.Errorf("invalid union variant: [unset]")
+    }
 
-	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
-
-	case "ListNested":
-		return baml.EncodeUnion(u.BamlEncodeName, "List__Nested", *u.variant_ListNested)
-
-	case "":
-		return nil, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union2ListNestedOrString) BamlTypeName() string {
-	return "Union2ListNestedOrString"
+    return "Union2ListNestedOrString"
 }
 
 func (u Union2ListNestedOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__List__Nested__string",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Union__List__Nested__string",
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+    }
 }
 
 func (u Union2ListNestedOrString) MarshalJSON() ([]byte, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "String":
+        return json.Marshal(u.variant_String)
+    
+    case "ListNested":
+        return json.Marshal(u.variant_ListNested)
+    
+    }
 
-	case "String":
-		return json.Marshal(u.variant_String)
-
-	case "ListNested":
-		return json.Marshal(u.variant_ListNested)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union2ListNestedOrString) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_String)
-	if err == nil {
-		u.variant = "String"
-		return nil
-	} else {
-		u.variant_String = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_ListNested)
-	if err == nil {
-		u.variant = "ListNested"
-		return nil
-	} else {
-		u.variant_ListNested = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
+    var err error
+    
+    err = json.Unmarshal(data, &u.variant_String)
+    if err == nil {
+        u.variant = "String"
+        return nil
+    } else {
+        u.variant_String = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_ListNested)
+    if err == nil {
+        u.variant = "ListNested"
+        return nil
+    } else {
+        u.variant_ListNested = nil
+    }
+    
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union2ListNestedOrString__NewString(v string) Union2ListNestedOrString {
 
-	return Union2ListNestedOrString{
-		variant:        "String",
-		variant_String: &v,
-	}
+func Union2ListNestedOrString__NewString(v string) Union2ListNestedOrString {
+    
+    return Union2ListNestedOrString{
+        variant: "String",
+        variant_String: &v,
+    }
 }
 
 func (u *Union2ListNestedOrString) SetString(v string) {
-
-	u.variant = "String"
-	u.variant_String = &v
-
-	u.variant_ListNested = nil
-
+    
+    u.variant = "String"
+    u.variant_String = &v
+    
+    u.variant_ListNested = nil
+    
 }
 
 func (u *Union2ListNestedOrString) IsString() bool {
-	return u.variant == "String"
+    return u.variant == "String"
 }
 
 func (u *Union2ListNestedOrString) AsString() *string {
-	if u.variant != "String" {
-		return nil
-	}
-	return u.variant_String
+    if u.variant != "String" {
+        return nil
+    }
+    return u.variant_String
 }
 
 func Union2ListNestedOrString__NewListNested(v []Nested) Union2ListNestedOrString {
-
-	return Union2ListNestedOrString{
-		variant:            "ListNested",
-		variant_ListNested: &v,
-	}
+    
+    return Union2ListNestedOrString{
+        variant: "ListNested",
+        variant_ListNested: &v,
+    }
 }
 
 func (u *Union2ListNestedOrString) SetListNested(v []Nested) {
-
-	u.variant = "ListNested"
-	u.variant_ListNested = &v
-
-	u.variant_String = nil
-
+    
+    u.variant = "ListNested"
+    u.variant_ListNested = &v
+    
+    u.variant_String = nil
+    
 }
 
 func (u *Union2ListNestedOrString) IsListNested() bool {
-	return u.variant == "ListNested"
+    return u.variant == "ListNested"
 }
 
 func (u *Union2ListNestedOrString) AsListNested() *[]Nested {
-	if u.variant != "ListNested" {
-		return nil
-	}
-	return u.variant_ListNested
+    if u.variant != "ListNested" {
+        return nil
+    }
+    return u.variant_ListNested
 }
-
 type Union2LiteralClassOneOrLiteralClassTwo struct {
-	variant string
-
-	variant_LiteralClassOne *LiteralClassOne
-
-	variant_LiteralClassTwo *LiteralClassTwo
+    variant string
+    
+    variant_LiteralClassOne *LiteralClassOne
+    
+    variant_LiteralClassTwo *LiteralClassTwo
+    
 }
 
 func (u *Union2LiteralClassOneOrLiteralClassTwo) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-	valueHolder := holder.Value
-	variantName := holder.VariantName
+    valueHolder := holder.Value
+    variantName := holder.VariantName
 	switch variantName {
-	case "LiteralClassOne":
-		u.variant = "LiteralClassOne"
-		value := baml.Decode(valueHolder).Interface().(LiteralClassOne)
-		u.variant_LiteralClassOne = &value
-	case "LiteralClassTwo":
-		u.variant = "LiteralClassTwo"
-		value := baml.Decode(valueHolder).Interface().(LiteralClassTwo)
-		u.variant_LiteralClassTwo = &value
-
-	default:
-		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+    case "LiteralClassOne":
+            u.variant = "LiteralClassOne"
+            value := baml.Decode(valueHolder).Interface().(LiteralClassOne)
+            u.variant_LiteralClassOne = &value
+    case "LiteralClassTwo":
+            u.variant = "LiteralClassTwo"
+            value := baml.Decode(valueHolder).Interface().(LiteralClassTwo)
+            u.variant_LiteralClassTwo = &value
+    
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
+
 func (u Union2LiteralClassOneOrLiteralClassTwo) Encode() (*cffi.CFFIValueHolder, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "LiteralClassOne":
+        return baml.EncodeUnion(u.BamlEncodeName, "LiteralClassOne", *u.variant_LiteralClassOne)
+    
+    case "LiteralClassTwo":
+        return baml.EncodeUnion(u.BamlEncodeName, "LiteralClassTwo", *u.variant_LiteralClassTwo)
+    
+    case "":
+        return nil, fmt.Errorf("invalid union variant: [unset]")
+    }
 
-	case "LiteralClassOne":
-		return baml.EncodeUnion(u.BamlEncodeName, "LiteralClassOne", *u.variant_LiteralClassOne)
-
-	case "LiteralClassTwo":
-		return baml.EncodeUnion(u.BamlEncodeName, "LiteralClassTwo", *u.variant_LiteralClassTwo)
-
-	case "":
-		return nil, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union2LiteralClassOneOrLiteralClassTwo) BamlTypeName() string {
-	return "Union2LiteralClassOneOrLiteralClassTwo"
+    return "Union2LiteralClassOneOrLiteralClassTwo"
 }
 
 func (u Union2LiteralClassOneOrLiteralClassTwo) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__LiteralClassOne__LiteralClassTwo",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Union__LiteralClassOne__LiteralClassTwo",
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+    }
 }
 
 func (u Union2LiteralClassOneOrLiteralClassTwo) MarshalJSON() ([]byte, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "LiteralClassOne":
+        return json.Marshal(u.variant_LiteralClassOne)
+    
+    case "LiteralClassTwo":
+        return json.Marshal(u.variant_LiteralClassTwo)
+    
+    }
 
-	case "LiteralClassOne":
-		return json.Marshal(u.variant_LiteralClassOne)
-
-	case "LiteralClassTwo":
-		return json.Marshal(u.variant_LiteralClassTwo)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union2LiteralClassOneOrLiteralClassTwo) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_LiteralClassOne)
-	if err == nil {
-		u.variant = "LiteralClassOne"
-		return nil
-	} else {
-		u.variant_LiteralClassOne = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_LiteralClassTwo)
-	if err == nil {
-		u.variant = "LiteralClassTwo"
-		return nil
-	} else {
-		u.variant_LiteralClassTwo = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
+    var err error
+    
+    err = json.Unmarshal(data, &u.variant_LiteralClassOne)
+    if err == nil {
+        u.variant = "LiteralClassOne"
+        return nil
+    } else {
+        u.variant_LiteralClassOne = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_LiteralClassTwo)
+    if err == nil {
+        u.variant = "LiteralClassTwo"
+        return nil
+    } else {
+        u.variant_LiteralClassTwo = nil
+    }
+    
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union2LiteralClassOneOrLiteralClassTwo__NewLiteralClassOne(v LiteralClassOne) Union2LiteralClassOneOrLiteralClassTwo {
 
-	return Union2LiteralClassOneOrLiteralClassTwo{
-		variant:                 "LiteralClassOne",
-		variant_LiteralClassOne: &v,
-	}
+func Union2LiteralClassOneOrLiteralClassTwo__NewLiteralClassOne(v LiteralClassOne) Union2LiteralClassOneOrLiteralClassTwo {
+    
+    return Union2LiteralClassOneOrLiteralClassTwo{
+        variant: "LiteralClassOne",
+        variant_LiteralClassOne: &v,
+    }
 }
 
 func (u *Union2LiteralClassOneOrLiteralClassTwo) SetLiteralClassOne(v LiteralClassOne) {
-
-	u.variant = "LiteralClassOne"
-	u.variant_LiteralClassOne = &v
-
-	u.variant_LiteralClassTwo = nil
-
+    
+    u.variant = "LiteralClassOne"
+    u.variant_LiteralClassOne = &v
+    
+    u.variant_LiteralClassTwo = nil
+    
 }
 
 func (u *Union2LiteralClassOneOrLiteralClassTwo) IsLiteralClassOne() bool {
-	return u.variant == "LiteralClassOne"
+    return u.variant == "LiteralClassOne"
 }
 
 func (u *Union2LiteralClassOneOrLiteralClassTwo) AsLiteralClassOne() *LiteralClassOne {
-	if u.variant != "LiteralClassOne" {
-		return nil
-	}
-	return u.variant_LiteralClassOne
+    if u.variant != "LiteralClassOne" {
+        return nil
+    }
+    return u.variant_LiteralClassOne
 }
 
 func Union2LiteralClassOneOrLiteralClassTwo__NewLiteralClassTwo(v LiteralClassTwo) Union2LiteralClassOneOrLiteralClassTwo {
-
-	return Union2LiteralClassOneOrLiteralClassTwo{
-		variant:                 "LiteralClassTwo",
-		variant_LiteralClassTwo: &v,
-	}
+    
+    return Union2LiteralClassOneOrLiteralClassTwo{
+        variant: "LiteralClassTwo",
+        variant_LiteralClassTwo: &v,
+    }
 }
 
 func (u *Union2LiteralClassOneOrLiteralClassTwo) SetLiteralClassTwo(v LiteralClassTwo) {
-
-	u.variant = "LiteralClassTwo"
-	u.variant_LiteralClassTwo = &v
-
-	u.variant_LiteralClassOne = nil
-
+    
+    u.variant = "LiteralClassTwo"
+    u.variant_LiteralClassTwo = &v
+    
+    u.variant_LiteralClassOne = nil
+    
 }
 
 func (u *Union2LiteralClassOneOrLiteralClassTwo) IsLiteralClassTwo() bool {
-	return u.variant == "LiteralClassTwo"
+    return u.variant == "LiteralClassTwo"
 }
 
 func (u *Union2LiteralClassOneOrLiteralClassTwo) AsLiteralClassTwo() *LiteralClassTwo {
-	if u.variant != "LiteralClassTwo" {
-		return nil
-	}
-	return u.variant_LiteralClassTwo
+    if u.variant != "LiteralClassTwo" {
+        return nil
+    }
+    return u.variant_LiteralClassTwo
 }
-
 type Union2MapStringKeyRecursiveUnionValueOrString struct {
-	variant string
-
-	variant_String *string
-
-	variant_MapStringKeyRecursiveUnionValue *map[string]RecursiveUnion
+    variant string
+    
+    variant_String *string
+    
+    variant_MapStringKeyRecursiveUnionValue *map[string]RecursiveUnion
+    
 }
 
 func (u *Union2MapStringKeyRecursiveUnionValueOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-	valueHolder := holder.Value
-	variantName := holder.VariantName
+    valueHolder := holder.Value
+    variantName := holder.VariantName
 	switch variantName {
-	case "string":
-		u.variant = "String"
-		value := baml.Decode(valueHolder).Interface().(string)
-		u.variant_String = &value
-	case "Map__string_RecursiveUnion":
-		u.variant = "MapStringKeyRecursiveUnionValue"
-		value := baml.Decode(valueHolder).Interface().(map[string]RecursiveUnion)
-		u.variant_MapStringKeyRecursiveUnionValue = &value
-
-	default:
-		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+    case "string":
+            u.variant = "String"
+            value := baml.Decode(valueHolder).Interface().(string)
+            u.variant_String = &value
+    case "Map__string_RecursiveUnion":
+            u.variant = "MapStringKeyRecursiveUnionValue"
+            value := baml.Decode(valueHolder).Interface().(map[string]RecursiveUnion)
+            u.variant_MapStringKeyRecursiveUnionValue = &value
+    
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
+
 func (u Union2MapStringKeyRecursiveUnionValueOrString) Encode() (*cffi.CFFIValueHolder, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "String":
+        return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+    
+    case "MapStringKeyRecursiveUnionValue":
+        return baml.EncodeUnion(u.BamlEncodeName, "Map__string_RecursiveUnion", *u.variant_MapStringKeyRecursiveUnionValue)
+    
+    case "":
+        return nil, fmt.Errorf("invalid union variant: [unset]")
+    }
 
-	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
-
-	case "MapStringKeyRecursiveUnionValue":
-		return baml.EncodeUnion(u.BamlEncodeName, "Map__string_RecursiveUnion", *u.variant_MapStringKeyRecursiveUnionValue)
-
-	case "":
-		return nil, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union2MapStringKeyRecursiveUnionValueOrString) BamlTypeName() string {
-	return "Union2MapStringKeyRecursiveUnionValueOrString"
+    return "Union2MapStringKeyRecursiveUnionValueOrString"
 }
 
 func (u Union2MapStringKeyRecursiveUnionValueOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__Map__string_RecursiveUnion__string",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Union__Map__string_RecursiveUnion__string",
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+    }
 }
 
 func (u Union2MapStringKeyRecursiveUnionValueOrString) MarshalJSON() ([]byte, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "String":
+        return json.Marshal(u.variant_String)
+    
+    case "MapStringKeyRecursiveUnionValue":
+        return json.Marshal(u.variant_MapStringKeyRecursiveUnionValue)
+    
+    }
 
-	case "String":
-		return json.Marshal(u.variant_String)
-
-	case "MapStringKeyRecursiveUnionValue":
-		return json.Marshal(u.variant_MapStringKeyRecursiveUnionValue)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union2MapStringKeyRecursiveUnionValueOrString) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_String)
-	if err == nil {
-		u.variant = "String"
-		return nil
-	} else {
-		u.variant_String = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_MapStringKeyRecursiveUnionValue)
-	if err == nil {
-		u.variant = "MapStringKeyRecursiveUnionValue"
-		return nil
-	} else {
-		u.variant_MapStringKeyRecursiveUnionValue = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
+    var err error
+    
+    err = json.Unmarshal(data, &u.variant_String)
+    if err == nil {
+        u.variant = "String"
+        return nil
+    } else {
+        u.variant_String = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_MapStringKeyRecursiveUnionValue)
+    if err == nil {
+        u.variant = "MapStringKeyRecursiveUnionValue"
+        return nil
+    } else {
+        u.variant_MapStringKeyRecursiveUnionValue = nil
+    }
+    
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union2MapStringKeyRecursiveUnionValueOrString__NewString(v string) Union2MapStringKeyRecursiveUnionValueOrString {
 
-	return Union2MapStringKeyRecursiveUnionValueOrString{
-		variant:        "String",
-		variant_String: &v,
-	}
+func Union2MapStringKeyRecursiveUnionValueOrString__NewString(v string) Union2MapStringKeyRecursiveUnionValueOrString {
+    
+    return Union2MapStringKeyRecursiveUnionValueOrString{
+        variant: "String",
+        variant_String: &v,
+    }
 }
 
 func (u *Union2MapStringKeyRecursiveUnionValueOrString) SetString(v string) {
-
-	u.variant = "String"
-	u.variant_String = &v
-
-	u.variant_MapStringKeyRecursiveUnionValue = nil
-
+    
+    u.variant = "String"
+    u.variant_String = &v
+    
+    u.variant_MapStringKeyRecursiveUnionValue = nil
+    
 }
 
 func (u *Union2MapStringKeyRecursiveUnionValueOrString) IsString() bool {
-	return u.variant == "String"
+    return u.variant == "String"
 }
 
 func (u *Union2MapStringKeyRecursiveUnionValueOrString) AsString() *string {
-	if u.variant != "String" {
-		return nil
-	}
-	return u.variant_String
+    if u.variant != "String" {
+        return nil
+    }
+    return u.variant_String
 }
 
 func Union2MapStringKeyRecursiveUnionValueOrString__NewMapStringKeyRecursiveUnionValue(v map[string]RecursiveUnion) Union2MapStringKeyRecursiveUnionValueOrString {
-
-	return Union2MapStringKeyRecursiveUnionValueOrString{
-		variant:                                 "MapStringKeyRecursiveUnionValue",
-		variant_MapStringKeyRecursiveUnionValue: &v,
-	}
+    
+    return Union2MapStringKeyRecursiveUnionValueOrString{
+        variant: "MapStringKeyRecursiveUnionValue",
+        variant_MapStringKeyRecursiveUnionValue: &v,
+    }
 }
 
 func (u *Union2MapStringKeyRecursiveUnionValueOrString) SetMapStringKeyRecursiveUnionValue(v map[string]RecursiveUnion) {
-
-	u.variant = "MapStringKeyRecursiveUnionValue"
-	u.variant_MapStringKeyRecursiveUnionValue = &v
-
-	u.variant_String = nil
-
+    
+    u.variant = "MapStringKeyRecursiveUnionValue"
+    u.variant_MapStringKeyRecursiveUnionValue = &v
+    
+    u.variant_String = nil
+    
 }
 
 func (u *Union2MapStringKeyRecursiveUnionValueOrString) IsMapStringKeyRecursiveUnionValue() bool {
-	return u.variant == "MapStringKeyRecursiveUnionValue"
+    return u.variant == "MapStringKeyRecursiveUnionValue"
 }
 
 func (u *Union2MapStringKeyRecursiveUnionValueOrString) AsMapStringKeyRecursiveUnionValue() *map[string]RecursiveUnion {
-	if u.variant != "MapStringKeyRecursiveUnionValue" {
-		return nil
-	}
-	return u.variant_MapStringKeyRecursiveUnionValue
+    if u.variant != "MapStringKeyRecursiveUnionValue" {
+        return nil
+    }
+    return u.variant_MapStringKeyRecursiveUnionValue
 }
-
 type Union2NestedOrString struct {
-	variant string
-
-	variant_Nested *Nested
-
-	variant_String *string
+    variant string
+    
+    variant_Nested *Nested
+    
+    variant_String *string
+    
 }
 
 func (u *Union2NestedOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-	valueHolder := holder.Value
-	variantName := holder.VariantName
+    valueHolder := holder.Value
+    variantName := holder.VariantName
 	switch variantName {
-	case "Nested":
-		u.variant = "Nested"
-		value := baml.Decode(valueHolder).Interface().(Nested)
-		u.variant_Nested = &value
-	case "string":
-		u.variant = "String"
-		value := baml.Decode(valueHolder).Interface().(string)
-		u.variant_String = &value
-
-	default:
-		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+    case "Nested":
+            u.variant = "Nested"
+            value := baml.Decode(valueHolder).Interface().(Nested)
+            u.variant_Nested = &value
+    case "string":
+            u.variant = "String"
+            value := baml.Decode(valueHolder).Interface().(string)
+            u.variant_String = &value
+    
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
+
 func (u Union2NestedOrString) Encode() (*cffi.CFFIValueHolder, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "Nested":
+        return baml.EncodeUnion(u.BamlEncodeName, "Nested", *u.variant_Nested)
+    
+    case "String":
+        return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+    
+    case "":
+        return nil, fmt.Errorf("invalid union variant: [unset]")
+    }
 
-	case "Nested":
-		return baml.EncodeUnion(u.BamlEncodeName, "Nested", *u.variant_Nested)
-
-	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
-
-	case "":
-		return nil, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union2NestedOrString) BamlTypeName() string {
-	return "Union2NestedOrString"
+    return "Union2NestedOrString"
 }
 
 func (u Union2NestedOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__Nested__string",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Union__Nested__string",
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+    }
 }
 
 func (u Union2NestedOrString) MarshalJSON() ([]byte, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "Nested":
+        return json.Marshal(u.variant_Nested)
+    
+    case "String":
+        return json.Marshal(u.variant_String)
+    
+    }
 
-	case "Nested":
-		return json.Marshal(u.variant_Nested)
-
-	case "String":
-		return json.Marshal(u.variant_String)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union2NestedOrString) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_Nested)
-	if err == nil {
-		u.variant = "Nested"
-		return nil
-	} else {
-		u.variant_Nested = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_String)
-	if err == nil {
-		u.variant = "String"
-		return nil
-	} else {
-		u.variant_String = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
+    var err error
+    
+    err = json.Unmarshal(data, &u.variant_Nested)
+    if err == nil {
+        u.variant = "Nested"
+        return nil
+    } else {
+        u.variant_Nested = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_String)
+    if err == nil {
+        u.variant = "String"
+        return nil
+    } else {
+        u.variant_String = nil
+    }
+    
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union2NestedOrString__NewNested(v Nested) Union2NestedOrString {
 
-	return Union2NestedOrString{
-		variant:        "Nested",
-		variant_Nested: &v,
-	}
+func Union2NestedOrString__NewNested(v Nested) Union2NestedOrString {
+    
+    return Union2NestedOrString{
+        variant: "Nested",
+        variant_Nested: &v,
+    }
 }
 
 func (u *Union2NestedOrString) SetNested(v Nested) {
-
-	u.variant = "Nested"
-	u.variant_Nested = &v
-
-	u.variant_String = nil
-
+    
+    u.variant = "Nested"
+    u.variant_Nested = &v
+    
+    u.variant_String = nil
+    
 }
 
 func (u *Union2NestedOrString) IsNested() bool {
-	return u.variant == "Nested"
+    return u.variant == "Nested"
 }
 
 func (u *Union2NestedOrString) AsNested() *Nested {
-	if u.variant != "Nested" {
-		return nil
-	}
-	return u.variant_Nested
+    if u.variant != "Nested" {
+        return nil
+    }
+    return u.variant_Nested
 }
 
 func Union2NestedOrString__NewString(v string) Union2NestedOrString {
-
-	return Union2NestedOrString{
-		variant:        "String",
-		variant_String: &v,
-	}
+    
+    return Union2NestedOrString{
+        variant: "String",
+        variant_String: &v,
+    }
 }
 
 func (u *Union2NestedOrString) SetString(v string) {
-
-	u.variant = "String"
-	u.variant_String = &v
-
-	u.variant_Nested = nil
-
+    
+    u.variant = "String"
+    u.variant_String = &v
+    
+    u.variant_Nested = nil
+    
 }
 
 func (u *Union2NestedOrString) IsString() bool {
-	return u.variant == "String"
+    return u.variant == "String"
 }
 
 func (u *Union2NestedOrString) AsString() *string {
-	if u.variant != "String" {
-		return nil
-	}
-	return u.variant_String
+    if u.variant != "String" {
+        return nil
+    }
+    return u.variant_String
 }
-
 type Union2OriginalAOrOriginalB struct {
-	variant string
-
-	variant_OriginalA *OriginalA
-
-	variant_OriginalB *OriginalB
+    variant string
+    
+    variant_OriginalA *OriginalA
+    
+    variant_OriginalB *OriginalB
+    
 }
 
 func (u *Union2OriginalAOrOriginalB) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-	valueHolder := holder.Value
-	variantName := holder.VariantName
+    valueHolder := holder.Value
+    variantName := holder.VariantName
 	switch variantName {
-	case "OriginalA":
-		u.variant = "OriginalA"
-		value := baml.Decode(valueHolder).Interface().(OriginalA)
-		u.variant_OriginalA = &value
-	case "OriginalB":
-		u.variant = "OriginalB"
-		value := baml.Decode(valueHolder).Interface().(OriginalB)
-		u.variant_OriginalB = &value
-
-	default:
-		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+    case "OriginalA":
+            u.variant = "OriginalA"
+            value := baml.Decode(valueHolder).Interface().(OriginalA)
+            u.variant_OriginalA = &value
+    case "OriginalB":
+            u.variant = "OriginalB"
+            value := baml.Decode(valueHolder).Interface().(OriginalB)
+            u.variant_OriginalB = &value
+    
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
+
 func (u Union2OriginalAOrOriginalB) Encode() (*cffi.CFFIValueHolder, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "OriginalA":
+        return baml.EncodeUnion(u.BamlEncodeName, "OriginalA", *u.variant_OriginalA)
+    
+    case "OriginalB":
+        return baml.EncodeUnion(u.BamlEncodeName, "OriginalB", *u.variant_OriginalB)
+    
+    case "":
+        return nil, fmt.Errorf("invalid union variant: [unset]")
+    }
 
-	case "OriginalA":
-		return baml.EncodeUnion(u.BamlEncodeName, "OriginalA", *u.variant_OriginalA)
-
-	case "OriginalB":
-		return baml.EncodeUnion(u.BamlEncodeName, "OriginalB", *u.variant_OriginalB)
-
-	case "":
-		return nil, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union2OriginalAOrOriginalB) BamlTypeName() string {
-	return "Union2OriginalAOrOriginalB"
+    return "Union2OriginalAOrOriginalB"
 }
 
 func (u Union2OriginalAOrOriginalB) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__OriginalA__OriginalB",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Union__OriginalA__OriginalB",
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+    }
 }
 
 func (u Union2OriginalAOrOriginalB) MarshalJSON() ([]byte, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "OriginalA":
+        return json.Marshal(u.variant_OriginalA)
+    
+    case "OriginalB":
+        return json.Marshal(u.variant_OriginalB)
+    
+    }
 
-	case "OriginalA":
-		return json.Marshal(u.variant_OriginalA)
-
-	case "OriginalB":
-		return json.Marshal(u.variant_OriginalB)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union2OriginalAOrOriginalB) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_OriginalA)
-	if err == nil {
-		u.variant = "OriginalA"
-		return nil
-	} else {
-		u.variant_OriginalA = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_OriginalB)
-	if err == nil {
-		u.variant = "OriginalB"
-		return nil
-	} else {
-		u.variant_OriginalB = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
+    var err error
+    
+    err = json.Unmarshal(data, &u.variant_OriginalA)
+    if err == nil {
+        u.variant = "OriginalA"
+        return nil
+    } else {
+        u.variant_OriginalA = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_OriginalB)
+    if err == nil {
+        u.variant = "OriginalB"
+        return nil
+    } else {
+        u.variant_OriginalB = nil
+    }
+    
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union2OriginalAOrOriginalB__NewOriginalA(v OriginalA) Union2OriginalAOrOriginalB {
 
-	return Union2OriginalAOrOriginalB{
-		variant:           "OriginalA",
-		variant_OriginalA: &v,
-	}
+func Union2OriginalAOrOriginalB__NewOriginalA(v OriginalA) Union2OriginalAOrOriginalB {
+    
+    return Union2OriginalAOrOriginalB{
+        variant: "OriginalA",
+        variant_OriginalA: &v,
+    }
 }
 
 func (u *Union2OriginalAOrOriginalB) SetOriginalA(v OriginalA) {
-
-	u.variant = "OriginalA"
-	u.variant_OriginalA = &v
-
-	u.variant_OriginalB = nil
-
+    
+    u.variant = "OriginalA"
+    u.variant_OriginalA = &v
+    
+    u.variant_OriginalB = nil
+    
 }
 
 func (u *Union2OriginalAOrOriginalB) IsOriginalA() bool {
-	return u.variant == "OriginalA"
+    return u.variant == "OriginalA"
 }
 
 func (u *Union2OriginalAOrOriginalB) AsOriginalA() *OriginalA {
-	if u.variant != "OriginalA" {
-		return nil
-	}
-	return u.variant_OriginalA
+    if u.variant != "OriginalA" {
+        return nil
+    }
+    return u.variant_OriginalA
 }
 
 func Union2OriginalAOrOriginalB__NewOriginalB(v OriginalB) Union2OriginalAOrOriginalB {
-
-	return Union2OriginalAOrOriginalB{
-		variant:           "OriginalB",
-		variant_OriginalB: &v,
-	}
+    
+    return Union2OriginalAOrOriginalB{
+        variant: "OriginalB",
+        variant_OriginalB: &v,
+    }
 }
 
 func (u *Union2OriginalAOrOriginalB) SetOriginalB(v OriginalB) {
-
-	u.variant = "OriginalB"
-	u.variant_OriginalB = &v
-
-	u.variant_OriginalA = nil
-
+    
+    u.variant = "OriginalB"
+    u.variant_OriginalB = &v
+    
+    u.variant_OriginalA = nil
+    
 }
 
 func (u *Union2OriginalAOrOriginalB) IsOriginalB() bool {
-	return u.variant == "OriginalB"
+    return u.variant == "OriginalB"
 }
 
 func (u *Union2OriginalAOrOriginalB) AsOriginalB() *OriginalB {
-	if u.variant != "OriginalB" {
-		return nil
-	}
-	return u.variant_OriginalB
+    if u.variant != "OriginalB" {
+        return nil
+    }
+    return u.variant_OriginalB
 }
-
 type Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject struct {
-	variant string
-
-	variant_MemoryObject *MemoryObject
-
-	variant_ComplexMemoryObject *ComplexMemoryObject
-
-	variant_AnotherObject *AnotherObject
+    variant string
+    
+    variant_MemoryObject *MemoryObject
+    
+    variant_ComplexMemoryObject *ComplexMemoryObject
+    
+    variant_AnotherObject *AnotherObject
+    
 }
 
 func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-	valueHolder := holder.Value
-	variantName := holder.VariantName
+    valueHolder := holder.Value
+    variantName := holder.VariantName
 	switch variantName {
-	case "MemoryObject":
-		u.variant = "MemoryObject"
-		value := baml.Decode(valueHolder).Interface().(MemoryObject)
-		u.variant_MemoryObject = &value
-	case "ComplexMemoryObject":
-		u.variant = "ComplexMemoryObject"
-		value := baml.Decode(valueHolder).Interface().(ComplexMemoryObject)
-		u.variant_ComplexMemoryObject = &value
-	case "AnotherObject":
-		u.variant = "AnotherObject"
-		value := baml.Decode(valueHolder).Interface().(AnotherObject)
-		u.variant_AnotherObject = &value
-
-	default:
-		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+    case "MemoryObject":
+            u.variant = "MemoryObject"
+            value := baml.Decode(valueHolder).Interface().(MemoryObject)
+            u.variant_MemoryObject = &value
+    case "ComplexMemoryObject":
+            u.variant = "ComplexMemoryObject"
+            value := baml.Decode(valueHolder).Interface().(ComplexMemoryObject)
+            u.variant_ComplexMemoryObject = &value
+    case "AnotherObject":
+            u.variant = "AnotherObject"
+            value := baml.Decode(valueHolder).Interface().(AnotherObject)
+            u.variant_AnotherObject = &value
+    
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
+
 func (u Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) Encode() (*cffi.CFFIValueHolder, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "MemoryObject":
+        return baml.EncodeUnion(u.BamlEncodeName, "MemoryObject", *u.variant_MemoryObject)
+    
+    case "ComplexMemoryObject":
+        return baml.EncodeUnion(u.BamlEncodeName, "ComplexMemoryObject", *u.variant_ComplexMemoryObject)
+    
+    case "AnotherObject":
+        return baml.EncodeUnion(u.BamlEncodeName, "AnotherObject", *u.variant_AnotherObject)
+    
+    case "":
+        return nil, fmt.Errorf("invalid union variant: [unset]")
+    }
 
-	case "MemoryObject":
-		return baml.EncodeUnion(u.BamlEncodeName, "MemoryObject", *u.variant_MemoryObject)
-
-	case "ComplexMemoryObject":
-		return baml.EncodeUnion(u.BamlEncodeName, "ComplexMemoryObject", *u.variant_ComplexMemoryObject)
-
-	case "AnotherObject":
-		return baml.EncodeUnion(u.BamlEncodeName, "AnotherObject", *u.variant_AnotherObject)
-
-	case "":
-		return nil, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) BamlTypeName() string {
-	return "Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject"
+    return "Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject"
 }
 
 func (u Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__AnotherObject__ComplexMemoryObject__MemoryObject",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Union__AnotherObject__ComplexMemoryObject__MemoryObject",
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+    }
 }
 
 func (u Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) MarshalJSON() ([]byte, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "MemoryObject":
+        return json.Marshal(u.variant_MemoryObject)
+    
+    case "ComplexMemoryObject":
+        return json.Marshal(u.variant_ComplexMemoryObject)
+    
+    case "AnotherObject":
+        return json.Marshal(u.variant_AnotherObject)
+    
+    }
 
-	case "MemoryObject":
-		return json.Marshal(u.variant_MemoryObject)
-
-	case "ComplexMemoryObject":
-		return json.Marshal(u.variant_ComplexMemoryObject)
-
-	case "AnotherObject":
-		return json.Marshal(u.variant_AnotherObject)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_MemoryObject)
-	if err == nil {
-		u.variant = "MemoryObject"
-		return nil
-	} else {
-		u.variant_MemoryObject = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_ComplexMemoryObject)
-	if err == nil {
-		u.variant = "ComplexMemoryObject"
-		return nil
-	} else {
-		u.variant_ComplexMemoryObject = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_AnotherObject)
-	if err == nil {
-		u.variant = "AnotherObject"
-		return nil
-	} else {
-		u.variant_AnotherObject = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
+    var err error
+    
+    err = json.Unmarshal(data, &u.variant_MemoryObject)
+    if err == nil {
+        u.variant = "MemoryObject"
+        return nil
+    } else {
+        u.variant_MemoryObject = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_ComplexMemoryObject)
+    if err == nil {
+        u.variant = "ComplexMemoryObject"
+        return nil
+    } else {
+        u.variant_ComplexMemoryObject = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_AnotherObject)
+    if err == nil {
+        u.variant = "AnotherObject"
+        return nil
+    } else {
+        u.variant_AnotherObject = nil
+    }
+    
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject__NewMemoryObject(v MemoryObject) Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject {
 
-	return Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject{
-		variant:              "MemoryObject",
-		variant_MemoryObject: &v,
-	}
+func Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject__NewMemoryObject(v MemoryObject) Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject {
+    
+    return Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject{
+        variant: "MemoryObject",
+        variant_MemoryObject: &v,
+    }
 }
 
 func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) SetMemoryObject(v MemoryObject) {
-
-	u.variant = "MemoryObject"
-	u.variant_MemoryObject = &v
-
-	u.variant_ComplexMemoryObject = nil
-
-	u.variant_AnotherObject = nil
-
+    
+    u.variant = "MemoryObject"
+    u.variant_MemoryObject = &v
+    
+    u.variant_ComplexMemoryObject = nil
+    
+    u.variant_AnotherObject = nil
+    
 }
 
 func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) IsMemoryObject() bool {
-	return u.variant == "MemoryObject"
+    return u.variant == "MemoryObject"
 }
 
 func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) AsMemoryObject() *MemoryObject {
-	if u.variant != "MemoryObject" {
-		return nil
-	}
-	return u.variant_MemoryObject
+    if u.variant != "MemoryObject" {
+        return nil
+    }
+    return u.variant_MemoryObject
 }
 
 func Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject__NewComplexMemoryObject(v ComplexMemoryObject) Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject {
-
-	return Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject{
-		variant:                     "ComplexMemoryObject",
-		variant_ComplexMemoryObject: &v,
-	}
+    
+    return Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject{
+        variant: "ComplexMemoryObject",
+        variant_ComplexMemoryObject: &v,
+    }
 }
 
 func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) SetComplexMemoryObject(v ComplexMemoryObject) {
-
-	u.variant = "ComplexMemoryObject"
-	u.variant_ComplexMemoryObject = &v
-
-	u.variant_MemoryObject = nil
-
-	u.variant_AnotherObject = nil
-
+    
+    u.variant = "ComplexMemoryObject"
+    u.variant_ComplexMemoryObject = &v
+    
+    u.variant_MemoryObject = nil
+    
+    u.variant_AnotherObject = nil
+    
 }
 
 func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) IsComplexMemoryObject() bool {
-	return u.variant == "ComplexMemoryObject"
+    return u.variant == "ComplexMemoryObject"
 }
 
 func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) AsComplexMemoryObject() *ComplexMemoryObject {
-	if u.variant != "ComplexMemoryObject" {
-		return nil
-	}
-	return u.variant_ComplexMemoryObject
+    if u.variant != "ComplexMemoryObject" {
+        return nil
+    }
+    return u.variant_ComplexMemoryObject
 }
 
 func Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject__NewAnotherObject(v AnotherObject) Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject {
-
-	return Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject{
-		variant:               "AnotherObject",
-		variant_AnotherObject: &v,
-	}
+    
+    return Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject{
+        variant: "AnotherObject",
+        variant_AnotherObject: &v,
+    }
 }
 
 func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) SetAnotherObject(v AnotherObject) {
-
-	u.variant = "AnotherObject"
-	u.variant_AnotherObject = &v
-
-	u.variant_MemoryObject = nil
-
-	u.variant_ComplexMemoryObject = nil
-
+    
+    u.variant = "AnotherObject"
+    u.variant_AnotherObject = &v
+    
+    u.variant_MemoryObject = nil
+    
+    u.variant_ComplexMemoryObject = nil
+    
 }
 
 func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) IsAnotherObject() bool {
-	return u.variant == "AnotherObject"
+    return u.variant == "AnotherObject"
 }
 
 func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) AsAnotherObject() *AnotherObject {
-	if u.variant != "AnotherObject" {
-		return nil
-	}
-	return u.variant_AnotherObject
+    if u.variant != "AnotherObject" {
+        return nil
+    }
+    return u.variant_AnotherObject
 }
-
 type Union3BookOrderOrFlightConfirmationOrGroceryReceipt struct {
-	variant string
-
-	variant_BookOrder *BookOrder
-
-	variant_FlightConfirmation *FlightConfirmation
-
-	variant_GroceryReceipt *GroceryReceipt
+    variant string
+    
+    variant_BookOrder *BookOrder
+    
+    variant_FlightConfirmation *FlightConfirmation
+    
+    variant_GroceryReceipt *GroceryReceipt
+    
 }
 
 func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-	valueHolder := holder.Value
-	variantName := holder.VariantName
+    valueHolder := holder.Value
+    variantName := holder.VariantName
 	switch variantName {
-	case "BookOrder":
-		u.variant = "BookOrder"
-		value := baml.Decode(valueHolder).Interface().(BookOrder)
-		u.variant_BookOrder = &value
-	case "FlightConfirmation":
-		u.variant = "FlightConfirmation"
-		value := baml.Decode(valueHolder).Interface().(FlightConfirmation)
-		u.variant_FlightConfirmation = &value
-	case "GroceryReceipt":
-		u.variant = "GroceryReceipt"
-		value := baml.Decode(valueHolder).Interface().(GroceryReceipt)
-		u.variant_GroceryReceipt = &value
-
-	default:
-		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+    case "BookOrder":
+            u.variant = "BookOrder"
+            value := baml.Decode(valueHolder).Interface().(BookOrder)
+            u.variant_BookOrder = &value
+    case "FlightConfirmation":
+            u.variant = "FlightConfirmation"
+            value := baml.Decode(valueHolder).Interface().(FlightConfirmation)
+            u.variant_FlightConfirmation = &value
+    case "GroceryReceipt":
+            u.variant = "GroceryReceipt"
+            value := baml.Decode(valueHolder).Interface().(GroceryReceipt)
+            u.variant_GroceryReceipt = &value
+    
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
+
 func (u Union3BookOrderOrFlightConfirmationOrGroceryReceipt) Encode() (*cffi.CFFIValueHolder, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "BookOrder":
+        return baml.EncodeUnion(u.BamlEncodeName, "BookOrder", *u.variant_BookOrder)
+    
+    case "FlightConfirmation":
+        return baml.EncodeUnion(u.BamlEncodeName, "FlightConfirmation", *u.variant_FlightConfirmation)
+    
+    case "GroceryReceipt":
+        return baml.EncodeUnion(u.BamlEncodeName, "GroceryReceipt", *u.variant_GroceryReceipt)
+    
+    case "":
+        return nil, fmt.Errorf("invalid union variant: [unset]")
+    }
 
-	case "BookOrder":
-		return baml.EncodeUnion(u.BamlEncodeName, "BookOrder", *u.variant_BookOrder)
-
-	case "FlightConfirmation":
-		return baml.EncodeUnion(u.BamlEncodeName, "FlightConfirmation", *u.variant_FlightConfirmation)
-
-	case "GroceryReceipt":
-		return baml.EncodeUnion(u.BamlEncodeName, "GroceryReceipt", *u.variant_GroceryReceipt)
-
-	case "":
-		return nil, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union3BookOrderOrFlightConfirmationOrGroceryReceipt) BamlTypeName() string {
-	return "Union3BookOrderOrFlightConfirmationOrGroceryReceipt"
+    return "Union3BookOrderOrFlightConfirmationOrGroceryReceipt"
 }
 
 func (u Union3BookOrderOrFlightConfirmationOrGroceryReceipt) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__BookOrder__FlightConfirmation__GroceryReceipt",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Union__BookOrder__FlightConfirmation__GroceryReceipt",
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+    }
 }
 
 func (u Union3BookOrderOrFlightConfirmationOrGroceryReceipt) MarshalJSON() ([]byte, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "BookOrder":
+        return json.Marshal(u.variant_BookOrder)
+    
+    case "FlightConfirmation":
+        return json.Marshal(u.variant_FlightConfirmation)
+    
+    case "GroceryReceipt":
+        return json.Marshal(u.variant_GroceryReceipt)
+    
+    }
 
-	case "BookOrder":
-		return json.Marshal(u.variant_BookOrder)
-
-	case "FlightConfirmation":
-		return json.Marshal(u.variant_FlightConfirmation)
-
-	case "GroceryReceipt":
-		return json.Marshal(u.variant_GroceryReceipt)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_BookOrder)
-	if err == nil {
-		u.variant = "BookOrder"
-		return nil
-	} else {
-		u.variant_BookOrder = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_FlightConfirmation)
-	if err == nil {
-		u.variant = "FlightConfirmation"
-		return nil
-	} else {
-		u.variant_FlightConfirmation = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_GroceryReceipt)
-	if err == nil {
-		u.variant = "GroceryReceipt"
-		return nil
-	} else {
-		u.variant_GroceryReceipt = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
+    var err error
+    
+    err = json.Unmarshal(data, &u.variant_BookOrder)
+    if err == nil {
+        u.variant = "BookOrder"
+        return nil
+    } else {
+        u.variant_BookOrder = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_FlightConfirmation)
+    if err == nil {
+        u.variant = "FlightConfirmation"
+        return nil
+    } else {
+        u.variant_FlightConfirmation = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_GroceryReceipt)
+    if err == nil {
+        u.variant = "GroceryReceipt"
+        return nil
+    } else {
+        u.variant_GroceryReceipt = nil
+    }
+    
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union3BookOrderOrFlightConfirmationOrGroceryReceipt__NewBookOrder(v BookOrder) Union3BookOrderOrFlightConfirmationOrGroceryReceipt {
 
-	return Union3BookOrderOrFlightConfirmationOrGroceryReceipt{
-		variant:           "BookOrder",
-		variant_BookOrder: &v,
-	}
+func Union3BookOrderOrFlightConfirmationOrGroceryReceipt__NewBookOrder(v BookOrder) Union3BookOrderOrFlightConfirmationOrGroceryReceipt {
+    
+    return Union3BookOrderOrFlightConfirmationOrGroceryReceipt{
+        variant: "BookOrder",
+        variant_BookOrder: &v,
+    }
 }
 
 func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) SetBookOrder(v BookOrder) {
-
-	u.variant = "BookOrder"
-	u.variant_BookOrder = &v
-
-	u.variant_FlightConfirmation = nil
-
-	u.variant_GroceryReceipt = nil
-
+    
+    u.variant = "BookOrder"
+    u.variant_BookOrder = &v
+    
+    u.variant_FlightConfirmation = nil
+    
+    u.variant_GroceryReceipt = nil
+    
 }
 
 func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) IsBookOrder() bool {
-	return u.variant == "BookOrder"
+    return u.variant == "BookOrder"
 }
 
 func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) AsBookOrder() *BookOrder {
-	if u.variant != "BookOrder" {
-		return nil
-	}
-	return u.variant_BookOrder
+    if u.variant != "BookOrder" {
+        return nil
+    }
+    return u.variant_BookOrder
 }
 
 func Union3BookOrderOrFlightConfirmationOrGroceryReceipt__NewFlightConfirmation(v FlightConfirmation) Union3BookOrderOrFlightConfirmationOrGroceryReceipt {
-
-	return Union3BookOrderOrFlightConfirmationOrGroceryReceipt{
-		variant:                    "FlightConfirmation",
-		variant_FlightConfirmation: &v,
-	}
+    
+    return Union3BookOrderOrFlightConfirmationOrGroceryReceipt{
+        variant: "FlightConfirmation",
+        variant_FlightConfirmation: &v,
+    }
 }
 
 func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) SetFlightConfirmation(v FlightConfirmation) {
-
-	u.variant = "FlightConfirmation"
-	u.variant_FlightConfirmation = &v
-
-	u.variant_BookOrder = nil
-
-	u.variant_GroceryReceipt = nil
-
+    
+    u.variant = "FlightConfirmation"
+    u.variant_FlightConfirmation = &v
+    
+    u.variant_BookOrder = nil
+    
+    u.variant_GroceryReceipt = nil
+    
 }
 
 func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) IsFlightConfirmation() bool {
-	return u.variant == "FlightConfirmation"
+    return u.variant == "FlightConfirmation"
 }
 
 func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) AsFlightConfirmation() *FlightConfirmation {
-	if u.variant != "FlightConfirmation" {
-		return nil
-	}
-	return u.variant_FlightConfirmation
+    if u.variant != "FlightConfirmation" {
+        return nil
+    }
+    return u.variant_FlightConfirmation
 }
 
 func Union3BookOrderOrFlightConfirmationOrGroceryReceipt__NewGroceryReceipt(v GroceryReceipt) Union3BookOrderOrFlightConfirmationOrGroceryReceipt {
-
-	return Union3BookOrderOrFlightConfirmationOrGroceryReceipt{
-		variant:                "GroceryReceipt",
-		variant_GroceryReceipt: &v,
-	}
+    
+    return Union3BookOrderOrFlightConfirmationOrGroceryReceipt{
+        variant: "GroceryReceipt",
+        variant_GroceryReceipt: &v,
+    }
 }
 
 func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) SetGroceryReceipt(v GroceryReceipt) {
-
-	u.variant = "GroceryReceipt"
-	u.variant_GroceryReceipt = &v
-
-	u.variant_BookOrder = nil
-
-	u.variant_FlightConfirmation = nil
-
+    
+    u.variant = "GroceryReceipt"
+    u.variant_GroceryReceipt = &v
+    
+    u.variant_BookOrder = nil
+    
+    u.variant_FlightConfirmation = nil
+    
 }
 
 func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) IsGroceryReceipt() bool {
-	return u.variant == "GroceryReceipt"
+    return u.variant == "GroceryReceipt"
 }
 
 func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) AsGroceryReceipt() *GroceryReceipt {
-	if u.variant != "GroceryReceipt" {
-		return nil
-	}
-	return u.variant_GroceryReceipt
+    if u.variant != "GroceryReceipt" {
+        return nil
+    }
+    return u.variant_GroceryReceipt
 }
-
 type Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString struct {
-	variant string
-
-	variant_Int *int64
-
-	variant_String *string
-
-	variant_Bool *bool
-
-	variant_Float *float64
-
-	variant_JsonObject *JsonObject
-
-	variant_JsonArray *JsonArray
+    variant string
+    
+    variant_Int *int64
+    
+    variant_String *string
+    
+    variant_Bool *bool
+    
+    variant_Float *float64
+    
+    variant_JsonObject *JsonObject
+    
+    variant_JsonArray *JsonArray
+    
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-	valueHolder := holder.Value
-	variantName := holder.VariantName
+    valueHolder := holder.Value
+    variantName := holder.VariantName
 	switch variantName {
-	case "int":
-		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
-		u.variant_Int = &value
-	case "string":
-		u.variant = "String"
-		value := baml.Decode(valueHolder).Interface().(string)
-		u.variant_String = &value
-	case "bool":
-		u.variant = "Bool"
-		value := baml.Decode(valueHolder).Interface().(bool)
-		u.variant_Bool = &value
-	case "float":
-		u.variant = "Float"
-		value := baml.Decode(valueHolder).Interface().(float64)
-		u.variant_Float = &value
-	case "JsonObject":
-		u.variant = "JsonObject"
-		value := baml.Decode(valueHolder).Interface().(JsonObject)
-		u.variant_JsonObject = &value
-	case "JsonArray":
-		u.variant = "JsonArray"
-		value := baml.Decode(valueHolder).Interface().(JsonArray)
-		u.variant_JsonArray = &value
-
-	default:
-		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+    case "int":
+            u.variant = "Int"
+            value := baml.Decode(valueHolder).Interface().(int64)
+            u.variant_Int = &value
+    case "string":
+            u.variant = "String"
+            value := baml.Decode(valueHolder).Interface().(string)
+            u.variant_String = &value
+    case "bool":
+            u.variant = "Bool"
+            value := baml.Decode(valueHolder).Interface().(bool)
+            u.variant_Bool = &value
+    case "float":
+            u.variant = "Float"
+            value := baml.Decode(valueHolder).Interface().(float64)
+            u.variant_Float = &value
+    case "JsonObject":
+            u.variant = "JsonObject"
+            value := baml.Decode(valueHolder).Interface().(JsonObject)
+            u.variant_JsonObject = &value
+    case "JsonArray":
+            u.variant = "JsonArray"
+            value := baml.Decode(valueHolder).Interface().(JsonArray)
+            u.variant_JsonArray = &value
+    
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
+
 func (u Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Encode() (*cffi.CFFIValueHolder, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "Int":
+        return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+    
+    case "String":
+        return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+    
+    case "Bool":
+        return baml.EncodeUnion(u.BamlEncodeName, "bool", *u.variant_Bool)
+    
+    case "Float":
+        return baml.EncodeUnion(u.BamlEncodeName, "float", *u.variant_Float)
+    
+    case "JsonObject":
+        return baml.EncodeUnion(u.BamlEncodeName, "JsonObject", *u.variant_JsonObject)
+    
+    case "JsonArray":
+        return baml.EncodeUnion(u.BamlEncodeName, "JsonArray", *u.variant_JsonArray)
+    
+    case "":
+        return nil, fmt.Errorf("invalid union variant: [unset]")
+    }
 
-	case "Int":
-		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
-
-	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
-
-	case "Bool":
-		return baml.EncodeUnion(u.BamlEncodeName, "bool", *u.variant_Bool)
-
-	case "Float":
-		return baml.EncodeUnion(u.BamlEncodeName, "float", *u.variant_Float)
-
-	case "JsonObject":
-		return baml.EncodeUnion(u.BamlEncodeName, "JsonObject", *u.variant_JsonObject)
-
-	case "JsonArray":
-		return baml.EncodeUnion(u.BamlEncodeName, "JsonArray", *u.variant_JsonArray)
-
-	case "":
-		return nil, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) BamlTypeName() string {
-	return "Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString"
+    return "Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString"
 }
 
 func (u Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__JsonArray__JsonObject__bool__float__int__string",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Union__JsonArray__JsonObject__bool__float__int__string",
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+    }
 }
 
 func (u Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) MarshalJSON() ([]byte, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "Int":
+        return json.Marshal(u.variant_Int)
+    
+    case "String":
+        return json.Marshal(u.variant_String)
+    
+    case "Bool":
+        return json.Marshal(u.variant_Bool)
+    
+    case "Float":
+        return json.Marshal(u.variant_Float)
+    
+    case "JsonObject":
+        return json.Marshal(u.variant_JsonObject)
+    
+    case "JsonArray":
+        return json.Marshal(u.variant_JsonArray)
+    
+    }
 
-	case "Int":
-		return json.Marshal(u.variant_Int)
-
-	case "String":
-		return json.Marshal(u.variant_String)
-
-	case "Bool":
-		return json.Marshal(u.variant_Bool)
-
-	case "Float":
-		return json.Marshal(u.variant_Float)
-
-	case "JsonObject":
-		return json.Marshal(u.variant_JsonObject)
-
-	case "JsonArray":
-		return json.Marshal(u.variant_JsonArray)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_Int)
-	if err == nil {
-		u.variant = "Int"
-		return nil
-	} else {
-		u.variant_Int = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_String)
-	if err == nil {
-		u.variant = "String"
-		return nil
-	} else {
-		u.variant_String = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_Bool)
-	if err == nil {
-		u.variant = "Bool"
-		return nil
-	} else {
-		u.variant_Bool = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_Float)
-	if err == nil {
-		u.variant = "Float"
-		return nil
-	} else {
-		u.variant_Float = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_JsonObject)
-	if err == nil {
-		u.variant = "JsonObject"
-		return nil
-	} else {
-		u.variant_JsonObject = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_JsonArray)
-	if err == nil {
-		u.variant = "JsonArray"
-		return nil
-	} else {
-		u.variant_JsonArray = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
+    var err error
+    
+    err = json.Unmarshal(data, &u.variant_Int)
+    if err == nil {
+        u.variant = "Int"
+        return nil
+    } else {
+        u.variant_Int = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_String)
+    if err == nil {
+        u.variant = "String"
+        return nil
+    } else {
+        u.variant_String = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_Bool)
+    if err == nil {
+        u.variant = "Bool"
+        return nil
+    } else {
+        u.variant_Bool = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_Float)
+    if err == nil {
+        u.variant = "Float"
+        return nil
+    } else {
+        u.variant_Float = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_JsonObject)
+    if err == nil {
+        u.variant = "JsonObject"
+        return nil
+    } else {
+        u.variant_JsonObject = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_JsonArray)
+    if err == nil {
+        u.variant = "JsonArray"
+        return nil
+    } else {
+        u.variant_JsonArray = nil
+    }
+    
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewInt(v int64) Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
 
-	return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
-		variant:     "Int",
-		variant_Int: &v,
-	}
+func Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewInt(v int64) Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
+    
+    return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
+        variant: "Int",
+        variant_Int: &v,
+    }
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) SetInt(v int64) {
-
-	u.variant = "Int"
-	u.variant_Int = &v
-
-	u.variant_String = nil
-
-	u.variant_Bool = nil
-
-	u.variant_Float = nil
-
-	u.variant_JsonObject = nil
-
-	u.variant_JsonArray = nil
-
+    
+    u.variant = "Int"
+    u.variant_Int = &v
+    
+    u.variant_String = nil
+    
+    u.variant_Bool = nil
+    
+    u.variant_Float = nil
+    
+    u.variant_JsonObject = nil
+    
+    u.variant_JsonArray = nil
+    
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsInt() bool {
-	return u.variant == "Int"
+    return u.variant == "Int"
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsInt() *int64 {
-	if u.variant != "Int" {
-		return nil
-	}
-	return u.variant_Int
+    if u.variant != "Int" {
+        return nil
+    }
+    return u.variant_Int
 }
 
 func Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewString(v string) Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
-
-	return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
-		variant:        "String",
-		variant_String: &v,
-	}
+    
+    return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
+        variant: "String",
+        variant_String: &v,
+    }
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) SetString(v string) {
-
-	u.variant = "String"
-	u.variant_String = &v
-
-	u.variant_Int = nil
-
-	u.variant_Bool = nil
-
-	u.variant_Float = nil
-
-	u.variant_JsonObject = nil
-
-	u.variant_JsonArray = nil
-
+    
+    u.variant = "String"
+    u.variant_String = &v
+    
+    u.variant_Int = nil
+    
+    u.variant_Bool = nil
+    
+    u.variant_Float = nil
+    
+    u.variant_JsonObject = nil
+    
+    u.variant_JsonArray = nil
+    
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsString() bool {
-	return u.variant == "String"
+    return u.variant == "String"
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsString() *string {
-	if u.variant != "String" {
-		return nil
-	}
-	return u.variant_String
+    if u.variant != "String" {
+        return nil
+    }
+    return u.variant_String
 }
 
 func Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewBool(v bool) Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
-
-	return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
-		variant:      "Bool",
-		variant_Bool: &v,
-	}
+    
+    return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
+        variant: "Bool",
+        variant_Bool: &v,
+    }
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) SetBool(v bool) {
-
-	u.variant = "Bool"
-	u.variant_Bool = &v
-
-	u.variant_Int = nil
-
-	u.variant_String = nil
-
-	u.variant_Float = nil
-
-	u.variant_JsonObject = nil
-
-	u.variant_JsonArray = nil
-
+    
+    u.variant = "Bool"
+    u.variant_Bool = &v
+    
+    u.variant_Int = nil
+    
+    u.variant_String = nil
+    
+    u.variant_Float = nil
+    
+    u.variant_JsonObject = nil
+    
+    u.variant_JsonArray = nil
+    
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsBool() bool {
-	return u.variant == "Bool"
+    return u.variant == "Bool"
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsBool() *bool {
-	if u.variant != "Bool" {
-		return nil
-	}
-	return u.variant_Bool
+    if u.variant != "Bool" {
+        return nil
+    }
+    return u.variant_Bool
 }
 
 func Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewFloat(v float64) Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
-
-	return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
-		variant:       "Float",
-		variant_Float: &v,
-	}
+    
+    return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
+        variant: "Float",
+        variant_Float: &v,
+    }
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) SetFloat(v float64) {
-
-	u.variant = "Float"
-	u.variant_Float = &v
-
-	u.variant_Int = nil
-
-	u.variant_String = nil
-
-	u.variant_Bool = nil
-
-	u.variant_JsonObject = nil
-
-	u.variant_JsonArray = nil
-
+    
+    u.variant = "Float"
+    u.variant_Float = &v
+    
+    u.variant_Int = nil
+    
+    u.variant_String = nil
+    
+    u.variant_Bool = nil
+    
+    u.variant_JsonObject = nil
+    
+    u.variant_JsonArray = nil
+    
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsFloat() bool {
-	return u.variant == "Float"
+    return u.variant == "Float"
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsFloat() *float64 {
-	if u.variant != "Float" {
-		return nil
-	}
-	return u.variant_Float
+    if u.variant != "Float" {
+        return nil
+    }
+    return u.variant_Float
 }
 
 func Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewJsonObject(v JsonObject) Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
-
-	return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
-		variant:            "JsonObject",
-		variant_JsonObject: &v,
-	}
+    
+    return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
+        variant: "JsonObject",
+        variant_JsonObject: &v,
+    }
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) SetJsonObject(v JsonObject) {
-
-	u.variant = "JsonObject"
-	u.variant_JsonObject = &v
-
-	u.variant_Int = nil
-
-	u.variant_String = nil
-
-	u.variant_Bool = nil
-
-	u.variant_Float = nil
-
-	u.variant_JsonArray = nil
-
+    
+    u.variant = "JsonObject"
+    u.variant_JsonObject = &v
+    
+    u.variant_Int = nil
+    
+    u.variant_String = nil
+    
+    u.variant_Bool = nil
+    
+    u.variant_Float = nil
+    
+    u.variant_JsonArray = nil
+    
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsJsonObject() bool {
-	return u.variant == "JsonObject"
+    return u.variant == "JsonObject"
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsJsonObject() *JsonObject {
-	if u.variant != "JsonObject" {
-		return nil
-	}
-	return u.variant_JsonObject
+    if u.variant != "JsonObject" {
+        return nil
+    }
+    return u.variant_JsonObject
 }
 
 func Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewJsonArray(v JsonArray) Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
-
-	return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
-		variant:           "JsonArray",
-		variant_JsonArray: &v,
-	}
+    
+    return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
+        variant: "JsonArray",
+        variant_JsonArray: &v,
+    }
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) SetJsonArray(v JsonArray) {
-
-	u.variant = "JsonArray"
-	u.variant_JsonArray = &v
-
-	u.variant_Int = nil
-
-	u.variant_String = nil
-
-	u.variant_Bool = nil
-
-	u.variant_Float = nil
-
-	u.variant_JsonObject = nil
-
+    
+    u.variant = "JsonArray"
+    u.variant_JsonArray = &v
+    
+    u.variant_Int = nil
+    
+    u.variant_String = nil
+    
+    u.variant_Bool = nil
+    
+    u.variant_Float = nil
+    
+    u.variant_JsonObject = nil
+    
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsJsonArray() bool {
-	return u.variant == "JsonArray"
+    return u.variant == "JsonArray"
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsJsonArray() *JsonArray {
-	if u.variant != "JsonArray" {
-		return nil
-	}
-	return u.variant_JsonArray
+    if u.variant != "JsonArray" {
+        return nil
+    }
+    return u.variant_JsonArray
 }

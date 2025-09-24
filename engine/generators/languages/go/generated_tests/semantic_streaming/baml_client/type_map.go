@@ -14,18 +14,23 @@
 package baml_client
 
 import (
-	"reflect"
-	"semantic_streaming/baml_client/stream_types"
-	"semantic_streaming/baml_client/types"
+    "semantic_streaming/baml_client/types"
+    "semantic_streaming/baml_client/stream_types"
 )
 
 var typeMap = map[string]reflect.Type{
-	"TYPES.ClassWithBlockDone":        reflect.TypeOf(types.ClassWithBlockDone{}),
-	"STREAM_TYPES.ClassWithBlockDone": reflect.TypeOf(stream_types.ClassWithBlockDone{}),
-	"TYPES.ClassWithoutDone":          reflect.TypeOf(types.ClassWithoutDone{}),
-	"STREAM_TYPES.ClassWithoutDone":   reflect.TypeOf(stream_types.ClassWithoutDone{}),
-	"TYPES.SemanticContainer":         reflect.TypeOf(types.SemanticContainer{}),
-	"STREAM_TYPES.SemanticContainer":  reflect.TypeOf(stream_types.SemanticContainer{}),
-	"TYPES.SmallThing":                reflect.TypeOf(types.SmallThing{}),
-	"STREAM_TYPES.SmallThing":         reflect.TypeOf(stream_types.SmallThing{}),
+"TYPES.ClassWithBlockDone": reflect.TypeOf(types.ClassWithBlockDone{}),
+    "STREAM_TYPES.ClassWithBlockDone": reflect.TypeOf(stream_types.ClassWithBlockDone{}),
+"TYPES.ClassWithoutDone": reflect.TypeOf(types.ClassWithoutDone{}),
+    "STREAM_TYPES.ClassWithoutDone": reflect.TypeOf(stream_types.ClassWithoutDone{}),
+"TYPES.SemanticContainer": reflect.TypeOf(types.SemanticContainer{}),
+    "STREAM_TYPES.SemanticContainer": reflect.TypeOf(stream_types.SemanticContainer{}),
+"TYPES.SmallThing": reflect.TypeOf(types.SmallThing{}),
+    "STREAM_TYPES.SmallThing": reflect.TypeOf(stream_types.SmallThing{}),
+
+
+
+
+
+
 }

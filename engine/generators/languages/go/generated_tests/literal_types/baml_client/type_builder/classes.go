@@ -15,12 +15,13 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
+
 type BooleanLiteralsClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *BooleanLiteralsClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -31,17 +32,21 @@ func (t *BooleanLiteralsClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
+
+
+
 func (t *BooleanLiteralsClassView) PropertyAlwaysTrue() (ClassPropertyView, error) {
-	return t.inner.Property("alwaysTrue")
+    return t.inner.Property("alwaysTrue")
 }
 
 func (t *BooleanLiteralsClassView) PropertyAlwaysFalse() (ClassPropertyView, error) {
-	return t.inner.Property("alwaysFalse")
+    return t.inner.Property("alwaysFalse")
 }
 
 func (t *BooleanLiteralsClassView) PropertyEitherBool() (ClassPropertyView, error) {
-	return t.inner.Property("eitherBool")
+    return t.inner.Property("eitherBool")
 }
+
 
 func (t *TypeBuilder) BooleanLiterals() (*BooleanLiteralsClassView, error) {
 	bld, err := t.inner.Class("BooleanLiterals")
@@ -56,11 +61,11 @@ func (t *BooleanLiteralsClassView) Type() (baml.Type, error) {
 }
 
 type ComplexLiteralsClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ComplexLiteralsClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -71,25 +76,29 @@ func (t *ComplexLiteralsClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
+
+
+
 func (t *ComplexLiteralsClassView) PropertyState() (ClassPropertyView, error) {
-	return t.inner.Property("state")
+    return t.inner.Property("state")
 }
 
 func (t *ComplexLiteralsClassView) PropertyRetryCount() (ClassPropertyView, error) {
-	return t.inner.Property("retryCount")
+    return t.inner.Property("retryCount")
 }
 
 func (t *ComplexLiteralsClassView) PropertyResponse() (ClassPropertyView, error) {
-	return t.inner.Property("response")
+    return t.inner.Property("response")
 }
 
 func (t *ComplexLiteralsClassView) PropertyFlags() (ClassPropertyView, error) {
-	return t.inner.Property("flags")
+    return t.inner.Property("flags")
 }
 
 func (t *ComplexLiteralsClassView) PropertyCodes() (ClassPropertyView, error) {
-	return t.inner.Property("codes")
+    return t.inner.Property("codes")
 }
+
 
 func (t *TypeBuilder) ComplexLiterals() (*ComplexLiteralsClassView, error) {
 	bld, err := t.inner.Class("ComplexLiterals")
@@ -104,11 +113,11 @@ func (t *ComplexLiteralsClassView) Type() (baml.Type, error) {
 }
 
 type IntegerLiteralsClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *IntegerLiteralsClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -119,17 +128,21 @@ func (t *IntegerLiteralsClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
+
+
+
 func (t *IntegerLiteralsClassView) PropertyPriority() (ClassPropertyView, error) {
-	return t.inner.Property("priority")
+    return t.inner.Property("priority")
 }
 
 func (t *IntegerLiteralsClassView) PropertyHttpStatus() (ClassPropertyView, error) {
-	return t.inner.Property("httpStatus")
+    return t.inner.Property("httpStatus")
 }
 
 func (t *IntegerLiteralsClassView) PropertyMaxRetries() (ClassPropertyView, error) {
-	return t.inner.Property("maxRetries")
+    return t.inner.Property("maxRetries")
 }
+
 
 func (t *TypeBuilder) IntegerLiterals() (*IntegerLiteralsClassView, error) {
 	bld, err := t.inner.Class("IntegerLiterals")
@@ -144,11 +157,11 @@ func (t *IntegerLiteralsClassView) Type() (baml.Type, error) {
 }
 
 type MixedLiteralsClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *MixedLiteralsClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -159,25 +172,29 @@ func (t *MixedLiteralsClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *MixedLiteralsClassView) PropertyId() (ClassPropertyView, error) {
-	return t.inner.Property("id")
+    return t.inner.Property("id")
 }
 
 func (t *MixedLiteralsClassView) PropertyType() (ClassPropertyView, error) {
-	return t.inner.Property("type")
+    return t.inner.Property("type")
 }
 
 func (t *MixedLiteralsClassView) PropertyLevel() (ClassPropertyView, error) {
-	return t.inner.Property("level")
+    return t.inner.Property("level")
 }
 
 func (t *MixedLiteralsClassView) PropertyIsActive() (ClassPropertyView, error) {
-	return t.inner.Property("isActive")
+    return t.inner.Property("isActive")
 }
 
 func (t *MixedLiteralsClassView) PropertyApiVersion() (ClassPropertyView, error) {
-	return t.inner.Property("apiVersion")
+    return t.inner.Property("apiVersion")
 }
+
 
 func (t *TypeBuilder) MixedLiterals() (*MixedLiteralsClassView, error) {
 	bld, err := t.inner.Class("MixedLiterals")
@@ -192,11 +209,11 @@ func (t *MixedLiteralsClassView) Type() (baml.Type, error) {
 }
 
 type StringLiteralsClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *StringLiteralsClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -207,17 +224,21 @@ func (t *StringLiteralsClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
+
+
+
 func (t *StringLiteralsClassView) PropertyStatus() (ClassPropertyView, error) {
-	return t.inner.Property("status")
+    return t.inner.Property("status")
 }
 
 func (t *StringLiteralsClassView) PropertyEnvironment() (ClassPropertyView, error) {
-	return t.inner.Property("environment")
+    return t.inner.Property("environment")
 }
 
 func (t *StringLiteralsClassView) PropertyMethod() (ClassPropertyView, error) {
-	return t.inner.Property("method")
+    return t.inner.Property("method")
 }
+
 
 func (t *TypeBuilder) StringLiterals() (*StringLiteralsClassView, error) {
 	bld, err := t.inner.Class("StringLiterals")

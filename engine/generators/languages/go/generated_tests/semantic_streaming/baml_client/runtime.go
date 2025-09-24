@@ -27,9 +27,7 @@
 package baml_client
 
 import (
-	"fmt"
 	"os"
-	"semantic_streaming/baml_client/type_builder"
 	"strings"
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"

@@ -14,311 +14,309 @@
 package baml_client
 
 import (
-	"context"
-	"fmt"
+    "context"
 
-	"nested_structures/baml_client/stream_types"
-	"nested_structures/baml_client/types"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "nested_structures/baml_client/types"
+    "nested_structures/baml_client/stream_types"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-type stream struct{}
-
+type stream struct {}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
-	IsError   bool
-	Error     error
-	IsFinal   bool
-	as_final  *TFinal
-	as_stream *TStream
+    IsError   bool
+    Error     error
+    IsFinal   bool
+    as_final  *TFinal
+    as_stream *TStream
 }
 
 func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
-	return s.as_final
+    return s.as_final
 }
 
 func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
-	return s.as_stream
+    return s.as_stream
 }
 
-// / Streaming version of TestComplexNested
+
+/// Streaming version of TestComplexNested
 func (*stream) TestComplexNested(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.ComplexNested, types.ComplexNested], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestComplexNested: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestComplexNested: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestComplexNested", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestComplexNested", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[stream_types.ComplexNested, types.ComplexNested])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[stream_types.ComplexNested, types.ComplexNested]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).(types.ComplexNested)
-				channel <- StreamValue[stream_types.ComplexNested, types.ComplexNested]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).(stream_types.ComplexNested)
-				channel <- StreamValue[stream_types.ComplexNested, types.ComplexNested]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[stream_types.ComplexNested, types.ComplexNested])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[stream_types.ComplexNested, types.ComplexNested]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).(types.ComplexNested)
+                    channel <- StreamValue[stream_types.ComplexNested, types.ComplexNested]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).(stream_types.ComplexNested)
+                channel <- StreamValue[stream_types.ComplexNested, types.ComplexNested]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestDeeplyNested
+/// Streaming version of TestDeeplyNested
 func (*stream) TestDeeplyNested(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.DeeplyNested, types.DeeplyNested], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestDeeplyNested: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestDeeplyNested: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestDeeplyNested", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestDeeplyNested", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[stream_types.DeeplyNested, types.DeeplyNested])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[stream_types.DeeplyNested, types.DeeplyNested]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).(types.DeeplyNested)
-				channel <- StreamValue[stream_types.DeeplyNested, types.DeeplyNested]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).(stream_types.DeeplyNested)
-				channel <- StreamValue[stream_types.DeeplyNested, types.DeeplyNested]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[stream_types.DeeplyNested, types.DeeplyNested])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[stream_types.DeeplyNested, types.DeeplyNested]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).(types.DeeplyNested)
+                    channel <- StreamValue[stream_types.DeeplyNested, types.DeeplyNested]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).(stream_types.DeeplyNested)
+                channel <- StreamValue[stream_types.DeeplyNested, types.DeeplyNested]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestRecursiveStructure
+/// Streaming version of TestRecursiveStructure
 func (*stream) TestRecursiveStructure(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.RecursiveStructure, types.RecursiveStructure], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestRecursiveStructure: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestRecursiveStructure: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestRecursiveStructure", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestRecursiveStructure", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[stream_types.RecursiveStructure, types.RecursiveStructure])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[stream_types.RecursiveStructure, types.RecursiveStructure]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).(types.RecursiveStructure)
-				channel <- StreamValue[stream_types.RecursiveStructure, types.RecursiveStructure]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).(stream_types.RecursiveStructure)
-				channel <- StreamValue[stream_types.RecursiveStructure, types.RecursiveStructure]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[stream_types.RecursiveStructure, types.RecursiveStructure])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[stream_types.RecursiveStructure, types.RecursiveStructure]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).(types.RecursiveStructure)
+                    channel <- StreamValue[stream_types.RecursiveStructure, types.RecursiveStructure]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).(stream_types.RecursiveStructure)
+                channel <- StreamValue[stream_types.RecursiveStructure, types.RecursiveStructure]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestSimpleNested
+/// Streaming version of TestSimpleNested
 func (*stream) TestSimpleNested(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.SimpleNested, types.SimpleNested], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestSimpleNested: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestSimpleNested: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestSimpleNested", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestSimpleNested", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[stream_types.SimpleNested, types.SimpleNested])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[stream_types.SimpleNested, types.SimpleNested]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).(types.SimpleNested)
-				channel <- StreamValue[stream_types.SimpleNested, types.SimpleNested]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).(stream_types.SimpleNested)
-				channel <- StreamValue[stream_types.SimpleNested, types.SimpleNested]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[stream_types.SimpleNested, types.SimpleNested])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[stream_types.SimpleNested, types.SimpleNested]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).(types.SimpleNested)
+                    channel <- StreamValue[stream_types.SimpleNested, types.SimpleNested]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).(stream_types.SimpleNested)
+                channel <- StreamValue[stream_types.SimpleNested, types.SimpleNested]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }

@@ -14,171 +14,169 @@
 package baml_client
 
 import (
-	"context"
-	"fmt"
+    "context"
 
-	"media_types/baml_client/stream_types"
-	"media_types/baml_client/types"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "media_types/baml_client/types"
+    "media_types/baml_client/stream_types"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-type stream struct{}
-
+type stream struct {}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
-	IsError   bool
-	Error     error
-	IsFinal   bool
-	as_final  *TFinal
-	as_stream *TStream
+    IsError   bool
+    Error     error
+    IsFinal   bool
+    as_final  *TFinal
+    as_stream *TStream
 }
 
 func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
-	return s.as_final
+    return s.as_final
 }
 
 func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
-	return s.as_stream
+    return s.as_stream
 }
 
-// / Streaming version of TestMediaArrayInputs
+
+/// Streaming version of TestMediaArrayInputs
 func (*stream) TestMediaArrayInputs(ctx context.Context, imageArray []types.Image, textInput string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"imageArray": imageArray, "textInput": textInput},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "imageArray": imageArray,"textInput": textInput, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestMediaArrayInputs: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestMediaArrayInputs: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMediaArrayInputs", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMediaArrayInputs", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).(types.MediaArrayAnalysisResult)
-				channel <- StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).(stream_types.MediaArrayAnalysisResult)
-				channel <- StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).(types.MediaArrayAnalysisResult)
+                    channel <- StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).(stream_types.MediaArrayAnalysisResult)
+                channel <- StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestMediaInput
+/// Streaming version of TestMediaInput
 func (*stream) TestMediaInput(ctx context.Context, media types.Union4AudioOrImageOrPDFOrVideo, textInput string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"media": media, "textInput": textInput},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "media": media,"textInput": textInput, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestMediaInput: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestMediaInput: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMediaInput", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMediaInput", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).(types.MediaAnalysisResult)
-				channel <- StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).(stream_types.MediaAnalysisResult)
-				channel <- StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).(types.MediaAnalysisResult)
+                    channel <- StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).(stream_types.MediaAnalysisResult)
+                channel <- StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }

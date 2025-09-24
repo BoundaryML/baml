@@ -14,1221 +14,1219 @@
 package baml_client
 
 import (
-	"context"
-	"fmt"
+    "context"
 
-	"array_types/baml_client/stream_types"
-	"array_types/baml_client/types"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "array_types/baml_client/types"
+    "array_types/baml_client/stream_types"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-type stream struct{}
-
+type stream struct {}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
-	IsError   bool
-	Error     error
-	IsFinal   bool
-	as_final  *TFinal
-	as_stream *TStream
+    IsError   bool
+    Error     error
+    IsFinal   bool
+    as_final  *TFinal
+    as_stream *TStream
 }
 
 func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
-	return s.as_final
+    return s.as_final
 }
 
 func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
-	return s.as_stream
+    return s.as_stream
 }
 
-// / Streaming version of TestEmptyArrays
+
+/// Streaming version of TestEmptyArrays
 func (*stream) TestEmptyArrays(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.SimpleArrays, types.SimpleArrays], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestEmptyArrays: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestEmptyArrays: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestEmptyArrays", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestEmptyArrays", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[stream_types.SimpleArrays, types.SimpleArrays])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).(types.SimpleArrays)
-				channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).(stream_types.SimpleArrays)
-				channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[stream_types.SimpleArrays, types.SimpleArrays])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).(types.SimpleArrays)
+                    channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).(stream_types.SimpleArrays)
+                channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestLargeArrays
+/// Streaming version of TestLargeArrays
 func (*stream) TestLargeArrays(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.SimpleArrays, types.SimpleArrays], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestLargeArrays: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestLargeArrays: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestLargeArrays", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestLargeArrays", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[stream_types.SimpleArrays, types.SimpleArrays])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).(types.SimpleArrays)
-				channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).(stream_types.SimpleArrays)
-				channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[stream_types.SimpleArrays, types.SimpleArrays])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).(types.SimpleArrays)
+                    channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).(stream_types.SimpleArrays)
+                channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestMixedArrays
+/// Streaming version of TestMixedArrays
 func (*stream) TestMixedArrays(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.MixedArrays, types.MixedArrays], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestMixedArrays: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestMixedArrays: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMixedArrays", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMixedArrays", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[stream_types.MixedArrays, types.MixedArrays])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[stream_types.MixedArrays, types.MixedArrays]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).(types.MixedArrays)
-				channel <- StreamValue[stream_types.MixedArrays, types.MixedArrays]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).(stream_types.MixedArrays)
-				channel <- StreamValue[stream_types.MixedArrays, types.MixedArrays]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[stream_types.MixedArrays, types.MixedArrays])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[stream_types.MixedArrays, types.MixedArrays]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).(types.MixedArrays)
+                    channel <- StreamValue[stream_types.MixedArrays, types.MixedArrays]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).(stream_types.MixedArrays)
+                channel <- StreamValue[stream_types.MixedArrays, types.MixedArrays]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestNestedArrays
+/// Streaming version of TestNestedArrays
 func (*stream) TestNestedArrays(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.NestedArrays, types.NestedArrays], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestNestedArrays: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestNestedArrays: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestNestedArrays", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestNestedArrays", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[stream_types.NestedArrays, types.NestedArrays])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[stream_types.NestedArrays, types.NestedArrays]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).(types.NestedArrays)
-				channel <- StreamValue[stream_types.NestedArrays, types.NestedArrays]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).(stream_types.NestedArrays)
-				channel <- StreamValue[stream_types.NestedArrays, types.NestedArrays]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[stream_types.NestedArrays, types.NestedArrays])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[stream_types.NestedArrays, types.NestedArrays]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).(types.NestedArrays)
+                    channel <- StreamValue[stream_types.NestedArrays, types.NestedArrays]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).(stream_types.NestedArrays)
+                channel <- StreamValue[stream_types.NestedArrays, types.NestedArrays]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestObjectArrays
+/// Streaming version of TestObjectArrays
 func (*stream) TestObjectArrays(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.ObjectArrays, types.ObjectArrays], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestObjectArrays: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestObjectArrays: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestObjectArrays", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestObjectArrays", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[stream_types.ObjectArrays, types.ObjectArrays])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[stream_types.ObjectArrays, types.ObjectArrays]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).(types.ObjectArrays)
-				channel <- StreamValue[stream_types.ObjectArrays, types.ObjectArrays]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).(stream_types.ObjectArrays)
-				channel <- StreamValue[stream_types.ObjectArrays, types.ObjectArrays]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[stream_types.ObjectArrays, types.ObjectArrays])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[stream_types.ObjectArrays, types.ObjectArrays]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).(types.ObjectArrays)
+                    channel <- StreamValue[stream_types.ObjectArrays, types.ObjectArrays]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).(stream_types.ObjectArrays)
+                channel <- StreamValue[stream_types.ObjectArrays, types.ObjectArrays]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestSimpleArrays
+/// Streaming version of TestSimpleArrays
 func (*stream) TestSimpleArrays(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.SimpleArrays, types.SimpleArrays], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestSimpleArrays: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestSimpleArrays: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestSimpleArrays", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestSimpleArrays", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[stream_types.SimpleArrays, types.SimpleArrays])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).(types.SimpleArrays)
-				channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).(stream_types.SimpleArrays)
-				channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[stream_types.SimpleArrays, types.SimpleArrays])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).(types.SimpleArrays)
+                    channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).(stream_types.SimpleArrays)
+                channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestTopLevel3DArray
+/// Streaming version of TestTopLevel3DArray
 func (*stream) TestTopLevel3DArray(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[][][]string, [][][]string], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevel3DArray: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevel3DArray: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevel3DArray", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevel3DArray", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[[][][]string, [][][]string])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[[][][]string, [][][]string]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).([][][]string)
-				channel <- StreamValue[[][][]string, [][][]string]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).([][][]string)
-				channel <- StreamValue[[][][]string, [][][]string]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[[][][]string, [][][]string])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[[][][]string, [][][]string]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).([][][]string)
+                    channel <- StreamValue[[][][]string, [][][]string]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).([][][]string)
+                channel <- StreamValue[[][][]string, [][][]string]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestTopLevelArrayOfMaps
+/// Streaming version of TestTopLevelArrayOfMaps
 func (*stream) TestTopLevelArrayOfMaps(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]map[string]int64, []map[string]int64], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelArrayOfMaps: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelArrayOfMaps: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelArrayOfMaps", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelArrayOfMaps", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[[]map[string]int64, []map[string]int64])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[[]map[string]int64, []map[string]int64]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).([]map[string]int64)
-				channel <- StreamValue[[]map[string]int64, []map[string]int64]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).([]map[string]int64)
-				channel <- StreamValue[[]map[string]int64, []map[string]int64]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[[]map[string]int64, []map[string]int64])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[[]map[string]int64, []map[string]int64]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).([]map[string]int64)
+                    channel <- StreamValue[[]map[string]int64, []map[string]int64]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).([]map[string]int64)
+                channel <- StreamValue[[]map[string]int64, []map[string]int64]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestTopLevelBoolArray
+/// Streaming version of TestTopLevelBoolArray
 func (*stream) TestTopLevelBoolArray(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]bool, []bool], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelBoolArray: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelBoolArray: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelBoolArray", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelBoolArray", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[[]bool, []bool])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[[]bool, []bool]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).([]bool)
-				channel <- StreamValue[[]bool, []bool]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).([]bool)
-				channel <- StreamValue[[]bool, []bool]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[[]bool, []bool])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[[]bool, []bool]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).([]bool)
+                    channel <- StreamValue[[]bool, []bool]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).([]bool)
+                channel <- StreamValue[[]bool, []bool]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestTopLevelEmptyArray
+/// Streaming version of TestTopLevelEmptyArray
 func (*stream) TestTopLevelEmptyArray(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]string, []string], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelEmptyArray: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelEmptyArray: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelEmptyArray", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelEmptyArray", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[[]string, []string])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[[]string, []string]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).([]string)
-				channel <- StreamValue[[]string, []string]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).([]string)
-				channel <- StreamValue[[]string, []string]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[[]string, []string])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[[]string, []string]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).([]string)
+                    channel <- StreamValue[[]string, []string]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).([]string)
+                channel <- StreamValue[[]string, []string]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestTopLevelFloatArray
+/// Streaming version of TestTopLevelFloatArray
 func (*stream) TestTopLevelFloatArray(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]float64, []float64], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelFloatArray: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelFloatArray: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelFloatArray", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelFloatArray", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[[]float64, []float64])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[[]float64, []float64]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).([]float64)
-				channel <- StreamValue[[]float64, []float64]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).([]float64)
-				channel <- StreamValue[[]float64, []float64]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[[]float64, []float64])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[[]float64, []float64]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).([]float64)
+                    channel <- StreamValue[[]float64, []float64]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).([]float64)
+                channel <- StreamValue[[]float64, []float64]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestTopLevelIntArray
+/// Streaming version of TestTopLevelIntArray
 func (*stream) TestTopLevelIntArray(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]int64, []int64], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelIntArray: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelIntArray: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelIntArray", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelIntArray", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[[]int64, []int64])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[[]int64, []int64]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).([]int64)
-				channel <- StreamValue[[]int64, []int64]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).([]int64)
-				channel <- StreamValue[[]int64, []int64]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[[]int64, []int64])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[[]int64, []int64]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).([]int64)
+                    channel <- StreamValue[[]int64, []int64]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).([]int64)
+                channel <- StreamValue[[]int64, []int64]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestTopLevelMixedArray
+/// Streaming version of TestTopLevelMixedArray
 func (*stream) TestTopLevelMixedArray(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelMixedArray: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelMixedArray: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelMixedArray", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelMixedArray", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[[]types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[[]types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).([]types.Union3BoolOrIntOrString)
-				channel <- StreamValue[[]types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).([]types.Union3BoolOrIntOrString)
-				channel <- StreamValue[[]types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[[]types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[[]types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).([]types.Union3BoolOrIntOrString)
+                    channel <- StreamValue[[]types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).([]types.Union3BoolOrIntOrString)
+                channel <- StreamValue[[]types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestTopLevelNestedArray
+/// Streaming version of TestTopLevelNestedArray
 func (*stream) TestTopLevelNestedArray(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[][]int64, [][]int64], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelNestedArray: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelNestedArray: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelNestedArray", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelNestedArray", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[[][]int64, [][]int64])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[[][]int64, [][]int64]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).([][]int64)
-				channel <- StreamValue[[][]int64, [][]int64]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).([][]int64)
-				channel <- StreamValue[[][]int64, [][]int64]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[[][]int64, [][]int64])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[[][]int64, [][]int64]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).([][]int64)
+                    channel <- StreamValue[[][]int64, [][]int64]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).([][]int64)
+                channel <- StreamValue[[][]int64, [][]int64]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestTopLevelNullableArray
+/// Streaming version of TestTopLevelNullableArray
 func (*stream) TestTopLevelNullableArray(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]*string, []*string], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelNullableArray: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelNullableArray: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelNullableArray", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelNullableArray", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[[]*string, []*string])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[[]*string, []*string]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).([]*string)
-				channel <- StreamValue[[]*string, []*string]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).([]*string)
-				channel <- StreamValue[[]*string, []*string]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[[]*string, []*string])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[[]*string, []*string]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).([]*string)
+                    channel <- StreamValue[[]*string, []*string]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).([]*string)
+                channel <- StreamValue[[]*string, []*string]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestTopLevelObjectArray
+/// Streaming version of TestTopLevelObjectArray
 func (*stream) TestTopLevelObjectArray(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]stream_types.User, []types.User], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelObjectArray: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelObjectArray: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelObjectArray", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelObjectArray", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[[]stream_types.User, []types.User])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[[]stream_types.User, []types.User]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).([]types.User)
-				channel <- StreamValue[[]stream_types.User, []types.User]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).([]stream_types.User)
-				channel <- StreamValue[[]stream_types.User, []types.User]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[[]stream_types.User, []types.User])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[[]stream_types.User, []types.User]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).([]types.User)
+                    channel <- StreamValue[[]stream_types.User, []types.User]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).([]stream_types.User)
+                channel <- StreamValue[[]stream_types.User, []types.User]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }
 
-// / Streaming version of TestTopLevelStringArray
+/// Streaming version of TestTopLevelStringArray
 func (*stream) TestTopLevelStringArray(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]string, []string], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelStringArray: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTopLevelStringArray: %w", err)
+        panic(wrapped_err)
+    }
 
-	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelStringArray", encoded, callOpts.onTick)
-	if err != nil {
-		return nil, err
-	}
+    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelStringArray", encoded, callOpts.onTick)
+    if err != nil {
+        return nil, err
+    }
 
-	channel := make(chan StreamValue[[]string, []string])
-	go func() {
-		for result := range internal_channel {
-			if result.Error != nil {
-				channel <- StreamValue[[]string, []string]{
-					IsError: true,
-					Error:   result.Error,
-				}
-				close(channel)
-				return
-			}
-			if result.HasData {
-				data := (result.Data).([]string)
-				channel <- StreamValue[[]string, []string]{
-					IsFinal:  true,
-					as_final: &data,
-				}
-			} else {
-				data := (result.StreamData).([]string)
-				channel <- StreamValue[[]string, []string]{
-					IsFinal:   false,
-					as_stream: &data,
-				}
-			}
-		}
+    channel := make(chan StreamValue[[]string, []string])
+    go func() {
+        for result := range internal_channel {
+            if result.Error != nil {
+                channel <- StreamValue[[]string, []string]{
+                    IsError: true,
+                    Error:   result.Error,
+                }
+                close(channel)
+                return
+            }
+            if result.HasData {
+                    data := (result.Data).([]string)
+                    channel <- StreamValue[[]string, []string]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+            } else {
+                data := (result.StreamData).([]string)
+                channel <- StreamValue[[]string, []string]{
+                    IsFinal: false,
+                    as_stream: &data,
+                }
+            }
+        }
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-	}()
-	return channel, nil
+    }()
+    return channel, nil
 }

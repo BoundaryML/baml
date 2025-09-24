@@ -27,8 +27,6 @@
 package baml_client
 
 import (
-	"edge_cases/baml_client/type_builder"
-	"fmt"
 	"os"
 	"strings"
 

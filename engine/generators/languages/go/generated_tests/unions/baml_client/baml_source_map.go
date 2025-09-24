@@ -14,10 +14,10 @@
 package baml_client
 
 var file_map = map[string]string{
-
-	"baml_src/main.baml": "type SystemComponentCategory = \"service\" | \"resource\"\n\nclass ExistingSystemComponent {\n  id int\n  name string\n  type string\n  category SystemComponentCategory\n  explanation string\n}\n\nfunction JsonInput(x: ExistingSystemComponent[]) -> (string @assert({{ this|length > 0 and this[0] != \"[\" }}) @stream.not_null)[] @stream.not_null {\n    client \"openai/gpt-4o-mini\"\n    prompt #\"\n        repeat back to me a summary of this:\n        {{ x }}\n\n        {{ ctx.output_format }}\n    \"#\n}\n\n// This union uses a mix of recursive and non-recursive types.\n// It is meant to test that codegeneration simplifies to\n// a smaller union before generation of a Go type.\n//\n// Should generate a union in the client like:\n// type Recursive1 = int | Recursive1[]\n// int | Recursive1[] | string | null\ntype MyUnion = Recursive1 | Nonrecursive1 | Nonrecursive2\n\ntype Recursive1 = int | Recursive1[]\n\ntype Nonrecursive1 = int | null\n\ntype Nonrecursive2 = (null | string) | null | (null | null)\n\nclass UseMyUnion {\n    u MyUnion\n}\n",
+  
+  "baml_src/main.baml": "type SystemComponentCategory = \"service\" | \"resource\"\n\nclass ExistingSystemComponent {\n  id int\n  name string\n  type string\n  category SystemComponentCategory\n  explanation string\n}\n\nfunction JsonInput(x: ExistingSystemComponent[]) -> (string @assert({{ this|length > 0 and this[0] != \"[\" }}) @stream.not_null)[] @stream.not_null {\n    client \"openai/gpt-4o-mini\"\n    prompt #\"\n        repeat back to me a summary of this:\n        {{ x }}\n\n        {{ ctx.output_format }}\n    \"#\n}\n\n// This union uses a mix of recursive and non-recursive types.\n// It is meant to test that codegeneration simplifies to\n// a smaller union before generation of a Go type.\n//\n// Should generate a union in the client like:\n// type Recursive1 = int | Recursive1[]\n// int | Recursive1[] | string | null\ntype MyUnion = Recursive1 | Nonrecursive1 | Nonrecursive2\n\ntype Recursive1 = int | Recursive1[]\n\ntype Nonrecursive1 = int | null\n\ntype Nonrecursive2 = (null | string) | null | (null | null)\n\nclass UseMyUnion {\n    u MyUnion\n}\n",  
 }
 
 func getBamlFiles() map[string]string {
-	return file_map
+  return file_map
 }

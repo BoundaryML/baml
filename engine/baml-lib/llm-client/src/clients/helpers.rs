@@ -59,6 +59,16 @@ impl<Meta: Clone> PropertyHandler<Meta> {
         }
     }
 
+    pub fn print_options(&self) {
+        println!(
+            "options: {:#?}",
+            self.options
+                .iter()
+                .map(|(k, (_, v))| (k, v.as_str()))
+                .collect::<IndexMap<_, _>>()
+        );
+    }
+
     pub fn push_option_error(&mut self, message: impl Into<Cow<'static, str>>) {
         self.errors.push(Error::new(message, self.span.clone()));
     }

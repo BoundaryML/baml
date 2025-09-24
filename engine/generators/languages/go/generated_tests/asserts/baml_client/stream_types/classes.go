@@ -14,15 +14,21 @@
 package stream_types
 
 import (
-	"fmt"
+    "encoding/json"
+    "fmt"
 
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+
+    "asserts/baml_client/types"
 )
 
+
 type Person struct {
-	Name *string `json:"name"`
-	Age  *int64  `json:"age"`
+    
+Name *string `json:"name"`
+Age *int64 `json:"age"`
+    
 }
 
 func (c *Person) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -34,43 +40,46 @@ func (c *Person) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		panic(fmt.Sprintf("expected Person, got %s", typeName.Name))
 	}
 
+   
+
+	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-		switch key {
-
-		case "name":
-			c.Name = baml.Decode(valueHolder).Interface().(*string)
-
-		case "age":
-			c.Age = baml.Decode(valueHolder).Interface().(*int64)
-
+			switch key {
+				
+				case "name":
+					c.Name = baml.Decode(valueHolder).Interface().(*string)
+				
+				case "age":
+					c.Age = baml.Decode(valueHolder).Interface().(*int64)
+				
 		default:
-
+			
 			panic(fmt.Sprintf("unexpected field: %s in class Person", key))
-
+			
 		}
 	}
 
 }
 
 func (c Person) Encode() (*cffi.CFFIValueHolder, error) {
-	fields := map[string]any{}
-
-	fields["name"] = c.Name
-
-	fields["age"] = c.Age
-
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+    fields := map[string]any{}
+    
+    fields["name"] = c.Name
+    
+    fields["age"] = c.Age
+    
+    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c Person) BamlTypeName() string {
-	return "Person"
+    return "Person"
 }
 
 func (u Person) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Person",
-	}
+    return &cffi.CFFITypeName{
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+        Name:      "Person",
+    }
 }

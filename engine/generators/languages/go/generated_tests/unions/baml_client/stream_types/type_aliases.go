@@ -14,8 +14,15 @@
 package stream_types
 
 import (
-	"unions/baml_client/types"
+    "encoding/json"
+    "fmt"
+
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+
+    "unions/baml_client/types"
 )
+
 
 type MyUnion = *Union3IntOrRecursive1OrString
 type Nonrecursive1 = *int64

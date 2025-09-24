@@ -14,134 +14,135 @@
 package baml_client
 
 import (
-	"context"
-	"fmt"
+    "context"
 
-	"media_types/baml_client/types"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "media_types/baml_client/types"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
+
+
 
 func TestMediaArrayInputs(ctx context.Context, imageArray []types.Image, textInput string, opts ...CallOptionFunc) (types.MediaArrayAnalysisResult, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"imageArray": imageArray, "textInput": textInput},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "imageArray": imageArray,"textInput": textInput, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestMediaArrayInputs", encoded, callOpts.onTick)
-		if err != nil {
-			return types.MediaArrayAnalysisResult{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestMediaArrayInputs", encoded, callOpts.onTick)
+        if err != nil {
+            return types.MediaArrayAnalysisResult{}, err
+        }
 
-		if result.Error != nil {
-			return types.MediaArrayAnalysisResult{}, result.Error
-		}
+        if result.Error != nil {
+            return types.MediaArrayAnalysisResult{}, result.Error
+        }
 
-		casted := (result.Data).(types.MediaArrayAnalysisResult)
+        casted := (result.Data).(types.MediaArrayAnalysisResult)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMediaArrayInputs", encoded, callOpts.onTick)
-		if err != nil {
-			return types.MediaArrayAnalysisResult{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMediaArrayInputs", encoded, callOpts.onTick)
+        if err != nil {
+            return types.MediaArrayAnalysisResult{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.MediaArrayAnalysisResult{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.MediaArrayAnalysisResult{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.MediaArrayAnalysisResult), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.MediaArrayAnalysisResult), nil
+            }
+        }
 
-		return types.MediaArrayAnalysisResult{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.MediaArrayAnalysisResult{}, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestMediaInput(ctx context.Context, media types.Union4AudioOrImageOrPDFOrVideo, textInput string, opts ...CallOptionFunc) (types.MediaAnalysisResult, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"media": media, "textInput": textInput},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "media": media,"textInput": textInput, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestMediaInput", encoded, callOpts.onTick)
-		if err != nil {
-			return types.MediaAnalysisResult{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestMediaInput", encoded, callOpts.onTick)
+        if err != nil {
+            return types.MediaAnalysisResult{}, err
+        }
 
-		if result.Error != nil {
-			return types.MediaAnalysisResult{}, result.Error
-		}
+        if result.Error != nil {
+            return types.MediaAnalysisResult{}, result.Error
+        }
 
-		casted := (result.Data).(types.MediaAnalysisResult)
+        casted := (result.Data).(types.MediaAnalysisResult)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMediaInput", encoded, callOpts.onTick)
-		if err != nil {
-			return types.MediaAnalysisResult{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMediaInput", encoded, callOpts.onTick)
+        if err != nil {
+            return types.MediaAnalysisResult{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.MediaAnalysisResult{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.MediaAnalysisResult{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.MediaAnalysisResult), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.MediaAnalysisResult), nil
+            }
+        }
 
-		return types.MediaAnalysisResult{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.MediaAnalysisResult{}, fmt.Errorf("No data returned from stream")
+    }
 }

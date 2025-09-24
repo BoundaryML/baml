@@ -146,6 +146,8 @@ pub struct UnresolvedVertex<Meta> {
     model: StringOr,
     #[baml_safe_hash]
     headers: IndexMap<String, StringOr>,
+    #[baml_safe_hash]
+    query_params: IndexMap<String, StringOr>,
     role_selection: UnresolvedRolesSelection,
     allowed_role_metadata: UnresolvedAllowedRoleMetadata,
     supported_request_modes: SupportedRequestModes,
@@ -166,6 +168,7 @@ pub struct ResolvedVertex {
     pub auth_strategy: ResolvedGcpAuthStrategy,
     pub model: String,
     pub headers: IndexMap<String, String>,
+    pub query_params: IndexMap<String, String>,
     /// This is usually not pub, but we need it so that we can pass it through to the Anthropic client.
     pub role_selection: RolesSelection,
     pub allowed_metadata: AllowedRoleMetadata,
@@ -219,6 +222,11 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
         env_vars.extend(self.auth_strategy.required_env_vars());
         env_vars.extend(self.model.required_env_vars());
         env_vars.extend(self.headers.values().flat_map(StringOr::required_env_vars));
+        env_vars.extend(
+            self.query_params
+                .values()
+                .flat_map(StringOr::required_env_vars),
+        );
         env_vars.extend(self.role_selection.required_env_vars());
         env_vars.extend(self.allowed_role_metadata.required_env_vars());
         env_vars.extend(self.supported_request_modes.required_env_vars());
@@ -238,6 +246,7 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
             auth_strategy: self.auth_strategy.without_meta(),
             model: self.model.clone(),
             headers: self.headers.clone(),
+            query_params: self.query_params.clone(),
             role_selection: self.role_selection.clone(),
             allowed_role_metadata: self.allowed_role_metadata.clone(),
             supported_request_modes: self.supported_request_modes.clone(),
@@ -268,6 +277,12 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
             .map(|(k, v)| Ok((k.clone(), v.resolve(ctx)?)))
             .collect::<Result<IndexMap<_, _>>>()?;
 
+        let query_params = self
+            .query_params
+            .iter()
+            .map(|(k, v)| Ok((k.clone(), v.resolve(ctx)?)))
+            .collect::<Result<IndexMap<_, _>>>()?;
+
         Ok(ResolvedVertex {
             base_url_or_location,
             project_id: match self.project_id {
@@ -277,6 +292,7 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
             auth_strategy: self.auth_strategy.resolve(ctx)?,
             model,
             headers,
+            query_params,
             role_selection,
             allowed_metadata: self.allowed_role_metadata.resolve(ctx)?,
             supported_request_modes: self.supported_request_modes.clone(),
@@ -368,6 +384,7 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
         let allowed_metadata = properties.ensure_allowed_metadata();
         let supported_request_modes = properties.ensure_supported_request_modes();
         let headers = properties.ensure_headers().unwrap_or_default();
+        let query_params = properties.ensure_query_params().unwrap_or_default();
         let finish_reason_filter = properties.ensure_finish_reason_filter();
 
         let anthropic_version = properties
@@ -389,6 +406,7 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
             auth_strategy,
             model,
             headers,
+            query_params,
             role_selection,
             allowed_role_metadata: allowed_metadata,
             supported_request_modes,

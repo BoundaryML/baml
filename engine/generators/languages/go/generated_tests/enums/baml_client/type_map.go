@@ -14,11 +14,16 @@
 package baml_client
 
 import (
-	"enums/baml_client/types"
-	"reflect"
+    "enums/baml_client/types"
+    "enums/baml_client/stream_types"
 )
 
 var typeMap = map[string]reflect.Type{
 
-	"TYPES.TestEnum": reflect.TypeOf(types.TestEnum("")),
+"TYPES.TestEnum": reflect.TypeOf(types.TestEnum("")),
+
+
+
+
+
 }

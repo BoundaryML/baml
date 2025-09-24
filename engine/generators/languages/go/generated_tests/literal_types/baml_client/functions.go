@@ -14,320 +14,324 @@
 package baml_client
 
 import (
-	"context"
-	"fmt"
+    "context"
 
-	"literal_types/baml_client/types"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "literal_types/baml_client/types"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
+
+
 
 func TestBooleanLiterals(ctx context.Context, input string, opts ...CallOptionFunc) (types.BooleanLiterals, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestBooleanLiterals", encoded, callOpts.onTick)
-		if err != nil {
-			return types.BooleanLiterals{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestBooleanLiterals", encoded, callOpts.onTick)
+        if err != nil {
+            return types.BooleanLiterals{}, err
+        }
 
-		if result.Error != nil {
-			return types.BooleanLiterals{}, result.Error
-		}
+        if result.Error != nil {
+            return types.BooleanLiterals{}, result.Error
+        }
 
-		casted := (result.Data).(types.BooleanLiterals)
+        casted := (result.Data).(types.BooleanLiterals)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestBooleanLiterals", encoded, callOpts.onTick)
-		if err != nil {
-			return types.BooleanLiterals{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestBooleanLiterals", encoded, callOpts.onTick)
+        if err != nil {
+            return types.BooleanLiterals{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.BooleanLiterals{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.BooleanLiterals{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.BooleanLiterals), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.BooleanLiterals), nil
+            }
+        }
 
-		return types.BooleanLiterals{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.BooleanLiterals{}, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestComplexLiterals(ctx context.Context, input string, opts ...CallOptionFunc) (types.ComplexLiterals, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestComplexLiterals", encoded, callOpts.onTick)
-		if err != nil {
-			return types.ComplexLiterals{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestComplexLiterals", encoded, callOpts.onTick)
+        if err != nil {
+            return types.ComplexLiterals{}, err
+        }
 
-		if result.Error != nil {
-			return types.ComplexLiterals{}, result.Error
-		}
+        if result.Error != nil {
+            return types.ComplexLiterals{}, result.Error
+        }
 
-		casted := (result.Data).(types.ComplexLiterals)
+        casted := (result.Data).(types.ComplexLiterals)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestComplexLiterals", encoded, callOpts.onTick)
-		if err != nil {
-			return types.ComplexLiterals{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestComplexLiterals", encoded, callOpts.onTick)
+        if err != nil {
+            return types.ComplexLiterals{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.ComplexLiterals{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.ComplexLiterals{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.ComplexLiterals), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.ComplexLiterals), nil
+            }
+        }
 
-		return types.ComplexLiterals{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.ComplexLiterals{}, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestIntegerLiterals(ctx context.Context, input string, opts ...CallOptionFunc) (types.IntegerLiterals, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestIntegerLiterals", encoded, callOpts.onTick)
-		if err != nil {
-			return types.IntegerLiterals{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestIntegerLiterals", encoded, callOpts.onTick)
+        if err != nil {
+            return types.IntegerLiterals{}, err
+        }
 
-		if result.Error != nil {
-			return types.IntegerLiterals{}, result.Error
-		}
+        if result.Error != nil {
+            return types.IntegerLiterals{}, result.Error
+        }
 
-		casted := (result.Data).(types.IntegerLiterals)
+        casted := (result.Data).(types.IntegerLiterals)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestIntegerLiterals", encoded, callOpts.onTick)
-		if err != nil {
-			return types.IntegerLiterals{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestIntegerLiterals", encoded, callOpts.onTick)
+        if err != nil {
+            return types.IntegerLiterals{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.IntegerLiterals{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.IntegerLiterals{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.IntegerLiterals), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.IntegerLiterals), nil
+            }
+        }
 
-		return types.IntegerLiterals{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.IntegerLiterals{}, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestMixedLiterals(ctx context.Context, input string, opts ...CallOptionFunc) (types.MixedLiterals, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestMixedLiterals", encoded, callOpts.onTick)
-		if err != nil {
-			return types.MixedLiterals{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestMixedLiterals", encoded, callOpts.onTick)
+        if err != nil {
+            return types.MixedLiterals{}, err
+        }
 
-		if result.Error != nil {
-			return types.MixedLiterals{}, result.Error
-		}
+        if result.Error != nil {
+            return types.MixedLiterals{}, result.Error
+        }
 
-		casted := (result.Data).(types.MixedLiterals)
+        casted := (result.Data).(types.MixedLiterals)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMixedLiterals", encoded, callOpts.onTick)
-		if err != nil {
-			return types.MixedLiterals{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMixedLiterals", encoded, callOpts.onTick)
+        if err != nil {
+            return types.MixedLiterals{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.MixedLiterals{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.MixedLiterals{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.MixedLiterals), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.MixedLiterals), nil
+            }
+        }
 
-		return types.MixedLiterals{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.MixedLiterals{}, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestStringLiterals(ctx context.Context, input string, opts ...CallOptionFunc) (types.StringLiterals, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestStringLiterals", encoded, callOpts.onTick)
-		if err != nil {
-			return types.StringLiterals{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestStringLiterals", encoded, callOpts.onTick)
+        if err != nil {
+            return types.StringLiterals{}, err
+        }
 
-		if result.Error != nil {
-			return types.StringLiterals{}, result.Error
-		}
+        if result.Error != nil {
+            return types.StringLiterals{}, result.Error
+        }
 
-		casted := (result.Data).(types.StringLiterals)
+        casted := (result.Data).(types.StringLiterals)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestStringLiterals", encoded, callOpts.onTick)
-		if err != nil {
-			return types.StringLiterals{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestStringLiterals", encoded, callOpts.onTick)
+        if err != nil {
+            return types.StringLiterals{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.StringLiterals{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.StringLiterals{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.StringLiterals), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.StringLiterals), nil
+            }
+        }
 
-		return types.StringLiterals{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.StringLiterals{}, fmt.Errorf("No data returned from stream")
+    }
 }

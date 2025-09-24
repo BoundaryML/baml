@@ -27,8 +27,6 @@
 package baml_client
 
 import (
-	"fmt"
-	"nested_structures/baml_client/type_builder"
 	"os"
 	"strings"
 

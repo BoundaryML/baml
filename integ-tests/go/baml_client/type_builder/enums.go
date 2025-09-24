@@ -15,12 +15,13 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
+
 type AliasedEnumEnumView struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *AliasedEnumEnumView) ListValues() ([]EnumValueView, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -31,13 +32,17 @@ func (t *AliasedEnumEnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *AliasedEnumEnumView) ValueKEY_ONE() (EnumValueView, error) {
-	return t.inner.Value("KEY_ONE")
+    return t.inner.Value("KEY_ONE")
 }
 
 func (t *AliasedEnumEnumView) ValueKEY_TWO() (EnumValueView, error) {
-	return t.inner.Value("KEY_TWO")
+    return t.inner.Value("KEY_TWO")
 }
+
 
 func (t *TypeBuilder) AliasedEnum() (*AliasedEnumEnumView, error) {
 	bld, err := t.inner.Enum("AliasedEnum")
@@ -52,11 +57,11 @@ func (t *AliasedEnumEnumView) Type() (baml.Type, error) {
 }
 
 type CategoryEnumView struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *CategoryEnumView) ListValues() ([]EnumValueView, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -67,25 +72,29 @@ func (t *CategoryEnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *CategoryEnumView) ValueRefund() (EnumValueView, error) {
-	return t.inner.Value("Refund")
+    return t.inner.Value("Refund")
 }
 
 func (t *CategoryEnumView) ValueCancelOrder() (EnumValueView, error) {
-	return t.inner.Value("CancelOrder")
+    return t.inner.Value("CancelOrder")
 }
 
 func (t *CategoryEnumView) ValueTechnicalSupport() (EnumValueView, error) {
-	return t.inner.Value("TechnicalSupport")
+    return t.inner.Value("TechnicalSupport")
 }
 
 func (t *CategoryEnumView) ValueAccountIssue() (EnumValueView, error) {
-	return t.inner.Value("AccountIssue")
+    return t.inner.Value("AccountIssue")
 }
 
 func (t *CategoryEnumView) ValueQuestion() (EnumValueView, error) {
-	return t.inner.Value("Question")
+    return t.inner.Value("Question")
 }
+
 
 func (t *TypeBuilder) Category() (*CategoryEnumView, error) {
 	bld, err := t.inner.Enum("Category")
@@ -100,11 +109,11 @@ func (t *CategoryEnumView) Type() (baml.Type, error) {
 }
 
 type Category2EnumView struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *Category2EnumView) ListValues() ([]EnumValueView, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -115,25 +124,29 @@ func (t *Category2EnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *Category2EnumView) ValueRefund() (EnumValueView, error) {
-	return t.inner.Value("Refund")
+    return t.inner.Value("Refund")
 }
 
 func (t *Category2EnumView) ValueCancelOrder() (EnumValueView, error) {
-	return t.inner.Value("CancelOrder")
+    return t.inner.Value("CancelOrder")
 }
 
 func (t *Category2EnumView) ValueTechnicalSupport() (EnumValueView, error) {
-	return t.inner.Value("TechnicalSupport")
+    return t.inner.Value("TechnicalSupport")
 }
 
 func (t *Category2EnumView) ValueAccountIssue() (EnumValueView, error) {
-	return t.inner.Value("AccountIssue")
+    return t.inner.Value("AccountIssue")
 }
 
 func (t *Category2EnumView) ValueQuestion() (EnumValueView, error) {
-	return t.inner.Value("Question")
+    return t.inner.Value("Question")
 }
+
 
 func (t *TypeBuilder) Category2() (*Category2EnumView, error) {
 	bld, err := t.inner.Enum("Category2")
@@ -148,11 +161,11 @@ func (t *Category2EnumView) Type() (baml.Type, error) {
 }
 
 type Category3EnumView struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *Category3EnumView) ListValues() ([]EnumValueView, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -163,25 +176,29 @@ func (t *Category3EnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *Category3EnumView) ValueRefund() (EnumValueView, error) {
-	return t.inner.Value("Refund")
+    return t.inner.Value("Refund")
 }
 
 func (t *Category3EnumView) ValueCancelOrder() (EnumValueView, error) {
-	return t.inner.Value("CancelOrder")
+    return t.inner.Value("CancelOrder")
 }
 
 func (t *Category3EnumView) ValueTechnicalSupport() (EnumValueView, error) {
-	return t.inner.Value("TechnicalSupport")
+    return t.inner.Value("TechnicalSupport")
 }
 
 func (t *Category3EnumView) ValueAccountIssue() (EnumValueView, error) {
-	return t.inner.Value("AccountIssue")
+    return t.inner.Value("AccountIssue")
 }
 
 func (t *Category3EnumView) ValueQuestion() (EnumValueView, error) {
-	return t.inner.Value("Question")
+    return t.inner.Value("Question")
 }
+
 
 func (t *TypeBuilder) Category3() (*Category3EnumView, error) {
 	bld, err := t.inner.Enum("Category3")
@@ -196,11 +213,11 @@ func (t *Category3EnumView) Type() (baml.Type, error) {
 }
 
 type ColorEnumBuilder struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *ColorEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -211,33 +228,37 @@ func (t *ColorEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
 	return builders, nil
 }
 
+
 func (t *ColorEnumBuilder) AddValue(value string) (EnumValueBuilder, error) {
 	return t.inner.AddValue(value)
 }
 
+
+
 func (t *ColorEnumBuilder) ValueRED() (EnumValueBuilder, error) {
-	return t.inner.Value("RED")
+    return t.inner.Value("RED")
 }
 
 func (t *ColorEnumBuilder) ValueBLUE() (EnumValueBuilder, error) {
-	return t.inner.Value("BLUE")
+    return t.inner.Value("BLUE")
 }
 
 func (t *ColorEnumBuilder) ValueGREEN() (EnumValueBuilder, error) {
-	return t.inner.Value("GREEN")
+    return t.inner.Value("GREEN")
 }
 
 func (t *ColorEnumBuilder) ValueYELLOW() (EnumValueBuilder, error) {
-	return t.inner.Value("YELLOW")
+    return t.inner.Value("YELLOW")
 }
 
 func (t *ColorEnumBuilder) ValueBLACK() (EnumValueBuilder, error) {
-	return t.inner.Value("BLACK")
+    return t.inner.Value("BLACK")
 }
 
 func (t *ColorEnumBuilder) ValueWHITE() (EnumValueBuilder, error) {
-	return t.inner.Value("WHITE")
+    return t.inner.Value("WHITE")
 }
+
 
 func (t *TypeBuilder) Color() (*ColorEnumBuilder, error) {
 	bld, err := t.inner.Enum("Color")
@@ -252,11 +273,11 @@ func (t *ColorEnumBuilder) Type() (baml.Type, error) {
 }
 
 type DataTypeEnumView struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *DataTypeEnumView) ListValues() ([]EnumValueView, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -267,13 +288,17 @@ func (t *DataTypeEnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *DataTypeEnumView) ValueResume() (EnumValueView, error) {
-	return t.inner.Value("Resume")
+    return t.inner.Value("Resume")
 }
 
 func (t *DataTypeEnumView) ValueEvent() (EnumValueView, error) {
-	return t.inner.Value("Event")
+    return t.inner.Value("Event")
 }
+
 
 func (t *TypeBuilder) DataType() (*DataTypeEnumView, error) {
 	bld, err := t.inner.Enum("DataType")
@@ -288,11 +313,11 @@ func (t *DataTypeEnumView) Type() (baml.Type, error) {
 }
 
 type DynEnumOneEnumBuilder struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *DynEnumOneEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -303,9 +328,13 @@ func (t *DynEnumOneEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
 	return builders, nil
 }
 
+
 func (t *DynEnumOneEnumBuilder) AddValue(value string) (EnumValueBuilder, error) {
 	return t.inner.AddValue(value)
 }
+
+
+
 
 func (t *TypeBuilder) DynEnumOne() (*DynEnumOneEnumBuilder, error) {
 	bld, err := t.inner.Enum("DynEnumOne")
@@ -320,11 +349,11 @@ func (t *DynEnumOneEnumBuilder) Type() (baml.Type, error) {
 }
 
 type DynEnumThreeEnumBuilder struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *DynEnumThreeEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -335,17 +364,21 @@ func (t *DynEnumThreeEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
 	return builders, nil
 }
 
+
 func (t *DynEnumThreeEnumBuilder) AddValue(value string) (EnumValueBuilder, error) {
 	return t.inner.AddValue(value)
 }
 
+
+
 func (t *DynEnumThreeEnumBuilder) ValueTRICYCLE() (EnumValueBuilder, error) {
-	return t.inner.Value("TRICYCLE")
+    return t.inner.Value("TRICYCLE")
 }
 
 func (t *DynEnumThreeEnumBuilder) ValueTRIANGLE() (EnumValueBuilder, error) {
-	return t.inner.Value("TRIANGLE")
+    return t.inner.Value("TRIANGLE")
 }
+
 
 func (t *TypeBuilder) DynEnumThree() (*DynEnumThreeEnumBuilder, error) {
 	bld, err := t.inner.Enum("DynEnumThree")
@@ -360,11 +393,11 @@ func (t *DynEnumThreeEnumBuilder) Type() (baml.Type, error) {
 }
 
 type DynEnumTwoEnumBuilder struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *DynEnumTwoEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -375,9 +408,13 @@ func (t *DynEnumTwoEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
 	return builders, nil
 }
 
+
 func (t *DynEnumTwoEnumBuilder) AddValue(value string) (EnumValueBuilder, error) {
 	return t.inner.AddValue(value)
 }
+
+
+
 
 func (t *TypeBuilder) DynEnumTwo() (*DynEnumTwoEnumBuilder, error) {
 	bld, err := t.inner.Enum("DynEnumTwo")
@@ -392,11 +429,11 @@ func (t *DynEnumTwoEnumBuilder) Type() (baml.Type, error) {
 }
 
 type EnumInClassEnumView struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *EnumInClassEnumView) ListValues() ([]EnumValueView, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -407,13 +444,17 @@ func (t *EnumInClassEnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *EnumInClassEnumView) ValueONE() (EnumValueView, error) {
-	return t.inner.Value("ONE")
+    return t.inner.Value("ONE")
 }
 
 func (t *EnumInClassEnumView) ValueTWO() (EnumValueView, error) {
-	return t.inner.Value("TWO")
+    return t.inner.Value("TWO")
 }
+
 
 func (t *TypeBuilder) EnumInClass() (*EnumInClassEnumView, error) {
 	bld, err := t.inner.Enum("EnumInClass")
@@ -428,11 +469,11 @@ func (t *EnumInClassEnumView) Type() (baml.Type, error) {
 }
 
 type EnumOutputEnumView struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *EnumOutputEnumView) ListValues() ([]EnumValueView, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -443,17 +484,21 @@ func (t *EnumOutputEnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *EnumOutputEnumView) ValueONE() (EnumValueView, error) {
-	return t.inner.Value("ONE")
+    return t.inner.Value("ONE")
 }
 
 func (t *EnumOutputEnumView) ValueTWO() (EnumValueView, error) {
-	return t.inner.Value("TWO")
+    return t.inner.Value("TWO")
 }
 
 func (t *EnumOutputEnumView) ValueTHREE() (EnumValueView, error) {
-	return t.inner.Value("THREE")
+    return t.inner.Value("THREE")
 }
+
 
 func (t *TypeBuilder) EnumOutput() (*EnumOutputEnumView, error) {
 	bld, err := t.inner.Enum("EnumOutput")
@@ -468,11 +513,11 @@ func (t *EnumOutputEnumView) Type() (baml.Type, error) {
 }
 
 type HobbyEnumBuilder struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *HobbyEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -483,21 +528,25 @@ func (t *HobbyEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
 	return builders, nil
 }
 
+
 func (t *HobbyEnumBuilder) AddValue(value string) (EnumValueBuilder, error) {
 	return t.inner.AddValue(value)
 }
 
+
+
 func (t *HobbyEnumBuilder) ValueSPORTS() (EnumValueBuilder, error) {
-	return t.inner.Value("SPORTS")
+    return t.inner.Value("SPORTS")
 }
 
 func (t *HobbyEnumBuilder) ValueMUSIC() (EnumValueBuilder, error) {
-	return t.inner.Value("MUSIC")
+    return t.inner.Value("MUSIC")
 }
 
 func (t *HobbyEnumBuilder) ValueREADING() (EnumValueBuilder, error) {
-	return t.inner.Value("READING")
+    return t.inner.Value("READING")
 }
+
 
 func (t *TypeBuilder) Hobby() (*HobbyEnumBuilder, error) {
 	bld, err := t.inner.Enum("Hobby")
@@ -512,11 +561,11 @@ func (t *HobbyEnumBuilder) Type() (baml.Type, error) {
 }
 
 type MapKeyEnumView struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *MapKeyEnumView) ListValues() ([]EnumValueView, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -527,17 +576,21 @@ func (t *MapKeyEnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *MapKeyEnumView) ValueA() (EnumValueView, error) {
-	return t.inner.Value("A")
+    return t.inner.Value("A")
 }
 
 func (t *MapKeyEnumView) ValueB() (EnumValueView, error) {
-	return t.inner.Value("B")
+    return t.inner.Value("B")
 }
 
 func (t *MapKeyEnumView) ValueC() (EnumValueView, error) {
-	return t.inner.Value("C")
+    return t.inner.Value("C")
 }
+
 
 func (t *TypeBuilder) MapKey() (*MapKeyEnumView, error) {
 	bld, err := t.inner.Enum("MapKey")
@@ -552,11 +605,11 @@ func (t *MapKeyEnumView) Type() (baml.Type, error) {
 }
 
 type NamedArgsSingleEnumEnumView struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *NamedArgsSingleEnumEnumView) ListValues() ([]EnumValueView, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -567,13 +620,17 @@ func (t *NamedArgsSingleEnumEnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *NamedArgsSingleEnumEnumView) ValueONE() (EnumValueView, error) {
-	return t.inner.Value("ONE")
+    return t.inner.Value("ONE")
 }
 
 func (t *NamedArgsSingleEnumEnumView) ValueTWO() (EnumValueView, error) {
-	return t.inner.Value("TWO")
+    return t.inner.Value("TWO")
 }
+
 
 func (t *TypeBuilder) NamedArgsSingleEnum() (*NamedArgsSingleEnumEnumView, error) {
 	bld, err := t.inner.Enum("NamedArgsSingleEnum")
@@ -588,11 +645,11 @@ func (t *NamedArgsSingleEnumEnumView) Type() (baml.Type, error) {
 }
 
 type NamedArgsSingleEnumListEnumView struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *NamedArgsSingleEnumListEnumView) ListValues() ([]EnumValueView, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -603,13 +660,17 @@ func (t *NamedArgsSingleEnumListEnumView) ListValues() ([]EnumValueView, error) 
 	return builders, nil
 }
 
+
+
+
 func (t *NamedArgsSingleEnumListEnumView) ValueONE() (EnumValueView, error) {
-	return t.inner.Value("ONE")
+    return t.inner.Value("ONE")
 }
 
 func (t *NamedArgsSingleEnumListEnumView) ValueTWO() (EnumValueView, error) {
-	return t.inner.Value("TWO")
+    return t.inner.Value("TWO")
 }
+
 
 func (t *TypeBuilder) NamedArgsSingleEnumList() (*NamedArgsSingleEnumListEnumView, error) {
 	bld, err := t.inner.Enum("NamedArgsSingleEnumList")
@@ -624,11 +685,11 @@ func (t *NamedArgsSingleEnumListEnumView) Type() (baml.Type, error) {
 }
 
 type OptionalTest_CategoryTypeEnumView struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *OptionalTest_CategoryTypeEnumView) ListValues() ([]EnumValueView, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -639,17 +700,21 @@ func (t *OptionalTest_CategoryTypeEnumView) ListValues() ([]EnumValueView, error
 	return builders, nil
 }
 
+
+
+
 func (t *OptionalTest_CategoryTypeEnumView) ValueAleph() (EnumValueView, error) {
-	return t.inner.Value("Aleph")
+    return t.inner.Value("Aleph")
 }
 
 func (t *OptionalTest_CategoryTypeEnumView) ValueBeta() (EnumValueView, error) {
-	return t.inner.Value("Beta")
+    return t.inner.Value("Beta")
 }
 
 func (t *OptionalTest_CategoryTypeEnumView) ValueGamma() (EnumValueView, error) {
-	return t.inner.Value("Gamma")
+    return t.inner.Value("Gamma")
 }
+
 
 func (t *TypeBuilder) OptionalTest_CategoryType() (*OptionalTest_CategoryTypeEnumView, error) {
 	bld, err := t.inner.Enum("OptionalTest_CategoryType")
@@ -664,11 +729,11 @@ func (t *OptionalTest_CategoryTypeEnumView) Type() (baml.Type, error) {
 }
 
 type OrderStatusEnumView struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *OrderStatusEnumView) ListValues() ([]EnumValueView, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -679,21 +744,25 @@ func (t *OrderStatusEnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *OrderStatusEnumView) ValueORDERED() (EnumValueView, error) {
-	return t.inner.Value("ORDERED")
+    return t.inner.Value("ORDERED")
 }
 
 func (t *OrderStatusEnumView) ValueSHIPPED() (EnumValueView, error) {
-	return t.inner.Value("SHIPPED")
+    return t.inner.Value("SHIPPED")
 }
 
 func (t *OrderStatusEnumView) ValueDELIVERED() (EnumValueView, error) {
-	return t.inner.Value("DELIVERED")
+    return t.inner.Value("DELIVERED")
 }
 
 func (t *OrderStatusEnumView) ValueCANCELLED() (EnumValueView, error) {
-	return t.inner.Value("CANCELLED")
+    return t.inner.Value("CANCELLED")
 }
+
 
 func (t *TypeBuilder) OrderStatus() (*OrderStatusEnumView, error) {
 	bld, err := t.inner.Enum("OrderStatus")
@@ -708,11 +777,11 @@ func (t *OrderStatusEnumView) Type() (baml.Type, error) {
 }
 
 type RenderStatusEnumEnumBuilder struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *RenderStatusEnumEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -723,17 +792,21 @@ func (t *RenderStatusEnumEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
 	return builders, nil
 }
 
+
 func (t *RenderStatusEnumEnumBuilder) AddValue(value string) (EnumValueBuilder, error) {
 	return t.inner.AddValue(value)
 }
 
+
+
 func (t *RenderStatusEnumEnumBuilder) ValueACTIVE() (EnumValueBuilder, error) {
-	return t.inner.Value("ACTIVE")
+    return t.inner.Value("ACTIVE")
 }
 
 func (t *RenderStatusEnumEnumBuilder) ValueINACTIVE() (EnumValueBuilder, error) {
-	return t.inner.Value("INACTIVE")
+    return t.inner.Value("INACTIVE")
 }
+
 
 func (t *TypeBuilder) RenderStatusEnum() (*RenderStatusEnumEnumBuilder, error) {
 	bld, err := t.inner.Enum("RenderStatusEnum")
@@ -748,11 +821,11 @@ func (t *RenderStatusEnumEnumBuilder) Type() (baml.Type, error) {
 }
 
 type RenderTestEnumEnumBuilder struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *RenderTestEnumEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -763,17 +836,21 @@ func (t *RenderTestEnumEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
 	return builders, nil
 }
 
+
 func (t *RenderTestEnumEnumBuilder) AddValue(value string) (EnumValueBuilder, error) {
 	return t.inner.AddValue(value)
 }
 
+
+
 func (t *RenderTestEnumEnumBuilder) ValueBIKE() (EnumValueBuilder, error) {
-	return t.inner.Value("BIKE")
+    return t.inner.Value("BIKE")
 }
 
 func (t *RenderTestEnumEnumBuilder) ValueSCOOTER() (EnumValueBuilder, error) {
-	return t.inner.Value("SCOOTER")
+    return t.inner.Value("SCOOTER")
 }
+
 
 func (t *TypeBuilder) RenderTestEnum() (*RenderTestEnumEnumBuilder, error) {
 	bld, err := t.inner.Enum("RenderTestEnum")
@@ -788,11 +865,11 @@ func (t *RenderTestEnumEnumBuilder) Type() (baml.Type, error) {
 }
 
 type TagEnumView struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *TagEnumView) ListValues() ([]EnumValueView, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -803,17 +880,21 @@ func (t *TagEnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *TagEnumView) ValueSecurity() (EnumValueView, error) {
-	return t.inner.Value("Security")
+    return t.inner.Value("Security")
 }
 
 func (t *TagEnumView) ValueAI() (EnumValueView, error) {
-	return t.inner.Value("AI")
+    return t.inner.Value("AI")
 }
 
 func (t *TagEnumView) ValueBlockchain() (EnumValueView, error) {
-	return t.inner.Value("Blockchain")
+    return t.inner.Value("Blockchain")
 }
+
 
 func (t *TypeBuilder) Tag() (*TagEnumView, error) {
 	bld, err := t.inner.Enum("Tag")
@@ -828,11 +909,11 @@ func (t *TagEnumView) Type() (baml.Type, error) {
 }
 
 type TestEnumEnumView struct {
-	inner baml.EnumBuilder
+    inner baml.EnumBuilder
 }
 
 func (t *TestEnumEnumView) ListValues() ([]EnumValueView, error) {
-	result, err := t.inner.ListValues()
+    result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -843,33 +924,37 @@ func (t *TestEnumEnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *TestEnumEnumView) ValueA() (EnumValueView, error) {
-	return t.inner.Value("A")
+    return t.inner.Value("A")
 }
 
 func (t *TestEnumEnumView) ValueB() (EnumValueView, error) {
-	return t.inner.Value("B")
+    return t.inner.Value("B")
 }
 
 func (t *TestEnumEnumView) ValueC() (EnumValueView, error) {
-	return t.inner.Value("C")
+    return t.inner.Value("C")
 }
 
 func (t *TestEnumEnumView) ValueD() (EnumValueView, error) {
-	return t.inner.Value("D")
+    return t.inner.Value("D")
 }
 
 func (t *TestEnumEnumView) ValueE() (EnumValueView, error) {
-	return t.inner.Value("E")
+    return t.inner.Value("E")
 }
 
 func (t *TestEnumEnumView) ValueF() (EnumValueView, error) {
-	return t.inner.Value("F")
+    return t.inner.Value("F")
 }
 
 func (t *TestEnumEnumView) ValueG() (EnumValueView, error) {
-	return t.inner.Value("G")
+    return t.inner.Value("G")
 }
+
 
 func (t *TypeBuilder) TestEnum() (*TestEnumEnumView, error) {
 	bld, err := t.inner.Enum("TestEnum")

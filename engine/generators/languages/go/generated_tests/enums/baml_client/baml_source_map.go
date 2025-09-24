@@ -14,10 +14,10 @@
 package baml_client
 
 var file_map = map[string]string{
-
-	"baml_src/main.baml": "enum TestEnum {\n  Angry @alias(\"k1\") @description(#\"\n    User is angry\n  \"#)\n  Happy @alias(\"k2\") @description(#\"\n    User is happy\n  \"#)\n  // tests whether k1 doesnt incorrectly get matched with k11\n  Sad @alias(\"k3\") @description(#\"\n    User is sad\n  \"#)\n  Confused @description(\n    User is confused\n  )\n  Excited @alias(\"k5\") @description(\n    User is excited\n  )\n  Exclamation @alias(\"k6\") // only alias\n  \n  Bored @alias(\"k7\") @description(#\"\n    User is bored\n    With a long description\n  \"#)\n   \n  @@alias(\"Category\")\n}\n\nfunction FnTestAliasedEnumOutput(input: string) -> TestEnum {\n  client \"openai/gpt-4o-mini\"\n  prompt #\"\n    Classify the user input into the following category\n      \n    {{ ctx.output_format }}\n\n    {{ _.role('user') }}\n    {{input}}\n\n    {{ _.role('assistant') }}\n    Category ID:\n  \"#\n}\n\nfunction ConsumeTestEnum(input: TestEnum) -> TestEnum {\n  client \"openai/gpt-4o-mini\"\n  prompt #\"\n    Return back to me verbatim:\n    \n    {{ input }}\n  \"#\n}\n\ntest FnTestAliasedEnumOutput {\n  functions [FnTestAliasedEnumOutput]\n  args {\n    input \"mehhhhh\"\n  }\n}",
+  
+  "baml_src/main.baml": "enum TestEnum {\n  Angry @alias(\"k1\") @description(#\"\n    User is angry\n  \"#)\n  Happy @alias(\"k2\") @description(#\"\n    User is happy\n  \"#)\n  // tests whether k1 doesnt incorrectly get matched with k11\n  Sad @alias(\"k3\") @description(#\"\n    User is sad\n  \"#)\n  Confused @description(\n    User is confused\n  )\n  Excited @alias(\"k5\") @description(\n    User is excited\n  )\n  Exclamation @alias(\"k6\") // only alias\n  \n  Bored @alias(\"k7\") @description(#\"\n    User is bored\n    With a long description\n  \"#)\n   \n  @@alias(\"Category\")\n}\n\nfunction FnTestAliasedEnumOutput(input: string) -> TestEnum {\n  client \"openai/gpt-4o-mini\"\n  prompt #\"\n    Classify the user input into the following category\n      \n    {{ ctx.output_format }}\n\n    {{ _.role('user') }}\n    {{input}}\n\n    {{ _.role('assistant') }}\n    Category ID:\n  \"#\n}\n\nfunction ConsumeTestEnum(input: TestEnum) -> TestEnum {\n  client \"openai/gpt-4o-mini\"\n  prompt #\"\n    Return back to me verbatim:\n    \n    {{ input }}\n  \"#\n}\n\ntest FnTestAliasedEnumOutput {\n  functions [FnTestAliasedEnumOutput]\n  args {\n    input \"mehhhhh\"\n  }\n}",  
 }
 
 func getBamlFiles() map[string]string {
-	return file_map
+  return file_map
 }

@@ -14,143 +14,142 @@
 package baml_client
 
 import (
-	"context"
-	"fmt"
+    "context"
 
-	"mixed_complex_types/baml_client/types"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "mixed_complex_types/baml_client/types"
+    "mixed_complex_types/baml_client/stream_types"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-type parse struct{}
-
+type parse struct {}
 var Parse = &parse{}
 
-// / Parse version of TestKitchenSink (Takes in string and returns types.KitchenSink)
+
+/// Parse version of TestKitchenSink (Takes in string and returns types.KitchenSink)
 func (*parse) TestKitchenSink(text string, opts ...CallOptionFunc) (types.KitchenSink, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"text": text, "stream": false},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "text": text, "stream": false },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestKitchenSink: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestKitchenSink: %w", err)
+        panic(wrapped_err)
+    }
 
-	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestKitchenSink", encoded)
-	if err != nil {
-		return types.KitchenSink{}, err
-	}
+    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestKitchenSink", encoded)
+    if err != nil {
+        return types.KitchenSink{}, err
+    }
 
-	casted := (result).(types.KitchenSink)
+    casted := (result).(types.KitchenSink)
 
-	return casted, nil
+    return casted, nil
 }
 
-// / Parse version of TestRecursiveComplexity (Takes in string and returns types.Node)
+/// Parse version of TestRecursiveComplexity (Takes in string and returns types.Node)
 func (*parse) TestRecursiveComplexity(text string, opts ...CallOptionFunc) (types.Node, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"text": text, "stream": false},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "text": text, "stream": false },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestRecursiveComplexity: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestRecursiveComplexity: %w", err)
+        panic(wrapped_err)
+    }
 
-	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestRecursiveComplexity", encoded)
-	if err != nil {
-		return types.Node{}, err
-	}
+    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestRecursiveComplexity", encoded)
+    if err != nil {
+        return types.Node{}, err
+    }
 
-	casted := (result).(types.Node)
+    casted := (result).(types.Node)
 
-	return casted, nil
+    return casted, nil
 }
 
-// / Parse version of TestUltraComplex (Takes in string and returns types.UltraComplex)
+/// Parse version of TestUltraComplex (Takes in string and returns types.UltraComplex)
 func (*parse) TestUltraComplex(text string, opts ...CallOptionFunc) (types.UltraComplex, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"text": text, "stream": false},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "text": text, "stream": false },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-		// and include the type of the args you're passing in.
-		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestUltraComplex: %w", err)
-		panic(wrapped_err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestUltraComplex: %w", err)
+        panic(wrapped_err)
+    }
 
-	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestUltraComplex", encoded)
-	if err != nil {
-		return types.UltraComplex{}, err
-	}
+    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestUltraComplex", encoded)
+    if err != nil {
+        return types.UltraComplex{}, err
+    }
 
-	casted := (result).(types.UltraComplex)
+    casted := (result).(types.UltraComplex)
 
-	return casted, nil
+    return casted, nil
 }

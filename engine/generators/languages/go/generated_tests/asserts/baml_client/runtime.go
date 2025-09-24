@@ -27,8 +27,6 @@
 package baml_client
 
 import (
-	"asserts/baml_client/type_builder"
-	"fmt"
 	"os"
 	"strings"
 

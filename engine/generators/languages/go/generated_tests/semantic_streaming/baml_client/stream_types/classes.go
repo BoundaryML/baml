@@ -14,17 +14,21 @@
 package stream_types
 
 import (
-	"fmt"
+    "encoding/json"
+    "fmt"
 
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 
-	"semantic_streaming/baml_client/types"
+    "semantic_streaming/baml_client/types"
 )
 
+
 type ClassWithBlockDone struct {
-	I_16_digits *int64  `json:"i_16_digits"`
-	S_20_words  *string `json:"s_20_words"`
+    
+I_16_digits *int64 `json:"i_16_digits"`
+S_20_words *string `json:"s_20_words"`
+    
 }
 
 func (c *ClassWithBlockDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -36,50 +40,54 @@ func (c *ClassWithBlockDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.Ty
 		panic(fmt.Sprintf("expected ClassWithBlockDone, got %s", typeName.Name))
 	}
 
+   
+
+	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-		switch key {
-
-		case "i_16_digits":
-			c.I_16_digits = baml.Decode(valueHolder).Interface().(*int64)
-
-		case "s_20_words":
-			c.S_20_words = baml.Decode(valueHolder).Interface().(*string)
-
+			switch key {
+				
+				case "i_16_digits":
+					c.I_16_digits = baml.Decode(valueHolder).Interface().(*int64)
+				
+				case "s_20_words":
+					c.S_20_words = baml.Decode(valueHolder).Interface().(*string)
+				
 		default:
-
+			
 			panic(fmt.Sprintf("unexpected field: %s in class ClassWithBlockDone", key))
-
+			
 		}
 	}
 
 }
 
 func (c ClassWithBlockDone) Encode() (*cffi.CFFIValueHolder, error) {
-	fields := map[string]any{}
-
-	fields["i_16_digits"] = c.I_16_digits
-
-	fields["s_20_words"] = c.S_20_words
-
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+    fields := map[string]any{}
+    
+    fields["i_16_digits"] = c.I_16_digits
+    
+    fields["s_20_words"] = c.S_20_words
+    
+    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c ClassWithBlockDone) BamlTypeName() string {
-	return "ClassWithBlockDone"
+    return "ClassWithBlockDone"
 }
 
 func (u ClassWithBlockDone) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "ClassWithBlockDone",
-	}
+    return &cffi.CFFITypeName{
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+        Name:      "ClassWithBlockDone",
+    }
 }
-
 type ClassWithoutDone struct {
-	I_16_digits *int64                    `json:"i_16_digits"`
-	S_20_words  baml.StreamState[*string] `json:"s_20_words"`
+    
+I_16_digits *int64 `json:"i_16_digits"`
+S_20_words baml.StreamState[*string] `json:"s_20_words"`
+    
 }
 
 func (c *ClassWithoutDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -91,58 +99,62 @@ func (c *ClassWithoutDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.Type
 		panic(fmt.Sprintf("expected ClassWithoutDone, got %s", typeName.Name))
 	}
 
+   
+
+	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-		switch key {
-
-		case "i_16_digits":
-			c.I_16_digits = baml.Decode(valueHolder).Interface().(*int64)
-
-		case "s_20_words":
-			c.S_20_words = baml.DecodeStreamingState(valueHolder, func(inner *cffi.CFFIValueHolder) *string {
-				return baml.Decode(inner).Interface().(*string)
-			})
-
+			switch key {
+				
+				case "i_16_digits":
+					c.I_16_digits = baml.Decode(valueHolder).Interface().(*int64)
+				
+				case "s_20_words":
+					c.S_20_words = baml.DecodeStreamingState(valueHolder, func(inner *cffi.CFFIValueHolder) *string {
+                return baml.Decode(inner).Interface().(*string)
+            })
+				
 		default:
-
+			
 			panic(fmt.Sprintf("unexpected field: %s in class ClassWithoutDone", key))
-
+			
 		}
 	}
 
 }
 
 func (c ClassWithoutDone) Encode() (*cffi.CFFIValueHolder, error) {
-	fields := map[string]any{}
-
-	fields["i_16_digits"] = c.I_16_digits
-
-	fields["s_20_words"] = c.S_20_words
-
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+    fields := map[string]any{}
+    
+    fields["i_16_digits"] = c.I_16_digits
+    
+    fields["s_20_words"] = c.S_20_words
+    
+    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c ClassWithoutDone) BamlTypeName() string {
-	return "ClassWithoutDone"
+    return "ClassWithoutDone"
 }
 
 func (u ClassWithoutDone) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "ClassWithoutDone",
-	}
+    return &cffi.CFFITypeName{
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+        Name:      "ClassWithoutDone",
+    }
 }
-
 type SemanticContainer struct {
-	Sixteen_digit_number     *int64                    `json:"sixteen_digit_number"`
-	String_with_twenty_words *string                   `json:"string_with_twenty_words"`
-	Class_1                  *ClassWithoutDone         `json:"class_1"`
-	Class_2                  *types.ClassWithBlockDone `json:"class_2"`
-	Class_done_needed        types.ClassWithBlockDone  `json:"class_done_needed"`
-	Class_needed             ClassWithoutDone          `json:"class_needed"`
-	Three_small_things       []SmallThing              `json:"three_small_things"`
-	Final_string             *string                   `json:"final_string"`
+    
+Sixteen_digit_number *int64 `json:"sixteen_digit_number"`
+String_with_twenty_words *string `json:"string_with_twenty_words"`
+Class_1 *ClassWithoutDone `json:"class_1"`
+Class_2 *types.ClassWithBlockDone `json:"class_2"`
+Class_done_needed types.ClassWithBlockDone `json:"class_done_needed"`
+Class_needed ClassWithoutDone `json:"class_needed"`
+Three_small_things []SmallThing `json:"three_small_things"`
+Final_string *string `json:"final_string"`
+    
 }
 
 func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -154,80 +166,84 @@ func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass, typeMap baml.Typ
 		panic(fmt.Sprintf("expected SemanticContainer, got %s", typeName.Name))
 	}
 
+   
+
+	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-		switch key {
-
-		case "sixteen_digit_number":
-			c.Sixteen_digit_number = baml.Decode(valueHolder).Interface().(*int64)
-
-		case "string_with_twenty_words":
-			c.String_with_twenty_words = baml.Decode(valueHolder).Interface().(*string)
-
-		case "class_1":
-			c.Class_1 = baml.Decode(valueHolder).Interface().(*ClassWithoutDone)
-
-		case "class_2":
-			c.Class_2 = baml.Decode(valueHolder).Interface().(*types.ClassWithBlockDone)
-
-		case "class_done_needed":
-			c.Class_done_needed = baml.Decode(valueHolder).Interface().(types.ClassWithBlockDone)
-
-		case "class_needed":
-			c.Class_needed = baml.Decode(valueHolder).Interface().(ClassWithoutDone)
-
-		case "three_small_things":
-			c.Three_small_things = baml.Decode(valueHolder).Interface().([]SmallThing)
-
-		case "final_string":
-			c.Final_string = baml.Decode(valueHolder).Interface().(*string)
-
+			switch key {
+				
+				case "sixteen_digit_number":
+					c.Sixteen_digit_number = baml.Decode(valueHolder).Interface().(*int64)
+				
+				case "string_with_twenty_words":
+					c.String_with_twenty_words = baml.Decode(valueHolder).Interface().(*string)
+				
+				case "class_1":
+					c.Class_1 = baml.Decode(valueHolder).Interface().(*ClassWithoutDone)
+				
+				case "class_2":
+					c.Class_2 = baml.Decode(valueHolder).Interface().(*types.ClassWithBlockDone)
+				
+				case "class_done_needed":
+					c.Class_done_needed = baml.Decode(valueHolder).Interface().(types.ClassWithBlockDone)
+				
+				case "class_needed":
+					c.Class_needed = baml.Decode(valueHolder).Interface().(ClassWithoutDone)
+				
+				case "three_small_things":
+					c.Three_small_things = baml.Decode(valueHolder).Interface().([]SmallThing)
+				
+				case "final_string":
+					c.Final_string = baml.Decode(valueHolder).Interface().(*string)
+				
 		default:
-
+			
 			panic(fmt.Sprintf("unexpected field: %s in class SemanticContainer", key))
-
+			
 		}
 	}
 
 }
 
 func (c SemanticContainer) Encode() (*cffi.CFFIValueHolder, error) {
-	fields := map[string]any{}
-
-	fields["sixteen_digit_number"] = c.Sixteen_digit_number
-
-	fields["string_with_twenty_words"] = c.String_with_twenty_words
-
-	fields["class_1"] = c.Class_1
-
-	fields["class_2"] = c.Class_2
-
-	fields["class_done_needed"] = c.Class_done_needed
-
-	fields["class_needed"] = c.Class_needed
-
-	fields["three_small_things"] = c.Three_small_things
-
-	fields["final_string"] = c.Final_string
-
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+    fields := map[string]any{}
+    
+    fields["sixteen_digit_number"] = c.Sixteen_digit_number
+    
+    fields["string_with_twenty_words"] = c.String_with_twenty_words
+    
+    fields["class_1"] = c.Class_1
+    
+    fields["class_2"] = c.Class_2
+    
+    fields["class_done_needed"] = c.Class_done_needed
+    
+    fields["class_needed"] = c.Class_needed
+    
+    fields["three_small_things"] = c.Three_small_things
+    
+    fields["final_string"] = c.Final_string
+    
+    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c SemanticContainer) BamlTypeName() string {
-	return "SemanticContainer"
+    return "SemanticContainer"
 }
 
 func (u SemanticContainer) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "SemanticContainer",
-	}
+    return &cffi.CFFITypeName{
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+        Name:      "SemanticContainer",
+    }
 }
-
 type SmallThing struct {
-	I_16_digits int64  `json:"i_16_digits"`
-	I_8_digits  *int64 `json:"i_8_digits"`
+    
+I_16_digits int64 `json:"i_16_digits"`
+I_8_digits *int64 `json:"i_8_digits"`
+    
 }
 
 func (c *SmallThing) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -239,43 +255,46 @@ func (c *SmallThing) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		panic(fmt.Sprintf("expected SmallThing, got %s", typeName.Name))
 	}
 
+   
+
+	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-		switch key {
-
-		case "i_16_digits":
-			c.I_16_digits = baml.Decode(valueHolder).Interface().(int64)
-
-		case "i_8_digits":
-			c.I_8_digits = baml.Decode(valueHolder).Interface().(*int64)
-
+			switch key {
+				
+				case "i_16_digits":
+					c.I_16_digits = baml.Decode(valueHolder).Interface().(int64)
+				
+				case "i_8_digits":
+					c.I_8_digits = baml.Decode(valueHolder).Interface().(*int64)
+				
 		default:
-
+			
 			panic(fmt.Sprintf("unexpected field: %s in class SmallThing", key))
-
+			
 		}
 	}
 
 }
 
 func (c SmallThing) Encode() (*cffi.CFFIValueHolder, error) {
-	fields := map[string]any{}
-
-	fields["i_16_digits"] = c.I_16_digits
-
-	fields["i_8_digits"] = c.I_8_digits
-
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+    fields := map[string]any{}
+    
+    fields["i_16_digits"] = c.I_16_digits
+    
+    fields["i_8_digits"] = c.I_8_digits
+    
+    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c SmallThing) BamlTypeName() string {
-	return "SmallThing"
+    return "SmallThing"
 }
 
 func (u SmallThing) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "SmallThing",
-	}
+    return &cffi.CFFITypeName{
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+        Name:      "SmallThing",
+    }
 }

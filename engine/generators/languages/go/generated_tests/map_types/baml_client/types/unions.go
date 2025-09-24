@@ -14,208 +14,213 @@
 package types
 
 import (
-	"encoding/json"
-	"fmt"
+    "encoding/json"
+    "fmt"
 
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
 type Union3BoolOrIntOrString struct {
-	variant string
-
-	variant_String *string
-
-	variant_Int *int64
-
-	variant_Bool *bool
+    variant string
+    
+    variant_String *string
+    
+    variant_Int *int64
+    
+    variant_Bool *bool
+    
 }
 
 func (u *Union3BoolOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-	valueHolder := holder.Value
-	variantName := holder.VariantName
+    valueHolder := holder.Value
+    variantName := holder.VariantName
 	switch variantName {
-	case "string":
-		u.variant = "String"
-		value := baml.Decode(valueHolder).Interface().(string)
-		u.variant_String = &value
-	case "int":
-		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
-		u.variant_Int = &value
-	case "bool":
-		u.variant = "Bool"
-		value := baml.Decode(valueHolder).Interface().(bool)
-		u.variant_Bool = &value
-
-	default:
-		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+    case "string":
+            u.variant = "String"
+            value := baml.Decode(valueHolder).Interface().(string)
+            u.variant_String = &value
+    case "int":
+            u.variant = "Int"
+            value := baml.Decode(valueHolder).Interface().(int64)
+            u.variant_Int = &value
+    case "bool":
+            u.variant = "Bool"
+            value := baml.Decode(valueHolder).Interface().(bool)
+            u.variant_Bool = &value
+    
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
+
 func (u Union3BoolOrIntOrString) Encode() (*cffi.CFFIValueHolder, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "String":
+        return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+    
+    case "Int":
+        return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+    
+    case "Bool":
+        return baml.EncodeUnion(u.BamlEncodeName, "bool", *u.variant_Bool)
+    
+    case "":
+        return nil, fmt.Errorf("invalid union variant: [unset]")
+    }
 
-	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
-
-	case "Int":
-		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
-
-	case "Bool":
-		return baml.EncodeUnion(u.BamlEncodeName, "bool", *u.variant_Bool)
-
-	case "":
-		return nil, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union3BoolOrIntOrString) BamlTypeName() string {
-	return "Union3BoolOrIntOrString"
+    return "Union3BoolOrIntOrString"
 }
 
 func (u Union3BoolOrIntOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__bool__int__string",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Union__bool__int__string",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 func (u Union3BoolOrIntOrString) MarshalJSON() ([]byte, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "String":
+        return json.Marshal(u.variant_String)
+    
+    case "Int":
+        return json.Marshal(u.variant_Int)
+    
+    case "Bool":
+        return json.Marshal(u.variant_Bool)
+    
+    }
 
-	case "String":
-		return json.Marshal(u.variant_String)
-
-	case "Int":
-		return json.Marshal(u.variant_Int)
-
-	case "Bool":
-		return json.Marshal(u.variant_Bool)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union3BoolOrIntOrString) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_String)
-	if err == nil {
-		u.variant = "String"
-		return nil
-	} else {
-		u.variant_String = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_Int)
-	if err == nil {
-		u.variant = "Int"
-		return nil
-	} else {
-		u.variant_Int = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_Bool)
-	if err == nil {
-		u.variant = "Bool"
-		return nil
-	} else {
-		u.variant_Bool = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
+    var err error
+    
+    err = json.Unmarshal(data, &u.variant_String)
+    if err == nil {
+        u.variant = "String"
+        return nil
+    } else {
+        u.variant_String = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_Int)
+    if err == nil {
+        u.variant = "Int"
+        return nil
+    } else {
+        u.variant_Int = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_Bool)
+    if err == nil {
+        u.variant = "Bool"
+        return nil
+    } else {
+        u.variant_Bool = nil
+    }
+    
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union3BoolOrIntOrString__NewString(v string) Union3BoolOrIntOrString {
 
-	return Union3BoolOrIntOrString{
-		variant:        "String",
-		variant_String: &v,
-	}
+func Union3BoolOrIntOrString__NewString(v string) Union3BoolOrIntOrString {
+    
+    return Union3BoolOrIntOrString{
+        variant: "String",
+        variant_String: &v,
+    }
 }
 
 func (u *Union3BoolOrIntOrString) SetString(v string) {
-
-	u.variant = "String"
-	u.variant_String = &v
-
-	u.variant_Int = nil
-
-	u.variant_Bool = nil
-
+    
+    u.variant = "String"
+    u.variant_String = &v
+    
+    u.variant_Int = nil
+    
+    u.variant_Bool = nil
+    
 }
 
 func (u *Union3BoolOrIntOrString) IsString() bool {
-	return u.variant == "String"
+    return u.variant == "String"
 }
 
 func (u *Union3BoolOrIntOrString) AsString() *string {
-	if u.variant != "String" {
-		return nil
-	}
-	return u.variant_String
+    if u.variant != "String" {
+        return nil
+    }
+    return u.variant_String
 }
 
 func Union3BoolOrIntOrString__NewInt(v int64) Union3BoolOrIntOrString {
-
-	return Union3BoolOrIntOrString{
-		variant:     "Int",
-		variant_Int: &v,
-	}
+    
+    return Union3BoolOrIntOrString{
+        variant: "Int",
+        variant_Int: &v,
+    }
 }
 
 func (u *Union3BoolOrIntOrString) SetInt(v int64) {
-
-	u.variant = "Int"
-	u.variant_Int = &v
-
-	u.variant_String = nil
-
-	u.variant_Bool = nil
-
+    
+    u.variant = "Int"
+    u.variant_Int = &v
+    
+    u.variant_String = nil
+    
+    u.variant_Bool = nil
+    
 }
 
 func (u *Union3BoolOrIntOrString) IsInt() bool {
-	return u.variant == "Int"
+    return u.variant == "Int"
 }
 
 func (u *Union3BoolOrIntOrString) AsInt() *int64 {
-	if u.variant != "Int" {
-		return nil
-	}
-	return u.variant_Int
+    if u.variant != "Int" {
+        return nil
+    }
+    return u.variant_Int
 }
 
 func Union3BoolOrIntOrString__NewBool(v bool) Union3BoolOrIntOrString {
-
-	return Union3BoolOrIntOrString{
-		variant:      "Bool",
-		variant_Bool: &v,
-	}
+    
+    return Union3BoolOrIntOrString{
+        variant: "Bool",
+        variant_Bool: &v,
+    }
 }
 
 func (u *Union3BoolOrIntOrString) SetBool(v bool) {
-
-	u.variant = "Bool"
-	u.variant_Bool = &v
-
-	u.variant_String = nil
-
-	u.variant_Int = nil
-
+    
+    u.variant = "Bool"
+    u.variant_Bool = &v
+    
+    u.variant_String = nil
+    
+    u.variant_Int = nil
+    
 }
 
 func (u *Union3BoolOrIntOrString) IsBool() bool {
-	return u.variant == "Bool"
+    return u.variant == "Bool"
 }
 
 func (u *Union3BoolOrIntOrString) AsBool() *bool {
-	if u.variant != "Bool" {
-		return nil
-	}
-	return u.variant_Bool
+    if u.variant != "Bool" {
+        return nil
+    }
+    return u.variant_Bool
 }
+
+

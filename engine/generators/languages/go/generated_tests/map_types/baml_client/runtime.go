@@ -27,8 +27,6 @@
 package baml_client
 
 import (
-	"fmt"
-	"map_types/baml_client/type_builder"
 	"os"
 	"strings"
 

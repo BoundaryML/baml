@@ -15,12 +15,13 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
+
 type UseMyUnionClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *UseMyUnionClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -31,9 +32,13 @@ func (t *UseMyUnionClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *UseMyUnionClassView) PropertyU() (ClassPropertyView, error) {
-	return t.inner.Property("u")
+    return t.inner.Property("u")
 }
+
 
 func (t *TypeBuilder) UseMyUnion() (*UseMyUnionClassView, error) {
 	bld, err := t.inner.Class("UseMyUnion")

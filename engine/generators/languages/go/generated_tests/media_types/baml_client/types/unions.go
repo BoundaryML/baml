@@ -14,266 +14,271 @@
 package types
 
 import (
-	"encoding/json"
-	"fmt"
+    "encoding/json"
+    "fmt"
 
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
 type Union4AudioOrImageOrPDFOrVideo struct {
-	variant string
-
-	variant_Image *Image
-
-	variant_Audio *Audio
-
-	variant_PDF *PDF
-
-	variant_Video *Video
+    variant string
+    
+    variant_Image *Image
+    
+    variant_Audio *Audio
+    
+    variant_PDF *PDF
+    
+    variant_Video *Video
+    
 }
 
 func (u *Union4AudioOrImageOrPDFOrVideo) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-	valueHolder := holder.Value
-	variantName := holder.VariantName
+    valueHolder := holder.Value
+    variantName := holder.VariantName
 	switch variantName {
-	case "image":
-		u.variant = "Image"
-		value := baml.Decode(valueHolder).Interface().(Image)
-		u.variant_Image = &value
-	case "audio":
-		u.variant = "Audio"
-		value := baml.Decode(valueHolder).Interface().(Audio)
-		u.variant_Audio = &value
-	case "pdf":
-		u.variant = "PDF"
-		value := baml.Decode(valueHolder).Interface().(PDF)
-		u.variant_PDF = &value
-	case "video":
-		u.variant = "Video"
-		value := baml.Decode(valueHolder).Interface().(Video)
-		u.variant_Video = &value
-
-	default:
-		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+    case "image":
+            u.variant = "Image"
+            value := baml.Decode(valueHolder).Interface().(Image)
+            u.variant_Image = &value
+    case "audio":
+            u.variant = "Audio"
+            value := baml.Decode(valueHolder).Interface().(Audio)
+            u.variant_Audio = &value
+    case "pdf":
+            u.variant = "PDF"
+            value := baml.Decode(valueHolder).Interface().(PDF)
+            u.variant_PDF = &value
+    case "video":
+            u.variant = "Video"
+            value := baml.Decode(valueHolder).Interface().(Video)
+            u.variant_Video = &value
+    
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
+
 func (u Union4AudioOrImageOrPDFOrVideo) Encode() (*cffi.CFFIValueHolder, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "Image":
+        return baml.EncodeUnion(u.BamlEncodeName, "image", *u.variant_Image)
+    
+    case "Audio":
+        return baml.EncodeUnion(u.BamlEncodeName, "audio", *u.variant_Audio)
+    
+    case "PDF":
+        return baml.EncodeUnion(u.BamlEncodeName, "pdf", *u.variant_PDF)
+    
+    case "Video":
+        return baml.EncodeUnion(u.BamlEncodeName, "video", *u.variant_Video)
+    
+    case "":
+        return nil, fmt.Errorf("invalid union variant: [unset]")
+    }
 
-	case "Image":
-		return baml.EncodeUnion(u.BamlEncodeName, "image", *u.variant_Image)
-
-	case "Audio":
-		return baml.EncodeUnion(u.BamlEncodeName, "audio", *u.variant_Audio)
-
-	case "PDF":
-		return baml.EncodeUnion(u.BamlEncodeName, "pdf", *u.variant_PDF)
-
-	case "Video":
-		return baml.EncodeUnion(u.BamlEncodeName, "video", *u.variant_Video)
-
-	case "":
-		return nil, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union4AudioOrImageOrPDFOrVideo) BamlTypeName() string {
-	return "Union4AudioOrImageOrPDFOrVideo"
+    return "Union4AudioOrImageOrPDFOrVideo"
 }
 
 func (u Union4AudioOrImageOrPDFOrVideo) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__audio__image__pdf__video",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Union__audio__image__pdf__video",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 func (u Union4AudioOrImageOrPDFOrVideo) MarshalJSON() ([]byte, error) {
-	switch u.variant {
+    switch u.variant {
+    
+    case "Image":
+        return json.Marshal(u.variant_Image)
+    
+    case "Audio":
+        return json.Marshal(u.variant_Audio)
+    
+    case "PDF":
+        return json.Marshal(u.variant_PDF)
+    
+    case "Video":
+        return json.Marshal(u.variant_Video)
+    
+    }
 
-	case "Image":
-		return json.Marshal(u.variant_Image)
-
-	case "Audio":
-		return json.Marshal(u.variant_Audio)
-
-	case "PDF":
-		return json.Marshal(u.variant_PDF)
-
-	case "Video":
-		return json.Marshal(u.variant_Video)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union4AudioOrImageOrPDFOrVideo) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_Image)
-	if err == nil {
-		u.variant = "Image"
-		return nil
-	} else {
-		u.variant_Image = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_Audio)
-	if err == nil {
-		u.variant = "Audio"
-		return nil
-	} else {
-		u.variant_Audio = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_PDF)
-	if err == nil {
-		u.variant = "PDF"
-		return nil
-	} else {
-		u.variant_PDF = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_Video)
-	if err == nil {
-		u.variant = "Video"
-		return nil
-	} else {
-		u.variant_Video = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
+    var err error
+    
+    err = json.Unmarshal(data, &u.variant_Image)
+    if err == nil {
+        u.variant = "Image"
+        return nil
+    } else {
+        u.variant_Image = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_Audio)
+    if err == nil {
+        u.variant = "Audio"
+        return nil
+    } else {
+        u.variant_Audio = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_PDF)
+    if err == nil {
+        u.variant = "PDF"
+        return nil
+    } else {
+        u.variant_PDF = nil
+    }
+    
+    err = json.Unmarshal(data, &u.variant_Video)
+    if err == nil {
+        u.variant = "Video"
+        return nil
+    } else {
+        u.variant_Video = nil
+    }
+    
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union4AudioOrImageOrPDFOrVideo__NewImage(v Image) Union4AudioOrImageOrPDFOrVideo {
 
-	return Union4AudioOrImageOrPDFOrVideo{
-		variant:       "Image",
-		variant_Image: &v,
-	}
+func Union4AudioOrImageOrPDFOrVideo__NewImage(v Image) Union4AudioOrImageOrPDFOrVideo {
+    
+    return Union4AudioOrImageOrPDFOrVideo{
+        variant: "Image",
+        variant_Image: &v,
+    }
 }
 
 func (u *Union4AudioOrImageOrPDFOrVideo) SetImage(v Image) {
-
-	u.variant = "Image"
-	u.variant_Image = &v
-
-	u.variant_Audio = nil
-
-	u.variant_PDF = nil
-
-	u.variant_Video = nil
-
+    
+    u.variant = "Image"
+    u.variant_Image = &v
+    
+    u.variant_Audio = nil
+    
+    u.variant_PDF = nil
+    
+    u.variant_Video = nil
+    
 }
 
 func (u *Union4AudioOrImageOrPDFOrVideo) IsImage() bool {
-	return u.variant == "Image"
+    return u.variant == "Image"
 }
 
 func (u *Union4AudioOrImageOrPDFOrVideo) AsImage() *Image {
-	if u.variant != "Image" {
-		return nil
-	}
-	return u.variant_Image
+    if u.variant != "Image" {
+        return nil
+    }
+    return u.variant_Image
 }
 
 func Union4AudioOrImageOrPDFOrVideo__NewAudio(v Audio) Union4AudioOrImageOrPDFOrVideo {
-
-	return Union4AudioOrImageOrPDFOrVideo{
-		variant:       "Audio",
-		variant_Audio: &v,
-	}
+    
+    return Union4AudioOrImageOrPDFOrVideo{
+        variant: "Audio",
+        variant_Audio: &v,
+    }
 }
 
 func (u *Union4AudioOrImageOrPDFOrVideo) SetAudio(v Audio) {
-
-	u.variant = "Audio"
-	u.variant_Audio = &v
-
-	u.variant_Image = nil
-
-	u.variant_PDF = nil
-
-	u.variant_Video = nil
-
+    
+    u.variant = "Audio"
+    u.variant_Audio = &v
+    
+    u.variant_Image = nil
+    
+    u.variant_PDF = nil
+    
+    u.variant_Video = nil
+    
 }
 
 func (u *Union4AudioOrImageOrPDFOrVideo) IsAudio() bool {
-	return u.variant == "Audio"
+    return u.variant == "Audio"
 }
 
 func (u *Union4AudioOrImageOrPDFOrVideo) AsAudio() *Audio {
-	if u.variant != "Audio" {
-		return nil
-	}
-	return u.variant_Audio
+    if u.variant != "Audio" {
+        return nil
+    }
+    return u.variant_Audio
 }
 
 func Union4AudioOrImageOrPDFOrVideo__NewPDF(v PDF) Union4AudioOrImageOrPDFOrVideo {
-
-	return Union4AudioOrImageOrPDFOrVideo{
-		variant:     "PDF",
-		variant_PDF: &v,
-	}
+    
+    return Union4AudioOrImageOrPDFOrVideo{
+        variant: "PDF",
+        variant_PDF: &v,
+    }
 }
 
 func (u *Union4AudioOrImageOrPDFOrVideo) SetPDF(v PDF) {
-
-	u.variant = "PDF"
-	u.variant_PDF = &v
-
-	u.variant_Image = nil
-
-	u.variant_Audio = nil
-
-	u.variant_Video = nil
-
+    
+    u.variant = "PDF"
+    u.variant_PDF = &v
+    
+    u.variant_Image = nil
+    
+    u.variant_Audio = nil
+    
+    u.variant_Video = nil
+    
 }
 
 func (u *Union4AudioOrImageOrPDFOrVideo) IsPDF() bool {
-	return u.variant == "PDF"
+    return u.variant == "PDF"
 }
 
 func (u *Union4AudioOrImageOrPDFOrVideo) AsPDF() *PDF {
-	if u.variant != "PDF" {
-		return nil
-	}
-	return u.variant_PDF
+    if u.variant != "PDF" {
+        return nil
+    }
+    return u.variant_PDF
 }
 
 func Union4AudioOrImageOrPDFOrVideo__NewVideo(v Video) Union4AudioOrImageOrPDFOrVideo {
-
-	return Union4AudioOrImageOrPDFOrVideo{
-		variant:       "Video",
-		variant_Video: &v,
-	}
+    
+    return Union4AudioOrImageOrPDFOrVideo{
+        variant: "Video",
+        variant_Video: &v,
+    }
 }
 
 func (u *Union4AudioOrImageOrPDFOrVideo) SetVideo(v Video) {
-
-	u.variant = "Video"
-	u.variant_Video = &v
-
-	u.variant_Image = nil
-
-	u.variant_Audio = nil
-
-	u.variant_PDF = nil
-
+    
+    u.variant = "Video"
+    u.variant_Video = &v
+    
+    u.variant_Image = nil
+    
+    u.variant_Audio = nil
+    
+    u.variant_PDF = nil
+    
 }
 
 func (u *Union4AudioOrImageOrPDFOrVideo) IsVideo() bool {
-	return u.variant == "Video"
+    return u.variant == "Video"
 }
 
 func (u *Union4AudioOrImageOrPDFOrVideo) AsVideo() *Video {
-	if u.variant != "Video" {
-		return nil
-	}
-	return u.variant_Video
+    if u.variant != "Video" {
+        return nil
+    }
+    return u.variant_Video
 }
+
+

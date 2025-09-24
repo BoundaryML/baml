@@ -14,83 +14,86 @@
 package types
 
 import (
-	"encoding/json"
-	"fmt"
+    "encoding/json"
+    "fmt"
 
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
+
 
 type Status string
 
 const (
-	StatusACTIVE   Status = "ACTIVE"
-	StatusINACTIVE Status = "INACTIVE"
-	StatusPENDING  Status = "PENDING"
+    
+    StatusACTIVE Status = "ACTIVE"
+    StatusINACTIVE Status = "INACTIVE"
+    StatusPENDING Status = "PENDING"
 )
 
 // Values returns all allowed values for the Status type.
 func (Status) Values() []Status {
-	return []Status{
-		StatusACTIVE,
-		StatusINACTIVE,
-		StatusPENDING,
-	}
+    return []Status{
+        StatusACTIVE,
+        StatusINACTIVE,
+        StatusPENDING,
+    }
 }
 
 // IsValid checks whether the given Status value is valid.
 func (e Status) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
+  
+  for _, v := range e.Values() {
+      if e == v {
+          return true
+      }
+  }
+  return false
+  
 }
 
 // MarshalJSON customizes JSON marshaling for Status.
 func (e Status) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid Status: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid Status: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for Status.
 func (e *Status) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = Status(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid Status: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = Status(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid Status: %q", s)
+    }
+    return nil
 }
 
 func (e *Status) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
-	name := holder.Name
-	if name.Name != "Status" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.Status, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = Status(value)
+    name := holder.Name
+    if name.Name != "Status" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.Status, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = Status(value)
 }
 
 func (e Status) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e Status) BamlTypeName() string {
-	return "Status"
+    return "Status"
 }
 
 func (u Status) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Status",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Status",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
+

@@ -14,12 +14,17 @@
 package baml_client
 
 import (
-	"classes/baml_client/stream_types"
-	"classes/baml_client/types"
-	"reflect"
+    "classes/baml_client/types"
+    "classes/baml_client/stream_types"
 )
 
 var typeMap = map[string]reflect.Type{
-	"TYPES.SimpleClass":        reflect.TypeOf(types.SimpleClass{}),
-	"STREAM_TYPES.SimpleClass": reflect.TypeOf(stream_types.SimpleClass{}),
+"TYPES.SimpleClass": reflect.TypeOf(types.SimpleClass{}),
+    "STREAM_TYPES.SimpleClass": reflect.TypeOf(stream_types.SimpleClass{}),
+
+
+
+
+
+
 }

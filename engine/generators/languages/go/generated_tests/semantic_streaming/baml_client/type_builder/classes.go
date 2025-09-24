@@ -15,12 +15,13 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
+
 type ClassWithBlockDoneClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ClassWithBlockDoneClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -31,13 +32,17 @@ func (t *ClassWithBlockDoneClassView) ListProperties() ([]ClassPropertyView, err
 	return builders, nil
 }
 
+
+
+
 func (t *ClassWithBlockDoneClassView) PropertyI_16_digits() (ClassPropertyView, error) {
-	return t.inner.Property("i_16_digits")
+    return t.inner.Property("i_16_digits")
 }
 
 func (t *ClassWithBlockDoneClassView) PropertyS_20_words() (ClassPropertyView, error) {
-	return t.inner.Property("s_20_words")
+    return t.inner.Property("s_20_words")
 }
+
 
 func (t *TypeBuilder) ClassWithBlockDone() (*ClassWithBlockDoneClassView, error) {
 	bld, err := t.inner.Class("ClassWithBlockDone")
@@ -52,11 +57,11 @@ func (t *ClassWithBlockDoneClassView) Type() (baml.Type, error) {
 }
 
 type ClassWithoutDoneClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ClassWithoutDoneClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -67,13 +72,17 @@ func (t *ClassWithoutDoneClassView) ListProperties() ([]ClassPropertyView, error
 	return builders, nil
 }
 
+
+
+
 func (t *ClassWithoutDoneClassView) PropertyI_16_digits() (ClassPropertyView, error) {
-	return t.inner.Property("i_16_digits")
+    return t.inner.Property("i_16_digits")
 }
 
 func (t *ClassWithoutDoneClassView) PropertyS_20_words() (ClassPropertyView, error) {
-	return t.inner.Property("s_20_words")
+    return t.inner.Property("s_20_words")
 }
+
 
 func (t *TypeBuilder) ClassWithoutDone() (*ClassWithoutDoneClassView, error) {
 	bld, err := t.inner.Class("ClassWithoutDone")
@@ -88,11 +97,11 @@ func (t *ClassWithoutDoneClassView) Type() (baml.Type, error) {
 }
 
 type SemanticContainerClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *SemanticContainerClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -103,37 +112,41 @@ func (t *SemanticContainerClassView) ListProperties() ([]ClassPropertyView, erro
 	return builders, nil
 }
 
+
+
+
 func (t *SemanticContainerClassView) PropertySixteen_digit_number() (ClassPropertyView, error) {
-	return t.inner.Property("sixteen_digit_number")
+    return t.inner.Property("sixteen_digit_number")
 }
 
 func (t *SemanticContainerClassView) PropertyString_with_twenty_words() (ClassPropertyView, error) {
-	return t.inner.Property("string_with_twenty_words")
+    return t.inner.Property("string_with_twenty_words")
 }
 
 func (t *SemanticContainerClassView) PropertyClass_1() (ClassPropertyView, error) {
-	return t.inner.Property("class_1")
+    return t.inner.Property("class_1")
 }
 
 func (t *SemanticContainerClassView) PropertyClass_2() (ClassPropertyView, error) {
-	return t.inner.Property("class_2")
+    return t.inner.Property("class_2")
 }
 
 func (t *SemanticContainerClassView) PropertyClass_done_needed() (ClassPropertyView, error) {
-	return t.inner.Property("class_done_needed")
+    return t.inner.Property("class_done_needed")
 }
 
 func (t *SemanticContainerClassView) PropertyClass_needed() (ClassPropertyView, error) {
-	return t.inner.Property("class_needed")
+    return t.inner.Property("class_needed")
 }
 
 func (t *SemanticContainerClassView) PropertyThree_small_things() (ClassPropertyView, error) {
-	return t.inner.Property("three_small_things")
+    return t.inner.Property("three_small_things")
 }
 
 func (t *SemanticContainerClassView) PropertyFinal_string() (ClassPropertyView, error) {
-	return t.inner.Property("final_string")
+    return t.inner.Property("final_string")
 }
+
 
 func (t *TypeBuilder) SemanticContainer() (*SemanticContainerClassView, error) {
 	bld, err := t.inner.Class("SemanticContainer")
@@ -148,11 +161,11 @@ func (t *SemanticContainerClassView) Type() (baml.Type, error) {
 }
 
 type SmallThingClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *SmallThingClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -163,13 +176,17 @@ func (t *SmallThingClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *SmallThingClassView) PropertyI_16_digits() (ClassPropertyView, error) {
-	return t.inner.Property("i_16_digits")
+    return t.inner.Property("i_16_digits")
 }
 
 func (t *SmallThingClassView) PropertyI_8_digits() (ClassPropertyView, error) {
-	return t.inner.Property("i_8_digits")
+    return t.inner.Property("i_8_digits")
 }
+
 
 func (t *TypeBuilder) SmallThing() (*SmallThingClassView, error) {
 	bld, err := t.inner.Class("SmallThing")

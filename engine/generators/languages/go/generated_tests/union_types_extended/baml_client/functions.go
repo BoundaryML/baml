@@ -14,258 +14,261 @@
 package baml_client
 
 import (
-	"context"
-	"fmt"
+    "context"
 
-	"union_types_extended/baml_client/types"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "union_types_extended/baml_client/types"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
+
+
 
 func TestComplexUnions(ctx context.Context, input string, opts ...CallOptionFunc) (types.ComplexUnions, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestComplexUnions", encoded, callOpts.onTick)
-		if err != nil {
-			return types.ComplexUnions{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestComplexUnions", encoded, callOpts.onTick)
+        if err != nil {
+            return types.ComplexUnions{}, err
+        }
 
-		if result.Error != nil {
-			return types.ComplexUnions{}, result.Error
-		}
+        if result.Error != nil {
+            return types.ComplexUnions{}, result.Error
+        }
 
-		casted := (result.Data).(types.ComplexUnions)
+        casted := (result.Data).(types.ComplexUnions)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestComplexUnions", encoded, callOpts.onTick)
-		if err != nil {
-			return types.ComplexUnions{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestComplexUnions", encoded, callOpts.onTick)
+        if err != nil {
+            return types.ComplexUnions{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.ComplexUnions{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.ComplexUnions{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.ComplexUnions), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.ComplexUnions), nil
+            }
+        }
 
-		return types.ComplexUnions{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.ComplexUnions{}, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestDiscriminatedUnions(ctx context.Context, input string, opts ...CallOptionFunc) (types.DiscriminatedUnions, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestDiscriminatedUnions", encoded, callOpts.onTick)
-		if err != nil {
-			return types.DiscriminatedUnions{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestDiscriminatedUnions", encoded, callOpts.onTick)
+        if err != nil {
+            return types.DiscriminatedUnions{}, err
+        }
 
-		if result.Error != nil {
-			return types.DiscriminatedUnions{}, result.Error
-		}
+        if result.Error != nil {
+            return types.DiscriminatedUnions{}, result.Error
+        }
 
-		casted := (result.Data).(types.DiscriminatedUnions)
+        casted := (result.Data).(types.DiscriminatedUnions)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestDiscriminatedUnions", encoded, callOpts.onTick)
-		if err != nil {
-			return types.DiscriminatedUnions{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestDiscriminatedUnions", encoded, callOpts.onTick)
+        if err != nil {
+            return types.DiscriminatedUnions{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.DiscriminatedUnions{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.DiscriminatedUnions{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.DiscriminatedUnions), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.DiscriminatedUnions), nil
+            }
+        }
 
-		return types.DiscriminatedUnions{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.DiscriminatedUnions{}, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestPrimitiveUnions(ctx context.Context, input string, opts ...CallOptionFunc) (types.PrimitiveUnions, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestPrimitiveUnions", encoded, callOpts.onTick)
-		if err != nil {
-			return types.PrimitiveUnions{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestPrimitiveUnions", encoded, callOpts.onTick)
+        if err != nil {
+            return types.PrimitiveUnions{}, err
+        }
 
-		if result.Error != nil {
-			return types.PrimitiveUnions{}, result.Error
-		}
+        if result.Error != nil {
+            return types.PrimitiveUnions{}, result.Error
+        }
 
-		casted := (result.Data).(types.PrimitiveUnions)
+        casted := (result.Data).(types.PrimitiveUnions)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestPrimitiveUnions", encoded, callOpts.onTick)
-		if err != nil {
-			return types.PrimitiveUnions{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestPrimitiveUnions", encoded, callOpts.onTick)
+        if err != nil {
+            return types.PrimitiveUnions{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.PrimitiveUnions{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.PrimitiveUnions{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.PrimitiveUnions), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.PrimitiveUnions), nil
+            }
+        }
 
-		return types.PrimitiveUnions{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.PrimitiveUnions{}, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestUnionArrays(ctx context.Context, input string, opts ...CallOptionFunc) (types.UnionArrays, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestUnionArrays", encoded, callOpts.onTick)
-		if err != nil {
-			return types.UnionArrays{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestUnionArrays", encoded, callOpts.onTick)
+        if err != nil {
+            return types.UnionArrays{}, err
+        }
 
-		if result.Error != nil {
-			return types.UnionArrays{}, result.Error
-		}
+        if result.Error != nil {
+            return types.UnionArrays{}, result.Error
+        }
 
-		casted := (result.Data).(types.UnionArrays)
+        casted := (result.Data).(types.UnionArrays)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestUnionArrays", encoded, callOpts.onTick)
-		if err != nil {
-			return types.UnionArrays{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestUnionArrays", encoded, callOpts.onTick)
+        if err != nil {
+            return types.UnionArrays{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.UnionArrays{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.UnionArrays{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.UnionArrays), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.UnionArrays), nil
+            }
+        }
 
-		return types.UnionArrays{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.UnionArrays{}, fmt.Errorf("No data returned from stream")
+    }
 }

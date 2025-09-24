@@ -14,15 +14,21 @@
 package stream_types
 
 import (
-	"fmt"
+    "encoding/json"
+    "fmt"
 
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+
+    "classes/baml_client/types"
 )
 
+
 type SimpleClass struct {
-	Digits *int64                    `json:"digits"`
-	Words  baml.StreamState[*string] `json:"words"`
+    
+Digits *int64 `json:"digits"`
+Words baml.StreamState[*string] `json:"words"`
+    
 }
 
 func (c *SimpleClass) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -34,45 +40,48 @@ func (c *SimpleClass) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 		panic(fmt.Sprintf("expected SimpleClass, got %s", typeName.Name))
 	}
 
+   
+
+	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-		switch key {
-
-		case "digits":
-			c.Digits = baml.Decode(valueHolder).Interface().(*int64)
-
-		case "words":
-			c.Words = baml.DecodeStreamingState(valueHolder, func(inner *cffi.CFFIValueHolder) *string {
-				return baml.Decode(inner).Interface().(*string)
-			})
-
+			switch key {
+				
+				case "digits":
+					c.Digits = baml.Decode(valueHolder).Interface().(*int64)
+				
+				case "words":
+					c.Words = baml.DecodeStreamingState(valueHolder, func(inner *cffi.CFFIValueHolder) *string {
+                return baml.Decode(inner).Interface().(*string)
+            })
+				
 		default:
-
+			
 			panic(fmt.Sprintf("unexpected field: %s in class SimpleClass", key))
-
+			
 		}
 	}
 
 }
 
 func (c SimpleClass) Encode() (*cffi.CFFIValueHolder, error) {
-	fields := map[string]any{}
-
-	fields["digits"] = c.Digits
-
-	fields["words"] = c.Words
-
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+    fields := map[string]any{}
+    
+    fields["digits"] = c.Digits
+    
+    fields["words"] = c.Words
+    
+    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c SimpleClass) BamlTypeName() string {
-	return "SimpleClass"
+    return "SimpleClass"
 }
 
 func (u SimpleClass) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "SimpleClass",
-	}
+    return &cffi.CFFITypeName{
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+        Name:      "SimpleClass",
+    }
 }

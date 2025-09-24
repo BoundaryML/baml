@@ -27,10 +27,8 @@
 package baml_client
 
 import (
-	"fmt"
 	"os"
 	"strings"
-	"unions/baml_client/type_builder"
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )

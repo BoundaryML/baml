@@ -15,12 +15,13 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
+
 type PersonClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *PersonClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -31,13 +32,17 @@ func (t *PersonClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *PersonClassView) PropertyName() (ClassPropertyView, error) {
-	return t.inner.Property("name")
+    return t.inner.Property("name")
 }
 
 func (t *PersonClassView) PropertyAge() (ClassPropertyView, error) {
-	return t.inner.Property("age")
+    return t.inner.Property("age")
 }
+
 
 func (t *TypeBuilder) Person() (*PersonClassView, error) {
 	bld, err := t.inner.Class("Person")

@@ -15,12 +15,13 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
+
 type ComplexMapsClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ComplexMapsClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -31,25 +32,29 @@ func (t *ComplexMapsClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *ComplexMapsClassView) PropertyUserMap() (ClassPropertyView, error) {
-	return t.inner.Property("userMap")
+    return t.inner.Property("userMap")
 }
 
 func (t *ComplexMapsClassView) PropertyProductMap() (ClassPropertyView, error) {
-	return t.inner.Property("productMap")
+    return t.inner.Property("productMap")
 }
 
 func (t *ComplexMapsClassView) PropertyNestedMap() (ClassPropertyView, error) {
-	return t.inner.Property("nestedMap")
+    return t.inner.Property("nestedMap")
 }
 
 func (t *ComplexMapsClassView) PropertyArrayMap() (ClassPropertyView, error) {
-	return t.inner.Property("arrayMap")
+    return t.inner.Property("arrayMap")
 }
 
 func (t *ComplexMapsClassView) PropertyMapArray() (ClassPropertyView, error) {
-	return t.inner.Property("mapArray")
+    return t.inner.Property("mapArray")
 }
+
 
 func (t *TypeBuilder) ComplexMaps() (*ComplexMapsClassView, error) {
 	bld, err := t.inner.Class("ComplexMaps")
@@ -64,11 +69,11 @@ func (t *ComplexMapsClassView) Type() (baml.Type, error) {
 }
 
 type ConfigClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ConfigClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -79,17 +84,21 @@ func (t *ConfigClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *ConfigClassView) PropertyUrl() (ClassPropertyView, error) {
-	return t.inner.Property("url")
+    return t.inner.Property("url")
 }
 
 func (t *ConfigClassView) PropertyPort() (ClassPropertyView, error) {
-	return t.inner.Property("port")
+    return t.inner.Property("port")
 }
 
 func (t *ConfigClassView) PropertyDebug() (ClassPropertyView, error) {
-	return t.inner.Property("debug")
+    return t.inner.Property("debug")
 }
+
 
 func (t *TypeBuilder) Config() (*ConfigClassView, error) {
 	bld, err := t.inner.Class("Config")
@@ -104,11 +113,11 @@ func (t *ConfigClassView) Type() (baml.Type, error) {
 }
 
 type EdgeCaseMapsClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *EdgeCaseMapsClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -119,21 +128,25 @@ func (t *EdgeCaseMapsClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *EdgeCaseMapsClassView) PropertyEmptyMap() (ClassPropertyView, error) {
-	return t.inner.Property("emptyMap")
+    return t.inner.Property("emptyMap")
 }
 
 func (t *EdgeCaseMapsClassView) PropertyNullableValues() (ClassPropertyView, error) {
-	return t.inner.Property("nullableValues")
+    return t.inner.Property("nullableValues")
 }
 
 func (t *EdgeCaseMapsClassView) PropertyOptionalValues() (ClassPropertyView, error) {
-	return t.inner.Property("optionalValues")
+    return t.inner.Property("optionalValues")
 }
 
 func (t *EdgeCaseMapsClassView) PropertyUnionValues() (ClassPropertyView, error) {
-	return t.inner.Property("unionValues")
+    return t.inner.Property("unionValues")
 }
+
 
 func (t *TypeBuilder) EdgeCaseMaps() (*EdgeCaseMapsClassView, error) {
 	bld, err := t.inner.Class("EdgeCaseMaps")
@@ -148,11 +161,11 @@ func (t *EdgeCaseMapsClassView) Type() (baml.Type, error) {
 }
 
 type MixedKeyMapsClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *MixedKeyMapsClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -163,21 +176,25 @@ func (t *MixedKeyMapsClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *MixedKeyMapsClassView) PropertyStringIntMap() (ClassPropertyView, error) {
-	return t.inner.Property("stringIntMap")
+    return t.inner.Property("stringIntMap")
 }
 
 func (t *MixedKeyMapsClassView) PropertyIntStringMap() (ClassPropertyView, error) {
-	return t.inner.Property("intStringMap")
+    return t.inner.Property("intStringMap")
 }
 
 func (t *MixedKeyMapsClassView) PropertyEnumMap() (ClassPropertyView, error) {
-	return t.inner.Property("enumMap")
+    return t.inner.Property("enumMap")
 }
 
 func (t *MixedKeyMapsClassView) PropertyLiteralMap() (ClassPropertyView, error) {
-	return t.inner.Property("literalMap")
+    return t.inner.Property("literalMap")
 }
+
 
 func (t *TypeBuilder) MixedKeyMaps() (*MixedKeyMapsClassView, error) {
 	bld, err := t.inner.Class("MixedKeyMaps")
@@ -192,11 +209,11 @@ func (t *MixedKeyMapsClassView) Type() (baml.Type, error) {
 }
 
 type NestedMapsClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *NestedMapsClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -207,25 +224,29 @@ func (t *NestedMapsClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *NestedMapsClassView) PropertySimple() (ClassPropertyView, error) {
-	return t.inner.Property("simple")
+    return t.inner.Property("simple")
 }
 
 func (t *NestedMapsClassView) PropertyOneLevelNested() (ClassPropertyView, error) {
-	return t.inner.Property("oneLevelNested")
+    return t.inner.Property("oneLevelNested")
 }
 
 func (t *NestedMapsClassView) PropertyTwoLevelNested() (ClassPropertyView, error) {
-	return t.inner.Property("twoLevelNested")
+    return t.inner.Property("twoLevelNested")
 }
 
 func (t *NestedMapsClassView) PropertyMapOfArrays() (ClassPropertyView, error) {
-	return t.inner.Property("mapOfArrays")
+    return t.inner.Property("mapOfArrays")
 }
 
 func (t *NestedMapsClassView) PropertyMapOfMaps() (ClassPropertyView, error) {
-	return t.inner.Property("mapOfMaps")
+    return t.inner.Property("mapOfMaps")
 }
+
 
 func (t *TypeBuilder) NestedMaps() (*NestedMapsClassView, error) {
 	bld, err := t.inner.Class("NestedMaps")
@@ -240,11 +261,11 @@ func (t *NestedMapsClassView) Type() (baml.Type, error) {
 }
 
 type ProductClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ProductClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -255,21 +276,25 @@ func (t *ProductClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *ProductClassView) PropertyId() (ClassPropertyView, error) {
-	return t.inner.Property("id")
+    return t.inner.Property("id")
 }
 
 func (t *ProductClassView) PropertyName() (ClassPropertyView, error) {
-	return t.inner.Property("name")
+    return t.inner.Property("name")
 }
 
 func (t *ProductClassView) PropertyPrice() (ClassPropertyView, error) {
-	return t.inner.Property("price")
+    return t.inner.Property("price")
 }
 
 func (t *ProductClassView) PropertyTags() (ClassPropertyView, error) {
-	return t.inner.Property("tags")
+    return t.inner.Property("tags")
 }
+
 
 func (t *TypeBuilder) Product() (*ProductClassView, error) {
 	bld, err := t.inner.Class("Product")
@@ -284,11 +309,11 @@ func (t *ProductClassView) Type() (baml.Type, error) {
 }
 
 type SimpleMapsClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *SimpleMapsClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -299,25 +324,29 @@ func (t *SimpleMapsClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *SimpleMapsClassView) PropertyStringToString() (ClassPropertyView, error) {
-	return t.inner.Property("stringToString")
+    return t.inner.Property("stringToString")
 }
 
 func (t *SimpleMapsClassView) PropertyStringToInt() (ClassPropertyView, error) {
-	return t.inner.Property("stringToInt")
+    return t.inner.Property("stringToInt")
 }
 
 func (t *SimpleMapsClassView) PropertyStringToFloat() (ClassPropertyView, error) {
-	return t.inner.Property("stringToFloat")
+    return t.inner.Property("stringToFloat")
 }
 
 func (t *SimpleMapsClassView) PropertyStringToBool() (ClassPropertyView, error) {
-	return t.inner.Property("stringToBool")
+    return t.inner.Property("stringToBool")
 }
 
 func (t *SimpleMapsClassView) PropertyIntToString() (ClassPropertyView, error) {
-	return t.inner.Property("intToString")
+    return t.inner.Property("intToString")
 }
+
 
 func (t *TypeBuilder) SimpleMaps() (*SimpleMapsClassView, error) {
 	bld, err := t.inner.Class("SimpleMaps")
@@ -332,11 +361,11 @@ func (t *SimpleMapsClassView) Type() (baml.Type, error) {
 }
 
 type UserClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -347,21 +376,25 @@ func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *UserClassView) PropertyId() (ClassPropertyView, error) {
-	return t.inner.Property("id")
+    return t.inner.Property("id")
 }
 
 func (t *UserClassView) PropertyName() (ClassPropertyView, error) {
-	return t.inner.Property("name")
+    return t.inner.Property("name")
 }
 
 func (t *UserClassView) PropertyEmail() (ClassPropertyView, error) {
-	return t.inner.Property("email")
+    return t.inner.Property("email")
 }
 
 func (t *UserClassView) PropertyActive() (ClassPropertyView, error) {
-	return t.inner.Property("active")
+    return t.inner.Property("active")
 }
+
 
 func (t *TypeBuilder) User() (*UserClassView, error) {
 	bld, err := t.inner.Class("User")

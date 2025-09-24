@@ -14,20 +14,24 @@
 package stream_types
 
 import (
-	"fmt"
+    "encoding/json"
+    "fmt"
 
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 
-	"unions/baml_client/types"
+    "unions/baml_client/types"
 )
 
+
 type ExistingSystemComponent struct {
-	Id          *int64                           `json:"id"`
-	Name        *string                          `json:"name"`
-	Type        *string                          `json:"type"`
-	Category    *types.Union2KresourceOrKservice `json:"category"`
-	Explanation *string                          `json:"explanation"`
+    
+Id *int64 `json:"id"`
+Name *string `json:"name"`
+Type *string `json:"type"`
+Category *types.Union2KresourceOrKservice `json:"category"`
+Explanation *string `json:"explanation"`
+    
 }
 
 func (c *ExistingSystemComponent) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -39,64 +43,68 @@ func (c *ExistingSystemComponent) Decode(holder *cffi.CFFIValueClass, typeMap ba
 		panic(fmt.Sprintf("expected ExistingSystemComponent, got %s", typeName.Name))
 	}
 
+   
+
+	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-		switch key {
-
-		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(*int64)
-
-		case "name":
-			c.Name = baml.Decode(valueHolder).Interface().(*string)
-
-		case "type":
-			c.Type = baml.Decode(valueHolder).Interface().(*string)
-
-		case "category":
-			c.Category = baml.Decode(valueHolder).Interface().(*types.Union2KresourceOrKservice)
-
-		case "explanation":
-			c.Explanation = baml.Decode(valueHolder).Interface().(*string)
-
+			switch key {
+				
+				case "id":
+					c.Id = baml.Decode(valueHolder).Interface().(*int64)
+				
+				case "name":
+					c.Name = baml.Decode(valueHolder).Interface().(*string)
+				
+				case "type":
+					c.Type = baml.Decode(valueHolder).Interface().(*string)
+				
+				case "category":
+					c.Category = baml.Decode(valueHolder).Interface().(*types.Union2KresourceOrKservice)
+				
+				case "explanation":
+					c.Explanation = baml.Decode(valueHolder).Interface().(*string)
+				
 		default:
-
+			
 			panic(fmt.Sprintf("unexpected field: %s in class ExistingSystemComponent", key))
-
+			
 		}
 	}
 
 }
 
 func (c ExistingSystemComponent) Encode() (*cffi.CFFIValueHolder, error) {
-	fields := map[string]any{}
-
-	fields["id"] = c.Id
-
-	fields["name"] = c.Name
-
-	fields["type"] = c.Type
-
-	fields["category"] = c.Category
-
-	fields["explanation"] = c.Explanation
-
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+    fields := map[string]any{}
+    
+    fields["id"] = c.Id
+    
+    fields["name"] = c.Name
+    
+    fields["type"] = c.Type
+    
+    fields["category"] = c.Category
+    
+    fields["explanation"] = c.Explanation
+    
+    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c ExistingSystemComponent) BamlTypeName() string {
-	return "ExistingSystemComponent"
+    return "ExistingSystemComponent"
 }
 
 func (u ExistingSystemComponent) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "ExistingSystemComponent",
-	}
+    return &cffi.CFFITypeName{
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+        Name:      "ExistingSystemComponent",
+    }
 }
-
 type UseMyUnion struct {
-	U *Union3IntOrRecursive1OrString `json:"u"`
+    
+U *Union3IntOrRecursive1OrString `json:"u"`
+    
 }
 
 func (c *UseMyUnion) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -108,38 +116,41 @@ func (c *UseMyUnion) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		panic(fmt.Sprintf("expected UseMyUnion, got %s", typeName.Name))
 	}
 
+   
+
+	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-		switch key {
-
-		case "u":
-			c.U = baml.Decode(valueHolder).Interface().(*Union3IntOrRecursive1OrString)
-
+			switch key {
+				
+				case "u":
+					c.U = baml.Decode(valueHolder).Interface().(*Union3IntOrRecursive1OrString)
+				
 		default:
-
+			
 			panic(fmt.Sprintf("unexpected field: %s in class UseMyUnion", key))
-
+			
 		}
 	}
 
 }
 
 func (c UseMyUnion) Encode() (*cffi.CFFIValueHolder, error) {
-	fields := map[string]any{}
-
-	fields["u"] = c.U
-
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+    fields := map[string]any{}
+    
+    fields["u"] = c.U
+    
+    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c UseMyUnion) BamlTypeName() string {
-	return "UseMyUnion"
+    return "UseMyUnion"
 }
 
 func (u UseMyUnion) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "UseMyUnion",
-	}
+    return &cffi.CFFITypeName{
+        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+        Name:      "UseMyUnion",
+    }
 }

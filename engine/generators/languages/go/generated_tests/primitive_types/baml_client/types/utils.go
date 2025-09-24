@@ -14,7 +14,7 @@
 package types
 
 import (
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
 type Checked[T any] = baml.Checked[T]

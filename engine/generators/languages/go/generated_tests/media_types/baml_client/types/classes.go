@@ -14,15 +14,19 @@
 package types
 
 import (
-	"fmt"
+    "encoding/json"
+    "fmt"
 
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
+
 type MediaAnalysisResult struct {
-	Topics       []string `json:"topics"`
-	AnalysisText string   `json:"analysisText"`
+    
+Topics []string `json:"topics"`
+AnalysisText string `json:"analysisText"`
+    
 }
 
 func (c *MediaAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -34,50 +38,55 @@ func (c *MediaAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap baml.T
 		panic(fmt.Sprintf("expected MediaAnalysisResult, got %s", typeName.Name))
 	}
 
+   
+
+	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-		switch key {
-
-		case "topics":
-			c.Topics = baml.Decode(valueHolder).Interface().([]string)
-
-		case "analysisText":
-			c.AnalysisText = baml.Decode(valueHolder).Interface().(string)
-
+			switch key {
+				
+				case "topics":
+					c.Topics = baml.Decode(valueHolder).Interface().([]string)
+				
+				case "analysisText":
+					c.AnalysisText = baml.Decode(valueHolder).Interface().(string)
+				
 		default:
-
+			
 			panic(fmt.Sprintf("unexpected field: %s in class MediaAnalysisResult", key))
-
+			
 		}
 	}
 
 }
 
 func (c MediaAnalysisResult) Encode() (*cffi.CFFIValueHolder, error) {
-	fields := map[string]any{}
-
-	fields["topics"] = c.Topics
-
-	fields["analysisText"] = c.AnalysisText
-
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+    fields := map[string]any{}
+    
+    fields["topics"] = c.Topics
+    
+    fields["analysisText"] = c.AnalysisText
+    
+    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c MediaAnalysisResult) BamlTypeName() string {
-	return "MediaAnalysisResult"
+    return "MediaAnalysisResult"
 }
 
 func (u MediaAnalysisResult) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "MediaAnalysisResult",
-	}
+    return &cffi.CFFITypeName{
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+        Name:      "MediaAnalysisResult",
+    }
 }
 
 type MediaArrayAnalysisResult struct {
-	AnalysisText string `json:"analysisText"`
-	MediaCount   int64  `json:"mediaCount"`
+    
+AnalysisText string `json:"analysisText"`
+MediaCount int64 `json:"mediaCount"`
+    
 }
 
 func (c *MediaArrayAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -89,51 +98,56 @@ func (c *MediaArrayAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap b
 		panic(fmt.Sprintf("expected MediaArrayAnalysisResult, got %s", typeName.Name))
 	}
 
+   
+
+	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-		switch key {
-
-		case "analysisText":
-			c.AnalysisText = baml.Decode(valueHolder).Interface().(string)
-
-		case "mediaCount":
-			c.MediaCount = baml.Decode(valueHolder).Interface().(int64)
-
+			switch key {
+				
+				case "analysisText":
+					c.AnalysisText = baml.Decode(valueHolder).Interface().(string)
+				
+				case "mediaCount":
+					c.MediaCount = baml.Decode(valueHolder).Interface().(int64)
+				
 		default:
-
+			
 			panic(fmt.Sprintf("unexpected field: %s in class MediaArrayAnalysisResult", key))
-
+			
 		}
 	}
 
 }
 
 func (c MediaArrayAnalysisResult) Encode() (*cffi.CFFIValueHolder, error) {
-	fields := map[string]any{}
-
-	fields["analysisText"] = c.AnalysisText
-
-	fields["mediaCount"] = c.MediaCount
-
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+    fields := map[string]any{}
+    
+    fields["analysisText"] = c.AnalysisText
+    
+    fields["mediaCount"] = c.MediaCount
+    
+    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c MediaArrayAnalysisResult) BamlTypeName() string {
-	return "MediaArrayAnalysisResult"
+    return "MediaArrayAnalysisResult"
 }
 
 func (u MediaArrayAnalysisResult) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "MediaArrayAnalysisResult",
-	}
+    return &cffi.CFFITypeName{
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+        Name:      "MediaArrayAnalysisResult",
+    }
 }
 
 type MediaMapAnalysisResult struct {
-	AnalysisText string   `json:"analysisText"`
-	KeyCount     int64    `json:"keyCount"`
-	Keys         []string `json:"keys"`
+    
+AnalysisText string `json:"analysisText"`
+KeyCount int64 `json:"keyCount"`
+Keys []string `json:"keys"`
+    
 }
 
 func (c *MediaMapAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -145,61 +159,66 @@ func (c *MediaMapAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap bam
 		panic(fmt.Sprintf("expected MediaMapAnalysisResult, got %s", typeName.Name))
 	}
 
+   
+
+	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-		switch key {
-
-		case "analysisText":
-			c.AnalysisText = baml.Decode(valueHolder).Interface().(string)
-
-		case "keyCount":
-			c.KeyCount = baml.Decode(valueHolder).Interface().(int64)
-
-		case "keys":
-			c.Keys = baml.Decode(valueHolder).Interface().([]string)
-
+			switch key {
+				
+				case "analysisText":
+					c.AnalysisText = baml.Decode(valueHolder).Interface().(string)
+				
+				case "keyCount":
+					c.KeyCount = baml.Decode(valueHolder).Interface().(int64)
+				
+				case "keys":
+					c.Keys = baml.Decode(valueHolder).Interface().([]string)
+				
 		default:
-
+			
 			panic(fmt.Sprintf("unexpected field: %s in class MediaMapAnalysisResult", key))
-
+			
 		}
 	}
 
 }
 
 func (c MediaMapAnalysisResult) Encode() (*cffi.CFFIValueHolder, error) {
-	fields := map[string]any{}
-
-	fields["analysisText"] = c.AnalysisText
-
-	fields["keyCount"] = c.KeyCount
-
-	fields["keys"] = c.Keys
-
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+    fields := map[string]any{}
+    
+    fields["analysisText"] = c.AnalysisText
+    
+    fields["keyCount"] = c.KeyCount
+    
+    fields["keys"] = c.Keys
+    
+    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c MediaMapAnalysisResult) BamlTypeName() string {
-	return "MediaMapAnalysisResult"
+    return "MediaMapAnalysisResult"
 }
 
 func (u MediaMapAnalysisResult) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "MediaMapAnalysisResult",
-	}
+    return &cffi.CFFITypeName{
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+        Name:      "MediaMapAnalysisResult",
+    }
 }
 
 type MixedMediaAnalysisResult struct {
-	Title                string   `json:"title"`
-	Description          string   `json:"description"`
-	HasImage             bool     `json:"hasImage"`
-	HasVideo             bool     `json:"hasVideo"`
-	HasAudio             bool     `json:"hasAudio"`
-	HasPdf               bool     `json:"hasPdf"`
-	AdditionalImageCount int64    `json:"additionalImageCount"`
-	MetadataKeys         []string `json:"metadataKeys"`
+    
+Title string `json:"title"`
+Description string `json:"description"`
+HasImage bool `json:"hasImage"`
+HasVideo bool `json:"hasVideo"`
+HasAudio bool `json:"hasAudio"`
+HasPdf bool `json:"hasPdf"`
+AdditionalImageCount int64 `json:"additionalImageCount"`
+MetadataKeys []string `json:"metadataKeys"`
+    
 }
 
 func (c *MixedMediaAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -211,81 +230,86 @@ func (c *MixedMediaAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap b
 		panic(fmt.Sprintf("expected MixedMediaAnalysisResult, got %s", typeName.Name))
 	}
 
+   
+
+	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-		switch key {
-
-		case "title":
-			c.Title = baml.Decode(valueHolder).Interface().(string)
-
-		case "description":
-			c.Description = baml.Decode(valueHolder).Interface().(string)
-
-		case "hasImage":
-			c.HasImage = baml.Decode(valueHolder).Interface().(bool)
-
-		case "hasVideo":
-			c.HasVideo = baml.Decode(valueHolder).Interface().(bool)
-
-		case "hasAudio":
-			c.HasAudio = baml.Decode(valueHolder).Interface().(bool)
-
-		case "hasPdf":
-			c.HasPdf = baml.Decode(valueHolder).Interface().(bool)
-
-		case "additionalImageCount":
-			c.AdditionalImageCount = baml.Decode(valueHolder).Interface().(int64)
-
-		case "metadataKeys":
-			c.MetadataKeys = baml.Decode(valueHolder).Interface().([]string)
-
+			switch key {
+				
+				case "title":
+					c.Title = baml.Decode(valueHolder).Interface().(string)
+				
+				case "description":
+					c.Description = baml.Decode(valueHolder).Interface().(string)
+				
+				case "hasImage":
+					c.HasImage = baml.Decode(valueHolder).Interface().(bool)
+				
+				case "hasVideo":
+					c.HasVideo = baml.Decode(valueHolder).Interface().(bool)
+				
+				case "hasAudio":
+					c.HasAudio = baml.Decode(valueHolder).Interface().(bool)
+				
+				case "hasPdf":
+					c.HasPdf = baml.Decode(valueHolder).Interface().(bool)
+				
+				case "additionalImageCount":
+					c.AdditionalImageCount = baml.Decode(valueHolder).Interface().(int64)
+				
+				case "metadataKeys":
+					c.MetadataKeys = baml.Decode(valueHolder).Interface().([]string)
+				
 		default:
-
+			
 			panic(fmt.Sprintf("unexpected field: %s in class MixedMediaAnalysisResult", key))
-
+			
 		}
 	}
 
 }
 
 func (c MixedMediaAnalysisResult) Encode() (*cffi.CFFIValueHolder, error) {
-	fields := map[string]any{}
-
-	fields["title"] = c.Title
-
-	fields["description"] = c.Description
-
-	fields["hasImage"] = c.HasImage
-
-	fields["hasVideo"] = c.HasVideo
-
-	fields["hasAudio"] = c.HasAudio
-
-	fields["hasPdf"] = c.HasPdf
-
-	fields["additionalImageCount"] = c.AdditionalImageCount
-
-	fields["metadataKeys"] = c.MetadataKeys
-
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+    fields := map[string]any{}
+    
+    fields["title"] = c.Title
+    
+    fields["description"] = c.Description
+    
+    fields["hasImage"] = c.HasImage
+    
+    fields["hasVideo"] = c.HasVideo
+    
+    fields["hasAudio"] = c.HasAudio
+    
+    fields["hasPdf"] = c.HasPdf
+    
+    fields["additionalImageCount"] = c.AdditionalImageCount
+    
+    fields["metadataKeys"] = c.MetadataKeys
+    
+    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c MixedMediaAnalysisResult) BamlTypeName() string {
-	return "MixedMediaAnalysisResult"
+    return "MixedMediaAnalysisResult"
 }
 
 func (u MixedMediaAnalysisResult) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "MixedMediaAnalysisResult",
-	}
+    return &cffi.CFFITypeName{
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+        Name:      "MixedMediaAnalysisResult",
+    }
 }
 
 type OptionalMediaAnalysisResult struct {
-	AnalysisText       string   `json:"analysisText"`
-	ProvidedMediaTypes []string `json:"providedMediaTypes"`
-	MissingMediaTypes  []string `json:"missingMediaTypes"`
+    
+AnalysisText string `json:"analysisText"`
+ProvidedMediaTypes []string `json:"providedMediaTypes"`
+MissingMediaTypes []string `json:"missingMediaTypes"`
+    
 }
 
 func (c *OptionalMediaAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -297,48 +321,52 @@ func (c *OptionalMediaAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMa
 		panic(fmt.Sprintf("expected OptionalMediaAnalysisResult, got %s", typeName.Name))
 	}
 
+   
+
+	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-		switch key {
-
-		case "analysisText":
-			c.AnalysisText = baml.Decode(valueHolder).Interface().(string)
-
-		case "providedMediaTypes":
-			c.ProvidedMediaTypes = baml.Decode(valueHolder).Interface().([]string)
-
-		case "missingMediaTypes":
-			c.MissingMediaTypes = baml.Decode(valueHolder).Interface().([]string)
-
+			switch key {
+				
+				case "analysisText":
+					c.AnalysisText = baml.Decode(valueHolder).Interface().(string)
+				
+				case "providedMediaTypes":
+					c.ProvidedMediaTypes = baml.Decode(valueHolder).Interface().([]string)
+				
+				case "missingMediaTypes":
+					c.MissingMediaTypes = baml.Decode(valueHolder).Interface().([]string)
+				
 		default:
-
+			
 			panic(fmt.Sprintf("unexpected field: %s in class OptionalMediaAnalysisResult", key))
-
+			
 		}
 	}
 
 }
 
 func (c OptionalMediaAnalysisResult) Encode() (*cffi.CFFIValueHolder, error) {
-	fields := map[string]any{}
-
-	fields["analysisText"] = c.AnalysisText
-
-	fields["providedMediaTypes"] = c.ProvidedMediaTypes
-
-	fields["missingMediaTypes"] = c.MissingMediaTypes
-
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+    fields := map[string]any{}
+    
+    fields["analysisText"] = c.AnalysisText
+    
+    fields["providedMediaTypes"] = c.ProvidedMediaTypes
+    
+    fields["missingMediaTypes"] = c.MissingMediaTypes
+    
+    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c OptionalMediaAnalysisResult) BamlTypeName() string {
-	return "OptionalMediaAnalysisResult"
+    return "OptionalMediaAnalysisResult"
 }
 
 func (u OptionalMediaAnalysisResult) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "OptionalMediaAnalysisResult",
-	}
+    return &cffi.CFFITypeName{
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+        Name:      "OptionalMediaAnalysisResult",
+    }
 }
+

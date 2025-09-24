@@ -14,134 +14,135 @@
 package baml_client
 
 import (
-	"context"
-	"fmt"
+    "context"
 
-	"enums/baml_client/types"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "enums/baml_client/types"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
+
+
 
 func ConsumeTestEnum(ctx context.Context, input types.TestEnum, opts ...CallOptionFunc) (types.TestEnum, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "ConsumeTestEnum", encoded, callOpts.onTick)
-		if err != nil {
-			return types.TestEnum(""), err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "ConsumeTestEnum", encoded, callOpts.onTick)
+        if err != nil {
+            return types.TestEnum(""), err
+        }
 
-		if result.Error != nil {
-			return types.TestEnum(""), result.Error
-		}
+        if result.Error != nil {
+            return types.TestEnum(""), result.Error
+        }
 
-		casted := (result.Data).(types.TestEnum)
+        casted := (result.Data).(types.TestEnum)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "ConsumeTestEnum", encoded, callOpts.onTick)
-		if err != nil {
-			return types.TestEnum(""), err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "ConsumeTestEnum", encoded, callOpts.onTick)
+        if err != nil {
+            return types.TestEnum(""), err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.TestEnum(""), result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.TestEnum(""), result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.TestEnum), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.TestEnum), nil
+            }
+        }
 
-		return types.TestEnum(""), fmt.Errorf("No data returned from stream")
-	}
+        return types.TestEnum(""), fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func FnTestAliasedEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (types.TestEnum, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "FnTestAliasedEnumOutput", encoded, callOpts.onTick)
-		if err != nil {
-			return types.TestEnum(""), err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "FnTestAliasedEnumOutput", encoded, callOpts.onTick)
+        if err != nil {
+            return types.TestEnum(""), err
+        }
 
-		if result.Error != nil {
-			return types.TestEnum(""), result.Error
-		}
+        if result.Error != nil {
+            return types.TestEnum(""), result.Error
+        }
 
-		casted := (result.Data).(types.TestEnum)
+        casted := (result.Data).(types.TestEnum)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnTestAliasedEnumOutput", encoded, callOpts.onTick)
-		if err != nil {
-			return types.TestEnum(""), err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "FnTestAliasedEnumOutput", encoded, callOpts.onTick)
+        if err != nil {
+            return types.TestEnum(""), err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.TestEnum(""), result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.TestEnum(""), result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.TestEnum), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.TestEnum), nil
+            }
+        }
 
-		return types.TestEnum(""), fmt.Errorf("No data returned from stream")
-	}
+        return types.TestEnum(""), fmt.Errorf("No data returned from stream")
+    }
 }

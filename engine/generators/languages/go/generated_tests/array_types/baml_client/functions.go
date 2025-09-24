@@ -14,1064 +14,1080 @@
 package baml_client
 
 import (
-	"context"
-	"fmt"
+    "context"
 
-	"array_types/baml_client/types"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "array_types/baml_client/types"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
+
+
 
 func TestEmptyArrays(ctx context.Context, input string, opts ...CallOptionFunc) (types.SimpleArrays, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestEmptyArrays", encoded, callOpts.onTick)
-		if err != nil {
-			return types.SimpleArrays{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestEmptyArrays", encoded, callOpts.onTick)
+        if err != nil {
+            return types.SimpleArrays{}, err
+        }
 
-		if result.Error != nil {
-			return types.SimpleArrays{}, result.Error
-		}
+        if result.Error != nil {
+            return types.SimpleArrays{}, result.Error
+        }
 
-		casted := (result.Data).(types.SimpleArrays)
+        casted := (result.Data).(types.SimpleArrays)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestEmptyArrays", encoded, callOpts.onTick)
-		if err != nil {
-			return types.SimpleArrays{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestEmptyArrays", encoded, callOpts.onTick)
+        if err != nil {
+            return types.SimpleArrays{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.SimpleArrays{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.SimpleArrays{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.SimpleArrays), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.SimpleArrays), nil
+            }
+        }
 
-		return types.SimpleArrays{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.SimpleArrays{}, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestLargeArrays(ctx context.Context, input string, opts ...CallOptionFunc) (types.SimpleArrays, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestLargeArrays", encoded, callOpts.onTick)
-		if err != nil {
-			return types.SimpleArrays{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestLargeArrays", encoded, callOpts.onTick)
+        if err != nil {
+            return types.SimpleArrays{}, err
+        }
 
-		if result.Error != nil {
-			return types.SimpleArrays{}, result.Error
-		}
+        if result.Error != nil {
+            return types.SimpleArrays{}, result.Error
+        }
 
-		casted := (result.Data).(types.SimpleArrays)
+        casted := (result.Data).(types.SimpleArrays)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestLargeArrays", encoded, callOpts.onTick)
-		if err != nil {
-			return types.SimpleArrays{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestLargeArrays", encoded, callOpts.onTick)
+        if err != nil {
+            return types.SimpleArrays{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.SimpleArrays{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.SimpleArrays{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.SimpleArrays), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.SimpleArrays), nil
+            }
+        }
 
-		return types.SimpleArrays{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.SimpleArrays{}, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestMixedArrays(ctx context.Context, input string, opts ...CallOptionFunc) (types.MixedArrays, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestMixedArrays", encoded, callOpts.onTick)
-		if err != nil {
-			return types.MixedArrays{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestMixedArrays", encoded, callOpts.onTick)
+        if err != nil {
+            return types.MixedArrays{}, err
+        }
 
-		if result.Error != nil {
-			return types.MixedArrays{}, result.Error
-		}
+        if result.Error != nil {
+            return types.MixedArrays{}, result.Error
+        }
 
-		casted := (result.Data).(types.MixedArrays)
+        casted := (result.Data).(types.MixedArrays)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMixedArrays", encoded, callOpts.onTick)
-		if err != nil {
-			return types.MixedArrays{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMixedArrays", encoded, callOpts.onTick)
+        if err != nil {
+            return types.MixedArrays{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.MixedArrays{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.MixedArrays{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.MixedArrays), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.MixedArrays), nil
+            }
+        }
 
-		return types.MixedArrays{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.MixedArrays{}, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestNestedArrays(ctx context.Context, input string, opts ...CallOptionFunc) (types.NestedArrays, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestNestedArrays", encoded, callOpts.onTick)
-		if err != nil {
-			return types.NestedArrays{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestNestedArrays", encoded, callOpts.onTick)
+        if err != nil {
+            return types.NestedArrays{}, err
+        }
 
-		if result.Error != nil {
-			return types.NestedArrays{}, result.Error
-		}
+        if result.Error != nil {
+            return types.NestedArrays{}, result.Error
+        }
 
-		casted := (result.Data).(types.NestedArrays)
+        casted := (result.Data).(types.NestedArrays)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestNestedArrays", encoded, callOpts.onTick)
-		if err != nil {
-			return types.NestedArrays{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestNestedArrays", encoded, callOpts.onTick)
+        if err != nil {
+            return types.NestedArrays{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.NestedArrays{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.NestedArrays{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.NestedArrays), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.NestedArrays), nil
+            }
+        }
 
-		return types.NestedArrays{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.NestedArrays{}, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestObjectArrays(ctx context.Context, input string, opts ...CallOptionFunc) (types.ObjectArrays, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestObjectArrays", encoded, callOpts.onTick)
-		if err != nil {
-			return types.ObjectArrays{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestObjectArrays", encoded, callOpts.onTick)
+        if err != nil {
+            return types.ObjectArrays{}, err
+        }
 
-		if result.Error != nil {
-			return types.ObjectArrays{}, result.Error
-		}
+        if result.Error != nil {
+            return types.ObjectArrays{}, result.Error
+        }
 
-		casted := (result.Data).(types.ObjectArrays)
+        casted := (result.Data).(types.ObjectArrays)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestObjectArrays", encoded, callOpts.onTick)
-		if err != nil {
-			return types.ObjectArrays{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestObjectArrays", encoded, callOpts.onTick)
+        if err != nil {
+            return types.ObjectArrays{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.ObjectArrays{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.ObjectArrays{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.ObjectArrays), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.ObjectArrays), nil
+            }
+        }
 
-		return types.ObjectArrays{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.ObjectArrays{}, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestSimpleArrays(ctx context.Context, input string, opts ...CallOptionFunc) (types.SimpleArrays, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestSimpleArrays", encoded, callOpts.onTick)
-		if err != nil {
-			return types.SimpleArrays{}, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestSimpleArrays", encoded, callOpts.onTick)
+        if err != nil {
+            return types.SimpleArrays{}, err
+        }
 
-		if result.Error != nil {
-			return types.SimpleArrays{}, result.Error
-		}
+        if result.Error != nil {
+            return types.SimpleArrays{}, result.Error
+        }
 
-		casted := (result.Data).(types.SimpleArrays)
+        casted := (result.Data).(types.SimpleArrays)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestSimpleArrays", encoded, callOpts.onTick)
-		if err != nil {
-			return types.SimpleArrays{}, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestSimpleArrays", encoded, callOpts.onTick)
+        if err != nil {
+            return types.SimpleArrays{}, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return types.SimpleArrays{}, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return types.SimpleArrays{}, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.(types.SimpleArrays), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.(types.SimpleArrays), nil
+            }
+        }
 
-		return types.SimpleArrays{}, fmt.Errorf("No data returned from stream")
-	}
+        return types.SimpleArrays{}, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestTopLevel3DArray(ctx context.Context, input string, opts ...CallOptionFunc) ([][][]string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestTopLevel3DArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestTopLevel3DArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		if result.Error != nil {
-			return nil, result.Error
-		}
+        if result.Error != nil {
+            return nil, result.Error
+        }
 
-		casted := (result.Data).([][][]string)
+        casted := (result.Data).([][][]string)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevel3DArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevel3DArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return nil, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return nil, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.([][][]string), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.([][][]string), nil
+            }
+        }
 
-		return nil, fmt.Errorf("No data returned from stream")
-	}
+        return nil, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestTopLevelArrayOfMaps(ctx context.Context, input string, opts ...CallOptionFunc) ([]map[string]int64, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelArrayOfMaps", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelArrayOfMaps", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		if result.Error != nil {
-			return nil, result.Error
-		}
+        if result.Error != nil {
+            return nil, result.Error
+        }
 
-		casted := (result.Data).([]map[string]int64)
+        casted := (result.Data).([]map[string]int64)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelArrayOfMaps", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelArrayOfMaps", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return nil, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return nil, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.([]map[string]int64), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.([]map[string]int64), nil
+            }
+        }
 
-		return nil, fmt.Errorf("No data returned from stream")
-	}
+        return nil, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestTopLevelBoolArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]bool, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelBoolArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelBoolArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		if result.Error != nil {
-			return nil, result.Error
-		}
+        if result.Error != nil {
+            return nil, result.Error
+        }
 
-		casted := (result.Data).([]bool)
+        casted := (result.Data).([]bool)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelBoolArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelBoolArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return nil, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return nil, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.([]bool), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.([]bool), nil
+            }
+        }
 
-		return nil, fmt.Errorf("No data returned from stream")
-	}
+        return nil, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestTopLevelEmptyArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelEmptyArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelEmptyArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		if result.Error != nil {
-			return nil, result.Error
-		}
+        if result.Error != nil {
+            return nil, result.Error
+        }
 
-		casted := (result.Data).([]string)
+        casted := (result.Data).([]string)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelEmptyArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelEmptyArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return nil, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return nil, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.([]string), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.([]string), nil
+            }
+        }
 
-		return nil, fmt.Errorf("No data returned from stream")
-	}
+        return nil, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestTopLevelFloatArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]float64, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelFloatArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelFloatArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		if result.Error != nil {
-			return nil, result.Error
-		}
+        if result.Error != nil {
+            return nil, result.Error
+        }
 
-		casted := (result.Data).([]float64)
+        casted := (result.Data).([]float64)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelFloatArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelFloatArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return nil, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return nil, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.([]float64), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.([]float64), nil
+            }
+        }
 
-		return nil, fmt.Errorf("No data returned from stream")
-	}
+        return nil, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestTopLevelIntArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]int64, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelIntArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelIntArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		if result.Error != nil {
-			return nil, result.Error
-		}
+        if result.Error != nil {
+            return nil, result.Error
+        }
 
-		casted := (result.Data).([]int64)
+        casted := (result.Data).([]int64)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelIntArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelIntArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return nil, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return nil, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.([]int64), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.([]int64), nil
+            }
+        }
 
-		return nil, fmt.Errorf("No data returned from stream")
-	}
+        return nil, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestTopLevelMixedArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]types.Union3BoolOrIntOrString, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelMixedArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelMixedArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		if result.Error != nil {
-			return nil, result.Error
-		}
+        if result.Error != nil {
+            return nil, result.Error
+        }
 
-		casted := (result.Data).([]types.Union3BoolOrIntOrString)
+        casted := (result.Data).([]types.Union3BoolOrIntOrString)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelMixedArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelMixedArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return nil, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return nil, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.([]types.Union3BoolOrIntOrString), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.([]types.Union3BoolOrIntOrString), nil
+            }
+        }
 
-		return nil, fmt.Errorf("No data returned from stream")
-	}
+        return nil, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestTopLevelNestedArray(ctx context.Context, input string, opts ...CallOptionFunc) ([][]int64, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelNestedArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelNestedArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		if result.Error != nil {
-			return nil, result.Error
-		}
+        if result.Error != nil {
+            return nil, result.Error
+        }
 
-		casted := (result.Data).([][]int64)
+        casted := (result.Data).([][]int64)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelNestedArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelNestedArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return nil, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return nil, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.([][]int64), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.([][]int64), nil
+            }
+        }
 
-		return nil, fmt.Errorf("No data returned from stream")
-	}
+        return nil, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestTopLevelNullableArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]*string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelNullableArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelNullableArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		if result.Error != nil {
-			return nil, result.Error
-		}
+        if result.Error != nil {
+            return nil, result.Error
+        }
 
-		casted := (result.Data).([]*string)
+        casted := (result.Data).([]*string)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelNullableArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelNullableArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return nil, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return nil, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.([]*string), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.([]*string), nil
+            }
+        }
 
-		return nil, fmt.Errorf("No data returned from stream")
-	}
+        return nil, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestTopLevelObjectArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]types.User, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelObjectArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelObjectArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		if result.Error != nil {
-			return nil, result.Error
-		}
+        if result.Error != nil {
+            return nil, result.Error
+        }
 
-		casted := (result.Data).([]types.User)
+        casted := (result.Data).([]types.User)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelObjectArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelObjectArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return nil, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return nil, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.([]types.User), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.([]types.User), nil
+            }
+        }
 
-		return nil, fmt.Errorf("No data returned from stream")
-	}
+        return nil, fmt.Errorf("No data returned from stream")
+    }
 }
+
 
 func TestTopLevelStringArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	if callOpts.typeBuilder != nil {
-		args.TypeBuilder = callOpts.typeBuilder
-	}
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
 
-	encoded, err := args.Encode()
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := args.Encode()
+    if err != nil {
+        panic(err)
+    }
 
-	if callOpts.onTick == nil {
-		result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelStringArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelStringArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		if result.Error != nil {
-			return nil, result.Error
-		}
+        if result.Error != nil {
+            return nil, result.Error
+        }
 
-		casted := (result.Data).([]string)
+        casted := (result.Data).([]string)
 
-		return casted, nil
-	} else {
-		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelStringArray", encoded, callOpts.onTick)
-		if err != nil {
-			return nil, err
-		}
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelStringArray", encoded, callOpts.onTick)
+        if err != nil {
+            return nil, err
+        }
 
-		for result := range channel {
-			if result.Error != nil {
-				return nil, result.Error
-			}
+        for result := range channel {
+            if result.Error != nil {
+                return nil, result.Error
+            }
 
-			if result.HasData {
-				return result.Data.([]string), nil
-			}
-		}
+            if result.HasData {
+                return result.Data.([]string), nil
+            }
+        }
 
-		return nil, fmt.Errorf("No data returned from stream")
-	}
+        return nil, fmt.Errorf("No data returned from stream")
+    }
 }

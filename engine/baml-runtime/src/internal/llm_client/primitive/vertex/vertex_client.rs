@@ -250,18 +250,48 @@ impl RequestBuilder for VertexClient {
             }
         );
 
+        // Build original URL with any configured query params appended (preserving alt=sse)
+        let original_with_query = if self.properties.query_params.is_empty() {
+            baml_original_url.clone()
+        } else {
+            let mut url = baml_original_url.clone();
+            let mut first = !url.contains('?');
+            for (k, v) in &self.properties.query_params {
+                if first {
+                    url.push('?');
+                    first = false;
+                } else {
+                    url.push('&');
+                }
+                // Note: values are appended as-is; expect callers to supply safe values
+                url.push_str(k);
+                url.push('=');
+                url.push_str(v);
+            }
+            url
+        };
+
         let mut req = match (&self.properties.proxy_url, allow_proxy) {
             (Some(proxy_url), true) => {
                 let req = self.client.post(proxy_url.clone());
-                req.header("baml-original-url", baml_original_url)
+                req.header("baml-original-url", original_with_query)
             }
-            _ => self.client.post(baml_original_url),
+            _ => {
+                let mut rb = self.client.post(baml_original_url);
+                if !self.properties.query_params.is_empty() {
+                    rb = rb.query(&self.properties.query_params);
+                }
+                rb
+            }
         };
 
-        // This is currently hardcoded, but we could make it a property if we wanted
+        // Use OAuth2 bearer auth unless an API key is provided via query params (query_params.key)
         // https://developers.google.com/identity/protocols/oauth2/scopes
         const DEFAULT_SCOPE: &str = "https://www.googleapis.com/auth/cloud-platform";
-        req = req.bearer_auth(vertex_auth.token(&[DEFAULT_SCOPE]).await?.as_str());
+        let has_api_key_query = self.properties.query_params.contains_key("key");
+        if !has_api_key_query {
+            req = req.bearer_auth(vertex_auth.token(&[DEFAULT_SCOPE]).await?.as_str());
+        }
 
         for (key, value) in &self.properties.headers {
             req = req.header(key, value);
