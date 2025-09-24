@@ -4,8 +4,6 @@ use baml_lsp_types::BamlNotification;
 use playground_server::{
     pick_ports, AppState, PlaygroundServer, PortConfiguration, WebviewCommand, WebviewRouterMessage,
 };
-use serde_json::json;
-use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 use walkdir::WalkDir;
 
