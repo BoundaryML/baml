@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use tokio::sync::broadcast;
 
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast;
 
 // Note: the name add_project should match exactly to the
 // EventListener.tsx command definitions due to how serde serializes these into json

@@ -21,8 +21,9 @@ impl IntoResponse for HttpError {
             Json(json!({
                 "error": error_message,
                 "type": "InternalError"
-            }))
-        ).into_response()
+            })),
+        )
+            .into_response()
     }
 }
 

@@ -1,7 +1,9 @@
+use anyhow::Context;
 use axum::{
     extract::{Path, State},
     Json,
 };
+use mime_guess;
 use serde_json::Value;
 
 use crate::{
@@ -9,8 +11,6 @@ use crate::{
     server::AppState,
     WebviewRouterMessage,
 };
-use anyhow::Context;
-use mime_guess;
 
 // Helper function to convert anyhow::Error to ApiError for internal operations
 fn anyhow_to_internal_error(err: anyhow::Error) -> ApiError {
