@@ -108,7 +108,6 @@ tracing-subscriber = { version = "0.3.18", features = [
   "valuable",
 ] }
 ctrlc = "3.4"
-ignore = "0.4.23"
 
 # openssl = { version = "0.10", optional = true }
 
