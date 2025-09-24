@@ -191,6 +191,7 @@ client<llm> VertexWithQueryParams {
   options {
     model gemini-2.5-flash
     location us-central1
+    project_id gloo-ai
     query_params {
       key env.VERTEX_API_KEY
     }

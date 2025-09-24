@@ -212,8 +212,9 @@ impl RequestBuilder for VertexClient {
         // VertexAuth can not be built in the WASM environment.
         _expose_secrets: bool,
     ) -> Result<reqwest::RequestBuilder> {
-        let vertex_auth =
-            super::auth::VertexAuth::get_or_create(&self.properties.auth_strategy).await?;
+        // Determine if API key auth is being used (query param 'key')
+        let has_api_key_query = self.properties.query_params.contains_key("key");
+        let mut vertex_auth: Option<std::sync::Arc<super::auth::VertexAuth>> = None;
 
         let base_url = match &self.properties.base_url_or_location {
             BaseUrlOrLocation::BaseUrl(base_url) => base_url.to_string(),
@@ -223,14 +224,35 @@ impl RequestBuilder for VertexClient {
                 } else {
                     format!("{location}-aiplatform.googleapis.com")
                 };
+                let project_id = match self.properties.project_id.as_ref() {
+                    Some(project_id) => project_id.to_string(),
+                    None => {
+                        if has_api_key_query {
+                            anyhow::bail!(
+                                "options.project_id is required when using API key auth with Vertex 'location' URLs;"
+                            );
+                        }
+                        // Fallback to GCP Application Default Credentials only when not using API key
+                        let va = match &vertex_auth {
+                            Some(va) => va,
+                            None => {
+                                vertex_auth = Some(
+                                    super::auth::VertexAuth::get_or_create(
+                                        &self.properties.auth_strategy,
+                                    )
+                                    .await?,
+                                );
+                                vertex_auth.as_ref().unwrap()
+                            }
+                        };
+                        va.project_id().await?.to_string()
+                    }
+                };
                 format!(
                     "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/google/models",
                     domain = domain,
                     location = location,
-                    project_id = match self.properties.project_id.as_ref() {
-                        Some(project_id) => project_id.to_string(),
-                        None => vertex_auth.project_id().await?.to_string(),
-                    }
+                    project_id = project_id,
                 )
             }
         };
@@ -288,9 +310,18 @@ impl RequestBuilder for VertexClient {
         // Use OAuth2 bearer auth unless an API key is provided via query params (query_params.key)
         // https://developers.google.com/identity/protocols/oauth2/scopes
         const DEFAULT_SCOPE: &str = "https://www.googleapis.com/auth/cloud-platform";
-        let has_api_key_query = self.properties.query_params.contains_key("key");
         if !has_api_key_query {
-            req = req.bearer_auth(vertex_auth.token(&[DEFAULT_SCOPE]).await?.as_str());
+            let va = match &vertex_auth {
+                Some(va) => va,
+                None => {
+                    vertex_auth = Some(
+                        super::auth::VertexAuth::get_or_create(&self.properties.auth_strategy)
+                            .await?,
+                    );
+                    vertex_auth.as_ref().unwrap()
+                }
+            };
+            req = req.bearer_auth(va.token(&[DEFAULT_SCOPE]).await?.as_str());
         }
 
         for (key, value) in &self.properties.headers {
