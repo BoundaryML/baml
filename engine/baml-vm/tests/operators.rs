@@ -1,9 +1,7 @@
 //! VM tests for operators (arithmetic, logical, bitwise, comparison, assignment).
 
-use baml_vm::{Value, VmExecState};
-
 mod common;
-use common::{assert_vm_executes, Program};
+use common::{assert_vm_executes, ExecState, Program, Value};
 
 // Arithmetic operators
 #[test]
@@ -15,7 +13,7 @@ fn basic_add() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(3)),
+        expected: ExecState::Complete(Value::Int(3)),
     })
 }
 
@@ -28,7 +26,7 @@ fn basic_sub() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(-1)),
+        expected: ExecState::Complete(Value::Int(-1)),
     })
 }
 
@@ -41,7 +39,7 @@ fn basic_mul() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(2)),
+        expected: ExecState::Complete(Value::Int(2)),
     })
 }
 
@@ -54,7 +52,7 @@ fn basic_div() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(5)),
+        expected: ExecState::Complete(Value::Int(5)),
     })
 }
 
@@ -67,7 +65,7 @@ fn basic_mod() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(1)),
+        expected: ExecState::Complete(Value::Int(1)),
     })
 }
 
@@ -81,7 +79,7 @@ fn basic_bit_and() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(2)),
+        expected: ExecState::Complete(Value::Int(2)),
     })
 }
 
@@ -94,7 +92,7 @@ fn basic_bit_or() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(11)),
+        expected: ExecState::Complete(Value::Int(11)),
     })
 }
 
@@ -107,7 +105,7 @@ fn basic_bit_xor() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(9)),
+        expected: ExecState::Complete(Value::Int(9)),
     })
 }
 
@@ -120,7 +118,7 @@ fn basic_bit_shift_left() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(80)),
+        expected: ExecState::Complete(Value::Int(80)),
     })
 }
 
@@ -133,7 +131,7 @@ fn basic_bit_shift_right() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(1)),
+        expected: ExecState::Complete(Value::Int(1)),
     })
 }
 
@@ -147,7 +145,7 @@ fn unary_neg() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(-1)),
+        expected: ExecState::Complete(Value::Int(-1)),
     })
 }
 
@@ -160,7 +158,7 @@ fn unary_not() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(false)),
+        expected: ExecState::Complete(Value::Bool(false)),
     })
 }
 
@@ -174,7 +172,7 @@ fn basic_eq() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(false)),
+        expected: ExecState::Complete(Value::Bool(false)),
     })
 }
 
@@ -187,7 +185,7 @@ fn basic_not_eq() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(true)),
+        expected: ExecState::Complete(Value::Bool(true)),
     })
 }
 
@@ -200,7 +198,7 @@ fn basic_gt() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(false)),
+        expected: ExecState::Complete(Value::Bool(false)),
     })
 }
 
@@ -213,7 +211,7 @@ fn basic_gt_eq() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(false)),
+        expected: ExecState::Complete(Value::Bool(false)),
     })
 }
 
@@ -226,7 +224,7 @@ fn basic_lt() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(true)),
+        expected: ExecState::Complete(Value::Bool(true)),
     })
 }
 
@@ -239,7 +237,7 @@ fn basic_lt_eq() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(true)),
+        expected: ExecState::Complete(Value::Bool(true)),
     })
 }
 
@@ -253,7 +251,7 @@ fn basic_and() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(false)),
+        expected: ExecState::Complete(Value::Bool(false)),
     })
 }
 
@@ -266,7 +264,7 @@ fn basic_or() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(true)),
+        expected: ExecState::Complete(Value::Bool(true)),
     })
 }
 
@@ -282,7 +280,7 @@ fn basic_assign_add() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(3)),
+        expected: ExecState::Complete(Value::Int(3)),
     })
 }
 
@@ -297,7 +295,7 @@ fn basic_assign_sub() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(-1)),
+        expected: ExecState::Complete(Value::Int(-1)),
     })
 }
 
@@ -312,7 +310,7 @@ fn basic_assign_mul() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(2)),
+        expected: ExecState::Complete(Value::Int(2)),
     })
 }
 
@@ -327,7 +325,7 @@ fn basic_assign_div() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(5)),
+        expected: ExecState::Complete(Value::Int(5)),
     })
 }
 
@@ -342,7 +340,7 @@ fn basic_assign_mod() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(1)),
+        expected: ExecState::Complete(Value::Int(1)),
     })
 }
 
@@ -357,7 +355,7 @@ fn basic_assign_bit_and() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(2)),
+        expected: ExecState::Complete(Value::Int(2)),
     })
 }
 
@@ -372,7 +370,7 @@ fn basic_assign_bit_or() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(11)),
+        expected: ExecState::Complete(Value::Int(11)),
     })
 }
 
@@ -387,7 +385,7 @@ fn basic_assign_bit_xor() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(9)),
+        expected: ExecState::Complete(Value::Int(9)),
     })
 }
 
@@ -406,7 +404,7 @@ fn instance_of_returns_true() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(true)),
+        expected: ExecState::Complete(Value::Bool(true)),
     })
 }
 
@@ -429,6 +427,6 @@ fn instance_of_returns_false() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(false)),
+        expected: ExecState::Complete(Value::Bool(false)),
     })
 }

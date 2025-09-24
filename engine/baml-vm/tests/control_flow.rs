@@ -1,9 +1,7 @@
 //! VM tests for control flow statements (if/else, while, for loops, break, continue).
 
-use baml_vm::{ObjectIndex, RuntimeError, Value, VmExecState};
-
 mod common;
-use common::{assert_vm_executes, assert_vm_fails, FailingProgram, Program};
+use common::{assert_vm_executes, ExecState, Program, Value};
 
 #[test]
 fn exec_if_branch() -> anyhow::Result<()> {
@@ -19,7 +17,7 @@ fn exec_if_branch() -> anyhow::Result<()> {
             }
         ",
         function: "main",
-        expected: VmExecState::Complete(Value::Int(1)),
+        expected: ExecState::Complete(Value::Int(1)),
     })
 }
 
@@ -37,7 +35,7 @@ fn exec_else_branch() -> anyhow::Result<()> {
             }
         ",
         function: "main",
-        expected: VmExecState::Complete(Value::Int(2)),
+        expected: ExecState::Complete(Value::Int(2)),
     })
 }
 
@@ -61,7 +59,7 @@ fn exec_else_if_branch() -> anyhow::Result<()> {
             }
         ",
         function: "main",
-        expected: VmExecState::Complete(Value::Int(2)),
+        expected: ExecState::Complete(Value::Int(2)),
     })
 }
 
@@ -91,7 +89,7 @@ fn while_loop() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: SOURCE,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(3)),
+        expected: ExecState::Complete(Value::Int(3)),
     })
 }
 
@@ -121,7 +119,7 @@ fn while_with_scope() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: SOURCE,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(5)),
+        expected: ExecState::Complete(Value::Int(5)),
     })
 }
 
@@ -148,7 +146,7 @@ fn break_factorial() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(120)),
+        expected: ExecState::Complete(Value::Int(120)),
     })
 }
 
@@ -174,7 +172,7 @@ fn break_nested_loops() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(7)),
+        expected: ExecState::Complete(Value::Int(7)),
     })
 }
 
@@ -206,7 +204,7 @@ fn continue_factorial() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(120)),
+        expected: ExecState::Complete(Value::Int(120)),
     })
 }
 
@@ -233,7 +231,7 @@ fn continue_nested() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(5)),
+        expected: ExecState::Complete(Value::Int(5)),
     })
 }
 
@@ -256,7 +254,7 @@ fn for_loop_sum() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(10)),
+        expected: ExecState::Complete(Value::Int(10)),
     })
 }
 
@@ -282,7 +280,7 @@ fn for_loop_with_break() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(7)),
+        expected: ExecState::Complete(Value::Int(7)),
     })
 }
 
@@ -308,7 +306,7 @@ fn for_loop_with_continue() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(11)),
+        expected: ExecState::Complete(Value::Int(11)),
     })
 }
 
@@ -334,7 +332,7 @@ fn for_loop_nested() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(21)),
+        expected: ExecState::Complete(Value::Int(21)),
     })
 }
 
@@ -353,7 +351,7 @@ fn c_for_sum_to_ten() -> anyhow::Result<()> {
                 s
             }"#,
         function: "SumToTen",
-        expected: VmExecState::Complete(Value::Int(55)),
+        expected: ExecState::Complete(Value::Int(55)),
     })
 }
 
@@ -381,7 +379,7 @@ fn c_for_after_with_break_continue() -> anyhow::Result<()> {
                 s
             }"#,
         function: "SumToTen",
-        expected: VmExecState::Complete(Value::Int(55)),
+        expected: ExecState::Complete(Value::Int(55)),
     })
 }
 
@@ -398,7 +396,7 @@ fn c_for_only_cond() -> anyhow::Result<()> {
                 s
             }"#,
         function: "OnlyCond",
-        expected: VmExecState::Complete(Value::Int(0)),
+        expected: ExecState::Complete(Value::Int(0)),
     })
 }
 
@@ -416,7 +414,7 @@ fn c_for_endless() -> anyhow::Result<()> {
                 s
             }"#,
         function: "Nothing",
-        expected: VmExecState::Complete(Value::Int(0)),
+        expected: ExecState::Complete(Value::Int(0)),
     })
 }
 
@@ -435,6 +433,6 @@ fn block_expr() -> anyhow::Result<()> {
             }
         ",
         function: "main",
-        expected: VmExecState::Complete(Value::Int(1)),
+        expected: ExecState::Complete(Value::Int(1)),
     })
 }

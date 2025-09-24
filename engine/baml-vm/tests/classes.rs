@@ -1,16 +1,16 @@
 //! VM tests for classes (constructors, field access, ...)
 
-use baml_vm::{ObjectIndex, Value, VmExecState};
-
 mod common;
-use common::{assert_vm_executes, assert_vm_executes_with_inspection, Program};
+use common::{assert_vm_executes, ExecState, Program, Value};
+use indexmap::indexmap;
+
+use crate::common::{Instance, Object};
 
 // Class tests
 #[test]
 fn class_constructor() -> anyhow::Result<()> {
-    assert_vm_executes_with_inspection(
-        Program {
-            source: "
+    assert_vm_executes(Program {
+        source: "
                 class Point {
                     x int
                     y int
@@ -21,71 +21,54 @@ fn class_constructor() -> anyhow::Result<()> {
                     p
                 }
             ",
-            function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(39))),
-        },
-        |vm| {
-            let baml_vm::Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(39)] else {
-                panic!(
-                    "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(39)]
-                );
-            };
-
-            assert_eq!(instance.fields, &[Value::Int(1), Value::Int(2)]);
-
-            Ok(())
-        },
-    )
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::Instance(Instance {
+            class: String::from("Point"),
+            fields: Instance::fields(indexmap! {
+                "x" => Value::Int(1),
+                "y" => Value::Int(2),
+            }),
+        }))),
+    })
 }
 
 #[test]
 fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
-    assert_vm_executes_with_inspection(
-        Program {
-            source: "
-                class Point {
-                    x int
-                    y int
-                    z int
-                    w int
-                }
+    assert_vm_executes(Program {
+        source: "
+            class Point {
+                x int
+                y int
+                z int
+                w int
+            }
 
-                function default_point() -> Point {
-                    Point { x: 0, y: 0, z: 0, w: 0 }
-                }
+            function default_point() -> Point {
+                Point { x: 0, y: 0, z: 0, w: 0 }
+            }
 
-                function main() -> Point {
-                    let p = Point { x: 1, y: 2, ...default_point() };
-                    p
-                }
-            ",
-            function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(40))),
-        },
-        |vm| {
-            let baml_vm::Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(40)] else {
-                panic!(
-                    "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(40)]
-                );
-            };
-
-            assert_eq!(
-                instance.fields,
-                &[Value::Int(0), Value::Int(0), Value::Int(0), Value::Int(0)],
-            );
-
-            Ok(())
-        },
-    )
+            function main() -> Point {
+                let p = Point { x: 1, y: 2, ...default_point() };
+                p
+            }
+        ",
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::Instance(Instance {
+            class: String::from("Point"),
+            fields: Instance::fields(indexmap! {
+                "x" => Value::Int(0),
+                "y" => Value::Int(0),
+                "z" => Value::Int(0),
+                "w" => Value::Int(0),
+            }),
+        }))),
+    })
 }
 
 #[test]
 fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
-    assert_vm_executes_with_inspection(
-        Program {
-            source: "
+    assert_vm_executes(Program {
+        source: "
                 class Point {
                     x int
                     y int
@@ -106,92 +89,75 @@ fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
                     p
                 }
             ",
-            function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(41))),
-        },
-        |vm| {
-            let baml_vm::Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(41)] else {
-                panic!(
-                    "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(41)]
-                );
-            };
-
-            assert_eq!(
-                instance.fields,
-                &[Value::Int(1), Value::Int(1), Value::Int(0), Value::Int(0)],
-            );
-
-            Ok(())
-        },
-    )
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::Instance(Instance {
+            class: String::from("Point"),
+            fields: Instance::fields(indexmap! {
+                "x" => Value::Int(1),
+                "y" => Value::Int(1),
+                "z" => Value::Int(0),
+                "w" => Value::Int(0),
+            }),
+        }))),
+    })
 }
 
 #[test]
 fn class_constructor_with_spread_operator_before_named_fields() -> anyhow::Result<()> {
-    assert_vm_executes_with_inspection(
-        Program {
-            source: "
-                class Point {
-                    x int
-                    y int
-                    z int
-                    w int
-                }
+    assert_vm_executes(Program {
+        source: "
+            class Point {
+                x int
+                y int
+                z int
+                w int
+            }
 
-                function default_point() -> Point {
-                    Point { x: 0, y: 0, z: 0, w: 0 }
-                }
+            function default_point() -> Point {
+                Point { x: 0, y: 0, z: 0, w: 0 }
+            }
 
-                function main() -> Point {
-                    let p = Point { ...default_point(), x: 1, y: 2 };
-                    p
-                }
-            ",
-            function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(40))),
-        },
-        |vm| {
-            let baml_vm::Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(40)] else {
-                panic!(
-                    "expected Instance, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(40)]
-                );
-            };
-
-            assert_eq!(
-                instance.fields,
-                &[Value::Int(1), Value::Int(2), Value::Int(0), Value::Int(0)],
-            );
-
-            Ok(())
-        },
-    )
+            function main() -> Point {
+                let p = Point { ...default_point(), x: 1, y: 2 };
+                p
+            }
+        ",
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::Instance(Instance {
+            class: String::from("Point"),
+            fields: Instance::fields(indexmap! {
+                "x" => Value::Int(1),
+                "y" => Value::Int(2),
+                "z" => Value::Int(0),
+                "w" => Value::Int(0),
+            }),
+        }))),
+    })
 }
 
 #[test]
 fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
-                class Point {
-                    x int
-                    y int
-                    z int
-                    w int
-                }
+            class Point {
+                x int
+                y int
+                z int
+                w int
+            }
 
-                function default_point() -> Point {
-                    Point { x: 0, y: 0, z: 0, w: 0 }
-                }
+            function default_point() -> Point {
+                Point { x: 0, y: 0, z: 0, w: 0 }
+            }
 
-                function main() -> int {
-                    let p = Point { x: 1, y: 2, ...default_point() };
-                    let x = 0;
-                    x
-                }
-            ",
+            function main() -> int {
+                let p = Point { x: 1, y: 2, ...default_point() };
+                let x = 0;
+                x
+            }
+        ",
         function: "main",
-        expected: VmExecState::Complete(Value::Int(0)),
+        expected: ExecState::Complete(Value::Int(0)),
     })
 }
 
@@ -217,7 +183,7 @@ fn nested_object_construction() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(30)),
+        expected: ExecState::Complete(Value::Int(30)),
     })
 }
 
@@ -243,7 +209,7 @@ fn nested_object_construction_with_field_access() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(20)),
+        expected: ExecState::Complete(Value::Int(20)),
     })
 }
 
@@ -263,7 +229,7 @@ fn nested_field_read_with_nested_construction() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(42)),
+        expected: ExecState::Complete(Value::Int(42)),
     })
 }
 
@@ -285,7 +251,7 @@ fn nested_field_read() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(42)),
+        expected: ExecState::Complete(Value::Int(42)),
     })
 }
 
@@ -306,7 +272,7 @@ fn constructor_with_preceding_variables() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(360)), // 100 + 200 + 10 + 20 + 30
+        expected: ExecState::Complete(Value::Int(360)), // 100 + 200 + 10 + 20 + 30
     })
 }
 
@@ -332,7 +298,7 @@ fn nested_constructor_with_preceding_variables() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(165)), // 100 + 50 + 5 + 10
+        expected: ExecState::Complete(Value::Int(165)), // 100 + 50 + 5 + 10
     })
 }
 
@@ -356,7 +322,7 @@ fn basic_method_decl() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(3)),
+        expected: ExecState::Complete(Value::Int(3)),
     })
 }
 
@@ -382,6 +348,6 @@ fn mut_self_method_decl() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(3)),
+        expected: ExecState::Complete(Value::Int(3)),
     })
 }
