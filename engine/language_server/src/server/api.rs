@@ -22,9 +22,8 @@ mod requests;
 mod traits;
 
 use notifications as notification;
-use requests as request;
-
 pub(crate) use request::code_action::OPEN_IN_BROWSER_COMMAND;
+use requests as request;
 
 use self::traits::{
     BackgroundDocumentNotificationHandler, NotificationHandler, RequestHandler,
