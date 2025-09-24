@@ -56,4 +56,5 @@
       "editor.tabSize": 2
   },
   "baml.enablePlaygroundProxy": true,
+  "editor.accessibilitySupport": "off",
 }

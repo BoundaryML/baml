@@ -10,6 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use baml_lsp_types::BamlNotification;
 use log::info;
 use lsp_server::Message;
 use lsp_types::{
@@ -207,15 +208,18 @@ impl Server {
         {
             let lsp_sender = server.connection.make_sender();
             server.args.tokio_runtime.spawn(async move {
-                lsp_sender
-                    .send(Message::Notification(lsp_server::Notification::new(
-                        "baml/port".to_string(),
-                        serde_json::to_value(PortNotificationParams {
+                let _ = lsp_sender
+                    .send(Message::Notification(
+                        BamlNotification::PlaygroundPort {
                             port: server.args.playground_port,
-                        })
-                        .unwrap(),
-                    )))
-                    .unwrap();
+                        }
+                        .to_lsp_notification(),
+                    ))
+                    .inspect_err(|e| {
+                        tracing::error!(
+                            "Failed to send baml/playground_port notification to IDE: {e}"
+                        );
+                    });
             });
         }
         {

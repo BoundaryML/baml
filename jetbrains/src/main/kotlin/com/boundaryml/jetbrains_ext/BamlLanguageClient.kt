@@ -57,7 +57,6 @@ class BamlLanguageClient(project: Project) :
     //        super.handleServerStatusChanged(serverStatus)
     //    }
 
-
     init {
         log.info("Initializing cursor tracking for BAML files")
 
@@ -146,7 +145,7 @@ class BamlLanguageClient(project: Project) :
     }
 
     // Existing port notification (keep exactly as-is but use new service)
-    @JsonNotification("baml/port")
+    @JsonNotification("baml/playground_port")
     fun onPort(params: PortParams) {
         log.info("Port params: ${params.port}")
 

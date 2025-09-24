@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use lsp_server::Notification;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
