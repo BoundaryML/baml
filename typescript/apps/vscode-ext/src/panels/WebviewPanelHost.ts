@@ -494,25 +494,25 @@ export class WebviewPanelHost {
           case 'UPDATE_SETTINGS': {
             const { settings } = vscodeMessage;
             const config = vscode.workspace.getConfiguration();
-            
+
             // Handle baml settings
-            if (settings.baml) {
-              if ('enablePlaygroundProxy' in settings.baml) {
+            if (settings) {
+              if ('enablePlaygroundProxy' in settings) {
                 await config.update(
                   'baml.enablePlaygroundProxy',
-                  settings.baml.enablePlaygroundProxy,
+                  settings.enablePlaygroundProxy,
                   vscode.ConfigurationTarget.Workspace,
                 );
               }
-              if ('featureFlags' in settings.baml) {
+              if ('featureFlags' in settings) {
                 await config.update(
                   'baml.featureFlags',
-                  settings.baml.featureFlags,
+                  settings.featureFlags,
                   vscode.ConfigurationTarget.Workspace,
                 );
               }
             }
-            
+
             this._panel.webview.postMessage({
               rpcId: message.rpcId,
               rpcMethod: vscodeCommand,
