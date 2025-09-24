@@ -14,7 +14,7 @@ const ROOT: &str = concat!(
 fn headers_mermaid_snapshots() {
     let dir = Path::new(ROOT);
     if !dir.exists() {
-        panic!("fixtures dir missing: {}", ROOT);
+        panic!("fixtures dir missing: {ROOT}");
     }
 
     let mut ran: usize = 0;
@@ -88,8 +88,8 @@ fn headers_mermaid_snapshots() {
                                     ran += 1;
                                 } else {
                                     eprintln!("[mermaid] {:<12} | {}", "FAIL(err)", rel_name);
-                                    eprintln!("EXPECTED ({}):\n{}\n---", rel_name, exp_n);
-                                    eprintln!("GOT      ({}):\n{}\n---", rel_name, got_n);
+                                    eprintln!("EXPECTED ({rel_name}):\n{exp_n}\n---");
+                                    eprintln!("GOT      ({rel_name}):\n{got_n}\n---");
                                     failed += 1;
                                     ran += 1;
                                     continue;
@@ -125,8 +125,8 @@ fn headers_mermaid_snapshots() {
                                 ran += 1;
                             } else {
                                 eprintln!("[mermaid] {:<12} | {}", "FAIL", rel_name);
-                                eprintln!("EXPECTED ({}):\n{}\n---", rel_name, exp_n);
-                                eprintln!("GOT      ({}):\n{}\n---", rel_name, got_n);
+                                eprintln!("EXPECTED ({rel_name}):\n{exp_n}\n---");
+                                eprintln!("GOT      ({rel_name}):\n{got_n}\n---");
                                 failed += 1;
                                 ran += 1;
                                 continue;
@@ -170,8 +170,8 @@ fn headers_mermaid_snapshots() {
                                 ran += 1;
                             } else {
                                 eprintln!("[mermaid] {:<12} | {}", "FAIL(err)", rel_name);
-                                eprintln!("EXPECTED ({}):\n{}\n---", rel_name, exp_n);
-                                eprintln!("GOT      ({}):\n{}\n---", rel_name, got_n);
+                                eprintln!("EXPECTED ({rel_name}):\n{exp_n}\n---");
+                                eprintln!("GOT      ({rel_name}):\n{got_n}\n---");
                                 failed += 1;
                                 ran += 1;
                                 continue;
@@ -189,20 +189,19 @@ fn headers_mermaid_snapshots() {
         }
     }
 
-    assert!(ran > 0, "no valid fixtures were executed in {}", ROOT);
+    assert!(ran > 0, "no valid fixtures were executed in {ROOT}");
     assert!(
         failed == 0,
-        "{} fixtures failed; see output for details",
-        failed
+        "{failed} fixtures failed; see output for details"
     );
     println!("[mermaid] Summary");
-    println!("  ran:     {}", ran);
-    println!("  pass:    {}", passed);
-    println!("  updated: {}", updated);
+    println!("  ran:     {ran}");
+    println!("  pass:    {passed}");
+    println!("  updated: {updated}");
     println!("  skip:");
-    println!("    panic:  {}", skipped_panic);
-    println!("    expect: {}", missing_expect);
-    println!("  fail:    {}", failed);
+    println!("    panic:  {skipped_panic}");
+    println!("    expect: {missing_expect}");
+    println!("  fail:    {failed}");
 }
 
 fn normalize(s: &str) -> String {

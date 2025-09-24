@@ -112,7 +112,7 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
         {
             if baml_keywords().contains(arg_name.as_str()) {
                 ctx.push_error(DatamodelError::new_validation_error(
-                    &format!("'{}' is a reserved keyword.", arg_name),
+                    &format!("'{arg_name}' is a reserved keyword."),
                     expr_fn.expr_fn().span.clone(),
                 ));
             }

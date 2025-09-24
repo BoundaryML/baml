@@ -43,11 +43,11 @@ fn redact_by_env(value: &str, env_vars: &HashMap<String, String>) -> Option<Stri
     }
     for (k, v) in env_vars {
         if value == v {
-            return Some(format!("${}", k));
+            return Some(format!("${k}"));
         }
         if let Some(stripped) = value.strip_prefix("Bearer ") {
             if stripped == v {
-                return Some(format!("Bearer ${}", k));
+                return Some(format!("Bearer ${k}"));
             }
         }
     }
@@ -126,7 +126,7 @@ pub fn scrub_body_string(
         let mut out = body.to_string();
         for (k, v) in env_vars {
             if !v.is_empty() && out.contains(v) {
-                out = out.replace(v, &format!("${}", k));
+                out = out.replace(v, &format!("${k}"));
             }
         }
         out

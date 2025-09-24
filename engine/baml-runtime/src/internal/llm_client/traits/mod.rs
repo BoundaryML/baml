@@ -209,7 +209,7 @@ fn to_curl_command(
         let value_str = value.to_str().unwrap_or("");
         let value_str =
             crate::redaction::scrub_header_value(key_str, value_str, env_vars, expose_secrets);
-        let header = format!(" -H \"{}: {}\"", key_str, value_str);
+        let header = format!(" -H \"{key_str}: {value_str}\"");
         curl_command.push_str(&header);
     }
 
