@@ -33,8 +33,6 @@ pub struct BamlSettings {
     /// initialization in the language server.
     #[serde(default)]
     pub(crate) lsp_methods_to_forward_to_webview: Option<Vec<String>>,
-    #[serde(default)]
-    pub(crate) open_baml_panel_in_browser: bool,
 }
 
 impl Default for BamlSettings {
@@ -46,7 +44,6 @@ impl Default for BamlSettings {
             client_version: None,
             enable_playground_proxy: Some(true),
             lsp_methods_to_forward_to_webview: None,
-            open_baml_panel_in_browser: false,
         }
     }
 }
