@@ -6,12 +6,12 @@ use internal_baml_core::configuration::GeneratorDefaultClientMode;
 use crate::{baml_src_files, BamlRuntime, InternalRuntimeInterface};
 
 #[derive(clap::Args, Debug)]
-pub struct LintArgs {
+pub struct CheckArgs {
     #[arg(long, help = "path/to/baml_src", default_value = "./baml_src")]
     pub from: PathBuf,
     #[arg(
         long,
-        help = "Lint without checking for version mismatch",
+        help = "Checks for erros and warnings without checking for version mismatch",
         default_value_t = false
     )]
     pub(super) no_version_check: bool,
@@ -24,23 +24,23 @@ pub struct LintArgs {
     // pub(super) only_errors: bool,
 }
 
-impl LintArgs {
+impl CheckArgs {
     pub fn run(
         &self,
         defaults: super::RuntimeCliDefaults,
         feature_flags: internal_baml_core::feature_flags::FeatureFlags,
     ) -> Result<()> {
-        let result = self.lint(defaults, feature_flags);
+        let result = self.check(defaults, feature_flags);
 
         if let Err(e) = result {
-            baml_log::error!("Error linting: {:?}", e);
+            baml_log::error!("Error checking: {:?}", e);
             return Err(e);
         }
 
         Ok(())
     }
 
-    fn lint(
+    fn check(
         &self,
         defaults: super::RuntimeCliDefaults,
         feature_flags: internal_baml_core::feature_flags::FeatureFlags,
