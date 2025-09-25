@@ -45,6 +45,35 @@ can expect authentication to work out of the box.
 Setting [`options.credentials`](#credentials) will take precedence and force `vertex-ai` to load
 service account credentials from that file path.
 
+### Using a Vertex API Key (Express Mode)
+
+<Info>
+  To get started quickly, we recommend using Express Mode with a Vertex API Key.
+  This avoids service account setup and works well for prototyping.
+
+  See Google's guide: [Use Vertex API keys (Express Mode)](https://cloud.google.com/vertex-ai/generative-ai/docs/start/api-keys?usertype=expressmode).
+</Info>
+
+When using a Vertex API Key, set the `key` query parameter and specify your `project_id` and `location`:
+
+```baml BAML
+client<llm> VertexApiKeyClient {
+  provider vertex-ai
+  options {
+    model gemini-2.5-pro
+    location us-central1
+    project_id my-project-id
+    query_params {
+      key env.VERTEX_API_KEY
+    }
+  }
+}
+```
+
+Notes:
+- `project_id` cannot be inferred when using an API key; set it explicitly.
+- Keep `credentials` unset when using an API key, so BAML does not prefer service account auth.
+
 ### Playground
 To use a `vertex-ai` client in the playground, all you need to do is run `gcloud
 auth application-default login` in the terminal. The playground will then use these
@@ -332,6 +361,27 @@ client<llm> MyClient {
   }
 }
 ```
+</ParamField>
+
+<ParamField path="query_params" type="object">
+  Query string parameters appended to the request URL.
+
+Example (use a Vertex API Key with Express Mode):
+```baml BAML
+client<llm> MyClient {
+  provider vertex-ai
+  options {
+    model gemini-2.5-pro
+    project_id my-project-id
+    location us-central1
+    query_params {
+      key env.VERTEX_API_KEY
+    }
+  }
+}
+```
+
+  When using an API key, omit `credentials` and set `project_id` explicitly.
 </ParamField>
 
 <Markdown src="/snippets/role-selection.mdx" />
