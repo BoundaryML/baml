@@ -32,8 +32,6 @@ impl SyncRequestHandler for CodeActionHandler {
         _requester: &mut Requester,
         params: CodeActionParams,
     ) -> Result<Option<Vec<CodeActionOrCommand>>> {
-        let mut actions = vec![];
-
         let uri = params.text_document.uri.clone();
         let path = uri
             .to_file_path()
