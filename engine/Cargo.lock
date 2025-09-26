@@ -1421,6 +1421,7 @@ version = "0.208.5"
 dependencies = [
  "anyhow",
  "baml-compiler",
+ "baml-runtime",
  "baml-types",
  "colored",
  "criterion",

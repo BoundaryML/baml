@@ -18,6 +18,7 @@ new_without_default = "allow"
 [dev-dependencies]
 anyhow = { workspace = true }
 baml-compiler = { path = "../baml-compiler" }
+baml-runtime = { path = "../baml-runtime" }
 internal-baml-core = { path = "../baml-lib/baml-core" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 internal-baml-parser-database = { path = "../baml-lib/parser-database" }
