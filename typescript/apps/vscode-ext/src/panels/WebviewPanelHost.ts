@@ -670,7 +670,14 @@ export class WebviewPanelHost {
             (async () => {
               try {
                 const client = await this._googleAuth.getClient();
-                let projectId = 'sam-project-vertex-1';
+                const projectId = await (async () => {
+                  try {
+                    return await this._googleAuth.getProjectId();
+                  } catch (error) {
+                    console.error('Error loading gcp creds project id:', error);
+                    return null;
+                  }
+                })();
 
                 const tokenResponse = await client.getAccessToken();
 
