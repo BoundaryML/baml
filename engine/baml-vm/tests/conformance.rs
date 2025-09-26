@@ -345,7 +345,6 @@ async fn class_and_control_flow_conformance() -> Result<()> {
 }
 
 #[tokio::test]
-#[ignore]
 async fn update_through_reference_conformance() -> Result<()> {
     let project = InMemoryBamlProject::new().with_file(
         "main.baml",
