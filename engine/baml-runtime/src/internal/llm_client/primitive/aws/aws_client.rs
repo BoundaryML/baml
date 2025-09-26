@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, ops::Deref, sync::Arc, time::Duration};
+use std::{borrow::Cow, collections::HashMap, ops::Deref, sync::Arc};
 
 use anyhow::{Context, Result};
 use aws_config::{
@@ -7,7 +7,8 @@ use aws_config::{
 use aws_credential_types::{
     provider::{
         error::{CredentialsError, CredentialsNotLoaded},
-        future::ProvideCredentials,
+        future::ProvideCredentials as ProvideCredentialsFuture,
+        ProvideCredentials,
     },
     Credentials,
 };
@@ -20,7 +21,7 @@ use aws_sdk_bedrockruntime::{
 use aws_smithy_json::serialize::JsonObjectWriter;
 use aws_smithy_runtime_api::{client::result::SdkError, http::Headers};
 use aws_smithy_types::{Blob, Document};
-use baml_ids::HttpRequestId;
+use baml_ids::{FunctionCallId, HttpRequestId};
 use baml_types::{
     tracing::events::{
         ClientDetails, HTTPBody, HTTPRequest, HTTPResponse, HTTPResponseStream, SSEEvent,
@@ -35,6 +36,7 @@ use internal_llm_client::{
     aws_bedrock::{self, ResolvedAwsBedrock},
     AllowedRoleMetadata, ClientProvider, ResolvedClientProperty, UnresolvedClientProperty,
 };
+use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use secrecy::ExposeSecret;
 use serde::Deserialize;
 use serde_json::{json, Map};
@@ -68,6 +70,62 @@ fn strip_mime_prefix(mime: &str) -> &str {
     mime.split_once('/').map(|(_, s)| s).unwrap_or(mime)
 }
 
+fn media_to_content_block_json(media: &BamlMedia) -> Result<serde_json::Value> {
+    match media.media_type {
+        BamlMediaType::Image => match &media.content {
+            BamlMediaContent::Base64(b64) => {
+                let mut image_obj = serde_json::Map::new();
+                if let Some(mime) = media.mime_type.as_deref() {
+                    image_obj.insert("format".into(), json!(strip_mime_prefix(mime)));
+                }
+                image_obj.insert("source".into(), json!({ "bytes": b64.base64 }));
+                Ok(json!({ "image": serde_json::Value::Object(image_obj) }))
+            }
+            _ => anyhow::bail!("AWS Bedrock only supports base64 image inputs in modular requests"),
+        },
+        BamlMediaType::Pdf => match &media.content {
+            BamlMediaContent::Base64(b64) => {
+                let mut doc_obj = serde_json::Map::new();
+                if let Some(mime) = media.mime_type.as_deref() {
+                    doc_obj.insert("format".into(), json!(strip_mime_prefix(mime)));
+                }
+                doc_obj.insert("name".into(), json!("document.pdf"));
+                doc_obj.insert("source".into(), json!({ "bytes": b64.base64 }));
+                Ok(json!({ "document": serde_json::Value::Object(doc_obj) }))
+            }
+            _ => anyhow::bail!("AWS Bedrock only supports base64 PDF inputs in modular requests"),
+        },
+        BamlMediaType::Video => match &media.content {
+            BamlMediaContent::Base64(b64) => {
+                let mut video_obj = serde_json::Map::new();
+                if let Some(mime) = media.mime_type.as_deref() {
+                    video_obj.insert("format".into(), json!(strip_mime_prefix(mime)));
+                }
+                video_obj.insert("source".into(), json!({ "bytes": b64.base64 }));
+                Ok(json!({ "video": serde_json::Value::Object(video_obj) }))
+            }
+            _ => anyhow::bail!("AWS Bedrock only supports base64 video inputs in modular requests"),
+        },
+        BamlMediaType::Audio => anyhow::bail!("AWS Bedrock does not support audio media parts"),
+    }
+}
+
+fn system_part_to_json(part: &ChatMessagePart) -> Result<serde_json::Value> {
+    match part {
+        ChatMessagePart::Text(t) => Ok(json!({ "text": t })),
+        ChatMessagePart::WithMeta(p, _) => system_part_to_json(p),
+        other => anyhow::bail!("AWS Bedrock only supports text system blocks, but got {other:?}"),
+    }
+}
+
+fn chat_part_to_json(part: &ChatMessagePart) -> Result<serde_json::Value> {
+    match part {
+        ChatMessagePart::Text(t) => Ok(json!({ "text": t })),
+        ChatMessagePart::Media(media) => media_to_content_block_json(media),
+        ChatMessagePart::WithMeta(inner, _) => chat_part_to_json(inner),
+    }
+}
+
 // represents client that interacts with the Bedrock API
 pub struct AwsClient {
     pub name: String,
@@ -76,6 +134,12 @@ pub struct AwsClient {
     features: ModelFeatures,
     properties: ResolvedAwsBedrock,
 }
+
+const PATH_SEGMENT_ENCODE_SET: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'_')
+    .remove(b'.')
+    .remove(b'~');
 
 fn resolve_properties(
     provider: &ClientProvider,
@@ -237,13 +301,11 @@ struct ExplicitCredentialsProvider {
 }
 
 impl aws_credential_types::provider::ProvideCredentials for ExplicitCredentialsProvider {
-    fn provide_credentials<'a>(
-        &'a self,
-    ) -> aws_credential_types::provider::future::ProvideCredentials<'a>
+    fn provide_credentials<'a>(&'a self) -> ProvideCredentialsFuture<'a>
     where
         Self: 'a,
     {
-        ProvideCredentials::ready(match (&self.access_key_id, &self.secret_access_key, &self.session_token) {
+        ProvideCredentialsFuture::ready(match (&self.access_key_id, &self.secret_access_key, &self.session_token) {
             (None, None, None) => {
                 Err(CredentialsError::unhandled("BAML internal error: ExplicitCredentialsProvider should only be constructed if either access_key_id or secret_access_key are provided"))
             }
@@ -261,6 +323,123 @@ impl aws_credential_types::provider::ProvideCredentials for ExplicitCredentialsP
 }
 
 impl AwsClient {
+    fn build_converse_body_json(
+        &self,
+        prompt: &[RenderedChatMessage],
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        let mut system_blocks: Option<Vec<serde_json::Value>> = None;
+        let mut chat_slice = prompt;
+
+        if let Some((first, remainder)) = chat_slice.split_first() {
+            if first.role == "system" {
+                let mut blocks = Vec::new();
+                for part in &first.parts {
+                    blocks.push(system_part_to_json(part)?);
+                }
+                system_blocks = Some(blocks);
+                chat_slice = remainder;
+            }
+        }
+
+        let mut messages_json: Vec<serde_json::Value> = Vec::new();
+        for message in chat_slice {
+            let mut content_blocks = Vec::new();
+            for part in &message.parts {
+                content_blocks.push(chat_part_to_json(part)?);
+            }
+            messages_json.push(json!({
+                "role": message.role,
+                "content": content_blocks,
+            }));
+        }
+
+        let mut root = serde_json::Map::new();
+        root.insert("messages".into(), serde_json::Value::Array(messages_json));
+
+        if let Some(system) = system_blocks {
+            root.insert("system".into(), serde_json::Value::Array(system));
+        }
+
+        if let Some(cfg) = &self.properties.inference_config {
+            let mut map = serde_json::Map::new();
+            if let Some(v) = cfg.max_tokens {
+                map.insert("maxTokens".into(), json!(v));
+            }
+            if let Some(v) = cfg.temperature {
+                map.insert("temperature".into(), json!(v));
+            }
+            if let Some(v) = cfg.top_p {
+                map.insert("topP".into(), json!(v));
+            }
+            if let Some(v) = cfg.stop_sequences.as_ref() {
+                map.insert("stopSequences".into(), json!(v));
+            }
+            if !map.is_empty() {
+                root.insert("inferenceConfig".into(), serde_json::Value::Object(map));
+            }
+        }
+
+        if !self.properties.additional_model_request_fields.is_empty() {
+            let addl = serde_json::to_value(&self.properties.additional_model_request_fields)?;
+            root.insert("additionalModelRequestFields".into(), addl);
+        }
+
+        Ok(root)
+    }
+
+    pub async fn build_modular_http_request(
+        &self,
+        ctx: &RuntimeContext,
+        chat_messages: &[RenderedChatMessage],
+        stream: bool,
+        request_id: HttpRequestId,
+    ) -> Result<HTTPRequest> {
+        if stream {
+            anyhow::bail!(
+                "AWS Bedrock modular streaming is not supported. Use non-streaming modular requests."
+            );
+        }
+
+        let region = self.properties.region.clone().unwrap_or_else(|| {
+            ctx.env_vars()
+                .get("AWS_REGION")
+                .cloned()
+                .unwrap_or_default()
+        });
+
+        if region.is_empty() {
+            anyhow::bail!(
+                "AWS region is required to build modular request. Set it in the client options or via AWS_REGION."
+            );
+        }
+
+        let body_string = serde_json::to_string(&serde_json::Value::Object(
+            self.build_converse_body_json(chat_messages)?,
+        ))?;
+        let body_bytes = body_string.as_bytes().to_vec();
+
+        let host = format!("bedrock-runtime.{region}.amazonaws.com");
+        let encoded_model =
+            utf8_percent_encode(&self.properties.model, PATH_SEGMENT_ENCODE_SET).to_string();
+        let url = format!("https://{host}/model/{}/converse", encoded_model);
+
+        let mut header_map = HashMap::new();
+        header_map.insert("content-type".to_string(), "application/json".to_string());
+        header_map.insert("accept".to_string(), "application/json".to_string());
+
+        Ok(HTTPRequest::new(
+            request_id,
+            url,
+            "POST".to_string(),
+            header_map,
+            HTTPBody::new(body_bytes),
+            ClientDetails {
+                name: self.context.name.clone(),
+                provider: "aws-bedrock".to_string(),
+                options: self.properties.client_options(),
+            },
+        ))
+    }
     pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<AwsClient> {
         let properties = resolve_properties(&client.provider, &client.unresolved_options()?, ctx)?;
 
@@ -554,125 +733,6 @@ impl WithRenderRawCurl for AwsClient {
         prompt: &[internal_baml_jinja::RenderedChatMessage],
         render_settings: RenderCurlSettings,
     ) -> Result<String> {
-        // Build system and messages payloads from the prompt
-        let mut system_blocks: Option<Vec<serde_json::Value>> = None;
-        let mut chat_slice = prompt;
-
-        if let Some((first, remainder_slice)) = chat_slice.split_first() {
-            if first.role == "system" {
-                let mut blocks = Vec::new();
-                for part in &first.parts {
-                    match part {
-                        ChatMessagePart::Text(t) => {
-                            blocks.push(json!({ "text": t }));
-                        }
-                        ChatMessagePart::Media(_) => {
-                            anyhow::bail!(
-                                "AWS Bedrock only supports text blocks for system messages, but got {:?}",
-                                part
-                            );
-                        }
-                        ChatMessagePart::WithMeta(p, _) => {
-                            if let ChatMessagePart::Text(t) = p.as_ref() {
-                                blocks.push(json!({ "text": t }));
-                            } else {
-                                anyhow::bail!(
-                                    "AWS Bedrock only supports text blocks for system messages, but got {:?}",
-                                    p
-                                );
-                            }
-                        }
-                    }
-                }
-                system_blocks = Some(blocks);
-                chat_slice = remainder_slice;
-            }
-        }
-
-        fn strip_mime_prefix(mime: &str) -> String {
-            match mime.split_once('/') {
-                Some((_, s)) => s.to_string(),
-                None => mime.to_string(),
-            }
-        }
-
-        fn to_cli_content_block(media: &BamlMedia) -> Result<serde_json::Value> {
-            match media.media_type {
-                BamlMediaType::Image => match &media.content {
-                    BamlMediaContent::Base64(b64) => {
-                        let mut image_obj = serde_json::Map::new();
-                        if let Some(mime) = media.mime_type.as_deref() {
-                            image_obj.insert("format".into(), json!(strip_mime_prefix(mime)));
-                        }
-                        image_obj.insert("source".into(), json!({ "bytes": b64.base64 }));
-                        Ok(json!({ "image": serde_json::Value::Object(image_obj) }))
-                    }
-                    BamlMediaContent::File(_) | BamlMediaContent::Url(_) => {
-                        anyhow::bail!("BAML internal error (AWSBedrock): image inputs must be base64 for raw curl rendering")
-                    }
-                },
-                BamlMediaType::Pdf => match &media.content {
-                    BamlMediaContent::Base64(b64) => {
-                        let mut doc_obj = serde_json::Map::new();
-                        if let Some(mime) = media.mime_type.as_deref() {
-                            doc_obj.insert("format".into(), json!(strip_mime_prefix(mime)));
-                        }
-                        doc_obj.insert("name".into(), json!("document.pdf"));
-                        doc_obj.insert("source".into(), json!({ "bytes": b64.base64 }));
-                        Ok(json!({ "document": serde_json::Value::Object(doc_obj) }))
-                    }
-                    BamlMediaContent::File(_) | BamlMediaContent::Url(_) => {
-                        anyhow::bail!("BAML internal error (AWSBedrock): PDF inputs must be base64 for raw curl rendering")
-                    }
-                },
-                BamlMediaType::Video => match &media.content {
-                    BamlMediaContent::Base64(b64) => {
-                        let mut video_obj = serde_json::Map::new();
-                        if let Some(mime) = media.mime_type.as_deref() {
-                            video_obj.insert("format".into(), json!(strip_mime_prefix(mime)));
-                        }
-                        video_obj.insert("source".into(), json!({ "bytes": b64.base64 }));
-                        Ok(json!({ "video": serde_json::Value::Object(video_obj) }))
-                    }
-                    BamlMediaContent::File(_) | BamlMediaContent::Url(_) => {
-                        anyhow::bail!("BAML internal error (AWSBedrock): video inputs must be base64 for raw curl rendering")
-                    }
-                },
-                BamlMediaType::Audio => {
-                    anyhow::bail!(
-                        "AWS Bedrock does not support audio media type: {:#?}",
-                        media
-                    )
-                }
-            }
-        }
-
-        let messages_json: Vec<serde_json::Value> = chat_slice
-            .iter()
-            .map(|m| {
-                let mut content_blocks: Vec<serde_json::Value> = Vec::new();
-                for part in &m.parts {
-                    match part {
-                        ChatMessagePart::Text(t) => content_blocks.push(json!({ "text": t })),
-                        ChatMessagePart::Media(media) => {
-                            content_blocks.push(to_cli_content_block(media)?);
-                        }
-                        ChatMessagePart::WithMeta(p, _) => match p.as_ref() {
-                            ChatMessagePart::Text(t) => content_blocks.push(json!({ "text": t })),
-                            ChatMessagePart::Media(media) => {
-                                content_blocks.push(to_cli_content_block(media)?);
-                            }
-                            ChatMessagePart::WithMeta(_, _) => unreachable!(),
-                        },
-                    }
-                }
-                Ok(json!({
-                    "role": m.role,
-                    "content": content_blocks
-                }))
-            })
-            .collect::<Result<Vec<_>>>()?;
-
         // Build CLI command
         let mut cmd = vec![];
         if let Some(region) = &self.properties.region {
@@ -692,40 +752,7 @@ impl WithRenderRawCurl for AwsClient {
         cmd.push("--output json".to_string());
 
         // Build --cli-input-json payload
-        let mut root = serde_json::Map::new();
-        // messages are required
-        root.insert("messages".into(), serde_json::Value::Array(messages_json));
-
-        // system (optional)
-        if let Some(blocks) = system_blocks {
-            root.insert("system".into(), serde_json::Value::Array(blocks));
-        }
-
-        // inferenceConfig (optional)
-        if let Some(cfg) = &self.properties.inference_config {
-            let mut map = serde_json::Map::new();
-            if let Some(v) = cfg.max_tokens {
-                map.insert("maxTokens".into(), json!(v));
-            }
-            if let Some(v) = cfg.temperature {
-                map.insert("temperature".into(), json!(v));
-            }
-            if let Some(v) = cfg.top_p {
-                map.insert("topP".into(), json!(v));
-            }
-            if let Some(v) = cfg.stop_sequences.as_ref() {
-                map.insert("stopSequences".into(), json!(v));
-            }
-            if !map.is_empty() {
-                root.insert("inferenceConfig".into(), serde_json::Value::Object(map));
-            }
-        }
-
-        // additionalModelRequestFields (optional)
-        if !self.properties.additional_model_request_fields.is_empty() {
-            let addl = serde_json::to_value(&self.properties.additional_model_request_fields)?;
-            root.insert("additionalModelRequestFields".into(), addl);
-        }
+        let root = self.build_converse_body_json(prompt)?;
 
         // pretty, multi-line JSON
         let input_json_str = serde_json::to_string_pretty(&serde_json::Value::Object(root))?;

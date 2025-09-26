@@ -66,6 +66,7 @@ log.workspace = true
 minijinja.workspace = true
 pin-project-lite.workspace = true
 pretty.workspace = true
+percent-encoding = "2.3.1"
 regex.workspace = true
 reqwest-eventsource = "0.6.0"
 scopeguard.workspace = true

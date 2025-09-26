@@ -484,6 +484,106 @@ You can use this to modify the `region`, `access_key_id`, `secret_access_key`, a
 <Markdown src="/snippets/supports-streaming.mdx" />
 <Markdown src="/snippets/finish-reason.mdx" />
 
+## Modular API
+
+- `b.request` returns a fully signed SigV4 `HTTPRequest` pointing at the
+  Converse API.
+- Forward the request as-is. Do not mutate the headers; they already include
+  `Authorization`, `X-Amz-Date`, and (if needed) `X-Amz-Security-Token`.
+- Send the request immediately after building it. The signature is computed at
+  request time, so rebuilding gives you a fresh signature.
+- Streaming modular calls are not yet supported for Bedrock.
+
+```typescript TypeScript
+import { SignatureV4 } from "@aws-sdk/signature-v4"
+import { defaultProvider } from "@aws-sdk/credential-provider-node"
+import { HttpRequest } from "@aws-sdk/protocol-http"
+import { b } from 'baml_client'
+
+async function callBedrock() {
+  const req = await b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  const body = req.body.json() as any
+  const bodyString = JSON.stringify(body)
+  const url = new URL(req.url)
+  const region = (req.client_details.options?.region as string) ?? process.env.AWS_REGION ?? "us-east-1"
+
+  const signer = new SignatureV4({
+    service: "bedrock",
+    region,
+    credentials: defaultProvider(),
+  })
+
+  const unsigned = new HttpRequest({
+    protocol: url.protocol,
+    hostname: url.hostname,
+    path: url.pathname,
+    method: req.method,
+    headers: {
+      ...req.headers,
+      host: url.host,
+      "content-type": "application/json",
+    },
+    body: bodyString,
+  })
+
+  const signed = await signer.sign(unsigned)
+
+  const res = await fetch(req.url, {
+    method: req.method,
+    headers: signed.headers as Record<string, string>,
+    body: bodyString,
+  })
+
+  if (!res.ok) {
+    throw new Error(`Bedrock request failed: ${res.status}`)
+  }
+
+  const payload = await res.json()
+  const message = payload.output.message.content.find((block: any) => block.text)?.text ?? ''
+
+  return b.parse.ExtractResume(message)
+}
+```
+
+```python Python
+import json
+import requests
+from botocore.auth import SigV4Auth
+from botocore.awsrequest import AWSRequest
+import boto3
+from baml_client import b
+
+def call_bedrock():
+  req = b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  body = req.body.json()
+  body_bytes = json.dumps(body).encode("utf-8")
+
+  session = boto3.Session()
+  credentials = session.get_credentials().get_frozen_credentials()
+  region = req.client_details.options.get("region") or session.region_name or "us-east-1"
+
+  aws_request = AWSRequest(
+    method=req.method,
+    url=req.url,
+    data=body_bytes,
+    headers=dict(req.headers),
+  )
+  SigV4Auth(credentials, "bedrock", region).add_auth(aws_request)
+
+  response = requests.post(
+    req.url,
+    headers=dict(aws_request.headers.items()),
+    data=body_bytes,
+  )
+  response.raise_for_status()
+
+  payload = response.json()
+  message = payload["output"]["message"]["content"][0]["text"]
+  return b.parse.ExtractResume(message)
+```
+
 ## Provider request parameters
 These are other `options` that are passed through to the provider, without modification by BAML. For example if the request has a `temperature` field, you can define it in the client here so every call has that set.
 
@@ -600,4 +700,3 @@ client<llm> MyClient {
 - Use `AWS_PROFILE` to manage multiple profiles
 - Run `aws configure list` to verify configuration
 </Accordion>
-

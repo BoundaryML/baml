@@ -1266,6 +1266,7 @@ dependencies = [
  "minijinja",
  "notify-debouncer-full",
  "once_cell",
+ "percent-encoding",
  "pin-project-lite",
  "pretty",
  "pretty_assertions",

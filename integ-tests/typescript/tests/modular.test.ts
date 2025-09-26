@@ -9,9 +9,17 @@ import {
   GenerateContentRequest,
   GoogleGenerativeAI,
 } from "@google/generative-ai";
+import { SignatureV4 } from "@smithy/signature-v4";
+import { fromEnv } from "@aws-sdk/credential-providers";
+import { HttpRequest } from "@smithy/protocol-http";
+import { Sha256 } from "@aws-crypto/sha256-js";
 import { HTTPRequest as BamlHttpRequest } from "@boundaryml/baml";
 import { Resume } from "../baml_client/types";
 import { b, ClientRegistry } from "./test-setup";
+
+const LONG_CACHEABLE_CONTEXT = Array.from({ length: 600 })
+  .map(() => "Reusable cacheable context paragraph.")
+  .join(" ");
 
 const JOHN_DOE_TEXT_RESUME = `
   John Doe
@@ -271,12 +279,97 @@ describe("Modular API Tests", () => {
     const req = await b.request.TestOpenAIResponses("mountains");
 
     // The openai-responses provider should use the /v1/responses endpoint
-    const res = await client.responses.create(req.body.json()) as any;
+    const res = (await client.responses.create(req.body.json())) as any;
 
     // Parse the response from the responses API (uses output_text instead of choices)
     const parsed = b.parse.TestOpenAIResponses(res.output_text);
 
     expect(typeof parsed).toBe("string");
     expect(parsed.length).toBeGreaterThan(0);
+  });
+
+  it("modular aws bedrock custom cache point", async () => {
+    const req = await b.request.TestAws("Dr. Pepper");
+
+    const body = req.body.json() as any;
+    expect(Array.isArray(body.messages)).toBe(true);
+    expect(body.messages.length).toBeGreaterThan(0);
+
+    const content = body.messages[0].content as any[];
+    expect(Array.isArray(content)).toBe(true);
+
+    const originalLength = content.length;
+    content.splice(1, 0, { text: LONG_CACHEABLE_CONTEXT });
+    content.splice(2, 0, { cachePoint: { type: "default" } });
+
+    expect(content[1]).toEqual({ text: LONG_CACHEABLE_CONTEXT });
+    expect(content[2]).toEqual({ cachePoint: { type: "default" } });
+    expect(content.length).toBe(originalLength + 2);
+
+    body.additionalModelRequestFields = {
+      ...(body.additionalModelRequestFields ?? {}),
+    };
+
+    const bodyString = JSON.stringify(body);
+    const url = new URL(req.url);
+    const region =
+      process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? "us-east-1";
+
+    const signer = new SignatureV4({
+      service: "bedrock",
+      region,
+      credentials: fromEnv(),
+      sha256: Sha256,
+    });
+
+    const baseHeaders = Object.fromEntries(
+      Object.entries(req.headers as Record<string, string | undefined>).filter(
+        ([, value]) => value !== undefined,
+      ),
+    ) as Record<string, string>;
+
+    const headers = {
+      ...baseHeaders,
+      host: url.host,
+      "content-type": "application/json",
+      accept: "application/json",
+    };
+
+    const unsigned = new HttpRequest({
+      protocol: url.protocol,
+      hostname: url.hostname,
+      path: url.pathname,
+      method: req.method,
+      headers,
+      body: bodyString,
+    });
+
+    const signed = await signer.sign(unsigned);
+    const signedHeaders = Object.fromEntries(
+      Object.entries(signed.headers).map(([key, value]) => [
+        key,
+        String(value),
+      ]),
+    ) as Record<string, string>;
+
+    const res = await fetch(req.url, {
+      method: req.method,
+      headers: signedHeaders,
+      body: bodyString,
+    });
+
+    if (!res.ok) {
+      throw new Error(
+        `Bedrock request failed: ${res.status} ${await res.text()}`,
+      );
+    }
+
+    const payload = (await res.json()) as any;
+    const contentBlocks = payload?.output?.message?.content ?? [];
+    expect(Array.isArray(contentBlocks)).toBe(true);
+    const textBlock =
+      contentBlocks.find((block: any) => block.text)?.text ?? "";
+    expect(typeof textBlock).toBe("string");
+    expect(textBlock.length).toBeGreaterThan(0);
   });
 });
