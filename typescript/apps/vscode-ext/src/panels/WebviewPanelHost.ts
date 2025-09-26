@@ -48,6 +48,10 @@ export class WebviewPanelHost {
   private _port: () => number;
   private _isInitialized: boolean = false;
   private _pendingCommands: Array<VscodeToWebviewCommand> = [];
+  private _googleAuth = new GoogleAuth({
+    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+  });
+
 
   /**
    * The WebPanelView class private constructor (called only from the render method).
@@ -665,12 +669,8 @@ export class WebviewPanelHost {
           case 'LOAD_GCP_CREDS':
             (async () => {
               try {
-                const auth = new GoogleAuth({
-                  scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-                });
-
-                const client = await auth.getClient();
-                const projectId = await auth.getProjectId();
+                const client = await this._googleAuth.getClient();
+                let projectId = 'sam-project-vertex-1';
 
                 const tokenResponse = await client.getAccessToken();
 

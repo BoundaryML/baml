@@ -79,7 +79,7 @@ pub struct AwsCredResult {
 #[serde(rename_all = "camelCase")]
 pub struct GcpCredResult {
     pub access_token: String,
-    pub project_id: String,
+    pub project_id: Option<String>,
 }
 
 #[derive(new)]
