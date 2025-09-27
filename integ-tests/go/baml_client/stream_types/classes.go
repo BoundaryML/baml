@@ -14,6 +14,7 @@
 package stream_types
 
 import (
+	"encoding/json"
 	"fmt"
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"

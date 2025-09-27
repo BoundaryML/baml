@@ -14,8 +14,6 @@
 package baml_client
 
 import (
-	"reflect"
-
 	"example.com/integ-tests/baml_client/stream_types"
 	"example.com/integ-tests/baml_client/types"
 )

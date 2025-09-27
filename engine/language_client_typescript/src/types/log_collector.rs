@@ -206,6 +206,19 @@ impl FunctionLog {
     }
 
     #[napi(getter)]
+    pub fn tags<'e>(&self, env: &'e Env) -> Result<Unknown<'e>> {
+        let mut inner = self.inner.lock().unwrap();
+        let tags = inner.tags();
+        // Convert serde_json::Value map into JS object
+        let mut js_obj = Object::new(env)?;
+        for (k, v) in tags.iter() {
+            let js_value = super::serde_value_to_js(env, v)?;
+            js_obj.set_named_property(k, js_value)?;
+        }
+        Ok(js_obj.into_unknown(env)?)
+    }
+
+    #[napi(getter)]
     pub fn selected_call<'e>(&self, env: &'e Env) -> Result<Unknown<'e>> {
         let calls = self.inner.lock().unwrap().calls();
         let found = calls.into_iter().find_map(|call| match call {

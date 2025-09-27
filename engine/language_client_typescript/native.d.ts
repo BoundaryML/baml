@@ -121,6 +121,7 @@ export declare class FunctionLog {
   get calls(): (LLMCall | LLMStreamCall)[]
   get rawLlmResponse(): string | null
   get selectedCall(): unknown
+  get tags(): object
 }
 
 export declare class FunctionResult {

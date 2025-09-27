@@ -268,6 +268,13 @@ impl FunctionLog {
         self.inner.lock().unwrap().raw_llm_response()
     }
 
+    pub fn tags(&self, ruby: &Ruby) -> crate::Result<Value> {
+        let mut guard = self.inner.lock().unwrap();
+        let tags = guard.tags();
+        serde_magnus::serialize(&tags)
+            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{e:?}")))
+    }
+
     pub fn selected_call(ruby: &Ruby, rb_self: &Self) -> Option<Value> {
         let calls = rb_self.inner.lock().unwrap().calls();
         calls.into_iter().find_map(|call| match call {
@@ -312,6 +319,7 @@ impl FunctionLog {
             method!(FunctionLog::raw_llm_response, 0),
         )?;
         cls.define_method("selected_call", method!(FunctionLog::selected_call, 0))?;
+        cls.define_method("tags", method!(FunctionLog::tags, 0))?;
 
         Ok(())
     }

@@ -11,6 +11,7 @@ import gc
 import sys
 import asyncio
 from contextlib import asynccontextmanager
+from baml_client.tracing import trace, set_tags
 
 
 def function_call_count():
@@ -119,6 +120,29 @@ async def test_collector_async_no_stream_success():
     print("----- gc.collect() -----", file=sys.stderr)
     # still not collected cause it's in use
     assert function_call_count() > 0
+
+
+@pytest.mark.asyncio
+async def test_functionlog_tags_inherit_from_parent_trace():
+    collector = Collector(name="tags-collector")
+
+    @trace
+    async def parent_fn(msg: str):
+        set_tags(parent_id="p123", run="xyz")
+        # Child BAML function call should inherit tags
+        return await b.TestOpenAIGPT4oMini(msg, baml_options={"collector": collector})
+
+    await parent_fn("hi")
+
+    logs = collector.logs
+    assert len(logs) == 1
+    log = logs[0]
+    # New tags accessor
+    tags = log.tags
+    assert isinstance(tags, dict)
+    # Verify keys set in parent trace appear in child function log
+    assert tags.get("parent_id") == "p123"
+    assert tags.get("run") == "xyz"
 
 
 @pytest.mark.asyncio

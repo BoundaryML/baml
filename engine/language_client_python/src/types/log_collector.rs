@@ -194,6 +194,17 @@ impl FunctionLog {
         Ok(dict.into())
     }
 
+    /// pyi: @property def tags -> Dict[str, Any]
+    #[getter]
+    pub fn tags<'py>(&self, py: Python<'py>) -> PyResult<PyObject> {
+        let tags = self.inner.lock().unwrap().tags();
+        let dict = PyDict::new(py);
+        for (k, v) in tags.iter() {
+            dict.set_item(k, serde_value_to_py(py, v)?)?;
+        }
+        Ok(dict.into())
+    }
+
     /// pyi: @property def selected_call -> Optional[Union[LLMCall, LLMStreamCall]]
     /// Suppose if there's exactly one call with `selected=true`, we return it:
     #[getter]

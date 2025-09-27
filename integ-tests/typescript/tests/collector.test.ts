@@ -1,4 +1,4 @@
-import { traceAsync } from "../baml_client/tracing";
+import { traceAsync, setTags } from "../baml_client/tracing";
 import { b, b_sync } from "./test-setup";
 import { BamlRuntime, Collector, FunctionLog, Usage } from "@boundaryml/baml";
 
@@ -111,6 +111,27 @@ describe("Collector Tests", () => {
     console.log("----- gc.collect() -----");
     // Still not collected because it's in use
     expect(Collector.__functionSpanCount()).toBeGreaterThan(0);
+  });
+
+  it("should include parent trace tags in FunctionLog.tags", async () => {
+    const collector = new Collector("tags-collector");
+
+    const parent = traceAsync("parentTS", async () => {
+      setTags({ parentId: "p123", run: "xyz" });
+      return await b.TestOpenAIGPT4oMini("hi there", { collector });
+    });
+
+    await parent();
+
+    const logs = collector.logs;
+    expect(logs.length).toBe(1);
+    const log = logs[0];
+
+    // New tags accessor
+    const tags = (log as any).tags as Record<string, unknown>;
+    expect(typeof tags).toBe("object");
+    expect(tags["parentId"]).toBe("p123");
+    expect(tags["run"]).toBe("xyz");
   });
 
   it("should handle streaming calls correctly", async () => {
