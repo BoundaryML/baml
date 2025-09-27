@@ -221,8 +221,8 @@ case "$_path" in
       #command="${command} && BAML_LOG=trace infisical run --env=test -- uv run python baml_example_tracing.py"
       # command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=dev -- uv run pytest -s"
       # command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=dev -- uv run pytest -s tests/test_functions.py::test_openai_responses_all_roles"
-      command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=dev -- uv run pytest -s tests/test_errors.py"
-      # command="${command} && BAML_LOG=debug,baml_runtime=trace  uv run pytest -s tests/test_functions.py::test_should_work_with_vertex_claude"
+      # command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=dev -- uv run pytest -s tests/test_errors.py"
+      command="${command} && BAML_LOG=debug,baml_runtime=trace  uv run pytest -s tests/test_functions.py::test_should_work_with_vertex_claude"
       # command="${command} && BAML_LOG=info infisical run --env=dev -- uv run pytest"
       # command="${command} && BAML_LOG=info  uv run pytest -s tests/test_dynamic_enum_request.py"
     fi

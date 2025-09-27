@@ -249,7 +249,7 @@ mod tests {
             result,
             JsCallbackResult::Ok(GcpCredResult {
                 access_token: "ya29.token".into(),
-                project_id: "my-project-123".into(),
+                project_id: Some("my-project-123".into()),
             })
         );
     }
