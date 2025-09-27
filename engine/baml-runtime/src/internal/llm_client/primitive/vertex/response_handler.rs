@@ -129,7 +129,6 @@ pub fn scan_vertex_response_stream(
             return Ok(());
         }
     };
-    println!("event_body: {:?}", event_body);
 
     let event = VertexResponse::deserialize(&event_body)
         .context(format!(

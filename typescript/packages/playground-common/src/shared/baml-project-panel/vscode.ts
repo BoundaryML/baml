@@ -349,7 +349,7 @@ class VSCodeAPIWrapper {
    * @returns Promise<Uint8Array> Binary file contents
    * @throws Error if file cannot be read or loaded
    */
-  public async loadMediaFile(path: string): Promise<Uint8Array> {
+  public loadMediaFile = async (path: string): Promise<Uint8Array> => {
     try {
       if (this.isVscode()) {
         // VSCode: Request file contents directly via workspace API

@@ -284,7 +284,7 @@ where
                                 start_time: system_start,
                                 latency: instant_start.elapsed(),
                                 request_options: node.provider.request_options().clone(),
-                                message: "Stream ended without response".to_string(),
+                                message: "Stream ended and no events were received".to_string(),
                                 code: ErrorCode::Other(2),
                             })
                         }

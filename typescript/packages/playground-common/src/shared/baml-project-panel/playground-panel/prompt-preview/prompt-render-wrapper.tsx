@@ -12,7 +12,7 @@ import { selectionAtom } from '../atoms';
 import { displaySettingsAtom } from '../preview-toolbar';
 import { PromptPreviewContent } from './prompt-preview-content';
 import { renderedPromptAtom } from './prompt-preview-content';
-import { PromptPreviewCurl } from './prompt-preview-curl';
+import { PromptPreviewCurl, curlAtom } from './prompt-preview-curl';
 import { ClientGraphView } from './test-panel/components/ClientGraphView';
 import { MermaidGraphView } from './test-panel/components/MermaidGraphView';
 
@@ -87,6 +87,8 @@ export const PromptRenderWrapper = () => {
   const [showCopied, setShowCopied] = React.useState(false);
   const { open: isSidebarOpen } = useSidebar();
   const isBetaEnabled = useAtomValue(betaFeatureEnabledAtom);
+  const [activeTab, setActiveTab] = React.useState<'preview' | 'curl' | 'client-graph' | 'mermaid-graph'>('preview');
+  const curl = useAtomValue(curlAtom);
 
   // Hide text when sidebar is open or on smaller screens
   const getButtonTextClass = () => {
@@ -97,6 +99,20 @@ export const PromptRenderWrapper = () => {
   };
 
   const handleCopy = () => {
+    // If the cURL tab is active, copy the generated cURL (without secrets)
+    if (activeTab === 'curl') {
+      if (curl.state === 'hasData' && curl.data && !(curl.data instanceof Error)) {
+        const text = curl.data.curlTextWithoutSecrets ?? '';
+        if (text) {
+          void navigator.clipboard.writeText(text);
+          setShowCopied(true);
+          setTimeout(() => setShowCopied(false), 1500);
+        }
+      }
+      return;
+    }
+
+    // Otherwise copy the human-readable prompt preview
     if (!renderedPrompt) return;
     navigator.clipboard.writeText(
       renderedPrompt
@@ -113,7 +129,7 @@ export const PromptRenderWrapper = () => {
 
   return (
     // this used to be flex flex-col h-full min-h-0
-    <Tabs defaultValue="preview" className="flex flex-col min-h-0">
+    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex flex-col min-h-0">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <TabsList>
@@ -137,7 +153,7 @@ export const PromptRenderWrapper = () => {
               <Copy className="size-4 flex-shrink-0" />
             )}
             <span className={getButtonTextClass()}>
-              {showCopied ? 'Copied!' : 'Copy Prompt'}
+              {showCopied ? 'Copied!' : activeTab === 'curl' ? 'Copy cURL' : 'Copy Prompt'}
             </span>
           </Button>
         </div>

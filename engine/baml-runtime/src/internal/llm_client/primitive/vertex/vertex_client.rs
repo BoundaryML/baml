@@ -132,7 +132,10 @@ impl WithStreamChat for VertexClient {
             self,
             either::Either::Right(prompt),
             Some(self.properties.model.clone()),
-            ResponseType::Vertex,
+            match self.properties.anthropic_version {
+                Some(ref anthropic_version) => ResponseType::Anthropic,
+                None => ResponseType::Vertex,
+            },
             ctx,
         )
         .await
@@ -348,6 +351,13 @@ impl RequestBuilder for VertexClient {
             (None, either::Either::Right(messages)) => {
                 json_body.extend(self.chat_to_message(messages)?);
             }
+        }
+
+        // If this is an Anthropic-on-Vertex request and streaming is enabled, add `stream: true`
+        // to the JSON body to mirror Anthropic API behavior.
+        // See docs here: https://console.cloud.google.com/vertex-ai/publishers/anthropic/model-garden/claude-3-5-sonnet?authuser=1&hl=en&project=gloo-ai
+        if stream && self.properties.anthropic_version.is_some() {
+            json_body.insert("stream".into(), json!(true));
         }
 
         let req = req.json(&json_body);
