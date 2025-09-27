@@ -1,4 +1,8 @@
-use std::{cell::RefCell, collections::HashMap, future::Future, sync::Arc};
+use std::{
+    collections::HashMap,
+    future::Future,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::{anyhow, bail, Context, Result};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
@@ -10,11 +14,12 @@ use crate::thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, T
 ///
 /// Variables are stored in refcells to allow for mutation.
 pub struct Scope {
-    pub variables: BamlMap<String, RefCell<BamlValueWithMeta<ExprMetadata>>>,
+    pub variables: BamlMap<String, Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>>,
 }
 
 enum EvalValue {
     Value(BamlValueWithMeta<ExprMetadata>),
+    Reference(Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>),
     Function(usize, Arc<Block<ExprMetadata>>, ExprMetadata),
 }
 
@@ -42,7 +47,7 @@ where
         variables: BamlMap::from_iter(
             extra_bindings
                 .into_iter()
-                .map(|(k, v)| (k, RefCell::new(v))),
+                .map(|(k, v)| (k, Arc::new(Mutex::new(v)))),
         ),
     }];
 
@@ -55,7 +60,10 @@ where
     }
     scopes[0].variables.insert(
         "__env_vars__".to_string(),
-        RefCell::new(BamlValueWithMeta::Map(env_entries, (Span::fake(), None))),
+        Arc::new(Mutex::new(BamlValueWithMeta::Map(
+            env_entries,
+            (Span::fake(), None),
+        ))),
     );
 
     // Seed scope with global assignments
@@ -88,31 +96,38 @@ where
         for stmt in block.statements.iter() {
             match stmt {
                 Statement::Let { name, value, .. } => {
-                    let v =
-                        expect_value(evaluate_expr(value, scopes, thir, run_llm_function).await?)?;
-                    declare(scopes, name, v);
+                    match evaluate_expr(value, scopes, thir, run_llm_function).await? {
+                        EvalValue::Value(v) => {
+                            declare(scopes, name, v);
+                        }
+                        EvalValue::Reference(cell) => {
+                            declare_with_cell(scopes, name, cell);
+                        }
+                        EvalValue::Function(_, _, _) => {
+                            bail!("cannot assign function to variable `{}`", name);
+                        }
+                    }
                 }
                 Statement::Declare { name, span } => {
                     declare(scopes, name, BamlValueWithMeta::Null((span.clone(), None)));
                 }
                 Statement::Assign { left, value } => {
-                    // For now, we only support simple variable assignment (identifiers)
-                    let var_name = match left {
-                        Expr::Var(name, _) => name,
-                        _ => {
-                            return Err(anyhow::anyhow!(
-                                "Complex assignment targets not yet supported"
-                            ));
-                        }
-                    };
-                    let v =
+                    let assigned_value =
                         expect_value(evaluate_expr(value, scopes, thir, run_llm_function).await?)?;
-                    assign(scopes, var_name, v)?;
+                    assign_to_expr(left, assigned_value, scopes, thir, run_llm_function).await?;
                 }
                 Statement::DeclareAndAssign { name, value, .. } => {
-                    let v =
-                        expect_value(evaluate_expr(value, scopes, thir, run_llm_function).await?)?;
-                    declare(scopes, name, v);
+                    match evaluate_expr(value, scopes, thir, run_llm_function).await? {
+                        EvalValue::Value(v) => {
+                            declare(scopes, name, v);
+                        }
+                        EvalValue::Reference(cell) => {
+                            declare_with_cell(scopes, name, cell);
+                        }
+                        EvalValue::Function(_, _, _) => {
+                            bail!("cannot assign function to variable `{}`", name);
+                        }
+                    }
                 }
                 Statement::Return { expr, .. } => {
                     let v =
@@ -214,20 +229,8 @@ where
                 } => {
                     use crate::hir::AssignOp;
 
-                    // For now, we only support simple variable assignment (identifiers)
-                    let var_name = match left {
-                        Expr::Var(name, _) => name,
-                        _ => {
-                            return Err(anyhow::anyhow!(
-                                "Complex assignment targets not yet supported"
-                            ));
-                        }
-                    };
-
-                    // Get current value of the variable
-                    let current_val = lookup(scopes, var_name).with_context(|| {
-                        format!("assign op to undeclared variable `{var_name}`")
-                    })?;
+                    let current_val =
+                        expect_value(evaluate_expr(left, scopes, thir, run_llm_function).await?)?;
 
                     // Evaluate the right-hand side expression
                     let rhs_val =
@@ -358,8 +361,8 @@ where
                         },
                     };
 
-                    // Assign the result back to the variable
-                    assign(scopes, var_name, result_val)?;
+                    // Assign the result back to the target expression
+                    assign_to_expr(left, result_val, scopes, thir, run_llm_function).await?;
                 }
                 Statement::SemicolonExpression { expr, .. } => {
                     let _ = evaluate_expr(expr, scopes, thir, run_llm_function).await?;
@@ -405,22 +408,10 @@ where
                                         } => {
                                             use crate::hir::AssignOp;
 
-                                            // For now, we only support simple variable assignment (identifiers)
-                                            let var_name = match left {
-                                                Expr::Var(name, _) => name,
-                                                _ => {
-                                                    return Err(anyhow::anyhow!(
-                                                        "Complex assignment targets not yet supported"
-                                                    ));
-                                                }
-                                            };
-
-                                            let current_val = lookup(scopes, var_name)
-                                                .with_context(|| {
-                                                    format!(
-                                                        "assign op to undeclared variable `{var_name}`"
-                                                    )
-                                                })?;
+                                            let current_val = expect_value(
+                                                evaluate_expr(left, scopes, thir, run_llm_function)
+                                                    .await?,
+                                            )?;
                                             let rhs_val = expect_value(
                                                 evaluate_expr(
                                                     value,
@@ -447,18 +438,16 @@ where
                                                     "unsupported assign op in C-for after clause"
                                                 ),
                                             };
-                                            assign(scopes, var_name, result_val)?;
+                                            assign_to_expr(
+                                                left,
+                                                result_val,
+                                                scopes,
+                                                thir,
+                                                run_llm_function,
+                                            )
+                                            .await?;
                                         }
                                         Statement::Assign { left, value } => {
-                                            // For now, we only support simple variable assignment (identifiers)
-                                            let var_name = match left {
-                                                Expr::Var(name, _) => name,
-                                                _ => {
-                                                    return Err(anyhow::anyhow!(
-                                                        "Complex assignment targets not yet supported"
-                                                    ));
-                                                }
-                                            };
                                             let v = expect_value(
                                                 evaluate_expr(
                                                     value,
@@ -468,7 +457,8 @@ where
                                                 )
                                                 .await?,
                                             )?;
-                                            assign(scopes, var_name, v)?;
+                                            assign_to_expr(left, v, scopes, thir, run_llm_function)
+                                                .await?;
                                         }
                                         _ => bail!(
                                             "unsupported statement type in C-for after clause"
@@ -490,22 +480,10 @@ where
                                         } => {
                                             use crate::hir::AssignOp;
 
-                                            // For now, we only support simple variable assignment (identifiers)
-                                            let var_name = match left {
-                                                Expr::Var(name, _) => name,
-                                                _ => {
-                                                    return Err(anyhow::anyhow!(
-                                                        "Complex assignment targets not yet supported"
-                                                    ));
-                                                }
-                                            };
-
-                                            let current_val = lookup(scopes, var_name)
-                                                .with_context(|| {
-                                                    format!(
-                                                        "assign op to undeclared variable `{var_name}`"
-                                                    )
-                                                })?;
+                                            let current_val = expect_value(
+                                                evaluate_expr(left, scopes, thir, run_llm_function)
+                                                    .await?,
+                                            )?;
                                             let rhs_val = expect_value(
                                                 evaluate_expr(
                                                     value,
@@ -532,18 +510,16 @@ where
                                                     "unsupported assign op in C-for after clause"
                                                 ),
                                             };
-                                            assign(scopes, var_name, result_val)?;
+                                            assign_to_expr(
+                                                left,
+                                                result_val,
+                                                scopes,
+                                                thir,
+                                                run_llm_function,
+                                            )
+                                            .await?;
                                         }
                                         Statement::Assign { left, value } => {
-                                            // For now, we only support simple variable assignment (identifiers)
-                                            let var_name = match left {
-                                                Expr::Var(name, _) => name,
-                                                _ => {
-                                                    return Err(anyhow::anyhow!(
-                                                        "Complex assignment targets not yet supported"
-                                                    ));
-                                                }
-                                            };
                                             let v = expect_value(
                                                 evaluate_expr(
                                                     value,
@@ -553,7 +529,8 @@ where
                                                 )
                                                 .await?,
                                             )?;
-                                            assign(scopes, var_name, v)?;
+                                            assign_to_expr(left, v, scopes, thir, run_llm_function)
+                                                .await?;
                                         }
                                         _ => bail!(
                                             "unsupported statement type in C-for after clause"
@@ -613,24 +590,118 @@ fn declare(scopes: &mut [Scope], name: &str, value: BamlValueWithMeta<ExprMetada
     if let Some(scope) = scopes.last_mut() {
         scope
             .variables
-            .insert(name.to_string(), RefCell::new(value));
+            .insert(name.to_string(), Arc::new(Mutex::new(value)));
+    }
+}
+
+fn declare_with_cell(
+    scopes: &mut [Scope],
+    name: &str,
+    cell: Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>,
+) {
+    if let Some(scope) = scopes.last_mut() {
+        scope.variables.insert(name.to_string(), cell);
     }
 }
 
 fn assign(scopes: &mut [Scope], name: &str, value: BamlValueWithMeta<ExprMetadata>) -> Result<()> {
     for s in scopes.iter_mut().rev() {
         if let Some(cell) = s.variables.get_mut(name) {
-            *cell.borrow_mut() = value;
+            *cell.lock().unwrap() = value;
             return Ok(());
         }
     }
     bail!("assign to undeclared variable `{}`", name)
 }
 
+async fn assign_to_expr<F, Fut>(
+    target: &Expr<ExprMetadata>,
+    new_value: BamlValueWithMeta<ExprMetadata>,
+    scopes: &mut Vec<Scope>,
+    thir: &THir<ExprMetadata>,
+    run_llm_function: &mut F,
+) -> Result<()>
+where
+    F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send,
+{
+    let mut current_expr = target;
+    let mut value_to_assign = new_value;
+
+    loop {
+        match current_expr {
+            Expr::Var(name, _) => return assign(scopes, name, value_to_assign),
+            Expr::FieldAccess { base, field, .. } => {
+                let mut base_value =
+                    expect_value(evaluate_expr(base, scopes, thir, run_llm_function).await?)?;
+
+                match &mut base_value {
+                    BamlValueWithMeta::Class(_, fields, _) => {
+                        let entry = fields.get_mut(field).with_context(|| {
+                            format!("field `{}` not found for assignment", field)
+                        })?;
+                        *entry = value_to_assign.clone();
+                    }
+                    BamlValueWithMeta::Map(fields, _) => {
+                        let entry = fields.get_mut(field).with_context(|| {
+                            format!("field `{}` not found for assignment", field)
+                        })?;
+                        *entry = value_to_assign.clone();
+                    }
+                    _ => bail!("field assignment on non-map/class"),
+                }
+
+                value_to_assign = base_value;
+                current_expr = base.as_ref();
+            }
+            Expr::ArrayAccess { base, index, meta } => {
+                let mut base_value =
+                    expect_value(evaluate_expr(base, scopes, thir, run_llm_function).await?)?;
+                let index_value =
+                    expect_value(evaluate_expr(index, scopes, thir, run_llm_function).await?)?;
+
+                let idx = match index_value {
+                    BamlValueWithMeta::Int(i, _) if i >= 0 => i as usize,
+                    _ => bail!(
+                        "array assignment requires a non-negative integer index at {:?}",
+                        meta.0
+                    ),
+                };
+
+                match &mut base_value {
+                    BamlValueWithMeta::List(items, _) => {
+                        if idx >= items.len() {
+                            bail!("array assignment index out of bounds");
+                        }
+                        items[idx] = value_to_assign.clone();
+                    }
+                    _ => bail!("array assignment on non-list value at {:?}", meta.0),
+                }
+
+                value_to_assign = base_value;
+                current_expr = base.as_ref();
+            }
+            _ => return Err(anyhow!("Complex assignment targets not yet supported")),
+        }
+    }
+}
+
 fn lookup(scopes: &[Scope], name: &str) -> Option<BamlValueWithMeta<ExprMetadata>> {
     for s in scopes.iter().rev() {
         if let Some(cell) = s.variables.get(name) {
-            return Some(cell.borrow().clone());
+            return Some(cell.lock().unwrap().clone());
+        }
+    }
+    None
+}
+
+fn lookup_cell(
+    scopes: &[Scope],
+    name: &str,
+) -> Option<Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>> {
+    for s in scopes.iter().rev() {
+        if let Some(cell) = s.variables.get(name) {
+            return Some(cell.clone());
         }
     }
     None
@@ -735,9 +806,9 @@ where
                         meta.clone(),
                     )
                 } else {
-                    let v = lookup(scopes, name)
+                    let cell = lookup_cell(scopes, name)
                         .with_context(|| format!("unbound variable `{}` at {:?}", name, meta.0))?;
-                    EvalValue::Value(v)
+                    EvalValue::Reference(cell)
                 }
             }
             Expr::Function(arity, body, meta) => {
@@ -853,7 +924,7 @@ where
                     variables: param_names
                         .into_iter()
                         .zip(arg_vals)
-                        .map(|(k, v)| (k, RefCell::new(v)))
+                        .map(|(k, v)| (k, Arc::new(Mutex::new(v))))
                         .collect(),
                 });
 
@@ -1025,6 +1096,7 @@ where
 fn expect_value(v: EvalValue) -> Result<BamlValueWithMeta<ExprMetadata>> {
     match v {
         EvalValue::Value(v) => Ok(v),
+        EvalValue::Reference(cell) => Ok(cell.lock().unwrap().clone()),
         EvalValue::Function(_, _, _) => bail!("expected value, found function"),
     }
 }

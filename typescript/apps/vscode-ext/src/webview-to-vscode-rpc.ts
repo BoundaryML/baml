@@ -1,63 +1,5 @@
 import type { AwsCredentialIdentity } from '@smithy/types';
 
-// Commands that vscode sends to the webview
-export type VscodeToWebviewCommand =
-  | {
-      command: 'modify_file';
-      content: {
-        root_path: string;
-        name: string;
-        content: string | undefined;
-      };
-    }
-  | {
-      command: 'add_project';
-      content: {
-        root_path: string;
-        files: Record<string, string>;
-      };
-    }
-  | {
-      command: 'remove_project';
-      content: {
-        root_path: string;
-      };
-    }
-  | {
-      command: 'select_function';
-      content: {
-        root_path: string;
-        function_name: string;
-      };
-    }
-  | {
-      command: 'update_cursor';
-      content: {
-        cursor: {
-          fileName: string;
-          fileText: string;
-          line: number;
-          column: number;
-        };
-      };
-    }
-  | {
-      command: 'port_number';
-      content: {
-        port: number;
-      };
-    }
-  | {
-      command: 'baml_cli_version';
-      content: string;
-    }
-  | {
-      command: 'run_test';
-      content: {
-        test_name: string;
-      };
-    };
-
 // Commands that the webview sends to vscode
 type EnsureVSCodeCommand<T> = T extends { vscodeCommand: string } ? T : never;
 
@@ -72,18 +14,14 @@ export interface EchoRequest {
   message: string;
 }
 
+export interface UpdateSettingsRequest {
+  vscodeCommand: 'UPDATE_SETTINGS';
+  settings: Record<string, any>;
+}
+
+
 export interface EchoResponse {
   message: string;
-}
-
-export interface SetProxySettingsRequest {
-  vscodeCommand: 'SET_PROXY_SETTINGS';
-  proxyEnabled: boolean;
-}
-
-export interface SetFeatureFlagsRequest {
-  vscodeCommand: 'SET_FEATURE_FLAGS';
-  featureFlags: string[];
 }
 
 export interface GetBamlSrcRequest {
@@ -125,6 +63,15 @@ export interface GetPlaygroundPortResponse {
   port: number;
 }
 
+export interface LoadEnvRequest {
+  vscodeCommand: 'LOAD_ENV';
+}
+
+export interface LoadEnvResponse {
+  envVars: Record<string, string>;
+  error?: string;
+}
+
 export interface LoadAwsCredsRequest {
   vscodeCommand: 'LOAD_AWS_CREDS';
   profile: string | null;
@@ -132,14 +79,14 @@ export interface LoadAwsCredsRequest {
 
 export type LoadAwsCredsResponse =
   | {
-      ok: AwsCredentialIdentity;
-    }
+    ok: AwsCredentialIdentity;
+  }
   | {
-      error: {
-        name: string;
-        message: string;
-      };
+    error: {
+      name: string;
+      message: string;
     };
+  };
 
 export interface LoadGcpCredsRequest {
   vscodeCommand: 'LOAD_GCP_CREDS';
@@ -147,17 +94,30 @@ export interface LoadGcpCredsRequest {
 
 export type LoadGcpCredsResponse =
   | {
-      ok: {
-        accessToken: string;
-        projectId: string;
-      };
-    }
-  | {
-      error: {
-        name: string;
-        message: string;
-      };
+    ok: {
+      accessToken: string;
+      projectId: string;
     };
+  }
+  | {
+    error: {
+      name: string;
+      message: string;
+    };
+  };
+
+export interface JumpToFileRequest {
+  vscodeCommand: 'JUMP_TO_FILE';
+  span: {
+    file_path: string;
+    start_line: number;
+    start_column: number;
+  };
+}
+
+export interface JumpToFileResponse {
+  ok: true;
+}
 
 export interface InitializedRequest {
   vscodeCommand: 'INITIALIZED';
@@ -167,57 +127,35 @@ export interface InitializedResponse {
   ack: true;
 }
 
-export interface JumpToFileRequest {
-  vscodeCommand: 'JUMP_TO_FILE';
-  span: {
-    start: number;
-    end: number;
+export interface SetFlashingRegionsRequest {
+  vscodeCommand: 'SET_FLASHING_REGIONS';
+  spans: {
     file_path: string;
     start_line: number;
-  };
+    start: number;
+    end_line: number;
+    end: number;
+  }[];
 }
 
-export interface JumpToFileResponse {
-  ok: true;
-}
-
-export interface SendLspNotificationToIdeRequest {
-  vscodeCommand: 'SEND_LSP_NOTIFICATION_TO_IDE';
-  notification: {
-    method: string;
-    params: Record<string, any>;
-  }
-}
-
-export interface SendLspNotificationToIdeResponse {
-  ok: true;
-}
-
-export interface OpenPlaygroundRequest {
-  vscodeCommand: 'OPEN_PLAYGROUND';
-}
-
-export interface OpenPlaygroundResponse {
-  success: boolean;
-  url?: string;
-  error?: string;
+export interface SetFlashingRegionsResponse {
+  ack: true;
 }
 
 type ApiPairs = [
   // Echo is included here as an example of what a request/response pair looks like
   [EchoRequest, EchoResponse],
-  [SetProxySettingsRequest, void],
-  [SetFeatureFlagsRequest, void],
+  [UpdateSettingsRequest, void],
   [GetBamlSrcRequest, GetBamlSrcResponse],
   [GetWebviewUriRequest, GetWebviewUriResponse],
   [GetVSCodeSettingsRequest, GetVSCodeSettingsResponse],
   [GetPlaygroundPortRequest, GetPlaygroundPortResponse],
+  [LoadEnvRequest, LoadEnvResponse],
   [LoadAwsCredsRequest, LoadAwsCredsResponse],
   [LoadGcpCredsRequest, LoadGcpCredsResponse],
   [InitializedRequest, InitializedResponse],
-  [OpenPlaygroundRequest, OpenPlaygroundResponse],
   [JumpToFileRequest, JumpToFileResponse],
-  [SendLspNotificationToIdeRequest, SendLspNotificationToIdeResponse],
+  [SetFlashingRegionsRequest, SetFlashingRegionsResponse],
 ];
 
 // Serialization for binary data (like images)

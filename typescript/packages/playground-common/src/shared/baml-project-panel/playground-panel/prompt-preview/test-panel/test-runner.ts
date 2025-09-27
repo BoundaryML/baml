@@ -1,6 +1,5 @@
 import type { WasmFunctionResponse, WasmSpan, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { findMediaFile } from '../media-utils'
 import { ctxAtom, runtimeAtom, wasmAtom } from '../../../atoms';
 import { useAtomCallback } from 'jotai/utils'
 import { vscode } from '../../../vscode'
@@ -12,21 +11,12 @@ import {
   selectedTestcaseAtom,
   selectedFunctionAtom,
   currentAbortControllerAtom,
+  flashRangesAtom,
 } from '../../atoms'
 import { isParallelTestsEnabledAtom, testHistoryAtom, selectedHistoryIndexAtom, type TestHistoryRun } from './atoms'
 import { isClientCallGraphEnabledAtom } from '../../preview-toolbar'
 import { apiKeysAtom } from '../../../../../components/api-keys-dialog/atoms';
 
-// Helper function to clear highlights if in VSCode
-const clearHighlights = () => {
-  try {
-    vscode.postMessage({
-      command: 'clearHighlights',
-    })
-  } catch (e) {
-    console.error('Failed to clear highlights in VSCode:', e)
-  }
-}
 
 // TODO: use a single hook for both run and parallel run
 const useRunTests = (maxBatchSize = 5) => {
@@ -37,15 +27,14 @@ const useRunTests = (maxBatchSize = 5) => {
   const setSelectedFunction = useSetAtom(selectedFunctionAtom)
   const setIsClientCallGraphEnabled = useSetAtom(isClientCallGraphEnabledAtom)
   const apiKeys = useAtomValue(apiKeysAtom)
+  const setFlashRanges = useSetAtom(flashRangesAtom)
   const runTests = useAtomCallback(
     useCallback(
       async (get, set, tests: { functionName: string; testName: string }[]) => {
         // Create a fresh abort controller for this test run
         const controller = new AbortController()
-        console.warn('BAML Cancel: Created new AbortController for test run')
         set(currentAbortControllerAtom, controller)
-        console.warn('BAML Cancel: AbortController stored in atom')
-        
+
         // Create a new history run
         const historyRun: TestHistoryRun = {
           timestamp: Date.now(),
@@ -89,9 +78,6 @@ const useRunTests = (maxBatchSize = 5) => {
         }
 
         const runTest = async (test: { functionName: string; testName: string }) => {
-          console.log('runTest', test)
-          console.log('apiKeys', apiKeys)
-
           // TEMPORARY DEBUGGING HELPER:
           // console.log("Try to set flashing regions")
           // try {
@@ -103,14 +89,11 @@ const useRunTests = (maxBatchSize = 5) => {
           //   console.error('Failed to set flashing regions in VSCode:', e)
           // }
 
-          vscode.postMessage({
-            command: 'telemetry',
-            meta: {
-              action: 'run_tests',
-              data: {
-                num_tests: tests.length,
-                parallel: false,
-              },
+          vscode.sendTelemetry({
+            action: 'run_tests',
+            data: {
+              num_tests: tests.length,
+              parallel: false,
             },
           })
 
@@ -122,7 +105,6 @@ const useRunTests = (maxBatchSize = 5) => {
                 message: 'Missing required dependencies. Try reloading the playground.',
               })
               console.error('Missing required dependencies. Try reloading the playground.')
-              clearHighlights() // Clear highlights on error
               return
             }
 
@@ -140,7 +122,7 @@ const useRunTests = (maxBatchSize = 5) => {
               (partial: WasmFunctionResponse) => {
                 setState(test, { status: 'running', response: partial })
               },
-              findMediaFile,
+              vscode.loadMediaFile,
               (spans: WasmSpan[]) => {
                 // Send spans to VSCode for highlighting if we're in the VSCode environment
                 const spans_to_send = spans.map((span) => ({
@@ -152,10 +134,14 @@ const useRunTests = (maxBatchSize = 5) => {
                 }))
                 console.log('spans_to_send: ', spans_to_send)
                 try {
-                  vscode.postMessage({
-                    command: 'set_flashing_regions',
-                    content: { spans: spans_to_send },
-                  })
+                  vscode.setFlashingRegions(spans_to_send)
+                  setFlashRanges(spans_to_send.map((span) => ({
+                    filePath: span.file_path,
+                    startLine: span.start_line,
+                    startCol: span.start,
+                    endLine: span.end_line,
+                    endCol: span.end,
+                  })))
                 } catch (e) {
                   console.error('Failed to send spans to VSCode:', e)
                 }
@@ -184,14 +170,10 @@ const useRunTests = (maxBatchSize = 5) => {
               response_status: responseStatusMap[response_status] || 'error',
               latency_ms: endTime - startTime,
             })
-
-            // Clear highlights when test is completed, whether success or failure
-            clearHighlights()
           } catch (e) {
             console.log('test error!')
             console.error(e)
-            clearHighlights() // Clear highlights on error
-            
+
             // Check if this is an abort error
             if (e instanceof Error && (e.name === 'AbortError' || e.message?.includes('BamlAbortError'))) {
               setState(test, {
@@ -255,7 +237,6 @@ const useRunTests = (maxBatchSize = 5) => {
           console.warn('BAML Cancel: Tests completed, cleaning up')
           set(areTestsRunningAtom, false)
           set(currentAbortControllerAtom, null) // Clean up abort controller
-          clearHighlights() // Clear highlights when all tests are done
         })
       },
       [maxBatchSize, rt, ctx, wasm, apiKeys],
@@ -286,7 +267,7 @@ const useParallelRunTests = (maxBatchSize = 5) => {
         console.warn('BAML Cancel: Created new AbortController for test run')
         set(currentAbortControllerAtom, controller)
         console.warn('BAML Cancel: AbortController stored in atom')
-        
+
         // Create a new history run
         const historyRun: TestHistoryRun = {
           timestamp: Date.now(),
@@ -353,14 +334,11 @@ const useParallelRunTests = (maxBatchSize = 5) => {
             console.error("Invalid test found, so won't select this test case in the prompt preview", tests[0])
           }
 
-          vscode.postMessage({
-            command: 'telemetry',
-            meta: {
-              action: 'run_tests',
-              data: {
-                num_tests: tests.length,
-                parallel: true,
-              },
+          vscode.sendTelemetry({
+            action: 'run_tests',
+            data: {
+              num_tests: tests.length,
+              parallel: true,
             },
           })
 
@@ -399,7 +377,7 @@ const useParallelRunTests = (maxBatchSize = 5) => {
                   { status: 'running', response: partial },
                 )
               },
-              findMediaFile,
+              vscode.loadMediaFile,
               apiKeys,
               controller.signal, // Now supported!
             )

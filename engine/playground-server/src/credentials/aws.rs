@@ -24,7 +24,7 @@ pub async fn load_aws_credentials(request: LoadAwsCredsRequest) -> LoadAwsCredsR
         },
         Err(e) => LoadAwsCredsResponse::Error {
             name: "CredentialLoadError".to_string(),
-            message: format!("Failed to load credentials: {:?}", e),
+            message: format!("Have you run `aws sso login` and set your AWS_REGION, AWS_PROFILE in the playground \"API Keys\"? Failed to load credentials: {:?}", e),
         },
     }
 }

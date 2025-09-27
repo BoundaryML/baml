@@ -1044,6 +1044,20 @@ impl BamlRuntime {
             .await
             .map(|(prompt, ..)| prompt)?;
 
+        let mut request_id = HttpRequestId::new();
+
+        if let RenderedPrompt::Chat(chat) = &prompt {
+            if let LLMProvider::Primitive(primitive) = provider.as_ref() {
+                if let internal::llm_client::primitive::LLMPrimitiveProvider::Aws(aws_client) =
+                    primitive.as_ref()
+                {
+                    return aws_client
+                        .build_modular_http_request(&ctx, chat, stream, request_id)
+                        .await;
+                }
+            }
+        }
+
         let request = match prompt {
             RenderedPrompt::Chat(chat) => provider
                 .build_request(either::Either::Right(&chat), true, stream, &ctx, self)
@@ -1064,7 +1078,7 @@ impl BamlRuntime {
         // Would also be nice if RequestBuilder had getters so we didn't have to
         // call .build()? above.
         Ok(HTTPRequest::new(
-            HttpRequestId::new(),
+            std::mem::take(&mut request_id),
             request.url().to_string(),
             request.method().to_string(),
             json_headers(request.headers()),

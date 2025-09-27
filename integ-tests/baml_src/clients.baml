@@ -219,7 +219,7 @@ client<llm> AwsBedrock {
     // max_completion_tokens 100000
     // model "anthropic.claude-3-5-sonnet-20240620-v1:0"
     // model_id "anthropic.claude-3-haiku-20240307-v1:0"
-    model "meta.llama3-8b-instruct-v1:0"
+    model "arn:aws:bedrock:us-east-1:404337120808:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
     // region "us-east-1"
     // access_key_id env.AWS_ACCESS_KEY_ID
     // secret_access_key env.AWS_SECRET_ACCESS_KEY

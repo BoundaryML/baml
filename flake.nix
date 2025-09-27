@@ -46,8 +46,9 @@
         buildInputs = (with pkgs; [
           cmake
           git
-	        go
-	        gotools
+        go
+        gotools
+          mise
           openssl
           pkg-config
           lld_17

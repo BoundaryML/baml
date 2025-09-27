@@ -6,11 +6,13 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.event.CaretEvent
 import com.intellij.openapi.editor.event.CaretListener
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import com.redhat.devtools.lsp4ij.LanguageServerManager
 import com.redhat.devtools.lsp4ij.LanguageServerManager.StartOptions
 import com.redhat.devtools.lsp4ij.LanguageServerManager.StopOptions
@@ -21,6 +23,8 @@ import com.redhat.devtools.lsp4ij.installation.ServerInstallationStatus
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -38,29 +42,7 @@ data class GeneratorVersionPayload(
     val root_path: String
 )
 
-// Data classes for cursor position notification
-@Serializable
-data class Position(
-    val line: Int,
-    val character: Int
-)
-
-@Serializable
-data class Range(
-    val start: Position,
-    val end: Position
-)
-
-@Serializable
-data class TextDocument(
-    val uri: String
-)
-
-@Serializable
-data class CursorNotificationPayload(
-    val textDocument: TextDocument,
-    val range: Range
-)
+// No need for data classes - we'll build JSON directly using buildJsonObject()
 
 class BamlLanguageClient(project: Project) :
     LanguageClientImpl(project) {
@@ -74,7 +56,6 @@ class BamlLanguageClient(project: Project) :
     //    override fun handleServerStatusChanged(serverStatus: ServerStatus) {
     //        super.handleServerStatusChanged(serverStatus)
     //    }
-
 
     init {
         log.info("Initializing cursor tracking for BAML files")
@@ -112,23 +93,11 @@ class BamlLanguageClient(project: Project) :
             
             // Get cursor position
             val caret = event.caret ?: return
-            val logicalPosition = caret.logicalPosition
-            val line = logicalPosition.line
-            val character = logicalPosition.column
-            
-            // Create the payload
-            val payload = CursorNotificationPayload(
-                textDocument = TextDocument(uri = "file://${virtualFile.path}"),
-                range = Range(
-                    start = Position(line = line, character = character),
-                    end = Position(line = line, character = character)
-                )
-            )
-            
+
             // Send POST request asynchronously
             val portValue = port // capture the non-null value
             ApplicationManager.getApplication().executeOnPooledThread {
-                sendCursorNotification(portValue, payload)
+                sendCursorNotification(portValue, virtualFile, caret)
             }
             
         } catch (e: Exception) {
@@ -136,10 +105,24 @@ class BamlLanguageClient(project: Project) :
         }
     }
 
-    private fun sendCursorNotification(port: Int, payload: CursorNotificationPayload) {
+    private fun sendCursorNotification(port: Int, file: VirtualFile, caret: Caret) {
         try {
-            val webviewUrl = "http://localhost:$port/webview/SEND_LSP_NOTIFICATION_TO_WEBVIEW"
-            val jsonBody = json.encodeToString(CursorNotificationPayload.serializer(), payload)
+            val webviewUrl = "http://localhost:$port/webview/SEND_COMMAND_TO_WEBVIEW"
+            
+            // See vscode-to-webview-rpc.ts for the structure of this message
+            val command = buildJsonObject {
+                put("source", JsonPrimitive("ide_message"))
+                put("payload", buildJsonObject {
+                    put("command", JsonPrimitive("update_cursor"))
+                    put("content", buildJsonObject {
+                        put("fileName", JsonPrimitive(file.path))
+                        put("line", JsonPrimitive(caret.logicalPosition.line))
+                        put("column", JsonPrimitive(caret.logicalPosition.column))
+                    })
+                })
+            }
+            
+            val jsonBody = json.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), command)
             
             log.debug("Sending cursor notification to $webviewUrl: $jsonBody")
             
@@ -162,7 +145,7 @@ class BamlLanguageClient(project: Project) :
     }
 
     // Existing port notification (keep exactly as-is but use new service)
-    @JsonNotification("baml/port")
+    @JsonNotification("baml/playground_port")
     fun onPort(params: PortParams) {
         log.info("Port params: ${params.port}")
 

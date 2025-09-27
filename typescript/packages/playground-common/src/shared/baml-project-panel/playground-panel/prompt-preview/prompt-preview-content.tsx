@@ -7,7 +7,7 @@ import { apiKeysAtom } from '../../../../components/api-keys-dialog/atoms';
 import { ctxAtom, diagnosticsAtom, filesAtom, runtimeAtom } from '../../atoms';
 import { areTestsRunningAtom, selectionAtom } from '../atoms';
 import { Loader } from './components';
-import { findMediaFile } from './media-utils';
+import { vscode } from '../../vscode';
 import { RenderPrompt } from './render-prompt';
 import { EnhancedErrorRenderer } from './test-panel/components/EnhancedErrorRenderer';
 
@@ -38,7 +38,7 @@ export const PromptPreviewContent = () => {
         rt,
         selectedTc.name,
         ctx,
-        findMediaFile,
+        vscode.loadMediaFile,
         apiKeys,
       );
       setLastKnownPreview(newPreview);
@@ -60,12 +60,12 @@ export const PromptPreviewContent = () => {
     // Include file content in the key so updates trigger when typing
     rt && ctx && selectedFn && selectedTc
       ? [
-          'prompt-preview',
-          selectedFn.name,
-          selectedTc.name,
-          JSON.stringify(apiKeys),
-          JSON.stringify(files), // Add file content to trigger updates on typing
-        ]
+        'prompt-preview',
+        selectedFn.name,
+        selectedTc.name,
+        JSON.stringify(apiKeys),
+        JSON.stringify(files), // Add file content to trigger updates on typing
+      ]
       : null,
     generatePreview,
     {

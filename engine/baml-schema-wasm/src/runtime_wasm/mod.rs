@@ -332,7 +332,20 @@ pub struct WasmSpan {
     #[wasm_bindgen(readonly)]
     pub start_line: usize,
     #[wasm_bindgen(readonly)]
+    pub start_column: usize,
+    #[wasm_bindgen(readonly)]
     pub end_line: usize,
+    #[wasm_bindgen(readonly)]
+    pub end_column: usize,
+}
+
+impl WasmSpan {
+    fn contains(&self, file_path: &str, cursor_idx: usize) -> bool {
+        // NB(sam): we should probably do an == comparison, but ends_with is the
+        // existing behavior and handles file:// ambiguity
+        self.file_path.as_str().ends_with(file_path)
+            && ((self.start)..=(self.end)).contains(&cursor_idx)
+    }
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -354,7 +367,9 @@ impl From<&baml_runtime::internal_baml_diagnostics::Span> for WasmSpan {
             start: span.start,
             end: span.end,
             start_line: start.0,
+            start_column: start.1,
             end_line: end.0,
+            end_column: end.1,
         }
     }
 }
@@ -366,7 +381,9 @@ impl Default for WasmSpan {
             start: 0,
             end: 0,
             start_line: 0,
+            start_column: 0,
             end_line: 0,
+            end_column: 0,
         }
     }
 }
@@ -1061,7 +1078,9 @@ impl WasmRuntime {
                     start: generator.span.start,
                     end: generator.span.end,
                     start_line: generator.span.line_and_column().0 .0,
+                    start_column: generator.span.line_and_column().0 .1,
                     end_line: generator.span.line_and_column().1 .0,
+                    end_column: generator.span.line_and_column().1 .1,
                 },
             })
             .collect()
@@ -1315,9 +1334,7 @@ impl WasmRuntime {
         for function in functions.clone() {
             let span = function.span.clone(); // Clone the span
 
-            if span.file_path.as_str().ends_with(file_name)
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
-            {
+            if span.contains(file_name, cursor_idx) {
                 return Some(function);
             }
         }
@@ -1326,9 +1343,7 @@ impl WasmRuntime {
 
         for tc in testcases {
             let span = tc.span;
-            if span.file_path.as_str().ends_with(file_name)
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
-            {
+            if span.contains(file_name, cursor_idx) {
                 if let Some(_parent_function) =
                     tc.parent_functions.iter().find(|f| f.name == selected_func)
                 {
@@ -1345,9 +1360,7 @@ impl WasmRuntime {
 
         for tc in testcases {
             let span = tc.span;
-            if span.file_path.as_str().ends_with(file_name)
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
-            {
+            if span.contains(file_name, cursor_idx) {
                 if let Some(_parent_function) =
                     tc.parent_functions.iter().find(|f| f.name == selected_func)
                 {
@@ -1462,9 +1475,7 @@ impl WasmRuntime {
         for testcase in testcases {
             let span = testcase.clone().span;
 
-            if span.file_path.as_str() == (parent_function.span.file_path)
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
-            {
+            if span.contains(&parent_function.span.file_path, cursor_idx) {
                 return Some(testcase);
             }
         }
@@ -1481,9 +1492,7 @@ impl WasmRuntime {
 
         for tc in testcases {
             let span = tc.span;
-            if span.file_path.as_str().ends_with(file_name)
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
-            {
+            if span.contains(file_name, cursor_idx) {
                 let first_function = tc
                     .parent_functions
                     .iter()

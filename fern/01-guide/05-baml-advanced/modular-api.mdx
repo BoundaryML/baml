@@ -448,6 +448,172 @@ async function run() {
 ```
 </CodeBlocks>
 
+### AWS Bedrock
+
+The modular API now returns requests for Bedrock's Converse API. You can
+modify it, sign it and forward the request with any HTTP client. A signature
+with the SignatureV4 SDK is required, we provide examples of how to do this
+below.
+
+```baml BAML {2}
+function ExtractResume(resume: string) -> Resume {
+  client Bedrock
+  // Prompt here...
+}
+```
+
+<CodeBlocks>
+```python Python
+import asyncio
+import json
+import os
+import httpx
+from botocore.auth import SigV4Auth
+from botocore.awsrequest import AWSRequest
+import boto3
+from baml_client import b
+from urllib.parse import urlsplit
+
+async def run():
+  req = await b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  body = req.body.json()
+  # Optional: append your own messages before signing.
+  body["messages"].append({
+    "role": "system",
+    "content": [{"text": "You must respond in JSON."}],
+  })
+  body_string = json.dumps(body)
+  body_bytes = body_string.encode("utf-8")
+
+  session = boto3.Session()
+  credentials = session.get_credentials().get_frozen_credentials()
+  region = (
+    req.client_details.options.get("region")
+    or os.environ.get("AWS_REGION")
+    or os.environ.get("AWS_DEFAULT_REGION")
+    or session.region_name
+    or "us-east-1"
+  )
+
+  url = urlsplit(req.url)
+
+  base_headers = {
+    key: value
+    for key, value in dict(req.headers).items()
+    if value is not None
+  }
+
+  headers = {
+    **base_headers,
+    "content-type": "application/json",
+    "accept": "application/json",
+    "host": url.netloc,
+  }
+
+  aws_request = AWSRequest(
+    method=req.method,
+    url=req.url,
+    data=body_bytes,
+    headers=headers,
+  )
+  SigV4Auth(credentials, "bedrock", region).add_auth(aws_request)
+
+  async with httpx.AsyncClient() as client:
+    response = await client.post(
+      req.url,
+      headers={key: str(value) for key, value in aws_request.headers.items()},
+      content=body_bytes,
+    )
+    if not response.is_success:
+      raise RuntimeError(
+        f"Bedrock request failed: {response.status_code} {response.text}"
+      )
+
+  payload = response.json()
+  message = payload["output"]["message"]["content"][0]["text"]
+  parsed = b.parse.ExtractResume(message)
+  print(parsed)
+
+asyncio.run(run())
+```
+
+```typescript TypeScript
+import { SignatureV4 } from "@smithy/signature-v4"
+import { fromEnv } from "@aws-sdk/credential-providers"
+import { HttpRequest } from "@smithy/protocol-http"
+import { Sha256 } from "@aws-crypto/sha256-js"
+import { b } from 'baml_client'
+
+async function run() {
+  const req = await b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  const body = req.body.json() as any
+  body.messages.push({
+    role: "user",
+    content: [{ text: "Add a short TL;DR." }],
+  })
+  const bodyString = JSON.stringify(body)
+
+  const url = new URL(req.url)
+  const region = process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? "us-east-1"
+
+  const signer = new SignatureV4({
+    service: "bedrock",
+    region,
+    credentials: fromEnv(),
+    sha256: Sha256,
+  })
+
+  const baseHeaders = Object.fromEntries(
+    Object.entries(req.headers as Record<string, string | undefined>).filter(
+      ([, value]) => value !== undefined,
+    ),
+  ) as Record<string, string>
+
+  const headers = {
+    ...baseHeaders,
+    host: url.host,
+    "content-type": "application/json",
+    accept: "application/json",
+  }
+
+  const unsigned = new HttpRequest({
+    protocol: url.protocol,
+    hostname: url.hostname,
+    path: url.pathname,
+    method: req.method,
+    headers,
+    body: bodyString,
+  })
+
+  const signed = await signer.sign(unsigned)
+  const signedHeaders = Object.fromEntries(
+    Object.entries(signed.headers).map(([key, value]) => [key, String(value)]),
+  ) as Record<string, string>
+
+  const res = await fetch(req.url, {
+    method: req.method,
+    headers: signedHeaders,
+    body: bodyString,
+  })
+
+  if (!res.ok) {
+    throw new Error(`Bedrock request failed: ${res.status} ${await res.text()}`)
+  }
+
+  const payload = await res.json()
+  const message = payload.output.message.content.find((block: any) => block.text)?.text ?? ''
+  const parsed = b.parse.ExtractResume(message)
+  console.log(parsed)
+}
+```
+</CodeBlocks>
+
+> ℹ️ Streaming modular requests are not yet supported for Bedrock. Call
+> `b.request` (non-streaming) when targeting AWS, and re-sign after any
+> modifications to the body or headers.
+
 ## Type Checking
 
 ### Python

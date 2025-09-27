@@ -1,8 +1,9 @@
+use anyhow::Context;
 use axum::{
     extract::{Path, State},
     Json,
 };
-use lsp_server::Notification;
+use mime_guess;
 use serde_json::Value;
 
 use crate::{
@@ -11,6 +12,23 @@ use crate::{
     WebviewRouterMessage,
 };
 
+// Helper function to convert anyhow::Error to ApiError for internal operations
+fn anyhow_to_internal_error(err: anyhow::Error) -> ApiError {
+    ApiError::InternalError(format!("{:#}", err))
+}
+
+fn anyhow_to_bad_request(err: anyhow::Error) -> ApiError {
+    ApiError::BadRequest(format!("{:#}", err))
+}
+
+// Helper function to get MIME type from file path
+fn get_mime_type(path: &std::path::Path) -> Option<String> {
+    // Get MIME type from file extension
+    mime_guess::from_path(path)
+        .first()
+        .map(|mime| mime.to_string())
+}
+
 pub async fn webview_rpc_handler(
     Path(command): Path<String>,
     State(state): State<AppState>,
@@ -18,40 +36,36 @@ pub async fn webview_rpc_handler(
 ) -> Result<Json<Value>, ApiError> {
     match command.as_str() {
         "GET_VSCODE_SETTINGS" => {
-            let config = state
-                .editor_config
-                .read()
-                .map_err(|_| ApiError::InternalError("Failed to read config".to_string()))?;
+            let (tx, mut rx) = tokio::sync::broadcast::channel(1);
+            let _ = state
+                .to_webview_router_tx
+                .send(WebviewRouterMessage::GetLanguageServerSettings(tx))
+                .inspect_err(|e| {
+                    tracing::error!(
+                        "Failed to send GET_LANGUAGE_SERVER_SETTINGS message to WebviewRouter: {e}"
+                    );
+                });
+            let response = rx
+                .recv()
+                .await
+                .map_err(|e| anyhow_to_internal_error(e.into()))?;
 
-            let response = GetVSCodeSettingsResponse {
-                enable_playground_proxy: config.enable_playground_proxy,
-                feature_flags: config.feature_flags.clone(),
-            };
-            Ok(Json(serde_json::to_value(response)?))
+            Ok(Json(response))
         }
 
-        "SET_PROXY_SETTINGS" => {
-            let request: SetProxySettingsRequest = serde_json::from_value(payload)
-                .map_err(|_| ApiError::BadRequest("Invalid request format".to_string()))?;
+        "UPDATE_SETTINGS" => {
+            let request: UpdateSettingsRequest = serde_json::from_value(payload)
+                .context("Failed to parse UpdateSettingsRequest")
+                .map_err(anyhow_to_bad_request)?;
 
-            let mut config = state
-                .editor_config
-                .write()
-                .map_err(|_| ApiError::InternalError("Failed to write config".to_string()))?;
-            config.enable_playground_proxy = request.proxy_enabled;
+            tracing::info!("UPDATE_SETTINGS: {:#?}", request);
 
-            Ok(Json(Value::Null)) // No response body for settings updates
-        }
-
-        "SET_FEATURE_FLAGS" => {
-            let request: SetFeatureFlagsRequest = serde_json::from_value(payload)
-                .map_err(|_| ApiError::BadRequest("Invalid feature flags request".to_string()))?;
-
-            let mut config = state
-                .editor_config
-                .write()
-                .map_err(|_| ApiError::InternalError("Failed to write config".to_string()))?;
-            config.feature_flags = request.feature_flags;
+            let _ = state
+                .to_webview_router_tx
+                .send(WebviewRouterMessage::UpdateLanguageServerSettings(request.settings))
+                .inspect_err(|e| {
+                    tracing::error!("Failed to send UPDATE_LANGUAGE_SERVER_SETTINGS message to WebviewRouter: {e}");
+                });
 
             Ok(Json(Value::Null)) // No response body for settings updates
         }
@@ -65,13 +79,48 @@ pub async fn webview_rpc_handler(
 
         "GET_WEBVIEW_URI" => {
             let request: GetWebviewUriRequest = serde_json::from_value(payload)
-                .map_err(|_| ApiError::BadRequest("Invalid webview URI request".to_string()))?;
+                .context("Failed to parse GetWebviewUriRequest")
+                .map_err(anyhow_to_bad_request)?;
 
-            let file_access = &state.file_access;
+            tracing::debug!("GET_WEBVIEW_URI request for path: {}", request.path);
 
-            // Generate webview-compatible URI (for JCEF, this is just a file:// URI)
-            let resolved_path = file_access.resolve_path(&request.path)?;
-            let uri = format!("file://{}", resolved_path.display());
+            // Use the path directly from the request
+            let path = std::path::Path::new(&request.path);
+
+            // Check if we can determine the MIME type
+            let uri = if let Some(mime_type) = get_mime_type(path) {
+                tracing::debug!("Returning data URL for {}: {}", mime_type, request.path);
+
+                // For files with detectable MIME types, read the file and create a data URL
+                match tokio::fs::read(&request.path).await {
+                    Ok(contents) => {
+                        use base64::{engine::general_purpose, Engine as _};
+                        let encoded = general_purpose::STANDARD.encode(&contents);
+                        let data_url = format!("data:{};base64,{}", mime_type, encoded);
+
+                        // Log if the data URL is large
+                        if data_url.len() > 1_000_000 {
+                            // 1MB
+                            tracing::warn!(
+                                "Large data URL generated for {}: {} bytes",
+                                request.path,
+                                data_url.len()
+                            );
+                        }
+
+                        data_url
+                    }
+                    Err(e) => {
+                        // Fall back to file:// URI if we can't read the file
+                        tracing::warn!("Failed to read file for data URL: {}", e);
+                        format!("file://{}", request.path)
+                    }
+                }
+            } else {
+                // For files without detectable MIME types, use file:// URI as before
+                tracing::debug!("Returning file URI for unknown type: {}", request.path);
+                format!("file://{}", request.path)
+            };
 
             let mut response = GetWebviewUriResponse {
                 uri,
@@ -79,10 +128,10 @@ pub async fn webview_rpc_handler(
                 read_error: None,
             };
 
-            if request.contents.unwrap_or(false) {
-                match file_access.read_file(&request.path).await {
+            // Still support the optional contents field for backward compatibility
+            if request.contents.unwrap_or(false) && get_mime_type(path).is_none() {
+                match tokio::fs::read(&request.path).await {
                     Ok(contents) => {
-                        // Encode binary data as base64 for JSON transport
                         use base64::{engine::general_purpose, Engine as _};
                         response.contents = Some(general_purpose::STANDARD.encode(contents));
                     }
@@ -134,7 +183,8 @@ pub async fn webview_rpc_handler(
 
         "SEND_LSP_NOTIFICATION_TO_IDE" => {
             let request: SendLspNotificationToIdeRequest = serde_json::from_value(payload)
-                .map_err(|_| ApiError::BadRequest("Invalid jump to file request".to_string()))?;
+                .context("Failed to parse SendLspNotificationToIdeRequest")
+                .map_err(anyhow_to_bad_request)?;
 
             let _ = state
                 .to_webview_router_tx
@@ -147,28 +197,21 @@ pub async fn webview_rpc_handler(
             Ok(Json(serde_json::to_value(response)?))
         }
 
-        "SEND_LSP_NOTIFICATION_TO_WEBVIEW" => {
+        "SEND_COMMAND_TO_WEBVIEW" => {
+            let request: SendCommandToWebviewRequest = serde_json::from_value(payload)
+                .context("Failed to parse SendCommandToWebviewRequest")
+                .map_err(anyhow_to_bad_request)?;
+
             let _ = state
                 .to_webview_router_tx
-                .send(WebviewRouterMessage::SendLspNotificationToWebview(Notification::new(
-                    "textDocument/codeAction".to_string(),
-                    payload,
-                )))
+                .send(WebviewRouterMessage::SendMessageToWebview(request.0))
                 .inspect_err(|e| {
-                    tracing::error!("Failed to send SEND_LSP_NOTIFICATION_TO_IDE message to language-server: {e}");
+                    tracing::error!(
+                        "Failed to send SEND_COMMAND_TO_WEBVIEW message to language-server: {e}"
+                    );
                 });
 
-            let response = SendLspNotificationToIdeResponse { ok: true };
-            Ok(Json(serde_json::to_value(response)?))
-        }
-
-        "ECHO" => {
-            let request: EchoRequest = serde_json::from_value(payload)
-                .map_err(|_| ApiError::BadRequest("Invalid echo request".to_string()))?;
-
-            let response = EchoResponse {
-                message: request.message,
-            };
+            let response = SendCommandToWebviewResponse { ok: true };
             Ok(Json(serde_json::to_value(response)?))
         }
 

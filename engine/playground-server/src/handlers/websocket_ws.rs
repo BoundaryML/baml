@@ -11,42 +11,34 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> 
 }
 
 pub async fn start_client_connection(ws: axum::extract::ws::WebSocket, state: AppState) {
-    tracing::info!("axum listening on /ws");
+    tracing::info!("EventListener client connected");
     let (mut ws_tx, mut ws_rx) = ws.split();
-    let mut rx = state.webview_router_to_websocket_rx;
-
-    // Send initial project state using the helper
-    tracing::info!("send_all_projects_to_client BEGIN");
-    // send_all_projects_to_client(&mut ws_tx, &session).await;
-    tracing::info!("send_all_projects_to_client END");
+    let mut rx = state.webview_router_to_websocket_rx_provider.subscribe();
 
     // Handle incoming messages and broadcast updates
     tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                // Handle incoming messages from the client
-                Some(result) = ws_rx.next() => {
-                    match result {
-                        Ok(msg) => {
-                            // Handle incoming WebSocket messages here
-                            tracing::debug!("Received WebSocket message: {:?}", msg);
-                        }
-                        Err(e) => {
-                            tracing::error!("WebSocket error: {}", e);
-                            break;
-                        }
-                    }
+        while let Some(msg) = ws_rx.next().await {
+            match msg {
+                Ok(msg) => {
+                    tracing::warn!("Received message from EventListener, discarding it:\n{msg:?}");
                 }
-                // Handle broadcast messages
-                Ok(msg) = rx.recv() => {
-                    // Convert the LSP message to a format suitable for WebSocket
-                    let message_text = serde_json::to_string(&msg).unwrap_or_else(|_| "{}".to_string());
-                    if let Err(e) = ws_tx.send(Message::Text(message_text.into())).await {
-                        tracing::error!("Failed to send broadcast message: {}", e);
-                        break;
-                    }
+                Err(e) => {
+                    tracing::error!("Error receiving message from EventListener: {e}");
+                    break;
                 }
             }
         }
+        tracing::info!("WebSocket rx channel closed");
+    });
+    tokio::spawn(async move {
+        while let Ok(msg) = rx.recv().await {
+            // Convert the LSP message to a format suitable for WebSocket
+            let message_text = serde_json::to_string(&msg).unwrap_or_else(|_| "{}".to_string());
+            if let Err(e) = ws_tx.send(Message::Text(message_text.into())).await {
+                tracing::error!("Failed to send message to EventListener: {e}");
+                break;
+            }
+        }
+        tracing::info!("WebSocket tx channel closed");
     });
 }

@@ -1,5 +1,5 @@
 'use client';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useEffect, useRef, useCallback } from 'react';
 import mermaid from 'mermaid';
 import { Button } from '@baml/ui/button';
@@ -7,6 +7,7 @@ import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import svgPanZoom from 'svg-pan-zoom';
 import { functionGraphAtom } from '../../../atoms-orch-graph';
 import { vscode } from '../../../../vscode';
+import { flashRangesAtom } from '../../../atoms';
 
 // === BAML Mermaid CSS Override (media-like styling) ===
 // This CSS is injected into the generated Mermaid SVG so it overrides Mermaid's defaults.
@@ -129,6 +130,7 @@ export const MermaidGraphView: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const panZoomRef = useRef<ReturnType<typeof svgPanZoom> | null>(null);
+  const setFlashRanges = useSetAtom(flashRangesAtom)
 
   const zoomIn = useCallback(() => {
     panZoomRef.current?.zoomBy(1.2);
@@ -153,7 +155,7 @@ export const MermaidGraphView: React.FC = () => {
     // Raw graph string for debugging
     try {
       console.log('[MermaidGraphView] raw graph string:', graph);
-    } catch {}
+    } catch { }
 
     const onResize = () => {
       if (!panZoomRef.current) return;
@@ -205,24 +207,22 @@ export const MermaidGraphView: React.FC = () => {
             }
             console.log('[MermaidGraphView] triggerSpan', { nodeId, span });
             vscode.jumpToFile(span);
-            
-            window.postMessage(
-              {
-                command: 'set_flashing_regions',
-                content: {
-                  spans: [
-                    {
-                      file_path: span.file_path,
-                      start_line: span.start_line,
-                      start: span.start,
-                      end_line: span.end_line,
-                      end: span.end,
-                    },
-                  ],
-                },
-              },
-              '*',
-            );
+
+            vscode.setFlashingRegions([{
+              file_path: span.file_path,
+              start_line: span.start_line,
+              start: span.start,
+              end_line: span.end_line,
+              end: span.end,
+            }]);
+            setFlashRanges([{
+              filePath: span.file_path,
+              startLine: span.start_line,
+              startCol: span.start,
+              endLine: span.end_line,
+              endCol: span.end,
+            }]);
+
           } catch (err) {
             console.error('[MermaidGraphView] error in triggerSpan', err);
           }
@@ -260,7 +260,7 @@ export const MermaidGraphView: React.FC = () => {
           styleEl.setAttribute('data-baml', 'mermaid-css-override');
           styleEl.textContent = MERMAID_CSS_OVERRIDE;
           svgEl.appendChild(styleEl);
-        } catch {}
+        } catch { }
 
         // Programmatically round rect corners (CSS cannot set rx/ry reliably on SVG rects)
         try {
@@ -268,7 +268,7 @@ export const MermaidGraphView: React.FC = () => {
             (el as SVGRectElement).setAttribute('rx', '10');
             (el as SVGRectElement).setAttribute('ry', '10');
           });
-        } catch {}
+        } catch { }
 
         // Expand cluster label foreignObjects to fit content after font/styling changes
         try {
@@ -286,7 +286,7 @@ export const MermaidGraphView: React.FC = () => {
               if (rect.height > 0) fo.setAttribute('height', String(rect.height));
             }
           });
-        } catch {}
+        } catch { }
 
         // Keep arrowhead markers near default sizing (no scaling), only color is overridden via CSS
 
@@ -353,7 +353,7 @@ export const MermaidGraphView: React.FC = () => {
               .find((el) => !!el);
             if (!target) return;
             target.style.cursor = 'pointer';
-            try { target.setAttribute('data-baml-node-id', nodeId); } catch {}
+            try { target.setAttribute('data-baml-node-id', nodeId); } catch { }
             const onClick = (ev: Event) => {
               ev.stopPropagation();
               console.log('[MermaidGraphView] node click (manual handler)', { nodeId, span, target: (ev.target as Element)?.tagName });
@@ -440,7 +440,7 @@ export const MermaidGraphView: React.FC = () => {
           (window as any).__bamlCleanupListeners();
           delete (window as any).__bamlCleanupListeners;
         }
-      } catch {}
+      } catch { }
     };
   }, [graph]);
 

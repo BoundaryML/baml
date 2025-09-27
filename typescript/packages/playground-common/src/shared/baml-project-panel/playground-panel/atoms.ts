@@ -1,5 +1,5 @@
 import { type Atom, atom } from 'jotai';
-import { runtimeAtom } from '../atoms';
+import { filesAtom, runtimeAtom } from '../atoms';
 
 // Related to test status
 import type {
@@ -82,52 +82,54 @@ export const updateCursorAtom = atom(
     set,
     cursor: {
       fileName: string;
-      fileText: string;
       line: number;
       column: number;
     },
   ) => {
     const runtime = get(runtimeAtom)?.rt;
+    if (!runtime) {
+      return;
+    }
+    const fileContent = get(filesAtom)[cursor.fileName];
+    if (!fileContent) {
+      return;
+    }
 
-    if (runtime) {
-      const fileName = cursor.fileName;
-      const fileContent = cursor.fileText;
-      const lines = fileContent.split('\n');
+    const fileName = cursor.fileName;
+    const lines = fileContent.split('\n');
 
-      let cursorIdx = 0;
-      for (let i = 0; i < cursor.line - 1; i++) {
-        cursorIdx += (lines[i]?.length ?? 0) + 1; // +1 for the newline character
-      }
+    let cursorIdx = 0;
+    for (let i = 0; i < cursor.line; i++) {
+      cursorIdx += (lines[i]?.length ?? 0) + 1; // +1 for the newline character
+    }
+    cursorIdx += cursor.column;
 
-      cursorIdx += cursor.column;
+    const selectedFunc = runtime.get_function_at_position(
+      fileName,
+      get(selectedFunctionAtom) ?? '',
+      cursorIdx,
+    );
 
-      const selectedFunc = runtime.get_function_at_position(
-        fileName,
-        get(selectedFunctionAtom) ?? '',
+    if (selectedFunc) {
+      set(selectedFunctionAtom, selectedFunc.name);
+      const selectedTestcase = runtime.get_testcase_from_position(
+        selectedFunc,
         cursorIdx,
       );
 
-      if (selectedFunc) {
-        set(selectedFunctionAtom, selectedFunc.name);
-        const selectedTestcase = runtime.get_testcase_from_position(
-          selectedFunc,
+      if (selectedTestcase) {
+        set(selectedTestcaseAtom, selectedTestcase.name);
+        const nestedFunc = runtime.get_function_of_testcase(
+          fileName,
           cursorIdx,
         );
 
-        if (selectedTestcase) {
-          set(selectedTestcaseAtom, selectedTestcase.name);
-          const nestedFunc = runtime.get_function_of_testcase(
-            fileName,
-            cursorIdx,
-          );
-
-          if (nestedFunc) {
-            set(selectedFunctionAtom, nestedFunc.name);
-          }
+        if (nestedFunc) {
+          set(selectedFunctionAtom, nestedFunc.name);
         }
       }
     }
-  },
+  }
 );
 
 export const selectionAtom = atom((get) => {
@@ -178,22 +180,22 @@ export type DoneTestStatusType =
   | 'error';
 export type TestState =
   | {
-      status: 'queued' | 'idle';
-    }
+    status: 'queued' | 'idle';
+  }
   | {
-      status: 'running';
-      response?: WasmFunctionResponse;
-    }
+    status: 'running';
+    response?: WasmFunctionResponse;
+  }
   | {
-      status: 'done';
-      response_status: DoneTestStatusType;
-      response: WasmTestResponse;
-      latency_ms: number;
-    }
+    status: 'done';
+    response_status: DoneTestStatusType;
+    response: WasmTestResponse;
+    latency_ms: number;
+  }
   | {
-      status: 'error';
-      message: string;
-    };
+    status: 'error';
+    message: string;
+  };
 
 export const testCaseAtom = atomFamily(
   (params: { functionName: string; testName: string }) =>

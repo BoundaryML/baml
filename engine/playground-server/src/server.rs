@@ -11,29 +11,35 @@ use tar::Archive;
 use tokio::{net::TcpListener, sync::broadcast};
 use tower_http::services::ServeDir;
 
-use crate::definitions::{WebviewNotification, WebviewRouterMessage};
+use crate::definitions::{WebviewCommand, WebviewRouterMessage};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+/// Wraps a broadcast::Sender but bans access to send(). This is effectively a weak pointer
+/// to the receiver.
+///
+/// It's important we use this instead of passing around a broadcast::Receiver that we
+/// clone, because every unused Receiver will fill the broadcast buffer and cause
+/// hard-to-reproduce lost-message bugs.
+pub struct ReceiverProvider(broadcast::Sender<WebviewCommand>);
+
+impl From<broadcast::Sender<WebviewCommand>> for ReceiverProvider {
+    fn from(sender: broadcast::Sender<WebviewCommand>) -> Self {
+        Self(sender)
+    }
+}
+
+impl ReceiverProvider {
+    pub fn subscribe(&self) -> broadcast::Receiver<WebviewCommand> {
+        self.0.subscribe()
+    }
+}
+#[derive(Debug, Clone)]
 pub struct AppState {
-    pub webview_router_to_websocket_rx: broadcast::Receiver<WebviewNotification>,
+    pub webview_router_to_websocket_rx_provider: ReceiverProvider,
     pub to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
     pub playground_port: u16,
     pub proxy_port: u16,
     pub editor_config: crate::config::SharedConfig,
-    pub file_access: crate::fs::WorkspaceFileAccess,
-}
-
-impl Clone for AppState {
-    fn clone(&self) -> Self {
-        Self {
-            webview_router_to_websocket_rx: self.webview_router_to_websocket_rx.resubscribe(),
-            to_webview_router_tx: self.to_webview_router_tx.clone(),
-            playground_port: self.playground_port,
-            proxy_port: self.proxy_port,
-            editor_config: self.editor_config.clone(),
-            file_access: self.file_access.clone(),
-        }
-    }
 }
 
 pub struct PlaygroundServer {
@@ -58,7 +64,10 @@ impl PlaygroundServer {
 
         tracing::info!(
             "Starting Playground server on {}",
-            listener.local_addr().unwrap()
+            listener
+                .local_addr()
+                .map(|addr| addr.to_string())
+                .unwrap_or_else(|_| "unknown address".to_string())
         );
         axum::serve(listener, app)
             .await

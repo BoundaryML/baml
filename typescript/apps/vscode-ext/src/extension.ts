@@ -1,28 +1,33 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import * as vscode from 'vscode'
+
 import axios from 'axios'
-import glooLens from './LanguageToBamlCodeLensProvider'
-import { WebviewPanelHost, openPlaygroundConfig } from './panels/WebviewPanelHost'
-import plugins from './plugins'
-import { requestBamlCLIVersion, requestDiagnostics } from './plugins/language-server-client'
-import { telemetry } from './plugins/language-server-client'
 import cors from 'cors'
 import { createProxyMiddleware } from 'http-proxy-middleware'
+import * as vscode from 'vscode'
+import glooLens from './LanguageToBamlCodeLensProvider'
+import { WebviewPanelHost } from './panels/WebviewPanelHost'
+import plugins from './plugins'
+import {
+  requestBamlCLIVersion,
+  requestDiagnostics,
+  telemetry,
+} from './plugins/language-server-client'
+
+import type { Express } from 'express'
+import { Socket } from 'net'
+import StatusBarPanel from './panels/StatusBarPanel'
+import { Server } from 'http'
 
 const outputChannel = vscode.window.createOutputChannel('baml')
-const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml-diagnostics')
-const LANG_NAME = 'Baml'
+const diagnosticsCollection =
+  vscode.languages.createDiagnosticCollection('baml-diagnostics')
 
-let server: any
+let server: Server | null = null
 let glowOnDecoration: vscode.TextEditorDecorationType | null = null
 let glowOffDecoration: vscode.TextEditorDecorationType | null = null
 let isGlowOn: boolean = true
 let animationTimer: NodeJS.Timeout | null = null
 let highlightRanges: vscode.Range[] = []
-
-import type { Express } from 'express'
-import StatusBarPanel from './panels/StatusBarPanel'
-import { Socket } from 'net'
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('BAML extension activating')
@@ -37,20 +42,19 @@ export function activate(context: vscode.ExtensionContext) {
 
   const app: Express = require('express')()
   app.use(cors())
-  const server = app.listen(0, () => {
+  server = app.listen(0, () => {
     console.log('Server started on port ' + getPort())
-    WebviewPanelHost.currentPanel?.postMessage('port_number', {
-      port: getPort(),
-    })
   })
 
   const getPort = () => {
-    const addr = server.address()
+    const addr = server?.address() || null
     if (addr === null) {
       vscode.window.showErrorMessage(
         'Failed to start BAML extension server. Please try reloading the window, or restarting VSCode.',
       )
-      console.error('Failed to start BAML extension server. Please try reloading the window, or restarting VSCode.')
+      console.error(
+        'Failed to start BAML extension server. Please try reloading the window, or restarting VSCode.',
+      )
       return 0
     }
     if (typeof addr === 'string') {
@@ -59,7 +63,6 @@ export function activate(context: vscode.ExtensionContext) {
     return addr.port
   }
 
-  
   app.use(
     createProxyMiddleware({
       changeOrigin: true, // leave prependPath = true (default)
@@ -67,7 +70,7 @@ export function activate(context: vscode.ExtensionContext) {
       pathRewrite: (path, req) => {
         console.log('[PROXY] pathRewrite input:', path)
 
-        // If the request clearly targets a static image asset (e.g. ".png", ".jpg" …)
+        // If the request clearly targets a static image asset (e.g. '.png', '.jpg' …)
         // and it’s a simple GET, we blank the path so the webview loads it from
         // its own origin.  The previous implementation treated ANY dotted suffix
         // as an “image”, which broke legitimate paths like “/pdf/2305.08675”.
@@ -81,7 +84,7 @@ export function activate(context: vscode.ExtensionContext) {
           return ''
         }
 
-        // Remove trailing slash so we don't end up with "//".
+        // Remove trailing slash so we don't end up with '//'.
         const out = path.endsWith('/') ? path.slice(0, -1) : path
         console.log('[PROXY] pathRewrite output:', out)
         return out
@@ -103,7 +106,7 @@ export function activate(context: vscode.ExtensionContext) {
         const url = new URL(cleanRaw)
 
         // Base path to prepend *if necessary*
-        const basePath = url.pathname.replace(/\/$/, '') // '/compat/v1' → '/compat/v1'
+        const basePath = url.pathname.replace(/\/$/, ''); // '/compat/v1' → '/compat/v1'
         if (!req.url) {
           throw new Error('missing req.url')
         }
@@ -125,7 +128,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         // Tell HPM to proxy to the origin only (scheme + host)
-        return url.origin // e.g. "https://api.llama.com"
+        return url.origin; // e.g. 'https://api.llama.com'
       },
 
       logger: console,
@@ -157,9 +160,13 @@ export function activate(context: vscode.ExtensionContext) {
 
   const bamlPlaygroundCommand = vscode.commands.registerCommand(
     'baml.openBamlPanel',
-    (args?: { projectId?: string; functionName?: string; implName?: string; showTests?: boolean }) => {
+    (args?: { projectId: string; functionName: string }) => {
       const config = vscode.workspace.getConfiguration()
-      config.update('baml.bamlPanelOpen', true, vscode.ConfigurationTarget.Global)
+      config.update(
+        'baml.bamlPanelOpen',
+        true,
+        vscode.ConfigurationTarget.Global,
+      )
 
       console.info('context.extensionUri', context.extensionUri)
       WebviewPanelHost.render(context.extensionUri, getPort, telemetry)
@@ -172,24 +179,26 @@ export function activate(context: vscode.ExtensionContext) {
       // sends project files as well to webview
       requestDiagnostics()
 
-      openPlaygroundConfig.lastOpenedFunction = args?.functionName ?? 'default'
-      WebviewPanelHost.currentPanel?.postMessage('select_function', {
-        root_path: 'default',
-        function_name: args?.functionName ?? 'default',
-      })
+      if (!args) return
 
-      console.info('Opening BAML panel')
+      WebviewPanelHost.currentPanel?.sendCommandToWebview({
+        source: 'lsp_message',
+        payload: {
+          method: 'workspace/executeCommand',
+          params: {
+            command: 'baml.openBamlPanel',
+            arguments: [args],
+          },
+        }
+      })
     },
   )
 
   const bamlTestcaseCommand = vscode.commands.registerCommand(
     'baml.runBamlTest',
     (args?: {
-      projectId: string
-      functionName?: string
-      implName?: string
-      showTests?: boolean
-      testCaseName?: string
+      functionName: string
+      testCaseName: string
     }) => {
       WebviewPanelHost.render(context.extensionUri, getPort, telemetry)
       if (telemetry) {
@@ -202,58 +211,68 @@ export function activate(context: vscode.ExtensionContext) {
       // sends project files as well to webview
       requestDiagnostics()
 
-      openPlaygroundConfig.lastOpenedFunction = args?.functionName ?? 'default'
+      if (!args) return
 
-      WebviewPanelHost.currentPanel?.postMessage('run_test', {
-        function_name: args?.functionName ?? 'default',
-        test_name: args?.testCaseName ?? 'default',
+      WebviewPanelHost.currentPanel?.sendCommandToWebview({
+        source: 'lsp_message',
+        payload: {
+          method: 'workspace/executeCommand',
+          params: {
+            command: 'baml.runBamlTest',
+            arguments: [args]
+          },
+        }
       })
-
-      console.info('Opening BAML panel')
     },
   )
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'baml.setFlashingRegions',
-      (params: {
-        content: {
-          spans: { file_path: string; start_line: number; start: number; end_line: number; end: number }[]
-        }
-      }) => {
-        console.log('args:', params)
-        // A helpful thing to toggle on for debugging:
-        console.log('HANDLER setFlashingRegions', params)
-        // vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(params))
+  const bamlSetFlashingRegionsCommand = vscode.commands.registerCommand(
+    'baml.setFlashingRegions',
+    (params: {
+      content: {
+        spans: {
+          file_path: string
+          start_line: number
+          start: number
+          end_line: number
+          end: number
+        }[]
+      }
+    }) => {
+      // A helpful thing to toggle on for debugging:
+      console.info('HANDLER setFlashingRegions', params)
+      // vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(params))
 
-        // Focus the editor to ensure styling updates are applied rapidly.
-        if (vscode.window.activeTextEditor) {
-          vscode.window.showTextDocument(
-            vscode.window.activeTextEditor.document,
-            vscode.window.activeTextEditor.viewColumn,
-          )
-        }
+      // Focus the editor to ensure styling updates are applied rapidly.
+      if (vscode.window.activeTextEditor) {
+        vscode.window.showTextDocument(
+          vscode.window.activeTextEditor.document,
+          vscode.window.activeTextEditor.viewColumn,
+        )
+      }
 
-        context.subscriptions.push({
-          dispose: () => {
-            stopAnimation()
-            if (glowOnDecoration) glowOnDecoration.dispose()
-            if (glowOffDecoration) glowOffDecoration.dispose()
-          },
-        })
-        const ranges = params.content.spans.map((span) => {
-          const start = new vscode.Position(span.start_line, span.start)
-          const end = new vscode.Position(span.end_line, span.end)
-          return new vscode.Range(start, end)
-        })
-        highlightRanges = ranges
-        updateHighlight()
-      },
-    ),
+      context.subscriptions.push({
+        dispose: () => {
+          stopAnimation()
+          if (glowOnDecoration) glowOnDecoration.dispose()
+          if (glowOffDecoration) glowOffDecoration.dispose()
+        },
+      })
+      const ranges = params.content.spans.map((span) => {
+        const start = new vscode.Position(span.start_line, span.start)
+        const end = new vscode.Position(span.end_line, span.end)
+        return new vscode.Range(start, end)
+      })
+      highlightRanges = ranges
+      updateHighlight()
+    },
   )
 
-  context.subscriptions.push(bamlPlaygroundCommand)
-  console.log('pushing glooLens')
+  if (bamlPlaygroundCommand) {
+    context.subscriptions.push(bamlPlaygroundCommand)
+  }
+  context.subscriptions.push(bamlTestcaseCommand)
+  context.subscriptions.push(bamlSetFlashingRegionsCommand)
 
   const pythonSelector = { language: 'python', scheme: 'file' }
   const typescriptSelector = { language: 'typescript', scheme: 'file' }
@@ -277,26 +296,30 @@ export function activate(context: vscode.ExtensionContext) {
     const position = event.selections[0]?.active
 
     const editor = vscode.window.activeTextEditor
+    if (!editor) { return; }
 
-    if (editor) {
-      const name = editor.document.fileName
-      if (name.endsWith('.baml')) {
-        const text = editor.document.getText()
-
-        // TODO: buggy when used with multiple functions, needs a fix.
-        WebviewPanelHost.currentPanel?.postMessage('update_cursor', {
-          cursor: {
-            fileName: name,
-            fileText: text,
-            line: position?.line ?? 0 + 1,
-            column: position?.character ?? 0,
-          },
-        })
-      }
+    const name = editor.document.fileName
+    if (!name.endsWith('.baml')) {
+      return
     }
+
+    // TODO: buggy when used with multiple functions, needs a fix.
+    WebviewPanelHost.currentPanel?.sendCommandToWebview({
+      source: 'ide_message',
+      payload: {
+        command: 'update_cursor',
+        content: {
+          fileName: name,
+          line: position?.line ?? 0,
+          column: position?.character ?? 0,
+        },
+      }
+    })
   })
 
-  const config = vscode.workspace.getConfiguration('editor', { languageId: 'baml' })
+  const config = vscode.workspace.getConfiguration('editor', {
+    languageId: 'baml',
+  })
   if (!config.get('defaultFormatter')) {
     // TODO: once the BAML formatter is stable, we should auto-prompt people to set it as the default formatter.
     // void vscode.commands.executeCommand('baml.setDefaultFormatter')
@@ -330,7 +353,7 @@ export function activate(context: vscode.ExtensionContext) {
   }, 30000)
 
   // TODO: Reactivate linter.
-  // runDiagnostics();
+  // runDiagnostics()
 }
 
 export function deactivate(): void {
@@ -411,7 +434,6 @@ function updateHighlight() {
 
 // Start the simple toggling animation
 function startAnimation() {
-  console.log('startAnimation')
   if (animationTimer) return
 
   // Toggle every 500ms (2 times per second)
@@ -421,7 +443,7 @@ function startAnimation() {
 
     // Update the highlight
     updateHighlight()
-  }, 500) // 500ms = half a second
+  }, 500); // 500ms = half a second
 }
 
 // Stop animation

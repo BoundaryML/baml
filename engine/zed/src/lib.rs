@@ -157,15 +157,26 @@ impl zed::Extension for BamlExtension {
         }
     }
 
-    // fn language_server_initialization_options(
-    //     &mut self,
-    //     _language_server_id: &LanguageServerId,
-    //     _worktree: &zed::Worktree,
-    // ) -> Result<Option<zed::serde_json::Value>> {
-    //     Ok(Some(zed::serde_json::json!({
-    //         "watchPatterns": ["**/baml_src/**/*.baml", "**/baml_src/**/*.json"]
-    //     })))
-    // }
+    fn language_server_initialization_options(
+        &mut self,
+        _language_server_id: &LanguageServerId,
+        _worktree: &zed::Worktree,
+    ) -> Result<Option<zed::serde_json::Value>> {
+        Ok(Some(zed::serde_json::json!({
+            "settings": {
+                "featureFlags": ["beta"],
+                "generateCodeOnSave": "always",
+                "lspMethodsToForwardToWebview": [
+                    "runtime_updated",
+                    // This allows us to update the currently shown fn/test in the webview when the
+                    // user changes their cursor position in Zed.
+                    // We use this instead of an "update_cursor" method because Zed doesn't have support
+                    // for custom cursor update listeners.
+                    "textDocument/codeAction"
+                ]
+            }
+        })))
+    }
 }
 
 zed::register_extension!(BamlExtension);

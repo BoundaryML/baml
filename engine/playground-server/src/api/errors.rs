@@ -1,5 +1,38 @@
+use anyhow::Error as AnyhowError;
 use axum::{http::StatusCode, response::IntoResponse, Json};
 use serde_json::json;
+
+#[derive(Debug)]
+pub struct HttpError(pub AnyhowError);
+
+impl From<AnyhowError> for HttpError {
+    fn from(err: AnyhowError) -> Self {
+        HttpError(err)
+    }
+}
+
+impl IntoResponse for HttpError {
+    fn into_response(self) -> axum::response::Response {
+        // For IPC, keep it simple but preserve error chain information
+        let error_message = format!("{:#}", self.0);
+
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "error": error_message,
+                "type": "InternalError"
+            })),
+        )
+            .into_response()
+    }
+}
+
+// Keep existing From implementation for backward compatibility
+impl From<serde_json::Error> for HttpError {
+    fn from(err: serde_json::Error) -> Self {
+        HttpError(anyhow::anyhow!("JSON serialization error: {}", err))
+    }
+}
 
 #[derive(Debug)]
 pub enum ApiError {

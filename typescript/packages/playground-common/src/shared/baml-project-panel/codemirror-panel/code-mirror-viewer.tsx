@@ -334,51 +334,51 @@ export const CodeMirrorViewer = ({
   const editorTheme =
     theme === 'dark'
       ? vscodeDarkInit({
-          styles: [
-            {
-              tag: [t.variableName],
-              color: '#dcdcaa',
-            },
-            {
-              tag: [t.brace],
-              color: '#569cd6',
-            },
-            {
-              tag: [t.variableName, t.propertyName],
-              color: '#d4d4d4',
-            },
-            {
-              tag: [t.attributeName],
-              color: '#c586c0',
-            },
-          ],
-          settings: {
-            fontSize: '11px',
-            // this must be a transparent color or selection will be invisible
-            lineHighlight: '#a1a1a730',
-            gutterBackground: 'transparent',
-            gutterForeground: '#808080',
-            gutterActiveForeground: '#808080',
-            gutterBorder: 'transparent',
+        styles: [
+          {
+            tag: [t.variableName],
+            color: '#dcdcaa',
           },
-        })
+          {
+            tag: [t.brace],
+            color: '#569cd6',
+          },
+          {
+            tag: [t.variableName, t.propertyName],
+            color: '#d4d4d4',
+          },
+          {
+            tag: [t.attributeName],
+            color: '#c586c0',
+          },
+        ],
+        settings: {
+          fontSize: '11px',
+          // this must be a transparent color or selection will be invisible
+          lineHighlight: '#a1a1a730',
+          gutterBackground: 'transparent',
+          gutterForeground: '#808080',
+          gutterActiveForeground: '#808080',
+          gutterBorder: 'transparent',
+        },
+      })
       : vscodeLightInit({
-          styles: [
-            {
-              tag: [t.attributeName],
-              color: '#ca8a04',
-            },
-          ],
-          settings: {
-            fontSize: '11px',
-            // this must be a transparent color or selection will be invisible
-            lineHighlight: '#c7c7c730',
-            gutterBackground: '#fff',
-            gutterForeground: '#808080',
-            gutterActiveForeground: '#808080',
-            gutterBorder: '#fff',
+        styles: [
+          {
+            tag: [t.attributeName],
+            color: '#ca8a04',
           },
-        });
+        ],
+        settings: {
+          fontSize: '11px',
+          // this must be a transparent color or selection will be invisible
+          lineHighlight: '#c7c7c730',
+          gutterBackground: '#fff',
+          gutterForeground: '#808080',
+          gutterActiveForeground: '#808080',
+          gutterBorder: '#fff',
+        },
+      });
 
   useEffect(() => {
     onContentChange?.(fileContent.code);
@@ -430,7 +430,6 @@ export const CodeMirrorViewer = ({
 
             setUpdateCursor({
               fileName: fileContent.id,
-              fileText: ref.current?.view?.state.doc.toString() || '',
               line,
               column,
             });

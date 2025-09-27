@@ -16,7 +16,6 @@
     "editor.formatOnSave": true
   },
   "tailwindCSS.experimental.configFile": "typescript/packages/ui/src/styles/globals.css",
-  "editor.defaultFormatter": "biomejs.biome",
   "editor.formatOnSave": true,
   "tailwindCSS.experimental.classRegex": [
     ["clsx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
@@ -45,5 +44,17 @@
   },
   "[baml]": {
     "editor.defaultFormatter": "Boundary.baml-extension"
-  }
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features",
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
+  "[typescriptreact]": {
+      "editor.defaultFormatter": "vscode.typescript-language-features",
+      "editor.insertSpaces": true,
+      "editor.tabSize": 2
+  },
+  "baml.enablePlaygroundProxy": true,
+  "editor.accessibilitySupport": "off",
 }
