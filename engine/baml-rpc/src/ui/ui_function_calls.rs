@@ -230,7 +230,7 @@ impl Display for OrderField {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, TS)]
+#[derive(Debug, Clone, Deserialize, Serialize, TS)]
 #[ts(export)]
 pub struct OrderBy {
     pub field: OrderField,

@@ -21,7 +21,7 @@ pub struct BamlSourceBundle {
 pub struct BamlSourceCode {
     pub project_id: String,
     pub file_blake3_hash: String,
-    pub content: Vec<u8>,
+    pub content: String,
     pub mime_type: String,
     #[ts(type = "number", optional)]
     pub uploaded_at: Option<EpochMsTimestamp>,

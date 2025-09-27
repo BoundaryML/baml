@@ -63,6 +63,8 @@ static PUBLISHING_CHANNEL: OnceCell<mpsc::UnboundedSender<PublisherMessage>> = O
 #[cfg(not(target_arch = "wasm32"))]
 static PUBLISHING_TASK: OnceCell<Arc<tokio::task::JoinHandle<()>>> = OnceCell::new();
 static BLOB_UPLOADER_TASK: OnceCell<Arc<tokio::task::JoinHandle<()>>> = OnceCell::new();
+static BLOB_UPLOADER_CHANNEL: OnceCell<mpsc::UnboundedSender<BlobUploaderMessage>> =
+    OnceCell::new();
 
 fn get_publish_channel(
     allow_missing: bool,
@@ -128,44 +130,60 @@ impl RuntimeAST {
     where
         TEndpoint: ApiEndpoint,
     {
-        if self.api_key().is_none() {
-            return Err(ApiError::Http {
-                status: reqwest::StatusCode::UNAUTHORIZED,
-                body: format!("BOUNDARY_API_KEY is not set for {}", TEndpoint::path()),
-            });
-        }
-        // A) send the request, propagating low‑level network errors
-        let response = self
-            .client
-            .post(format!("{}{}", self.base_url(), TEndpoint::path()))
-            .json(&request)
-            .bearer_auth(self.api_key().unwrap());
-        let response = response.send().await;
+        // Wrap the entire request lifecycle in a timeout.
+        let timeout_duration = Duration::from_secs(6);
 
-        let response = match response {
-            Ok(response) => response,
-            Err(e) => {
-                return Err(ApiError::Transport(e));
+        let fut = async {
+            if self.api_key().is_none() {
+                return Err(ApiError::Http {
+                    status: reqwest::StatusCode::UNAUTHORIZED,
+                    body: format!("BOUNDARY_API_KEY is not set for {}", TEndpoint::path()),
+                });
             }
+
+            let path = TEndpoint::path();
+            // log::info!("api_request request1={path:#?}");
+
+            // A) send the request, propagating low‑level network errors
+            let response_builder = self
+                .client
+                .post(format!("{}{}", self.base_url(), TEndpoint::path()))
+                .json(&request)
+                .bearer_auth(self.api_key().unwrap());
+
+            let response = response_builder.send().await;
+            let path = TEndpoint::path();
+            log::debug!("api_request request2={path:#?} response={response:?}");
+
+            let response = match response {
+                Ok(response) => response,
+                Err(e) => return Err(ApiError::Transport(e)),
+            };
+
+            // B) take the status code up‑front
+            let status = response.status();
+
+            // We still need the body either way, so pull it into bytes now
+            let bytes = response.bytes().await.map_err(ApiError::Transport)?;
+
+            // C) non‑2xx → turn into our own Http error, preserving body for debugging
+            if !status.is_success() {
+                let body_str = String::from_utf8_lossy(&bytes).to_string();
+                return Err(ApiError::Http {
+                    status,
+                    body: body_str,
+                });
+            }
+
+            // D) happy path: 2xx → attempt to parse into T
+            serde_json::from_slice::<TEndpoint::Response<'resp>>(&bytes)
+                .map_err(ApiError::Deserialize)
         };
 
-        // B) take the status code up‑front
-        let status = response.status();
-
-        // We still need the body either way, so pull it into bytes now
-        let bytes = response.bytes().await.map_err(ApiError::Transport)?;
-
-        // C) non‑2xx → turn into our own Http error, preserving body for debugging
-        if !status.is_success() {
-            let body_str = String::from_utf8_lossy(&bytes).to_string();
-            return Err(ApiError::Http {
-                status,
-                body: body_str,
-            });
+        match timeout(timeout_duration, fut).await {
+            Ok(res) => res,
+            Err(_) => Err(ApiError::Timeout(timeout_duration)),
         }
-
-        // D) happy path: 2xx → attempt to parse into T
-        serde_json::from_slice::<TEndpoint::Response<'resp>>(&bytes).map_err(ApiError::Deserialize)
     }
 }
 
@@ -180,6 +198,8 @@ pub enum ApiError {
     },
     #[error("Failed to deserialize response: {0}")]
     Deserialize(serde_json::Error),
+    #[error("Request timed out after {0:?}")]
+    Timeout(Duration),
 }
 
 impl TypeLookup for RuntimeAST {
@@ -216,8 +236,26 @@ pub fn start_publisher(
     }
     log::debug!("Starting publisher");
 
-    // Create the blob upload channel first
-    let (blob_tx, blob_rx) = mpsc::unbounded_channel::<BlobUploaderMessage>();
+    let mut blob_rx_holder: Option<mpsc::UnboundedReceiver<BlobUploaderMessage>> = None;
+    let blob_tx = match BLOB_UPLOADER_CHANNEL.get() {
+        Some(existing) => existing.clone(),
+        None => {
+            let (new_tx, new_rx) = mpsc::unbounded_channel::<BlobUploaderMessage>();
+            match BLOB_UPLOADER_CHANNEL.set(new_tx.clone()) {
+                Ok(()) => {
+                    blob_rx_holder = Some(new_rx);
+                    new_tx
+                }
+                Err(_) => {
+                    // Another thread beat us to initialization
+                    BLOB_UPLOADER_CHANNEL
+                        .get()
+                        .expect("blob uploader channel should be initialized")
+                        .clone()
+                }
+            }
+        }
+    };
 
     let lookup = Arc::new(RuntimeAST {
         ast: lookup,
@@ -225,64 +263,55 @@ pub fn start_publisher(
         blob_cache: BlobRefCache::with_upload_channel(blob_tx.clone()),
     });
 
-    // Use get_or_init to ensure thread-safe initialization
-    let channel = PUBLISHING_CHANNEL.get_or_init(|| {
-        let (tx, rx) = mpsc::unbounded_channel::<PublisherMessage>();
-
-        let mut publisher = TracePublisher::new(rx, lookup.clone(), blob_tx.clone());
-        let mut blob_uploader = BlobUploader::new(blob_rx, lookup.clone());
+    let channel = if let Some(existing) = PUBLISHING_CHANNEL.get() {
+        existing
+    } else {
+        let Some(blob_rx) = blob_rx_holder.take() else {
+            // Another thread is handling initialization; we'll pick up the update next time.
+            return;
+        };
 
         #[cfg(not(target_arch = "wasm32"))]
-        {
-            // Spawn the main publisher task
-            let handle = rt.spawn(async move { publisher.run().await });
-            PUBLISHING_TASK.get_or_init(|| Arc::new(handle));
+        let rt_clone = rt.clone();
 
-            // Spawn the blob uploader task
-            let blob_handle = rt.spawn(async move { blob_uploader.run().await });
-            BLOB_UPLOADER_TASK.get_or_init(|| Arc::new(blob_handle));
-        }
+        let lookup_for_publisher = lookup.clone();
+        let lookup_for_blob = lookup.clone();
+        let blob_tx_for_publisher = blob_tx.clone();
 
-        #[cfg(target_arch = "wasm32")]
-        {
-            wasm_bindgen_futures::spawn_local(async move {
-                publisher.run().await;
-            });
+        PUBLISHING_CHANNEL.get_or_init(move || {
+            let (tx, rx) = mpsc::unbounded_channel::<PublisherMessage>();
 
-            wasm_bindgen_futures::spawn_local(async move {
-                blob_uploader.run().await;
-            });
-        }
+            let mut publisher =
+                TracePublisher::new(rx, lookup_for_publisher, blob_tx_for_publisher);
+            let mut blob_uploader = BlobUploader::new(blob_rx, lookup_for_blob);
 
-        tx
-    });
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                // Spawn the main publisher task
+                let handle = rt_clone.spawn(async move { publisher.run().await });
+                PUBLISHING_TASK.get_or_init(|| Arc::new(handle));
+
+                // Spawn the blob uploader task
+                let blob_handle = rt_clone.spawn(async move { blob_uploader.run().await });
+                BLOB_UPLOADER_TASK.get_or_init(|| Arc::new(blob_handle));
+            }
+
+            #[cfg(target_arch = "wasm32")]
+            {
+                wasm_bindgen_futures::spawn_local(async move {
+                    publisher.run().await;
+                });
+
+                wasm_bindgen_futures::spawn_local(async move {
+                    blob_uploader.run().await;
+                });
+            }
+
+            tx
+        })
+    };
 
     let _ = channel.send(PublisherMessage::UpdateRuntime(lookup));
-}
-
-/// Gracefully shutdown the TracePublisher.
-/// 1. Sends a Shutdown message and waits for its ack.
-/// 2. Awaits the background task's JoinHandle so Drop runs.
-pub async fn shutdown_publisher() -> anyhow::Result<()> {
-    log::debug!("Shutting down publisher");
-    // 1. send Shutdown
-    let Some(channel) = get_publish_channel(true) else {
-        return Ok(());
-    };
-    let Some(blob_channel) = BLOB_UPLOADER_TASK.get() else {
-        return Ok(());
-    };
-    let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
-    channel
-        .send(PublisherMessage::Shutdown(ack_tx))
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
-
-    // 2. wait for the ack (so we flush remaining events)
-    ack_rx
-        .await
-        .map_err(|e| anyhow::anyhow!("shutdown ack failed: {}", e))?;
-
-    Ok(())
 }
 
 struct TracePublisher {
@@ -371,6 +400,7 @@ impl TracePublisher {
                             let _ = blob_ack_rx.await;
                             // Signal flush completion.
                             let _ = flush_ack.send(());
+                            log::debug!("Flush publisher completed")
                         },
                         PublisherMessage::Shutdown(shutdown_ack) => {
                             if !buffer.is_empty() {
@@ -714,6 +744,7 @@ impl BlobUploader {
 
     pub async fn run(&mut self) {
         let mut upload_interval = interval(Duration::from_secs(2));
+        upload_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
         loop {
             tokio::select! {
@@ -737,6 +768,7 @@ impl BlobUploader {
                             }
                         },
                         BlobUploaderMessage::Flush(flush_ack) => {
+                            log::debug!("Flush blob uploader started");
                             self.process_queued_blobs().await;
                             let _ = flush_ack.send(());
                         },
@@ -748,12 +780,10 @@ impl BlobUploader {
                     }
                 }
                 _ = upload_interval.tick() => {
-                    // log::info!("Blob uploader received tick");
                     if self.lookup.api_key().is_none() {
-                        log::info!("Skipping blob upload because BOUNDARY_API_KEY is not set");
+                        log::debug!("Skipping blob upload because BOUNDARY_API_KEY is not set");
                         continue;
                     }
-                    // Process any queued blobs on the timer
                     if !self.queued_blobs.is_empty() {
                         self.process_queued_blobs().await;
                     }
@@ -767,11 +797,20 @@ impl BlobUploader {
             return;
         }
 
-        log::info!("Processing {} queued blobs", self.queued_blobs.len());
+        let queued_len = self.queued_blobs.len();
+        log::debug!("Processing {queued_len} queued blobs");
         let blobs_to_upload = std::mem::take(&mut self.queued_blobs);
-        let result = self.upload_blob_batch(blobs_to_upload).await;
-        if let Err(e) = result {
-            log::error!("Failed to upload queued blob batch: {e}");
+
+        match self.upload_blob_batch(blobs_to_upload).await {
+            Ok(()) => {
+                log::debug!("Successfully uploaded batch of {queued_len} blobs");
+            }
+            Err(e) => {
+                log::error!(
+                    "Failed to upload queued blob batch ({} blobs): {e}",
+                    queued_len
+                );
+            }
         }
     }
 
@@ -782,8 +821,6 @@ impl BlobUploader {
         if blobs.is_empty() {
             return Ok(());
         }
-
-        log::debug!("Uploading {} blobs", blobs.len());
 
         // Prepare metadata for the API request
         let blob_metadata: Vec<BlobMetadataItem> = blobs
@@ -797,6 +834,17 @@ impl BlobUploader {
             .collect();
 
         // Get upload URL and check which blobs already exist
+        let blob_endpoint = format!(
+            "{}{}",
+            self.lookup.base_url(),
+            <CreateBlobBatchUploadUrl as ApiEndpoint>::path()
+        );
+        log::debug!(
+            "Requesting blob upload URL for {} blobs at {}",
+            blob_metadata.len(),
+            blob_endpoint
+        );
+
         let upload_response = match self
             .lookup
             .api_request::<CreateBlobBatchUploadUrl>(CreateBlobBatchUploadUrlRequest {
@@ -811,7 +859,19 @@ impl BlobUploader {
                 return Err(e.into());
             }
         };
-        log::debug!("upload_response={upload_response:?}");
+        if let Ok(parsed_url) = reqwest::Url::parse(&upload_response.s3_presigned_url) {
+            log::debug!(
+                "Received blob upload URL host={} path={} ({} blobs excluded)",
+                parsed_url.host_str().unwrap_or_default(),
+                parsed_url.path(),
+                upload_response.exclude_blobs.len()
+            );
+        } else {
+            log::debug!(
+                "Received blob upload URL ({} blobs excluded)",
+                upload_response.exclude_blobs.len()
+            );
+        }
 
         // Filter out blobs that already exist
         let blobs_to_upload: Vec<_> = blobs
@@ -834,7 +894,8 @@ impl BlobUploader {
             .map(|blob| BlobUploadItem {
                 function_call_id: blob.metadata.function_call_id.clone(),
                 blob_hash: blob.metadata.blob_hash.clone(),
-                payload: blob.content.clone(),
+                // Content here is the base64 string bytes; convert to String
+                base64_payload: String::from_utf8_lossy(&blob.content).to_string(),
                 media_type: blob.metadata.media_type.clone(),
             })
             .collect();
@@ -843,7 +904,14 @@ impl BlobUploader {
             blobs: upload_items,
         };
 
-        // Upload to S3
+        // Measure payload size (bytes) for throughput logging
+        let payload_bytes = serde_json::to_string(&batch_file)
+            .context("Failed to serialize blob batch for size measurement")?
+            .into_bytes()
+            .len();
+
+        // Upload to S3 and measure elapsed time
+        let start_time = std::time::Instant::now();
         let upload_result = self
             .lookup
             .client
@@ -857,18 +925,33 @@ impl BlobUploader {
             )
             .send()
             .await;
-
-        let blob_hashes: Vec<String> = blobs_to_upload
-            .iter()
-            .map(|b| b.metadata.blob_hash.clone())
-            .collect();
+        let elapsed = start_time.elapsed();
 
         match upload_result {
-            Ok(_) => {
-                log::debug!("Successfully uploaded {} blobs", blobs_to_upload.len());
+            Ok(response) => {
+                let secs = elapsed.as_secs_f64().max(1e-9);
+                let kb = payload_bytes as f64 / 1024.0;
+                let kbps = kb / secs;
+                log::debug!(
+                    "Blob batch upload completed with status {} ({} blobs, {:.2} kB in {:.2}s, {:.2} kB/s)",
+                    response.status(),
+                    blobs_to_upload.len(),
+                    kb,
+                    secs,
+                    kbps
+                );
             }
             Err(e) => {
-                log::error!("Failed to upload blob batch to S3: {e}");
+                let secs = elapsed.as_secs_f64().max(1e-9);
+                let kb = payload_bytes as f64 / 1024.0;
+                let kbps = kb / secs;
+                log::error!(
+                    "Failed to upload BAML blob batch to S3 after {:.2}s ({} blobs, attempted {:.2} kB, {:.2} kB/s): {e}",
+                    secs,
+                    blobs_to_upload.len(),
+                    kb,
+                    kbps
+                );
                 return Err(e.into());
             }
         }
@@ -893,6 +976,30 @@ impl AsReqwestHeaders for S3UploadMetadata {
             .collect::<Result<HeaderMap>>()
     }
 }
+
+async fn flush_blob_uploader_channel(timeout_duration: Duration) -> anyhow::Result<()> {
+    let Some(blob_tx) = BLOB_UPLOADER_CHANNEL.get() else {
+        return Ok(());
+    };
+
+    let (blob_ack_tx, blob_ack_rx) = tokio::sync::oneshot::channel();
+    blob_tx
+        .send(BlobUploaderMessage::Flush(blob_ack_tx))
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+
+    match timeout(timeout_duration, blob_ack_rx).await {
+        Ok(Ok(())) => {
+            log::debug!("Flush blob uploader completed");
+            Ok(())
+        }
+        Ok(Err(e)) => Err(e.into()),
+        Err(_) => Err(anyhow::anyhow!(
+            "Blob flush timed out after {:?}",
+            timeout_duration
+        )),
+    }
+}
+
 pub fn publish_trace_event(event: Arc<TraceEventWithMeta>) -> anyhow::Result<()> {
     let Some(channel) = get_publish_channel(false) else {
         return Ok(());
@@ -906,23 +1013,31 @@ pub fn publish_trace_event(event: Arc<TraceEventWithMeta>) -> anyhow::Result<()>
 // but that's ok since noone uses our wasm build in node for logging.
 // https://github.com/whizsid/wasmtimer-rs/issues/26
 pub async fn flush() -> anyhow::Result<()> {
-    let Some(channel) = get_publish_channel(false) else {
-        return Ok(());
-    };
-    let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
-    if let Err(e) = channel.send(PublisherMessage::Flush(ack_tx)) {
-        return Err(e.into());
-    }
-
+    log::debug!("Flushing traces [rust]");
     // Set a timeout to avoid waiting indefinitely.
-    let timeout_duration = Duration::from_secs(8);
+    let timeout_duration = Duration::from_secs(30);
 
-    match timeout(timeout_duration, ack_rx).await {
-        Ok(Ok(())) => Ok(()),
-        Ok(Err(e)) => Err(e.into()),
-        Err(_) => Err(anyhow::anyhow!(
-            "Flush timed out after {:?}",
-            timeout_duration
-        )),
+    if let Some(channel) = get_publish_channel(false) {
+        let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+        channel
+            .send(PublisherMessage::Flush(ack_tx))
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+
+        return match timeout(timeout_duration, ack_rx).await {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e.into()),
+            Err(_) => Err(anyhow::anyhow!(
+                "Flush timed out after {:?}",
+                timeout_duration
+            )),
+        };
+    } else {
+        log::debug!("No publish channel found [rust]");
     }
+
+    log::debug!("Flushing blob uploader [rust]");
+
+    let res = flush_blob_uploader_channel(timeout_duration).await;
+    log::debug!("Flushing blob uploader [rust] completed");
+    res
 }

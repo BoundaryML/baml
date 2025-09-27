@@ -239,7 +239,7 @@ pub struct LoggedLLMRequest {
     pub prompt: Vec<LLMChatMessage>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone)]
 pub struct HTTPBody {
     raw: Vec<u8>,
 }
@@ -297,6 +297,28 @@ impl HTTPBody {
                         .collect(),
                 )
             })
+    }
+}
+
+// Custom serialization: always serialize as text; if invalid UTF-8, serialize as base64
+impl serde::Serialize for HTTPBody {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Serialize as text to avoid exploding arrays of bytes; use lossy UTF-8 if needed
+        let s = String::from_utf8_lossy(&self.raw);
+        serializer.serialize_str(&s)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for HTTPBody {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(HTTPBody::new(s.into_bytes()))
     }
 }
 

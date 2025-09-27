@@ -124,7 +124,7 @@ impl BlobRefCache {
                 // Create the message using a different approach to avoid circular imports
                 match upload_tx.send(BlobUploaderMessage::QueueBlob(blob_with_content)) {
                     Ok(_) => {
-                        log::info!("Queued blob {blob_hash} for immediate upload");
+                        log::info!("Queued blob {blob_hash} for upload");
                     }
                     Err(e) => {
                         log::warn!("Failed to queue blob for upload: {e}");
@@ -167,7 +167,7 @@ impl BlobRefCache {
 
         // Actually perform the removals
         for hash in to_remove {
-            log::info!("Removing blob {hash} from cache (no active references)");
+            // log::info!("Removing blob {hash} from cache (no active references)");
             blobs.remove(&hash);
         }
     }

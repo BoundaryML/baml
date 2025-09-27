@@ -46,6 +46,6 @@ pub struct BlobBatchUploadS3File {
 pub struct BlobUploadItem {
     pub function_call_id: String,
     pub blob_hash: String,
-    pub payload: Vec<u8>, // Raw bytes of the blob
+    pub base64_payload: String, // Base64 string of the blob
     pub media_type: Option<String>,
 }

@@ -67,7 +67,7 @@ pub struct CallStackEntry {
     pub function_name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 #[ts(export)]
 pub struct ListTracesRequest {
