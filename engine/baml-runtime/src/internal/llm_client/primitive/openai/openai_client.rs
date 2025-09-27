@@ -206,7 +206,8 @@ impl ProviderStrategy {
                                                             baml_types::BamlMediaContent::Url(url_content) => {
                                                                 Ok(json!({
                                                                     "type": "input_file",
-                                                                    "file_url": url_content.url
+                                                                    "file_url": url_content.url,
+                                                                    "filename": "document.pdf"
                                                                 }))
                                                             }
                                                             baml_types::BamlMediaContent::File(file_content) => {
@@ -722,7 +723,8 @@ impl ToProviderMessage for OpenAIClient {
                             payload_key.into(),
                             json!({
                                 "type": "input_file",
-                                "file_url": url_content.url
+                                "file_url": url_content.url,
+                                "filename": "document.pdf"
                             }),
                         );
                     }
