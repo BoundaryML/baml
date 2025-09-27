@@ -68,7 +68,7 @@ impl VertexAuth {
             None => {
                 let cred_provider = get_js_callback_provider()?;
                 let gcp_creds = cred_provider.gcp_req().await.context(
-                    "Failed to load GCP creds: try running `gcloud auth application-default login`",
+                    "Failed to load GCP creds token: try running `gcloud auth application-default login`",
                 )?;
                 Ok(Arc::new(Token(gcp_creds.access_token)))
             }
@@ -81,9 +81,11 @@ impl VertexAuth {
             None => {
                 let cred_provider = get_js_callback_provider()?;
                 let gcp_creds = cred_provider.gcp_req().await.context(
-                    "Failed to load GCP creds: try running `gcloud auth application-default login`",
+                    "Failed to load GCP creds project ID (load failed): try running `gcloud auth application-default login`",
                 )?;
-                Ok(gcp_creds.project_id.into())
+                Ok(gcp_creds.project_id.ok_or(anyhow::anyhow!(
+                    "Failed to load GCP creds project ID (failed to resolve): try running `gcloud auth application-default login`",
+                ))?.into())
             }
         }
     }
