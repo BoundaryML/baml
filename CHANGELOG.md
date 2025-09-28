@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.209.0](https://github.com/boundaryml/baml/compare/0.208.5..0.209.0) - 2025-09-28
+
+
+### Bug Fixes
+- Make Studio trace uploads 6x more efficient, and fix flushing logic (#2531)
+- Fix an issue where we wouldn't parse a stream until the end of the stream, fix openai responses pdf input, and vertex-anthropic streaming. (#2530) - ([4bb2f33](https://github.com/boundaryml/baml/commit/4bb2f33ff908ff6a2f97fca222bc7afb5a12e8f3)) - aaronvg
+- **(language-server)** handle non-baml-src baml files gracefully (#2506) - ([613df6b](https://github.com/boundaryml/baml/commit/613df6b9398d2921b5551be4f54db4cb285ba32f)) - Samuel Lijin
+- **(playground)** make vertex work in the vscode playground (#2525) - ([6a5fa73](https://github.com/boundaryml/baml/commit/6a5fa73253da89952d698cac16514d1673d84a48)) - Samuel Lijin
+
+### Features
+- Bedrock modular api support (#2526) - ([42dfef3](https://github.com/boundaryml/baml/commit/42dfef3a1e66b265858b42600fc759e330ea0f56)) - Greg Hale
+- Expose tags in the collector. Allow passing tags via baml function baml_options (#2528) - ([27f0694](https://github.com/boundaryml/baml/commit/27f06945727cd5354421516f9fe7183e86a6e298)) - aaronvg
+
+
+### Docs
+- Update vertex ai provider docs with api key info (#2519) - ([f146914](https://github.com/boundaryml/baml/commit/f1469143472c041521b6c8774a01e2670397977b)) - aaronvg
+- Bump version to 0.209.0 - ([ca4cf4d](https://github.com/boundaryml/baml/commit/ca4cf4d2091be8f7561a80ca1dbc3c21ada35011)) - Aaron Villalpando
+
+
 ## [0.208.5](https://github.com/boundaryml/baml/compare/0.208.4..0.208.5) - 2025-09-24
 
 ### Bugfix
