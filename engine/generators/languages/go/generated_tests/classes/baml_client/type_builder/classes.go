@@ -15,13 +15,12 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
-
 type SimpleClassClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *SimpleClassClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -32,17 +31,13 @@ func (t *SimpleClassClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-
-
-
 func (t *SimpleClassClassView) PropertyDigits() (ClassPropertyView, error) {
-    return t.inner.Property("digits")
+	return t.inner.Property("digits")
 }
 
 func (t *SimpleClassClassView) PropertyWords() (ClassPropertyView, error) {
-    return t.inner.Property("words")
+	return t.inner.Property("words")
 }
-
 
 func (t *TypeBuilder) SimpleClass() (*SimpleClassClassView, error) {
 	bld, err := t.inner.Class("SimpleClass")

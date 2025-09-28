@@ -14,159 +14,154 @@
 package types
 
 import (
-    "encoding/json"
-    "fmt"
+	"encoding/json"
+	"fmt"
 
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
 type Union2ExampleOrExample2 struct {
-    variant string
-    
-    variant_Example *Example
-    
-    variant_Example2 *Example2
-    
+	variant string
+
+	variant_Example *Example
+
+	variant_Example2 *Example2
 }
 
 func (u *Union2ExampleOrExample2) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-    valueHolder := holder.Value
-    variantName := holder.VariantName
+	valueHolder := holder.Value
+	variantName := holder.VariantName
 	switch variantName {
-    case "Example":
-            u.variant = "Example"
-            value := baml.Decode(valueHolder).Interface().(Example)
-            u.variant_Example = &value
-    case "Example2":
-            u.variant = "Example2"
-            value := baml.Decode(valueHolder).Interface().(Example2)
-            u.variant_Example2 = &value
-    
-    default:
-        panic(fmt.Sprintf("invalid union variant: %s", variantName))
+	case "Example":
+		u.variant = "Example"
+		value := baml.Decode(valueHolder).Interface().(Example)
+		u.variant_Example = &value
+	case "Example2":
+		u.variant = "Example2"
+		value := baml.Decode(valueHolder).Interface().(Example2)
+		u.variant_Example2 = &value
+
+	default:
+		panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
-
 func (u Union2ExampleOrExample2) Encode() (*cffi.CFFIValueHolder, error) {
-    switch u.variant {
-    
-    case "Example":
-        return baml.EncodeUnion(u.BamlEncodeName, "Example", *u.variant_Example)
-    
-    case "Example2":
-        return baml.EncodeUnion(u.BamlEncodeName, "Example2", *u.variant_Example2)
-    
-    case "":
-        return nil, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "Example":
+		return baml.EncodeUnion(u.BamlEncodeName, "Example", *u.variant_Example)
+
+	case "Example2":
+		return baml.EncodeUnion(u.BamlEncodeName, "Example2", *u.variant_Example2)
+
+	case "":
+		return nil, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union2ExampleOrExample2) BamlTypeName() string {
-    return "Union2ExampleOrExample2"
+	return "Union2ExampleOrExample2"
 }
 
 func (u Union2ExampleOrExample2) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Name:      "Union__Example__Example2",
-        Namespace: cffi.CFFITypeNamespace_TYPES,
-    }
+	return &cffi.CFFITypeName{
+		Name:      "Union__Example__Example2",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 func (u Union2ExampleOrExample2) MarshalJSON() ([]byte, error) {
-    switch u.variant {
-    
-    case "Example":
-        return json.Marshal(u.variant_Example)
-    
-    case "Example2":
-        return json.Marshal(u.variant_Example2)
-    
-    }
+	switch u.variant {
 
-    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "Example":
+		return json.Marshal(u.variant_Example)
+
+	case "Example2":
+		return json.Marshal(u.variant_Example2)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union2ExampleOrExample2) UnmarshalJSON(data []byte) error {
-    var err error
-    
-    err = json.Unmarshal(data, &u.variant_Example)
-    if err == nil {
-        u.variant = "Example"
-        return nil
-    } else {
-        u.variant_Example = nil
-    }
-    
-    err = json.Unmarshal(data, &u.variant_Example2)
-    if err == nil {
-        u.variant = "Example2"
-        return nil
-    } else {
-        u.variant_Example2 = nil
-    }
-    
-    return fmt.Errorf("invalid union variant: %s", string(data))
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_Example)
+	if err == nil {
+		u.variant = "Example"
+		return nil
+	} else {
+		u.variant_Example = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Example2)
+	if err == nil {
+		u.variant = "Example2"
+		return nil
+	} else {
+		u.variant_Example2 = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-
 func Union2ExampleOrExample2__NewExample(v Example) Union2ExampleOrExample2 {
-    
-    return Union2ExampleOrExample2{
-        variant: "Example",
-        variant_Example: &v,
-    }
+
+	return Union2ExampleOrExample2{
+		variant:         "Example",
+		variant_Example: &v,
+	}
 }
 
 func (u *Union2ExampleOrExample2) SetExample(v Example) {
-    
-    u.variant = "Example"
-    u.variant_Example = &v
-    
-    u.variant_Example2 = nil
-    
+
+	u.variant = "Example"
+	u.variant_Example = &v
+
+	u.variant_Example2 = nil
+
 }
 
 func (u *Union2ExampleOrExample2) IsExample() bool {
-    return u.variant == "Example"
+	return u.variant == "Example"
 }
 
 func (u *Union2ExampleOrExample2) AsExample() *Example {
-    if u.variant != "Example" {
-        return nil
-    }
-    return u.variant_Example
+	if u.variant != "Example" {
+		return nil
+	}
+	return u.variant_Example
 }
 
 func Union2ExampleOrExample2__NewExample2(v Example2) Union2ExampleOrExample2 {
-    
-    return Union2ExampleOrExample2{
-        variant: "Example2",
-        variant_Example2: &v,
-    }
+
+	return Union2ExampleOrExample2{
+		variant:          "Example2",
+		variant_Example2: &v,
+	}
 }
 
 func (u *Union2ExampleOrExample2) SetExample2(v Example2) {
-    
-    u.variant = "Example2"
-    u.variant_Example2 = &v
-    
-    u.variant_Example = nil
-    
+
+	u.variant = "Example2"
+	u.variant_Example2 = &v
+
+	u.variant_Example = nil
+
 }
 
 func (u *Union2ExampleOrExample2) IsExample2() bool {
-    return u.variant == "Example2"
+	return u.variant == "Example2"
 }
 
 func (u *Union2ExampleOrExample2) AsExample2() *Example2 {
-    if u.variant != "Example2" {
-        return nil
-    }
-    return u.variant_Example2
+	if u.variant != "Example2" {
+		return nil
+	}
+	return u.variant_Example2
 }
-
-

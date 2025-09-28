@@ -316,7 +316,7 @@ export interface Widget {
   type: "button" | "text" | "image" | "container"
   button?: ButtonWidget | null
   text?: TextWidget | null
-  image?: ImageWidget | null
+  img?: ImageWidget | null
   container?: ContainerWidget | null
   
 }

@@ -15,13 +15,12 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
-
 type ComplexOptionalClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *ComplexOptionalClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -32,21 +31,17 @@ func (t *ComplexOptionalClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
-
-
-
 func (t *ComplexOptionalClassView) PropertyData() (ClassPropertyView, error) {
-    return t.inner.Property("data")
+	return t.inner.Property("data")
 }
 
 func (t *ComplexOptionalClassView) PropertyItems() (ClassPropertyView, error) {
-    return t.inner.Property("items")
+	return t.inner.Property("items")
 }
 
 func (t *ComplexOptionalClassView) PropertyMapping() (ClassPropertyView, error) {
-    return t.inner.Property("mapping")
+	return t.inner.Property("mapping")
 }
-
 
 func (t *TypeBuilder) ComplexOptional() (*ComplexOptionalClassView, error) {
 	bld, err := t.inner.Class("ComplexOptional")
@@ -61,11 +56,11 @@ func (t *ComplexOptionalClassView) Type() (baml.Type, error) {
 }
 
 type MixedOptionalNullableClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *MixedOptionalNullableClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -76,49 +71,45 @@ func (t *MixedOptionalNullableClassView) ListProperties() ([]ClassPropertyView, 
 	return builders, nil
 }
 
-
-
-
 func (t *MixedOptionalNullableClassView) PropertyId() (ClassPropertyView, error) {
-    return t.inner.Property("id")
+	return t.inner.Property("id")
 }
 
 func (t *MixedOptionalNullableClassView) PropertyDescription() (ClassPropertyView, error) {
-    return t.inner.Property("description")
+	return t.inner.Property("description")
 }
 
 func (t *MixedOptionalNullableClassView) PropertyMetadata() (ClassPropertyView, error) {
-    return t.inner.Property("metadata")
+	return t.inner.Property("metadata")
 }
 
 func (t *MixedOptionalNullableClassView) PropertyNotes() (ClassPropertyView, error) {
-    return t.inner.Property("notes")
+	return t.inner.Property("notes")
 }
 
 func (t *MixedOptionalNullableClassView) PropertyTags() (ClassPropertyView, error) {
-    return t.inner.Property("tags")
+	return t.inner.Property("tags")
 }
 
 func (t *MixedOptionalNullableClassView) PropertyCategories() (ClassPropertyView, error) {
-    return t.inner.Property("categories")
+	return t.inner.Property("categories")
 }
 
 func (t *MixedOptionalNullableClassView) PropertyKeywords() (ClassPropertyView, error) {
-    return t.inner.Property("keywords")
+	return t.inner.Property("keywords")
 }
 
 func (t *MixedOptionalNullableClassView) PropertyPrimaryUser() (ClassPropertyView, error) {
-    return t.inner.Property("primaryUser")
+	return t.inner.Property("primaryUser")
 }
 
 func (t *MixedOptionalNullableClassView) PropertySecondaryUser() (ClassPropertyView, error) {
-    return t.inner.Property("secondaryUser")
+	return t.inner.Property("secondaryUser")
 }
 
 func (t *MixedOptionalNullableClassView) PropertyTertiaryUser() (ClassPropertyView, error) {
-    return t.inner.Property("tertiaryUser")
+	return t.inner.Property("tertiaryUser")
 }
-
 
 func (t *TypeBuilder) MixedOptionalNullable() (*MixedOptionalNullableClassView, error) {
 	bld, err := t.inner.Class("MixedOptionalNullable")
@@ -133,11 +124,11 @@ func (t *MixedOptionalNullableClassView) Type() (baml.Type, error) {
 }
 
 type NullableTypesClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *NullableTypesClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -148,33 +139,29 @@ func (t *NullableTypesClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-
-
-
 func (t *NullableTypesClassView) PropertyNullableString() (ClassPropertyView, error) {
-    return t.inner.Property("nullableString")
+	return t.inner.Property("nullableString")
 }
 
 func (t *NullableTypesClassView) PropertyNullableInt() (ClassPropertyView, error) {
-    return t.inner.Property("nullableInt")
+	return t.inner.Property("nullableInt")
 }
 
 func (t *NullableTypesClassView) PropertyNullableFloat() (ClassPropertyView, error) {
-    return t.inner.Property("nullableFloat")
+	return t.inner.Property("nullableFloat")
 }
 
 func (t *NullableTypesClassView) PropertyNullableBool() (ClassPropertyView, error) {
-    return t.inner.Property("nullableBool")
+	return t.inner.Property("nullableBool")
 }
 
 func (t *NullableTypesClassView) PropertyNullableArray() (ClassPropertyView, error) {
-    return t.inner.Property("nullableArray")
+	return t.inner.Property("nullableArray")
 }
 
 func (t *NullableTypesClassView) PropertyNullableObject() (ClassPropertyView, error) {
-    return t.inner.Property("nullableObject")
+	return t.inner.Property("nullableObject")
 }
-
 
 func (t *TypeBuilder) NullableTypes() (*NullableTypesClassView, error) {
 	bld, err := t.inner.Class("NullableTypes")
@@ -189,11 +176,11 @@ func (t *NullableTypesClassView) Type() (baml.Type, error) {
 }
 
 type OptionalDataClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *OptionalDataClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -204,21 +191,17 @@ func (t *OptionalDataClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-
-
-
 func (t *OptionalDataClassView) PropertyValue() (ClassPropertyView, error) {
-    return t.inner.Property("value")
+	return t.inner.Property("value")
 }
 
 func (t *OptionalDataClassView) PropertyCount() (ClassPropertyView, error) {
-    return t.inner.Property("count")
+	return t.inner.Property("count")
 }
 
 func (t *OptionalDataClassView) PropertyEnabled() (ClassPropertyView, error) {
-    return t.inner.Property("enabled")
+	return t.inner.Property("enabled")
 }
-
 
 func (t *TypeBuilder) OptionalData() (*OptionalDataClassView, error) {
 	bld, err := t.inner.Class("OptionalData")
@@ -233,11 +216,11 @@ func (t *OptionalDataClassView) Type() (baml.Type, error) {
 }
 
 type OptionalFieldsClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *OptionalFieldsClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -248,41 +231,37 @@ func (t *OptionalFieldsClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
-
-
-
 func (t *OptionalFieldsClassView) PropertyRequiredString() (ClassPropertyView, error) {
-    return t.inner.Property("requiredString")
+	return t.inner.Property("requiredString")
 }
 
 func (t *OptionalFieldsClassView) PropertyOptionalString() (ClassPropertyView, error) {
-    return t.inner.Property("optionalString")
+	return t.inner.Property("optionalString")
 }
 
 func (t *OptionalFieldsClassView) PropertyRequiredInt() (ClassPropertyView, error) {
-    return t.inner.Property("requiredInt")
+	return t.inner.Property("requiredInt")
 }
 
 func (t *OptionalFieldsClassView) PropertyOptionalInt() (ClassPropertyView, error) {
-    return t.inner.Property("optionalInt")
+	return t.inner.Property("optionalInt")
 }
 
 func (t *OptionalFieldsClassView) PropertyRequiredBool() (ClassPropertyView, error) {
-    return t.inner.Property("requiredBool")
+	return t.inner.Property("requiredBool")
 }
 
 func (t *OptionalFieldsClassView) PropertyOptionalBool() (ClassPropertyView, error) {
-    return t.inner.Property("optionalBool")
+	return t.inner.Property("optionalBool")
 }
 
 func (t *OptionalFieldsClassView) PropertyOptionalArray() (ClassPropertyView, error) {
-    return t.inner.Property("optionalArray")
+	return t.inner.Property("optionalArray")
 }
 
 func (t *OptionalFieldsClassView) PropertyOptionalMap() (ClassPropertyView, error) {
-    return t.inner.Property("optionalMap")
+	return t.inner.Property("optionalMap")
 }
-
 
 func (t *TypeBuilder) OptionalFields() (*OptionalFieldsClassView, error) {
 	bld, err := t.inner.Class("OptionalFields")
@@ -297,11 +276,11 @@ func (t *OptionalFieldsClassView) Type() (baml.Type, error) {
 }
 
 type OptionalItemClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *OptionalItemClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -312,25 +291,21 @@ func (t *OptionalItemClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-
-
-
 func (t *OptionalItemClassView) PropertyId() (ClassPropertyView, error) {
-    return t.inner.Property("id")
+	return t.inner.Property("id")
 }
 
 func (t *OptionalItemClassView) PropertyName() (ClassPropertyView, error) {
-    return t.inner.Property("name")
+	return t.inner.Property("name")
 }
 
 func (t *OptionalItemClassView) PropertyDescription() (ClassPropertyView, error) {
-    return t.inner.Property("description")
+	return t.inner.Property("description")
 }
 
 func (t *OptionalItemClassView) PropertyMetadata() (ClassPropertyView, error) {
-    return t.inner.Property("metadata")
+	return t.inner.Property("metadata")
 }
-
 
 func (t *TypeBuilder) OptionalItem() (*OptionalItemClassView, error) {
 	bld, err := t.inner.Class("OptionalItem")
@@ -345,11 +320,11 @@ func (t *OptionalItemClassView) Type() (baml.Type, error) {
 }
 
 type OptionalValueClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *OptionalValueClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -360,17 +335,13 @@ func (t *OptionalValueClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-
-
-
 func (t *OptionalValueClassView) PropertyData() (ClassPropertyView, error) {
-    return t.inner.Property("data")
+	return t.inner.Property("data")
 }
 
 func (t *OptionalValueClassView) PropertyOptional() (ClassPropertyView, error) {
-    return t.inner.Property("optional")
+	return t.inner.Property("optional")
 }
-
 
 func (t *TypeBuilder) OptionalValue() (*OptionalValueClassView, error) {
 	bld, err := t.inner.Class("OptionalValue")
@@ -385,11 +356,11 @@ func (t *OptionalValueClassView) Type() (baml.Type, error) {
 }
 
 type ProductClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *ProductClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -400,21 +371,17 @@ func (t *ProductClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-
-
-
 func (t *ProductClassView) PropertyId() (ClassPropertyView, error) {
-    return t.inner.Property("id")
+	return t.inner.Property("id")
 }
 
 func (t *ProductClassView) PropertyName() (ClassPropertyView, error) {
-    return t.inner.Property("name")
+	return t.inner.Property("name")
 }
 
 func (t *ProductClassView) PropertyPrice() (ClassPropertyView, error) {
-    return t.inner.Property("price")
+	return t.inner.Property("price")
 }
-
 
 func (t *TypeBuilder) Product() (*ProductClassView, error) {
 	bld, err := t.inner.Class("Product")
@@ -429,11 +396,11 @@ func (t *ProductClassView) Type() (baml.Type, error) {
 }
 
 type UnionWithNullClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *UnionWithNullClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -444,25 +411,21 @@ func (t *UnionWithNullClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-
-
-
 func (t *UnionWithNullClassView) PropertySimpleUnion() (ClassPropertyView, error) {
-    return t.inner.Property("simpleUnion")
+	return t.inner.Property("simpleUnion")
 }
 
 func (t *UnionWithNullClassView) PropertyNullableUnion() (ClassPropertyView, error) {
-    return t.inner.Property("nullableUnion")
+	return t.inner.Property("nullableUnion")
 }
 
 func (t *UnionWithNullClassView) PropertyOptionalUnion() (ClassPropertyView, error) {
-    return t.inner.Property("optionalUnion")
+	return t.inner.Property("optionalUnion")
 }
 
 func (t *UnionWithNullClassView) PropertyComplexUnion() (ClassPropertyView, error) {
-    return t.inner.Property("complexUnion")
+	return t.inner.Property("complexUnion")
 }
-
 
 func (t *TypeBuilder) UnionWithNull() (*UnionWithNullClassView, error) {
 	bld, err := t.inner.Class("UnionWithNull")
@@ -477,11 +440,11 @@ func (t *UnionWithNullClassView) Type() (baml.Type, error) {
 }
 
 type UserClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -492,25 +455,21 @@ func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-
-
-
 func (t *UserClassView) PropertyId() (ClassPropertyView, error) {
-    return t.inner.Property("id")
+	return t.inner.Property("id")
 }
 
 func (t *UserClassView) PropertyName() (ClassPropertyView, error) {
-    return t.inner.Property("name")
+	return t.inner.Property("name")
 }
 
 func (t *UserClassView) PropertyEmail() (ClassPropertyView, error) {
-    return t.inner.Property("email")
+	return t.inner.Property("email")
 }
 
 func (t *UserClassView) PropertyPhone() (ClassPropertyView, error) {
-    return t.inner.Property("phone")
+	return t.inner.Property("phone")
 }
-
 
 func (t *TypeBuilder) User() (*UserClassView, error) {
 	bld, err := t.inner.Class("User")

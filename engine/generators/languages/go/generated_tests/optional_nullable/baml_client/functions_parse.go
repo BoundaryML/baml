@@ -14,228 +14,249 @@
 package baml_client
 
 import (
-    "context"
+	"context"
+	"fmt"
 
-    "optional_nullable/baml_client/types"
-    "optional_nullable/baml_client/stream_types"
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"optional_nullable/baml_client/types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-type parse struct {}
+type parse struct{}
+
 var Parse = &parse{}
 
-
-/// Parse version of TestAllNull (Takes in string and returns types.NullableTypes)
+// / Parse version of TestAllNull (Takes in string and returns types.NullableTypes)
 func (*parse) TestAllNull(text string, opts ...CallOptionFunc) (types.NullableTypes, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": false },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestAllNull: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestAllNull", encoded)
-    if err != nil {
-        return types.NullableTypes{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestAllNull: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(types.NullableTypes)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestAllNull", encoded)
+	if err != nil {
+		return types.NullableTypes{}, err
+	}
 
-    return casted, nil
+	casted := (result).(types.NullableTypes)
+
+	return casted, nil
 }
 
-/// Parse version of TestAllOptionalOmitted (Takes in string and returns types.OptionalFields)
+// / Parse version of TestAllOptionalOmitted (Takes in string and returns types.OptionalFields)
 func (*parse) TestAllOptionalOmitted(text string, opts ...CallOptionFunc) (types.OptionalFields, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": false },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestAllOptionalOmitted: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestAllOptionalOmitted", encoded)
-    if err != nil {
-        return types.OptionalFields{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestAllOptionalOmitted: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(types.OptionalFields)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestAllOptionalOmitted", encoded)
+	if err != nil {
+		return types.OptionalFields{}, err
+	}
 
-    return casted, nil
+	casted := (result).(types.OptionalFields)
+
+	return casted, nil
 }
 
-/// Parse version of TestMixedOptionalNullable (Takes in string and returns types.MixedOptionalNullable)
+// / Parse version of TestMixedOptionalNullable (Takes in string and returns types.MixedOptionalNullable)
 func (*parse) TestMixedOptionalNullable(text string, opts ...CallOptionFunc) (types.MixedOptionalNullable, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": false },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestMixedOptionalNullable: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestMixedOptionalNullable", encoded)
-    if err != nil {
-        return types.MixedOptionalNullable{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestMixedOptionalNullable: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(types.MixedOptionalNullable)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestMixedOptionalNullable", encoded)
+	if err != nil {
+		return types.MixedOptionalNullable{}, err
+	}
 
-    return casted, nil
+	casted := (result).(types.MixedOptionalNullable)
+
+	return casted, nil
 }
 
-/// Parse version of TestNullableTypes (Takes in string and returns types.NullableTypes)
+// / Parse version of TestNullableTypes (Takes in string and returns types.NullableTypes)
 func (*parse) TestNullableTypes(text string, opts ...CallOptionFunc) (types.NullableTypes, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": false },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestNullableTypes: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestNullableTypes", encoded)
-    if err != nil {
-        return types.NullableTypes{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestNullableTypes: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(types.NullableTypes)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestNullableTypes", encoded)
+	if err != nil {
+		return types.NullableTypes{}, err
+	}
 
-    return casted, nil
+	casted := (result).(types.NullableTypes)
+
+	return casted, nil
 }
 
-/// Parse version of TestOptionalFields (Takes in string and returns types.OptionalFields)
+// / Parse version of TestOptionalFields (Takes in string and returns types.OptionalFields)
 func (*parse) TestOptionalFields(text string, opts ...CallOptionFunc) (types.OptionalFields, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": false },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOptionalFields: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestOptionalFields", encoded)
-    if err != nil {
-        return types.OptionalFields{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOptionalFields: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(types.OptionalFields)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestOptionalFields", encoded)
+	if err != nil {
+		return types.OptionalFields{}, err
+	}
 
-    return casted, nil
+	casted := (result).(types.OptionalFields)
+
+	return casted, nil
 }

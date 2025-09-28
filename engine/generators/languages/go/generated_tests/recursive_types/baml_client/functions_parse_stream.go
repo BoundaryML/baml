@@ -14,99 +14,108 @@
 package baml_client
 
 import (
-    "context"
+	"context"
+	"fmt"
 
-    "recursive_types/baml_client/types"
-    "recursive_types/baml_client/stream_types"
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"recursive_types/baml_client/stream_types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-type parse_stream struct {}
+type parse_stream struct{}
+
 var ParseStream = &parse_stream{}
 
-
-/// Parse version of Foo (Takes in string and returns stream_types.JSON)
+// / Parse version of Foo (Takes in string and returns stream_types.JSON)
 func (*parse_stream) Foo(text string, opts ...CallOptionFunc) (stream_types.JSON, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": true },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": true},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: Foo: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "Foo", encoded)
-    if err != nil {
-        return nil, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: Foo: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(stream_types.JSON)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "Foo", encoded)
+	if err != nil {
+		return nil, err
+	}
 
-    return casted, nil
+	casted := (result).(stream_types.JSON)
+
+	return casted, nil
 }
 
-/// Parse version of JsonInput (Takes in string and returns stream_types.JSON)
+// / Parse version of JsonInput (Takes in string and returns stream_types.JSON)
 func (*parse_stream) JsonInput(text string, opts ...CallOptionFunc) (stream_types.JSON, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": true },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": true},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: JsonInput: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "JsonInput", encoded)
-    if err != nil {
-        return nil, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: JsonInput: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(stream_types.JSON)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "JsonInput", encoded)
+	if err != nil {
+		return nil, err
+	}
 
-    return casted, nil
+	casted := (result).(stream_types.JSON)
+
+	return casted, nil
 }

@@ -14,50 +14,46 @@
 package baml_client
 
 import (
-    "edge_cases/baml_client/types"
-    "edge_cases/baml_client/stream_types"
+	"edge_cases/baml_client/stream_types"
+	"edge_cases/baml_client/types"
+	"reflect"
 )
 
 var typeMap = map[string]reflect.Type{
-"TYPES.AllNullable": reflect.TypeOf(types.AllNullable{}),
-    "STREAM_TYPES.AllNullable": reflect.TypeOf(stream_types.AllNullable{}),
-"TYPES.BooleanEdgeCases": reflect.TypeOf(types.BooleanEdgeCases{}),
-    "STREAM_TYPES.BooleanEdgeCases": reflect.TypeOf(stream_types.BooleanEdgeCases{}),
-"TYPES.CircularReference": reflect.TypeOf(types.CircularReference{}),
-    "STREAM_TYPES.CircularReference": reflect.TypeOf(stream_types.CircularReference{}),
-"TYPES.DeepRecursion": reflect.TypeOf(types.DeepRecursion{}),
-    "STREAM_TYPES.DeepRecursion": reflect.TypeOf(stream_types.DeepRecursion{}),
-"TYPES.EmptyCollections": reflect.TypeOf(types.EmptyCollections{}),
-    "STREAM_TYPES.EmptyCollections": reflect.TypeOf(stream_types.EmptyCollections{}),
-"TYPES.InnerNullable": reflect.TypeOf(types.InnerNullable{}),
-    "STREAM_TYPES.InnerNullable": reflect.TypeOf(stream_types.InnerNullable{}),
-"TYPES.LargeStructure": reflect.TypeOf(types.LargeStructure{}),
-    "STREAM_TYPES.LargeStructure": reflect.TypeOf(stream_types.LargeStructure{}),
-"TYPES.MixedEdgeCases": reflect.TypeOf(types.MixedEdgeCases{}),
-    "STREAM_TYPES.MixedEdgeCases": reflect.TypeOf(stream_types.MixedEdgeCases{}),
-"TYPES.NestedNullable": reflect.TypeOf(types.NestedNullable{}),
-    "STREAM_TYPES.NestedNullable": reflect.TypeOf(stream_types.NestedNullable{}),
-"TYPES.NullEdgeCases": reflect.TypeOf(types.NullEdgeCases{}),
-    "STREAM_TYPES.NullEdgeCases": reflect.TypeOf(stream_types.NullEdgeCases{}),
-"TYPES.NumberEdgeCases": reflect.TypeOf(types.NumberEdgeCases{}),
-    "STREAM_TYPES.NumberEdgeCases": reflect.TypeOf(stream_types.NumberEdgeCases{}),
-"TYPES.OptionalEverything": reflect.TypeOf(types.OptionalEverything{}),
-    "STREAM_TYPES.OptionalEverything": reflect.TypeOf(stream_types.OptionalEverything{}),
-"TYPES.OuterNullable": reflect.TypeOf(types.OuterNullable{}),
-    "STREAM_TYPES.OuterNullable": reflect.TypeOf(stream_types.OuterNullable{}),
-"TYPES.SomeNullable": reflect.TypeOf(types.SomeNullable{}),
-    "STREAM_TYPES.SomeNullable": reflect.TypeOf(stream_types.SomeNullable{}),
-"TYPES.SpecialCharacters": reflect.TypeOf(types.SpecialCharacters{}),
-    "STREAM_TYPES.SpecialCharacters": reflect.TypeOf(stream_types.SpecialCharacters{}),
-"TYPES.User": reflect.TypeOf(types.User{}),
-    "STREAM_TYPES.User": reflect.TypeOf(stream_types.User{}),
-"TYPES.VeryLongStrings": reflect.TypeOf(types.VeryLongStrings{}),
-    "STREAM_TYPES.VeryLongStrings": reflect.TypeOf(stream_types.VeryLongStrings{}),
+	"TYPES.AllNullable":               reflect.TypeOf(types.AllNullable{}),
+	"STREAM_TYPES.AllNullable":        reflect.TypeOf(stream_types.AllNullable{}),
+	"TYPES.BooleanEdgeCases":          reflect.TypeOf(types.BooleanEdgeCases{}),
+	"STREAM_TYPES.BooleanEdgeCases":   reflect.TypeOf(stream_types.BooleanEdgeCases{}),
+	"TYPES.CircularReference":         reflect.TypeOf(types.CircularReference{}),
+	"STREAM_TYPES.CircularReference":  reflect.TypeOf(stream_types.CircularReference{}),
+	"TYPES.DeepRecursion":             reflect.TypeOf(types.DeepRecursion{}),
+	"STREAM_TYPES.DeepRecursion":      reflect.TypeOf(stream_types.DeepRecursion{}),
+	"TYPES.EmptyCollections":          reflect.TypeOf(types.EmptyCollections{}),
+	"STREAM_TYPES.EmptyCollections":   reflect.TypeOf(stream_types.EmptyCollections{}),
+	"TYPES.InnerNullable":             reflect.TypeOf(types.InnerNullable{}),
+	"STREAM_TYPES.InnerNullable":      reflect.TypeOf(stream_types.InnerNullable{}),
+	"TYPES.LargeStructure":            reflect.TypeOf(types.LargeStructure{}),
+	"STREAM_TYPES.LargeStructure":     reflect.TypeOf(stream_types.LargeStructure{}),
+	"TYPES.MixedEdgeCases":            reflect.TypeOf(types.MixedEdgeCases{}),
+	"STREAM_TYPES.MixedEdgeCases":     reflect.TypeOf(stream_types.MixedEdgeCases{}),
+	"TYPES.NestedNullable":            reflect.TypeOf(types.NestedNullable{}),
+	"STREAM_TYPES.NestedNullable":     reflect.TypeOf(stream_types.NestedNullable{}),
+	"TYPES.NullEdgeCases":             reflect.TypeOf(types.NullEdgeCases{}),
+	"STREAM_TYPES.NullEdgeCases":      reflect.TypeOf(stream_types.NullEdgeCases{}),
+	"TYPES.NumberEdgeCases":           reflect.TypeOf(types.NumberEdgeCases{}),
+	"STREAM_TYPES.NumberEdgeCases":    reflect.TypeOf(stream_types.NumberEdgeCases{}),
+	"TYPES.OptionalEverything":        reflect.TypeOf(types.OptionalEverything{}),
+	"STREAM_TYPES.OptionalEverything": reflect.TypeOf(stream_types.OptionalEverything{}),
+	"TYPES.OuterNullable":             reflect.TypeOf(types.OuterNullable{}),
+	"STREAM_TYPES.OuterNullable":      reflect.TypeOf(stream_types.OuterNullable{}),
+	"TYPES.SomeNullable":              reflect.TypeOf(types.SomeNullable{}),
+	"STREAM_TYPES.SomeNullable":       reflect.TypeOf(stream_types.SomeNullable{}),
+	"TYPES.SpecialCharacters":         reflect.TypeOf(types.SpecialCharacters{}),
+	"STREAM_TYPES.SpecialCharacters":  reflect.TypeOf(stream_types.SpecialCharacters{}),
+	"TYPES.User":                      reflect.TypeOf(types.User{}),
+	"STREAM_TYPES.User":               reflect.TypeOf(stream_types.User{}),
+	"TYPES.VeryLongStrings":           reflect.TypeOf(types.VeryLongStrings{}),
+	"STREAM_TYPES.VeryLongStrings":    reflect.TypeOf(stream_types.VeryLongStrings{}),
 
-
-"TYPES.Union__bool__int__string": reflect.TypeOf(types.Union3BoolOrIntOrString{}),
-
-
-
-
+	"TYPES.Union__bool__int__string": reflect.TypeOf(types.Union3BoolOrIntOrString{}),
 }

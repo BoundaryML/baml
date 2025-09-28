@@ -27,6 +27,8 @@
 package baml_client
 
 import (
+	"array_types/baml_client/type_builder"
+	"fmt"
 	"os"
 	"strings"
 
@@ -64,6 +66,7 @@ func init() {
 type callOption struct {
 	clientRegistry *baml.ClientRegistry
 	env            map[string]string
+	tags           map[string]string
 	collectors     []baml.Collector
 	onTick         baml.OnTickCallbackData
 	typeBuilder    baml.TypeBuilder
@@ -82,6 +85,13 @@ func WithClientRegistry(clientRegistry *baml.ClientRegistry) CallOptionFunc {
 func WithEnv(env map[string]string) CallOptionFunc {
 	return func(o *callOption) {
 		o.env = env
+	}
+}
+
+// Add tags to the specific function call.
+func WithTags(tags map[string]string) CallOptionFunc {
+	return func(o *callOption) {
+		o.tags = tags
 	}
 }
 

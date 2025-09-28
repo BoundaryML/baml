@@ -14,99 +14,108 @@
 package baml_client
 
 import (
-    "context"
+	"context"
+	"fmt"
 
-    "classes/baml_client/types"
-    "classes/baml_client/stream_types"
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"classes/baml_client/types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-type parse struct {}
+type parse struct{}
+
 var Parse = &parse{}
 
-
-/// Parse version of ConsumeSimpleClass (Takes in string and returns types.SimpleClass)
+// / Parse version of ConsumeSimpleClass (Takes in string and returns types.SimpleClass)
 func (*parse) ConsumeSimpleClass(text string, opts ...CallOptionFunc) (types.SimpleClass, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": false },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: ConsumeSimpleClass: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "ConsumeSimpleClass", encoded)
-    if err != nil {
-        return types.SimpleClass{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: ConsumeSimpleClass: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(types.SimpleClass)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "ConsumeSimpleClass", encoded)
+	if err != nil {
+		return types.SimpleClass{}, err
+	}
 
-    return casted, nil
+	casted := (result).(types.SimpleClass)
+
+	return casted, nil
 }
 
-/// Parse version of MakeSimpleClass (Takes in string and returns types.SimpleClass)
+// / Parse version of MakeSimpleClass (Takes in string and returns types.SimpleClass)
 func (*parse) MakeSimpleClass(text string, opts ...CallOptionFunc) (types.SimpleClass, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": false },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: MakeSimpleClass: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "MakeSimpleClass", encoded)
-    if err != nil {
-        return types.SimpleClass{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: MakeSimpleClass: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(types.SimpleClass)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "MakeSimpleClass", encoded)
+	if err != nil {
+		return types.SimpleClass{}, err
+	}
 
-    return casted, nil
+	casted := (result).(types.SimpleClass)
+
+	return casted, nil
 }

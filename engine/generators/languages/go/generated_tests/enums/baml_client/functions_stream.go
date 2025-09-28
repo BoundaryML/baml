@@ -14,169 +14,178 @@
 package baml_client
 
 import (
-    "context"
+	"context"
+	"fmt"
 
-    "enums/baml_client/types"
-    "enums/baml_client/stream_types"
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"enums/baml_client/types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-type stream struct {}
+type stream struct{}
+
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
-    IsError   bool
-    Error     error
-    IsFinal   bool
-    as_final  *TFinal
-    as_stream *TStream
+	IsError   bool
+	Error     error
+	IsFinal   bool
+	as_final  *TFinal
+	as_stream *TStream
 }
 
 func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
-    return s.as_final
+	return s.as_final
 }
 
 func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
-    return s.as_stream
+	return s.as_stream
 }
 
-
-/// Streaming version of ConsumeTestEnum
+// / Streaming version of ConsumeTestEnum
 func (*stream) ConsumeTestEnum(ctx context.Context, input types.TestEnum, opts ...CallOptionFunc) (<-chan StreamValue[types.TestEnum, types.TestEnum], error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "input": input, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: ConsumeTestEnum: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "ConsumeTestEnum", encoded, callOpts.onTick)
-    if err != nil {
-        return nil, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: ConsumeTestEnum: %w", err)
+		panic(wrapped_err)
+	}
 
-    channel := make(chan StreamValue[types.TestEnum, types.TestEnum])
-    go func() {
-        for result := range internal_channel {
-            if result.Error != nil {
-                channel <- StreamValue[types.TestEnum, types.TestEnum]{
-                    IsError: true,
-                    Error:   result.Error,
-                }
-                close(channel)
-                return
-            }
-            if result.HasData {
-                    data := (result.Data).(types.TestEnum)
-                    channel <- StreamValue[types.TestEnum, types.TestEnum]{
-                        IsFinal: true,
-                        as_final: &data,
-                    }
-            } else {
-                data := (result.StreamData).(types.TestEnum)
-                channel <- StreamValue[types.TestEnum, types.TestEnum]{
-                    IsFinal: false,
-                    as_stream: &data,
-                }
-            }
-        }
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "ConsumeTestEnum", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[types.TestEnum, types.TestEnum])
+	go func() {
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[types.TestEnum, types.TestEnum]{
+					IsError: true,
+					Error:   result.Error,
+				}
+				close(channel)
+				return
+			}
+			if result.HasData {
+				data := (result.Data).(types.TestEnum)
+				channel <- StreamValue[types.TestEnum, types.TestEnum]{
+					IsFinal:  true,
+					as_final: &data,
+				}
+			} else {
+				data := (result.StreamData).(types.TestEnum)
+				channel <- StreamValue[types.TestEnum, types.TestEnum]{
+					IsFinal:   false,
+					as_stream: &data,
+				}
+			}
+		}
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-    }()
-    return channel, nil
+	}()
+	return channel, nil
 }
 
-/// Streaming version of FnTestAliasedEnumOutput
+// / Streaming version of FnTestAliasedEnumOutput
 func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[types.TestEnum, types.TestEnum], error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "input": input, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: FnTestAliasedEnumOutput: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "FnTestAliasedEnumOutput", encoded, callOpts.onTick)
-    if err != nil {
-        return nil, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: FnTestAliasedEnumOutput: %w", err)
+		panic(wrapped_err)
+	}
 
-    channel := make(chan StreamValue[types.TestEnum, types.TestEnum])
-    go func() {
-        for result := range internal_channel {
-            if result.Error != nil {
-                channel <- StreamValue[types.TestEnum, types.TestEnum]{
-                    IsError: true,
-                    Error:   result.Error,
-                }
-                close(channel)
-                return
-            }
-            if result.HasData {
-                    data := (result.Data).(types.TestEnum)
-                    channel <- StreamValue[types.TestEnum, types.TestEnum]{
-                        IsFinal: true,
-                        as_final: &data,
-                    }
-            } else {
-                data := (result.StreamData).(types.TestEnum)
-                channel <- StreamValue[types.TestEnum, types.TestEnum]{
-                    IsFinal: false,
-                    as_stream: &data,
-                }
-            }
-        }
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "FnTestAliasedEnumOutput", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[types.TestEnum, types.TestEnum])
+	go func() {
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[types.TestEnum, types.TestEnum]{
+					IsError: true,
+					Error:   result.Error,
+				}
+				close(channel)
+				return
+			}
+			if result.HasData {
+				data := (result.Data).(types.TestEnum)
+				channel <- StreamValue[types.TestEnum, types.TestEnum]{
+					IsFinal:  true,
+					as_final: &data,
+				}
+			} else {
+				data := (result.StreamData).(types.TestEnum)
+				channel <- StreamValue[types.TestEnum, types.TestEnum]{
+					IsFinal:   false,
+					as_stream: &data,
+				}
+			}
+		}
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-    }()
-    return channel, nil
+	}()
+	return channel, nil
 }

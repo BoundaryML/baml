@@ -15,6 +15,7 @@ type BamlFunctionArguments struct {
 	Env            map[string]string
 	Collectors     []Collector
 	TypeBuilder    TypeBuilder
+	Tags           map[string]string
 }
 
 func (args *BamlFunctionArguments) Encode() ([]byte, error) {
@@ -70,12 +71,27 @@ func (args *BamlFunctionArguments) encode() (*cffi.CFFIFunctionArguments, error)
 		typeBuilder = encodedTypeBuilder
 	}
 
+	var tags []*cffi.CFFIMapEntry
+	if args.Tags != nil {
+		for key, value := range args.Tags {
+			tags = append(tags, &cffi.CFFIMapEntry{
+				Key: key,
+				Value: &cffi.CFFIValueHolder{
+					Value: &cffi.CFFIValueHolder_StringValue{
+						StringValue: value,
+					},
+				},
+			})
+		}
+	}
+
 	functionArguments := cffi.CFFIFunctionArguments{
 		Kwargs:         kwargs,
 		ClientRegistry: clientRegistry,
 		Env:            env,
 		Collectors:     collectors,
 		TypeBuilder:    typeBuilder,
+		Tags:           tags,
 	}
 
 	return &functionArguments, nil

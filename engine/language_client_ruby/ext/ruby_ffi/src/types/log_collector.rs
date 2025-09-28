@@ -268,11 +268,15 @@ impl FunctionLog {
         self.inner.lock().unwrap().raw_llm_response()
     }
 
-    pub fn tags(&self, ruby: &Ruby) -> crate::Result<Value> {
+    pub fn tags(&self) -> std::collections::HashMap<String, String> {
         let mut guard = self.inner.lock().unwrap();
-        let tags = guard.tags();
-        serde_magnus::serialize(&tags)
-            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{e:?}")))
+        guard.tags().into_iter().map(|(k, v)| {
+            let string_value = match v {
+                serde_json::Value::String(s) => s,
+                _ => v.to_string(),
+            };
+            (k, string_value)
+        }).collect()
     }
 
     pub fn selected_call(ruby: &Ruby, rb_self: &Self) -> Option<Value> {

@@ -15,13 +15,12 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
-
 type ExampleClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *ExampleClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -32,21 +31,17 @@ func (t *ExampleClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-
-
-
 func (t *ExampleClassView) PropertyType() (ClassPropertyView, error) {
-    return t.inner.Property("type")
+	return t.inner.Property("type")
 }
 
 func (t *ExampleClassView) PropertyA() (ClassPropertyView, error) {
-    return t.inner.Property("a")
+	return t.inner.Property("a")
 }
 
 func (t *ExampleClassView) PropertyB() (ClassPropertyView, error) {
-    return t.inner.Property("b")
+	return t.inner.Property("b")
 }
-
 
 func (t *TypeBuilder) Example() (*ExampleClassView, error) {
 	bld, err := t.inner.Class("Example")
@@ -61,11 +56,11 @@ func (t *ExampleClassView) Type() (baml.Type, error) {
 }
 
 type Example2ClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *Example2ClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -76,25 +71,21 @@ func (t *Example2ClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-
-
-
 func (t *Example2ClassView) PropertyType() (ClassPropertyView, error) {
-    return t.inner.Property("type")
+	return t.inner.Property("type")
 }
 
 func (t *Example2ClassView) PropertyItem() (ClassPropertyView, error) {
-    return t.inner.Property("item")
+	return t.inner.Property("item")
 }
 
 func (t *Example2ClassView) PropertyElement() (ClassPropertyView, error) {
-    return t.inner.Property("element")
+	return t.inner.Property("element")
 }
 
 func (t *Example2ClassView) PropertyElement2() (ClassPropertyView, error) {
-    return t.inner.Property("element2")
+	return t.inner.Property("element2")
 }
-
 
 func (t *TypeBuilder) Example2() (*Example2ClassView, error) {
 	bld, err := t.inner.Class("Example2")

@@ -237,7 +237,7 @@ export namespace partial_types {
       type?: "button" | "text" | "image" | "container" | null
       button?: ButtonWidget | null
       text?: TextWidget | null
-      image?: ImageWidget | null
+      img?: ImageWidget | null
       container?: ContainerWidget | null
     }
 }

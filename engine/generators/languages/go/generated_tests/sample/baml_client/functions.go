@@ -14,135 +14,142 @@
 package baml_client
 
 import (
-    "context"
+	"context"
+	"fmt"
 
-    "sample/baml_client/types"
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"sample/baml_client/types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
-
-
 
 func Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (types.Union2ExampleOrExample2, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "x": x, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"x": x},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "Bar", encoded, callOpts.onTick)
-        if err != nil {
-            return types.Union2ExampleOrExample2{}, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return types.Union2ExampleOrExample2{}, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "Bar", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union2ExampleOrExample2{}, err
+		}
 
-        casted := (result.Data).(types.Union2ExampleOrExample2)
+		if result.Error != nil {
+			return types.Union2ExampleOrExample2{}, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "Bar", encoded, callOpts.onTick)
-        if err != nil {
-            return types.Union2ExampleOrExample2{}, err
-        }
+		casted := (result.Data).(types.Union2ExampleOrExample2)
 
-        for result := range channel {
-            if result.Error != nil {
-                return types.Union2ExampleOrExample2{}, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "Bar", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union2ExampleOrExample2{}, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.Union2ExampleOrExample2), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return types.Union2ExampleOrExample2{}, result.Error
+			}
 
-        return types.Union2ExampleOrExample2{}, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.Union2ExampleOrExample2), nil
+			}
+		}
+
+		return types.Union2ExampleOrExample2{}, fmt.Errorf("No data returned from stream")
+	}
 }
-
 
 func Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (types.Union2ExampleOrExample2, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "x": x, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"x": x},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "Foo", encoded, callOpts.onTick)
-        if err != nil {
-            return types.Union2ExampleOrExample2{}, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return types.Union2ExampleOrExample2{}, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "Foo", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union2ExampleOrExample2{}, err
+		}
 
-        casted := (result.Data).(types.Union2ExampleOrExample2)
+		if result.Error != nil {
+			return types.Union2ExampleOrExample2{}, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "Foo", encoded, callOpts.onTick)
-        if err != nil {
-            return types.Union2ExampleOrExample2{}, err
-        }
+		casted := (result.Data).(types.Union2ExampleOrExample2)
 
-        for result := range channel {
-            if result.Error != nil {
-                return types.Union2ExampleOrExample2{}, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "Foo", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union2ExampleOrExample2{}, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.Union2ExampleOrExample2), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return types.Union2ExampleOrExample2{}, result.Error
+			}
 
-        return types.Union2ExampleOrExample2{}, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.Union2ExampleOrExample2), nil
+			}
+		}
+
+		return types.Union2ExampleOrExample2{}, fmt.Errorf("No data returned from stream")
+	}
 }

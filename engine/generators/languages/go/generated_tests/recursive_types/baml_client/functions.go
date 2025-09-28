@@ -14,135 +14,142 @@
 package baml_client
 
 import (
-    "context"
+	"context"
+	"fmt"
 
-    "recursive_types/baml_client/types"
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"recursive_types/baml_client/types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
-
-
 
 func Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (types.JSON, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "x": x, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"x": x},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "Foo", encoded, callOpts.onTick)
-        if err != nil {
-            return nil, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return nil, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "Foo", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
 
-        casted := (result.Data).(types.JSON)
+		if result.Error != nil {
+			return nil, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "Foo", encoded, callOpts.onTick)
-        if err != nil {
-            return nil, err
-        }
+		casted := (result.Data).(types.JSON)
 
-        for result := range channel {
-            if result.Error != nil {
-                return nil, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "Foo", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.JSON), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
 
-        return nil, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.JSON), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
+	}
 }
-
 
 func JsonInput(ctx context.Context, x types.JSON, opts ...CallOptionFunc) (types.JSON, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "x": x, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"x": x},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "JsonInput", encoded, callOpts.onTick)
-        if err != nil {
-            return nil, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return nil, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "JsonInput", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
 
-        casted := (result.Data).(types.JSON)
+		if result.Error != nil {
+			return nil, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "JsonInput", encoded, callOpts.onTick)
-        if err != nil {
-            return nil, err
-        }
+		casted := (result.Data).(types.JSON)
 
-        for result := range channel {
-            if result.Error != nil {
-                return nil, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "JsonInput", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.JSON), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
 
-        return nil, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.JSON), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
+	}
 }

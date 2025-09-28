@@ -14,142 +14,155 @@
 package baml_client
 
 import (
-    "context"
+	"context"
+	"fmt"
 
-    "semantic_streaming/baml_client/types"
-    "semantic_streaming/baml_client/stream_types"
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"semantic_streaming/baml_client/types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-type parse struct {}
+type parse struct{}
+
 var Parse = &parse{}
 
-
-/// Parse version of MakeClassWithBlockDone (Takes in string and returns types.ClassWithBlockDone)
+// / Parse version of MakeClassWithBlockDone (Takes in string and returns types.ClassWithBlockDone)
 func (*parse) MakeClassWithBlockDone(text string, opts ...CallOptionFunc) (types.ClassWithBlockDone, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": false },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: MakeClassWithBlockDone: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "MakeClassWithBlockDone", encoded)
-    if err != nil {
-        return types.ClassWithBlockDone{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: MakeClassWithBlockDone: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(types.ClassWithBlockDone)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "MakeClassWithBlockDone", encoded)
+	if err != nil {
+		return types.ClassWithBlockDone{}, err
+	}
 
-    return casted, nil
+	casted := (result).(types.ClassWithBlockDone)
+
+	return casted, nil
 }
 
-/// Parse version of MakeClassWithExternalDone (Takes in string and returns types.ClassWithoutDone)
+// / Parse version of MakeClassWithExternalDone (Takes in string and returns types.ClassWithoutDone)
 func (*parse) MakeClassWithExternalDone(text string, opts ...CallOptionFunc) (types.ClassWithoutDone, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": false },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: MakeClassWithExternalDone: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "MakeClassWithExternalDone", encoded)
-    if err != nil {
-        return types.ClassWithoutDone{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: MakeClassWithExternalDone: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(types.ClassWithoutDone)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "MakeClassWithExternalDone", encoded)
+	if err != nil {
+		return types.ClassWithoutDone{}, err
+	}
 
-    return casted, nil
+	casted := (result).(types.ClassWithoutDone)
+
+	return casted, nil
 }
 
-/// Parse version of MakeSemanticContainer (Takes in string and returns types.SemanticContainer)
+// / Parse version of MakeSemanticContainer (Takes in string and returns types.SemanticContainer)
 func (*parse) MakeSemanticContainer(text string, opts ...CallOptionFunc) (types.SemanticContainer, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": false },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: MakeSemanticContainer: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "MakeSemanticContainer", encoded)
-    if err != nil {
-        return types.SemanticContainer{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: MakeSemanticContainer: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(types.SemanticContainer)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "MakeSemanticContainer", encoded)
+	if err != nil {
+		return types.SemanticContainer{}, err
+	}
 
-    return casted, nil
+	casted := (result).(types.SemanticContainer)
+
+	return casted, nil
 }

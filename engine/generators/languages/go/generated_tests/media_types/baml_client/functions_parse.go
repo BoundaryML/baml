@@ -14,99 +14,108 @@
 package baml_client
 
 import (
-    "context"
+	"context"
+	"fmt"
 
-    "media_types/baml_client/types"
-    "media_types/baml_client/stream_types"
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"media_types/baml_client/types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-type parse struct {}
+type parse struct{}
+
 var Parse = &parse{}
 
-
-/// Parse version of TestMediaArrayInputs (Takes in string and returns types.MediaArrayAnalysisResult)
+// / Parse version of TestMediaArrayInputs (Takes in string and returns types.MediaArrayAnalysisResult)
 func (*parse) TestMediaArrayInputs(text string, opts ...CallOptionFunc) (types.MediaArrayAnalysisResult, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": false },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestMediaArrayInputs: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestMediaArrayInputs", encoded)
-    if err != nil {
-        return types.MediaArrayAnalysisResult{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestMediaArrayInputs: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(types.MediaArrayAnalysisResult)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestMediaArrayInputs", encoded)
+	if err != nil {
+		return types.MediaArrayAnalysisResult{}, err
+	}
 
-    return casted, nil
+	casted := (result).(types.MediaArrayAnalysisResult)
+
+	return casted, nil
 }
 
-/// Parse version of TestMediaInput (Takes in string and returns types.MediaAnalysisResult)
+// / Parse version of TestMediaInput (Takes in string and returns types.MediaAnalysisResult)
 func (*parse) TestMediaInput(text string, opts ...CallOptionFunc) (types.MediaAnalysisResult, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": false },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestMediaInput: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestMediaInput", encoded)
-    if err != nil {
-        return types.MediaAnalysisResult{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestMediaInput: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(types.MediaAnalysisResult)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestMediaInput", encoded)
+	if err != nil {
+		return types.MediaAnalysisResult{}, err
+	}
 
-    return casted, nil
+	casted := (result).(types.MediaAnalysisResult)
+
+	return casted, nil
 }

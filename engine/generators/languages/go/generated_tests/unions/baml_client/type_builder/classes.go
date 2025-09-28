@@ -15,13 +15,12 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
-
 type ExistingSystemComponentClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *ExistingSystemComponentClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -32,29 +31,25 @@ func (t *ExistingSystemComponentClassView) ListProperties() ([]ClassPropertyView
 	return builders, nil
 }
 
-
-
-
 func (t *ExistingSystemComponentClassView) PropertyId() (ClassPropertyView, error) {
-    return t.inner.Property("id")
+	return t.inner.Property("id")
 }
 
 func (t *ExistingSystemComponentClassView) PropertyName() (ClassPropertyView, error) {
-    return t.inner.Property("name")
+	return t.inner.Property("name")
 }
 
 func (t *ExistingSystemComponentClassView) PropertyType() (ClassPropertyView, error) {
-    return t.inner.Property("type")
+	return t.inner.Property("type")
 }
 
 func (t *ExistingSystemComponentClassView) PropertyCategory() (ClassPropertyView, error) {
-    return t.inner.Property("category")
+	return t.inner.Property("category")
 }
 
 func (t *ExistingSystemComponentClassView) PropertyExplanation() (ClassPropertyView, error) {
-    return t.inner.Property("explanation")
+	return t.inner.Property("explanation")
 }
-
 
 func (t *TypeBuilder) ExistingSystemComponent() (*ExistingSystemComponentClassView, error) {
 	bld, err := t.inner.Class("ExistingSystemComponent")
@@ -69,11 +64,11 @@ func (t *ExistingSystemComponentClassView) Type() (baml.Type, error) {
 }
 
 type UseMyUnionClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *UseMyUnionClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -84,13 +79,9 @@ func (t *UseMyUnionClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-
-
-
 func (t *UseMyUnionClassView) PropertyU() (ClassPropertyView, error) {
-    return t.inner.Property("u")
+	return t.inner.Property("u")
 }
-
 
 func (t *TypeBuilder) UseMyUnion() (*UseMyUnionClassView, error) {
 	bld, err := t.inner.Class("UseMyUnion")
