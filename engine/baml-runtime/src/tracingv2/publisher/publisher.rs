@@ -1017,27 +1017,40 @@ pub async fn flush() -> anyhow::Result<()> {
     // Set a timeout to avoid waiting indefinitely.
     let timeout_duration = Duration::from_secs(30);
 
+    // First try to flush the trace publisher (which should also flush blobs internally)
+    let mut publisher_result: Option<anyhow::Result<()>> = None;
     if let Some(channel) = get_publish_channel(false) {
         let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
-        channel
+        let send_res = channel
             .send(PublisherMessage::Flush(ack_tx))
-            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
-
-        return match timeout(timeout_duration, ack_rx).await {
-            Ok(Ok(())) => Ok(()),
-            Ok(Err(e)) => Err(e.into()),
-            Err(_) => Err(anyhow::anyhow!(
-                "Flush timed out after {:?}",
-                timeout_duration
-            )),
-        };
+            .map_err(|e| anyhow::anyhow!(e.to_string()));
+        if let Err(e) = send_res {
+            publisher_result = Some(Err(e));
+        } else {
+            publisher_result = Some(match timeout(timeout_duration, ack_rx).await {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(e)) => Err(e.into()),
+                Err(_) => Err(anyhow::anyhow!(
+                    "Flush timed out after {:?}",
+                    timeout_duration
+                )),
+            });
+        }
     } else {
         log::debug!("No publish channel found [rust]");
     }
 
+    // Always flush the blob uploader explicitly as well to guarantee no leftovers
     log::debug!("Flushing blob uploader [rust]");
-
-    let res = flush_blob_uploader_channel(timeout_duration).await;
+    let blob_result = flush_blob_uploader_channel(timeout_duration).await;
     log::debug!("Flushing blob uploader [rust] completed");
-    res
+
+    // Prefer reporting blob uploader errors if any; otherwise propagate publisher errors
+    if let Err(e) = blob_result {
+        return Err(e);
+    }
+    if let Some(Err(e)) = publisher_result {
+        return Err(e);
+    }
+    Ok(())
 }

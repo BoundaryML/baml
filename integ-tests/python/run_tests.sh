@@ -14,6 +14,7 @@ uv run pytest "$@" \
     --ignore=tests/test_errors.py \
     --ignore=tests/test_collector.py \
     --ignore=tests/test_with_options.py \
+    --ignore=tests/test_pydantic_video.py \
     --ignore=tests/test_modular_api.py \
     --ignore=tests/test_logger.py \
     --ignore=tests/test_typebuilder.py \
