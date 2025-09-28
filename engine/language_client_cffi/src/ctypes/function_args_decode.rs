@@ -66,13 +66,21 @@ impl Decode for BamlFunctionArguments {
         let tags = from
             .tags
             .into_iter()
-            .map(|t| (t.key, t.value.and_then(|v| v.value).and_then(|v| {
-                if let crate::baml::cffi::cffi_value_holder::Value::StringValue(s) = v {
-                    Some(s)
-                } else {
-                    None
-                }
-            }).unwrap_or_default()))
+            .map(|t| {
+                (
+                    t.key,
+                    t.value
+                        .and_then(|v| v.value)
+                        .and_then(|v| {
+                            if let crate::baml::cffi::cffi_value_holder::Value::StringValue(s) = v {
+                                Some(s)
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or_default(),
+                )
+            })
             .collect::<HashMap<String, String>>();
 
         Ok(BamlFunctionArguments {

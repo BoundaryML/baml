@@ -1589,7 +1589,7 @@ impl WasmRuntime {
                                 Some(cb),
                                 None,
                                 env_vars.clone(),
-                                None, // tags
+                                None,          // tags
                                 test_tripwire, // Pass tripwire to each test
                                 on_tick,
                             )
