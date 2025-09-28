@@ -347,8 +347,9 @@ async def run():
     # Access results and logs
     print(res)
     print(invoice)
-    print(collector.id(res.id).usage)
-    print(collector.id(invoice.id).usage)
+    # Use tags or iterate logs to correlate specific calls
+    for log in collector.logs:
+        print(log.usage)
 ```
 </Tab>
 
@@ -371,8 +372,10 @@ const [
 // Access results and logs
 console.log(res)
 console.log(invoice)
-console.log(collector.id(resumeId)?.usage)
-console.log(collector.id(invoiceId)?.usage)
+// Use tags or iterate logs to correlate specific calls
+for (const log of collector.logs) {
+  console.log(log.usage)
+}
 ```
 </Tab>
 
@@ -400,7 +403,8 @@ async def run():
         print(chunk)
     
     result = await stream.get_final_result()
-    print(collector.id(stream.id).usage)
+    # Use tags or collector.last / collector.logs for usage
+    print(collector.last.usage)
 ```
 </Tab>
 
@@ -417,7 +421,8 @@ for await (const chunk of stream) {
 }
 
 const result = await stream.getFinalResult()
-console.log(collector.id(stream.id)?.usage)
+// Use tags or collector.last / collector.logs for usage
+console.log(collector.last?.usage)
 ```
 </Tab>
 
@@ -434,7 +439,8 @@ stream.each do |chunk|
 end
 
 result = stream.get_final_result
-print(collector.id(stream.id).usage)
+# Use tags or collector.last / collector.logs for usage
+print(collector.last.usage)
 ```
 </Tab>
 </Tabs>
