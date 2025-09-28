@@ -14,39 +14,35 @@
 package baml_client
 
 import (
-    "literal_types/baml_client/types"
-    "literal_types/baml_client/stream_types"
+	"literal_types/baml_client/stream_types"
+	"literal_types/baml_client/types"
+	"reflect"
 )
 
 var typeMap = map[string]reflect.Type{
-"TYPES.BooleanLiterals": reflect.TypeOf(types.BooleanLiterals{}),
-    "STREAM_TYPES.BooleanLiterals": reflect.TypeOf(stream_types.BooleanLiterals{}),
-"TYPES.ComplexLiterals": reflect.TypeOf(types.ComplexLiterals{}),
-    "STREAM_TYPES.ComplexLiterals": reflect.TypeOf(stream_types.ComplexLiterals{}),
-"TYPES.IntegerLiterals": reflect.TypeOf(types.IntegerLiterals{}),
-    "STREAM_TYPES.IntegerLiterals": reflect.TypeOf(stream_types.IntegerLiterals{}),
-"TYPES.MixedLiterals": reflect.TypeOf(types.MixedLiterals{}),
-    "STREAM_TYPES.MixedLiterals": reflect.TypeOf(stream_types.MixedLiterals{}),
-"TYPES.StringLiterals": reflect.TypeOf(types.StringLiterals{}),
-    "STREAM_TYPES.StringLiterals": reflect.TypeOf(stream_types.StringLiterals{}),
+	"TYPES.BooleanLiterals":        reflect.TypeOf(types.BooleanLiterals{}),
+	"STREAM_TYPES.BooleanLiterals": reflect.TypeOf(stream_types.BooleanLiterals{}),
+	"TYPES.ComplexLiterals":        reflect.TypeOf(types.ComplexLiterals{}),
+	"STREAM_TYPES.ComplexLiterals": reflect.TypeOf(stream_types.ComplexLiterals{}),
+	"TYPES.IntegerLiterals":        reflect.TypeOf(types.IntegerLiterals{}),
+	"STREAM_TYPES.IntegerLiterals": reflect.TypeOf(stream_types.IntegerLiterals{}),
+	"TYPES.MixedLiterals":          reflect.TypeOf(types.MixedLiterals{}),
+	"STREAM_TYPES.MixedLiterals":   reflect.TypeOf(stream_types.MixedLiterals{}),
+	"TYPES.StringLiterals":         reflect.TypeOf(types.StringLiterals{}),
+	"STREAM_TYPES.StringLiterals":  reflect.TypeOf(stream_types.StringLiterals{}),
 
-
-"TYPES.Union__bool_false__bool_true": reflect.TypeOf(types.Union2BoolKFalseOrBoolKTrue{}),
-"TYPES.Union__int_1__int_2__int_3": reflect.TypeOf(types.Union3IntK1OrIntK2OrIntK3{}),
-"TYPES.Union__int_200__int_404__int_500": reflect.TypeOf(types.Union3IntK200OrIntK404OrIntK500{}),
-"TYPES.Union__string_active__string_inactive__string_pending": reflect.TypeOf(types.Union3KactiveOrKinactiveOrKpending{}),
-"TYPES.Union__string_admin__string_guest__string_user": reflect.TypeOf(types.Union3KadminOrKguestOrKuser{}),
-"TYPES.Union__string_dev__string_prod__string_staging": reflect.TypeOf(types.Union3KdevOrKprodOrKstaging{}),
-"TYPES.Union__string_error__string_success__string_timeout": reflect.TypeOf(types.Union3KerrorOrKsuccessOrKtimeout{}),
-"TYPES.Union__string_v1__string_v2__string_v3": reflect.TypeOf(types.Union3Kv1OrKv2OrKv3{}),
-"TYPES.Union__int_0__int_1__int_3__int_5": reflect.TypeOf(types.Union4IntK0OrIntK1OrIntK3OrIntK5{}),
-"TYPES.Union__string_DELETE__string_GET__string_POST__string_PUT": reflect.TypeOf(types.Union4KDELETEOrKGETOrKPOSTOrKPUT{}),
-"TYPES.Union__string_archived__string_deleted__string_draft__string_published": reflect.TypeOf(types.Union4KarchivedOrKdeletedOrKdraftOrKpublished{}),
-"TYPES.Union__int_1__int_2__int_3__int_4__int_5": reflect.TypeOf(types.Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5{}),
-"TYPES.Union__int_200__int_201__int_400__int_404__int_500": reflect.TypeOf(types.Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500{}),
-"TYPES.Union__int_0__int_1__int_13__int_2__int_3__int_5__int_8": reflect.TypeOf(types.Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8{}),
-
-
-
-
+	"TYPES.Union__bool_false__bool_true":                                           reflect.TypeOf(types.Union2BoolKFalseOrBoolKTrue{}),
+	"TYPES.Union__int_1__int_2__int_3":                                             reflect.TypeOf(types.Union3IntK1OrIntK2OrIntK3{}),
+	"TYPES.Union__int_200__int_404__int_500":                                       reflect.TypeOf(types.Union3IntK200OrIntK404OrIntK500{}),
+	"TYPES.Union__string_active__string_inactive__string_pending":                  reflect.TypeOf(types.Union3KactiveOrKinactiveOrKpending{}),
+	"TYPES.Union__string_admin__string_guest__string_user":                         reflect.TypeOf(types.Union3KadminOrKguestOrKuser{}),
+	"TYPES.Union__string_dev__string_prod__string_staging":                         reflect.TypeOf(types.Union3KdevOrKprodOrKstaging{}),
+	"TYPES.Union__string_error__string_success__string_timeout":                    reflect.TypeOf(types.Union3KerrorOrKsuccessOrKtimeout{}),
+	"TYPES.Union__string_v1__string_v2__string_v3":                                 reflect.TypeOf(types.Union3Kv1OrKv2OrKv3{}),
+	"TYPES.Union__int_0__int_1__int_3__int_5":                                      reflect.TypeOf(types.Union4IntK0OrIntK1OrIntK3OrIntK5{}),
+	"TYPES.Union__string_DELETE__string_GET__string_POST__string_PUT":              reflect.TypeOf(types.Union4KDELETEOrKGETOrKPOSTOrKPUT{}),
+	"TYPES.Union__string_archived__string_deleted__string_draft__string_published": reflect.TypeOf(types.Union4KarchivedOrKdeletedOrKdraftOrKpublished{}),
+	"TYPES.Union__int_1__int_2__int_3__int_4__int_5":                               reflect.TypeOf(types.Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5{}),
+	"TYPES.Union__int_200__int_201__int_400__int_404__int_500":                     reflect.TypeOf(types.Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500{}),
+	"TYPES.Union__int_0__int_1__int_13__int_2__int_3__int_5__int_8":                reflect.TypeOf(types.Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8{}),
 }

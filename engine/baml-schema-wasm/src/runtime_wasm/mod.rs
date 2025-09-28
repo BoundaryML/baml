@@ -1589,6 +1589,7 @@ impl WasmRuntime {
                                 Some(cb),
                                 None,
                                 env_vars.clone(),
+                                None,          // tags
                                 test_tripwire, // Pass tripwire to each test
                                 on_tick,
                             )
@@ -1944,6 +1945,7 @@ impl WasmFunction {
                 Some(tx),
                 None,
                 env_vars.clone(),
+                None, // tags
                 tripwire,
                 on_tick,
             )
@@ -2019,6 +2021,7 @@ impl WasmFunction {
                 Some(cb),
                 None,
                 env_vars.clone(),
+                None, // tags
                 tripwire,
                 on_tick,
             )

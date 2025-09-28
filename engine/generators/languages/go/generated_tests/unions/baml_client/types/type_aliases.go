@@ -13,15 +13,6 @@
 
 package types
 
-import (
-    "encoding/json"
-    "fmt"
-
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
-)
-
-
 type MyUnion = *Union3IntOrRecursive1OrString
 
 type Nonrecursive1 = *int64
@@ -31,4 +22,3 @@ type Nonrecursive2 = *string
 type Recursive1 = Union2IntOrListRecursive1
 
 type SystemComponentCategory = Union2KresourceOrKservice
-

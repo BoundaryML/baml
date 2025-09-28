@@ -145,6 +145,23 @@ impl FunctionLogWrapper {
     }
 
     #[export_baml_fn]
+    fn tags(&self) -> BamlValue {
+        let mut log_clone = (self.as_ref()).clone();
+        let metadata = log_clone.tags();
+        BamlValue::Map(
+            metadata
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        baml_types::BamlValue::try_from(v.clone()).unwrap(),
+                    )
+                })
+                .collect(),
+        )
+    }
+
+    #[export_baml_fn]
     fn selected_call(&self) -> Option<either::Either<LLMCall, LLMStreamCall>> {
         let mut log_clone = (self.as_ref()).clone();
         let calls = log_clone.calls();

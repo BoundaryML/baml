@@ -14,10 +14,10 @@
 package baml_client
 
 var file_map = map[string]string{
-  
-  "baml_src/main.baml": "class Person {\n    name string @assert(valid_name, {{ this|length >= 2 }})\n    age int @assert(valid_age, {{ this >= 0 }})\n\n    @@assert(not_minor, {{\n        this.age >= 18\n    }})\n}\n\nfunction PersonTest() -> Person {\n    client \"openai/gpt-4o\"\n    prompt #\"\n        Fake random information about an adult person.\n\n        {{ ctx.output_format }}\n    \"#\n}\n\ntest PersonTest {\n    functions [PersonTest]\n    args {\n        output_format: \"json\"\n    }\n}\n",  
+
+	"baml_src/main.baml": "class Person {\n    name string @assert(valid_name, {{ this|length >= 2 }})\n    age int @assert(valid_age, {{ this >= 0 }})\n\n    @@assert(not_minor, {{\n        this.age >= 18\n    }})\n}\n\nfunction PersonTest() -> Person {\n    client \"openai/gpt-4o\"\n    prompt #\"\n        Fake random information about an adult person.\n\n        {{ ctx.output_format }}\n    \"#\n}\n\ntest PersonTest {\n    functions [PersonTest]\n    args {\n        output_format: \"json\"\n    }\n}\n",
 }
 
 func getBamlFiles() map[string]string {
-  return file_map
+	return file_map
 }

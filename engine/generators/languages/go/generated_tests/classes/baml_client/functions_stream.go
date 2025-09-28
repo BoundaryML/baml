@@ -14,169 +14,179 @@
 package baml_client
 
 import (
-    "context"
+	"context"
+	"fmt"
 
-    "classes/baml_client/types"
-    "classes/baml_client/stream_types"
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"classes/baml_client/stream_types"
+	"classes/baml_client/types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-type stream struct {}
+type stream struct{}
+
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
-    IsError   bool
-    Error     error
-    IsFinal   bool
-    as_final  *TFinal
-    as_stream *TStream
+	IsError   bool
+	Error     error
+	IsFinal   bool
+	as_final  *TFinal
+	as_stream *TStream
 }
 
 func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
-    return s.as_final
+	return s.as_final
 }
 
 func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
-    return s.as_stream
+	return s.as_stream
 }
 
-
-/// Streaming version of ConsumeSimpleClass
+// / Streaming version of ConsumeSimpleClass
 func (*stream) ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.SimpleClass, types.SimpleClass], error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "item": item, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"item": item},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: ConsumeSimpleClass: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "ConsumeSimpleClass", encoded, callOpts.onTick)
-    if err != nil {
-        return nil, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: ConsumeSimpleClass: %w", err)
+		panic(wrapped_err)
+	}
 
-    channel := make(chan StreamValue[stream_types.SimpleClass, types.SimpleClass])
-    go func() {
-        for result := range internal_channel {
-            if result.Error != nil {
-                channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
-                    IsError: true,
-                    Error:   result.Error,
-                }
-                close(channel)
-                return
-            }
-            if result.HasData {
-                    data := (result.Data).(types.SimpleClass)
-                    channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
-                        IsFinal: true,
-                        as_final: &data,
-                    }
-            } else {
-                data := (result.StreamData).(stream_types.SimpleClass)
-                channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
-                    IsFinal: false,
-                    as_stream: &data,
-                }
-            }
-        }
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "ConsumeSimpleClass", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[stream_types.SimpleClass, types.SimpleClass])
+	go func() {
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
+					IsError: true,
+					Error:   result.Error,
+				}
+				close(channel)
+				return
+			}
+			if result.HasData {
+				data := (result.Data).(types.SimpleClass)
+				channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
+					IsFinal:  true,
+					as_final: &data,
+				}
+			} else {
+				data := (result.StreamData).(stream_types.SimpleClass)
+				channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
+					IsFinal:   false,
+					as_stream: &data,
+				}
+			}
+		}
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-    }()
-    return channel, nil
+	}()
+	return channel, nil
 }
 
-/// Streaming version of MakeSimpleClass
+// / Streaming version of MakeSimpleClass
 func (*stream) MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.SimpleClass, types.SimpleClass], error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{  },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: MakeSimpleClass: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeSimpleClass", encoded, callOpts.onTick)
-    if err != nil {
-        return nil, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: MakeSimpleClass: %w", err)
+		panic(wrapped_err)
+	}
 
-    channel := make(chan StreamValue[stream_types.SimpleClass, types.SimpleClass])
-    go func() {
-        for result := range internal_channel {
-            if result.Error != nil {
-                channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
-                    IsError: true,
-                    Error:   result.Error,
-                }
-                close(channel)
-                return
-            }
-            if result.HasData {
-                    data := (result.Data).(types.SimpleClass)
-                    channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
-                        IsFinal: true,
-                        as_final: &data,
-                    }
-            } else {
-                data := (result.StreamData).(stream_types.SimpleClass)
-                channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
-                    IsFinal: false,
-                    as_stream: &data,
-                }
-            }
-        }
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeSimpleClass", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[stream_types.SimpleClass, types.SimpleClass])
+	go func() {
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
+					IsError: true,
+					Error:   result.Error,
+				}
+				close(channel)
+				return
+			}
+			if result.HasData {
+				data := (result.Data).(types.SimpleClass)
+				channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
+					IsFinal:  true,
+					as_final: &data,
+				}
+			} else {
+				data := (result.StreamData).(stream_types.SimpleClass)
+				channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
+					IsFinal:   false,
+					as_stream: &data,
+				}
+			}
+		}
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-    }()
-    return channel, nil
+	}()
+	return channel, nil
 }

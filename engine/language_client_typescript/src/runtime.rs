@@ -119,6 +119,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
+        tags: HashMap<String, String>,
         env_vars: HashMap<String, String>,
         signal: Option<Object>, // NEW: AbortSignal parameter
     ) -> napi::Result<PromiseRaw<'e, FunctionResult>> {
@@ -154,6 +155,7 @@ impl BamlRuntime {
                     tb.as_ref(),
                     cb.as_ref(),
                     Some(collector_list),
+                    Some(tags),
                     env_vars,
                     tripwire,
                 )
@@ -178,6 +180,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
+        tags: HashMap<String, String>,
         env_vars: HashMap<String, String>,
         signal: Option<Object>, // NEW: AbortSignal parameter (sync doesn't actually use it)
     ) -> napi::Result<FunctionResult> {
@@ -207,6 +210,7 @@ impl BamlRuntime {
             cb.as_ref(),
             Some(collector_list),
             env_vars,
+            Some(tags),
             tripwire,
         );
 
@@ -226,6 +230,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
+        tags: HashMap<String, String>,
         env_vars: HashMap<String, String>,
         signal: Option<Object>, // NEW: AbortSignal parameter
         #[napi(ts_arg_type = "(() => void) | undefined")] on_tick: Option<Function<(), ()>>,
@@ -258,6 +263,7 @@ impl BamlRuntime {
                 client_registry.as_ref(),
                 Some(collector_list),
                 env_vars,
+                Some(tags),
                 tripwire,
             )
             .map_err(from_anyhow_error)?;
@@ -294,6 +300,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
+        tags: HashMap<String, String>,
         env_vars: HashMap<String, String>,
         signal: Option<Object>, // NEW: AbortSignal parameter
         #[napi(ts_arg_type = "(() => void) | undefined")] on_tick: Option<Function<(), ()>>,
@@ -325,6 +332,7 @@ impl BamlRuntime {
                 client_registry.as_ref(),
                 Some(collector_list),
                 env_vars,
+                Some(tags),
                 tripwire,
             )
             .map_err(from_anyhow_error)?;

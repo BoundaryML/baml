@@ -147,6 +147,7 @@ impl BamlAsyncVmRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
+        tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         // Find the function.
@@ -172,6 +173,7 @@ impl BamlAsyncVmRuntime {
                     tb,
                     cb,
                     collectors,
+                    tags,
                     env_vars,
                     cancel_tripwire,
                 )
@@ -181,7 +183,15 @@ impl BamlAsyncVmRuntime {
             .llm_runtime
             .tracer_wrapper
             .get_or_create_tracer(&env_vars)
-            .start_call(&function_name, ctx, params, true, false, collectors.clone())
+            .start_call(
+                &function_name,
+                ctx,
+                params,
+                true,
+                false,
+                collectors.clone(),
+                None,
+            )
             .curr_call_id();
 
         let Some(expr_fn) = self
@@ -246,6 +256,7 @@ impl BamlAsyncVmRuntime {
             (anyhow::Result<FunctionResult>, FunctionCallId),
         )>();
 
+        let tags_clone = tags.clone();
         let vm_result = 'mainloop: loop {
             match vm.exec() {
                 Ok(VmExecState::Await(idx)) => {
@@ -372,6 +383,7 @@ impl BamlAsyncVmRuntime {
                                 // TODO: Collectors are not supported yet.
                                 // let collectors = collectors.clone();
                                 let env_vars = env_vars.clone();
+                                let tags_for_future = tags_clone.clone();
 
                                 let futures_tx = futures_tx.clone();
 
@@ -388,6 +400,7 @@ impl BamlAsyncVmRuntime {
                                             tb.as_ref(),
                                             cb.as_ref(),
                                             None,
+                                            tags_for_future,
                                             env_vars,
                                             cancel_tripwire,
                                         )
@@ -646,6 +659,7 @@ impl BamlAsyncVmRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
+        tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         self.async_runtime.block_on(self.call_function(
@@ -656,6 +670,7 @@ impl BamlAsyncVmRuntime {
             cb,
             collectors,
             env_vars,
+            tags,
             cancel_tripwire,
         ))
     }
@@ -669,6 +684,7 @@ impl BamlAsyncVmRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
+        tags: Option<HashMap<String, String>>,
         // FunctionResultStream is responsible for freeing the TripWire and the clean up.
         cancel_tripwire: Arc<TripWire>,
     ) -> anyhow::Result<FunctionResultStream> {
@@ -680,6 +696,7 @@ impl BamlAsyncVmRuntime {
             cb,
             collectors,
             env_vars,
+            tags,
             cancel_tripwire,
         )
     }

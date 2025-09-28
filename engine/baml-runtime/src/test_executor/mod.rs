@@ -294,6 +294,7 @@ impl TestExecutor for BamlRuntime {
                             on_event,
                             None,
                             env_vars,
+                            None,                // tags
                             TripWire::new(None), // No tripwire for test executor,
                             on_tick,
                         )

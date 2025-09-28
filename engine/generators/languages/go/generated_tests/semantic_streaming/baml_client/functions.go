@@ -14,198 +14,208 @@
 package baml_client
 
 import (
-    "context"
+	"context"
+	"fmt"
 
-    "semantic_streaming/baml_client/types"
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"semantic_streaming/baml_client/types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
-
-
 
 func MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFunc) (types.ClassWithBlockDone, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{  },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithBlockDone", encoded, callOpts.onTick)
-        if err != nil {
-            return types.ClassWithBlockDone{}, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return types.ClassWithBlockDone{}, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithBlockDone", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassWithBlockDone{}, err
+		}
 
-        casted := (result.Data).(types.ClassWithBlockDone)
+		if result.Error != nil {
+			return types.ClassWithBlockDone{}, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeClassWithBlockDone", encoded, callOpts.onTick)
-        if err != nil {
-            return types.ClassWithBlockDone{}, err
-        }
+		casted := (result.Data).(types.ClassWithBlockDone)
 
-        for result := range channel {
-            if result.Error != nil {
-                return types.ClassWithBlockDone{}, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeClassWithBlockDone", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassWithBlockDone{}, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.ClassWithBlockDone), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return types.ClassWithBlockDone{}, result.Error
+			}
 
-        return types.ClassWithBlockDone{}, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.ClassWithBlockDone), nil
+			}
+		}
+
+		return types.ClassWithBlockDone{}, fmt.Errorf("No data returned from stream")
+	}
 }
-
 
 func MakeClassWithExternalDone(ctx context.Context, opts ...CallOptionFunc) (types.ClassWithoutDone, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{  },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithExternalDone", encoded, callOpts.onTick)
-        if err != nil {
-            return types.ClassWithoutDone{}, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return types.ClassWithoutDone{}, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithExternalDone", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassWithoutDone{}, err
+		}
 
-        casted := (result.Data).(types.ClassWithoutDone)
+		if result.Error != nil {
+			return types.ClassWithoutDone{}, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeClassWithExternalDone", encoded, callOpts.onTick)
-        if err != nil {
-            return types.ClassWithoutDone{}, err
-        }
+		casted := (result.Data).(types.ClassWithoutDone)
 
-        for result := range channel {
-            if result.Error != nil {
-                return types.ClassWithoutDone{}, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeClassWithExternalDone", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassWithoutDone{}, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.ClassWithoutDone), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return types.ClassWithoutDone{}, result.Error
+			}
 
-        return types.ClassWithoutDone{}, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.ClassWithoutDone), nil
+			}
+		}
+
+		return types.ClassWithoutDone{}, fmt.Errorf("No data returned from stream")
+	}
 }
-
 
 func MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc) (types.SemanticContainer, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{  },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "MakeSemanticContainer", encoded, callOpts.onTick)
-        if err != nil {
-            return types.SemanticContainer{}, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return types.SemanticContainer{}, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "MakeSemanticContainer", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SemanticContainer{}, err
+		}
 
-        casted := (result.Data).(types.SemanticContainer)
+		if result.Error != nil {
+			return types.SemanticContainer{}, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeSemanticContainer", encoded, callOpts.onTick)
-        if err != nil {
-            return types.SemanticContainer{}, err
-        }
+		casted := (result.Data).(types.SemanticContainer)
 
-        for result := range channel {
-            if result.Error != nil {
-                return types.SemanticContainer{}, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeSemanticContainer", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SemanticContainer{}, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.SemanticContainer), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return types.SemanticContainer{}, result.Error
+			}
 
-        return types.SemanticContainer{}, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.SemanticContainer), nil
+			}
+		}
+
+		return types.SemanticContainer{}, fmt.Errorf("No data returned from stream")
+	}
 }

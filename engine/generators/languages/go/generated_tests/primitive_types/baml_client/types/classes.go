@@ -14,26 +14,22 @@
 package types
 
 import (
-    "encoding/json"
-    "fmt"
+	"fmt"
 
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
-
 type MixedPrimitives struct {
-    
-Name string `json:"name"`
-Age int64 `json:"age"`
-Height float64 `json:"height"`
-IsActive bool `json:"isActive"`
-Metadata any `json:"metadata"`
-Tags []string `json:"tags"`
-Scores []int64 `json:"scores"`
-Measurements []float64 `json:"measurements"`
-Flags []bool `json:"flags"`
-    
+	Name         string    `json:"name"`
+	Age          int64     `json:"age"`
+	Height       float64   `json:"height"`
+	IsActive     bool      `json:"isActive"`
+	Metadata     any       `json:"metadata"`
+	Tags         []string  `json:"tags"`
+	Scores       []int64   `json:"scores"`
+	Measurements []float64 `json:"measurements"`
+	Flags        []bool    `json:"flags"`
 }
 
 func (c *MixedPrimitives) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -45,92 +41,87 @@ func (c *MixedPrimitives) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 		panic(fmt.Sprintf("expected MixedPrimitives, got %s", typeName.Name))
 	}
 
-   
-
-	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-			switch key {
-				
-				case "name":
-					c.Name = baml.Decode(valueHolder).Interface().(string)
-				
-				case "age":
-					c.Age = baml.Decode(valueHolder).Interface().(int64)
-				
-				case "height":
-					c.Height = baml.Decode(valueHolder).Interface().(float64)
-				
-				case "isActive":
-					c.IsActive = baml.Decode(valueHolder).Interface().(bool)
-				
-				case "metadata":
-					c.Metadata = baml.Decode(valueHolder).Interface().(any)
-				
-				case "tags":
-					c.Tags = baml.Decode(valueHolder).Interface().([]string)
-				
-				case "scores":
-					c.Scores = baml.Decode(valueHolder).Interface().([]int64)
-				
-				case "measurements":
-					c.Measurements = baml.Decode(valueHolder).Interface().([]float64)
-				
-				case "flags":
-					c.Flags = baml.Decode(valueHolder).Interface().([]bool)
-				
+		switch key {
+
+		case "name":
+			c.Name = baml.Decode(valueHolder).Interface().(string)
+
+		case "age":
+			c.Age = baml.Decode(valueHolder).Interface().(int64)
+
+		case "height":
+			c.Height = baml.Decode(valueHolder).Interface().(float64)
+
+		case "isActive":
+			c.IsActive = baml.Decode(valueHolder).Interface().(bool)
+
+		case "metadata":
+			c.Metadata = baml.Decode(valueHolder).Interface().(any)
+
+		case "tags":
+			c.Tags = baml.Decode(valueHolder).Interface().([]string)
+
+		case "scores":
+			c.Scores = baml.Decode(valueHolder).Interface().([]int64)
+
+		case "measurements":
+			c.Measurements = baml.Decode(valueHolder).Interface().([]float64)
+
+		case "flags":
+			c.Flags = baml.Decode(valueHolder).Interface().([]bool)
+
 		default:
-			
+
 			panic(fmt.Sprintf("unexpected field: %s in class MixedPrimitives", key))
-			
+
 		}
 	}
 
 }
 
 func (c MixedPrimitives) Encode() (*cffi.CFFIValueHolder, error) {
-    fields := map[string]any{}
-    
-    fields["name"] = c.Name
-    
-    fields["age"] = c.Age
-    
-    fields["height"] = c.Height
-    
-    fields["isActive"] = c.IsActive
-    
-    fields["metadata"] = c.Metadata
-    
-    fields["tags"] = c.Tags
-    
-    fields["scores"] = c.Scores
-    
-    fields["measurements"] = c.Measurements
-    
-    fields["flags"] = c.Flags
-    
-    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	fields := map[string]any{}
+
+	fields["name"] = c.Name
+
+	fields["age"] = c.Age
+
+	fields["height"] = c.Height
+
+	fields["isActive"] = c.IsActive
+
+	fields["metadata"] = c.Metadata
+
+	fields["tags"] = c.Tags
+
+	fields["scores"] = c.Scores
+
+	fields["measurements"] = c.Measurements
+
+	fields["flags"] = c.Flags
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c MixedPrimitives) BamlTypeName() string {
-    return "MixedPrimitives"
+	return "MixedPrimitives"
 }
 
 func (u MixedPrimitives) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Namespace: cffi.CFFITypeNamespace_TYPES,
-        Name:      "MixedPrimitives",
-    }
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+		Name:      "MixedPrimitives",
+	}
 }
 
 type PrimitiveArrays struct {
-    
-StringArray []string `json:"stringArray"`
-IntArray []int64 `json:"intArray"`
-FloatArray []float64 `json:"floatArray"`
-BoolArray []bool `json:"boolArray"`
-    
+	StringArray []string  `json:"stringArray"`
+	IntArray    []int64   `json:"intArray"`
+	FloatArray  []float64 `json:"floatArray"`
+	BoolArray   []bool    `json:"boolArray"`
 }
 
 func (c *PrimitiveArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -142,67 +133,62 @@ func (c *PrimitiveArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 		panic(fmt.Sprintf("expected PrimitiveArrays, got %s", typeName.Name))
 	}
 
-   
-
-	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-			switch key {
-				
-				case "stringArray":
-					c.StringArray = baml.Decode(valueHolder).Interface().([]string)
-				
-				case "intArray":
-					c.IntArray = baml.Decode(valueHolder).Interface().([]int64)
-				
-				case "floatArray":
-					c.FloatArray = baml.Decode(valueHolder).Interface().([]float64)
-				
-				case "boolArray":
-					c.BoolArray = baml.Decode(valueHolder).Interface().([]bool)
-				
+		switch key {
+
+		case "stringArray":
+			c.StringArray = baml.Decode(valueHolder).Interface().([]string)
+
+		case "intArray":
+			c.IntArray = baml.Decode(valueHolder).Interface().([]int64)
+
+		case "floatArray":
+			c.FloatArray = baml.Decode(valueHolder).Interface().([]float64)
+
+		case "boolArray":
+			c.BoolArray = baml.Decode(valueHolder).Interface().([]bool)
+
 		default:
-			
+
 			panic(fmt.Sprintf("unexpected field: %s in class PrimitiveArrays", key))
-			
+
 		}
 	}
 
 }
 
 func (c PrimitiveArrays) Encode() (*cffi.CFFIValueHolder, error) {
-    fields := map[string]any{}
-    
-    fields["stringArray"] = c.StringArray
-    
-    fields["intArray"] = c.IntArray
-    
-    fields["floatArray"] = c.FloatArray
-    
-    fields["boolArray"] = c.BoolArray
-    
-    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	fields := map[string]any{}
+
+	fields["stringArray"] = c.StringArray
+
+	fields["intArray"] = c.IntArray
+
+	fields["floatArray"] = c.FloatArray
+
+	fields["boolArray"] = c.BoolArray
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c PrimitiveArrays) BamlTypeName() string {
-    return "PrimitiveArrays"
+	return "PrimitiveArrays"
 }
 
 func (u PrimitiveArrays) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Namespace: cffi.CFFITypeNamespace_TYPES,
-        Name:      "PrimitiveArrays",
-    }
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+		Name:      "PrimitiveArrays",
+	}
 }
 
 type PrimitiveMaps struct {
-    
-StringMap map[string]string `json:"stringMap"`
-IntMap map[string]int64 `json:"intMap"`
-FloatMap map[string]float64 `json:"floatMap"`
-BoolMap map[string]bool `json:"boolMap"`
-    
+	StringMap map[string]string  `json:"stringMap"`
+	IntMap    map[string]int64   `json:"intMap"`
+	FloatMap  map[string]float64 `json:"floatMap"`
+	BoolMap   map[string]bool    `json:"boolMap"`
 }
 
 func (c *PrimitiveMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -214,68 +200,63 @@ func (c *PrimitiveMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 		panic(fmt.Sprintf("expected PrimitiveMaps, got %s", typeName.Name))
 	}
 
-   
-
-	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-			switch key {
-				
-				case "stringMap":
-					c.StringMap = baml.Decode(valueHolder).Interface().(map[string]string)
-				
-				case "intMap":
-					c.IntMap = baml.Decode(valueHolder).Interface().(map[string]int64)
-				
-				case "floatMap":
-					c.FloatMap = baml.Decode(valueHolder).Interface().(map[string]float64)
-				
-				case "boolMap":
-					c.BoolMap = baml.Decode(valueHolder).Interface().(map[string]bool)
-				
+		switch key {
+
+		case "stringMap":
+			c.StringMap = baml.Decode(valueHolder).Interface().(map[string]string)
+
+		case "intMap":
+			c.IntMap = baml.Decode(valueHolder).Interface().(map[string]int64)
+
+		case "floatMap":
+			c.FloatMap = baml.Decode(valueHolder).Interface().(map[string]float64)
+
+		case "boolMap":
+			c.BoolMap = baml.Decode(valueHolder).Interface().(map[string]bool)
+
 		default:
-			
+
 			panic(fmt.Sprintf("unexpected field: %s in class PrimitiveMaps", key))
-			
+
 		}
 	}
 
 }
 
 func (c PrimitiveMaps) Encode() (*cffi.CFFIValueHolder, error) {
-    fields := map[string]any{}
-    
-    fields["stringMap"] = c.StringMap
-    
-    fields["intMap"] = c.IntMap
-    
-    fields["floatMap"] = c.FloatMap
-    
-    fields["boolMap"] = c.BoolMap
-    
-    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	fields := map[string]any{}
+
+	fields["stringMap"] = c.StringMap
+
+	fields["intMap"] = c.IntMap
+
+	fields["floatMap"] = c.FloatMap
+
+	fields["boolMap"] = c.BoolMap
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c PrimitiveMaps) BamlTypeName() string {
-    return "PrimitiveMaps"
+	return "PrimitiveMaps"
 }
 
 func (u PrimitiveMaps) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Namespace: cffi.CFFITypeNamespace_TYPES,
-        Name:      "PrimitiveMaps",
-    }
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+		Name:      "PrimitiveMaps",
+	}
 }
 
 type PrimitiveTypes struct {
-    
-StringField string `json:"stringField"`
-IntField int64 `json:"intField"`
-FloatField float64 `json:"floatField"`
-BoolField bool `json:"boolField"`
-NullField any `json:"nullField"`
-    
+	StringField string  `json:"stringField"`
+	IntField    int64   `json:"intField"`
+	FloatField  float64 `json:"floatField"`
+	BoolField   bool    `json:"boolField"`
+	NullField   any     `json:"nullField"`
 }
 
 func (c *PrimitiveTypes) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -287,62 +268,58 @@ func (c *PrimitiveTypes) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 		panic(fmt.Sprintf("expected PrimitiveTypes, got %s", typeName.Name))
 	}
 
-   
-
-	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-			switch key {
-				
-				case "stringField":
-					c.StringField = baml.Decode(valueHolder).Interface().(string)
-				
-				case "intField":
-					c.IntField = baml.Decode(valueHolder).Interface().(int64)
-				
-				case "floatField":
-					c.FloatField = baml.Decode(valueHolder).Interface().(float64)
-				
-				case "boolField":
-					c.BoolField = baml.Decode(valueHolder).Interface().(bool)
-				
-				case "nullField":
-					c.NullField = baml.Decode(valueHolder).Interface().(any)
-				
+		switch key {
+
+		case "stringField":
+			c.StringField = baml.Decode(valueHolder).Interface().(string)
+
+		case "intField":
+			c.IntField = baml.Decode(valueHolder).Interface().(int64)
+
+		case "floatField":
+			c.FloatField = baml.Decode(valueHolder).Interface().(float64)
+
+		case "boolField":
+			c.BoolField = baml.Decode(valueHolder).Interface().(bool)
+
+		case "nullField":
+			c.NullField = baml.Decode(valueHolder).Interface().(any)
+
 		default:
-			
+
 			panic(fmt.Sprintf("unexpected field: %s in class PrimitiveTypes", key))
-			
+
 		}
 	}
 
 }
 
 func (c PrimitiveTypes) Encode() (*cffi.CFFIValueHolder, error) {
-    fields := map[string]any{}
-    
-    fields["stringField"] = c.StringField
-    
-    fields["intField"] = c.IntField
-    
-    fields["floatField"] = c.FloatField
-    
-    fields["boolField"] = c.BoolField
-    
-    fields["nullField"] = c.NullField
-    
-    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	fields := map[string]any{}
+
+	fields["stringField"] = c.StringField
+
+	fields["intField"] = c.IntField
+
+	fields["floatField"] = c.FloatField
+
+	fields["boolField"] = c.BoolField
+
+	fields["nullField"] = c.NullField
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c PrimitiveTypes) BamlTypeName() string {
-    return "PrimitiveTypes"
+	return "PrimitiveTypes"
 }
 
 func (u PrimitiveTypes) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Namespace: cffi.CFFITypeNamespace_TYPES,
-        Name:      "PrimitiveTypes",
-    }
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+		Name:      "PrimitiveTypes",
+	}
 }
-

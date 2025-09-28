@@ -1,4 +1,4 @@
-import { traceAsync } from "../baml_client/tracing";
+import { traceAsync, setTags } from "../baml_client/tracing";
 import { b, b_sync } from "./test-setup";
 import { BamlRuntime, Collector, FunctionLog, Usage } from "@boundaryml/baml";
 
@@ -111,6 +111,27 @@ describe("Collector Tests", () => {
     console.log("----- gc.collect() -----");
     // Still not collected because it's in use
     expect(Collector.__functionSpanCount()).toBeGreaterThan(0);
+  });
+
+  it("should include parent trace tags in FunctionLog.tags", async () => {
+    const collector = new Collector("tags-collector");
+
+    const parent = traceAsync("parentTS", async () => {
+      setTags({ parentId: "p123", run: "xyz" });
+      return await b.TestOpenAIGPT4oMini("hi there", { collector });
+    });
+
+    await parent();
+
+    const logs = collector.logs;
+    expect(logs.length).toBe(1);
+    const log = logs[0];
+
+    // New tags accessor
+    const tags = (log as any).tags as Record<string, unknown>;
+    expect(typeof tags).toBe("object");
+    expect(tags["parentId"]).toBe("p123");
+    expect(tags["run"]).toBe("xyz");
   });
 
   it("should handle streaming calls correctly", async () => {
@@ -427,56 +448,119 @@ describe("Collector Tests", () => {
 
     Under Sir Roderick's tutelage, Galahad learned not only the arts of combat and horsemanship but also the deeper principles of chivalry, honor, and service to others. He spent years training in various castles and courts, always demonstrating exceptional skill and character that earned him the respect of nobles and commoners alike.
     `.repeat(10);
-    
+
     // First call - establishes cache (using cache_control in the BAML template)
     await b.TestCaching(largeContent, "What are the key virtues of Sir Galahad?", { collector });
-    
+
     const firstLog = collector.logs[0];
     expect(firstLog).not.toBeNull();
     expect(firstLog.functionName).toBe("TestCaching");
-    
+
     // Note first request may not have cached tokens
     // expect(firstLog.usage.cachedInputTokens).toBeDefined();
     // expect(firstLog.calls[0].usage?.cachedInputTokens).toBeDefined();
-    
+
     // First call establishes cache, might have some cached tokens from cache creation
     const firstCachedTokens = firstLog.usage.cachedInputTokens || 0;
-    
+
     // Second call with same large content - should use cache and show cached tokens > 0
     await b.TestCaching(largeContent, "What is Sir Galahad's background and origin?", { collector });
-    
+
     const secondLog = collector.logs[1];
     expect(secondLog).not.toBeNull();
     expect(secondLog.functionName).toBe("TestCaching");
-    
+
     // Verify cached tokens are tracked and should be > 0 for the second call
     expect(secondLog.usage.cachedInputTokens).toBeDefined();
     expect(secondLog.calls[0].usage?.cachedInputTokens).toBeDefined();
-    
+
     // Third call to really ensure caching is working
     await b.TestCaching(largeContent, "How did Sir Galahad become a knight?", { collector });
-    
+
     const thirdLog = collector.logs[2];
     expect(thirdLog).not.toBeNull();
-    
+
     // At least one of the later calls should have cached tokens > 0
-    const hasCachedTokens = 
-      (secondLog.usage.cachedInputTokens || 0) > 0 || 
+    const hasCachedTokens =
+      (secondLog.usage.cachedInputTokens || 0) > 0 ||
       (thirdLog.usage.cachedInputTokens || 0) > 0;
-    
+
     expect(hasCachedTokens).toBe(true);
-    
+
     // Verify collector aggregates cached tokens correctly
-    const totalCachedTokens = 
+    const totalCachedTokens =
       (collector.logs[0].usage.cachedInputTokens || 0) +
       (collector.logs[1].usage.cachedInputTokens || 0) +
       (collector.logs[2].usage.cachedInputTokens || 0);
     expect(collector.usage.cachedInputTokens).toBe(totalCachedTokens);
-    
+
     console.log("Cached tokens - First call:", firstLog.usage.cachedInputTokens);
     console.log("Cached tokens - Second call:", secondLog.usage.cachedInputTokens);
     console.log("Cached tokens - Third call:", thirdLog.usage.cachedInputTokens);
     console.log("Total cached tokens:", collector.usage.cachedInputTokens);
     console.log("Large content length:", largeContent.length, "characters");
+  });
+
+  it("should pass function-specific tags and preserve parent trace tags", async () => {
+    const collector = new Collector("tags-test-collector");
+
+    const parentFnWithMultipleCalls = traceAsync("parentTS", async (msg: string) => {
+      // Set parent trace tags
+      setTags({ parentId: "parent_123", environment: "test" });
+
+      // First BAML call with its own tags
+      const result1 = await b.TestOpenAIGPT4oMini(msg + " - call 1", {
+        collector,
+        tags: { callId: "first", version: "v1" },
+      });
+
+      // Second BAML call with different tags
+      const result2 = await b.TestOpenAIGPT4oMini(msg + " - call 2", {
+        collector,
+        tags: { callId: "second", version: "v2", extra: "data" },
+      });
+
+      return [result1, result2];
+    });
+
+    const results = await parentFnWithMultipleCalls("hello");
+    expect(results[0]).not.toBeNull();
+    expect(results[1]).not.toBeNull();
+
+    const logs = collector.logs;
+    expect(logs.length).toBe(2);
+
+    // Check first function call's tags
+    const log1 = logs[0];
+    const tags1 = (log1 as any).tags as Record<string, unknown>;
+    expect(typeof tags1).toBe("object");
+    console.log("### First call tags:", tags1);
+
+    // Parent trace tags should be present
+    expect(tags1["parentId"]).toBe("parent_123");
+    expect(tags1["environment"]).toBe("test");
+
+    // Function-specific tags should be present
+    expect(tags1["callId"]).toBe("first");
+    expect(tags1["version"]).toBe("v1");
+
+    // Check second function call's tags
+    const log2 = logs[1];
+    const tags2 = (log2 as any).tags as Record<string, unknown>;
+    expect(typeof tags2).toBe("object");
+    console.log("### Second call tags:", tags2);
+
+    // Parent trace tags should still be present
+    expect(tags2["parentId"]).toBe("parent_123");
+    expect(tags2["environment"]).toBe("test");
+
+    // Function-specific tags should be different
+    expect(tags2["callId"]).toBe("second");
+    expect(tags2["version"]).toBe("v2");
+    expect(tags2["extra"]).toBe("data");
+
+    // Verify the tags are different between calls
+    expect(tags1["callId"]).not.toBe(tags2["callId"]);
+    expect(tags1["version"]).not.toBe(tags2["version"]);
   });
 });

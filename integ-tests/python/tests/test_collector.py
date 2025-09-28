@@ -11,6 +11,7 @@ import gc
 import sys
 import asyncio
 from contextlib import asynccontextmanager
+from baml_client.tracing import trace, set_tags
 
 
 def function_call_count():
@@ -119,6 +120,106 @@ async def test_collector_async_no_stream_success():
     print("----- gc.collect() -----", file=sys.stderr)
     # still not collected cause it's in use
     assert function_call_count() > 0
+
+
+@pytest.mark.asyncio
+async def test_functionlog_tags_inherit_from_parent_trace():
+    collector = Collector(name="tags-collector")
+
+    @trace
+    async def parent_fn(msg: str):
+        set_tags(parent_id="p123", run="xyz")
+        # Child BAML function call should inherit tags
+        return await b.TestOpenAIGPT4oMini(msg, baml_options={"collector": collector})
+
+    await parent_fn("hi")
+
+    logs = collector.logs
+    assert len(logs) == 1
+    log = logs[0]
+    # New tags accessor
+    tags = log.tags
+    assert isinstance(tags, dict)
+    print("### tags", tags)
+    # Verify keys set in parent trace appear in child function log
+    assert tags.get("parent_id") == "p123"
+    assert tags.get("run") == "xyz"
+
+
+@pytest.mark.asyncio
+async def test_baml_function_tags_with_parent_trace():
+    """Test that BAML functions can receive tags via baml_options and that parent trace tags are also preserved."""
+    collector = Collector(name="tags-test-collector")
+
+    @trace
+    async def parent_fn_with_multiple_calls(msg: str):
+        # Set parent trace tags
+        set_tags(parent_id="parent_123", environment="test")
+
+        # First BAML call with its own tags
+        result1 = await b.TestOpenAIGPT4oMini(
+            msg + " - call 1",
+            baml_options={
+                "collector": collector,
+                "tags": {"call_id": "first", "version": "v1"},
+            },
+        )
+
+        # Second BAML call with different tags
+        result2 = await b.TestOpenAIGPT4oMini(
+            msg + " - call 2",
+            baml_options={
+                "collector": collector,
+                "tags": {"call_id": "second", "version": "v2", "extra": "data"},
+            },
+        )
+
+        return result1, result2
+
+    try:
+        results = await parent_fn_with_multiple_calls("hello")
+        assert results[0] is not None
+        assert results[1] is not None
+
+        logs = collector.logs
+        assert len(logs) == 2, f"Expected 2 logs, got {len(logs)}"
+
+        # Check first function call's tags
+        log1 = logs[0]
+        tags1 = log1.tags
+        assert isinstance(tags1, dict)
+        print(f"### First call tags: {tags1}")
+
+        # Parent trace tags should be present
+        assert tags1.get("parent_id") == "parent_123"
+        assert tags1.get("environment") == "test"
+
+        # Function-specific tags should be present
+        assert tags1.get("call_id") == "first"
+        assert tags1.get("version") == "v1"
+
+        # Check second function call's tags
+        log2 = logs[1]
+        tags2 = log2.tags
+        assert isinstance(tags2, dict)
+        print(f"### Second call tags: {tags2}")
+
+        # Parent trace tags should still be present
+        assert tags2.get("parent_id") == "parent_123"
+        assert tags2.get("environment") == "test"
+
+        # Function-specific tags should be different
+        assert tags2.get("call_id") == "second"
+        assert tags2.get("version") == "v2"
+        assert tags2.get("extra") == "data"
+
+        # Verify the tags are different between calls
+        assert tags1.get("call_id") != tags2.get("call_id")
+        assert tags1.get("version") != tags2.get("version")
+    finally:
+        # Clear collector to help with cleanup
+        # collector.logs.clear()
+        pass
 
 
 @pytest.mark.asyncio
@@ -997,9 +1098,9 @@ async def test_collector_openai_stream_chunk_verification():
     assert call.client_name == "GPT4oMini"
     sse_chunks = call.sse_responses()
     assert sse_chunks is not None
-    assert len(sse_chunks) >= len(chunks_received), (
-        f"Expected {len(chunks_received)} chunks, got {sse_chunks}"
-    )
+    assert len(sse_chunks) >= len(
+        chunks_received
+    ), f"Expected {len(chunks_received)} chunks, got {sse_chunks}"
     for chunk in sse_chunks:
         print(f"Chunk: {chunk.json()}")
 

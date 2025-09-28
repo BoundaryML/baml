@@ -14,20 +14,16 @@
 package types
 
 import (
-    "encoding/json"
-    "fmt"
+	"fmt"
 
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
-
 type BooleanLiterals struct {
-    
-AlwaysTrue bool `json:"alwaysTrue"`
-AlwaysFalse bool `json:"alwaysFalse"`
-EitherBool Union2BoolKFalseOrBoolKTrue `json:"eitherBool"`
-    
+	AlwaysTrue  bool                        `json:"alwaysTrue"`
+	AlwaysFalse bool                        `json:"alwaysFalse"`
+	EitherBool  Union2BoolKFalseOrBoolKTrue `json:"eitherBool"`
 }
 
 func (c *BooleanLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -39,63 +35,58 @@ func (c *BooleanLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 		panic(fmt.Sprintf("expected BooleanLiterals, got %s", typeName.Name))
 	}
 
-   
-
-	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-			switch key {
-				
-				case "alwaysTrue":
-					c.AlwaysTrue = baml.Decode(valueHolder).Interface().(bool)
-				
-				case "alwaysFalse":
-					c.AlwaysFalse = baml.Decode(valueHolder).Interface().(bool)
-				
-				case "eitherBool":
-					c.EitherBool = baml.Decode(valueHolder).Interface().(Union2BoolKFalseOrBoolKTrue)
-				
+		switch key {
+
+		case "alwaysTrue":
+			c.AlwaysTrue = baml.Decode(valueHolder).Interface().(bool)
+
+		case "alwaysFalse":
+			c.AlwaysFalse = baml.Decode(valueHolder).Interface().(bool)
+
+		case "eitherBool":
+			c.EitherBool = baml.Decode(valueHolder).Interface().(Union2BoolKFalseOrBoolKTrue)
+
 		default:
-			
+
 			panic(fmt.Sprintf("unexpected field: %s in class BooleanLiterals", key))
-			
+
 		}
 	}
 
 }
 
 func (c BooleanLiterals) Encode() (*cffi.CFFIValueHolder, error) {
-    fields := map[string]any{}
-    
-    fields["alwaysTrue"] = c.AlwaysTrue
-    
-    fields["alwaysFalse"] = c.AlwaysFalse
-    
-    fields["eitherBool"] = c.EitherBool
-    
-    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	fields := map[string]any{}
+
+	fields["alwaysTrue"] = c.AlwaysTrue
+
+	fields["alwaysFalse"] = c.AlwaysFalse
+
+	fields["eitherBool"] = c.EitherBool
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c BooleanLiterals) BamlTypeName() string {
-    return "BooleanLiterals"
+	return "BooleanLiterals"
 }
 
 func (u BooleanLiterals) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Namespace: cffi.CFFITypeNamespace_TYPES,
-        Name:      "BooleanLiterals",
-    }
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+		Name:      "BooleanLiterals",
+	}
 }
 
 type ComplexLiterals struct {
-    
-State Union4KarchivedOrKdeletedOrKdraftOrKpublished `json:"state"`
-RetryCount Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 `json:"retryCount"`
-Response Union3KerrorOrKsuccessOrKtimeout `json:"response"`
-Flags []Union2BoolKFalseOrBoolKTrue `json:"flags"`
-Codes []Union3IntK200OrIntK404OrIntK500 `json:"codes"`
-    
+	State      Union4KarchivedOrKdeletedOrKdraftOrKpublished          `json:"state"`
+	RetryCount Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 `json:"retryCount"`
+	Response   Union3KerrorOrKsuccessOrKtimeout                       `json:"response"`
+	Flags      []Union2BoolKFalseOrBoolKTrue                          `json:"flags"`
+	Codes      []Union3IntK200OrIntK404OrIntK500                      `json:"codes"`
 }
 
 func (c *ComplexLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -107,71 +98,66 @@ func (c *ComplexLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 		panic(fmt.Sprintf("expected ComplexLiterals, got %s", typeName.Name))
 	}
 
-   
-
-	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-			switch key {
-				
-				case "state":
-					c.State = baml.Decode(valueHolder).Interface().(Union4KarchivedOrKdeletedOrKdraftOrKpublished)
-				
-				case "retryCount":
-					c.RetryCount = baml.Decode(valueHolder).Interface().(Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8)
-				
-				case "response":
-					c.Response = baml.Decode(valueHolder).Interface().(Union3KerrorOrKsuccessOrKtimeout)
-				
-				case "flags":
-					c.Flags = baml.Decode(valueHolder).Interface().([]Union2BoolKFalseOrBoolKTrue)
-				
-				case "codes":
-					c.Codes = baml.Decode(valueHolder).Interface().([]Union3IntK200OrIntK404OrIntK500)
-				
+		switch key {
+
+		case "state":
+			c.State = baml.Decode(valueHolder).Interface().(Union4KarchivedOrKdeletedOrKdraftOrKpublished)
+
+		case "retryCount":
+			c.RetryCount = baml.Decode(valueHolder).Interface().(Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8)
+
+		case "response":
+			c.Response = baml.Decode(valueHolder).Interface().(Union3KerrorOrKsuccessOrKtimeout)
+
+		case "flags":
+			c.Flags = baml.Decode(valueHolder).Interface().([]Union2BoolKFalseOrBoolKTrue)
+
+		case "codes":
+			c.Codes = baml.Decode(valueHolder).Interface().([]Union3IntK200OrIntK404OrIntK500)
+
 		default:
-			
+
 			panic(fmt.Sprintf("unexpected field: %s in class ComplexLiterals", key))
-			
+
 		}
 	}
 
 }
 
 func (c ComplexLiterals) Encode() (*cffi.CFFIValueHolder, error) {
-    fields := map[string]any{}
-    
-    fields["state"] = c.State
-    
-    fields["retryCount"] = c.RetryCount
-    
-    fields["response"] = c.Response
-    
-    fields["flags"] = c.Flags
-    
-    fields["codes"] = c.Codes
-    
-    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	fields := map[string]any{}
+
+	fields["state"] = c.State
+
+	fields["retryCount"] = c.RetryCount
+
+	fields["response"] = c.Response
+
+	fields["flags"] = c.Flags
+
+	fields["codes"] = c.Codes
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c ComplexLiterals) BamlTypeName() string {
-    return "ComplexLiterals"
+	return "ComplexLiterals"
 }
 
 func (u ComplexLiterals) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Namespace: cffi.CFFITypeNamespace_TYPES,
-        Name:      "ComplexLiterals",
-    }
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+		Name:      "ComplexLiterals",
+	}
 }
 
 type IntegerLiterals struct {
-    
-Priority Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 `json:"priority"`
-HttpStatus Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 `json:"httpStatus"`
-MaxRetries Union4IntK0OrIntK1OrIntK3OrIntK5 `json:"maxRetries"`
-    
+	Priority   Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5           `json:"priority"`
+	HttpStatus Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 `json:"httpStatus"`
+	MaxRetries Union4IntK0OrIntK1OrIntK3OrIntK5                  `json:"maxRetries"`
 }
 
 func (c *IntegerLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -183,63 +169,58 @@ func (c *IntegerLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 		panic(fmt.Sprintf("expected IntegerLiterals, got %s", typeName.Name))
 	}
 
-   
-
-	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-			switch key {
-				
-				case "priority":
-					c.Priority = baml.Decode(valueHolder).Interface().(Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5)
-				
-				case "httpStatus":
-					c.HttpStatus = baml.Decode(valueHolder).Interface().(Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500)
-				
-				case "maxRetries":
-					c.MaxRetries = baml.Decode(valueHolder).Interface().(Union4IntK0OrIntK1OrIntK3OrIntK5)
-				
+		switch key {
+
+		case "priority":
+			c.Priority = baml.Decode(valueHolder).Interface().(Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5)
+
+		case "httpStatus":
+			c.HttpStatus = baml.Decode(valueHolder).Interface().(Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500)
+
+		case "maxRetries":
+			c.MaxRetries = baml.Decode(valueHolder).Interface().(Union4IntK0OrIntK1OrIntK3OrIntK5)
+
 		default:
-			
+
 			panic(fmt.Sprintf("unexpected field: %s in class IntegerLiterals", key))
-			
+
 		}
 	}
 
 }
 
 func (c IntegerLiterals) Encode() (*cffi.CFFIValueHolder, error) {
-    fields := map[string]any{}
-    
-    fields["priority"] = c.Priority
-    
-    fields["httpStatus"] = c.HttpStatus
-    
-    fields["maxRetries"] = c.MaxRetries
-    
-    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	fields := map[string]any{}
+
+	fields["priority"] = c.Priority
+
+	fields["httpStatus"] = c.HttpStatus
+
+	fields["maxRetries"] = c.MaxRetries
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c IntegerLiterals) BamlTypeName() string {
-    return "IntegerLiterals"
+	return "IntegerLiterals"
 }
 
 func (u IntegerLiterals) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Namespace: cffi.CFFITypeNamespace_TYPES,
-        Name:      "IntegerLiterals",
-    }
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+		Name:      "IntegerLiterals",
+	}
 }
 
 type MixedLiterals struct {
-    
-Id int64 `json:"id"`
-Type Union3KadminOrKguestOrKuser `json:"type"`
-Level Union3IntK1OrIntK2OrIntK3 `json:"level"`
-IsActive Union2BoolKFalseOrBoolKTrue `json:"isActive"`
-ApiVersion Union3Kv1OrKv2OrKv3 `json:"apiVersion"`
-    
+	Id         int64                       `json:"id"`
+	Type       Union3KadminOrKguestOrKuser `json:"type"`
+	Level      Union3IntK1OrIntK2OrIntK3   `json:"level"`
+	IsActive   Union2BoolKFalseOrBoolKTrue `json:"isActive"`
+	ApiVersion Union3Kv1OrKv2OrKv3         `json:"apiVersion"`
 }
 
 func (c *MixedLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -251,71 +232,66 @@ func (c *MixedLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 		panic(fmt.Sprintf("expected MixedLiterals, got %s", typeName.Name))
 	}
 
-   
-
-	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-			switch key {
-				
-				case "id":
-					c.Id = baml.Decode(valueHolder).Interface().(int64)
-				
-				case "type":
-					c.Type = baml.Decode(valueHolder).Interface().(Union3KadminOrKguestOrKuser)
-				
-				case "level":
-					c.Level = baml.Decode(valueHolder).Interface().(Union3IntK1OrIntK2OrIntK3)
-				
-				case "isActive":
-					c.IsActive = baml.Decode(valueHolder).Interface().(Union2BoolKFalseOrBoolKTrue)
-				
-				case "apiVersion":
-					c.ApiVersion = baml.Decode(valueHolder).Interface().(Union3Kv1OrKv2OrKv3)
-				
+		switch key {
+
+		case "id":
+			c.Id = baml.Decode(valueHolder).Interface().(int64)
+
+		case "type":
+			c.Type = baml.Decode(valueHolder).Interface().(Union3KadminOrKguestOrKuser)
+
+		case "level":
+			c.Level = baml.Decode(valueHolder).Interface().(Union3IntK1OrIntK2OrIntK3)
+
+		case "isActive":
+			c.IsActive = baml.Decode(valueHolder).Interface().(Union2BoolKFalseOrBoolKTrue)
+
+		case "apiVersion":
+			c.ApiVersion = baml.Decode(valueHolder).Interface().(Union3Kv1OrKv2OrKv3)
+
 		default:
-			
+
 			panic(fmt.Sprintf("unexpected field: %s in class MixedLiterals", key))
-			
+
 		}
 	}
 
 }
 
 func (c MixedLiterals) Encode() (*cffi.CFFIValueHolder, error) {
-    fields := map[string]any{}
-    
-    fields["id"] = c.Id
-    
-    fields["type"] = c.Type
-    
-    fields["level"] = c.Level
-    
-    fields["isActive"] = c.IsActive
-    
-    fields["apiVersion"] = c.ApiVersion
-    
-    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	fields := map[string]any{}
+
+	fields["id"] = c.Id
+
+	fields["type"] = c.Type
+
+	fields["level"] = c.Level
+
+	fields["isActive"] = c.IsActive
+
+	fields["apiVersion"] = c.ApiVersion
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c MixedLiterals) BamlTypeName() string {
-    return "MixedLiterals"
+	return "MixedLiterals"
 }
 
 func (u MixedLiterals) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Namespace: cffi.CFFITypeNamespace_TYPES,
-        Name:      "MixedLiterals",
-    }
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+		Name:      "MixedLiterals",
+	}
 }
 
 type StringLiterals struct {
-    
-Status Union3KactiveOrKinactiveOrKpending `json:"status"`
-Environment Union3KdevOrKprodOrKstaging `json:"environment"`
-Method Union4KDELETEOrKGETOrKPOSTOrKPUT `json:"method"`
-    
+	Status      Union3KactiveOrKinactiveOrKpending `json:"status"`
+	Environment Union3KdevOrKprodOrKstaging        `json:"environment"`
+	Method      Union4KDELETEOrKGETOrKPOSTOrKPUT   `json:"method"`
 }
 
 func (c *StringLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -327,52 +303,48 @@ func (c *StringLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 		panic(fmt.Sprintf("expected StringLiterals, got %s", typeName.Name))
 	}
 
-   
-
-	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-			switch key {
-				
-				case "status":
-					c.Status = baml.Decode(valueHolder).Interface().(Union3KactiveOrKinactiveOrKpending)
-				
-				case "environment":
-					c.Environment = baml.Decode(valueHolder).Interface().(Union3KdevOrKprodOrKstaging)
-				
-				case "method":
-					c.Method = baml.Decode(valueHolder).Interface().(Union4KDELETEOrKGETOrKPOSTOrKPUT)
-				
+		switch key {
+
+		case "status":
+			c.Status = baml.Decode(valueHolder).Interface().(Union3KactiveOrKinactiveOrKpending)
+
+		case "environment":
+			c.Environment = baml.Decode(valueHolder).Interface().(Union3KdevOrKprodOrKstaging)
+
+		case "method":
+			c.Method = baml.Decode(valueHolder).Interface().(Union4KDELETEOrKGETOrKPOSTOrKPUT)
+
 		default:
-			
+
 			panic(fmt.Sprintf("unexpected field: %s in class StringLiterals", key))
-			
+
 		}
 	}
 
 }
 
 func (c StringLiterals) Encode() (*cffi.CFFIValueHolder, error) {
-    fields := map[string]any{}
-    
-    fields["status"] = c.Status
-    
-    fields["environment"] = c.Environment
-    
-    fields["method"] = c.Method
-    
-    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	fields := map[string]any{}
+
+	fields["status"] = c.Status
+
+	fields["environment"] = c.Environment
+
+	fields["method"] = c.Method
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c StringLiterals) BamlTypeName() string {
-    return "StringLiterals"
+	return "StringLiterals"
 }
 
 func (u StringLiterals) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Namespace: cffi.CFFITypeNamespace_TYPES,
-        Name:      "StringLiterals",
-    }
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+		Name:      "StringLiterals",
+	}
 }
-

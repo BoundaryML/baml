@@ -24,6 +24,7 @@ module BamlClient
       const :tb,              T.nilable(BamlClient::TypeBuilder),  default: nil
       const :client_registry, T.nilable(Baml::ClientRegistry), default: nil
       const :env,             T.nilable(T::Hash[String, T.nilable(String)]), default: nil
+      const :tags,            T.nilable(T::Hash[String, String]), default: nil
       const :collector,       T.any(T.nilable(Baml::Collector), T::Array[Baml::Collector]), default: nil
   end
 
@@ -33,6 +34,7 @@ module BamlClient
         const :client_registry, T.nilable(Baml::ClientRegistry)
         const :collectors,      T::Array[Baml::Collector]
         const :env_vars,        T::Hash[String, String]
+        const :tags,            T::Hash[String, String]
     end
 
     class DoNotUseDirectlyCallManager
@@ -73,6 +75,7 @@ module BamlClient
             r.client_registry,
             r.collectors,
             r.env_vars,
+            r.tags,
           )
         end
 
@@ -89,6 +92,7 @@ module BamlClient
             r.client_registry,
             r.collectors,
             r.env_vars,
+            r.tags,
           )
           [ctx, result]
         end
@@ -120,11 +124,15 @@ module BamlClient
             v.nil? ? env_vars.delete(k) : env_vars[k] = v
           end
 
+          # 5. tags
+          tags = @baml_options.tags || {}
+
           ResolvedBamlOptions.new(
             tb:              baml_tb,
             client_registry: cr || nil,
             collectors:      collectors,
             env_vars:        env_vars,
+            tags:            tags,
           )
         end
     end

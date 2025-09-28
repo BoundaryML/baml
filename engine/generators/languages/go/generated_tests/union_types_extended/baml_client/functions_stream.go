@@ -14,309 +14,327 @@
 package baml_client
 
 import (
-    "context"
+	"context"
+	"fmt"
 
-    "union_types_extended/baml_client/types"
-    "union_types_extended/baml_client/stream_types"
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"union_types_extended/baml_client/stream_types"
+	"union_types_extended/baml_client/types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-type stream struct {}
+type stream struct{}
+
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
-    IsError   bool
-    Error     error
-    IsFinal   bool
-    as_final  *TFinal
-    as_stream *TStream
+	IsError   bool
+	Error     error
+	IsFinal   bool
+	as_final  *TFinal
+	as_stream *TStream
 }
 
 func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
-    return s.as_final
+	return s.as_final
 }
 
 func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
-    return s.as_stream
+	return s.as_stream
 }
 
-
-/// Streaming version of TestComplexUnions
+// / Streaming version of TestComplexUnions
 func (*stream) TestComplexUnions(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.ComplexUnions, types.ComplexUnions], error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "input": input, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestComplexUnions: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestComplexUnions", encoded, callOpts.onTick)
-    if err != nil {
-        return nil, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestComplexUnions: %w", err)
+		panic(wrapped_err)
+	}
 
-    channel := make(chan StreamValue[stream_types.ComplexUnions, types.ComplexUnions])
-    go func() {
-        for result := range internal_channel {
-            if result.Error != nil {
-                channel <- StreamValue[stream_types.ComplexUnions, types.ComplexUnions]{
-                    IsError: true,
-                    Error:   result.Error,
-                }
-                close(channel)
-                return
-            }
-            if result.HasData {
-                    data := (result.Data).(types.ComplexUnions)
-                    channel <- StreamValue[stream_types.ComplexUnions, types.ComplexUnions]{
-                        IsFinal: true,
-                        as_final: &data,
-                    }
-            } else {
-                data := (result.StreamData).(stream_types.ComplexUnions)
-                channel <- StreamValue[stream_types.ComplexUnions, types.ComplexUnions]{
-                    IsFinal: false,
-                    as_stream: &data,
-                }
-            }
-        }
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestComplexUnions", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[stream_types.ComplexUnions, types.ComplexUnions])
+	go func() {
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.ComplexUnions, types.ComplexUnions]{
+					IsError: true,
+					Error:   result.Error,
+				}
+				close(channel)
+				return
+			}
+			if result.HasData {
+				data := (result.Data).(types.ComplexUnions)
+				channel <- StreamValue[stream_types.ComplexUnions, types.ComplexUnions]{
+					IsFinal:  true,
+					as_final: &data,
+				}
+			} else {
+				data := (result.StreamData).(stream_types.ComplexUnions)
+				channel <- StreamValue[stream_types.ComplexUnions, types.ComplexUnions]{
+					IsFinal:   false,
+					as_stream: &data,
+				}
+			}
+		}
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-    }()
-    return channel, nil
+	}()
+	return channel, nil
 }
 
-/// Streaming version of TestDiscriminatedUnions
+// / Streaming version of TestDiscriminatedUnions
 func (*stream) TestDiscriminatedUnions(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions], error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "input": input, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestDiscriminatedUnions: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestDiscriminatedUnions", encoded, callOpts.onTick)
-    if err != nil {
-        return nil, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestDiscriminatedUnions: %w", err)
+		panic(wrapped_err)
+	}
 
-    channel := make(chan StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions])
-    go func() {
-        for result := range internal_channel {
-            if result.Error != nil {
-                channel <- StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]{
-                    IsError: true,
-                    Error:   result.Error,
-                }
-                close(channel)
-                return
-            }
-            if result.HasData {
-                    data := (result.Data).(types.DiscriminatedUnions)
-                    channel <- StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]{
-                        IsFinal: true,
-                        as_final: &data,
-                    }
-            } else {
-                data := (result.StreamData).(stream_types.DiscriminatedUnions)
-                channel <- StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]{
-                    IsFinal: false,
-                    as_stream: &data,
-                }
-            }
-        }
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestDiscriminatedUnions", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions])
+	go func() {
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]{
+					IsError: true,
+					Error:   result.Error,
+				}
+				close(channel)
+				return
+			}
+			if result.HasData {
+				data := (result.Data).(types.DiscriminatedUnions)
+				channel <- StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]{
+					IsFinal:  true,
+					as_final: &data,
+				}
+			} else {
+				data := (result.StreamData).(stream_types.DiscriminatedUnions)
+				channel <- StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]{
+					IsFinal:   false,
+					as_stream: &data,
+				}
+			}
+		}
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-    }()
-    return channel, nil
+	}()
+	return channel, nil
 }
 
-/// Streaming version of TestPrimitiveUnions
+// / Streaming version of TestPrimitiveUnions
 func (*stream) TestPrimitiveUnions(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions], error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "input": input, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestPrimitiveUnions: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestPrimitiveUnions", encoded, callOpts.onTick)
-    if err != nil {
-        return nil, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestPrimitiveUnions: %w", err)
+		panic(wrapped_err)
+	}
 
-    channel := make(chan StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions])
-    go func() {
-        for result := range internal_channel {
-            if result.Error != nil {
-                channel <- StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions]{
-                    IsError: true,
-                    Error:   result.Error,
-                }
-                close(channel)
-                return
-            }
-            if result.HasData {
-                    data := (result.Data).(types.PrimitiveUnions)
-                    channel <- StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions]{
-                        IsFinal: true,
-                        as_final: &data,
-                    }
-            } else {
-                data := (result.StreamData).(stream_types.PrimitiveUnions)
-                channel <- StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions]{
-                    IsFinal: false,
-                    as_stream: &data,
-                }
-            }
-        }
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestPrimitiveUnions", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions])
+	go func() {
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions]{
+					IsError: true,
+					Error:   result.Error,
+				}
+				close(channel)
+				return
+			}
+			if result.HasData {
+				data := (result.Data).(types.PrimitiveUnions)
+				channel <- StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions]{
+					IsFinal:  true,
+					as_final: &data,
+				}
+			} else {
+				data := (result.StreamData).(stream_types.PrimitiveUnions)
+				channel <- StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions]{
+					IsFinal:   false,
+					as_stream: &data,
+				}
+			}
+		}
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-    }()
-    return channel, nil
+	}()
+	return channel, nil
 }
 
-/// Streaming version of TestUnionArrays
+// / Streaming version of TestUnionArrays
 func (*stream) TestUnionArrays(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.UnionArrays, types.UnionArrays], error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "input": input, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestUnionArrays: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestUnionArrays", encoded, callOpts.onTick)
-    if err != nil {
-        return nil, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestUnionArrays: %w", err)
+		panic(wrapped_err)
+	}
 
-    channel := make(chan StreamValue[stream_types.UnionArrays, types.UnionArrays])
-    go func() {
-        for result := range internal_channel {
-            if result.Error != nil {
-                channel <- StreamValue[stream_types.UnionArrays, types.UnionArrays]{
-                    IsError: true,
-                    Error:   result.Error,
-                }
-                close(channel)
-                return
-            }
-            if result.HasData {
-                    data := (result.Data).(types.UnionArrays)
-                    channel <- StreamValue[stream_types.UnionArrays, types.UnionArrays]{
-                        IsFinal: true,
-                        as_final: &data,
-                    }
-            } else {
-                data := (result.StreamData).(stream_types.UnionArrays)
-                channel <- StreamValue[stream_types.UnionArrays, types.UnionArrays]{
-                    IsFinal: false,
-                    as_stream: &data,
-                }
-            }
-        }
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TestUnionArrays", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[stream_types.UnionArrays, types.UnionArrays])
+	go func() {
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.UnionArrays, types.UnionArrays]{
+					IsError: true,
+					Error:   result.Error,
+				}
+				close(channel)
+				return
+			}
+			if result.HasData {
+				data := (result.Data).(types.UnionArrays)
+				channel <- StreamValue[stream_types.UnionArrays, types.UnionArrays]{
+					IsFinal:  true,
+					as_final: &data,
+				}
+			} else {
+				data := (result.StreamData).(stream_types.UnionArrays)
+				channel <- StreamValue[stream_types.UnionArrays, types.UnionArrays]{
+					IsFinal:   false,
+					as_stream: &data,
+				}
+			}
+		}
 
 		// when internal_channel is closed, close the output too
 		close(channel)
-    }()
-    return channel, nil
+	}()
+	return channel, nil
 }

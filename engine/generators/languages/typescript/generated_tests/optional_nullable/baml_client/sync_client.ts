@@ -44,7 +44,8 @@ type BamlCallOptions = {
   clientRegistry?: ClientRegistry
   collector?: Collector | Collector[]
   env?: Record<string, string | undefined>
-  abortSignal?: AbortSignal
+  tags?: Record<string, string>
+  signal?: AbortSignal
   onTick?: (reason: TickReason, log: FunctionLog | null) => void
 }
 
@@ -99,7 +100,7 @@ export class BamlSyncClient {
   ): types.NullableTypes {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -124,6 +125,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -139,7 +141,7 @@ export class BamlSyncClient {
   ): types.OptionalFields {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -164,6 +166,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -179,7 +182,7 @@ export class BamlSyncClient {
   ): types.MixedOptionalNullable {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -204,6 +207,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -219,7 +223,7 @@ export class BamlSyncClient {
   ): types.NullableTypes {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -244,6 +248,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -259,7 +264,7 @@ export class BamlSyncClient {
   ): types.OptionalFields {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.abortSignal;
+      const signal = options.signal;
       
       if (signal?.aborted) {
         throw new BamlAbortError('Operation was aborted', signal.reason);
@@ -284,6 +289,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )

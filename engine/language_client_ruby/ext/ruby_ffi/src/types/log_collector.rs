@@ -268,6 +268,21 @@ impl FunctionLog {
         self.inner.lock().unwrap().raw_llm_response()
     }
 
+    pub fn tags(&self) -> std::collections::HashMap<String, String> {
+        let mut guard = self.inner.lock().unwrap();
+        guard
+            .tags()
+            .into_iter()
+            .map(|(k, v)| {
+                let string_value = match v {
+                    serde_json::Value::String(s) => s,
+                    _ => v.to_string(),
+                };
+                (k, string_value)
+            })
+            .collect()
+    }
+
     pub fn selected_call(ruby: &Ruby, rb_self: &Self) -> Option<Value> {
         let calls = rb_self.inner.lock().unwrap().calls();
         calls.into_iter().find_map(|call| match call {
@@ -312,6 +327,7 @@ impl FunctionLog {
             method!(FunctionLog::raw_llm_response, 0),
         )?;
         cls.define_method("selected_call", method!(FunctionLog::selected_call, 0))?;
+        cls.define_method("tags", method!(FunctionLog::tags, 0))?;
 
         Ok(())
     }

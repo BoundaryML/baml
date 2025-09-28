@@ -14,261 +14,274 @@
 package baml_client
 
 import (
-    "context"
+	"context"
+	"fmt"
 
-    "nested_structures/baml_client/types"
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"nested_structures/baml_client/types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
-
-
 
 func TestComplexNested(ctx context.Context, input string, opts ...CallOptionFunc) (types.ComplexNested, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "input": input, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "TestComplexNested", encoded, callOpts.onTick)
-        if err != nil {
-            return types.ComplexNested{}, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return types.ComplexNested{}, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestComplexNested", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ComplexNested{}, err
+		}
 
-        casted := (result.Data).(types.ComplexNested)
+		if result.Error != nil {
+			return types.ComplexNested{}, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestComplexNested", encoded, callOpts.onTick)
-        if err != nil {
-            return types.ComplexNested{}, err
-        }
+		casted := (result.Data).(types.ComplexNested)
 
-        for result := range channel {
-            if result.Error != nil {
-                return types.ComplexNested{}, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestComplexNested", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ComplexNested{}, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.ComplexNested), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return types.ComplexNested{}, result.Error
+			}
 
-        return types.ComplexNested{}, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.ComplexNested), nil
+			}
+		}
+
+		return types.ComplexNested{}, fmt.Errorf("No data returned from stream")
+	}
 }
-
 
 func TestDeeplyNested(ctx context.Context, input string, opts ...CallOptionFunc) (types.DeeplyNested, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "input": input, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "TestDeeplyNested", encoded, callOpts.onTick)
-        if err != nil {
-            return types.DeeplyNested{}, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return types.DeeplyNested{}, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestDeeplyNested", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DeeplyNested{}, err
+		}
 
-        casted := (result.Data).(types.DeeplyNested)
+		if result.Error != nil {
+			return types.DeeplyNested{}, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestDeeplyNested", encoded, callOpts.onTick)
-        if err != nil {
-            return types.DeeplyNested{}, err
-        }
+		casted := (result.Data).(types.DeeplyNested)
 
-        for result := range channel {
-            if result.Error != nil {
-                return types.DeeplyNested{}, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestDeeplyNested", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DeeplyNested{}, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.DeeplyNested), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return types.DeeplyNested{}, result.Error
+			}
 
-        return types.DeeplyNested{}, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.DeeplyNested), nil
+			}
+		}
+
+		return types.DeeplyNested{}, fmt.Errorf("No data returned from stream")
+	}
 }
-
 
 func TestRecursiveStructure(ctx context.Context, input string, opts ...CallOptionFunc) (types.RecursiveStructure, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "input": input, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "TestRecursiveStructure", encoded, callOpts.onTick)
-        if err != nil {
-            return types.RecursiveStructure{}, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return types.RecursiveStructure{}, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestRecursiveStructure", encoded, callOpts.onTick)
+		if err != nil {
+			return types.RecursiveStructure{}, err
+		}
 
-        casted := (result.Data).(types.RecursiveStructure)
+		if result.Error != nil {
+			return types.RecursiveStructure{}, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestRecursiveStructure", encoded, callOpts.onTick)
-        if err != nil {
-            return types.RecursiveStructure{}, err
-        }
+		casted := (result.Data).(types.RecursiveStructure)
 
-        for result := range channel {
-            if result.Error != nil {
-                return types.RecursiveStructure{}, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestRecursiveStructure", encoded, callOpts.onTick)
+		if err != nil {
+			return types.RecursiveStructure{}, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.RecursiveStructure), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return types.RecursiveStructure{}, result.Error
+			}
 
-        return types.RecursiveStructure{}, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.RecursiveStructure), nil
+			}
+		}
+
+		return types.RecursiveStructure{}, fmt.Errorf("No data returned from stream")
+	}
 }
-
 
 func TestSimpleNested(ctx context.Context, input string, opts ...CallOptionFunc) (types.SimpleNested, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "input": input, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "TestSimpleNested", encoded, callOpts.onTick)
-        if err != nil {
-            return types.SimpleNested{}, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return types.SimpleNested{}, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestSimpleNested", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SimpleNested{}, err
+		}
 
-        casted := (result.Data).(types.SimpleNested)
+		if result.Error != nil {
+			return types.SimpleNested{}, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestSimpleNested", encoded, callOpts.onTick)
-        if err != nil {
-            return types.SimpleNested{}, err
-        }
+		casted := (result.Data).(types.SimpleNested)
 
-        for result := range channel {
-            if result.Error != nil {
-                return types.SimpleNested{}, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestSimpleNested", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SimpleNested{}, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.SimpleNested), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return types.SimpleNested{}, result.Error
+			}
 
-        return types.SimpleNested{}, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.SimpleNested), nil
+			}
+		}
+
+		return types.SimpleNested{}, fmt.Errorf("No data returned from stream")
+	}
 }

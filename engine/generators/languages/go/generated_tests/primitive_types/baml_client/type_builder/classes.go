@@ -15,13 +15,12 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
-
 type MixedPrimitivesClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *MixedPrimitivesClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -32,45 +31,41 @@ func (t *MixedPrimitivesClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
-
-
-
 func (t *MixedPrimitivesClassView) PropertyName() (ClassPropertyView, error) {
-    return t.inner.Property("name")
+	return t.inner.Property("name")
 }
 
 func (t *MixedPrimitivesClassView) PropertyAge() (ClassPropertyView, error) {
-    return t.inner.Property("age")
+	return t.inner.Property("age")
 }
 
 func (t *MixedPrimitivesClassView) PropertyHeight() (ClassPropertyView, error) {
-    return t.inner.Property("height")
+	return t.inner.Property("height")
 }
 
 func (t *MixedPrimitivesClassView) PropertyIsActive() (ClassPropertyView, error) {
-    return t.inner.Property("isActive")
+	return t.inner.Property("isActive")
 }
 
 func (t *MixedPrimitivesClassView) PropertyMetadata() (ClassPropertyView, error) {
-    return t.inner.Property("metadata")
+	return t.inner.Property("metadata")
 }
 
 func (t *MixedPrimitivesClassView) PropertyTags() (ClassPropertyView, error) {
-    return t.inner.Property("tags")
+	return t.inner.Property("tags")
 }
 
 func (t *MixedPrimitivesClassView) PropertyScores() (ClassPropertyView, error) {
-    return t.inner.Property("scores")
+	return t.inner.Property("scores")
 }
 
 func (t *MixedPrimitivesClassView) PropertyMeasurements() (ClassPropertyView, error) {
-    return t.inner.Property("measurements")
+	return t.inner.Property("measurements")
 }
 
 func (t *MixedPrimitivesClassView) PropertyFlags() (ClassPropertyView, error) {
-    return t.inner.Property("flags")
+	return t.inner.Property("flags")
 }
-
 
 func (t *TypeBuilder) MixedPrimitives() (*MixedPrimitivesClassView, error) {
 	bld, err := t.inner.Class("MixedPrimitives")
@@ -85,11 +80,11 @@ func (t *MixedPrimitivesClassView) Type() (baml.Type, error) {
 }
 
 type PrimitiveArraysClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *PrimitiveArraysClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -100,25 +95,21 @@ func (t *PrimitiveArraysClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
-
-
-
 func (t *PrimitiveArraysClassView) PropertyStringArray() (ClassPropertyView, error) {
-    return t.inner.Property("stringArray")
+	return t.inner.Property("stringArray")
 }
 
 func (t *PrimitiveArraysClassView) PropertyIntArray() (ClassPropertyView, error) {
-    return t.inner.Property("intArray")
+	return t.inner.Property("intArray")
 }
 
 func (t *PrimitiveArraysClassView) PropertyFloatArray() (ClassPropertyView, error) {
-    return t.inner.Property("floatArray")
+	return t.inner.Property("floatArray")
 }
 
 func (t *PrimitiveArraysClassView) PropertyBoolArray() (ClassPropertyView, error) {
-    return t.inner.Property("boolArray")
+	return t.inner.Property("boolArray")
 }
-
 
 func (t *TypeBuilder) PrimitiveArrays() (*PrimitiveArraysClassView, error) {
 	bld, err := t.inner.Class("PrimitiveArrays")
@@ -133,11 +124,11 @@ func (t *PrimitiveArraysClassView) Type() (baml.Type, error) {
 }
 
 type PrimitiveMapsClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *PrimitiveMapsClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -148,25 +139,21 @@ func (t *PrimitiveMapsClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-
-
-
 func (t *PrimitiveMapsClassView) PropertyStringMap() (ClassPropertyView, error) {
-    return t.inner.Property("stringMap")
+	return t.inner.Property("stringMap")
 }
 
 func (t *PrimitiveMapsClassView) PropertyIntMap() (ClassPropertyView, error) {
-    return t.inner.Property("intMap")
+	return t.inner.Property("intMap")
 }
 
 func (t *PrimitiveMapsClassView) PropertyFloatMap() (ClassPropertyView, error) {
-    return t.inner.Property("floatMap")
+	return t.inner.Property("floatMap")
 }
 
 func (t *PrimitiveMapsClassView) PropertyBoolMap() (ClassPropertyView, error) {
-    return t.inner.Property("boolMap")
+	return t.inner.Property("boolMap")
 }
-
 
 func (t *TypeBuilder) PrimitiveMaps() (*PrimitiveMapsClassView, error) {
 	bld, err := t.inner.Class("PrimitiveMaps")
@@ -181,11 +168,11 @@ func (t *PrimitiveMapsClassView) Type() (baml.Type, error) {
 }
 
 type PrimitiveTypesClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *PrimitiveTypesClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -196,29 +183,25 @@ func (t *PrimitiveTypesClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
-
-
-
 func (t *PrimitiveTypesClassView) PropertyStringField() (ClassPropertyView, error) {
-    return t.inner.Property("stringField")
+	return t.inner.Property("stringField")
 }
 
 func (t *PrimitiveTypesClassView) PropertyIntField() (ClassPropertyView, error) {
-    return t.inner.Property("intField")
+	return t.inner.Property("intField")
 }
 
 func (t *PrimitiveTypesClassView) PropertyFloatField() (ClassPropertyView, error) {
-    return t.inner.Property("floatField")
+	return t.inner.Property("floatField")
 }
 
 func (t *PrimitiveTypesClassView) PropertyBoolField() (ClassPropertyView, error) {
-    return t.inner.Property("boolField")
+	return t.inner.Property("boolField")
 }
 
 func (t *PrimitiveTypesClassView) PropertyNullField() (ClassPropertyView, error) {
-    return t.inner.Property("nullField")
+	return t.inner.Property("nullField")
 }
-
 
 func (t *TypeBuilder) PrimitiveTypes() (*PrimitiveTypesClassView, error) {
 	bld, err := t.inner.Class("PrimitiveTypes")

@@ -45,6 +45,10 @@ func AaaSamOutputFormat(ctx context.Context, recipe string, opts ...CallOptionFu
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -107,6 +111,10 @@ func AliasThatPointsToRecursiveType(ctx context.Context, data types.LinkedListAl
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -167,6 +175,10 @@ func AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOption
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -233,6 +245,10 @@ func AliasedInputClass(ctx context.Context, input types.InputClass, opts ...Call
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -293,6 +309,10 @@ func AliasedInputClass2(ctx context.Context, input types.InputClass, opts ...Cal
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -357,6 +377,10 @@ func AliasedInputClassNested(ctx context.Context, input types.InputClassNested, 
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -417,6 +441,10 @@ func AliasedInputEnum(ctx context.Context, input types.AliasedEnum, opts ...Call
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -481,6 +509,10 @@ func AliasedInputList(ctx context.Context, input []types.AliasedEnum, opts ...Ca
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -541,6 +573,10 @@ func AllowedOptionals(ctx context.Context, optionals types.OptionalListAndMap, o
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -605,6 +641,10 @@ func AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (int64, erro
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -665,6 +705,10 @@ func AudioInput(ctx context.Context, aud types.Audio, opts ...CallOptionFunc) (s
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -729,6 +773,10 @@ func AudioInputOpenai(ctx context.Context, aud types.Audio, prompt string, opts 
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -789,6 +837,10 @@ func BuildLinkedList(ctx context.Context, input []int64, opts ...CallOptionFunc)
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -853,6 +905,10 @@ func BuildTree(ctx context.Context, input types.BinaryNode, opts ...CallOptionFu
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -913,6 +969,10 @@ func ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, cls types.
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -977,6 +1037,10 @@ func ClassifyDynEnumTwo(ctx context.Context, input string, opts ...CallOptionFun
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1037,6 +1101,10 @@ func ClassifyDynamicStatus(ctx context.Context, input string, opts ...CallOption
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -1101,6 +1169,10 @@ func ClassifyMessage(ctx context.Context, input string, opts ...CallOptionFunc) 
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1161,6 +1233,10 @@ func ClassifyMessage2(ctx context.Context, input string, opts ...CallOptionFunc)
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -1225,6 +1301,10 @@ func ClassifyMessage3(ctx context.Context, input string, opts ...CallOptionFunc)
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1285,6 +1365,10 @@ func Completion(ctx context.Context, prefix string, suffix string, language stri
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -1349,6 +1433,10 @@ func CustomTask(ctx context.Context, input string, opts ...CallOptionFunc) (type
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1409,6 +1497,10 @@ func DescribeAudio(ctx context.Context, audio types.Audio, opts ...CallOptionFun
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -1473,6 +1565,10 @@ func DescribeAudio2(ctx context.Context, audio types.Audio, opts ...CallOptionFu
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1533,6 +1629,10 @@ func DescribeImage(ctx context.Context, img types.Image, opts ...CallOptionFunc)
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -1597,6 +1697,10 @@ func DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, im
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1657,6 +1761,10 @@ func DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, im
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -1721,6 +1829,10 @@ func DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, im
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1781,6 +1893,10 @@ func DescribeMedia1599(ctx context.Context, img types.Image, client_sector strin
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -1845,6 +1961,10 @@ func DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) (types.Uni
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1905,6 +2025,10 @@ func DummyOutputFunction(ctx context.Context, input string, opts ...CallOptionFu
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -1969,6 +2093,10 @@ func DynamicFunc(ctx context.Context, input types.DynamicClassOne, opts ...CallO
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2029,6 +2157,10 @@ func DynamicInputOutput(ctx context.Context, input types.DynInputOutput, opts ..
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -2093,6 +2225,10 @@ func DynamicListInputOutput(ctx context.Context, input []types.DynInputOutput, o
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2153,6 +2289,10 @@ func ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (string, error) 
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -2217,6 +2357,10 @@ func ExtractContactInfo(ctx context.Context, document string, opts ...CallOption
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2277,6 +2421,10 @@ func ExtractDynamicCategories(ctx context.Context, input string, opts ...CallOpt
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -2341,6 +2489,10 @@ func ExtractEntities(ctx context.Context, text string, opts ...CallOptionFunc) (
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2401,6 +2553,10 @@ func ExtractHobby(ctx context.Context, text string, opts ...CallOptionFunc) ([]t
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -2465,6 +2621,10 @@ func ExtractName(ctx context.Context, text string, opts ...CallOptionFunc) (stri
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2525,6 +2685,10 @@ func ExtractNames(ctx context.Context, input string, opts ...CallOptionFunc) ([]
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -2589,6 +2753,10 @@ func ExtractPeople(ctx context.Context, text string, opts ...CallOptionFunc) ([]
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2649,6 +2817,10 @@ func ExtractReceiptInfo(ctx context.Context, email string, reason types.Union2Kc
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -2713,6 +2885,10 @@ func ExtractResume(ctx context.Context, resume string, img *types.Image, opts ..
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2773,6 +2949,10 @@ func ExtractResume2(ctx context.Context, resume string, opts ...CallOptionFunc) 
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -2837,6 +3017,10 @@ func FnAlwaysFails(ctx context.Context, input string, opts ...CallOptionFunc) (s
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2897,6 +3081,10 @@ func FnClassOptionalOutput(ctx context.Context, input string, opts ...CallOption
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -2961,6 +3149,10 @@ func FnClassOptionalOutput2(ctx context.Context, input string, opts ...CallOptio
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3021,6 +3213,10 @@ func FnEnumListOutput(ctx context.Context, input string, opts ...CallOptionFunc)
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -3085,6 +3281,10 @@ func FnEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (ty
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3145,6 +3345,10 @@ func FnFailRetryConstantDelay(ctx context.Context, retries int64, delay_ms int64
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -3209,6 +3413,10 @@ func FnFailRetryExponentialDelay(ctx context.Context, retries int64, initial_del
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3269,6 +3477,10 @@ func FnFallbackAlwaysFails(ctx context.Context, input string, opts ...CallOption
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -3333,6 +3545,10 @@ func FnLiteralClassInputOutput(ctx context.Context, input types.LiteralClassHell
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3393,6 +3609,10 @@ func FnLiteralUnionClassInputOutput(ctx context.Context, input types.Union2Liter
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -3457,6 +3677,10 @@ func FnNamedArgsSingleStringOptional(ctx context.Context, myString *string, opts
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3517,6 +3741,10 @@ func FnOutputBool(ctx context.Context, input string, opts ...CallOptionFunc) (bo
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -3581,6 +3809,10 @@ func FnOutputClass(ctx context.Context, input string, opts ...CallOptionFunc) (t
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3641,6 +3873,10 @@ func FnOutputClassList(ctx context.Context, input string, opts ...CallOptionFunc
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -3705,6 +3941,10 @@ func FnOutputClassNested(ctx context.Context, input string, opts ...CallOptionFu
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3765,6 +4005,10 @@ func FnOutputClassWithEnum(ctx context.Context, input string, opts ...CallOption
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -3829,6 +4073,10 @@ func FnOutputInt(ctx context.Context, input string, opts ...CallOptionFunc) (int
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3889,6 +4137,10 @@ func FnOutputLiteralBool(ctx context.Context, input string, opts ...CallOptionFu
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -3953,6 +4205,10 @@ func FnOutputLiteralInt(ctx context.Context, input string, opts ...CallOptionFun
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4013,6 +4269,10 @@ func FnOutputLiteralString(ctx context.Context, input string, opts ...CallOption
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -4077,6 +4337,10 @@ func FnOutputStringList(ctx context.Context, input string, opts ...CallOptionFun
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4137,6 +4401,10 @@ func FnTestAliasedEnumOutput(ctx context.Context, input string, opts ...CallOpti
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -4201,6 +4469,10 @@ func FnTestClassAlias(ctx context.Context, input string, opts ...CallOptionFunc)
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4261,6 +4533,10 @@ func FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedArgsSingleE
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -4325,6 +4601,10 @@ func GetDataType(ctx context.Context, text string, opts ...CallOptionFunc) (type
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4385,6 +4665,10 @@ func GetOrderInfo(ctx context.Context, email types.Email, opts ...CallOptionFunc
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -4449,6 +4733,10 @@ func GetQuery(ctx context.Context, query string, opts ...CallOptionFunc) (types.
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4509,6 +4797,10 @@ func InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, i2 map[typ
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -4573,6 +4865,10 @@ func InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union4Kfour
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4633,6 +4929,10 @@ func InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]string, op
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -4697,6 +4997,10 @@ func JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, opts ...Call
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4757,6 +5061,10 @@ func LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc) (string,
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -4821,6 +5129,10 @@ func LiteralUnionsTest(ctx context.Context, input string, opts ...CallOptionFunc
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4883,6 +5195,10 @@ func LlmReturnNumber(ctx context.Context, n int64, opts ...CallOptionFunc) (int6
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4943,6 +5259,10 @@ func MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (types.Che
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -5009,6 +5329,10 @@ func MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFunc) (types.
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5069,6 +5393,10 @@ func MakeClassWithExternalDone(ctx context.Context, opts ...CallOptionFunc) (typ
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -5133,6 +5461,10 @@ func MakeNestedBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (typ
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5193,6 +5525,10 @@ func MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc) (types.S
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -5257,6 +5593,10 @@ func MapAlias(ctx context.Context, m map[string][]string, opts ...CallOptionFunc
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5317,6 +5657,10 @@ func MergeAliasAttributes(ctx context.Context, money int64, opts ...CallOptionFu
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -5381,6 +5725,10 @@ func MyFunc(ctx context.Context, input string, opts ...CallOptionFunc) (types.Dy
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5441,6 +5789,10 @@ func NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOrListString
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -5505,6 +5857,10 @@ func NullLiteralClassHello(ctx context.Context, s string, opts ...CallOptionFunc
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5565,6 +5921,10 @@ func OpenAIWithAnthropicResponseHello(ctx context.Context, s string, opts ...Cal
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -5629,6 +5989,10 @@ func OptionalTest_Function(ctx context.Context, input string, opts ...CallOption
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5689,6 +6053,10 @@ func PdfInput(ctx context.Context, pdf types.PDF, opts ...CallOptionFunc) (strin
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -5753,6 +6121,10 @@ func PdfInputAnthropic(ctx context.Context, pdf types.PDF, opts ...CallOptionFun
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5813,6 +6185,10 @@ func PdfInputOpenai(ctx context.Context, pdf types.PDF, prompt string, opts ...C
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -5877,6 +6253,10 @@ func PdfInputVertex(ctx context.Context, pdf types.PDF, opts ...CallOptionFunc) 
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5939,6 +6319,10 @@ func PredictAge(ctx context.Context, name string, opts ...CallOptionFunc) (types
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5999,6 +6383,10 @@ func PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (ty
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -6065,6 +6453,10 @@ func PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIntOrString,
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6125,6 +6517,10 @@ func PromptTestClaude(ctx context.Context, input string, opts ...CallOptionFunc)
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -6189,6 +6585,10 @@ func PromptTestClaudeChat(ctx context.Context, input string, opts ...CallOptionF
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6249,6 +6649,10 @@ func PromptTestClaudeChatNoSystem(ctx context.Context, input string, opts ...Cal
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -6313,6 +6717,10 @@ func PromptTestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc)
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6373,6 +6781,10 @@ func PromptTestOpenAIChat(ctx context.Context, input string, opts ...CallOptionF
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -6437,6 +6849,10 @@ func PromptTestOpenAIChatNoSystem(ctx context.Context, input string, opts ...Cal
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6497,6 +6913,10 @@ func PromptTestStreaming(ctx context.Context, input string, opts ...CallOptionFu
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -6561,6 +6981,10 @@ func RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne, opts ...C
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6621,6 +7045,10 @@ func RecursiveClassWithAliasIndirection(ctx context.Context, cls types.NodeWithA
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -6685,6 +7113,10 @@ func RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion, opts ..
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6745,6 +7177,10 @@ func RenderDynamicClass(ctx context.Context, input types.RenderTestClass, opts .
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -6809,6 +7245,10 @@ func RenderDynamicEnum(ctx context.Context, bike types.RenderTestEnum, other typ
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6869,6 +7309,10 @@ func ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...C
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -6935,6 +7379,10 @@ func ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallOptionFunc)
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6995,6 +7443,10 @@ func ReturnJsonEntry(ctx context.Context, s string, opts ...CallOptionFunc) (typ
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -7059,6 +7511,10 @@ func ReturnMalformedConstraints(ctx context.Context, a int64, opts ...CallOption
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7119,6 +7575,10 @@ func SchemaDescriptions(ctx context.Context, input string, opts ...CallOptionFun
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -7183,6 +7643,10 @@ func SimpleRecursiveListAlias(ctx context.Context, input types.RecursiveListAlia
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7243,6 +7707,10 @@ func SimpleRecursiveMapAlias(ctx context.Context, input types.RecursiveMapAlias,
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -7307,6 +7775,10 @@ func StreamBigNumbers(ctx context.Context, digits int64, opts ...CallOptionFunc)
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7367,6 +7839,10 @@ func StreamFailingAssertion(ctx context.Context, theme string, length int64, opt
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -7431,6 +7907,10 @@ func StreamFailingCheck(ctx context.Context, theme string, length int64, opts ..
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7491,6 +7971,10 @@ func StreamOneBigNumber(ctx context.Context, digits int64, opts ...CallOptionFun
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -7555,6 +8039,10 @@ func StreamUnionIntegers(ctx context.Context, digits int64, opts ...CallOptionFu
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7615,6 +8103,10 @@ func StreamingCompoundNumbers(ctx context.Context, digits int64, yapping bool, o
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -7679,6 +8171,10 @@ func StructureDocument1559(ctx context.Context, document_txt string, opts ...Cal
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7739,6 +8235,10 @@ func TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDependency, 
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -7803,6 +8303,10 @@ func TellStory(ctx context.Context, story string, opts ...CallOptionFunc) (strin
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7863,6 +8367,10 @@ func TestAbortFallbackChain(ctx context.Context, input string, opts ...CallOptio
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -7927,6 +8435,10 @@ func TestAnthropic(ctx context.Context, input string, opts ...CallOptionFunc) (s
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7987,6 +8499,10 @@ func TestAnthropicShorthand(ctx context.Context, input string, opts ...CallOptio
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -8051,6 +8567,10 @@ func TestAws(ctx context.Context, input string, opts ...CallOptionFunc) (string,
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8111,6 +8631,10 @@ func TestAwsClaude37(ctx context.Context, input string, opts ...CallOptionFunc) 
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -8175,6 +8699,10 @@ func TestAwsInferenceProfile(ctx context.Context, input string, opts ...CallOpti
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8235,6 +8763,10 @@ func TestAwsInvalidAccessKey(ctx context.Context, input string, opts ...CallOpti
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -8299,6 +8831,10 @@ func TestAwsInvalidProfile(ctx context.Context, input string, opts ...CallOption
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8359,6 +8895,10 @@ func TestAwsInvalidRegion(ctx context.Context, input string, opts ...CallOptionF
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -8423,6 +8963,10 @@ func TestAwsInvalidSessionToken(ctx context.Context, input string, opts ...CallO
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8483,6 +9027,10 @@ func TestAzure(ctx context.Context, input string, opts ...CallOptionFunc) (strin
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -8547,6 +9095,10 @@ func TestAzureFailure(ctx context.Context, input string, opts ...CallOptionFunc)
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8607,6 +9159,10 @@ func TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ...CallOptio
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -8671,6 +9227,10 @@ func TestAzureO1WithMaxCompletionTokens(ctx context.Context, input string, opts 
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8731,6 +9291,10 @@ func TestAzureO1WithMaxTokens(ctx context.Context, input string, opts ...CallOpt
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -8795,6 +9359,10 @@ func TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ...CallOptio
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8855,6 +9423,10 @@ func TestAzureO3WithMaxCompletionTokens(ctx context.Context, input string, opts 
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -8919,6 +9491,10 @@ func TestAzureWithMaxTokens(ctx context.Context, input string, opts ...CallOptio
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8979,6 +9555,10 @@ func TestCaching(ctx context.Context, input string, not_cached string, opts ...C
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -9043,6 +9623,10 @@ func TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (string, er
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9103,6 +9687,10 @@ func TestFallbackStrategy(ctx context.Context, input string, opts ...CallOptionF
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -9167,6 +9755,10 @@ func TestFallbackToShorthand(ctx context.Context, input string, opts ...CallOpti
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9227,6 +9819,10 @@ func TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts ...CallOpt
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -9291,6 +9887,10 @@ func TestFnNamedArgsSingleClass(ctx context.Context, myArg types.NamedArgsSingle
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9351,6 +9951,10 @@ func TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.NamedArgsS
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -9415,6 +10019,10 @@ func TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, opts ...Ca
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9475,6 +10083,10 @@ func TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts ...CallOpti
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -9539,6 +10151,10 @@ func TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap map[string
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9599,6 +10215,10 @@ func TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap map[string]m
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -9663,6 +10283,10 @@ func TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[strin
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9723,6 +10347,10 @@ func TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...C
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -9787,6 +10415,10 @@ func TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArray []strin
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9847,6 +10479,10 @@ func TestFnNamedArgsSingleStringList(ctx context.Context, myArg []string, opts .
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -9911,6 +10547,10 @@ func TestGemini(ctx context.Context, input string, opts ...CallOptionFunc) (stri
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9971,6 +10611,10 @@ func TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFunc) (strin
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -10035,6 +10679,10 @@ func TestGeminiSystem(ctx context.Context, input string, opts ...CallOptionFunc)
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10095,6 +10743,10 @@ func TestGeminiSystemAsChat(ctx context.Context, input string, opts ...CallOptio
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -10159,6 +10811,10 @@ func TestGeminiThinking(ctx context.Context, input string, opts ...CallOptionFun
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10219,6 +10875,10 @@ func TestGroq(ctx context.Context, input string, opts ...CallOptionFunc) (string
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -10283,6 +10943,10 @@ func TestImageInput(ctx context.Context, img types.Image, opts ...CallOptionFunc
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10343,6 +11007,10 @@ func TestImageInputAnthropic(ctx context.Context, img types.Image, opts ...CallO
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -10407,6 +11075,10 @@ func TestImageListInput(ctx context.Context, imgs []types.Image, opts ...CallOpt
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10467,6 +11139,10 @@ func TestMemory(ctx context.Context, input string, opts ...CallOptionFunc) (type
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -10531,6 +11207,10 @@ func TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArgsSingleCla
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10591,6 +11271,10 @@ func TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts ...CallOpti
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -10655,6 +11339,10 @@ func TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ...CallOptio
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10715,6 +11403,10 @@ func TestNamedArgsLiteralString(ctx context.Context, myString string, opts ...Ca
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -10779,6 +11471,10 @@ func TestOllama(ctx context.Context, input string, opts ...CallOptionFunc) (*str
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10839,6 +11535,10 @@ func TestOllamaHaiku(ctx context.Context, input string, opts ...CallOptionFunc) 
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -10903,6 +11603,10 @@ func TestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc) (stri
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10963,6 +11667,10 @@ func TestOpenAIDummyClient(ctx context.Context, input string, opts ...CallOption
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -11027,6 +11735,10 @@ func TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...CallOptionFu
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11087,6 +11799,10 @@ func TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...CallOptionF
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -11151,6 +11867,10 @@ func TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...CallOptionF
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11211,6 +11931,10 @@ func TestOpenAILegacyProvider(ctx context.Context, input string, opts ...CallOpt
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -11275,6 +11999,10 @@ func TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts ...CallOpti
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11335,6 +12063,10 @@ func TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input string, opts
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -11399,6 +12131,10 @@ func TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts ...CallOp
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11459,6 +12195,10 @@ func TestOpenAIProviderWithResponsesType(ctx context.Context, input string, opts
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -11523,6 +12263,10 @@ func TestOpenAIResponses(ctx context.Context, input string, opts ...CallOptionFu
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11583,6 +12327,10 @@ func TestOpenAIResponsesAllRoles(ctx context.Context, problem string, opts ...Ca
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -11647,6 +12395,10 @@ func TestOpenAIResponsesAutoType(ctx context.Context, input string, opts ...Call
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11707,6 +12459,10 @@ func TestOpenAIResponsesConversation(ctx context.Context, topic string, opts ...
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -11771,6 +12527,10 @@ func TestOpenAIResponsesCustomURL(ctx context.Context, input string, opts ...Cal
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11831,6 +12591,10 @@ func TestOpenAIResponsesDifferentModel(ctx context.Context, input string, opts .
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -11895,6 +12659,10 @@ func TestOpenAIResponsesEndpoint(ctx context.Context, input string, opts ...Call
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11955,6 +12723,10 @@ func TestOpenAIResponsesExplicit(ctx context.Context, input string, opts ...Call
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -12019,6 +12791,10 @@ func TestOpenAIResponsesFunctionCall(ctx context.Context, query string, opts ...
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -12079,6 +12855,10 @@ func TestOpenAIResponsesImageInput(ctx context.Context, image types.Union4AudioO
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -12143,6 +12923,10 @@ func TestOpenAIResponsesReasoning(ctx context.Context, problem string, opts ...C
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -12203,6 +12987,10 @@ func TestOpenAIResponsesShorthand(ctx context.Context, input string, opts ...Cal
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -12267,6 +13055,10 @@ func TestOpenAIResponsesWebSearch(ctx context.Context, query string, opts ...Cal
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -12327,6 +13119,10 @@ func TestOpenAIResponsesWithOpenAIResponseType(ctx context.Context, input string
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -12391,6 +13187,10 @@ func TestOpenAIShorthand(ctx context.Context, input string, opts ...CallOptionFu
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -12451,6 +13251,10 @@ func TestOpenAIWithFinishReasonError(ctx context.Context, input string, opts ...
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -12515,6 +13319,10 @@ func TestOpenAIWithMaxTokens(ctx context.Context, input string, opts ...CallOpti
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -12575,6 +13383,10 @@ func TestOpenAIWithNullMaxTokens(ctx context.Context, input string, opts ...Call
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -12639,6 +13451,10 @@ func TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input string, opts .
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -12699,6 +13515,10 @@ func TestOpenaiResponsesPdfs(ctx context.Context, pdf types.PDF, opts ...CallOpt
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -12763,6 +13583,10 @@ func TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (string, err
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -12823,6 +13647,10 @@ func TestRetryExponential(ctx context.Context, opts ...CallOptionFunc) (string, 
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -12887,6 +13715,10 @@ func TestRoundRobinStrategy(ctx context.Context, input string, opts ...CallOptio
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -12947,6 +13779,10 @@ func TestSingleFallbackClient(ctx context.Context, opts ...CallOptionFunc) (stri
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -13011,6 +13847,10 @@ func TestThinking(ctx context.Context, input string, opts ...CallOptionFunc) (ty
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -13071,6 +13911,10 @@ func TestUniverseQuestion(ctx context.Context, question types.UniverseQuestionIn
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -13135,6 +13979,10 @@ func TestVertex(ctx context.Context, input string, opts ...CallOptionFunc) (stri
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -13195,6 +14043,10 @@ func TestVertexClaude(ctx context.Context, input string, opts ...CallOptionFunc)
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -13259,6 +14111,10 @@ func TestVertexWithSystemInstructions(ctx context.Context, opts ...CallOptionFun
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -13319,6 +14175,10 @@ func UnionTest_Function(ctx context.Context, input types.Union2BoolOrString, opt
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -13383,6 +14243,10 @@ func UseBlockConstraint(ctx context.Context, inp types.BlockConstraintForParam, 
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -13443,6 +14307,10 @@ func UseMaintainFieldOrder(ctx context.Context, input types.MaintainFieldOrder, 
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -13507,6 +14375,10 @@ func UseMalformedConstraints(ctx context.Context, a types.MalformedConstraints2,
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -13567,6 +14439,10 @@ func UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlockConstrai
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -13631,6 +14507,10 @@ func ValidateBasicResponses(ctx context.Context, input string, opts ...CallOptio
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -13691,6 +14571,10 @@ func ValidateResponseTypes(ctx context.Context, input string, opts ...CallOption
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -13755,6 +14639,10 @@ func VideoInputGemini(ctx context.Context, vid types.Video, opts ...CallOptionFu
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -13815,6 +14703,10 @@ func VideoInputVertex(ctx context.Context, vid types.Video, opts ...CallOptionFu
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()

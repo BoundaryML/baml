@@ -14,94 +14,91 @@
 package types
 
 import (
-    "encoding/json"
-    "fmt"
+	"encoding/json"
+	"fmt"
 
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
-
 
 type TestEnum string
 
 const (
-    
-    TestEnumAngry TestEnum = "Angry"
-    TestEnumHappy TestEnum = "Happy"
-    TestEnumSad TestEnum = "Sad"
-    TestEnumConfused TestEnum = "Confused"
-    TestEnumExcited TestEnum = "Excited"
-    TestEnumExclamation TestEnum = "Exclamation"
-    TestEnumBored TestEnum = "Bored"
+	TestEnumAngry       TestEnum = "Angry"
+	TestEnumHappy       TestEnum = "Happy"
+	TestEnumSad         TestEnum = "Sad"
+	TestEnumConfused    TestEnum = "Confused"
+	TestEnumExcited     TestEnum = "Excited"
+	TestEnumExclamation TestEnum = "Exclamation"
+	TestEnumBored       TestEnum = "Bored"
 )
 
 // Values returns all allowed values for the TestEnum type.
 func (TestEnum) Values() []TestEnum {
-    return []TestEnum{
-        TestEnumAngry,
-        TestEnumHappy,
-        TestEnumSad,
-        TestEnumConfused,
-        TestEnumExcited,
-        TestEnumExclamation,
-        TestEnumBored,
-    }
+	return []TestEnum{
+		TestEnumAngry,
+		TestEnumHappy,
+		TestEnumSad,
+		TestEnumConfused,
+		TestEnumExcited,
+		TestEnumExclamation,
+		TestEnumBored,
+	}
 }
 
 // IsValid checks whether the given TestEnum value is valid.
 func (e TestEnum) IsValid() bool {
-  
-  for _, v := range e.Values() {
-      if e == v {
-          return true
-      }
-  }
-  return false
-  
+
+	for _, v := range e.Values() {
+		if e == v {
+			return true
+		}
+	}
+	return false
+
 }
 
 // MarshalJSON customizes JSON marshaling for TestEnum.
 func (e TestEnum) MarshalJSON() ([]byte, error) {
-    if !e.IsValid() {
-        return nil, fmt.Errorf("invalid TestEnum: %q", e)
-    }
-    return json.Marshal(string(e))
+	if !e.IsValid() {
+		return nil, fmt.Errorf("invalid TestEnum: %q", e)
+	}
+	return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for TestEnum.
 func (e *TestEnum) UnmarshalJSON(data []byte) error {
-    var s string
-    if err := json.Unmarshal(data, &s); err != nil {
-        return err
-    }
-    *e = TestEnum(s)
-    if !e.IsValid() {
-        return fmt.Errorf("invalid TestEnum: %q", s)
-    }
-    return nil
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*e = TestEnum(s)
+	if !e.IsValid() {
+		return fmt.Errorf("invalid TestEnum: %q", s)
+	}
+	return nil
 }
 
 func (e *TestEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
-    name := holder.Name
-    if name.Name != "TestEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-        panic(fmt.Sprintf("expected types.TestEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-    }
-    value := holder.Value
-    *e = TestEnum(value)
+	name := holder.Name
+	if name.Name != "TestEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.TestEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+	}
+	value := holder.Value
+	*e = TestEnum(value)
 }
 
 func (e TestEnum) Encode() (*cffi.CFFIValueHolder, error) {
-    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e TestEnum) BamlTypeName() string {
-    return "TestEnum"
+	return "TestEnum"
 }
 
 func (u TestEnum) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Name:      "TestEnum",
-        Namespace: cffi.CFFITypeNamespace_TYPES,
-    }
+	return &cffi.CFFITypeName{
+		Name:      "TestEnum",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
-

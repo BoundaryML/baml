@@ -14,228 +14,249 @@
 package baml_client
 
 import (
-    "context"
+	"context"
+	"fmt"
 
-    "literal_types/baml_client/types"
-    "literal_types/baml_client/stream_types"
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"literal_types/baml_client/stream_types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-type parse_stream struct {}
+type parse_stream struct{}
+
 var ParseStream = &parse_stream{}
 
-
-/// Parse version of TestBooleanLiterals (Takes in string and returns stream_types.BooleanLiterals)
+// / Parse version of TestBooleanLiterals (Takes in string and returns stream_types.BooleanLiterals)
 func (*parse_stream) TestBooleanLiterals(text string, opts ...CallOptionFunc) (stream_types.BooleanLiterals, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": true },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": true},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestBooleanLiterals: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestBooleanLiterals", encoded)
-    if err != nil {
-        return stream_types.BooleanLiterals{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestBooleanLiterals: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(stream_types.BooleanLiterals)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestBooleanLiterals", encoded)
+	if err != nil {
+		return stream_types.BooleanLiterals{}, err
+	}
 
-    return casted, nil
+	casted := (result).(stream_types.BooleanLiterals)
+
+	return casted, nil
 }
 
-/// Parse version of TestComplexLiterals (Takes in string and returns stream_types.ComplexLiterals)
+// / Parse version of TestComplexLiterals (Takes in string and returns stream_types.ComplexLiterals)
 func (*parse_stream) TestComplexLiterals(text string, opts ...CallOptionFunc) (stream_types.ComplexLiterals, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": true },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": true},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestComplexLiterals: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestComplexLiterals", encoded)
-    if err != nil {
-        return stream_types.ComplexLiterals{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestComplexLiterals: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(stream_types.ComplexLiterals)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestComplexLiterals", encoded)
+	if err != nil {
+		return stream_types.ComplexLiterals{}, err
+	}
 
-    return casted, nil
+	casted := (result).(stream_types.ComplexLiterals)
+
+	return casted, nil
 }
 
-/// Parse version of TestIntegerLiterals (Takes in string and returns stream_types.IntegerLiterals)
+// / Parse version of TestIntegerLiterals (Takes in string and returns stream_types.IntegerLiterals)
 func (*parse_stream) TestIntegerLiterals(text string, opts ...CallOptionFunc) (stream_types.IntegerLiterals, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": true },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": true},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestIntegerLiterals: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestIntegerLiterals", encoded)
-    if err != nil {
-        return stream_types.IntegerLiterals{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestIntegerLiterals: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(stream_types.IntegerLiterals)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestIntegerLiterals", encoded)
+	if err != nil {
+		return stream_types.IntegerLiterals{}, err
+	}
 
-    return casted, nil
+	casted := (result).(stream_types.IntegerLiterals)
+
+	return casted, nil
 }
 
-/// Parse version of TestMixedLiterals (Takes in string and returns stream_types.MixedLiterals)
+// / Parse version of TestMixedLiterals (Takes in string and returns stream_types.MixedLiterals)
 func (*parse_stream) TestMixedLiterals(text string, opts ...CallOptionFunc) (stream_types.MixedLiterals, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": true },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": true},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestMixedLiterals: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestMixedLiterals", encoded)
-    if err != nil {
-        return stream_types.MixedLiterals{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestMixedLiterals: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(stream_types.MixedLiterals)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestMixedLiterals", encoded)
+	if err != nil {
+		return stream_types.MixedLiterals{}, err
+	}
 
-    return casted, nil
+	casted := (result).(stream_types.MixedLiterals)
+
+	return casted, nil
 }
 
-/// Parse version of TestStringLiterals (Takes in string and returns stream_types.StringLiterals)
+// / Parse version of TestStringLiterals (Takes in string and returns stream_types.StringLiterals)
 func (*parse_stream) TestStringLiterals(text string, opts ...CallOptionFunc) (stream_types.StringLiterals, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": true },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": true},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestStringLiterals: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestStringLiterals", encoded)
-    if err != nil {
-        return stream_types.StringLiterals{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestStringLiterals: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(stream_types.StringLiterals)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestStringLiterals", encoded)
+	if err != nil {
+		return stream_types.StringLiterals{}, err
+	}
 
-    return casted, nil
+	casted := (result).(stream_types.StringLiterals)
+
+	return casted, nil
 }

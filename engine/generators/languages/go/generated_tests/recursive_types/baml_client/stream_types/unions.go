@@ -14,681 +14,672 @@
 package stream_types
 
 import (
-    "encoding/json"
-    "fmt"
+	"encoding/json"
+	"fmt"
 
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
-
-    "recursive_types/baml_client/types"
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
 type Union2IntOrListRecursive1 struct {
-    variant string
-    
-    variant_Int *int64
-    
-    variant_ListRecursive1 *[]Recursive1
-    
+	variant string
+
+	variant_Int *int64
+
+	variant_ListRecursive1 *[]Recursive1
 }
 
 func (u *Union2IntOrListRecursive1) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-    valueHolder := holder.Value
-    variantName := holder.VariantName
+	valueHolder := holder.Value
+	variantName := holder.VariantName
 	switch variantName {
-    case "int":
-            u.variant = "Int"
-            value := baml.Decode(valueHolder).Interface().(int64)
-            u.variant_Int = &value
-    case "List__Recursive1":
-            u.variant = "ListRecursive1"
-            value := baml.Decode(valueHolder).Interface().([]Recursive1)
-            u.variant_ListRecursive1 = &value
-    
-    default:
-        panic(fmt.Sprintf("invalid union variant: %s", variantName))
+	case "int":
+		u.variant = "Int"
+		value := baml.Decode(valueHolder).Interface().(int64)
+		u.variant_Int = &value
+	case "List__Recursive1":
+		u.variant = "ListRecursive1"
+		value := baml.Decode(valueHolder).Interface().([]Recursive1)
+		u.variant_ListRecursive1 = &value
+
+	default:
+		panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
-
 func (u Union2IntOrListRecursive1) Encode() (*cffi.CFFIValueHolder, error) {
-    switch u.variant {
-    
-    case "Int":
-        return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
-    
-    case "ListRecursive1":
-        return baml.EncodeUnion(u.BamlEncodeName, "List__Recursive1", *u.variant_ListRecursive1)
-    
-    case "":
-        return nil, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "Int":
+		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+
+	case "ListRecursive1":
+		return baml.EncodeUnion(u.BamlEncodeName, "List__Recursive1", *u.variant_ListRecursive1)
+
+	case "":
+		return nil, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union2IntOrListRecursive1) BamlTypeName() string {
-    return "Union2IntOrListRecursive1"
+	return "Union2IntOrListRecursive1"
 }
 
 func (u Union2IntOrListRecursive1) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Name:      "Union__List__Recursive1__int",
-        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-    }
+	return &cffi.CFFITypeName{
+		Name:      "Union__List__Recursive1__int",
+		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+	}
 }
 
 func (u Union2IntOrListRecursive1) MarshalJSON() ([]byte, error) {
-    switch u.variant {
-    
-    case "Int":
-        return json.Marshal(u.variant_Int)
-    
-    case "ListRecursive1":
-        return json.Marshal(u.variant_ListRecursive1)
-    
-    }
+	switch u.variant {
 
-    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "Int":
+		return json.Marshal(u.variant_Int)
+
+	case "ListRecursive1":
+		return json.Marshal(u.variant_ListRecursive1)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union2IntOrListRecursive1) UnmarshalJSON(data []byte) error {
-    var err error
-    
-    err = json.Unmarshal(data, &u.variant_Int)
-    if err == nil {
-        u.variant = "Int"
-        return nil
-    } else {
-        u.variant_Int = nil
-    }
-    
-    err = json.Unmarshal(data, &u.variant_ListRecursive1)
-    if err == nil {
-        u.variant = "ListRecursive1"
-        return nil
-    } else {
-        u.variant_ListRecursive1 = nil
-    }
-    
-    return fmt.Errorf("invalid union variant: %s", string(data))
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_Int)
+	if err == nil {
+		u.variant = "Int"
+		return nil
+	} else {
+		u.variant_Int = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_ListRecursive1)
+	if err == nil {
+		u.variant = "ListRecursive1"
+		return nil
+	} else {
+		u.variant_ListRecursive1 = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-
 func Union2IntOrListRecursive1__NewInt(v int64) Union2IntOrListRecursive1 {
-    
-    return Union2IntOrListRecursive1{
-        variant: "Int",
-        variant_Int: &v,
-    }
+
+	return Union2IntOrListRecursive1{
+		variant:     "Int",
+		variant_Int: &v,
+	}
 }
 
 func (u *Union2IntOrListRecursive1) SetInt(v int64) {
-    
-    u.variant = "Int"
-    u.variant_Int = &v
-    
-    u.variant_ListRecursive1 = nil
-    
+
+	u.variant = "Int"
+	u.variant_Int = &v
+
+	u.variant_ListRecursive1 = nil
+
 }
 
 func (u *Union2IntOrListRecursive1) IsInt() bool {
-    return u.variant == "Int"
+	return u.variant == "Int"
 }
 
 func (u *Union2IntOrListRecursive1) AsInt() *int64 {
-    if u.variant != "Int" {
-        return nil
-    }
-    return u.variant_Int
+	if u.variant != "Int" {
+		return nil
+	}
+	return u.variant_Int
 }
 
 func Union2IntOrListRecursive1__NewListRecursive1(v []Recursive1) Union2IntOrListRecursive1 {
-    
-    return Union2IntOrListRecursive1{
-        variant: "ListRecursive1",
-        variant_ListRecursive1: &v,
-    }
+
+	return Union2IntOrListRecursive1{
+		variant:                "ListRecursive1",
+		variant_ListRecursive1: &v,
+	}
 }
 
 func (u *Union2IntOrListRecursive1) SetListRecursive1(v []Recursive1) {
-    
-    u.variant = "ListRecursive1"
-    u.variant_ListRecursive1 = &v
-    
-    u.variant_Int = nil
-    
+
+	u.variant = "ListRecursive1"
+	u.variant_ListRecursive1 = &v
+
+	u.variant_Int = nil
+
 }
 
 func (u *Union2IntOrListRecursive1) IsListRecursive1() bool {
-    return u.variant == "ListRecursive1"
+	return u.variant == "ListRecursive1"
 }
 
 func (u *Union2IntOrListRecursive1) AsListRecursive1() *[]Recursive1 {
-    if u.variant != "ListRecursive1" {
-        return nil
-    }
-    return u.variant_ListRecursive1
+	if u.variant != "ListRecursive1" {
+		return nil
+	}
+	return u.variant_ListRecursive1
 }
+
 type Union3IntOrRecursive1OrString struct {
-    variant string
-    
-    variant_Recursive1 *Recursive1
-    
-    variant_Int *int64
-    
-    variant_String *string
-    
+	variant string
+
+	variant_Recursive1 *Recursive1
+
+	variant_Int *int64
+
+	variant_String *string
 }
 
 func (u *Union3IntOrRecursive1OrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-    valueHolder := holder.Value
-    variantName := holder.VariantName
+	valueHolder := holder.Value
+	variantName := holder.VariantName
 	switch variantName {
-    case "Recursive1":
-            u.variant = "Recursive1"
-            value := baml.Decode(valueHolder).Interface().(Recursive1)
-            u.variant_Recursive1 = &value
-    case "int":
-            u.variant = "Int"
-            value := baml.Decode(valueHolder).Interface().(int64)
-            u.variant_Int = &value
-    case "string":
-            u.variant = "String"
-            value := baml.Decode(valueHolder).Interface().(string)
-            u.variant_String = &value
-    
-    default:
-        panic(fmt.Sprintf("invalid union variant: %s", variantName))
+	case "Recursive1":
+		u.variant = "Recursive1"
+		value := baml.Decode(valueHolder).Interface().(Recursive1)
+		u.variant_Recursive1 = &value
+	case "int":
+		u.variant = "Int"
+		value := baml.Decode(valueHolder).Interface().(int64)
+		u.variant_Int = &value
+	case "string":
+		u.variant = "String"
+		value := baml.Decode(valueHolder).Interface().(string)
+		u.variant_String = &value
+
+	default:
+		panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
-
 func (u Union3IntOrRecursive1OrString) Encode() (*cffi.CFFIValueHolder, error) {
-    switch u.variant {
-    
-    case "Recursive1":
-        return baml.EncodeUnion(u.BamlEncodeName, "Recursive1", *u.variant_Recursive1)
-    
-    case "Int":
-        return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
-    
-    case "String":
-        return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
-    
-    case "":
-        return nil, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "Recursive1":
+		return baml.EncodeUnion(u.BamlEncodeName, "Recursive1", *u.variant_Recursive1)
+
+	case "Int":
+		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+
+	case "String":
+		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+
+	case "":
+		return nil, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union3IntOrRecursive1OrString) BamlTypeName() string {
-    return "Union3IntOrRecursive1OrString"
+	return "Union3IntOrRecursive1OrString"
 }
 
 func (u Union3IntOrRecursive1OrString) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Name:      "Union__Recursive1__int__string",
-        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-    }
-}
-
-func (u Union3IntOrRecursive1OrString) MarshalJSON() ([]byte, error) {
-    switch u.variant {
-    
-    case "Recursive1":
-        return json.Marshal(u.variant_Recursive1)
-    
-    case "Int":
-        return json.Marshal(u.variant_Int)
-    
-    case "String":
-        return json.Marshal(u.variant_String)
-    
-    }
-
-    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
-}
-
-func (u *Union3IntOrRecursive1OrString) UnmarshalJSON(data []byte) error {
-    var err error
-    
-    err = json.Unmarshal(data, &u.variant_Recursive1)
-    if err == nil {
-        u.variant = "Recursive1"
-        return nil
-    } else {
-        u.variant_Recursive1 = nil
-    }
-    
-    err = json.Unmarshal(data, &u.variant_Int)
-    if err == nil {
-        u.variant = "Int"
-        return nil
-    } else {
-        u.variant_Int = nil
-    }
-    
-    err = json.Unmarshal(data, &u.variant_String)
-    if err == nil {
-        u.variant = "String"
-        return nil
-    } else {
-        u.variant_String = nil
-    }
-    
-    return fmt.Errorf("invalid union variant: %s", string(data))
-}
-
-
-func Union3IntOrRecursive1OrString__NewRecursive1(v Recursive1) Union3IntOrRecursive1OrString {
-    
-    return Union3IntOrRecursive1OrString{
-        variant: "Recursive1",
-        variant_Recursive1: &v,
-    }
-}
-
-func (u *Union3IntOrRecursive1OrString) SetRecursive1(v Recursive1) {
-    
-    u.variant = "Recursive1"
-    u.variant_Recursive1 = &v
-    
-    u.variant_Int = nil
-    
-    u.variant_String = nil
-    
-}
-
-func (u *Union3IntOrRecursive1OrString) IsRecursive1() bool {
-    return u.variant == "Recursive1"
-}
-
-func (u *Union3IntOrRecursive1OrString) AsRecursive1() *Recursive1 {
-    if u.variant != "Recursive1" {
-        return nil
-    }
-    return u.variant_Recursive1
-}
-
-func Union3IntOrRecursive1OrString__NewInt(v int64) Union3IntOrRecursive1OrString {
-    
-    return Union3IntOrRecursive1OrString{
-        variant: "Int",
-        variant_Int: &v,
-    }
-}
-
-func (u *Union3IntOrRecursive1OrString) SetInt(v int64) {
-    
-    u.variant = "Int"
-    u.variant_Int = &v
-    
-    u.variant_Recursive1 = nil
-    
-    u.variant_String = nil
-    
-}
-
-func (u *Union3IntOrRecursive1OrString) IsInt() bool {
-    return u.variant == "Int"
-}
-
-func (u *Union3IntOrRecursive1OrString) AsInt() *int64 {
-    if u.variant != "Int" {
-        return nil
-    }
-    return u.variant_Int
-}
-
-func Union3IntOrRecursive1OrString__NewString(v string) Union3IntOrRecursive1OrString {
-    
-    return Union3IntOrRecursive1OrString{
-        variant: "String",
-        variant_String: &v,
-    }
-}
-
-func (u *Union3IntOrRecursive1OrString) SetString(v string) {
-    
-    u.variant = "String"
-    u.variant_String = &v
-    
-    u.variant_Recursive1 = nil
-    
-    u.variant_Int = nil
-    
-}
-
-func (u *Union3IntOrRecursive1OrString) IsString() bool {
-    return u.variant == "String"
-}
-
-func (u *Union3IntOrRecursive1OrString) AsString() *string {
-    if u.variant != "String" {
-        return nil
-    }
-    return u.variant_String
-}
-type Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString struct {
-    variant string
-    
-    variant_String *string
-    
-    variant_Int *int64
-    
-    variant_Float *float64
-    
-    variant_MapStringKeyJSONValue *map[string]JSON
-    
-    variant_ListJSON *[]JSON
-    
-}
-
-func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-    valueHolder := holder.Value
-    variantName := holder.VariantName
-	switch variantName {
-    case "string":
-            u.variant = "String"
-            value := baml.Decode(valueHolder).Interface().(string)
-            u.variant_String = &value
-    case "int":
-            u.variant = "Int"
-            value := baml.Decode(valueHolder).Interface().(int64)
-            u.variant_Int = &value
-    case "float":
-            u.variant = "Float"
-            value := baml.Decode(valueHolder).Interface().(float64)
-            u.variant_Float = &value
-    case "Map__string_JSON":
-            u.variant = "MapStringKeyJSONValue"
-            value := baml.Decode(valueHolder).Interface().(map[string]JSON)
-            u.variant_MapStringKeyJSONValue = &value
-    case "List__JSON":
-            u.variant = "ListJSON"
-            value := baml.Decode(valueHolder).Interface().([]JSON)
-            u.variant_ListJSON = &value
-    
-    default:
-        panic(fmt.Sprintf("invalid union variant: %s", variantName))
+	return &cffi.CFFITypeName{
+		Name:      "Union__Recursive1__int__string",
+		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
 	}
 }
 
+func (u Union3IntOrRecursive1OrString) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "Recursive1":
+		return json.Marshal(u.variant_Recursive1)
+
+	case "Int":
+		return json.Marshal(u.variant_Int)
+
+	case "String":
+		return json.Marshal(u.variant_String)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union3IntOrRecursive1OrString) UnmarshalJSON(data []byte) error {
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_Recursive1)
+	if err == nil {
+		u.variant = "Recursive1"
+		return nil
+	} else {
+		u.variant_Recursive1 = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Int)
+	if err == nil {
+		u.variant = "Int"
+		return nil
+	} else {
+		u.variant_Int = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_String)
+	if err == nil {
+		u.variant = "String"
+		return nil
+	} else {
+		u.variant_String = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
+}
+
+func Union3IntOrRecursive1OrString__NewRecursive1(v Recursive1) Union3IntOrRecursive1OrString {
+
+	return Union3IntOrRecursive1OrString{
+		variant:            "Recursive1",
+		variant_Recursive1: &v,
+	}
+}
+
+func (u *Union3IntOrRecursive1OrString) SetRecursive1(v Recursive1) {
+
+	u.variant = "Recursive1"
+	u.variant_Recursive1 = &v
+
+	u.variant_Int = nil
+
+	u.variant_String = nil
+
+}
+
+func (u *Union3IntOrRecursive1OrString) IsRecursive1() bool {
+	return u.variant == "Recursive1"
+}
+
+func (u *Union3IntOrRecursive1OrString) AsRecursive1() *Recursive1 {
+	if u.variant != "Recursive1" {
+		return nil
+	}
+	return u.variant_Recursive1
+}
+
+func Union3IntOrRecursive1OrString__NewInt(v int64) Union3IntOrRecursive1OrString {
+
+	return Union3IntOrRecursive1OrString{
+		variant:     "Int",
+		variant_Int: &v,
+	}
+}
+
+func (u *Union3IntOrRecursive1OrString) SetInt(v int64) {
+
+	u.variant = "Int"
+	u.variant_Int = &v
+
+	u.variant_Recursive1 = nil
+
+	u.variant_String = nil
+
+}
+
+func (u *Union3IntOrRecursive1OrString) IsInt() bool {
+	return u.variant == "Int"
+}
+
+func (u *Union3IntOrRecursive1OrString) AsInt() *int64 {
+	if u.variant != "Int" {
+		return nil
+	}
+	return u.variant_Int
+}
+
+func Union3IntOrRecursive1OrString__NewString(v string) Union3IntOrRecursive1OrString {
+
+	return Union3IntOrRecursive1OrString{
+		variant:        "String",
+		variant_String: &v,
+	}
+}
+
+func (u *Union3IntOrRecursive1OrString) SetString(v string) {
+
+	u.variant = "String"
+	u.variant_String = &v
+
+	u.variant_Recursive1 = nil
+
+	u.variant_Int = nil
+
+}
+
+func (u *Union3IntOrRecursive1OrString) IsString() bool {
+	return u.variant == "String"
+}
+
+func (u *Union3IntOrRecursive1OrString) AsString() *string {
+	if u.variant != "String" {
+		return nil
+	}
+	return u.variant_String
+}
+
+type Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString struct {
+	variant string
+
+	variant_String *string
+
+	variant_Int *int64
+
+	variant_Float *float64
+
+	variant_MapStringKeyJSONValue *map[string]JSON
+
+	variant_ListJSON *[]JSON
+}
+
+func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
+	valueHolder := holder.Value
+	variantName := holder.VariantName
+	switch variantName {
+	case "string":
+		u.variant = "String"
+		value := baml.Decode(valueHolder).Interface().(string)
+		u.variant_String = &value
+	case "int":
+		u.variant = "Int"
+		value := baml.Decode(valueHolder).Interface().(int64)
+		u.variant_Int = &value
+	case "float":
+		u.variant = "Float"
+		value := baml.Decode(valueHolder).Interface().(float64)
+		u.variant_Float = &value
+	case "Map__string_JSON":
+		u.variant = "MapStringKeyJSONValue"
+		value := baml.Decode(valueHolder).Interface().(map[string]JSON)
+		u.variant_MapStringKeyJSONValue = &value
+	case "List__JSON":
+		u.variant = "ListJSON"
+		value := baml.Decode(valueHolder).Interface().([]JSON)
+		u.variant_ListJSON = &value
+
+	default:
+		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+	}
+}
 
 func (u Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) Encode() (*cffi.CFFIValueHolder, error) {
-    switch u.variant {
-    
-    case "String":
-        return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
-    
-    case "Int":
-        return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
-    
-    case "Float":
-        return baml.EncodeUnion(u.BamlEncodeName, "float", *u.variant_Float)
-    
-    case "MapStringKeyJSONValue":
-        return baml.EncodeUnion(u.BamlEncodeName, "Map__string_JSON", *u.variant_MapStringKeyJSONValue)
-    
-    case "ListJSON":
-        return baml.EncodeUnion(u.BamlEncodeName, "List__JSON", *u.variant_ListJSON)
-    
-    case "":
-        return nil, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "String":
+		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+
+	case "Int":
+		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+
+	case "Float":
+		return baml.EncodeUnion(u.BamlEncodeName, "float", *u.variant_Float)
+
+	case "MapStringKeyJSONValue":
+		return baml.EncodeUnion(u.BamlEncodeName, "Map__string_JSON", *u.variant_MapStringKeyJSONValue)
+
+	case "ListJSON":
+		return baml.EncodeUnion(u.BamlEncodeName, "List__JSON", *u.variant_ListJSON)
+
+	case "":
+		return nil, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) BamlTypeName() string {
-    return "Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString"
+	return "Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString"
 }
 
 func (u Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Name:      "Union__List__JSON__Map__string_JSON__float__int__string",
-        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-    }
+	return &cffi.CFFITypeName{
+		Name:      "Union__List__JSON__Map__string_JSON__float__int__string",
+		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+	}
 }
 
 func (u Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) MarshalJSON() ([]byte, error) {
-    switch u.variant {
-    
-    case "String":
-        return json.Marshal(u.variant_String)
-    
-    case "Int":
-        return json.Marshal(u.variant_Int)
-    
-    case "Float":
-        return json.Marshal(u.variant_Float)
-    
-    case "MapStringKeyJSONValue":
-        return json.Marshal(u.variant_MapStringKeyJSONValue)
-    
-    case "ListJSON":
-        return json.Marshal(u.variant_ListJSON)
-    
-    }
+	switch u.variant {
 
-    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "String":
+		return json.Marshal(u.variant_String)
+
+	case "Int":
+		return json.Marshal(u.variant_Int)
+
+	case "Float":
+		return json.Marshal(u.variant_Float)
+
+	case "MapStringKeyJSONValue":
+		return json.Marshal(u.variant_MapStringKeyJSONValue)
+
+	case "ListJSON":
+		return json.Marshal(u.variant_ListJSON)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) UnmarshalJSON(data []byte) error {
-    var err error
-    
-    err = json.Unmarshal(data, &u.variant_String)
-    if err == nil {
-        u.variant = "String"
-        return nil
-    } else {
-        u.variant_String = nil
-    }
-    
-    err = json.Unmarshal(data, &u.variant_Int)
-    if err == nil {
-        u.variant = "Int"
-        return nil
-    } else {
-        u.variant_Int = nil
-    }
-    
-    err = json.Unmarshal(data, &u.variant_Float)
-    if err == nil {
-        u.variant = "Float"
-        return nil
-    } else {
-        u.variant_Float = nil
-    }
-    
-    err = json.Unmarshal(data, &u.variant_MapStringKeyJSONValue)
-    if err == nil {
-        u.variant = "MapStringKeyJSONValue"
-        return nil
-    } else {
-        u.variant_MapStringKeyJSONValue = nil
-    }
-    
-    err = json.Unmarshal(data, &u.variant_ListJSON)
-    if err == nil {
-        u.variant = "ListJSON"
-        return nil
-    } else {
-        u.variant_ListJSON = nil
-    }
-    
-    return fmt.Errorf("invalid union variant: %s", string(data))
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_String)
+	if err == nil {
+		u.variant = "String"
+		return nil
+	} else {
+		u.variant_String = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Int)
+	if err == nil {
+		u.variant = "Int"
+		return nil
+	} else {
+		u.variant_Int = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Float)
+	if err == nil {
+		u.variant = "Float"
+		return nil
+	} else {
+		u.variant_Float = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_MapStringKeyJSONValue)
+	if err == nil {
+		u.variant = "MapStringKeyJSONValue"
+		return nil
+	} else {
+		u.variant_MapStringKeyJSONValue = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_ListJSON)
+	if err == nil {
+		u.variant = "ListJSON"
+		return nil
+	} else {
+		u.variant_ListJSON = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-
 func Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString__NewString(v string) Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
-    
-    return Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString{
-        variant: "String",
-        variant_String: &v,
-    }
+
+	return Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString{
+		variant:        "String",
+		variant_String: &v,
+	}
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) SetString(v string) {
-    
-    u.variant = "String"
-    u.variant_String = &v
-    
-    u.variant_Int = nil
-    
-    u.variant_Float = nil
-    
-    u.variant_MapStringKeyJSONValue = nil
-    
-    u.variant_ListJSON = nil
-    
+
+	u.variant = "String"
+	u.variant_String = &v
+
+	u.variant_Int = nil
+
+	u.variant_Float = nil
+
+	u.variant_MapStringKeyJSONValue = nil
+
+	u.variant_ListJSON = nil
+
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) IsString() bool {
-    return u.variant == "String"
+	return u.variant == "String"
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) AsString() *string {
-    if u.variant != "String" {
-        return nil
-    }
-    return u.variant_String
+	if u.variant != "String" {
+		return nil
+	}
+	return u.variant_String
 }
 
 func Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString__NewInt(v int64) Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
-    
-    return Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString{
-        variant: "Int",
-        variant_Int: &v,
-    }
+
+	return Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString{
+		variant:     "Int",
+		variant_Int: &v,
+	}
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) SetInt(v int64) {
-    
-    u.variant = "Int"
-    u.variant_Int = &v
-    
-    u.variant_String = nil
-    
-    u.variant_Float = nil
-    
-    u.variant_MapStringKeyJSONValue = nil
-    
-    u.variant_ListJSON = nil
-    
+
+	u.variant = "Int"
+	u.variant_Int = &v
+
+	u.variant_String = nil
+
+	u.variant_Float = nil
+
+	u.variant_MapStringKeyJSONValue = nil
+
+	u.variant_ListJSON = nil
+
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) IsInt() bool {
-    return u.variant == "Int"
+	return u.variant == "Int"
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) AsInt() *int64 {
-    if u.variant != "Int" {
-        return nil
-    }
-    return u.variant_Int
+	if u.variant != "Int" {
+		return nil
+	}
+	return u.variant_Int
 }
 
 func Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString__NewFloat(v float64) Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
-    
-    return Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString{
-        variant: "Float",
-        variant_Float: &v,
-    }
+
+	return Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString{
+		variant:       "Float",
+		variant_Float: &v,
+	}
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) SetFloat(v float64) {
-    
-    u.variant = "Float"
-    u.variant_Float = &v
-    
-    u.variant_String = nil
-    
-    u.variant_Int = nil
-    
-    u.variant_MapStringKeyJSONValue = nil
-    
-    u.variant_ListJSON = nil
-    
+
+	u.variant = "Float"
+	u.variant_Float = &v
+
+	u.variant_String = nil
+
+	u.variant_Int = nil
+
+	u.variant_MapStringKeyJSONValue = nil
+
+	u.variant_ListJSON = nil
+
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) IsFloat() bool {
-    return u.variant == "Float"
+	return u.variant == "Float"
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) AsFloat() *float64 {
-    if u.variant != "Float" {
-        return nil
-    }
-    return u.variant_Float
+	if u.variant != "Float" {
+		return nil
+	}
+	return u.variant_Float
 }
 
 func Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString__NewMapStringKeyJSONValue(v map[string]JSON) Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
-    
-    return Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString{
-        variant: "MapStringKeyJSONValue",
-        variant_MapStringKeyJSONValue: &v,
-    }
+
+	return Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString{
+		variant:                       "MapStringKeyJSONValue",
+		variant_MapStringKeyJSONValue: &v,
+	}
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) SetMapStringKeyJSONValue(v map[string]JSON) {
-    
-    u.variant = "MapStringKeyJSONValue"
-    u.variant_MapStringKeyJSONValue = &v
-    
-    u.variant_String = nil
-    
-    u.variant_Int = nil
-    
-    u.variant_Float = nil
-    
-    u.variant_ListJSON = nil
-    
+
+	u.variant = "MapStringKeyJSONValue"
+	u.variant_MapStringKeyJSONValue = &v
+
+	u.variant_String = nil
+
+	u.variant_Int = nil
+
+	u.variant_Float = nil
+
+	u.variant_ListJSON = nil
+
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) IsMapStringKeyJSONValue() bool {
-    return u.variant == "MapStringKeyJSONValue"
+	return u.variant == "MapStringKeyJSONValue"
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) AsMapStringKeyJSONValue() *map[string]JSON {
-    if u.variant != "MapStringKeyJSONValue" {
-        return nil
-    }
-    return u.variant_MapStringKeyJSONValue
+	if u.variant != "MapStringKeyJSONValue" {
+		return nil
+	}
+	return u.variant_MapStringKeyJSONValue
 }
 
 func Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString__NewListJSON(v []JSON) Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
-    
-    return Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString{
-        variant: "ListJSON",
-        variant_ListJSON: &v,
-    }
+
+	return Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString{
+		variant:          "ListJSON",
+		variant_ListJSON: &v,
+	}
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) SetListJSON(v []JSON) {
-    
-    u.variant = "ListJSON"
-    u.variant_ListJSON = &v
-    
-    u.variant_String = nil
-    
-    u.variant_Int = nil
-    
-    u.variant_Float = nil
-    
-    u.variant_MapStringKeyJSONValue = nil
-    
+
+	u.variant = "ListJSON"
+	u.variant_ListJSON = &v
+
+	u.variant_String = nil
+
+	u.variant_Int = nil
+
+	u.variant_Float = nil
+
+	u.variant_MapStringKeyJSONValue = nil
+
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) IsListJSON() bool {
-    return u.variant == "ListJSON"
+	return u.variant == "ListJSON"
 }
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) AsListJSON() *[]JSON {
-    if u.variant != "ListJSON" {
-        return nil
-    }
-    return u.variant_ListJSON
+	if u.variant != "ListJSON" {
+		return nil
+	}
+	return u.variant_ListJSON
 }

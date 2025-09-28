@@ -14,324 +14,340 @@
 package baml_client
 
 import (
-    "context"
+	"context"
+	"fmt"
 
-    "optional_nullable/baml_client/types"
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"optional_nullable/baml_client/types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
-
-
 
 func TestAllNull(ctx context.Context, input string, opts ...CallOptionFunc) (types.NullableTypes, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "input": input, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "TestAllNull", encoded, callOpts.onTick)
-        if err != nil {
-            return types.NullableTypes{}, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return types.NullableTypes{}, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAllNull", encoded, callOpts.onTick)
+		if err != nil {
+			return types.NullableTypes{}, err
+		}
 
-        casted := (result.Data).(types.NullableTypes)
+		if result.Error != nil {
+			return types.NullableTypes{}, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAllNull", encoded, callOpts.onTick)
-        if err != nil {
-            return types.NullableTypes{}, err
-        }
+		casted := (result.Data).(types.NullableTypes)
 
-        for result := range channel {
-            if result.Error != nil {
-                return types.NullableTypes{}, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAllNull", encoded, callOpts.onTick)
+		if err != nil {
+			return types.NullableTypes{}, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.NullableTypes), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return types.NullableTypes{}, result.Error
+			}
 
-        return types.NullableTypes{}, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.NullableTypes), nil
+			}
+		}
+
+		return types.NullableTypes{}, fmt.Errorf("No data returned from stream")
+	}
 }
-
 
 func TestAllOptionalOmitted(ctx context.Context, input string, opts ...CallOptionFunc) (types.OptionalFields, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "input": input, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "TestAllOptionalOmitted", encoded, callOpts.onTick)
-        if err != nil {
-            return types.OptionalFields{}, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return types.OptionalFields{}, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAllOptionalOmitted", encoded, callOpts.onTick)
+		if err != nil {
+			return types.OptionalFields{}, err
+		}
 
-        casted := (result.Data).(types.OptionalFields)
+		if result.Error != nil {
+			return types.OptionalFields{}, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAllOptionalOmitted", encoded, callOpts.onTick)
-        if err != nil {
-            return types.OptionalFields{}, err
-        }
+		casted := (result.Data).(types.OptionalFields)
 
-        for result := range channel {
-            if result.Error != nil {
-                return types.OptionalFields{}, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAllOptionalOmitted", encoded, callOpts.onTick)
+		if err != nil {
+			return types.OptionalFields{}, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.OptionalFields), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return types.OptionalFields{}, result.Error
+			}
 
-        return types.OptionalFields{}, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.OptionalFields), nil
+			}
+		}
+
+		return types.OptionalFields{}, fmt.Errorf("No data returned from stream")
+	}
 }
-
 
 func TestMixedOptionalNullable(ctx context.Context, input string, opts ...CallOptionFunc) (types.MixedOptionalNullable, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "input": input, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "TestMixedOptionalNullable", encoded, callOpts.onTick)
-        if err != nil {
-            return types.MixedOptionalNullable{}, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return types.MixedOptionalNullable{}, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestMixedOptionalNullable", encoded, callOpts.onTick)
+		if err != nil {
+			return types.MixedOptionalNullable{}, err
+		}
 
-        casted := (result.Data).(types.MixedOptionalNullable)
+		if result.Error != nil {
+			return types.MixedOptionalNullable{}, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMixedOptionalNullable", encoded, callOpts.onTick)
-        if err != nil {
-            return types.MixedOptionalNullable{}, err
-        }
+		casted := (result.Data).(types.MixedOptionalNullable)
 
-        for result := range channel {
-            if result.Error != nil {
-                return types.MixedOptionalNullable{}, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMixedOptionalNullable", encoded, callOpts.onTick)
+		if err != nil {
+			return types.MixedOptionalNullable{}, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.MixedOptionalNullable), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return types.MixedOptionalNullable{}, result.Error
+			}
 
-        return types.MixedOptionalNullable{}, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.MixedOptionalNullable), nil
+			}
+		}
+
+		return types.MixedOptionalNullable{}, fmt.Errorf("No data returned from stream")
+	}
 }
-
 
 func TestNullableTypes(ctx context.Context, input string, opts ...CallOptionFunc) (types.NullableTypes, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "input": input, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "TestNullableTypes", encoded, callOpts.onTick)
-        if err != nil {
-            return types.NullableTypes{}, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return types.NullableTypes{}, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestNullableTypes", encoded, callOpts.onTick)
+		if err != nil {
+			return types.NullableTypes{}, err
+		}
 
-        casted := (result.Data).(types.NullableTypes)
+		if result.Error != nil {
+			return types.NullableTypes{}, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestNullableTypes", encoded, callOpts.onTick)
-        if err != nil {
-            return types.NullableTypes{}, err
-        }
+		casted := (result.Data).(types.NullableTypes)
 
-        for result := range channel {
-            if result.Error != nil {
-                return types.NullableTypes{}, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestNullableTypes", encoded, callOpts.onTick)
+		if err != nil {
+			return types.NullableTypes{}, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.NullableTypes), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return types.NullableTypes{}, result.Error
+			}
 
-        return types.NullableTypes{}, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.NullableTypes), nil
+			}
+		}
+
+		return types.NullableTypes{}, fmt.Errorf("No data returned from stream")
+	}
 }
-
 
 func TestOptionalFields(ctx context.Context, input string, opts ...CallOptionFunc) (types.OptionalFields, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "input": input, },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        panic(err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    if callOpts.onTick == nil {
-        result, err := bamlRuntime.CallFunction(ctx, "TestOptionalFields", encoded, callOpts.onTick)
-        if err != nil {
-            return types.OptionalFields{}, err
-        }
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
 
-        if result.Error != nil {
-            return types.OptionalFields{}, result.Error
-        }
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOptionalFields", encoded, callOpts.onTick)
+		if err != nil {
+			return types.OptionalFields{}, err
+		}
 
-        casted := (result.Data).(types.OptionalFields)
+		if result.Error != nil {
+			return types.OptionalFields{}, result.Error
+		}
 
-        return casted, nil
-    } else {
-        channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOptionalFields", encoded, callOpts.onTick)
-        if err != nil {
-            return types.OptionalFields{}, err
-        }
+		casted := (result.Data).(types.OptionalFields)
 
-        for result := range channel {
-            if result.Error != nil {
-                return types.OptionalFields{}, result.Error
-            }
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOptionalFields", encoded, callOpts.onTick)
+		if err != nil {
+			return types.OptionalFields{}, err
+		}
 
-            if result.HasData {
-                return result.Data.(types.OptionalFields), nil
-            }
-        }
+		for result := range channel {
+			if result.Error != nil {
+				return types.OptionalFields{}, result.Error
+			}
 
-        return types.OptionalFields{}, fmt.Errorf("No data returned from stream")
-    }
+			if result.HasData {
+				return result.Data.(types.OptionalFields), nil
+			}
+		}
+
+		return types.OptionalFields{}, fmt.Errorf("No data returned from stream")
+	}
 }

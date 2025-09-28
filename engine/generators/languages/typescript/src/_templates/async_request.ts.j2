@@ -1,87 +1,88 @@
-import type { BamlRuntime, BamlCtxManager, ClientRegistry, Image, Audio, Pdf, Video, FunctionLog } from "@boundaryml/baml"
+import type { BamlRuntime, BamlCtxManager, ClientRegistry, Image, Audio, Pdf, Video, FunctionLog } from
+"@boundaryml/baml"
 import { toBamlError, HTTPRequest } from "@boundaryml/baml"
 import type { Checked, Check } from "./types"
 import type * as types from "./types"
 import type {
-  {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%}
+{%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%}
 } from "./types"
 import type TypeBuilder from "./type_builder"
 
 type TickReason = "Unknown";
 
 type BamlCallOptions = {
-  tb?: TypeBuilder
-  clientRegistry?: ClientRegistry
-  env?: Record<string, string | undefined>
+tb?: TypeBuilder
+clientRegistry?: ClientRegistry
+env?: Record<string, string | undefined>
   onTick?: (reason: TickReason, log: FunctionLog | null) => void
-}
+  }
 
-export class AsyncHttpRequest {
+  export class AsyncHttpRequest {
   constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
 
   {% for func in functions %}
   async {{ func.name }}(
+  {% for (name, arg_type) in func.args -%}
+  {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
+  {%- endfor %}
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "{{func.name}}",
+      {
+      {% for (name, arg_type) in func.args -%}
+      "{{name}}": {{name}}{% if arg_type.meta().is_optional() %}?? null{% endif %}{% if !loop.last %},{% endif %}
+      {%- endfor %}
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      {% endfor %}
+      }
+
+      export class AsyncHttpStreamRequest {
+      constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
+
+      {% for func in functions %}
+      async {{ func.name }}(
       {% for (name, arg_type) in func.args -%}
       {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
       {%- endfor %}
       __baml_options__?: BamlCallOptions
-  ): Promise<HTTPRequest> {
-    try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-      return await this.runtime.buildRequest(
-        "{{func.name}}",
-        {
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "{{func.name}}",
+          {
           {% for (name, arg_type) in func.args -%}
           "{{name}}": {{name}}{% if arg_type.meta().is_optional() %}?? null{% endif %}{% if !loop.last %},{% endif %}
           {%- endfor %}
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        false,
-        env
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  {% endfor %}
-}
-
-export class AsyncHttpStreamRequest {
-  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
-
-  {% for func in functions %}
-  async {{ func.name }}(
-      {% for (name, arg_type) in func.args -%}
-      {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
-      {%- endfor %}
-      __baml_options__?: BamlCallOptions
-  ): Promise<HTTPRequest> {
-    try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-      return await this.runtime.buildRequest(
-        "{{func.name}}",
-        {
-          {% for (name, arg_type) in func.args -%}
-          "{{name}}": {{name}}{% if arg_type.meta().is_optional() %}?? null{% endif %}{% if !loop.last %},{% endif %}
-          {%- endfor %}
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        true,
-        env
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  {% endfor %}
-}
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          {% endfor %}
+          }

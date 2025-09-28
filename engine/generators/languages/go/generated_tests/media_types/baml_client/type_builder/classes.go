@@ -15,13 +15,12 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
-
 type MediaAnalysisResultClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *MediaAnalysisResultClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -32,17 +31,13 @@ func (t *MediaAnalysisResultClassView) ListProperties() ([]ClassPropertyView, er
 	return builders, nil
 }
 
-
-
-
 func (t *MediaAnalysisResultClassView) PropertyTopics() (ClassPropertyView, error) {
-    return t.inner.Property("topics")
+	return t.inner.Property("topics")
 }
 
 func (t *MediaAnalysisResultClassView) PropertyAnalysisText() (ClassPropertyView, error) {
-    return t.inner.Property("analysisText")
+	return t.inner.Property("analysisText")
 }
-
 
 func (t *TypeBuilder) MediaAnalysisResult() (*MediaAnalysisResultClassView, error) {
 	bld, err := t.inner.Class("MediaAnalysisResult")
@@ -57,11 +52,11 @@ func (t *MediaAnalysisResultClassView) Type() (baml.Type, error) {
 }
 
 type MediaArrayAnalysisResultClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *MediaArrayAnalysisResultClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -72,17 +67,13 @@ func (t *MediaArrayAnalysisResultClassView) ListProperties() ([]ClassPropertyVie
 	return builders, nil
 }
 
-
-
-
 func (t *MediaArrayAnalysisResultClassView) PropertyAnalysisText() (ClassPropertyView, error) {
-    return t.inner.Property("analysisText")
+	return t.inner.Property("analysisText")
 }
 
 func (t *MediaArrayAnalysisResultClassView) PropertyMediaCount() (ClassPropertyView, error) {
-    return t.inner.Property("mediaCount")
+	return t.inner.Property("mediaCount")
 }
-
 
 func (t *TypeBuilder) MediaArrayAnalysisResult() (*MediaArrayAnalysisResultClassView, error) {
 	bld, err := t.inner.Class("MediaArrayAnalysisResult")
@@ -97,11 +88,11 @@ func (t *MediaArrayAnalysisResultClassView) Type() (baml.Type, error) {
 }
 
 type MediaMapAnalysisResultClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *MediaMapAnalysisResultClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -112,21 +103,17 @@ func (t *MediaMapAnalysisResultClassView) ListProperties() ([]ClassPropertyView,
 	return builders, nil
 }
 
-
-
-
 func (t *MediaMapAnalysisResultClassView) PropertyAnalysisText() (ClassPropertyView, error) {
-    return t.inner.Property("analysisText")
+	return t.inner.Property("analysisText")
 }
 
 func (t *MediaMapAnalysisResultClassView) PropertyKeyCount() (ClassPropertyView, error) {
-    return t.inner.Property("keyCount")
+	return t.inner.Property("keyCount")
 }
 
 func (t *MediaMapAnalysisResultClassView) PropertyKeys() (ClassPropertyView, error) {
-    return t.inner.Property("keys")
+	return t.inner.Property("keys")
 }
-
 
 func (t *TypeBuilder) MediaMapAnalysisResult() (*MediaMapAnalysisResultClassView, error) {
 	bld, err := t.inner.Class("MediaMapAnalysisResult")
@@ -141,11 +128,11 @@ func (t *MediaMapAnalysisResultClassView) Type() (baml.Type, error) {
 }
 
 type MixedMediaAnalysisResultClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *MixedMediaAnalysisResultClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -156,41 +143,37 @@ func (t *MixedMediaAnalysisResultClassView) ListProperties() ([]ClassPropertyVie
 	return builders, nil
 }
 
-
-
-
 func (t *MixedMediaAnalysisResultClassView) PropertyTitle() (ClassPropertyView, error) {
-    return t.inner.Property("title")
+	return t.inner.Property("title")
 }
 
 func (t *MixedMediaAnalysisResultClassView) PropertyDescription() (ClassPropertyView, error) {
-    return t.inner.Property("description")
+	return t.inner.Property("description")
 }
 
 func (t *MixedMediaAnalysisResultClassView) PropertyHasImage() (ClassPropertyView, error) {
-    return t.inner.Property("hasImage")
+	return t.inner.Property("hasImage")
 }
 
 func (t *MixedMediaAnalysisResultClassView) PropertyHasVideo() (ClassPropertyView, error) {
-    return t.inner.Property("hasVideo")
+	return t.inner.Property("hasVideo")
 }
 
 func (t *MixedMediaAnalysisResultClassView) PropertyHasAudio() (ClassPropertyView, error) {
-    return t.inner.Property("hasAudio")
+	return t.inner.Property("hasAudio")
 }
 
 func (t *MixedMediaAnalysisResultClassView) PropertyHasPdf() (ClassPropertyView, error) {
-    return t.inner.Property("hasPdf")
+	return t.inner.Property("hasPdf")
 }
 
 func (t *MixedMediaAnalysisResultClassView) PropertyAdditionalImageCount() (ClassPropertyView, error) {
-    return t.inner.Property("additionalImageCount")
+	return t.inner.Property("additionalImageCount")
 }
 
 func (t *MixedMediaAnalysisResultClassView) PropertyMetadataKeys() (ClassPropertyView, error) {
-    return t.inner.Property("metadataKeys")
+	return t.inner.Property("metadataKeys")
 }
-
 
 func (t *TypeBuilder) MixedMediaAnalysisResult() (*MixedMediaAnalysisResultClassView, error) {
 	bld, err := t.inner.Class("MixedMediaAnalysisResult")
@@ -205,11 +188,11 @@ func (t *MixedMediaAnalysisResultClassView) Type() (baml.Type, error) {
 }
 
 type OptionalMediaAnalysisResultClassView struct {
-    inner baml.ClassBuilder
+	inner baml.ClassBuilder
 }
 
 func (t *OptionalMediaAnalysisResultClassView) ListProperties() ([]ClassPropertyView, error) {
-    result, err := t.inner.ListProperties()
+	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -220,21 +203,17 @@ func (t *OptionalMediaAnalysisResultClassView) ListProperties() ([]ClassProperty
 	return builders, nil
 }
 
-
-
-
 func (t *OptionalMediaAnalysisResultClassView) PropertyAnalysisText() (ClassPropertyView, error) {
-    return t.inner.Property("analysisText")
+	return t.inner.Property("analysisText")
 }
 
 func (t *OptionalMediaAnalysisResultClassView) PropertyProvidedMediaTypes() (ClassPropertyView, error) {
-    return t.inner.Property("providedMediaTypes")
+	return t.inner.Property("providedMediaTypes")
 }
 
 func (t *OptionalMediaAnalysisResultClassView) PropertyMissingMediaTypes() (ClassPropertyView, error) {
-    return t.inner.Property("missingMediaTypes")
+	return t.inner.Property("missingMediaTypes")
 }
-
 
 func (t *TypeBuilder) OptionalMediaAnalysisResult() (*OptionalMediaAnalysisResultClassView, error) {
 	bld, err := t.inner.Class("OptionalMediaAnalysisResult")

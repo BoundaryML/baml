@@ -50,6 +50,7 @@ impl InternalBamlRuntime {
         ctx: RuntimeContext,
         #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
         collectors: Vec<Arc<Collector>>,
+        tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
     ) -> Result<FunctionResultStream> {
         let is_expr_fn = self.get_expr_function(&function_name, &ctx).is_ok();
@@ -84,6 +85,7 @@ impl InternalBamlRuntime {
                 #[cfg(not(target_arch = "wasm32"))]
                 tokio_runtime,
                 collectors,
+                tags,
                 cancel_tripwire,
             })
         } else {
@@ -104,6 +106,7 @@ impl InternalBamlRuntime {
                 #[cfg(not(target_arch = "wasm32"))]
                 tokio_runtime,
                 collectors,
+                tags,
                 cancel_tripwire,
             })
         }

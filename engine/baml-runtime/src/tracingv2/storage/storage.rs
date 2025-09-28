@@ -520,6 +520,11 @@ impl FunctionLog {
     pub fn metadata(&mut self) -> HashMap<String, serde_json::Value> {
         self.get_inner().lock().unwrap().metadata.clone()
     }
+
+    /// Backwards-compatible alias for metadata used by some language clients as "tags"
+    pub fn tags(&mut self) -> HashMap<String, serde_json::Value> {
+        self.get_inner().lock().unwrap().metadata.clone()
+    }
 }
 
 impl Drop for FunctionLog {

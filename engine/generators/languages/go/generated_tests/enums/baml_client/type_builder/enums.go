@@ -15,13 +15,12 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
-
 type TestEnumEnumView struct {
-    inner baml.EnumBuilder
+	inner baml.EnumBuilder
 }
 
 func (t *TestEnumEnumView) ListValues() ([]EnumValueView, error) {
-    result, err := t.inner.ListValues()
+	result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -32,37 +31,33 @@ func (t *TestEnumEnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
-
-
-
 func (t *TestEnumEnumView) ValueAngry() (EnumValueView, error) {
-    return t.inner.Value("Angry")
+	return t.inner.Value("Angry")
 }
 
 func (t *TestEnumEnumView) ValueHappy() (EnumValueView, error) {
-    return t.inner.Value("Happy")
+	return t.inner.Value("Happy")
 }
 
 func (t *TestEnumEnumView) ValueSad() (EnumValueView, error) {
-    return t.inner.Value("Sad")
+	return t.inner.Value("Sad")
 }
 
 func (t *TestEnumEnumView) ValueConfused() (EnumValueView, error) {
-    return t.inner.Value("Confused")
+	return t.inner.Value("Confused")
 }
 
 func (t *TestEnumEnumView) ValueExcited() (EnumValueView, error) {
-    return t.inner.Value("Excited")
+	return t.inner.Value("Excited")
 }
 
 func (t *TestEnumEnumView) ValueExclamation() (EnumValueView, error) {
-    return t.inner.Value("Exclamation")
+	return t.inner.Value("Exclamation")
 }
 
 func (t *TestEnumEnumView) ValueBored() (EnumValueView, error) {
-    return t.inner.Value("Bored")
+	return t.inner.Value("Bored")
 }
-
 
 func (t *TypeBuilder) TestEnum() (*TestEnumEnumView, error) {
 	bld, err := t.inner.Enum("TestEnum")

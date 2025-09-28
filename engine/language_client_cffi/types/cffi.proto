@@ -212,6 +212,8 @@ message CFFIFunctionArguments {
   repeated CFFIRawObject collectors = 4;
   // type builder only
   CFFIRawObject type_builder = 5;
+  // tags
+  repeated CFFIMapEntry tags = 6;
 }
 
 message CFFIObjectMethodArguments {

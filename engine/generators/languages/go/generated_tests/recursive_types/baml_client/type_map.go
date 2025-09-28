@@ -14,33 +14,32 @@
 package baml_client
 
 import (
-    "recursive_types/baml_client/types"
-    "recursive_types/baml_client/stream_types"
+	"recursive_types/baml_client/stream_types"
+	"recursive_types/baml_client/types"
+	"reflect"
 )
 
 var typeMap = map[string]reflect.Type{
-"TYPES.UseMyUnion": reflect.TypeOf(types.UseMyUnion{}),
-    "STREAM_TYPES.UseMyUnion": reflect.TypeOf(stream_types.UseMyUnion{}),
+	"TYPES.UseMyUnion":        reflect.TypeOf(types.UseMyUnion{}),
+	"STREAM_TYPES.UseMyUnion": reflect.TypeOf(stream_types.UseMyUnion{}),
 
+	"TYPES.Union__List__Recursive1__int":                            reflect.TypeOf(types.Union2IntOrListRecursive1{}),
+	"TYPES.Union__Recursive1__int__string":                          reflect.TypeOf(types.Union3IntOrRecursive1OrString{}),
+	"TYPES.Union__List__JSON__Map__string_JSON__float__int__string": reflect.TypeOf(types.Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString{}),
 
-"TYPES.Union__List__Recursive1__int": reflect.TypeOf(types.Union2IntOrListRecursive1{}),
-"TYPES.Union__Recursive1__int__string": reflect.TypeOf(types.Union3IntOrRecursive1OrString{}),
-"TYPES.Union__List__JSON__Map__string_JSON__float__int__string": reflect.TypeOf(types.Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString{}),
+	"STREAM_TYPES.Union__List__Recursive1__int":                            reflect.TypeOf(stream_types.Union2IntOrListRecursive1{}),
+	"STREAM_TYPES.Union__Recursive1__int__string":                          reflect.TypeOf(stream_types.Union3IntOrRecursive1OrString{}),
+	"STREAM_TYPES.Union__List__JSON__Map__string_JSON__float__int__string": reflect.TypeOf(stream_types.Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString{}),
 
-"STREAM_TYPES.Union__List__Recursive1__int": reflect.TypeOf(stream_types.Union2IntOrListRecursive1{}),
-"STREAM_TYPES.Union__Recursive1__int__string": reflect.TypeOf(stream_types.Union3IntOrRecursive1OrString{}),
-"STREAM_TYPES.Union__List__JSON__Map__string_JSON__float__int__string": reflect.TypeOf(stream_types.Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString{}),
+	"TYPES.JSON":          reflect.TypeOf((*types.Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString)(nil)),
+	"TYPES.MyUnion":       reflect.TypeOf((*types.Union3IntOrRecursive1OrString)(nil)),
+	"TYPES.Nonrecursive1": reflect.TypeOf((*int64)(nil)),
+	"TYPES.Nonrecursive2": reflect.TypeOf((*string)(nil)),
+	"TYPES.Recursive1":    reflect.TypeOf(types.Union2IntOrListRecursive1{}),
 
-"TYPES.JSON": reflect.TypeOf((*types.Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString)(nil)),
-"TYPES.MyUnion": reflect.TypeOf((*types.Union3IntOrRecursive1OrString)(nil)),
-"TYPES.Nonrecursive1": reflect.TypeOf((*int64)(nil)),
-"TYPES.Nonrecursive2": reflect.TypeOf((*string)(nil)),
-"TYPES.Recursive1": reflect.TypeOf(types.Union2IntOrListRecursive1{}),
-
-"STREAM_TYPES.JSON": reflect.TypeOf((*stream_types.Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString)(nil)),
-"STREAM_TYPES.MyUnion": reflect.TypeOf((*stream_types.Union3IntOrRecursive1OrString)(nil)),
-"STREAM_TYPES.Nonrecursive1": reflect.TypeOf((*int64)(nil)),
-"STREAM_TYPES.Nonrecursive2": reflect.TypeOf((*string)(nil)),
-"STREAM_TYPES.Recursive1": reflect.TypeOf((*stream_types.Union2IntOrListRecursive1)(nil)),
-
+	"STREAM_TYPES.JSON":          reflect.TypeOf((*stream_types.Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString)(nil)),
+	"STREAM_TYPES.MyUnion":       reflect.TypeOf((*stream_types.Union3IntOrRecursive1OrString)(nil)),
+	"STREAM_TYPES.Nonrecursive1": reflect.TypeOf((*int64)(nil)),
+	"STREAM_TYPES.Nonrecursive2": reflect.TypeOf((*string)(nil)),
+	"STREAM_TYPES.Recursive1":    reflect.TypeOf((*stream_types.Union2IntOrListRecursive1)(nil)),
 }

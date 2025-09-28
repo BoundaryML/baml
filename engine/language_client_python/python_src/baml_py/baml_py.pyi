@@ -175,6 +175,8 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
         env_vars: Dict[str, str],
+        tags: Optional[Dict[str, str]] = None,
+        abort_controller: Optional[AbortController] = None,
     ) -> FunctionResult: ...
     def call_function_sync(
         self,
@@ -185,6 +187,8 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
         env_vars: Dict[str, str],
+        tags: Optional[Dict[str, str]] = None,
+        abort_controller: Optional[AbortController] = None,
     ) -> FunctionResult: ...
     @staticmethod
     def from_files(
@@ -203,7 +207,8 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
         env_vars: Dict[str, str],
-        on_tick: Optional[Callable[[], None]],
+        tags: Optional[Dict[str, str]] = None,
+        on_tick: Optional[Callable[[], None]] = None,
     ) -> FunctionResultStream: ...
     def stream_function_sync(
         self,
@@ -215,7 +220,8 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
         env_vars: Dict[str, str],
-        on_tick: Optional[Callable[[], None]],
+        tags: Optional[Dict[str, str]] = None,
+        on_tick: Optional[Callable[[], None]] = None,
     ) -> SyncFunctionResultStream: ...
     def create_context_manager(self) -> RuntimeContextManager: ...
     def flush(self) -> None: ...
@@ -363,6 +369,8 @@ class FunctionLog:
     def raw_llm_response(self) -> Optional[str]: ...
     @property
     def metadata(self) -> Dict[str, Any]: ...
+    @property
+    def tags(self) -> Dict[str, Any]: ...
     @property
     def selected_call(self) -> Optional[Union[LLMCall, LLMStreamCall]]: ...
 

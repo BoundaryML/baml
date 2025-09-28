@@ -326,6 +326,7 @@ async fn beta_reduce<'a>(
                             None,
                             None,
                             None,
+                            None, // tags
                             env.env_vars.clone(),
                             TripWire::new(None),
                         )
@@ -1159,6 +1160,7 @@ test Poems {
                 Some(on_event),
                 None,
                 HashMap::new(),
+                None,
                 TripWire::new(None),
                 None::<Box<dyn Fn()>>,
             )
@@ -1293,6 +1295,7 @@ test TestMakePerson() {
                 Some(on_event),
                 None,
                 HashMap::new(),
+                None,
                 TripWire::new(None),
                 None::<Box<dyn Fn()>>,
             )
@@ -1371,6 +1374,7 @@ test UseFunction() {
                     "OPENAI_API_KEY".to_string(),
                     std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY is not set."),
                 )]),
+                None,
                 TripWire::new(None),
                 None::<Box<dyn Fn()>>,
             )

@@ -14,185 +14,202 @@
 package baml_client
 
 import (
-    "context"
+	"context"
+	"fmt"
 
-    "nested_structures/baml_client/types"
-    "nested_structures/baml_client/stream_types"
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"nested_structures/baml_client/stream_types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-type parse_stream struct {}
+type parse_stream struct{}
+
 var ParseStream = &parse_stream{}
 
-
-/// Parse version of TestComplexNested (Takes in string and returns stream_types.ComplexNested)
+// / Parse version of TestComplexNested (Takes in string and returns stream_types.ComplexNested)
 func (*parse_stream) TestComplexNested(text string, opts ...CallOptionFunc) (stream_types.ComplexNested, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": true },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": true},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestComplexNested: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestComplexNested", encoded)
-    if err != nil {
-        return stream_types.ComplexNested{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestComplexNested: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(stream_types.ComplexNested)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestComplexNested", encoded)
+	if err != nil {
+		return stream_types.ComplexNested{}, err
+	}
 
-    return casted, nil
+	casted := (result).(stream_types.ComplexNested)
+
+	return casted, nil
 }
 
-/// Parse version of TestDeeplyNested (Takes in string and returns stream_types.DeeplyNested)
+// / Parse version of TestDeeplyNested (Takes in string and returns stream_types.DeeplyNested)
 func (*parse_stream) TestDeeplyNested(text string, opts ...CallOptionFunc) (stream_types.DeeplyNested, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": true },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": true},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestDeeplyNested: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestDeeplyNested", encoded)
-    if err != nil {
-        return stream_types.DeeplyNested{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestDeeplyNested: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(stream_types.DeeplyNested)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestDeeplyNested", encoded)
+	if err != nil {
+		return stream_types.DeeplyNested{}, err
+	}
 
-    return casted, nil
+	casted := (result).(stream_types.DeeplyNested)
+
+	return casted, nil
 }
 
-/// Parse version of TestRecursiveStructure (Takes in string and returns stream_types.RecursiveStructure)
+// / Parse version of TestRecursiveStructure (Takes in string and returns stream_types.RecursiveStructure)
 func (*parse_stream) TestRecursiveStructure(text string, opts ...CallOptionFunc) (stream_types.RecursiveStructure, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": true },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": true},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestRecursiveStructure: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestRecursiveStructure", encoded)
-    if err != nil {
-        return stream_types.RecursiveStructure{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestRecursiveStructure: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(stream_types.RecursiveStructure)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestRecursiveStructure", encoded)
+	if err != nil {
+		return stream_types.RecursiveStructure{}, err
+	}
 
-    return casted, nil
+	casted := (result).(stream_types.RecursiveStructure)
+
+	return casted, nil
 }
 
-/// Parse version of TestSimpleNested (Takes in string and returns stream_types.SimpleNested)
+// / Parse version of TestSimpleNested (Takes in string and returns stream_types.SimpleNested)
 func (*parse_stream) TestSimpleNested(text string, opts ...CallOptionFunc) (stream_types.SimpleNested, error) {
 
-    var callOpts callOption
-    for _, opt := range opts {
-        opt(&callOpts)
-    }
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
 
-    args := baml.BamlFunctionArguments{
-        Kwargs: map[string]any{ "text": text, "stream": true },
-        Env: getEnvVars(callOpts.env),
-    }
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": true},
+		Env:    getEnvVars(callOpts.env),
+	}
 
-    if callOpts.clientRegistry != nil {
-        args.ClientRegistry = callOpts.clientRegistry
-    }
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
 
-    if callOpts.collectors != nil {
-        args.Collectors = callOpts.collectors
-    }
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
 
-    if callOpts.typeBuilder != nil {
-        args.TypeBuilder = callOpts.typeBuilder
-    }
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
 
-    encoded, err := args.Encode()
-    if err != nil {
-        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
-        // and include the type of the args you're passing in.
-        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestSimpleNested: %w", err)
-        panic(wrapped_err)
-    }
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
 
-    result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestSimpleNested", encoded)
-    if err != nil {
-        return stream_types.SimpleNested{}, err
-    }
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestSimpleNested: %w", err)
+		panic(wrapped_err)
+	}
 
-    casted := (result).(stream_types.SimpleNested)
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestSimpleNested", encoded)
+	if err != nil {
+		return stream_types.SimpleNested{}, err
+	}
 
-    return casted, nil
+	casted := (result).(stream_types.SimpleNested)
+
+	return casted, nil
 }

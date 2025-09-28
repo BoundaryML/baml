@@ -14,20 +14,14 @@
 package stream_types
 
 import (
-    "encoding/json"
-    "fmt"
+	"fmt"
 
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
-
-    "recursive_types/baml_client/types"
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
-
 type UseMyUnion struct {
-    
-U *Union3IntOrRecursive1OrString `json:"u"`
-    
+	U *Union3IntOrRecursive1OrString `json:"u"`
 }
 
 func (c *UseMyUnion) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -39,41 +33,38 @@ func (c *UseMyUnion) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		panic(fmt.Sprintf("expected UseMyUnion, got %s", typeName.Name))
 	}
 
-   
-
-	
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
-			switch key {
-				
-				case "u":
-					c.U = baml.Decode(valueHolder).Interface().(*Union3IntOrRecursive1OrString)
-				
+		switch key {
+
+		case "u":
+			c.U = baml.Decode(valueHolder).Interface().(*Union3IntOrRecursive1OrString)
+
 		default:
-			
+
 			panic(fmt.Sprintf("unexpected field: %s in class UseMyUnion", key))
-			
+
 		}
 	}
 
 }
 
 func (c UseMyUnion) Encode() (*cffi.CFFIValueHolder, error) {
-    fields := map[string]any{}
-    
-    fields["u"] = c.U
-    
-    return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	fields := map[string]any{}
+
+	fields["u"] = c.U
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
 }
 
 func (c UseMyUnion) BamlTypeName() string {
-    return "UseMyUnion"
+	return "UseMyUnion"
 }
 
 func (u UseMyUnion) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-        Name:      "UseMyUnion",
-    }
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+		Name:      "UseMyUnion",
+	}
 }

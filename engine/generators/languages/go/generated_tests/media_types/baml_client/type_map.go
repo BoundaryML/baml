@@ -14,26 +14,22 @@
 package baml_client
 
 import (
-    "media_types/baml_client/types"
-    "media_types/baml_client/stream_types"
+	"media_types/baml_client/stream_types"
+	"media_types/baml_client/types"
+	"reflect"
 )
 
 var typeMap = map[string]reflect.Type{
-"TYPES.MediaAnalysisResult": reflect.TypeOf(types.MediaAnalysisResult{}),
-    "STREAM_TYPES.MediaAnalysisResult": reflect.TypeOf(stream_types.MediaAnalysisResult{}),
-"TYPES.MediaArrayAnalysisResult": reflect.TypeOf(types.MediaArrayAnalysisResult{}),
-    "STREAM_TYPES.MediaArrayAnalysisResult": reflect.TypeOf(stream_types.MediaArrayAnalysisResult{}),
-"TYPES.MediaMapAnalysisResult": reflect.TypeOf(types.MediaMapAnalysisResult{}),
-    "STREAM_TYPES.MediaMapAnalysisResult": reflect.TypeOf(stream_types.MediaMapAnalysisResult{}),
-"TYPES.MixedMediaAnalysisResult": reflect.TypeOf(types.MixedMediaAnalysisResult{}),
-    "STREAM_TYPES.MixedMediaAnalysisResult": reflect.TypeOf(stream_types.MixedMediaAnalysisResult{}),
-"TYPES.OptionalMediaAnalysisResult": reflect.TypeOf(types.OptionalMediaAnalysisResult{}),
-    "STREAM_TYPES.OptionalMediaAnalysisResult": reflect.TypeOf(stream_types.OptionalMediaAnalysisResult{}),
+	"TYPES.MediaAnalysisResult":                reflect.TypeOf(types.MediaAnalysisResult{}),
+	"STREAM_TYPES.MediaAnalysisResult":         reflect.TypeOf(stream_types.MediaAnalysisResult{}),
+	"TYPES.MediaArrayAnalysisResult":           reflect.TypeOf(types.MediaArrayAnalysisResult{}),
+	"STREAM_TYPES.MediaArrayAnalysisResult":    reflect.TypeOf(stream_types.MediaArrayAnalysisResult{}),
+	"TYPES.MediaMapAnalysisResult":             reflect.TypeOf(types.MediaMapAnalysisResult{}),
+	"STREAM_TYPES.MediaMapAnalysisResult":      reflect.TypeOf(stream_types.MediaMapAnalysisResult{}),
+	"TYPES.MixedMediaAnalysisResult":           reflect.TypeOf(types.MixedMediaAnalysisResult{}),
+	"STREAM_TYPES.MixedMediaAnalysisResult":    reflect.TypeOf(stream_types.MixedMediaAnalysisResult{}),
+	"TYPES.OptionalMediaAnalysisResult":        reflect.TypeOf(types.OptionalMediaAnalysisResult{}),
+	"STREAM_TYPES.OptionalMediaAnalysisResult": reflect.TypeOf(stream_types.OptionalMediaAnalysisResult{}),
 
-
-"TYPES.Union__audio__image__pdf__video": reflect.TypeOf(types.Union4AudioOrImageOrPDFOrVideo{}),
-
-
-
-
+	"TYPES.Union__audio__image__pdf__video": reflect.TypeOf(types.Union4AudioOrImageOrPDFOrVideo{}),
 }

@@ -35,20 +35,21 @@ module BamlClient
           @options = options
       end
 
-      sig {params(collector: T.nilable(T.any(Baml::Collector, T::Array[Baml::Collector])), tb: T.nilable(Baml::TypeBuilder), client_registry: T.nilable(Baml::ClientRegistry), env_vars: T.nilable(T::Hash[Symbol, String])).returns(BamlSyncClient)}
-      def with_options(collector: nil, tb: nil, client_registry: nil, env_vars: nil)
+      sig {params(collector: T.nilable(T.any(Baml::Collector, T::Array[Baml::Collector])), tb: T.nilable(Baml::TypeBuilder), client_registry: T.nilable(Baml::ClientRegistry), env_vars: T.nilable(T::Hash[Symbol, String]), tags: T.nilable(T::Hash[String, String])).returns(BamlSyncClient)}
+      def with_options(collector: nil, tb: nil, client_registry: nil, env_vars: nil, tags: nil)
           BamlSyncClient.new(@options.merge_options(BamlCallOptions.from_hash({
               collector: collector,
               tb: tb,
               client_registry: client_registry,
               env_vars: env_vars,
+              tags: tags,
           })))
       end
 
       sig {params(
           varargs: T.untyped,
           recipe: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Recipe)}
       def AaaSamOutputFormat(
           *varargs,
@@ -73,7 +74,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           data: BamlClient::Types::LinkedListAliasNode,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::LinkedListAliasNode)}
       def AliasThatPointsToRecursiveType(
           *varargs,
@@ -98,7 +99,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           money: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Checked[Integer])}
       def AliasWithMultipleAttrs(
           *varargs,
@@ -123,7 +124,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::InputClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def AliasedInputClass(
           *varargs,
@@ -148,7 +149,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::InputClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def AliasedInputClass2(
           *varargs,
@@ -173,7 +174,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::InputClassNested,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def AliasedInputClassNested(
           *varargs,
@@ -198,7 +199,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::AliasedEnum,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def AliasedInputEnum(
           *varargs,
@@ -223,7 +224,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: T::Array[BamlClient::Types::AliasedEnum],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def AliasedInputList(
           *varargs,
@@ -248,7 +249,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           optionals: BamlClient::Types::OptionalListAndMap,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::OptionalListAndMap)}
       def AllowedOptionals(
           *varargs,
@@ -273,7 +274,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           a: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def AssertFn(
           *varargs,
@@ -298,7 +299,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           aud: Baml::Audio,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def AudioInput(
           *varargs,
@@ -323,7 +324,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           aud: Baml::Audio,prompt: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def AudioInputOpenai(
           *varargs,
@@ -348,7 +349,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: T::Array[Integer],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::LinkedList)}
       def BuildLinkedList(
           *varargs,
@@ -373,7 +374,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::BinaryNode,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Tree)}
       def BuildTree(
           *varargs,
@@ -398,7 +399,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           cls: BamlClient::Types::ClassToRecAlias,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::ClassToRecAlias)}
       def ClassThatPointsToRecursiveClassThroughAlias(
           *varargs,
@@ -423,7 +424,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(BamlClient::Types::DynEnumTwo, String))}
       def ClassifyDynEnumTwo(
           *varargs,
@@ -448,7 +449,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(BamlClient::Types::DynEnumOne, String))}
       def ClassifyDynamicStatus(
           *varargs,
@@ -473,7 +474,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Category)}
       def ClassifyMessage(
           *varargs,
@@ -498,7 +499,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Category)}
       def ClassifyMessage2(
           *varargs,
@@ -523,7 +524,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Category)}
       def ClassifyMessage3(
           *varargs,
@@ -548,7 +549,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           prefix: String,suffix: String,language: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def Completion(
           *varargs,
@@ -573,7 +574,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(BamlClient::Types::BookOrder, BamlClient::Types::FlightConfirmation, BamlClient::Types::GroceryReceipt))}
       def CustomTask(
           *varargs,
@@ -598,7 +599,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           audio: Baml::Audio,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def DescribeAudio(
           *varargs,
@@ -623,7 +624,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           audio: Baml::Audio,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def DescribeAudio2(
           *varargs,
@@ -648,7 +649,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def DescribeImage(
           *varargs,
@@ -673,7 +674,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           classWithImage: BamlClient::Types::ClassWithImage,img2: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def DescribeImage2(
           *varargs,
@@ -698,7 +699,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           classWithImage: BamlClient::Types::ClassWithImage,img2: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def DescribeImage3(
           *varargs,
@@ -723,7 +724,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           classWithImage: BamlClient::Types::ClassWithImage,img2: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def DescribeImage4(
           *varargs,
@@ -748,7 +749,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,client_sector: String,client_name: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def DescribeMedia1599(
           *varargs,
@@ -773,7 +774,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(BamlClient::Types::OriginalA, BamlClient::Types::OriginalB))}
       def DifferentiateUnions(
           *varargs,
@@ -798,7 +799,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::DummyOutput)}
       def DummyOutputFunction(
           *varargs,
@@ -823,7 +824,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::DynamicClassOne,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::DynamicClassTwo)}
       def DynamicFunc(
           *varargs,
@@ -848,7 +849,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::DynInputOutput,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::DynInputOutput)}
       def DynamicInputOutput(
           *varargs,
@@ -873,7 +874,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: T::Array[BamlClient::Types::DynInputOutput],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[BamlClient::Types::DynInputOutput])}
       def DynamicListInputOutput(
           *varargs,
@@ -898,7 +899,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def ExpectFailure(
           *varargs,
@@ -923,7 +924,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           document: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::ContactInfo)}
       def ExtractContactInfo(
           *varargs,
@@ -948,7 +949,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[T.any(BamlClient::Types::DynEnumTwo, String)])}
       def ExtractDynamicCategories(
           *varargs,
@@ -973,7 +974,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::DynamicSchema)}
       def ExtractEntities(
           *varargs,
@@ -998,7 +999,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[T.any(BamlClient::Types::Hobby, String)])}
       def ExtractHobby(
           *varargs,
@@ -1023,7 +1024,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def ExtractName(
           *varargs,
@@ -1048,7 +1049,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[String])}
       def ExtractNames(
           *varargs,
@@ -1073,7 +1074,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[BamlClient::Types::Person])}
       def ExtractPeople(
           *varargs,
@@ -1098,7 +1099,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           email: String,reason: T.any(String, String),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::ReceiptInfo)}
       def ExtractReceiptInfo(
           *varargs,
@@ -1123,7 +1124,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           resume: String,img: T.nilable(Baml::Image),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Resume)}
       def ExtractResume(
           *varargs,
@@ -1148,7 +1149,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           resume: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Resume)}
       def ExtractResume2(
           *varargs,
@@ -1173,7 +1174,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def FnAlwaysFails(
           *varargs,
@@ -1198,7 +1199,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.nilable(BamlClient::Types::ClassOptionalOutput))}
       def FnClassOptionalOutput(
           *varargs,
@@ -1223,7 +1224,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.nilable(BamlClient::Types::ClassOptionalOutput2))}
       def FnClassOptionalOutput2(
           *varargs,
@@ -1248,7 +1249,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[BamlClient::Types::EnumOutput])}
       def FnEnumListOutput(
           *varargs,
@@ -1273,7 +1274,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::EnumOutput)}
       def FnEnumOutput(
           *varargs,
@@ -1298,7 +1299,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           retries: Integer,delay_ms: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def FnFailRetryConstantDelay(
           *varargs,
@@ -1323,7 +1324,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           retries: Integer,initial_delay_ms: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def FnFailRetryExponentialDelay(
           *varargs,
@@ -1348,7 +1349,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def FnFallbackAlwaysFails(
           *varargs,
@@ -1373,7 +1374,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::LiteralClassHello,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::LiteralClassHello)}
       def FnLiteralClassInputOutput(
           *varargs,
@@ -1398,7 +1399,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo))}
       def FnLiteralUnionClassInputOutput(
           *varargs,
@@ -1423,7 +1424,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myString: T.nilable(String),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def FnNamedArgsSingleStringOptional(
           *varargs,
@@ -1448,7 +1449,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Boolean)}
       def FnOutputBool(
           *varargs,
@@ -1473,7 +1474,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TestOutputClass)}
       def FnOutputClass(
           *varargs,
@@ -1498,7 +1499,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[BamlClient::Types::TestOutputClass])}
       def FnOutputClassList(
           *varargs,
@@ -1523,7 +1524,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TestClassNested)}
       def FnOutputClassNested(
           *varargs,
@@ -1548,7 +1549,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TestClassWithEnum)}
       def FnOutputClassWithEnum(
           *varargs,
@@ -1573,7 +1574,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def FnOutputInt(
           *varargs,
@@ -1598,7 +1599,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Boolean)}
       def FnOutputLiteralBool(
           *varargs,
@@ -1623,7 +1624,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def FnOutputLiteralInt(
           *varargs,
@@ -1648,7 +1649,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def FnOutputLiteralString(
           *varargs,
@@ -1673,7 +1674,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[String])}
       def FnOutputStringList(
           *varargs,
@@ -1698,7 +1699,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TestEnum)}
       def FnTestAliasedEnumOutput(
           *varargs,
@@ -1723,7 +1724,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TestClassAlias)}
       def FnTestClassAlias(
           *varargs,
@@ -1748,7 +1749,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myArg: BamlClient::Types::NamedArgsSingleEnum,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def FnTestNamedArgsSingleEnum(
           *varargs,
@@ -1773,7 +1774,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::RaysData)}
       def GetDataType(
           *varargs,
@@ -1798,7 +1799,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           email: BamlClient::Types::Email,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::OrderInfo)}
       def GetOrderInfo(
           *varargs,
@@ -1823,7 +1824,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           query: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::SearchParams)}
       def GetQuery(
           *varargs,
@@ -1848,7 +1849,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           i1: T::Hash[BamlClient::Types::MapKey, String],i2: T::Hash[BamlClient::Types::MapKey, String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Hash[BamlClient::Types::MapKey, String])}
       def InOutEnumMapKey(
           *varargs,
@@ -1873,7 +1874,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           i1: T::Hash[T.any(String, String, String, String), String],i2: T::Hash[T.any(String, String, String, String), String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Hash[T.any(String, String, String, String), String])}
       def InOutLiteralStringUnionMapKey(
           *varargs,
@@ -1898,7 +1899,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           m: T::Hash[String, String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Hash[String, String])}
       def InOutSingleLiteralStringMapKey(
           *varargs,
@@ -1923,7 +1924,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::JsonValue,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::JsonValue)}
       def JsonTypeAliasCycle(
           *varargs,
@@ -1948,7 +1949,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def LLMEcho(
           *varargs,
@@ -1973,7 +1974,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(Integer, T::Boolean, String))}
       def LiteralUnionsTest(
           *varargs,
@@ -1998,7 +1999,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           n: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def LlmReturnNumber(
           *varargs,
@@ -2023,7 +2024,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Checked[BamlClient::Types::BlockConstraint])}
       def MakeBlockConstraint(
           *varargs,
@@ -2048,7 +2049,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::ClassWithBlockDone)}
       def MakeClassWithBlockDone(
           *varargs,
@@ -2073,7 +2074,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::ClassWithoutDone)}
       def MakeClassWithExternalDone(
           *varargs,
@@ -2098,7 +2099,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::NestedBlockConstraint)}
       def MakeNestedBlockConstraint(
           *varargs,
@@ -2123,7 +2124,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::SemanticContainer)}
       def MakeSemanticContainer(
           *varargs,
@@ -2148,7 +2149,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           m: T::Hash[String, T::Array[String]],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Hash[String, T::Array[String]])}
       def MapAlias(
           *varargs,
@@ -2173,7 +2174,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           money: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::MergeAttrs)}
       def MergeAliasAttributes(
           *varargs,
@@ -2198,7 +2199,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::DynamicOutput)}
       def MyFunc(
           *varargs,
@@ -2223,7 +2224,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           c: T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]]),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]]))}
       def NestedAlias(
           *varargs,
@@ -2248,7 +2249,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           s: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::ClassForNullLiteral)}
       def NullLiteralClassHello(
           *varargs,
@@ -2273,7 +2274,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           s: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def OpenAIWithAnthropicResponseHello(
           *varargs,
@@ -2298,7 +2299,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[T.nilable(BamlClient::Types::OptionalTest_ReturnType)])}
       def OptionalTest_Function(
           *varargs,
@@ -2323,7 +2324,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PdfInput(
           *varargs,
@@ -2348,7 +2349,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PdfInputAnthropic(
           *varargs,
@@ -2373,7 +2374,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,prompt: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PdfInputOpenai(
           *varargs,
@@ -2398,7 +2399,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PdfInputVertex(
           *varargs,
@@ -2423,7 +2424,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           name: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::FooAny)}
       def PredictAge(
           *varargs,
@@ -2448,7 +2449,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           inp: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Checked[Integer])}
       def PredictAgeBare(
           *varargs,
@@ -2473,7 +2474,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           p: T.any(Integer, String, T::Boolean, Float),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(Integer, String, T::Boolean, Float))}
       def PrimitiveAlias(
           *varargs,
@@ -2498,7 +2499,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PromptTestClaude(
           *varargs,
@@ -2523,7 +2524,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PromptTestClaudeChat(
           *varargs,
@@ -2548,7 +2549,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PromptTestClaudeChatNoSystem(
           *varargs,
@@ -2573,7 +2574,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PromptTestOpenAI(
           *varargs,
@@ -2598,7 +2599,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PromptTestOpenAIChat(
           *varargs,
@@ -2623,7 +2624,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PromptTestOpenAIChatNoSystem(
           *varargs,
@@ -2648,7 +2649,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PromptTestStreaming(
           *varargs,
@@ -2673,7 +2674,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecAliasOne,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::RecAliasOne)}
       def RecursiveAliasCycle(
           *varargs,
@@ -2698,7 +2699,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           cls: BamlClient::Types::NodeWithAliasIndirection,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::NodeWithAliasIndirection)}
       def RecursiveClassWithAliasIndirection(
           *varargs,
@@ -2723,7 +2724,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveUnion,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::RecursiveUnion)}
       def RecursiveUnionTest(
           *varargs,
@@ -2748,7 +2749,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RenderTestClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def RenderDynamicClass(
           *varargs,
@@ -2773,7 +2774,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           bike: T.any(BamlClient::Types::RenderTestEnum, String),other: T.any(BamlClient::Types::RenderTestEnum, String),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def RenderDynamicEnum(
           *varargs,
@@ -2798,7 +2799,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           money: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Checked[Integer])}
       def ReturnAliasWithMergedAttributes(
           *varargs,
@@ -2823,7 +2824,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           inp: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def ReturnFailingAssert(
           *varargs,
@@ -2848,7 +2849,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           s: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::JsonTemplate)}
       def ReturnJsonEntry(
           *varargs,
@@ -2873,7 +2874,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           a: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::MalformedConstraints)}
       def ReturnMalformedConstraints(
           *varargs,
@@ -2898,7 +2899,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Schema)}
       def SchemaDescriptions(
           *varargs,
@@ -2923,7 +2924,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveListAlias,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::RecursiveListAlias)}
       def SimpleRecursiveListAlias(
           *varargs,
@@ -2948,7 +2949,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveMapAlias,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::RecursiveMapAlias)}
       def SimpleRecursiveMapAlias(
           *varargs,
@@ -2973,7 +2974,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           digits: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::BigNumbers)}
       def StreamBigNumbers(
           *varargs,
@@ -2998,7 +2999,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           theme: String,length: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TwoStoriesOneTitle)}
       def StreamFailingAssertion(
           *varargs,
@@ -3023,7 +3024,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           theme: String,length: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TwoStoriesOneTitleCheck)}
       def StreamFailingCheck(
           *varargs,
@@ -3048,7 +3049,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           digits: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def StreamOneBigNumber(
           *varargs,
@@ -3073,7 +3074,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           digits: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[T.any(Integer, String)])}
       def StreamUnionIntegers(
           *varargs,
@@ -3098,7 +3099,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           digits: Integer,yapping: T::Boolean,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::CompoundBigNumbers)}
       def StreamingCompoundNumbers(
           *varargs,
@@ -3123,7 +3124,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           document_txt: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Document1559)}
       def StructureDocument1559(
           *varargs,
@@ -3148,7 +3149,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveAliasDependency,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::RecursiveAliasDependency)}
       def TakeRecAliasDep(
           *varargs,
@@ -3173,7 +3174,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           story: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TellStory(
           *varargs,
@@ -3198,7 +3199,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAbortFallbackChain(
           *varargs,
@@ -3223,7 +3224,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAnthropic(
           *varargs,
@@ -3248,7 +3249,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAnthropicShorthand(
           *varargs,
@@ -3273,7 +3274,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAws(
           *varargs,
@@ -3298,7 +3299,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAwsClaude37(
           *varargs,
@@ -3323,7 +3324,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAwsInferenceProfile(
           *varargs,
@@ -3348,7 +3349,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAwsInvalidAccessKey(
           *varargs,
@@ -3373,7 +3374,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAwsInvalidProfile(
           *varargs,
@@ -3398,7 +3399,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAwsInvalidRegion(
           *varargs,
@@ -3423,7 +3424,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAwsInvalidSessionToken(
           *varargs,
@@ -3448,7 +3449,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzure(
           *varargs,
@@ -3473,7 +3474,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzureFailure(
           *varargs,
@@ -3498,7 +3499,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzureO1NoMaxTokens(
           *varargs,
@@ -3523,7 +3524,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzureO1WithMaxCompletionTokens(
           *varargs,
@@ -3548,7 +3549,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzureO1WithMaxTokens(
           *varargs,
@@ -3573,7 +3574,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzureO3NoMaxTokens(
           *varargs,
@@ -3598,7 +3599,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzureO3WithMaxCompletionTokens(
           *varargs,
@@ -3623,7 +3624,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzureWithMaxTokens(
           *varargs,
@@ -3648,7 +3649,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,not_cached: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestCaching(
           *varargs,
@@ -3673,7 +3674,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFallbackClient(
           *varargs,
@@ -3698,7 +3699,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFallbackStrategy(
           *varargs,
@@ -3723,7 +3724,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFallbackToShorthand(
           *varargs,
@@ -3748,7 +3749,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myBool: T::Boolean,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFnNamedArgsSingleBool(
           *varargs,
@@ -3773,7 +3774,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myArg: BamlClient::Types::NamedArgsSingleClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFnNamedArgsSingleClass(
           *varargs,
@@ -3798,7 +3799,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myArg: T::Array[BamlClient::Types::NamedArgsSingleEnumList],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFnNamedArgsSingleEnumList(
           *varargs,
@@ -3823,7 +3824,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myFloat: Float,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFnNamedArgsSingleFloat(
           *varargs,
@@ -3848,7 +3849,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myInt: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFnNamedArgsSingleInt(
           *varargs,
@@ -3873,7 +3874,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myMap: T::Hash[String, BamlClient::Types::StringToClassEntry],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Hash[String, BamlClient::Types::StringToClassEntry])}
       def TestFnNamedArgsSingleMapStringToClass(
           *varargs,
@@ -3898,7 +3899,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myMap: T::Hash[String, T::Hash[String, String]],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Hash[String, T::Hash[String, String]])}
       def TestFnNamedArgsSingleMapStringToMap(
           *varargs,
@@ -3923,7 +3924,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myMap: T::Hash[String, String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Hash[String, String])}
       def TestFnNamedArgsSingleMapStringToString(
           *varargs,
@@ -3948,7 +3949,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myString: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFnNamedArgsSingleString(
           *varargs,
@@ -3973,7 +3974,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myStringArray: T::Array[String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFnNamedArgsSingleStringArray(
           *varargs,
@@ -3998,7 +3999,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myArg: T::Array[String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[String])}
       def TestFnNamedArgsSingleStringList(
           *varargs,
@@ -4023,7 +4024,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestGemini(
           *varargs,
@@ -4048,7 +4049,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestGeminiOpenAiGeneric(
           *varargs,
@@ -4073,7 +4074,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestGeminiSystem(
           *varargs,
@@ -4098,7 +4099,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestGeminiSystemAsChat(
           *varargs,
@@ -4123,7 +4124,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestGeminiThinking(
           *varargs,
@@ -4148,7 +4149,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestGroq(
           *varargs,
@@ -4173,7 +4174,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestImageInput(
           *varargs,
@@ -4198,7 +4199,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestImageInputAnthropic(
           *varargs,
@@ -4223,7 +4224,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           imgs: T::Array[Baml::Image],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestImageListInput(
           *varargs,
@@ -4248,7 +4249,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TestMemoryOutput)}
       def TestMemory(
           *varargs,
@@ -4273,7 +4274,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myArg: BamlClient::Types::NamedArgsSingleClass,myArg2: BamlClient::Types::NamedArgsSingleClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestMulticlassNamedArgs(
           *varargs,
@@ -4298,7 +4299,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myBool: T::Boolean,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestNamedArgsLiteralBool(
           *varargs,
@@ -4323,7 +4324,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myInt: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestNamedArgsLiteralInt(
           *varargs,
@@ -4348,7 +4349,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myString: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestNamedArgsLiteralString(
           *varargs,
@@ -4373,7 +4374,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.nilable(String))}
       def TestOllama(
           *varargs,
@@ -4398,7 +4399,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Haiku)}
       def TestOllamaHaiku(
           *varargs,
@@ -4423,7 +4424,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAI(
           *varargs,
@@ -4448,7 +4449,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIDummyClient(
           *varargs,
@@ -4473,7 +4474,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIGPT4oMini(
           *varargs,
@@ -4498,7 +4499,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIGPT4oMini2(
           *varargs,
@@ -4523,7 +4524,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIGPT4oMini3(
           *varargs,
@@ -4548,7 +4549,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAILegacyProvider(
           *varargs,
@@ -4573,7 +4574,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIO1NoMaxTokens(
           *varargs,
@@ -4598,7 +4599,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIO1WithMaxCompletionTokens(
           *varargs,
@@ -4623,7 +4624,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIO1WithMaxTokens(
           *varargs,
@@ -4648,7 +4649,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIProviderWithResponsesType(
           *varargs,
@@ -4673,7 +4674,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponses(
           *varargs,
@@ -4698,7 +4699,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           problem: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesAllRoles(
           *varargs,
@@ -4723,7 +4724,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesAutoType(
           *varargs,
@@ -4748,7 +4749,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           topic: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesConversation(
           *varargs,
@@ -4773,7 +4774,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesCustomURL(
           *varargs,
@@ -4798,7 +4799,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesDifferentModel(
           *varargs,
@@ -4823,7 +4824,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesEndpoint(
           *varargs,
@@ -4848,7 +4849,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesExplicit(
           *varargs,
@@ -4873,7 +4874,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           query: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesFunctionCall(
           *varargs,
@@ -4898,7 +4899,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           image: T.any(Baml::Image, String, Baml::Pdf, Baml::Audio),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesImageInput(
           *varargs,
@@ -4923,7 +4924,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           problem: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesReasoning(
           *varargs,
@@ -4948,7 +4949,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesShorthand(
           *varargs,
@@ -4973,7 +4974,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           query: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesWebSearch(
           *varargs,
@@ -4998,7 +4999,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesWithOpenAIResponseType(
           *varargs,
@@ -5023,7 +5024,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIShorthand(
           *varargs,
@@ -5048,7 +5049,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIWithFinishReasonError(
           *varargs,
@@ -5073,7 +5074,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIWithMaxTokens(
           *varargs,
@@ -5098,7 +5099,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIWithNullMaxTokens(
           *varargs,
@@ -5123,7 +5124,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenRouterMistralSmall3_1_24b(
           *varargs,
@@ -5148,7 +5149,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenaiResponsesPdfs(
           *varargs,
@@ -5173,7 +5174,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestRetryConstant(
           *varargs,
@@ -5198,7 +5199,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestRetryExponential(
           *varargs,
@@ -5223,7 +5224,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestRoundRobinStrategy(
           *varargs,
@@ -5248,7 +5249,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestSingleFallbackClient(
           *varargs,
@@ -5273,7 +5274,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::CustomStory)}
       def TestThinking(
           *varargs,
@@ -5298,7 +5299,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           question: BamlClient::Types::UniverseQuestionInput,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::UniverseQuestion)}
       def TestUniverseQuestion(
           *varargs,
@@ -5323,7 +5324,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestVertex(
           *varargs,
@@ -5348,7 +5349,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestVertexClaude(
           *varargs,
@@ -5373,7 +5374,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestVertexWithSystemInstructions(
           *varargs,
@@ -5398,7 +5399,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: T.any(String, T::Boolean),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::UnionTest_ReturnType)}
       def UnionTest_Function(
           *varargs,
@@ -5423,7 +5424,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           inp: BamlClient::Types::BlockConstraintForParam,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def UseBlockConstraint(
           *varargs,
@@ -5448,7 +5449,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::MaintainFieldOrder,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::MaintainFieldOrder)}
       def UseMaintainFieldOrder(
           *varargs,
@@ -5473,7 +5474,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           a: BamlClient::Types::MalformedConstraints2,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def UseMalformedConstraints(
           *varargs,
@@ -5498,7 +5499,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           inp: BamlClient::Types::NestedBlockConstraintForParam,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def UseNestedBlockConstraint(
           *varargs,
@@ -5523,7 +5524,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def ValidateBasicResponses(
           *varargs,
@@ -5548,7 +5549,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def ValidateResponseTypes(
           *varargs,
@@ -5573,7 +5574,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           vid: Baml::Video,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def VideoInputGemini(
           *varargs,
@@ -5598,7 +5599,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           vid: Baml::Video,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def VideoInputVertex(
           *varargs,
@@ -5634,7 +5635,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           recipe: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::Recipe, BamlClient::Types::Recipe])}
       def AaaSamOutputFormat(
           *varargs,
@@ -5659,7 +5660,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           data: BamlClient::Types::LinkedListAliasNode,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::LinkedListAliasNode, BamlClient::Types::LinkedListAliasNode])}
       def AliasThatPointsToRecursiveType(
           *varargs,
@@ -5684,7 +5685,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           money: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::Checked[Integer], BamlClient::Types::Checked[Integer]])}
       def AliasWithMultipleAttrs(
           *varargs,
@@ -5709,7 +5710,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::InputClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AliasedInputClass(
           *varargs,
@@ -5734,7 +5735,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::InputClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AliasedInputClass2(
           *varargs,
@@ -5759,7 +5760,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::InputClassNested,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AliasedInputClassNested(
           *varargs,
@@ -5784,7 +5785,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::AliasedEnum,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AliasedInputEnum(
           *varargs,
@@ -5809,7 +5810,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: T::Array[BamlClient::Types::AliasedEnum],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AliasedInputList(
           *varargs,
@@ -5834,7 +5835,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           optionals: BamlClient::Types::OptionalListAndMap,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::OptionalListAndMap, BamlClient::Types::OptionalListAndMap])}
       def AllowedOptionals(
           *varargs,
@@ -5859,7 +5860,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           a: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def AssertFn(
           *varargs,
@@ -5884,7 +5885,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           aud: Baml::Audio,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AudioInput(
           *varargs,
@@ -5909,7 +5910,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           aud: Baml::Audio,prompt: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AudioInputOpenai(
           *varargs,
@@ -5934,7 +5935,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: T::Array[Integer],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::LinkedList, BamlClient::Types::LinkedList])}
       def BuildLinkedList(
           *varargs,
@@ -5959,7 +5960,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::BinaryNode,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::Tree, BamlClient::Types::Tree])}
       def BuildTree(
           *varargs,
@@ -5984,7 +5985,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           cls: BamlClient::Types::ClassToRecAlias,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::ClassToRecAlias, BamlClient::Types::ClassToRecAlias])}
       def ClassThatPointsToRecursiveClassThroughAlias(
           *varargs,
@@ -6009,7 +6010,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(BamlClient::Types::DynEnumTwo, String), T.any(BamlClient::Types::DynEnumTwo, String)])}
       def ClassifyDynEnumTwo(
           *varargs,
@@ -6034,7 +6035,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(BamlClient::Types::DynEnumOne, String), T.any(BamlClient::Types::DynEnumOne, String)])}
       def ClassifyDynamicStatus(
           *varargs,
@@ -6059,7 +6060,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category])}
       def ClassifyMessage(
           *varargs,
@@ -6084,7 +6085,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category])}
       def ClassifyMessage2(
           *varargs,
@@ -6109,7 +6110,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category])}
       def ClassifyMessage3(
           *varargs,
@@ -6134,7 +6135,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           prefix: String,suffix: String,language: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def Completion(
           *varargs,
@@ -6159,7 +6160,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(BamlClient::StreamTypes::BookOrder, BamlClient::StreamTypes::FlightConfirmation, BamlClient::StreamTypes::GroceryReceipt), T.any(BamlClient::Types::BookOrder, BamlClient::Types::FlightConfirmation, BamlClient::Types::GroceryReceipt)])}
       def CustomTask(
           *varargs,
@@ -6184,7 +6185,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           audio: Baml::Audio,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def DescribeAudio(
           *varargs,
@@ -6209,7 +6210,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           audio: Baml::Audio,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def DescribeAudio2(
           *varargs,
@@ -6234,7 +6235,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def DescribeImage(
           *varargs,
@@ -6259,7 +6260,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           classWithImage: BamlClient::Types::ClassWithImage,img2: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def DescribeImage2(
           *varargs,
@@ -6284,7 +6285,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           classWithImage: BamlClient::Types::ClassWithImage,img2: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def DescribeImage3(
           *varargs,
@@ -6309,7 +6310,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           classWithImage: BamlClient::Types::ClassWithImage,img2: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def DescribeImage4(
           *varargs,
@@ -6334,7 +6335,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,client_sector: String,client_name: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def DescribeMedia1599(
           *varargs,
@@ -6359,7 +6360,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(BamlClient::StreamTypes::OriginalA, BamlClient::StreamTypes::OriginalB), T.any(BamlClient::Types::OriginalA, BamlClient::Types::OriginalB)])}
       def DifferentiateUnions(
           *varargs,
@@ -6384,7 +6385,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::DummyOutput, BamlClient::Types::DummyOutput])}
       def DummyOutputFunction(
           *varargs,
@@ -6409,7 +6410,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::DynamicClassOne,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::DynamicClassTwo, BamlClient::Types::DynamicClassTwo])}
       def DynamicFunc(
           *varargs,
@@ -6434,7 +6435,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::DynInputOutput,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::DynInputOutput, BamlClient::Types::DynInputOutput])}
       def DynamicInputOutput(
           *varargs,
@@ -6459,7 +6460,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: T::Array[BamlClient::Types::DynInputOutput],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[BamlClient::StreamTypes::DynInputOutput], T::Array[BamlClient::Types::DynInputOutput]])}
       def DynamicListInputOutput(
           *varargs,
@@ -6484,7 +6485,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def ExpectFailure(
           *varargs,
@@ -6509,7 +6510,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           document: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::ContactInfo, BamlClient::Types::ContactInfo])}
       def ExtractContactInfo(
           *varargs,
@@ -6534,7 +6535,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[T.any(BamlClient::Types::DynEnumTwo, String)], T::Array[T.any(BamlClient::Types::DynEnumTwo, String)]])}
       def ExtractDynamicCategories(
           *varargs,
@@ -6559,7 +6560,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::DynamicSchema, BamlClient::Types::DynamicSchema])}
       def ExtractEntities(
           *varargs,
@@ -6584,7 +6585,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[T.any(BamlClient::Types::Hobby, String)], T::Array[T.any(BamlClient::Types::Hobby, String)]])}
       def ExtractHobby(
           *varargs,
@@ -6609,7 +6610,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def ExtractName(
           *varargs,
@@ -6634,7 +6635,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[String], T::Array[String]])}
       def ExtractNames(
           *varargs,
@@ -6659,7 +6660,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[BamlClient::StreamTypes::Person], T::Array[BamlClient::Types::Person]])}
       def ExtractPeople(
           *varargs,
@@ -6684,7 +6685,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           email: String,reason: T.any(String, String),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::ReceiptInfo, BamlClient::Types::ReceiptInfo])}
       def ExtractReceiptInfo(
           *varargs,
@@ -6709,7 +6710,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           resume: String,img: T.nilable(Baml::Image),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::Resume, BamlClient::Types::Resume])}
       def ExtractResume(
           *varargs,
@@ -6734,7 +6735,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           resume: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::Resume, BamlClient::Types::Resume])}
       def ExtractResume2(
           *varargs,
@@ -6759,7 +6760,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def FnAlwaysFails(
           *varargs,
@@ -6784,7 +6785,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassOptionalOutput), T.nilable(BamlClient::Types::ClassOptionalOutput)])}
       def FnClassOptionalOutput(
           *varargs,
@@ -6809,7 +6810,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassOptionalOutput2), T.nilable(BamlClient::Types::ClassOptionalOutput2)])}
       def FnClassOptionalOutput2(
           *varargs,
@@ -6834,7 +6835,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[BamlClient::Types::EnumOutput], T::Array[BamlClient::Types::EnumOutput]])}
       def FnEnumListOutput(
           *varargs,
@@ -6859,7 +6860,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::EnumOutput, BamlClient::Types::EnumOutput])}
       def FnEnumOutput(
           *varargs,
@@ -6884,7 +6885,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           retries: Integer,delay_ms: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def FnFailRetryConstantDelay(
           *varargs,
@@ -6909,7 +6910,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           retries: Integer,initial_delay_ms: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def FnFailRetryExponentialDelay(
           *varargs,
@@ -6934,7 +6935,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def FnFallbackAlwaysFails(
           *varargs,
@@ -6959,7 +6960,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::LiteralClassHello,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::LiteralClassHello, BamlClient::Types::LiteralClassHello])}
       def FnLiteralClassInputOutput(
           *varargs,
@@ -6984,7 +6985,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(BamlClient::StreamTypes::LiteralClassOne, BamlClient::StreamTypes::LiteralClassTwo), T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo)])}
       def FnLiteralUnionClassInputOutput(
           *varargs,
@@ -7009,7 +7010,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myString: T.nilable(String),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def FnNamedArgsSingleStringOptional(
           *varargs,
@@ -7034,7 +7035,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Boolean, T::Boolean])}
       def FnOutputBool(
           *varargs,
@@ -7059,7 +7060,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::TestOutputClass, BamlClient::Types::TestOutputClass])}
       def FnOutputClass(
           *varargs,
@@ -7084,7 +7085,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[BamlClient::StreamTypes::TestOutputClass], T::Array[BamlClient::Types::TestOutputClass]])}
       def FnOutputClassList(
           *varargs,
@@ -7109,7 +7110,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::TestClassNested, BamlClient::Types::TestClassNested])}
       def FnOutputClassNested(
           *varargs,
@@ -7134,7 +7135,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::TestClassWithEnum, BamlClient::Types::TestClassWithEnum])}
       def FnOutputClassWithEnum(
           *varargs,
@@ -7159,7 +7160,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def FnOutputInt(
           *varargs,
@@ -7184,7 +7185,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Boolean, T::Boolean])}
       def FnOutputLiteralBool(
           *varargs,
@@ -7209,7 +7210,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def FnOutputLiteralInt(
           *varargs,
@@ -7234,7 +7235,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def FnOutputLiteralString(
           *varargs,
@@ -7259,7 +7260,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[String], T::Array[String]])}
       def FnOutputStringList(
           *varargs,
@@ -7284,7 +7285,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::TestEnum, BamlClient::Types::TestEnum])}
       def FnTestAliasedEnumOutput(
           *varargs,
@@ -7309,7 +7310,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::TestClassAlias, BamlClient::Types::TestClassAlias])}
       def FnTestClassAlias(
           *varargs,
@@ -7334,7 +7335,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myArg: BamlClient::Types::NamedArgsSingleEnum,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def FnTestNamedArgsSingleEnum(
           *varargs,
@@ -7359,7 +7360,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::RaysData, BamlClient::Types::RaysData])}
       def GetDataType(
           *varargs,
@@ -7384,7 +7385,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           email: BamlClient::Types::Email,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::OrderInfo, BamlClient::Types::OrderInfo])}
       def GetOrderInfo(
           *varargs,
@@ -7409,7 +7410,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           query: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::SearchParams, BamlClient::Types::SearchParams])}
       def GetQuery(
           *varargs,
@@ -7434,7 +7435,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           i1: T::Hash[BamlClient::Types::MapKey, String],i2: T::Hash[BamlClient::Types::MapKey, String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Hash[BamlClient::Types::MapKey, String], T::Hash[BamlClient::Types::MapKey, String]])}
       def InOutEnumMapKey(
           *varargs,
@@ -7459,7 +7460,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           i1: T::Hash[T.any(String, String, String, String), String],i2: T::Hash[T.any(String, String, String, String), String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Hash[T.any(String, String, String, String), String], T::Hash[T.any(String, String, String, String), String]])}
       def InOutLiteralStringUnionMapKey(
           *varargs,
@@ -7484,7 +7485,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           m: T::Hash[String, String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Hash[String, String], T::Hash[String, String]])}
       def InOutSingleLiteralStringMapKey(
           *varargs,
@@ -7509,7 +7510,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::JsonValue,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::JsonValue, BamlClient::Types::JsonValue])}
       def JsonTypeAliasCycle(
           *varargs,
@@ -7534,7 +7535,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def LLMEcho(
           *varargs,
@@ -7559,7 +7560,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(Integer, T::Boolean, String), T.any(Integer, T::Boolean, String)])}
       def LiteralUnionsTest(
           *varargs,
@@ -7584,7 +7585,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           n: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def LlmReturnNumber(
           *varargs,
@@ -7609,7 +7610,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::Checked[BamlClient::StreamTypes::BlockConstraint], BamlClient::Types::Checked[BamlClient::Types::BlockConstraint]])}
       def MakeBlockConstraint(
           *varargs,
@@ -7634,7 +7635,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::ClassWithBlockDone, BamlClient::Types::ClassWithBlockDone])}
       def MakeClassWithBlockDone(
           *varargs,
@@ -7659,7 +7660,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::ClassWithoutDone, BamlClient::Types::ClassWithoutDone])}
       def MakeClassWithExternalDone(
           *varargs,
@@ -7684,7 +7685,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::NestedBlockConstraint, BamlClient::Types::NestedBlockConstraint])}
       def MakeNestedBlockConstraint(
           *varargs,
@@ -7709,7 +7710,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::SemanticContainer, BamlClient::Types::SemanticContainer])}
       def MakeSemanticContainer(
           *varargs,
@@ -7734,7 +7735,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           m: T::Hash[String, T::Array[String]],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Hash[String, T::Array[String]], T::Hash[String, T::Array[String]]])}
       def MapAlias(
           *varargs,
@@ -7759,7 +7760,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           money: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::MergeAttrs, BamlClient::Types::MergeAttrs])}
       def MergeAliasAttributes(
           *varargs,
@@ -7784,7 +7785,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::DynamicOutput, BamlClient::Types::DynamicOutput])}
       def MyFunc(
           *varargs,
@@ -7809,7 +7810,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           c: T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]]),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]]), T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]])])}
       def NestedAlias(
           *varargs,
@@ -7834,7 +7835,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           s: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::ClassForNullLiteral, BamlClient::Types::ClassForNullLiteral])}
       def NullLiteralClassHello(
           *varargs,
@@ -7859,7 +7860,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           s: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def OpenAIWithAnthropicResponseHello(
           *varargs,
@@ -7884,7 +7885,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[T.nilable(BamlClient::StreamTypes::OptionalTest_ReturnType)], T::Array[T.nilable(BamlClient::Types::OptionalTest_ReturnType)]])}
       def OptionalTest_Function(
           *varargs,
@@ -7909,7 +7910,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PdfInput(
           *varargs,
@@ -7934,7 +7935,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PdfInputAnthropic(
           *varargs,
@@ -7959,7 +7960,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,prompt: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PdfInputOpenai(
           *varargs,
@@ -7984,7 +7985,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PdfInputVertex(
           *varargs,
@@ -8009,7 +8010,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           name: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::FooAny, BamlClient::Types::FooAny])}
       def PredictAge(
           *varargs,
@@ -8034,7 +8035,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           inp: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::Checked[Integer], BamlClient::Types::Checked[Integer]])}
       def PredictAgeBare(
           *varargs,
@@ -8059,7 +8060,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           p: T.any(Integer, String, T::Boolean, Float),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(Integer, String, T::Boolean, Float), T.any(Integer, String, T::Boolean, Float)])}
       def PrimitiveAlias(
           *varargs,
@@ -8084,7 +8085,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PromptTestClaude(
           *varargs,
@@ -8109,7 +8110,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PromptTestClaudeChat(
           *varargs,
@@ -8134,7 +8135,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PromptTestClaudeChatNoSystem(
           *varargs,
@@ -8159,7 +8160,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PromptTestOpenAI(
           *varargs,
@@ -8184,7 +8185,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PromptTestOpenAIChat(
           *varargs,
@@ -8209,7 +8210,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PromptTestOpenAIChatNoSystem(
           *varargs,
@@ -8234,7 +8235,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PromptTestStreaming(
           *varargs,
@@ -8259,7 +8260,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecAliasOne,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::RecAliasOne, BamlClient::Types::RecAliasOne])}
       def RecursiveAliasCycle(
           *varargs,
@@ -8284,7 +8285,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           cls: BamlClient::Types::NodeWithAliasIndirection,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::NodeWithAliasIndirection, BamlClient::Types::NodeWithAliasIndirection])}
       def RecursiveClassWithAliasIndirection(
           *varargs,
@@ -8309,7 +8310,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveUnion,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::RecursiveUnion, BamlClient::Types::RecursiveUnion])}
       def RecursiveUnionTest(
           *varargs,
@@ -8334,7 +8335,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RenderTestClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def RenderDynamicClass(
           *varargs,
@@ -8359,7 +8360,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           bike: T.any(BamlClient::Types::RenderTestEnum, String),other: T.any(BamlClient::Types::RenderTestEnum, String),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def RenderDynamicEnum(
           *varargs,
@@ -8384,7 +8385,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           money: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::Checked[Integer], BamlClient::Types::Checked[Integer]])}
       def ReturnAliasWithMergedAttributes(
           *varargs,
@@ -8409,7 +8410,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           inp: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def ReturnFailingAssert(
           *varargs,
@@ -8434,7 +8435,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           s: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::JsonTemplate, BamlClient::Types::JsonTemplate])}
       def ReturnJsonEntry(
           *varargs,
@@ -8459,7 +8460,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           a: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::MalformedConstraints, BamlClient::Types::MalformedConstraints])}
       def ReturnMalformedConstraints(
           *varargs,
@@ -8484,7 +8485,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::Schema, BamlClient::Types::Schema])}
       def SchemaDescriptions(
           *varargs,
@@ -8509,7 +8510,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveListAlias,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::RecursiveListAlias, BamlClient::Types::RecursiveListAlias])}
       def SimpleRecursiveListAlias(
           *varargs,
@@ -8534,7 +8535,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveMapAlias,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::RecursiveMapAlias, BamlClient::Types::RecursiveMapAlias])}
       def SimpleRecursiveMapAlias(
           *varargs,
@@ -8559,7 +8560,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           digits: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::BigNumbers, BamlClient::Types::BigNumbers])}
       def StreamBigNumbers(
           *varargs,
@@ -8584,7 +8585,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           theme: String,length: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::TwoStoriesOneTitle, BamlClient::Types::TwoStoriesOneTitle])}
       def StreamFailingAssertion(
           *varargs,
@@ -8609,7 +8610,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           theme: String,length: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::TwoStoriesOneTitleCheck, BamlClient::Types::TwoStoriesOneTitleCheck])}
       def StreamFailingCheck(
           *varargs,
@@ -8634,7 +8635,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           digits: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def StreamOneBigNumber(
           *varargs,
@@ -8659,7 +8660,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           digits: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[T.any(Integer, String)], T::Array[T.any(Integer, String)]])}
       def StreamUnionIntegers(
           *varargs,
@@ -8684,7 +8685,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           digits: Integer,yapping: T::Boolean,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::CompoundBigNumbers, BamlClient::Types::CompoundBigNumbers])}
       def StreamingCompoundNumbers(
           *varargs,
@@ -8709,7 +8710,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           document_txt: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::Document1559, BamlClient::Types::Document1559])}
       def StructureDocument1559(
           *varargs,
@@ -8734,7 +8735,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveAliasDependency,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::RecursiveAliasDependency, BamlClient::Types::RecursiveAliasDependency])}
       def TakeRecAliasDep(
           *varargs,
@@ -8759,7 +8760,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           story: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TellStory(
           *varargs,
@@ -8784,7 +8785,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAbortFallbackChain(
           *varargs,
@@ -8809,7 +8810,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAnthropic(
           *varargs,
@@ -8834,7 +8835,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAnthropicShorthand(
           *varargs,
@@ -8859,7 +8860,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAws(
           *varargs,
@@ -8884,7 +8885,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAwsClaude37(
           *varargs,
@@ -8909,7 +8910,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAwsInferenceProfile(
           *varargs,
@@ -8934,7 +8935,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAwsInvalidAccessKey(
           *varargs,
@@ -8959,7 +8960,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAwsInvalidProfile(
           *varargs,
@@ -8984,7 +8985,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAwsInvalidRegion(
           *varargs,
@@ -9009,7 +9010,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAwsInvalidSessionToken(
           *varargs,
@@ -9034,7 +9035,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzure(
           *varargs,
@@ -9059,7 +9060,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzureFailure(
           *varargs,
@@ -9084,7 +9085,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzureO1NoMaxTokens(
           *varargs,
@@ -9109,7 +9110,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzureO1WithMaxCompletionTokens(
           *varargs,
@@ -9134,7 +9135,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzureO1WithMaxTokens(
           *varargs,
@@ -9159,7 +9160,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzureO3NoMaxTokens(
           *varargs,
@@ -9184,7 +9185,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzureO3WithMaxCompletionTokens(
           *varargs,
@@ -9209,7 +9210,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzureWithMaxTokens(
           *varargs,
@@ -9234,7 +9235,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,not_cached: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestCaching(
           *varargs,
@@ -9259,7 +9260,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFallbackClient(
           *varargs,
@@ -9284,7 +9285,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFallbackStrategy(
           *varargs,
@@ -9309,7 +9310,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFallbackToShorthand(
           *varargs,
@@ -9334,7 +9335,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myBool: T::Boolean,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleBool(
           *varargs,
@@ -9359,7 +9360,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myArg: BamlClient::Types::NamedArgsSingleClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleClass(
           *varargs,
@@ -9384,7 +9385,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myArg: T::Array[BamlClient::Types::NamedArgsSingleEnumList],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleEnumList(
           *varargs,
@@ -9409,7 +9410,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myFloat: Float,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleFloat(
           *varargs,
@@ -9434,7 +9435,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myInt: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleInt(
           *varargs,
@@ -9459,7 +9460,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myMap: T::Hash[String, BamlClient::Types::StringToClassEntry],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Hash[String, BamlClient::StreamTypes::StringToClassEntry], T::Hash[String, BamlClient::Types::StringToClassEntry]])}
       def TestFnNamedArgsSingleMapStringToClass(
           *varargs,
@@ -9484,7 +9485,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myMap: T::Hash[String, T::Hash[String, String]],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Hash[String, T::Hash[String, String]], T::Hash[String, T::Hash[String, String]]])}
       def TestFnNamedArgsSingleMapStringToMap(
           *varargs,
@@ -9509,7 +9510,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myMap: T::Hash[String, String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Hash[String, String], T::Hash[String, String]])}
       def TestFnNamedArgsSingleMapStringToString(
           *varargs,
@@ -9534,7 +9535,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myString: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleString(
           *varargs,
@@ -9559,7 +9560,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myStringArray: T::Array[String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleStringArray(
           *varargs,
@@ -9584,7 +9585,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myArg: T::Array[String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[String], T::Array[String]])}
       def TestFnNamedArgsSingleStringList(
           *varargs,
@@ -9609,7 +9610,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestGemini(
           *varargs,
@@ -9634,7 +9635,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestGeminiOpenAiGeneric(
           *varargs,
@@ -9659,7 +9660,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestGeminiSystem(
           *varargs,
@@ -9684,7 +9685,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestGeminiSystemAsChat(
           *varargs,
@@ -9709,7 +9710,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestGeminiThinking(
           *varargs,
@@ -9734,7 +9735,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestGroq(
           *varargs,
@@ -9759,7 +9760,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestImageInput(
           *varargs,
@@ -9784,7 +9785,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestImageInputAnthropic(
           *varargs,
@@ -9809,7 +9810,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           imgs: T::Array[Baml::Image],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestImageListInput(
           *varargs,
@@ -9834,7 +9835,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::TestMemoryOutput, BamlClient::Types::TestMemoryOutput])}
       def TestMemory(
           *varargs,
@@ -9859,7 +9860,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myArg: BamlClient::Types::NamedArgsSingleClass,myArg2: BamlClient::Types::NamedArgsSingleClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestMulticlassNamedArgs(
           *varargs,
@@ -9884,7 +9885,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myBool: T::Boolean,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestNamedArgsLiteralBool(
           *varargs,
@@ -9909,7 +9910,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myInt: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestNamedArgsLiteralInt(
           *varargs,
@@ -9934,7 +9935,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           myString: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestNamedArgsLiteralString(
           *varargs,
@@ -9959,7 +9960,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.nilable(String), T.nilable(String)])}
       def TestOllama(
           *varargs,
@@ -9984,7 +9985,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::Haiku, BamlClient::Types::Haiku])}
       def TestOllamaHaiku(
           *varargs,
@@ -10009,7 +10010,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAI(
           *varargs,
@@ -10034,7 +10035,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIDummyClient(
           *varargs,
@@ -10059,7 +10060,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIGPT4oMini(
           *varargs,
@@ -10084,7 +10085,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIGPT4oMini2(
           *varargs,
@@ -10109,7 +10110,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIGPT4oMini3(
           *varargs,
@@ -10134,7 +10135,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAILegacyProvider(
           *varargs,
@@ -10159,7 +10160,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIO1NoMaxTokens(
           *varargs,
@@ -10184,7 +10185,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIO1WithMaxCompletionTokens(
           *varargs,
@@ -10209,7 +10210,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIO1WithMaxTokens(
           *varargs,
@@ -10234,7 +10235,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIProviderWithResponsesType(
           *varargs,
@@ -10259,7 +10260,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponses(
           *varargs,
@@ -10284,7 +10285,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           problem: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesAllRoles(
           *varargs,
@@ -10309,7 +10310,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesAutoType(
           *varargs,
@@ -10334,7 +10335,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           topic: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesConversation(
           *varargs,
@@ -10359,7 +10360,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesCustomURL(
           *varargs,
@@ -10384,7 +10385,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesDifferentModel(
           *varargs,
@@ -10409,7 +10410,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesEndpoint(
           *varargs,
@@ -10434,7 +10435,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesExplicit(
           *varargs,
@@ -10459,7 +10460,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           query: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesFunctionCall(
           *varargs,
@@ -10484,7 +10485,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           image: T.any(Baml::Image, String, Baml::Pdf, Baml::Audio),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesImageInput(
           *varargs,
@@ -10509,7 +10510,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           problem: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesReasoning(
           *varargs,
@@ -10534,7 +10535,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesShorthand(
           *varargs,
@@ -10559,7 +10560,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           query: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesWebSearch(
           *varargs,
@@ -10584,7 +10585,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesWithOpenAIResponseType(
           *varargs,
@@ -10609,7 +10610,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIShorthand(
           *varargs,
@@ -10634,7 +10635,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIWithFinishReasonError(
           *varargs,
@@ -10659,7 +10660,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIWithMaxTokens(
           *varargs,
@@ -10684,7 +10685,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIWithNullMaxTokens(
           *varargs,
@@ -10709,7 +10710,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenRouterMistralSmall3_1_24b(
           *varargs,
@@ -10734,7 +10735,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenaiResponsesPdfs(
           *varargs,
@@ -10759,7 +10760,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestRetryConstant(
           *varargs,
@@ -10784,7 +10785,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestRetryExponential(
           *varargs,
@@ -10809,7 +10810,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestRoundRobinStrategy(
           *varargs,
@@ -10834,7 +10835,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestSingleFallbackClient(
           *varargs,
@@ -10859,7 +10860,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::CustomStory, BamlClient::Types::CustomStory])}
       def TestThinking(
           *varargs,
@@ -10884,7 +10885,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           question: BamlClient::Types::UniverseQuestionInput,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::UniverseQuestion, BamlClient::Types::UniverseQuestion])}
       def TestUniverseQuestion(
           *varargs,
@@ -10909,7 +10910,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestVertex(
           *varargs,
@@ -10934,7 +10935,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestVertexClaude(
           *varargs,
@@ -10959,7 +10960,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestVertexWithSystemInstructions(
           *varargs,
@@ -10984,7 +10985,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: T.any(String, T::Boolean),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::UnionTest_ReturnType, BamlClient::Types::UnionTest_ReturnType])}
       def UnionTest_Function(
           *varargs,
@@ -11009,7 +11010,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           inp: BamlClient::Types::BlockConstraintForParam,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def UseBlockConstraint(
           *varargs,
@@ -11034,7 +11035,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::MaintainFieldOrder,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::MaintainFieldOrder, BamlClient::Types::MaintainFieldOrder])}
       def UseMaintainFieldOrder(
           *varargs,
@@ -11059,7 +11060,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           a: BamlClient::Types::MalformedConstraints2,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def UseMalformedConstraints(
           *varargs,
@@ -11084,7 +11085,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           inp: BamlClient::Types::NestedBlockConstraintForParam,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def UseNestedBlockConstraint(
           *varargs,
@@ -11109,7 +11110,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def ValidateBasicResponses(
           *varargs,
@@ -11134,7 +11135,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def ValidateResponseTypes(
           *varargs,
@@ -11159,7 +11160,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           vid: Baml::Video,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def VideoInputGemini(
           *varargs,
@@ -11184,7 +11185,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           vid: Baml::Video,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def VideoInputVertex(
           *varargs,

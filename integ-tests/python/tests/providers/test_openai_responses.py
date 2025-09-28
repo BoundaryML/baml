@@ -24,6 +24,7 @@ async def test_expose_request_openai_responses_multimodal():
                             {
                                 "type": "input_image",
                                 "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
+                                "detail": "auto",
                             },
                         ],
                     }
@@ -84,6 +85,7 @@ async def test_expose_request_openai_responses_pdf_base64():
                             {
                                 "type": "input_file",
                                 "file_data": f"data:application/pdf;base64,{test_pdf_b64}",
+                                "filename": "document.pdf",
                             },
                         ],
                     }
@@ -266,6 +268,7 @@ async def test_expose_request_openai_responses_pdf_url():
                             {
                                 "type": "input_file",
                                 "file_url": "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final85.pdf",
+                                "filename": "document.pdf",
                             },
                         ],
                     }

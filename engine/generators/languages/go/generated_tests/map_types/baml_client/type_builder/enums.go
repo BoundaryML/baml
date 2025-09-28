@@ -15,13 +15,12 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
-
 type StatusEnumView struct {
-    inner baml.EnumBuilder
+	inner baml.EnumBuilder
 }
 
 func (t *StatusEnumView) ListValues() ([]EnumValueView, error) {
-    result, err := t.inner.ListValues()
+	result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
 	}
@@ -32,21 +31,17 @@ func (t *StatusEnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
-
-
-
 func (t *StatusEnumView) ValueACTIVE() (EnumValueView, error) {
-    return t.inner.Value("ACTIVE")
+	return t.inner.Value("ACTIVE")
 }
 
 func (t *StatusEnumView) ValueINACTIVE() (EnumValueView, error) {
-    return t.inner.Value("INACTIVE")
+	return t.inner.Value("INACTIVE")
 }
 
 func (t *StatusEnumView) ValuePENDING() (EnumValueView, error) {
-    return t.inner.Value("PENDING")
+	return t.inner.Value("PENDING")
 }
-
 
 func (t *TypeBuilder) Status() (*StatusEnumView, error) {
 	bld, err := t.inner.Enum("Status")
