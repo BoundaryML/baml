@@ -131,7 +131,7 @@ impl<Meta: Clone> UnresolvedGoogleAI<Meta> {
             .as_ref()
             .map(|m| m.resolve(ctx))
             .transpose()?
-            .unwrap_or_else(|| "gemini-1.5-flash".to_string());
+            .ok_or_else(|| anyhow::anyhow!("model must be provided"))?;
 
         let base_url = self.base_url.resolve(ctx)?;
 

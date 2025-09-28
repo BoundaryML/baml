@@ -283,12 +283,22 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
             .map(|(k, v)| Ok((k.clone(), v.resolve(ctx)?)))
             .collect::<Result<IndexMap<_, _>>>()?;
 
+        // HACK: for some reason .resolve returns the env var name with $ if it's not found. So we need to check for that.
+        let project_id = match self.project_id {
+            Some(ref project_id) => {
+                let resolved = project_id.resolve(ctx)?;
+                if resolved.starts_with("$") || resolved.is_empty() {
+                    None
+                } else {
+                    Some(resolved)
+                }
+            }
+            None => None,
+        };
+
         Ok(ResolvedVertex {
             base_url_or_location,
-            project_id: match self.project_id {
-                Some(ref project_id) => Some(project_id.resolve(ctx)?),
-                None => None,
-            },
+            project_id,
             auth_strategy: self.auth_strategy.resolve(ctx)?,
             model,
             headers,

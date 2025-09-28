@@ -51,7 +51,7 @@ func TestClientRegistryVertexAIWithJSONCredentials(t *testing.T) {
 	
 	// Add Vertex AI client with JSON string credentials
 	clientRegistry.AddLlmClient("MyClient", "vertex-ai", map[string]interface{}{
-		"model":       "gemini-1.5-pro",
+		"model":       "gemini-2.5-flash",
 		"location":    "us-central1", 
 		"credentials": credentials,
 	})
@@ -85,7 +85,7 @@ func TestClientRegistryVertexAIWithJSONObjectCredentials(t *testing.T) {
 	
 	// Add Vertex AI client with JSON object credentials
 	clientRegistry.AddLlmClient("MyClient", "vertex-ai", map[string]interface{}{
-		"model":       "gemini-1.5-pro",
+		"model":       "gemini-2.5-flash",
 		"location":    "us-central1",
 		"credentials": credentials,
 	})

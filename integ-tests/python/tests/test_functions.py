@@ -1017,7 +1017,7 @@ async def test_dynamic_client_with_vertex_json_str_creds():
         "MyClient",
         "vertex-ai",
         {
-            "model": "gemini-1.5-pro",
+            "model": "gemini-2.5-flash",
             "location": "us-central1",
             "credentials": os.environ[
                 "INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT"
@@ -1039,7 +1039,7 @@ async def test_dynamic_client_with_vertex_json_object_creds():
         "MyClient",
         "vertex-ai",
         {
-            "model": "gemini-1.5-pro",
+            "model": "gemini-2.5-flash",
             "location": "us-central1",
             "credentials": json.loads(
                 os.environ["INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT"]
