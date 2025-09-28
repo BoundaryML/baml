@@ -378,7 +378,8 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
 
         let project_id = properties
             .ensure_string("project_id", false)
-            .map(|(_, v, _)| v);
+            .map(|(_, v, _)| v)
+            .or_else(|| Some(StringOr::EnvVar("GOOGLE_CLOUD_PROJECT".to_string())));
 
         let role_selection = properties.ensure_roles_selection();
         let allowed_metadata = properties.ensure_allowed_metadata();

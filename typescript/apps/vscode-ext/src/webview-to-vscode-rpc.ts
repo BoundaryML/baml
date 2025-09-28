@@ -96,7 +96,7 @@ export type LoadGcpCredsResponse =
   | {
     ok: {
       accessToken: string;
-      projectId: string;
+      projectId: string | null;
     };
   }
   | {

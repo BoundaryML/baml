@@ -547,7 +547,7 @@ impl TracePublisher {
         {
             Ok(response) => response,
             Err(e) => {
-                tracing::error!("Failed to check BAML source upload status: {}", e);
+                tracing::warn!("Failed to check BAML source upload status: {}", e);
                 return Err(e.into());
             }
         };

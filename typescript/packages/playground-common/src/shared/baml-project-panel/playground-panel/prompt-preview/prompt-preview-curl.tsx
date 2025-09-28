@@ -3,7 +3,7 @@ import { useAtomValue } from 'jotai';
 import { atom } from 'jotai';
 import { loadable } from 'jotai/utils';
 import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
 import type React from 'react';
 import { useMemo } from 'react';
 import { apiKeysAtom } from '../../../../components/api-keys-dialog/atoms';
@@ -76,10 +76,10 @@ const baseCurlAtom = atom<Promise<CurlResult>>(async (get) => {
   };
 });
 
-const curlAtom = loadable(baseCurlAtom);
+export const curlAtom = loadable(baseCurlAtom);
 
 // Syntax highlighting component for curl commands
-const SyntaxHighlightedCurl = ({ text }: { text: string }) => {
+const SyntaxHighlightedCurl = memo(({ text }: { text: string }) => {
   const [highlightedHtml, setHighlightedHtml] = useState<string>('');
   const [highlighter, setHighlighter] = useState<any | undefined>(undefined);
   const { theme } = useTheme();
@@ -221,14 +221,39 @@ const SyntaxHighlightedCurl = ({ text }: { text: string }) => {
       />
     </div>
   );
-};
+}, (prev, next) => prev.text === next.text);
 
 export const PromptPreviewCurl = () => {
   const curl = useAtomValue(curlAtom);
+  const [lastCurl, setLastCurl] = useState<
+    | { curlTextWithoutSecrets: string; curlTextWithSecrets: string }
+    | undefined
+  >(undefined);
+
+  useEffect(() => {
+    if (curl.state === 'hasData' && curl.data && !(curl.data instanceof Error)) {
+      setLastCurl(curl.data);
+    }
+  }, [curl]);
 
   // Memoize the rendered content to prevent unnecessary re-renders
   const renderedContent = useMemo(() => {
     if (curl.state === 'loading') {
+      // While loading, show the last known cURL if available, otherwise a loader
+      if (lastCurl) {
+        return (
+          <div className="relative group">
+            <CopyButton
+              text={lastCurl.curlTextWithoutSecrets}
+              className="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100 z-30"
+              size="sm"
+              variant="outline"
+              showToast={false}
+            />
+            <SyntaxHighlightedCurl text={lastCurl.curlTextWithoutSecrets} />
+          </div>
+        );
+      }
       return <Loader />;
     }
 
@@ -264,7 +289,7 @@ export const PromptPreviewCurl = () => {
         <SyntaxHighlightedCurl text={value.curlTextWithoutSecrets} />
       </div>
     );
-  }, [curl]);
+  }, [curl, lastCurl]);
 
   return renderedContent;
 };

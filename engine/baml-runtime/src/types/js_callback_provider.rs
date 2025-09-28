@@ -79,7 +79,7 @@ pub struct AwsCredResult {
 #[serde(rename_all = "camelCase")]
 pub struct GcpCredResult {
     pub access_token: String,
-    pub project_id: String,
+    pub project_id: Option<String>,
 }
 
 #[derive(new)]
@@ -249,7 +249,7 @@ mod tests {
             result,
             JsCallbackResult::Ok(GcpCredResult {
                 access_token: "ya29.token".into(),
-                project_id: "my-project-123".into(),
+                project_id: Some("my-project-123".into()),
             })
         );
     }

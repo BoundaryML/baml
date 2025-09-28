@@ -9,6 +9,7 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
 use serde_json::json;
 use stream_cancel::Tripwire;
+use tokio::sync::{watch, Mutex};
 #[cfg(not(target_family = "wasm"))]
 use tokio::time::*;
 #[cfg(target_family = "wasm")]
@@ -22,13 +23,128 @@ use crate::{
             orchestrator::ExecutionScope,
             parsed_value_to_response,
             traits::{HttpContext, WithClientProperties, WithPrompt, WithStreamable},
-            LLMErrorResponse, LLMResponse, ResponseBamlValue,
+            ErrorCode, LLMCompleteResponse, LLMErrorResponse, LLMResponse, ResponseBamlValue,
         },
         prompt_renderer::PromptRenderer,
     },
     tracingv2::storage::{make_trace_event_for_response, storage::BAML_TRACER},
     FunctionResult, RuntimeContext,
 };
+
+// Shared state between the SSE consumer and the throttled parser.
+#[derive(Default)]
+struct ParserState {
+    last_sent_partial_serialized: Option<String>,
+    last_processed_snapshot_ptr: Option<usize>,
+}
+
+// Attempts to parse the latest SSE snapshot. We split this out in case parsing takes longer than the SSE interval.
+async fn run_parser_loop<'a, ParseFn, EventFn>(
+    scope: OrchestrationScope,
+    parse_state: Arc<Mutex<ParserState>>,
+    partial_parse_fn: &'a ParseFn,
+    on_event: &'a EventFn,
+    mut snapshot_rx: watch::Receiver<Option<Arc<LLMCompleteResponse>>>,
+) where
+    ParseFn: Fn(&str) -> Result<ResponseBamlValue> + 'a,
+    EventFn: Fn(FunctionResult) + 'a,
+{
+    let mut parse_interval = interval(web_time::Duration::from_millis(50));
+    parse_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
+    loop {
+        tokio::select! {
+            _ = parse_interval.tick() => {
+                process_latest_snapshot(
+                    &scope,
+                    &parse_state,
+                    partial_parse_fn,
+                    on_event,
+                    &mut snapshot_rx,
+                ).await;
+            }
+            changed = snapshot_rx.changed() => {
+                if changed.is_err() {
+                    process_latest_snapshot(
+                        &scope,
+                        &parse_state,
+                        partial_parse_fn,
+                        on_event,
+                        &mut snapshot_rx,
+                    ).await;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+async fn process_latest_snapshot<'a, ParseFn, EventFn>(
+    scope: &OrchestrationScope,
+    parse_state: &Arc<Mutex<ParserState>>,
+    partial_parse_fn: &'a ParseFn,
+    on_event: &'a EventFn,
+    snapshot_rx: &mut watch::Receiver<Option<Arc<LLMCompleteResponse>>>,
+) where
+    ParseFn: Fn(&str) -> Result<ResponseBamlValue> + 'a,
+    EventFn: Fn(FunctionResult) + 'a,
+{
+    let Some(snapshot) = snapshot_rx.borrow().clone() else {
+        return;
+    };
+
+    let snapshot_ptr = Arc::as_ptr(&snapshot) as usize;
+    let should_attempt = {
+        let state = parse_state.lock().await;
+        state.last_processed_snapshot_ptr != Some(snapshot_ptr)
+    };
+
+    if !should_attempt {
+        return;
+    }
+
+    match partial_parse_fn(&snapshot.content) {
+        Ok(baml_value) => {
+            let parsed = ResponseBamlValue(
+                baml_value
+                    .0
+                    .map_meta_owned(|m| jsonish::ResponseValueMeta(vec![], m.1, m.2, m.3)),
+            );
+            let partial = parsed.serialize_partial();
+            let serialized = serde_json::to_string(&partial).ok();
+
+            let should_emit = {
+                let mut state = parse_state.lock().await;
+                let should_emit = match serialized.as_ref() {
+                    Some(serialized_str) => {
+                        state.last_sent_partial_serialized.as_deref()
+                            != Some(serialized_str.as_str())
+                    }
+                    None => true,
+                };
+                state.last_processed_snapshot_ptr = Some(snapshot_ptr);
+                if should_emit {
+                    if let Some(serialized_str) = serialized.clone() {
+                        state.last_sent_partial_serialized = Some(serialized_str);
+                    }
+                }
+                should_emit
+            };
+
+            if should_emit {
+                on_event(FunctionResult::new(
+                    scope.clone(),
+                    LLMResponse::Success((*snapshot).clone()),
+                    Some(Ok(parsed)),
+                ));
+            }
+        }
+        Err(err) => {
+            let mut state = parse_state.lock().await;
+            state.last_processed_snapshot_ptr = None;
+        }
+    }
+}
 
 pub async fn orchestrate_stream<F, G>(
     iter: OrchestratorNodeIterator,
@@ -103,126 +219,64 @@ where
                 let final_response = match stream_res {
                     Ok(mut response_stream) => {
                         let mut last_response: Option<LLMResponse> = None;
-                        let mut latest_success_snapshot: Option<crate::internal::llm_client::LLMCompleteResponse> = None;
-                        let mut latest_content_for_parse: Option<String> = None;
-                        // Track last parsed payload surfaced to downstream listeners so we can dedupe events
-                        let mut last_sent_partial_serialized: Option<String> = None;
-                        let mut parse_interval = interval(web_time::Duration::from_millis(20));
-                        // If parsing falls behind, skip missed ticks so we only parse latest.
-                        parse_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+                        let parse_state = Arc::new(Mutex::new(ParserState::default()));
+                        let (snapshot_tx, snapshot_rx) = watch::channel::<Option<Arc<LLMCompleteResponse>>>(None);
 
-                        loop {
-                            tokio::select! {
-                                // Prioritize consuming SSE events over parsing.
-                                biased;
-                                maybe_item = FuturesStreamExt::next(&mut response_stream) => {
-                                    match maybe_item {
-                                        Some(stream_part) => {
-                                            if let Some(on_tick) = on_tick_fn.as_ref() {
-                                                on_tick();
-                                            }
-                                            match &stream_part {
-                                                LLMResponse::Success(s) => {
-                                                    // Track latest snapshot and content
-                                                    latest_success_snapshot = Some(s.clone());
-                                                    latest_content_for_parse = Some(s.content.clone());
-                                                    last_response = Some(LLMResponse::Success(s.clone()));
-                                                }
-                                                other => {
-                                                    last_response = Some(other.clone());
-                                                }
-                                            }
-                                        }
-                                        None => {
-                                            // End of stream
-                                            break;
-                                        }
-                                    }
+                        let parser_future = on_event.as_ref().map(|on_event_cb| {
+                            let scope = node.scope.clone();
+                            let parse_state = parse_state.clone();
+                            let partial_parse_fn = &partial_parse_fn;
+                            let snapshot_rx = snapshot_rx.clone();
+                            async move {
+                                run_parser_loop(
+                                    scope,
+                                    parse_state,
+                                    partial_parse_fn,
+                                    on_event_cb,
+                                    snapshot_rx,
+                                )
+                                .await;
+                            }
+                        });
+
+                        let on_tick_cb = on_tick_fn.as_ref();
+                        let parse_state_for_sse = parse_state.clone();
+                        let sse_future = async move {
+                            let snapshot_sender = snapshot_tx;
+                            while let Some(stream_part) = FuturesStreamExt::next(&mut response_stream).await {
+                                if let Some(on_tick) = on_tick_cb {
+                                    on_tick();
                                 }
-                                // Periodically surface the latest partial parse to downstream listeners.
-                                _ = parse_interval.tick(), if on_event.is_some() => {
-                                    if let Some(on_event) = on_event.as_ref() {
-                                        if let Some(snap) = latest_success_snapshot.as_ref() {
-                                            if let Some(mut content) = latest_content_for_parse.take() {
-                                                match partial_parse_fn(&content) {
-                                                    Ok(baml_value) => {
-                                                        // Strip flags to reduce memory usage
-                                                        let parsed = ResponseBamlValue(baml_value.0.map_meta_owned(|m| {
-                                                            jsonish::ResponseValueMeta(vec![], m.1, m.2, m.3)
-                                                        }));
-                                                        if let Ok(serialized) = serde_json::to_string(&parsed.serialize_partial()) {
-                                                            if last_sent_partial_serialized
-                                                                .as_deref()
-                                                                != Some(serialized.as_str())
-                                                            {
-                                                                // only successful events sent to the client
-                                                                on_event(FunctionResult::new(
-                                                                    node.scope.clone(),
-                                                                    LLMResponse::Success(snap.clone()),
-                                                                    Some(Ok(parsed)),
-                                                                ));
-                                                                last_sent_partial_serialized = Some(serialized);
-                                                            }
-                                                        } else {
-                                                            // If serialization fails, still emit the parsed event instead of dropping it.
-                                                            on_event(FunctionResult::new(
-                                                                node.scope.clone(),
-                                                                LLMResponse::Success(snap.clone()),
-                                                                Some(Ok(parsed)),
-                                                            ));
-                                                            // Intentionally do not update last_sent_partial_serialized here.
-                                                        }
-                                                    }
-                                                    Err(_) => {
-                                                        // Only restore the content if nothing newer has arrived since we took it.
-                                                        if latest_content_for_parse.is_none() {
-                                                            latest_content_for_parse = Some(content);
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
+
+                                match &stream_part {
+                                    LLMResponse::Success(s) => {
+                                        let snapshot = Arc::new(s.clone());
+                                        let _ = snapshot_sender.send_replace(Some(snapshot.clone()));
+                                        last_response = Some(LLMResponse::Success((*snapshot).clone()));
+
+                                        let mut state = parse_state_for_sse.lock().await;
+                                        state.last_processed_snapshot_ptr = None;
+                                    }
+                                    other => {
+                                        last_response = Some(other.clone());
                                     }
                                 }
                             }
-                        }
 
-                        if let Some(on_event) = on_event.as_ref() {
-                            if let Some(snap) = latest_success_snapshot.as_ref() {
-                                if let Some(mut content) = latest_content_for_parse.take() {
-                                    if let Ok(baml_value) = partial_parse_fn(&content) {
-                                        // Strip flags to reduce memory usage
-                                        let parsed = ResponseBamlValue(baml_value.0.map_meta_owned(|m| {
-                                            jsonish::ResponseValueMeta(vec![], m.1, m.2, m.3)
-                                        }));
-                                        if let Ok(serialized) = serde_json::to_string(&parsed.serialize_partial()) {
-                                            if last_sent_partial_serialized
-                                                .as_deref()
-                                                != Some(serialized.as_str())
-                                            {
-                                                // Only successful events should reach downstream listeners
-                                                on_event(FunctionResult::new(
-                                                    node.scope.clone(),
-                                                    LLMResponse::Success(snap.clone()),
-                                                    Some(Ok(parsed)),
-                                                ));
-                                                last_sent_partial_serialized = Some(serialized);
-                                            }
-                                        } else {
-                                            // If serialization fails, still emit the parsed event instead of dropping it.
-                                            on_event(FunctionResult::new(
-                                                node.scope.clone(),
-                                                LLMResponse::Success(snap.clone()),
-                                                Some(Ok(parsed)),
-                                            ));
-                                            // Intentionally do not update last_sent_partial_serialized here.
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                            drop(snapshot_sender);
+                            last_response
+                        };
 
-                        last_response.unwrap_or_else(|| {
+                        let final_last_response = if let Some(parser_future) = parser_future {
+                            let (last_response_opt, _) = futures::future::join(sse_future, parser_future).await;
+                            last_response_opt
+                        } else {
+                            sse_future.await
+                        };
+
+                        if let Some(response) = final_last_response {
+                            response
+                        } else {
                             LLMResponse::LLMFailure(LLMErrorResponse {
                                 client: node.provider.name().into(),
                                 model: None,
@@ -230,10 +284,10 @@ where
                                 start_time: system_start,
                                 latency: instant_start.elapsed(),
                                 request_options: node.provider.request_options().clone(),
-                                message: "Stream ended without response".to_string(),
-                                code: crate::internal::llm_client::ErrorCode::from_u16(2),
+                                message: "Stream ended and no events were received".to_string(),
+                                code: ErrorCode::Other(2),
                             })
-                        })
+                        }
                     }
                     Err(response) => response,
                 };
