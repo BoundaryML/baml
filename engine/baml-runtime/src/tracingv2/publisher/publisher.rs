@@ -1044,11 +1044,9 @@ pub async fn flush() -> anyhow::Result<()> {
     log::debug!("Flushing blob uploader [rust]");
     let blob_result = flush_blob_uploader_channel(timeout_duration).await;
     log::debug!("Flushing blob uploader [rust] completed");
-
     // Prefer reporting blob uploader errors if any; otherwise propagate publisher errors
-    if let Err(e) = blob_result {
-        return Err(e);
-    }
+    blob_result?;
+
     if let Some(Err(e)) = publisher_result {
         return Err(e);
     }
