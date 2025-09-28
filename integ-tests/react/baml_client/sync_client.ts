@@ -22,7 +22,7 @@ import type { BamlRuntime, FunctionResult, BamlCtxManager, Image, Audio, Pdf, Vi
 import { toBamlError, BamlAbortError, type HTTPRequest } from "@boundaryml/baml"
 import type { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types"
 import type * as types from "./types"
-import type {AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, ClientDetails1559, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, Document1559, DummyJsonTodo, DummyOutput, DynEnumOne, DynEnumThree, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, DynamicSchema, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Haiku, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MaintainFieldOrder, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, Note1599, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, RecursiveUnion, RenderEnumInput, RenderStatusEnum, RenderTestClass, RenderTestEnum, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, Tree, TwoStoriesOneTitle, TwoStoriesOneTitleCheck, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types"
+import type {AddTodoItem, AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, ClientDetails1559, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, Document1559, DummyJsonTodo, DummyOutput, DynEnumOne, DynEnumThree, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, DynamicSchema, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Haiku, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MaintainFieldOrder, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, Note1599, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, RecursiveUnion, RenderEnumInput, RenderStatusEnum, RenderTestClass, RenderTestEnum, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, TodoMessageToUser, Tree, TwoStoriesOneTitle, TwoStoriesOneTitleCheck, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types"
 import type TypeBuilder from "./type_builder"
 import { HttpRequest, HttpStreamRequest } from "./sync_request"
 import { LlmResponseParser, LlmStreamParser } from "./parser"
@@ -668,6 +668,47 @@ export class BamlSyncClient {
     }
   }
   
+  ChooseTodoTools(
+      query: string,
+      __baml_options__?: BamlCallOptions
+  ): (types.AddTodoItem | types.TodoMessageToUser)[] {
+    try {
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const signal = options.signal;
+      
+      if (signal?.aborted) {
+        throw new BamlAbortError('Operation was aborted', signal.reason);
+      }
+      
+      // Check if onTick is provided and reject for sync operations
+      if (options.onTick) {
+        throw new Error("onTick is not supported for synchronous functions. Please use the async client instead.");
+      }
+      
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      const raw = this.runtime.callFunctionSync(
+        "ChooseTodoTools",
+        {
+          "query": query
+        },
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+        options.tags || {},
+        env,
+        signal,
+      )
+      return raw.parsed(false) as (types.AddTodoItem | types.TodoMessageToUser)[]
+    } catch (error: any) {
+      throw toBamlError(error);
+    }
+  }
+  
   ClassThatPointsToRecursiveClassThroughAlias(
       cls: types.ClassToRecAlias,
       __baml_options__?: BamlCallOptions
@@ -958,7 +999,7 @@ export class BamlSyncClient {
   CustomTask(
       input: string,
       __baml_options__?: BamlCallOptions
-  ): BookOrder | FlightConfirmation | GroceryReceipt {
+  ): types.BookOrder | types.FlightConfirmation | types.GroceryReceipt {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const signal = options.signal;
@@ -990,7 +1031,7 @@ export class BamlSyncClient {
         env,
         signal,
       )
-      return raw.parsed(false) as BookOrder | FlightConfirmation | GroceryReceipt
+      return raw.parsed(false) as types.BookOrder | types.FlightConfirmation | types.GroceryReceipt
     } catch (error: any) {
       throw toBamlError(error);
     }
@@ -1286,7 +1327,7 @@ export class BamlSyncClient {
   DifferentiateUnions(
       
       __baml_options__?: BamlCallOptions
-  ): OriginalA | OriginalB {
+  ): types.OriginalA | types.OriginalB {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const signal = options.signal;
@@ -1318,7 +1359,7 @@ export class BamlSyncClient {
         env,
         signal,
       )
-      return raw.parsed(false) as OriginalA | OriginalB
+      return raw.parsed(false) as types.OriginalA | types.OriginalB
     } catch (error: any) {
       throw toBamlError(error);
     }
@@ -2309,9 +2350,9 @@ export class BamlSyncClient {
   }
   
   FnLiteralUnionClassInputOutput(
-      input: LiteralClassOne | LiteralClassTwo,
+      input: types.LiteralClassOne | types.LiteralClassTwo,
       __baml_options__?: BamlCallOptions
-  ): LiteralClassOne | LiteralClassTwo {
+  ): types.LiteralClassOne | types.LiteralClassTwo {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const signal = options.signal;
@@ -2343,7 +2384,7 @@ export class BamlSyncClient {
         env,
         signal,
       )
-      return raw.parsed(false) as LiteralClassOne | LiteralClassTwo
+      return raw.parsed(false) as types.LiteralClassOne | types.LiteralClassTwo
     } catch (error: any) {
       throw toBamlError(error);
     }
@@ -3662,9 +3703,9 @@ export class BamlSyncClient {
   }
   
   NestedAlias(
-      c: number | string | boolean | number | string[] | Record<string, string[]>,
+      c: number | string | boolean | string[] | Record<string, string[]>,
       __baml_options__?: BamlCallOptions
-  ): number | string | boolean | number | string[] | Record<string, string[]> {
+  ): number | string | boolean | string[] | Record<string, string[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const signal = options.signal;
@@ -3696,7 +3737,7 @@ export class BamlSyncClient {
         env,
         signal,
       )
-      return raw.parsed(false) as number | string | boolean | number | string[] | Record<string, string[]>
+      return raw.parsed(false) as number | string | boolean | string[] | Record<string, string[]>
     } catch (error: any) {
       throw toBamlError(error);
     }
@@ -4072,9 +4113,9 @@ export class BamlSyncClient {
   }
   
   PrimitiveAlias(
-      p: number | string | boolean | number,
+      p: number | string | boolean,
       __baml_options__?: BamlCallOptions
-  ): number | string | boolean | number {
+  ): number | string | boolean {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const signal = options.signal;
@@ -4106,7 +4147,7 @@ export class BamlSyncClient {
         env,
         signal,
       )
-      return raw.parsed(false) as number | string | boolean | number
+      return raw.parsed(false) as number | string | boolean
     } catch (error: any) {
       throw toBamlError(error);
     }

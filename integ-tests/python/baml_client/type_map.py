@@ -16,6 +16,9 @@ from . import stream_types
 
 type_map = {
 
+    "types.AddTodoItem": types.AddTodoItem,
+    "stream_types.AddTodoItem": stream_types.AddTodoItem,
+
     "types.AnotherObject": types.AnotherObject,
     "stream_types.AnotherObject": stream_types.AnotherObject,
 
@@ -300,6 +303,9 @@ type_map = {
 
     "types.TestOutputClass": types.TestOutputClass,
     "stream_types.TestOutputClass": stream_types.TestOutputClass,
+
+    "types.TodoMessageToUser": types.TodoMessageToUser,
+    "stream_types.TodoMessageToUser": stream_types.TodoMessageToUser,
 
     "types.Tree": types.Tree,
     "stream_types.Tree": stream_types.Tree,

@@ -24,8 +24,16 @@ class StreamState(GenericModel, typing.Generic[StreamStateValueT]):
     value: StreamStateValueT
     state: typing_extensions.Literal["Pending", "Incomplete", "Complete"]
 # #########################################################################
-# Generated classes (102)
+# Generated classes (104)
 # #########################################################################
+
+class AddTodoItem(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    type: str
+    item: typing.Optional[str] = None
+    time: typing.Optional[str] = None
+    description: typing.Optional[str] = None
 
 class AnotherObject(BaseModel):
     class Config:
@@ -647,6 +655,12 @@ class TestOutputClass(BaseModel):
     prop1: typing.Optional[str] = None
     prop2: typing.Optional[int] = None
 
+class TodoMessageToUser(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    type: str
+    message: typing.Optional[str] = None
+
 class Tree(BaseModel):
     class Config:
         arbitrary_types_allowed = True
@@ -693,7 +707,7 @@ class WithReasoning(BaseModel):
     reasoning: typing.Optional[str] = None
 
 # #########################################################################
-# Generated type aliases (20)
+# Generated type aliases (21)
 # #########################################################################
 
 
@@ -755,3 +769,6 @@ RecursiveMapAlias: typing_extensions.TypeAlias = typing.Dict[str, "RecursiveMapA
 
 
 RecursiveUnion: typing_extensions.TypeAlias = typing.Optional[typing.Union[str, typing.Dict[str, "RecursiveUnion"]]]
+
+
+TodoTool: typing_extensions.TypeAlias = typing.Optional[typing.Union["AddTodoItem", "TodoMessageToUser"]]

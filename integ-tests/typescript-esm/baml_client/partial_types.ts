@@ -20,7 +20,7 @@ $ pnpm add @boundaryml/baml
 
 import type { Image, Audio, Pdf, Video } from "@boundaryml/baml"
 import type { Checked, Check } from "./types.js"
-import type {  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "./types.js"
+import type {  AddTodoItem,  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  TodoMessageToUser,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "./types.js"
 import type * as types from "./types.js"
 
 /******************************************************************************
@@ -36,6 +36,12 @@ export interface StreamState<T> {
 }
 
 export namespace partial_types {
+    export interface AddTodoItem {
+      type: "add_todo_item"
+      item?: string | null
+      time?: string | null
+      description?: string | null
+    }
     export interface AnotherObject {
       id?: string | null
       thingy2?: string | null
@@ -108,7 +114,7 @@ export namespace partial_types {
       id?: string | null
       name?: string | null
       description?: string | null
-      metadata: (string | number | number)[]
+      metadata: (string | number)[]
     }
     export interface CompoundBigNumbers {
       big?: BigNumbers | null
@@ -224,7 +230,7 @@ export namespace partial_types {
     export interface GroceryReceipt {
       receiptId?: string | null
       storeName?: string | null
-      items: (string | number | number)[]
+      items: (string | number)[]
       totalAmount?: number | null
     }
     export interface Haiku {
@@ -363,7 +369,7 @@ export namespace partial_types {
       value?: string | null
     }
     export interface Quantity {
-      amount?: number | number | null
+      amount?: number | null
       unit?: string | null
     }
     export interface RaysData {
@@ -410,7 +416,7 @@ export namespace partial_types {
       prop2?: Nested | string | null
       prop5: (string | null)[]
       prop6?: string | Nested[] | null
-      nested_attrs: (string | Nested)[]
+      nested_attrs: (string | Nested | null)[]
       parens?: string | null
       other_group?: string | number | null
     }
@@ -420,7 +426,7 @@ export namespace partial_types {
       jobTitle?: WithReasoning | null
       company?: WithReasoning | null
       description: WithReasoning[]
-      tags: (Tag | string)[]
+      tags: (types.Tag | string)[]
     }
     export interface SemanticContainer {
       sixteen_digit_number?: number | null
@@ -469,6 +475,10 @@ export namespace partial_types {
       prop1?: string | null
       prop2?: number | null
     }
+    export interface TodoMessageToUser {
+      type: "todo_message_to_user"
+      message?: string | null
+    }
     export interface Tree {
       data?: number | null
       children?: Forest | null
@@ -504,7 +514,7 @@ export namespace partial_types {
     }
 export type Amount = number | null
 
-export type Combination = number | string | boolean | number | string[] | Record<string, string[]> | null
+export type Combination = number | string | boolean | string[] | Record<string, string[]> | null
 
 export type Currency = types.Checked<number,"gt_ten"> | null
 
@@ -514,7 +524,7 @@ export type JsonArray = JsonValue[]
 
 export type JsonEntry = SimpleTag | JsonTemplate | null
 
-export type JsonValue = number | string | boolean | number | JsonObject | JsonArray | null
+export type JsonValue = number | string | boolean | JsonObject | JsonArray | null
 
 export type LinkedListAlias = LinkedListAliasNode | null
 
@@ -524,7 +534,7 @@ export type MultipleAttrs = types.Checked<number,"gt_ten"> | null
 
 export type NodeIndirection = NodeWithAliasIndirection | null
 
-export type Primitive = number | string | boolean | number | null
+export type Primitive = number | string | boolean | null
 
 export type RecAliasOne = RecAliasTwo | null
 
@@ -533,6 +543,8 @@ export type RecAliasThree = RecAliasOne[]
 export type RecAliasTwo = RecAliasThree | null
 
 export type RecursiveListAlias = RecursiveListAlias[]
+
+export type TodoTool = AddTodoItem | TodoMessageToUser | null
 
 export interface JsonObject {
   [key: string]: JsonValue

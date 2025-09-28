@@ -287,6 +287,20 @@ class BamlSyncClient:
                 "input": input,
             })
             return typing.cast(types.Tree, result.cast_to(types, types, stream_types, False, __runtime__))
+    def ChooseTodoTools(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.List[typing.Union["types.AddTodoItem", "types.TodoMessageToUser"]]:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.ChooseTodoTools(query=query,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="ChooseTodoTools", args={
+                "query": query,
+            })
+            return typing.cast(typing.List[typing.Union["types.AddTodoItem", "types.TodoMessageToUser"]], result.cast_to(types, types, stream_types, False, __runtime__))
     def ClassThatPointsToRecursiveClassThroughAlias(self, cls: types.ClassToRecAlias,
         baml_options: BamlCallOptions = {},
     ) -> types.ClassToRecAlias:
@@ -3684,6 +3698,18 @@ class BamlStreamClient:
           lambda x: typing.cast(types.Tree, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def ChooseTodoTools(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.List[typing.Union["types.AddTodoItem", "stream_types.TodoMessageToUser"]], typing.List[typing.Union["types.AddTodoItem", "types.TodoMessageToUser"]]]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ChooseTodoTools", args={
+            "query": query,
+        })
+        return baml_py.BamlSyncStream[typing.List[typing.Union["types.AddTodoItem", "stream_types.TodoMessageToUser"]], typing.List[typing.Union["types.AddTodoItem", "types.TodoMessageToUser"]]](
+          result,
+          lambda x: typing.cast(typing.List[typing.Union["types.AddTodoItem", "stream_types.TodoMessageToUser"]], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.List[typing.Union["types.AddTodoItem", "types.TodoMessageToUser"]], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def ClassThatPointsToRecursiveClassThroughAlias(self, cls: types.ClassToRecAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.ClassToRecAlias, types.ClassToRecAlias]:
@@ -6550,6 +6576,13 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
+    def ChooseTodoTools(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ChooseTodoTools", args={
+            "query": query,
+        }, mode="request")
+        return result
     def ClassThatPointsToRecursiveClassThroughAlias(self, cls: types.ClassToRecAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -8264,6 +8297,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="BuildTree", args={
             "input": input,
+        }, mode="stream")
+        return result
+    def ChooseTodoTools(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ChooseTodoTools", args={
+            "query": query,
         }, mode="stream")
         return result
     def ClassThatPointsToRecursiveClassThroughAlias(self, cls: types.ClassToRecAlias,

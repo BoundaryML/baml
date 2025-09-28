@@ -217,6 +217,23 @@ paths:
                 title: BuildTreeResponse
                 $ref: '#/components/schemas/Tree'
       operationId: BuildTree
+  /call/ChooseTodoTools:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ChooseTodoTools'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ChooseTodoToolsResponse
+                type: array
+                items:
+                  oneOf:
+                  - $ref: '#/components/schemas/AddTodoItem'
+                  - $ref: '#/components/schemas/TodoMessageToUser'
+      operationId: ChooseTodoTools
   /call/ClassThatPointsToRecursiveClassThroughAlias:
     post:
       requestBody:
@@ -3341,6 +3358,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    ChooseTodoTools:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ChooseTodoToolsRequest
+            type: object
+            properties:
+              query:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - query
             additionalProperties: false
     ClassThatPointsToRecursiveClassThroughAlias:
       required: true
@@ -6927,6 +6960,23 @@ components:
       - name
       - expr
       additionalProperties: false
+    AddTodoItem:
+      type: object
+      properties:
+        description:
+          type: string
+        item:
+          type: string
+        time:
+          type: string
+        type:
+          type: string
+      required:
+      - description
+      - item
+      - time
+      - type
+      additionalProperties: false
     AliasedEnum:
       enum:
       - KEY_ONE
@@ -8385,6 +8435,17 @@ components:
       required:
       - prop1
       - prop2
+      additionalProperties: false
+    TodoMessageToUser:
+      type: object
+      properties:
+        message:
+          type: string
+        type:
+          type: string
+      required:
+      - message
+      - type
       additionalProperties: false
     Tree:
       type: object

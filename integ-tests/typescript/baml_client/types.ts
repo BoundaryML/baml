@@ -183,6 +183,14 @@ export enum TestEnum {
   G = "G",
 }
 
+export interface AddTodoItem {
+  type: "add_todo_item"
+  item: string
+  time: string
+  description: string
+  
+}
+
 export interface AnotherObject {
   id: string
   thingy2: string
@@ -285,7 +293,7 @@ export interface ComplexMemoryObject {
   id: string
   name: string
   description: string
-  metadata: (string | number | number)[]
+  metadata: (string | number)[]
   
 }
 
@@ -453,7 +461,7 @@ export interface FormatterTest3 {
 export interface GroceryReceipt {
   receiptId: string
   storeName: string
-  items: (string | number | number)[]
+  items: (string | number)[]
   totalAmount: number
   
 }
@@ -658,7 +666,7 @@ export interface PhoneNumber {
 }
 
 export interface Quantity {
-  amount: number | number
+  amount: number
   unit?: string | null
   
 }
@@ -723,7 +731,7 @@ export interface Schema {
   prop2: Nested | string
   prop5: (string | null)[]
   prop6: string | Nested[]
-  nested_attrs: (string | Nested)[]
+  nested_attrs: (string | Nested | null)[]
   parens?: string | null
   other_group: string | number
   
@@ -806,6 +814,12 @@ export interface TestOutputClass {
   
 }
 
+export interface TodoMessageToUser {
+  type: "todo_message_to_user"
+  message: string
+  
+}
+
 export interface Tree {
   data: number
   children: Forest
@@ -855,7 +869,7 @@ export interface WithReasoning {
 
 export type Amount = number
 
-export type Combination = number | string | boolean | number | string[] | Record<string, string[]>
+export type Combination = number | string | boolean | string[] | Record<string, string[]>
 
 export type Currency = Checked<number,"gt_ten">
 
@@ -865,7 +879,7 @@ export type JsonArray = JsonValue[]
 
 export type JsonEntry = SimpleTag | JsonTemplate
 
-export type JsonValue = number | string | boolean | number | JsonObject | JsonArray
+export type JsonValue = number | string | boolean | JsonObject | JsonArray
 
 export type LinkedListAlias = LinkedListAliasNode
 
@@ -875,7 +889,7 @@ export type MultipleAttrs = Checked<number,"gt_ten">
 
 export type NodeIndirection = NodeWithAliasIndirection
 
-export type Primitive = number | string | boolean | number
+export type Primitive = number | string | boolean
 
 export type RecAliasOne = RecAliasTwo
 
@@ -884,6 +898,8 @@ export type RecAliasThree = RecAliasOne[]
 export type RecAliasTwo = RecAliasThree
 
 export type RecursiveListAlias = RecursiveListAlias[]
+
+export type TodoTool = AddTodoItem | TodoMessageToUser
 
 export interface JsonObject {
   [key: string]: JsonValue

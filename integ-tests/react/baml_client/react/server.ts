@@ -24,7 +24,7 @@ import { b } from '../index';
 import type { Check, Checked  } from "../types";
 import type { Image, Audio, Pdf, Video } from "@boundaryml/baml";
 
-import type {  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
+import type {  AddTodoItem,  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  TodoMessageToUser,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
 
 import type * as types from "../types"
 
@@ -288,6 +288,24 @@ export const BuildTree = async (
 };
 
 /**
+ * Executes the "ChooseTodoTools" BAML action.
+ *
+ * This server action calls the underlying BAML function "ChooseTodoTools"
+ * with the specified parameters.
+ *
+ * @param { string } query - Input parameter.
+ *
+ * @returns {Promise<(types.AddTodoItem | types.TodoMessageToUser)[]>} A promise that resolves with the result of the action.
+ */
+export const ChooseTodoTools = async (
+  query: string,
+): Promise<(types.AddTodoItem | types.TodoMessageToUser)[]> => {
+  return b.ChooseTodoTools(
+    query,
+  );
+};
+
+/**
  * Executes the "ClassThatPointsToRecursiveClassThroughAlias" BAML action.
  *
  * This server action calls the underlying BAML function "ClassThatPointsToRecursiveClassThroughAlias"
@@ -427,11 +445,11 @@ export const Completion = async (
  *
  * @param { string } input - Input parameter.
  *
- * @returns {Promise<BookOrder | FlightConfirmation | GroceryReceipt>} A promise that resolves with the result of the action.
+ * @returns {Promise<types.BookOrder | types.FlightConfirmation | types.GroceryReceipt>} A promise that resolves with the result of the action.
  */
 export const CustomTask = async (
   input: string,
-): Promise<BookOrder | FlightConfirmation | GroceryReceipt> => {
+): Promise<types.BookOrder | types.FlightConfirmation | types.GroceryReceipt> => {
   return b.CustomTask(
     input,
   );
@@ -585,10 +603,10 @@ export const DescribeMedia1599 = async (
  * with the specified parameters.
  *
  *
- * @returns {Promise<OriginalA | OriginalB>} A promise that resolves with the result of the action.
+ * @returns {Promise<types.OriginalA | types.OriginalB>} A promise that resolves with the result of the action.
  */
 export const DifferentiateUnions = async (
-): Promise<OriginalA | OriginalB> => {
+): Promise<types.OriginalA | types.OriginalB> => {
   return b.DifferentiateUnions(
   );
 };
@@ -1040,13 +1058,13 @@ export const FnLiteralClassInputOutput = async (
  * This server action calls the underlying BAML function "FnLiteralUnionClassInputOutput"
  * with the specified parameters.
  *
- * @param { LiteralClassOne | LiteralClassTwo } input - Input parameter.
+ * @param { types.LiteralClassOne | types.LiteralClassTwo } input - Input parameter.
  *
- * @returns {Promise<LiteralClassOne | LiteralClassTwo>} A promise that resolves with the result of the action.
+ * @returns {Promise<types.LiteralClassOne | types.LiteralClassTwo>} A promise that resolves with the result of the action.
  */
 export const FnLiteralUnionClassInputOutput = async (
-  input: LiteralClassOne | LiteralClassTwo,
-): Promise<LiteralClassOne | LiteralClassTwo> => {
+  input: types.LiteralClassOne | types.LiteralClassTwo,
+): Promise<types.LiteralClassOne | types.LiteralClassTwo> => {
   return b.FnLiteralUnionClassInputOutput(
     input,
   );
@@ -1625,13 +1643,13 @@ export const MyFunc = async (
  * This server action calls the underlying BAML function "NestedAlias"
  * with the specified parameters.
  *
- * @param { number | string | boolean | number | string[] | Record<string, string[]> } c - Input parameter.
+ * @param { number | string | boolean | string[] | Record<string, string[]> } c - Input parameter.
  *
- * @returns {Promise<number | string | boolean | number | string[] | Record<string, string[]>>} A promise that resolves with the result of the action.
+ * @returns {Promise<number | string | boolean | string[] | Record<string, string[]>>} A promise that resolves with the result of the action.
  */
 export const NestedAlias = async (
-  c: number | string | boolean | number | string[] | Record<string, string[]>,
-): Promise<number | string | boolean | number | string[] | Record<string, string[]>> => {
+  c: number | string | boolean | string[] | Record<string, string[]>,
+): Promise<number | string | boolean | string[] | Record<string, string[]>> => {
   return b.NestedAlias(
     c,
   );
@@ -1808,13 +1826,13 @@ export const PredictAgeBare = async (
  * This server action calls the underlying BAML function "PrimitiveAlias"
  * with the specified parameters.
  *
- * @param { number | string | boolean | number } p - Input parameter.
+ * @param { number | string | boolean } p - Input parameter.
  *
- * @returns {Promise<number | string | boolean | number>} A promise that resolves with the result of the action.
+ * @returns {Promise<number | string | boolean>} A promise that resolves with the result of the action.
  */
 export const PrimitiveAlias = async (
-  p: number | string | boolean | number,
-): Promise<number | string | boolean | number> => {
+  p: number | string | boolean,
+): Promise<number | string | boolean> => {
   return b.PrimitiveAlias(
     p,
   );

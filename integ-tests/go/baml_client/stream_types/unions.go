@@ -21,6 +21,151 @@ import (
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
+type Union2AddTodoItemOrTodoMessageToUser struct {
+	variant string
+
+	variant_AddTodoItem *AddTodoItem
+
+	variant_TodoMessageToUser *TodoMessageToUser
+}
+
+func (u *Union2AddTodoItemOrTodoMessageToUser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
+	valueHolder := holder.Value
+	variantName := holder.VariantName
+	switch variantName {
+	case "AddTodoItem":
+		u.variant = "AddTodoItem"
+		value := baml.Decode(valueHolder).Interface().(AddTodoItem)
+		u.variant_AddTodoItem = &value
+	case "TodoMessageToUser":
+		u.variant = "TodoMessageToUser"
+		value := baml.Decode(valueHolder).Interface().(TodoMessageToUser)
+		u.variant_TodoMessageToUser = &value
+
+	default:
+		panic(fmt.Sprintf("invalid union variant: %s", variantName))
+	}
+}
+
+func (u Union2AddTodoItemOrTodoMessageToUser) Encode() (*cffi.CFFIValueHolder, error) {
+	switch u.variant {
+
+	case "AddTodoItem":
+		return baml.EncodeUnion(u.BamlEncodeName, "AddTodoItem", *u.variant_AddTodoItem)
+
+	case "TodoMessageToUser":
+		return baml.EncodeUnion(u.BamlEncodeName, "TodoMessageToUser", *u.variant_TodoMessageToUser)
+
+	case "":
+		return nil, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union2AddTodoItemOrTodoMessageToUser) BamlTypeName() string {
+	return "Union2AddTodoItemOrTodoMessageToUser"
+}
+
+func (u Union2AddTodoItemOrTodoMessageToUser) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "Union__AddTodoItem__TodoMessageToUser",
+		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+	}
+}
+
+func (u Union2AddTodoItemOrTodoMessageToUser) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "AddTodoItem":
+		return json.Marshal(u.variant_AddTodoItem)
+
+	case "TodoMessageToUser":
+		return json.Marshal(u.variant_TodoMessageToUser)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union2AddTodoItemOrTodoMessageToUser) UnmarshalJSON(data []byte) error {
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_AddTodoItem)
+	if err == nil {
+		u.variant = "AddTodoItem"
+		return nil
+	} else {
+		u.variant_AddTodoItem = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_TodoMessageToUser)
+	if err == nil {
+		u.variant = "TodoMessageToUser"
+		return nil
+	} else {
+		u.variant_TodoMessageToUser = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
+}
+
+func Union2AddTodoItemOrTodoMessageToUser__NewAddTodoItem(v AddTodoItem) Union2AddTodoItemOrTodoMessageToUser {
+
+	return Union2AddTodoItemOrTodoMessageToUser{
+		variant:             "AddTodoItem",
+		variant_AddTodoItem: &v,
+	}
+}
+
+func (u *Union2AddTodoItemOrTodoMessageToUser) SetAddTodoItem(v AddTodoItem) {
+
+	u.variant = "AddTodoItem"
+	u.variant_AddTodoItem = &v
+
+	u.variant_TodoMessageToUser = nil
+
+}
+
+func (u *Union2AddTodoItemOrTodoMessageToUser) IsAddTodoItem() bool {
+	return u.variant == "AddTodoItem"
+}
+
+func (u *Union2AddTodoItemOrTodoMessageToUser) AsAddTodoItem() *AddTodoItem {
+	if u.variant != "AddTodoItem" {
+		return nil
+	}
+	return u.variant_AddTodoItem
+}
+
+func Union2AddTodoItemOrTodoMessageToUser__NewTodoMessageToUser(v TodoMessageToUser) Union2AddTodoItemOrTodoMessageToUser {
+
+	return Union2AddTodoItemOrTodoMessageToUser{
+		variant:                   "TodoMessageToUser",
+		variant_TodoMessageToUser: &v,
+	}
+}
+
+func (u *Union2AddTodoItemOrTodoMessageToUser) SetTodoMessageToUser(v TodoMessageToUser) {
+
+	u.variant = "TodoMessageToUser"
+	u.variant_TodoMessageToUser = &v
+
+	u.variant_AddTodoItem = nil
+
+}
+
+func (u *Union2AddTodoItemOrTodoMessageToUser) IsTodoMessageToUser() bool {
+	return u.variant == "TodoMessageToUser"
+}
+
+func (u *Union2AddTodoItemOrTodoMessageToUser) AsTodoMessageToUser() *TodoMessageToUser {
+	if u.variant != "TodoMessageToUser" {
+		return nil
+	}
+	return u.variant_TodoMessageToUser
+}
+
 type Union2EarthlingOrMartian struct {
 	variant string
 
