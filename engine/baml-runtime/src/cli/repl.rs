@@ -527,6 +527,7 @@ impl ReplState {
                                 None,
                                 None,
                                 None,
+                                None, // tags
                                 env_vars,
                                 TripWire::new_with_on_drop(
                                     None,

@@ -357,6 +357,7 @@ Streaming is available via http://localhost:{port}/stream/{{FunctionName}}, but 
                 None,
                 client_registry.as_ref(),
                 None,
+                None, // tags
                 env_vars,
                 TripWire::new(None),
             )
@@ -460,6 +461,7 @@ Streaming is available via http://localhost:{port}/stream/{{FunctionName}}, but 
                 client_registry.as_ref(),
                 Some(vec![]),
                 env_vars,
+                None, // tags
                 TripWire::new(None),
             );
 

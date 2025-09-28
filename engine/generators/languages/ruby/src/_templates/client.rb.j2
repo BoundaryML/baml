@@ -17,13 +17,14 @@ class BamlSyncClient
         @options = options
     end
 
-    sig {params(collector: T.nilable(T.any(Baml::Collector, T::Array[Baml::Collector])), tb: T.nilable(Baml::TypeBuilder), client_registry: T.nilable(Baml::ClientRegistry), env_vars: T.nilable(T::Hash[Symbol, String])).returns(BamlSyncClient)}
-    def with_options(collector: nil, tb: nil, client_registry: nil, env_vars: nil)
+    sig {params(collector: T.nilable(T.any(Baml::Collector, T::Array[Baml::Collector])), tb: T.nilable(Baml::TypeBuilder), client_registry: T.nilable(Baml::ClientRegistry), env_vars: T.nilable(T::Hash[Symbol, String]), tags: T.nilable(T::Hash[String, String])).returns(BamlSyncClient)}
+    def with_options(collector: nil, tb: nil, client_registry: nil, env_vars: nil, tags: nil)
         BamlSyncClient.new(@options.merge_options(BamlCallOptions.from_hash({
             collector: collector,
             tb: tb,
             client_registry: client_registry,
             env_vars: env_vars,
+            tags: tags,
         })))
     end
 
@@ -33,7 +34,7 @@ class BamlSyncClient
         {% for arg in func.args -%}
         {{arg.name}}: {{arg.type_.serialize_type(pkg)}},
         {%- endfor %}
-        baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
     ).returns({{ func.return_type.serialize_type(pkg) }})}
     def {{func.name}}(
         *varargs,
@@ -76,7 +77,7 @@ class BamlStreamClient
         {% for arg in func.args -%}
         {{arg.name}}: {{arg.type_.serialize_type(pkg)}},
         {%- endfor %}
-        baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
     ).returns(Baml::BamlStream[{{ func.stream_return_type.serialize_type(pkg) }}, {{ func.return_type.serialize_type(pkg) }}])}
     def {{func.name}}(
         *varargs,

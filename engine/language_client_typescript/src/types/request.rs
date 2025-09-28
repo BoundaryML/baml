@@ -4,7 +4,7 @@ use napi::{
 };
 use napi_derive::napi;
 
-use super::log_collector::serde_value_to_js;
+use crate::types::log_collector::serde_value_to_js;
 use crate::errors::from_anyhow_error;
 
 crate::lang_wrapper!(

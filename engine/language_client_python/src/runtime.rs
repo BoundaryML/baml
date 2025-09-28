@@ -173,7 +173,7 @@ impl BamlRuntime {
             .into()
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors, env_vars, abort_controller=None))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors, env_vars, tags, abort_controller=None))]
     fn call_function(
         &self,
         py: Python<'_>,
@@ -184,6 +184,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: &Bound<'_, PyList>,
         env_vars: HashMap<String, String>,
+        tags: Option<HashMap<String, String>>,
         abort_controller: Option<&crate::abort_controller::AbortController>,
     ) -> PyResult<PyObject> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
@@ -225,6 +226,7 @@ impl BamlRuntime {
                     cb.as_ref(),
                     Some(collector_list),
                     env_vars,
+                    tags,
                     tripwire,
                 )
                 .await;
@@ -236,7 +238,7 @@ impl BamlRuntime {
         .map(pyo3::Bound::into)
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors, env_vars, abort_controller=None))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors, env_vars, tags, abort_controller=None))]
     fn call_function_sync(
         &self,
         function_name: String,
@@ -246,6 +248,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: &Bound<'_, PyList>,
         env_vars: HashMap<String, String>,
+        tags: Option<HashMap<String, String>>,
         abort_controller: Option<&crate::abort_controller::AbortController>,
     ) -> PyResult<FunctionResult> {
         let Some(args) = parse_py_type(args, false)? else {
@@ -286,6 +289,7 @@ impl BamlRuntime {
                     cb.as_ref(),
                     Some(collector_list),
                     env_vars,
+                    tags,
                     tripwire,
                 )
             })
@@ -296,7 +300,7 @@ impl BamlRuntime {
             .map_err(BamlError::from_anyhow)
     }
 
-    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars, on_tick=None, abort_controller=None))]
+    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars, tags=None, on_tick=None, abort_controller=None))]
     fn stream_function(
         &self,
         py: Python<'_>,
@@ -308,6 +312,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: &Bound<'_, PyList>,
         env_vars: HashMap<String, String>,
+        tags: Option<HashMap<String, String>>,
         on_tick: Option<PyObject>,
         abort_controller: Option<&crate::abort_controller::AbortController>,
     ) -> PyResult<FunctionResultStream> {
@@ -342,6 +347,7 @@ impl BamlRuntime {
                 cb.map(|cb| cb.inner.clone()).as_ref(),
                 Some(collector_list),
                 env_vars.clone(),
+                tags,
                 tripwire,
             )
             .map_err(BamlError::from_anyhow)?;
@@ -356,7 +362,7 @@ impl BamlRuntime {
         ))
     }
 
-    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars, on_tick=None, abort_controller=None))]
+    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars, tags=None, on_tick=None, abort_controller=None))]
     fn stream_function_sync(
         &self,
         py: Python<'_>,
@@ -368,6 +374,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: &Bound<'_, PyList>,
         env_vars: HashMap<String, String>,
+        tags: Option<HashMap<String, String>>,
         on_tick: Option<PyObject>,
         abort_controller: Option<&crate::abort_controller::AbortController>,
     ) -> PyResult<SyncFunctionResultStream> {
@@ -402,6 +409,7 @@ impl BamlRuntime {
                 cb.map(|cb| cb.inner.clone()).as_ref(),
                 Some(collector_list),
                 env_vars.clone(),
+                tags,
                 tripwire,
             )
             .map_err(BamlError::from_anyhow)?;

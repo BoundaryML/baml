@@ -90,7 +90,17 @@ async fn test_call_function() -> Result<FunctionResult> {
     );
 
     let (res, _) = runtime
-        .call_function("ExtractNames".to_string(), &params, &ctx)
+        .call_function(
+            "ExtractNames".to_string(),
+            &params,
+            &ctx,
+            None,
+            None,
+            None,
+            None, // tags
+            std::env::vars().collect(),
+            stream_cancel::Tripwire::new(None),
+        )
         .await;
     let res = res?;
 

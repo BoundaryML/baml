@@ -326,6 +326,7 @@ async fn beta_reduce<'a>(
                             None,
                             None,
                             None,
+                            None, // tags
                             env.env_vars.clone(),
                             TripWire::new(None),
                         )

@@ -452,6 +452,7 @@ impl BamlRuntime {
         expr_tx: Option<mpsc::UnboundedSender<Vec<internal_baml_diagnostics::SerializedSpan>>>,
         collector: Option<Arc<Collector>>,
         env_vars: HashMap<String, String>,
+        tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
         on_tick: Option<G>,
     ) -> (Result<TestResponse>, FunctionCallId)
@@ -471,6 +472,7 @@ impl BamlRuntime {
                 true,
                 true, // tests always stream which is why there's an on_event
                 collector.as_ref().map(|c| vec![c.clone()]),
+                tags.as_ref(),
             );
 
         let expr_fn = self.inner.ir().find_expr_fn(function_name);
@@ -576,6 +578,7 @@ impl BamlRuntime {
                 self.async_runtime.clone(),
                 // TODO: collectors here?
                 vec![],
+                None, // tags
                 cancel_tripwire,
             )?;
             let (response_res, call_uuid) = stream
@@ -673,6 +676,7 @@ impl BamlRuntime {
         on_event: Option<F>,
         collector: Option<Arc<Collector>>,
         env_vars: HashMap<String, String>,
+        tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
         on_tick: Option<G>,
     ) -> (Result<TestResponse>, FunctionCallId)
@@ -689,6 +693,7 @@ impl BamlRuntime {
                 None,
                 collector,
                 env_vars,
+                tags,
                 cancel_tripwire,
                 on_tick,
             )
@@ -706,6 +711,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
+        tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
     ) -> (Result<FunctionResult>, FunctionCallId) {
         let fut = self.call_function(
@@ -715,6 +721,7 @@ impl BamlRuntime {
             tb,
             cb,
             collectors,
+            tags,
             env_vars,
             cancel_tripwire,
         );
@@ -729,6 +736,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
+        tags: Option<HashMap<String, String>>,
         env_vars: HashMap<String, String>,
         cancel_tripwire: Arc<TripWire>,
     ) -> (Result<FunctionResult>, FunctionCallId) {
@@ -742,6 +750,7 @@ impl BamlRuntime {
             env_vars,
             None,
             cancel_tripwire,
+            tags,
         ))
         .await;
         res
@@ -779,6 +788,7 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
         expr_tx: Option<mpsc::UnboundedSender<Vec<internal_baml_diagnostics::SerializedSpan>>>,
         cancel_tripwire: Arc<TripWire>,
+        tags: Option<HashMap<String, String>>,
     ) -> (Result<FunctionResult>, FunctionCallId) {
         // baml_log::info!("env vars: {:#?}", env_vars.clone());
         baml_log::set_from_env(&env_vars).unwrap();
@@ -789,7 +799,15 @@ impl BamlRuntime {
         let call = self
             .tracer_wrapper
             .get_or_create_tracer(&env_vars)
-            .start_call(&function_name, ctx, params, true, false, collectors);
+            .start_call(
+                &function_name,
+                ctx,
+                params,
+                true,
+                false,
+                collectors,
+                tags.as_ref(),
+            );
         let curr_call_id = call.curr_call_id();
 
         let fake_syntax_span = Span::fake();
@@ -984,6 +1002,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
+        tags: Option<HashMap<String, String>>,
         expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
         cancel_tripwire: Arc<TripWire>,
     ) -> Result<FunctionResultStream> {
@@ -996,6 +1015,7 @@ impl BamlRuntime {
             #[cfg(not(target_arch = "wasm32"))]
             self.async_runtime.clone(),
             collectors.unwrap_or_default(),
+            tags,
             cancel_tripwire,
         )
     }
@@ -1009,6 +1029,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
+        tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
     ) -> Result<FunctionResultStream> {
         self.stream_function_with_expr_events(
@@ -1019,6 +1040,7 @@ impl BamlRuntime {
             cb,
             collectors,
             env_vars,
+            tags,
             None,
             cancel_tripwire,
         )
@@ -1330,7 +1352,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
     ) -> TracingCall {
         self.tracer_wrapper
             .get_or_create_tracer(env_vars)
-            .start_call(function_name, ctx, params, false, false, None)
+            .start_call(function_name, ctx, params, false, false, None, None)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1505,7 +1527,7 @@ async fn expr_eval_result(
         Ok(expr_fn) => {
             log::trace!("Calling function: {function_name}");
             let collectors = collector.as_ref().map(|c| vec![c.clone()]);
-            let call = tracer.start_call(function_name, mgr, params, true, false, collectors);
+            let call = tracer.start_call(function_name, mgr, params, true, false, collectors, None);
 
             let ctx = mgr.create_ctx(tb, cb, env_vars.clone(), call.new_call_id_stack.clone())?;
             let env = EvalEnv {

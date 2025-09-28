@@ -37,6 +37,7 @@ pub struct FunctionResultStream {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) tokio_runtime: Arc<tokio::runtime::Runtime>,
     pub(crate) collectors: Vec<Arc<Collector>>,
+    pub(crate) tags: Option<HashMap<String, String>>,
     pub(crate) cancel_tripwire: Arc<TripWire>,
 }
 
@@ -109,6 +110,7 @@ impl FunctionResultStream {
             true,
             true,
             (!self.collectors.is_empty()).then(|| self.collectors.clone()),
+            self.tags.as_ref(),
         );
         let rctx = ctx.create_ctx(tb, cb, env_vars, call.new_call_id_stack.clone());
         let res = match rctx {

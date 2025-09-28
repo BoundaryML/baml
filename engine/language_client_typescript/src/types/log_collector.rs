@@ -212,7 +212,7 @@ impl FunctionLog {
         // Convert serde_json::Value map into JS object
         let mut js_obj = Object::new(env)?;
         for (k, v) in tags.iter() {
-            let js_value = super::serde_value_to_js(env, v)?;
+            let js_value = serde_value_to_js(env, v)?;
             js_obj.set_named_property(k, js_value)?;
         }
         Ok(js_obj.into_unknown(env)?)

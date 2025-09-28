@@ -53,6 +53,7 @@ class BamlSyncClient:
         client_registry: typing.Optional[baml_py.baml_py.ClientRegistry] = None,
         collector: typing.Optional[typing.Union[baml_py.baml_py.Collector, typing.List[baml_py.baml_py.Collector]]] = None,
         env: typing.Optional[typing.Dict[str, typing.Optional[str]]] = None,
+        tags: typing.Optional[typing.Dict[str, str]] = None,
         on_tick: typing.Optional[typing.Callable[[str, baml_py.baml_py.FunctionLog], None]] = None,
     ) -> "BamlSyncClient":
         options: BamlCallOptions = {}
@@ -64,6 +65,8 @@ class BamlSyncClient:
             options["collector"] = collector
         if env is not None:
             options["env"] = env
+        if tags is not None:
+            options["tags"] = tags
         if on_tick is not None:
             options["on_tick"] = on_tick
         return BamlSyncClient(self.__options.merge_options(options))

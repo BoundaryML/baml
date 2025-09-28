@@ -44,6 +44,7 @@ type BamlCallOptions = {
   clientRegistry?: ClientRegistry
   collector?: Collector | Collector[]
   env?: Record<string, string | undefined>
+  tags?: Record<string, string>
   signal?: AbortSignal
   onTick?: (reason: TickReason, log: FunctionLog | null) => void
 }
@@ -124,6 +125,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -164,6 +166,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -204,6 +207,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -244,6 +248,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -284,6 +289,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -324,6 +330,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -364,6 +371,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -404,6 +412,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -444,6 +453,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -484,6 +494,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -524,6 +535,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -564,6 +576,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -604,6 +617,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -644,6 +658,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -684,6 +699,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -724,6 +740,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -764,6 +781,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -804,6 +822,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -844,6 +863,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -884,6 +904,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -924,6 +945,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -964,6 +986,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1004,6 +1027,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1044,6 +1068,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1084,6 +1109,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1124,6 +1150,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1164,6 +1191,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1204,6 +1232,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1244,6 +1273,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1284,6 +1314,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1324,6 +1355,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1364,6 +1396,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1404,6 +1437,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1444,6 +1478,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1484,6 +1519,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1524,6 +1560,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1564,6 +1601,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1604,6 +1642,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1644,6 +1683,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1684,6 +1724,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1724,6 +1765,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1764,6 +1806,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1804,6 +1847,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1844,6 +1888,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1884,6 +1929,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1924,6 +1970,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -1964,6 +2011,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2004,6 +2052,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2044,6 +2093,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2084,6 +2134,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2124,6 +2175,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2164,6 +2216,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2204,6 +2257,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2244,6 +2298,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2284,6 +2339,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2324,6 +2380,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2364,6 +2421,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2404,6 +2462,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2444,6 +2503,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2484,6 +2544,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2524,6 +2585,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2564,6 +2626,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2604,6 +2667,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2644,6 +2708,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2684,6 +2749,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2724,6 +2790,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2764,6 +2831,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2804,6 +2872,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2844,6 +2913,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2884,6 +2954,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2924,6 +2995,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -2964,6 +3036,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3004,6 +3077,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3044,6 +3118,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3084,6 +3159,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3124,6 +3200,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3164,6 +3241,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3204,6 +3282,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3244,6 +3323,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3284,6 +3364,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3324,6 +3405,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3364,6 +3446,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3404,6 +3487,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3444,6 +3528,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3484,6 +3569,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3524,6 +3610,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3564,6 +3651,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3604,6 +3692,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3644,6 +3733,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3684,6 +3774,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3724,6 +3815,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3764,6 +3856,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3804,6 +3897,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3844,6 +3938,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3884,6 +3979,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3924,6 +4020,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -3964,6 +4061,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4004,6 +4102,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4044,6 +4143,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4084,6 +4184,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4124,6 +4225,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4164,6 +4266,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4204,6 +4307,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4244,6 +4348,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4284,6 +4389,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4324,6 +4430,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4364,6 +4471,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4404,6 +4512,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4444,6 +4553,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4484,6 +4594,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4524,6 +4635,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4564,6 +4676,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4604,6 +4717,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4644,6 +4758,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4684,6 +4799,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4724,6 +4840,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4764,6 +4881,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4804,6 +4922,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4844,6 +4963,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4884,6 +5004,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4924,6 +5045,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -4964,6 +5086,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5004,6 +5127,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5044,6 +5168,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5084,6 +5209,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5124,6 +5250,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5164,6 +5291,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5204,6 +5332,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5244,6 +5373,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5284,6 +5414,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5324,6 +5455,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5364,6 +5496,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5404,6 +5537,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5444,6 +5578,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5484,6 +5619,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5524,6 +5660,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5564,6 +5701,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5604,6 +5742,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5644,6 +5783,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5684,6 +5824,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5724,6 +5865,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5764,6 +5906,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5804,6 +5947,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5844,6 +5988,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5884,6 +6029,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5924,6 +6070,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -5964,6 +6111,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6004,6 +6152,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6044,6 +6193,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6084,6 +6234,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6124,6 +6275,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6164,6 +6316,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6204,6 +6357,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6244,6 +6398,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6284,6 +6439,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6324,6 +6480,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6364,6 +6521,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6404,6 +6562,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6444,6 +6603,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6484,6 +6644,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6524,6 +6685,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6564,6 +6726,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6604,6 +6767,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6644,6 +6808,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6684,6 +6849,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6724,6 +6890,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6764,6 +6931,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6804,6 +6972,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6844,6 +7013,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6884,6 +7054,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6924,6 +7095,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -6964,6 +7136,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7004,6 +7177,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7044,6 +7218,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7084,6 +7259,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7124,6 +7300,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7164,6 +7341,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7204,6 +7382,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7244,6 +7423,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7284,6 +7464,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7324,6 +7505,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7364,6 +7546,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7404,6 +7587,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7444,6 +7628,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7484,6 +7669,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7524,6 +7710,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7564,6 +7751,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7604,6 +7792,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7644,6 +7833,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7684,6 +7874,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7724,6 +7915,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7764,6 +7956,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7804,6 +7997,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7844,6 +8038,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7884,6 +8079,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7924,6 +8120,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -7964,6 +8161,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8004,6 +8202,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8044,6 +8243,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8084,6 +8284,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8124,6 +8325,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8164,6 +8366,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8204,6 +8407,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8244,6 +8448,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8284,6 +8489,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8324,6 +8530,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8364,6 +8571,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8404,6 +8612,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8444,6 +8653,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8484,6 +8694,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8524,6 +8735,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8564,6 +8776,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8604,6 +8817,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8644,6 +8858,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8684,6 +8899,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8724,6 +8940,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8764,6 +8981,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8804,6 +9022,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8844,6 +9063,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8884,6 +9104,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8924,6 +9145,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -8964,6 +9186,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
@@ -9004,6 +9227,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        options.tags || {},
         env,
         signal,
       )
