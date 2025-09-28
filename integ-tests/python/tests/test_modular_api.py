@@ -39,7 +39,9 @@ JOHN_DOE_TEXT_RESUME = """
     Software Engineer at Google (2020 - Present)
 """
 
-LONG_CACHEABLE_CONTEXT = " ".join(["Reusable cacheable context paragraph." for _ in range(600)])
+LONG_CACHEABLE_CONTEXT = " ".join(
+    ["Reusable cacheable context paragraph." for _ in range(600)]
+)
 
 JOHN_DOE_PARSED_RESUME = types.Resume(
     name="John Doe",
@@ -155,9 +157,7 @@ async def test_modular_bedrock_manual_cache_point():
     url = urlsplit(req.url)
 
     base_headers = {
-        key: value
-        for key, value in dict(req.headers).items()
-        if value is not None
+        key: value for key, value in dict(req.headers).items() if value is not None
     }
 
     headers = {
@@ -208,7 +208,9 @@ async def test_modular_bedrock_manual_cache_point():
     payload = response.json()
     content_blocks = payload.get("output", {}).get("message", {}).get("content", [])
     assert isinstance(content_blocks, list)
-    text_block = next((block.get("text") for block in content_blocks if "text" in block), "")
+    text_block = next(
+        (block.get("text") for block in content_blocks if "text" in block), ""
+    )
     assert text_block
 
 
@@ -241,7 +243,7 @@ async def test_modular_google_gemini():
 
     body = req.body.json()
     response = await client.aio.models.generate_content(
-        model="gemini-1.5-flash",
+        model="gemini-2.5-flash",
         contents=body["contents"],
         config={"safety_settings": [body["safetySettings"]]},
     )
@@ -418,9 +420,7 @@ async def test_modular_openai_responses():
 
     # The openai-responses provider should use the /v1/responses endpoint.
 
-    response = typing.cast(
-        Response, await client.responses.create(**req.body.json())
-    )
+    response = typing.cast(Response, await client.responses.create(**req.body.json()))
 
     parsed = b.parse.TestOpenAIResponses(response.output_text)
 
