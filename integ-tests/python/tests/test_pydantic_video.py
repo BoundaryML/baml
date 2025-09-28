@@ -2,7 +2,6 @@ import base64
 import baml_py
 import pydantic
 from baml_client import b
-import asyncio
 import pytest
 
 
