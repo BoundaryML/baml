@@ -214,7 +214,7 @@ const parent = traceAsync("parentTS", async () => {
   setTags({ parentId: "p123", run: "xyz" });
   const collector = new Collector("tags-collector");
   await b.TestOpenAIGPT4oMini("hi", { collector, tags: { callId: "first" } });
-  const tags = (collector.last as any).tags as Record<string, unknown>;
+  const tags = collector.last!.tags;
   console.log(tags);
 });
 

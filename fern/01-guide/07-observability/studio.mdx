@@ -230,7 +230,7 @@ const parent = traceAsync("parentTS", async (msg: string) => {
   });
 
   const log = collector.last!;
-  const tags = (log as any).tags as Record<string, unknown>;
+  const tags = log.tags;
   console.log(tags); // { parentId: "p123", run: "xyz", callId: "first", version: "v1" }
 });
 
