@@ -2351,7 +2351,7 @@ pub fn typecheck_expression(
 
                         _ => {
                             // We won't emit more diagnostics here because if either of the branches
-                            // has no type we've already emitted an error for that type
+                            // has no type we've already emitted an error for that branch
                         }
                     };
 
