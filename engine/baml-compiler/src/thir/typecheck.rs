@@ -796,7 +796,7 @@ fn typecheck_statement(
             emit,
             span,
         } => {
-            let typed_value = typecheck_expression(value, context, diagnostics);
+            let mut typed_value = typecheck_expression(value, context, diagnostics);
 
             if let (Some(annot), Some(inferred)) =
                 (annotated_type.as_ref(), typed_value.meta().1.as_ref())
@@ -840,6 +840,10 @@ fn typecheck_statement(
                         }),
                     },
                 );
+            }
+
+            if let Some(annotation) = annotated_type {
+                typed_value.meta_mut().1 = Some(annotation.clone());
             }
 
             Some(thir::Statement::Let {
@@ -951,7 +955,7 @@ fn typecheck_statement(
             emit,
             span,
         } => {
-            let typed_value = typecheck_expression(value, context, diagnostics);
+            let mut typed_value = typecheck_expression(value, context, diagnostics);
 
             if let (Some(annot), Some(inferred)) =
                 (annotated_type.as_ref(), typed_value.meta().1.as_ref())
@@ -995,11 +999,15 @@ fn typecheck_statement(
                 );
             }
 
-            let var_type = typed_value.meta().1.as_ref().or(annotated_type.as_ref());
+            let var_type = annotated_type.as_ref().or(typed_value.meta().1.as_ref());
 
             // If we were able to infer the type
             if let (Some(var_type), Some(emit)) = (var_type.as_ref(), emit) {
                 typecheck_emit(emit, var_type, context, diagnostics);
+            }
+
+            if let Some(annotation) = annotated_type.as_ref() {
+                typed_value.meta_mut().1 = Some(annotation.clone());
             }
 
             Some(thir::Statement::DeclareAndAssign {

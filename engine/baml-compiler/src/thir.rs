@@ -2,8 +2,10 @@
 ///
 use baml_types::ir_type::TypeIR;
 
-use crate::emit::EmitSpec;
-use crate::hir::{self, AssignOp, BinaryOperator, LlmFunction, UnaryOperator};
+use crate::{
+    emit::EmitSpec,
+    hir::{self, AssignOp, BinaryOperator, LlmFunction, UnaryOperator},
+};
 
 pub mod interpret;
 pub mod typecheck;
@@ -21,6 +23,7 @@ use itertools::join;
 /// This differs from HIR in a few ways:
 ///   - Expressions are (optionally) typed.
 ///   - Variables are bound or free, using the locally nameless representation.
+///   - Type parameter `T` is used for both `BamlValueWithMeta` and expression meta.
 #[derive(Clone, Debug)]
 pub struct THir<T> {
     pub expr_functions: Vec<ExprFunction<T>>,
@@ -210,7 +213,7 @@ impl VarIndex {
 /// The metadata used during parsing, typechecking and evaluation of BAML expressions.
 pub type ExprMetadata = (Span, Option<TypeIR>);
 
-impl<T: Clone + std::fmt::Debug> Expr<T> {
+impl<T> Expr<T> {
     pub fn meta(&self) -> &T {
         match self {
             Expr::Value(baml_value) => baml_value.meta(),
@@ -253,7 +256,10 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
         }
     }
 
-    pub fn into_meta(self) -> T {
+    pub fn into_meta(self) -> T
+    where
+        T: Clone,
+    {
         match self {
             Expr::Value(baml_value) => baml_value.meta().clone(),
             Expr::Block(_, meta) => meta,
@@ -718,7 +724,7 @@ impl<T: Clone> Statement<T> {
                     "Let {} = {} {}",
                     name,
                     value.dump_str(),
-                    emit.as_ref().map_or("", |_| "<emit>").to_string()
+                    emit.as_ref().map_or("", |_| "<emit>")
                 )
             }
             Statement::Declare { name, span: _ } => format!("var {name}"),
@@ -741,7 +747,7 @@ impl<T: Clone> Statement<T> {
                     "var {} <- {} {}",
                     name,
                     value.dump_str(),
-                    emit.as_ref().map_or("", |_| "<emit>").to_string()
+                    emit.as_ref().map_or("", |_| "<emit>")
                 )
             }
             Statement::Return { expr, span: _ } => {

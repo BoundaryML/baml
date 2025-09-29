@@ -3,10 +3,13 @@
 use baml_types::ir_type::TypeIR;
 use pretty::RcDoc;
 
-use crate::emit::{EmitSpec, EmitWhen};
-use crate::hir::{
-    AssignOp, BinaryOperator, Block, Class, ClassConstructorField, Enum, EnumVariant, ExprFunction,
-    Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg, UnaryOperator,
+use crate::{
+    emit::{EmitSpec, EmitWhen},
+    hir::{
+        AssignOp, BinaryOperator, Block, Class, ClassConstructorField, Enum, EnumVariant,
+        ExprFunction, Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg,
+        UnaryOperator,
+    },
 };
 
 impl Hir {
@@ -703,10 +706,10 @@ impl EmitSpec {
         args.push(format!("name={}", self.name));
         let args_doc = RcDoc::intersperse(args.iter().cloned().map(RcDoc::text), RcDoc::text(", "));
         let doc = RcDoc::space().append(RcDoc::text("@emit"));
-        if args.len() > 0 {
-            doc.append(RcDoc::text("(").append(args_doc).append(RcDoc::text(")")))
-        } else {
+        if args.is_empty() {
             doc
+        } else {
+            doc.append(RcDoc::text("(").append(args_doc).append(RcDoc::text(")")))
         }
     }
 }

@@ -2,9 +2,10 @@
 //!
 //! This file contains the definitions for all HIR items.
 
-use crate::emit::EmitSpec;
 use baml_types::ir_type::TypeIR;
 use internal_baml_diagnostics::Span;
+
+use crate::emit::EmitSpec;
 
 pub mod dump;
 pub mod lowering;

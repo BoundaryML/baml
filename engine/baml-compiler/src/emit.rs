@@ -1,11 +1,13 @@
 /// Utilities for analyzing the emit variables and their dependencies.
 pub mod emit_options;
 
-pub use crate::emit::emit_options::{EmitSpec, EmitWhen};
-use crate::hir::{self, ClassConstructor, ClassConstructorField, Hir};
-use baml_types::{BamlMap, TypeIR};
-use internal_baml_diagnostics::Diagnostics;
 use std::collections::HashSet;
+
+use baml_types::{ir_type::UnionConstructor, BamlMap, TypeIR};
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+
+pub use crate::emit::emit_options::{EmitSpec, EmitWhen};
+use crate::thir::{self, typecheck::TypeCompatibility, ClassConstructorField, ExprMetadata, THir};
 
 /// The result of analyzing the emit variables in a BAML program.
 /// See `EmitChannels::analyze_program` for more details.
@@ -25,7 +27,7 @@ impl EmitChannels {
     ///   - Its own variables
     ///   - Its transitive subfunctions' markdown headers (under a namespace)
     ///   - Its transitive subfunctions' variables (under a namespace)
-    pub fn analyze_program(hir: &Hir, diagnostics: &mut Diagnostics) -> Self {
+    pub fn analyze_program(hir: &THir<ExprMetadata>, diagnostics: &mut Diagnostics) -> Self {
         // Compute the immediate metadata for each function.
         let function_metadatas: BamlMap<String, FunctionMetadata> = hir
             .expr_functions
@@ -56,7 +58,7 @@ impl EmitChannels {
         function_metadatas: &BamlMap<String, FunctionMetadata>,
         transitive_closures: &BamlMap<String, HashSet<String>>,
     ) -> FunctionChannels {
-        let mut channels = HashSet::new();
+        let mut channels: HashSet<(ChannelFQN, TypeIR)> = HashSet::new();
 
         let FunctionMetadata {
             emit_vars,
@@ -64,19 +66,27 @@ impl EmitChannels {
             ..
         } = &function_metadatas[fn_name];
 
-        let md_channels = markdown_headers.into_iter().map(|header| ChannelFQN {
-            namespace: None,
-            r#type: ChannelType::MarkdownHeader,
-            name: header.clone(),
+        let md_channels = markdown_headers.iter().map(|header| {
+            (
+                ChannelFQN {
+                    namespace: None,
+                    r#type: ChannelType::MarkdownHeader,
+                    name: header.clone(),
+                },
+                TypeIR::string(),
+            )
         });
         channels.extend(md_channels);
-        let var_channels = emit_vars
-            .into_iter()
-            .map(|(_, (emit_spec, _chan_type))| ChannelFQN {
-                namespace: None,
-                r#type: ChannelType::Variable,
-                name: emit_spec.name.clone(),
-            });
+        let var_channels = emit_vars.into_iter().map(|(_, (emit_spec, chan_type))| {
+            (
+                ChannelFQN {
+                    namespace: None,
+                    r#type: ChannelType::Variable,
+                    name: emit_spec.name.clone(),
+                },
+                chan_type.clone(),
+            )
+        });
         channels.extend(var_channels);
 
         let mut dependencies = transitive_closures[fn_name].clone();
@@ -87,20 +97,27 @@ impl EmitChannels {
                 emit_vars,
                 ..
             } = &function_metadatas[&subfunction];
-            let sub_md_channels = markdown_headers.iter().map(|header| ChannelFQN {
-                namespace: Some(subfunction.clone()),
-                r#type: ChannelType::MarkdownHeader,
-                name: header.clone(),
+            let sub_md_channels = markdown_headers.iter().map(|header| {
+                (
+                    ChannelFQN {
+                        namespace: Some(subfunction.clone()),
+                        r#type: ChannelType::MarkdownHeader,
+                        name: header.clone(),
+                    },
+                    TypeIR::string(),
+                )
             });
             channels.extend(sub_md_channels);
-            let sub_var_channels =
-                emit_vars
-                    .into_iter()
-                    .map(|(_, (emit_spec, _chan_type))| ChannelFQN {
+            let sub_var_channels = emit_vars.into_iter().map(|(_, (emit_spec, chan_type))| {
+                (
+                    ChannelFQN {
                         namespace: Some(subfunction.clone()),
                         r#type: ChannelType::Variable,
                         name: emit_spec.name.clone(),
-                    });
+                    },
+                    chan_type.clone(),
+                )
+            });
             channels.extend(sub_var_channels);
         }
 
@@ -110,7 +127,7 @@ impl EmitChannels {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionChannels {
-    pub channels: HashSet<ChannelFQN>,
+    pub channels: HashSet<(ChannelFQN, TypeIR)>,
 }
 
 /// Fully qualified name of an emit channel.
@@ -144,15 +161,41 @@ struct FunctionMetadata {
 }
 
 impl FunctionMetadata {
+    /// Add a new emit variable to the function metadata.
+    /// If a variable with the same name already exists,
+    /// use the existing channel and augment its type as
+    /// needed (combine the existing and the new types into
+    /// a union unless they are already subtypes).
+    pub fn push_emit_var(&mut self, name: String, spec: EmitSpec, ty: TypeIR) {
+        self.emit_vars
+            .entry(name)
+            .and_modify(|(_existing_spec, existing_type)| {
+                if ty.is_subtype(existing_type) {
+                    // Do nothing - the newly added type is already contained in the
+                    // existing channel type.
+                } else if existing_type.is_subtype(&ty) {
+                    // "Grow" the channel type to the supertype.
+                    *existing_type = ty.clone();
+                } else {
+                    // Combine the existing and new types into a union.
+                    *existing_type = TypeIR::union(vec![existing_type.clone(), ty.clone()]);
+                }
+            })
+            .or_insert((spec, ty));
+    }
+
     /// Walk the statements of a function to collect metadata.
-    pub fn analyze_function(function: &hir::ExprFunction, diagnostics: &mut Diagnostics) -> Self {
+    pub fn analyze_function(
+        function: &thir::ExprFunction<ExprMetadata>,
+        diagnostics: &mut Diagnostics,
+    ) -> Self {
         let mut metadata = FunctionMetadata {
             subfunctions: HashSet::new(),
             emit_vars: BamlMap::new(),
             markdown_headers: HashSet::new(),
         };
 
-        let hir::ExprFunction { body, .. } = function;
+        let thir::ExprFunction { body, .. } = function;
         for statement in body.statements.iter() {
             metadata.analyze_statement(statement, diagnostics);
         }
@@ -161,61 +204,85 @@ impl FunctionMetadata {
     }
 
     /// Walk the parts of a statement, appending metadata.
-    pub fn analyze_statement(&mut self, statement: &hir::Statement, diagnostics: &mut Diagnostics) {
+    pub fn analyze_statement(
+        &mut self,
+        statement: &thir::Statement<ExprMetadata>,
+        diagnostics: &mut Diagnostics,
+    ) {
         match statement {
-            hir::Statement::Let {
+            thir::Statement::Let {
                 value, emit, name, ..
             } => {
                 if let Some(spec) = emit {
-                    self.emit_vars.insert(name.clone(), spec.clone());
+                    match &value.meta().1 {
+                        Some(var_type) => {
+                            self.push_emit_var(spec.name.clone(), spec.clone(), var_type.clone());
+                        }
+                        None => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Variable '{}' has no type", name),
+                                spec.span.clone(),
+                            ));
+                        }
+                    }
                 }
                 self.analyze_expression(value, diagnostics);
             }
-            hir::Statement::Declare { .. } => {}
-            hir::Statement::Assign { value, .. } => {
+            thir::Statement::SemicolonExpression { expr, .. } => {
+                self.analyze_expression(expr, diagnostics);
+            }
+            thir::Statement::Declare { .. } => {}
+            thir::Statement::Assign { value, .. } => {
                 self.analyze_expression(value, diagnostics);
             }
-            hir::Statement::AssignOp { value, .. } => {
+            thir::Statement::AssignOp { value, .. } => {
                 self.analyze_expression(value, diagnostics);
             }
-            hir::Statement::DeclareAndAssign {
+            thir::Statement::DeclareAndAssign {
                 value, emit, name, ..
             } => {
                 if let Some(spec) = emit {
-                    self.emit_vars.insert(name.clone(), spec.clone());
+                    match &value.meta().1 {
+                        Some(var_type) => {
+                            self.push_emit_var(spec.name.clone(), spec.clone(), var_type.clone());
+                        }
+                        None => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Variable '{}' has no type", name),
+                                spec.span.clone(),
+                            ));
+                        }
+                    }
                 }
                 self.analyze_expression(value, diagnostics);
             }
-            hir::Statement::Return { expr, .. } => {
+            thir::Statement::Return { expr, .. } => {
                 self.analyze_expression(expr, diagnostics);
             }
-            hir::Statement::Expression { expr, .. } => {
+            thir::Statement::Expression { expr, .. } => {
                 self.analyze_expression(expr, diagnostics);
             }
-            hir::Statement::Semicolon { expr, .. } => {
-                self.analyze_expression(expr, diagnostics);
-            }
-            hir::Statement::While {
+            thir::Statement::While {
                 condition, block, ..
             } => {
                 self.analyze_expression(condition, diagnostics);
                 for s in block.statements.iter() {
-                    self.analyze_statement(&s, diagnostics);
+                    self.analyze_statement(s, diagnostics);
                 }
             }
-            hir::Statement::ForLoop { block, .. } => {
+            thir::Statement::ForLoop { block, .. } => {
                 for s in block.statements.iter() {
-                    self.analyze_statement(&s, diagnostics);
+                    self.analyze_statement(s, diagnostics);
                 }
             }
-            hir::Statement::CForLoop { block, .. } => {
+            thir::Statement::CForLoop { block, .. } => {
                 for s in block.statements.iter() {
-                    self.analyze_statement(&s, diagnostics);
+                    self.analyze_statement(s, diagnostics);
                 }
             }
-            hir::Statement::Break(_) => {}
-            hir::Statement::Continue(_) => {}
-            hir::Statement::Assert { condition, .. } => {
+            thir::Statement::Break(_) => {}
+            thir::Statement::Continue(_) => {}
+            thir::Statement::Assert { condition, .. } => {
                 self.analyze_expression(condition, diagnostics);
             }
         };
@@ -224,54 +291,51 @@ impl FunctionMetadata {
     /// Walk the parts of an expression, appending metadata.
     pub fn analyze_expression(
         &mut self,
-        expression: &hir::Expression,
+        expression: &thir::Expr<ExprMetadata>,
         diagnostics: &mut Diagnostics,
     ) {
         match expression {
-            hir::Expression::ArrayAccess { base, index, .. } => {
+            thir::Expr::ArrayAccess { base, index, .. } => {
                 self.analyze_expression(base, diagnostics);
                 self.analyze_expression(index, diagnostics);
             }
-            hir::Expression::FieldAccess { base, .. } => {
+            thir::Expr::FieldAccess { base, .. } => {
                 self.analyze_expression(base, diagnostics);
             }
-            hir::Expression::MethodCall { receiver, args, .. } => {
+            thir::Expr::MethodCall { receiver, args, .. } => {
                 self.analyze_expression(receiver, diagnostics);
                 for arg in args {
                     self.analyze_expression(arg, diagnostics);
                 }
             }
-            hir::Expression::BoolValue(_, _) => {}
-            hir::Expression::NumericValue(_, _) => {}
-            hir::Expression::Identifier(_, _) => {}
-            hir::Expression::StringValue(_, _) => {}
-            hir::Expression::RawStringValue(_, _) => {}
-            hir::Expression::If {
-                condition,
-                if_branch,
-                else_branch,
-                ..
-            } => {
+            thir::Expr::Value(_) => {}
+            thir::Expr::Var(_, _) => {}
+            thir::Expr::Builtin(_, _) => {}
+            thir::Expr::Function(_, body, _) => {
+                for statement in &body.statements {
+                    self.analyze_statement(statement, diagnostics);
+                }
+            }
+            thir::Expr::If(condition, if_branch, else_branch, _) => {
                 self.analyze_expression(condition, diagnostics);
                 self.analyze_expression(if_branch, diagnostics);
                 if let Some(expr) = else_branch {
                     self.analyze_expression(expr, diagnostics);
                 }
             }
-            hir::Expression::Array(elements, _) => {
+            thir::Expr::List(elements, _) => {
                 for element in elements {
                     self.analyze_expression(element, diagnostics);
                 }
             }
-            hir::Expression::Map(kvs, _) => {
+            thir::Expr::Map(kvs, _) => {
                 for (_, value) in kvs {
                     self.analyze_expression(value, diagnostics);
                 }
             }
-            hir::Expression::JinjaExpressionValue(_, _) => {}
-            hir::Expression::Call { function, args, .. } => {
-                match function.as_ref() {
-                    hir::Expression::Identifier(ident, _) => {
+            thir::Expr::Call { func, args, .. } => {
+                match func.as_ref() {
+                    thir::Expr::Var(ident, _) => {
                         self.subfunctions.insert(ident.clone());
                     }
                     other_expr => {
@@ -282,7 +346,7 @@ impl FunctionMetadata {
                     self.analyze_expression(arg, diagnostics);
                 }
             }
-            hir::Expression::ClassConstructor(ClassConstructor { fields, .. }, _) => {
+            thir::Expr::ClassConstructor { fields, .. } => {
                 for f in fields {
                     match f {
                         ClassConstructorField::Named { value, .. } => {
@@ -294,19 +358,19 @@ impl FunctionMetadata {
                     }
                 }
             }
-            hir::Expression::Block(block, _) => {
+            thir::Expr::Block(block, _) => {
                 for stmt in block.statements.iter() {
                     self.analyze_statement(stmt, diagnostics);
                 }
             }
-            hir::Expression::BinaryOperation { left, right, .. } => {
+            thir::Expr::BinaryOperation { left, right, .. } => {
                 self.analyze_expression(left, diagnostics);
                 self.analyze_expression(right, diagnostics);
             }
-            hir::Expression::UnaryOperation { expr, .. } => {
+            thir::Expr::UnaryOperation { expr, .. } => {
                 self.analyze_expression(expr, diagnostics);
             }
-            hir::Expression::Paren(expr, _) => {
+            thir::Expr::Paren(expr, _) => {
                 self.analyze_expression(expr, diagnostics);
             }
         };
@@ -316,7 +380,7 @@ impl FunctionMetadata {
     /// transitive closure of function calls.
     pub fn transitive_closures(env: &BamlMap<String, Self>) -> BamlMap<String, HashSet<String>> {
         let mut closures = BamlMap::new();
-        for (name, func) in env {
+        for (name, _func) in env {
             let mut visited = HashSet::new();
             let mut stack = vec![name.clone()];
             while let Some(current) = stack.pop() {
@@ -338,9 +402,10 @@ impl FunctionMetadata {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::hir::Hir;
     use std::path::PathBuf;
+
+    use super::*;
+    use crate::{hir::Hir, thir::typecheck::typecheck};
 
     #[test]
     // Test that transitive closure is computer correctly.
@@ -369,8 +434,9 @@ mod tests {
             }
         "#,
         );
+        let thir = typecheck(&hir, &mut diagnostics);
 
-        let function_metadatas: BamlMap<String, FunctionMetadata> = hir
+        let function_metadatas: BamlMap<String, FunctionMetadata> = thir
             .expr_functions
             .iter()
             .map(|f| {
@@ -419,8 +485,9 @@ mod tests {
         "#,
         );
         let mut diagnostics = Diagnostics::new(PathBuf::from("test"));
+        let thir = typecheck(&hir, &mut diagnostics);
 
-        let emit_channels = EmitChannels::analyze_program(&hir, &mut diagnostics);
+        let emit_channels = EmitChannels::analyze_program(&thir, &mut diagnostics);
         let a_channels = emit_channels.functions_channels.get("A").unwrap();
         let b_channels = emit_channels.functions_channels.get("B").unwrap();
         let c_channels = emit_channels.functions_channels.get("C").unwrap();
@@ -434,9 +501,9 @@ mod tests {
             b_channels
                 .channels
                 .iter()
-                .filter(|channel| channel.name == "b_1"
-                    && channel.namespace == None
-                    && channel.r#type == ChannelType::Variable)
+                .filter(|channel| channel.0.name == "b_1"
+                    && channel.0.namespace == None
+                    && channel.0.r#type == ChannelType::Variable)
                 .count(),
             1
         );
@@ -444,8 +511,8 @@ mod tests {
             b_channels
                 .channels
                 .iter()
-                .filter(|channel| channel.namespace == Some("A".to_string())
-                    && channel.r#type == ChannelType::Variable)
+                .filter(|channel| channel.0.namespace == Some("A".to_string())
+                    && channel.0.r#type == ChannelType::Variable)
                 .count(),
             2
         );
@@ -456,7 +523,7 @@ mod tests {
             a_channels
                 .channels
                 .iter()
-                .filter(|channel| channel.namespace == None)
+                .filter(|channel| channel.0.namespace == None)
                 .count(),
             2
         );
@@ -464,9 +531,55 @@ mod tests {
             a_channels
                 .channels
                 .iter()
-                .filter(|channel| channel.namespace == Some("B".to_string()))
+                .filter(|channel| channel.0.namespace == Some("B".to_string()))
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn test_emit_channel_sharing() {
+        let hir = Hir::from_source(
+            r#"
+                function A() -> int {
+                    let a_1: int = 1 @emit(name=a);
+                    let a_2: string = "hi" @emit(name=a);
+                    let b_1: int | bool = true @emit(name=b);
+                    let b_2: int = 3 @emit(name=b);
+                    let c_1: int = 1 @emit(name=c);
+                    let c_2: int | bool = 3 @emit(name=c);
+                    1
+                }
+            "#,
+        );
+        let mut diagnostics = Diagnostics::new(PathBuf::from("test"));
+        let thir = typecheck(&hir, &mut diagnostics);
+
+        let emit_channels = EmitChannels::analyze_program(&thir, &mut diagnostics);
+        let mut a_channels = emit_channels
+            .functions_channels
+            .get("A")
+            .unwrap()
+            .clone()
+            .channels
+            .into_iter()
+            .collect::<Vec<_>>();
+        a_channels.sort_by(|a, b| a.0.name.cmp(&b.0.name));
+
+        assert_eq!(a_channels.len(), 3);
+        let mut a_channels_iter = a_channels.iter();
+
+        if let TypeIR::Union(union_view, _) = &a_channels_iter.next().unwrap().1 {
+            let variants = union_view.iter_skip_null();
+            assert_eq!(variants, vec![&TypeIR::int(), &TypeIR::string()]);
+        }
+        if let TypeIR::Union(union_view, _) = &a_channels_iter.next().unwrap().1 {
+            let variants = union_view.iter_skip_null();
+            assert_eq!(variants, vec![&TypeIR::int(), &TypeIR::bool()]);
+        }
+        if let TypeIR::Union(union_view, _) = &a_channels_iter.next().unwrap().1 {
+            let variants = union_view.iter_skip_null();
+            assert_eq!(variants, vec![&TypeIR::int(), &TypeIR::bool()]);
+        }
     }
 }
