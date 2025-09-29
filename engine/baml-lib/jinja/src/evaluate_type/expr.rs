@@ -596,6 +596,69 @@ fn tracker_visit_expr(
                         Type::Unknown
                     }
                 },
+                union @ Type::Union(items) => {
+                    // Attribute must be present on all items of the union and
+                    // also have the same type.
+                    let mut attr_found_in_all_union_types = true;
+                    let mut attr_type = None;
+
+                    // Search recursively for all types in the union to check
+                    // if they all contain the property.
+                    let mut stack = Vec::from_iter(items.iter());
+                    while let Some(t) = stack.pop() {
+                        match t {
+                            Type::ClassRef(c) => {
+                                // Get type of prop
+                                let (t, err) = types.check_class_property(
+                                    &pretty_print(&expr.expr),
+                                    c,
+                                    expr.name,
+                                    expr.span(),
+                                );
+
+                                // Break if prop not found.
+                                if err.is_some() {
+                                    attr_found_in_all_union_types = false;
+                                    break;
+                                }
+
+                                // Check if previous type matches the current one
+                                match &attr_type {
+                                    None => attr_type = Some(t),
+
+                                    Some(known_type) => {
+                                        if !t.equals_ignoring_literal_values(known_type) {
+                                            attr_found_in_all_union_types = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Recurse into nested unions
+                            Type::Union(nested) => stack.extend(nested.iter()),
+
+                            // Found a type that's not a class, stop here.
+                            _ => {
+                                attr_found_in_all_union_types = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if attr_found_in_all_union_types && attr_type.is_some() {
+                        attr_type.unwrap()
+                    } else {
+                        state.errors.push(TypeError::new_invalid_type(
+                            &expr.expr,
+                            union,
+                            "class",
+                            expr.span(),
+                        ));
+
+                        Type::Unknown
+                    }
+                }
                 Type::Unknown => Type::Unknown,
                 t => {
                     state.errors.push(TypeError::new_invalid_type(

@@ -1,3 +1,4 @@
+use baml_types::LiteralValue;
 use minijinja::machinery::ast::{self, Spanned, Stmt, UnaryOpKind};
 
 use super::{expr::evaluate_type, types::PredefinedTypes, TypeError};
@@ -215,6 +216,104 @@ pub fn predicate_implications<'a>(
                     vec![]
                 }
             }
+            ast::BinOpKind::Eq if branch => match (&binary_op.left, &binary_op.right) {
+                (GetAttr(get_attr), Const(const_expr)) | (Const(const_expr), GetAttr(get_attr)) => {
+                    match &get_attr.expr {
+                        Var(var) => match context.resolve(var.id) {
+                            Some(Type::Union(items)) => {
+                                let mut implications = vec![];
+
+                                let mut attr_type = None;
+                                let mut attr_found_in_all_union_types = true;
+
+                                let mut stack = Vec::from_iter(items.iter());
+                                while let Some(t) = stack.pop() {
+                                    match t {
+                                        Type::Union(nested) => stack.extend(nested.iter()),
+
+                                        Type::ClassRef(c) => {
+                                            let (prop_type, err) = context.check_class_property(
+                                                &crate::evaluate_type::pretty_print::pretty_print(
+                                                    &get_attr.expr,
+                                                ),
+                                                c,
+                                                get_attr.name,
+                                                get_attr.span(),
+                                            );
+
+                                            if err.is_some() {
+                                                attr_found_in_all_union_types = false;
+                                                break;
+                                            }
+
+                                            match &attr_type {
+                                                None => attr_type = Some(prop_type.clone()),
+
+                                                Some(known_type) => {
+                                                    if !prop_type
+                                                        .equals_ignoring_literal_values(known_type)
+                                                    {
+                                                        attr_found_in_all_union_types = false;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+
+                                            if let Type::Literal(literal) = prop_type {
+                                                match literal {
+                                                    LiteralValue::String(s) => {
+                                                        if let Some(v) = const_expr.value.as_str() {
+                                                            if v == s {
+                                                                implications.push((
+                                                                    var.id.to_string(),
+                                                                    t.clone(),
+                                                                ));
+                                                            }
+                                                        }
+                                                    }
+                                                    LiteralValue::Int(i) => {
+                                                        if let Some(v) = const_expr.value.as_i64() {
+                                                            if v == i {
+                                                                implications.push((
+                                                                    var.id.to_string(),
+                                                                    t.clone(),
+                                                                ));
+                                                            }
+                                                        }
+                                                    }
+                                                    LiteralValue::Bool(_) => {
+                                                        attr_found_in_all_union_types = false;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        _ => {
+                                            attr_found_in_all_union_types = false;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                eprintln!("implications: {:?}", implications);
+
+                                if attr_found_in_all_union_types && implications.len() == 1 {
+                                    implications
+                                } else {
+                                    vec![]
+                                }
+                            }
+
+                            _ => vec![],
+                        },
+
+                        _ => vec![],
+                    }
+                }
+
+                _ => vec![],
+            },
             _ => vec![],
         },
         _ => vec![],
