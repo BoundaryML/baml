@@ -1,4 +1,5 @@
 pub mod ui_baml_src;
+pub mod ui_blobs;
 pub mod ui_control_plane_orgs;
 pub mod ui_control_plane_projects;
 pub mod ui_dashboard;
