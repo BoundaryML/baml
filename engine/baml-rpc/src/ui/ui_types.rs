@@ -94,7 +94,7 @@ pub struct UiFunctionCall {
     #[ts(optional)]
     pub function_id: Option<UiFunctionIdString>,
 
-    #[ts(type = "Record<string, string>")]
+    #[ts(type = "Record<string, unknown>")]
     pub tags: serde_json::Map<String, serde_json::Value>,
 
     #[serde(rename = "start_epoch_ms")]
@@ -105,7 +105,7 @@ pub struct UiFunctionCall {
     pub end_time: Option<EpochMsTimestamp>,
     pub status: String,
 
-    #[ts(type = "any")]
+    #[ts(type = "unknown")]
     pub baml_options: serde_json::Value,
     pub inputs: Vec<UiFunctionInput>,
     #[ts(as = "Option<BamlValue>")]
@@ -130,9 +130,9 @@ pub struct UiLlmRequest {
     pub client_name: String,
     pub client_provider: String,
     // TODO: type this out properly.
-    #[ts(type = "any")]
+    #[ts(type = "unknown")]
     pub params: serde_json::Value,
-    #[ts(type = "any")]
+    #[ts(type = "unknown")]
     pub prompt: serde_json::Value,
 }
 
@@ -186,7 +186,7 @@ pub struct UiHttpRequest {
     pub start_time: EpochMsTimestamp,
     pub url: String,
     pub method: String,
-    #[ts(type = "Record<string, any> | undefined")]
+    #[ts(type = "Record<string, string> | undefined")]
     pub headers: Option<HashMap<String, String>>,
     pub body: String,
 }
@@ -197,7 +197,7 @@ pub struct UiHttpResponse {
     #[ts(type = "number")]
     pub end_time: EpochMsTimestamp,
     pub status_code: u16,
-    #[ts(type = "Record<string, any>")]
+    #[ts(type = "Record<string, unknown>")]
     pub headers: HashMap<String, serde_json::Value>,
     pub body: String,
 }
