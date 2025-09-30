@@ -205,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn test_should_inferr_narrowed_type_on_if_branch() {
+    fn test_should_infer_narrowed_type_on_if_branch() {
         let mut types = PredefinedTypes::default(JinjaContext::Prompt);
 
         types.add_class(
@@ -230,6 +230,63 @@ mod tests {
                 Type::ClassRef("UserMessage".to_string()),
                 Type::ClassRef("AssistantMessage".to_string()),
             ]),
+        );
+
+        validate_template(
+            "test",
+            r#"
+                {% if message.kind == "user_message" %}
+                    {{ message.user_message }}
+                {% elif message.kind == "assistant_message" %}
+                    {{ message.assistant_message }}
+                {% endif %}
+            "#,
+            &mut types,
+        )
+        .expect("Should succeed");
+    }
+
+    #[test]
+    fn test_should_infer_narrowed_type_on_if_branch_with_alias() {
+        let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+
+        types.add_class(
+            "UserMessage",
+            indexmap::indexmap! {
+                "kind".to_string() => Type::Literal(LiteralValue::String("user_message".to_string())),
+                "user_message".to_string() => Type::String,
+            }
+        );
+
+        types.add_class(
+            "AssistantMessage",
+            indexmap::indexmap! {
+                "kind".to_string() => Type::Literal(LiteralValue::String("assistant_message".to_string())),
+                "assistant_message".to_string() => Type::String,
+            },
+        );
+
+        types.add_alias(
+            "Message",
+            Type::Union(vec![
+                Type::ClassRef("UserMessage".to_string()),
+                Type::ClassRef("AssistantMessage".to_string()),
+            ]),
+        );
+
+        types.add_variable(
+            "message",
+            Type::Alias {
+                name: "Message".to_string(),
+                target: Box::new(Type::Union(vec![
+                    Type::ClassRef("UserMessage".to_string()),
+                    Type::ClassRef("AssistantMessage".to_string()),
+                ])),
+                resolved: Box::new(Type::Union(vec![
+                    Type::ClassRef("UserMessage".to_string()),
+                    Type::ClassRef("AssistantMessage".to_string()),
+                ])),
+            },
         );
 
         validate_template(
