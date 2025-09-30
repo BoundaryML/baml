@@ -19,10 +19,15 @@
 /// in several places. Bidirectional typing is the target.
 use std::{borrow::Cow, sync::Arc};
 
-use baml_types::{ir_type::TypeIR, BamlMap, BamlMediaType, BamlValueWithMeta, TypeValue};
+use baml_types::{
+    ir_type::{ArrowGeneric, TypeIR},
+    BamlMap, BamlMediaType, BamlValueWithMeta, TypeValue,
+};
+use internal_baml_ast::ast::WithSpan;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::{
+    emit::{EmitSpec, EmitWhen},
     hir::{self, dump::TypeDocumentRender, BinaryOperator, Hir},
     thir::{self as thir, ExprMetadata, THir},
 };
@@ -788,9 +793,10 @@ fn typecheck_statement(
             name,
             value,
             annotated_type,
+            emit,
             span,
         } => {
-            let typed_value = typecheck_expression(value, context, diagnostics);
+            let mut typed_value = typecheck_expression(value, context, diagnostics);
 
             if let (Some(annot), Some(inferred)) =
                 (annotated_type.as_ref(), typed_value.meta().1.as_ref())
@@ -836,9 +842,14 @@ fn typecheck_statement(
                 );
             }
 
+            if let Some(annotation) = annotated_type {
+                typed_value.meta_mut().1 = Some(annotation.clone());
+            }
+
             Some(thir::Statement::Let {
                 name: name.clone(),
                 value: typed_value,
+                emit: emit.clone(),
                 span: span.clone(),
             })
         }
@@ -941,9 +952,10 @@ fn typecheck_statement(
             name,
             value,
             annotated_type,
+            emit,
             span,
         } => {
-            let typed_value = typecheck_expression(value, context, diagnostics);
+            let mut typed_value = typecheck_expression(value, context, diagnostics);
 
             if let (Some(annot), Some(inferred)) =
                 (annotated_type.as_ref(), typed_value.meta().1.as_ref())
@@ -987,9 +999,21 @@ fn typecheck_statement(
                 );
             }
 
+            let var_type = annotated_type.as_ref().or(typed_value.meta().1.as_ref());
+
+            // If we were able to infer the type
+            if let (Some(var_type), Some(emit)) = (var_type.as_ref(), emit) {
+                typecheck_emit(emit, var_type, context, diagnostics);
+            }
+
+            if let Some(annotation) = annotated_type.as_ref() {
+                typed_value.meta_mut().1 = Some(annotation.clone());
+            }
+
             Some(thir::Statement::DeclareAndAssign {
                 name: name.clone(),
                 value: typed_value,
+                emit: emit.clone(),
                 span: span.clone(),
             })
         }
@@ -2399,6 +2423,43 @@ pub fn typecheck_expression(
     }
 }
 
+fn typecheck_emit(
+    emit: &EmitSpec,
+    var_type: &TypeIR,
+    context: &mut TypeContext,
+    diagnostics: &mut Diagnostics,
+) {
+    match &emit.when {
+        EmitWhen::FunctionName(fn_name) => {
+            let required_predicate_type = TypeIR::Arrow(
+                Box::new(ArrowGeneric {
+                    param_types: vec![var_type.clone(), var_type.clone()],
+                    return_type: TypeIR::bool(),
+                }),
+                Default::default(),
+            );
+            match context.get_type(&fn_name.to_string()) {
+                None => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Function '{}' not found", fn_name),
+                        fn_name.span().clone(),
+                    ));
+                }
+                Some(function_type) => {
+                    if !function_type.is_subtype(&required_predicate_type) {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Function '{}' has incorrect type", fn_name),
+                            fn_name.span().clone(),
+                        ));
+                    }
+                }
+            }
+        }
+        EmitWhen::True => {}
+        EmitWhen::False => {}
+    }
+}
+
 /// Check if two types are compatible (for now, just equality)
 fn types_compatible(actual: &TypeIR, expected: &TypeIR) -> bool {
     match (actual, expected) {
@@ -2478,7 +2539,10 @@ impl TypeCompatibility for TypeIR {
             (TypeIR::Class { name: a, .. }, TypeIR::Class { name: e, .. }) => a == e,
             (TypeIR::Enum { name: a, .. }, TypeIR::Enum { name: e, .. }) => a == e,
 
-            // Function types: conservative check (same arity; covariant inputs/outputs)
+            // Function types:
+            //   Same arity
+            //   Parameters are contravariant
+            //   Return type is covariant
             (TypeIR::Arrow(a_arrow, _), TypeIR::Arrow(e_arrow, _)) => {
                 if a_arrow.param_types.len() != e_arrow.param_types.len() {
                     return false;
@@ -2487,7 +2551,7 @@ impl TypeCompatibility for TypeIR {
                     .param_types
                     .iter()
                     .zip(e_arrow.param_types.iter())
-                    .all(|(a_in, e_in)| a_in.is_subtype(e_in))
+                    .all(|(a_in, e_in)| e_in.is_subtype(a_in))
                 {
                     return false;
                 }

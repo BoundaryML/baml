@@ -1016,6 +1016,7 @@ dependencies = [
  "internal-baml-diagnostics",
  "internal-baml-parser-database",
  "itertools 0.14.0",
+ "log",
  "pretty",
  "tokio",
 ]

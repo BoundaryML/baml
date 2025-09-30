@@ -10,6 +10,11 @@ use internal_baml_diagnostics::Span;
 
 use crate::thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, THir};
 
+// TODO:
+//  - Variables should be expressions, not BamlValues. Because we want to be able to
+//    mutate them across REPL prompts and see the same downstream effects on their
+//    containers that we would for mutating values within functions.
+
 /// A scope is a map of variable names to their values.
 ///
 /// Variables are stored in refcells to allow for mutation.
@@ -1716,12 +1721,14 @@ mod tests {
                 Statement::Let {
                     name: "a".to_string(),
                     value: Expr::Value(BamlValueWithMeta::Int(0, meta())),
+                    emit: None,
                     span: Span::fake(),
                 },
                 // let mut b = 1;
                 Statement::Let {
                     name: "b".to_string(),
                     value: Expr::Value(BamlValueWithMeta::Int(1, meta())),
+                    emit: None,
                     span: Span::fake(),
                 },
                 // while (n > 0) {
@@ -1756,6 +1763,7 @@ mod tests {
                                     right: Arc::new(Expr::Var("b".to_string(), meta())),
                                     meta: meta(),
                                 },
+                                emit: None,
                                 span: Span::fake(),
                             },
                             // b = a;
