@@ -4726,3 +4726,35 @@ export const SumFromTo = async (
   );
   return Promise.resolve(stream.toStreamable());
 };
+
+/**
+ * Executes the streaming variant of the "WorkflowEmit" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const WorkflowEmit = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.WorkflowEmit(
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "WorkflowEmitChild" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const WorkflowEmitChild = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.WorkflowEmitChild(
+  );
+  return Promise.resolve(stream.toStreamable());
+};

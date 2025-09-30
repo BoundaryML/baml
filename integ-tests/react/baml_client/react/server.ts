@@ -4480,3 +4480,33 @@ export const SumFromTo = async (
     y,
   );
 };
+
+/**
+ * Executes the "WorkflowEmit" BAML action.
+ *
+ * This server action calls the underlying BAML function "WorkflowEmit"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const WorkflowEmit = async (
+): Promise<number> => {
+  return b.WorkflowEmit(
+  );
+};
+
+/**
+ * Executes the "WorkflowEmitChild" BAML action.
+ *
+ * This server action calls the underlying BAML function "WorkflowEmitChild"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const WorkflowEmitChild = async (
+): Promise<number> => {
+  return b.WorkflowEmitChild(
+  );
+};

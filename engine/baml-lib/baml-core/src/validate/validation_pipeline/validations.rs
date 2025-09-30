@@ -18,6 +18,9 @@ use baml_types::GeneratorOutputType;
 
 use super::context::Context;
 use crate::{configuration::Generator, validate::generator_loader::load_generators_from_ast};
+use baml_compiler::emit::EmitChannels;
+use baml_compiler::hir::Hir;
+use baml_compiler::thir::typecheck::typecheck;
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
     enums::validate(ctx);
@@ -52,10 +55,12 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
 /// HIR-based typechecking using functions from baml-compiler
 fn hir_typecheck_exprs(ctx: &mut Context<'_>) -> Result<()> {
     // Create HIR from AST using baml-compiler
-    let hir = baml_compiler::hir::Hir::from_ast(ctx.db.ast());
+    let hir = Hir::from_ast(ctx.db.ast());
 
     // Run HIR-based typechecking using baml-compiler
-    let _thir = baml_compiler::thir::typecheck::typecheck(&hir, ctx.diagnostics);
+    let thir = typecheck(&hir, ctx.diagnostics);
+
+    let _ = EmitChannels::analyze_program(&thir, ctx.diagnostics);
 
     Ok(())
 }

@@ -3535,6 +3535,34 @@ class BamlSyncClient:
                 "x": x,"y": y,
             })
             return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def WorkflowEmit(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.WorkflowEmit(
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="WorkflowEmit", args={
+                
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def WorkflowEmitChild(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.WorkflowEmitChild(
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="WorkflowEmitChild", args={
+                
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -6496,6 +6524,30 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def WorkflowEmit(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="WorkflowEmit", args={
+            
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def WorkflowEmitChild(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="WorkflowEmitChild", args={
+            
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     
 
 class BamlHttpRequestClient:
@@ -8226,6 +8278,20 @@ class BamlHttpRequestClient:
             "x": x,"y": y,
         }, mode="request")
         return result
+    def WorkflowEmit(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="WorkflowEmit", args={
+            
+        }, mode="request")
+        return result
+    def WorkflowEmitChild(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="WorkflowEmitChild", args={
+            
+        }, mode="request")
+        return result
     
 
 class BamlHttpStreamRequestClient:
@@ -9954,6 +10020,20 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="SumFromTo", args={
             "x": x,"y": y,
+        }, mode="stream")
+        return result
+    def WorkflowEmit(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="WorkflowEmit", args={
+            
+        }, mode="stream")
+        return result
+    def WorkflowEmitChild(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="WorkflowEmitChild", args={
+            
         }, mode="stream")
         return result
     

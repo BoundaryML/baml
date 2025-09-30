@@ -42,7 +42,7 @@ export namespace partial_types {
       positiveFloats: number[]
     }
     export interface MixedArrays {
-      primitiveArray: (string | number | number | boolean)[]
+      primitiveArray: (string | number | boolean)[]
       nullableArray: (string | null)[]
       optionalItems: (string | null)[]
       arrayOfArrays: string[][]

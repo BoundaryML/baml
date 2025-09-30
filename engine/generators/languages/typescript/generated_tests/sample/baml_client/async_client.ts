@@ -97,7 +97,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         async Bar(
         x: number,
         __baml_options__?: BamlCallOptions
-        ): Promise<Example | Example2> {
+        ): Promise<types.Example | types.Example2> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
           const signal = options.signal;
@@ -135,7 +135,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             env,
             signal,
             )
-            return raw.parsed(false) as Example | Example2
+            return raw.parsed(false) as types.Example | types.Example2
             } catch (error) {
             throw toBamlError(error);
             }
@@ -144,7 +144,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         async Foo(
         x: number,
         __baml_options__?: BamlCallOptions
-        ): Promise<Example2 | Example> {
+        ): Promise<types.Example2 | types.Example> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
           const signal = options.signal;
@@ -182,7 +182,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             env,
             signal,
             )
-            return raw.parsed(false) as Example2 | Example
+            return raw.parsed(false) as types.Example2 | types.Example
             } catch (error) {
             throw toBamlError(error);
             }
@@ -205,7 +205,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             Bar(
             x: number,
             __baml_options__?: BamlCallOptions
-            ): BamlStream<Example | Example2, Example | Example2>
+            ): BamlStream<partial_types.Example | partial_types.Example2, types.Example | types.Example2>
               {
               try {
               const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -256,10 +256,10 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 signal,
                 onTickWrapper,
                 )
-                return new BamlStream<Example | Example2, Example | Example2>(
+                return new BamlStream<partial_types.Example | partial_types.Example2, types.Example | types.Example2>(
                   raw,
-                  (a): Example | Example2 => a,
-                  (a): Example | Example2 => a,
+                  (a): partial_types.Example | partial_types.Example2 => a,
+                  (a): types.Example | types.Example2 => a,
                   this.ctxManager.cloneContext(),
                   options.signal,
                   )
@@ -271,7 +271,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             Foo(
             x: number,
             __baml_options__?: BamlCallOptions
-            ): BamlStream<Example2 | Example, Example2 | Example>
+            ): BamlStream<partial_types.Example2 | partial_types.Example, types.Example2 | types.Example>
               {
               try {
               const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -322,10 +322,10 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 signal,
                 onTickWrapper,
                 )
-                return new BamlStream<Example2 | Example, Example2 | Example>(
+                return new BamlStream<partial_types.Example2 | partial_types.Example, types.Example2 | types.Example>(
                   raw,
-                  (a): Example2 | Example => a,
-                  (a): Example2 | Example => a,
+                  (a): partial_types.Example2 | partial_types.Example => a,
+                  (a): types.Example2 | types.Example => a,
                   this.ctxManager.cloneContext(),
                   options.signal,
                   )

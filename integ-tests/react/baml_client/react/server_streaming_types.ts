@@ -273,4 +273,6 @@ export type StreamingServerTypes = {
   ValidateResponseTypes: string,
   VideoInputGemini: string,
   VideoInputVertex: string,
+  WorkflowEmit: number | null,
+  WorkflowEmitChild: number | null,
 }

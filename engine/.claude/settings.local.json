@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Read(//Users/greghale/code/baml/integ-tests/typescript/baml_client/**)"
     ],
     "deny": []
   }

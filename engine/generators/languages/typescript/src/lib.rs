@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use baml_types::GeneratorOutputType;
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
 use functions::{
@@ -9,6 +11,7 @@ use functions::{
 use generated_types::{render_partial_types, render_ts_types, render_type_builder};
 use internal_baml_core::configuration::ModuleFormat;
 use regex::Regex;
+mod events;
 mod functions;
 mod generated_types;
 mod ir_to_ts;
@@ -61,16 +64,21 @@ $ pnpm add @boundaryml/baml
             .chain(ir.walk_alias_cycles().map(|a| a.item.0.clone()))
             .collect();
         types.sort();
-        let functions = ir
-            .functions
-            .iter()
-            .map(|f| ir_to_ts::functions::ir_function_to_ts(f, &pkg))
-            .chain(
-                ir.expr_fns
-                    .iter()
-                    .map(|f| ir_to_ts::functions::ir_expr_fn_to_ts(f, &pkg)),
-            )
-            .collect::<Vec<_>>();
+        let expr_fn_wrappers = ir.expr_fns_as_functions();
+        let mut function_name_map: HashMap<String, String> = HashMap::new();
+        let mut functions = Vec::new();
+
+        for func in ir.functions.iter() {
+            let ts_fn = ir_to_ts::functions::ir_function_to_ts(func, &pkg);
+            function_name_map.insert(func.elem.name().to_string(), ts_fn.name.clone());
+            functions.push(ts_fn);
+        }
+
+        for func in expr_fn_wrappers.iter() {
+            let ts_fn = ir_to_ts::functions::ir_function_to_ts(func, &pkg);
+            function_name_map.insert(func.elem.name().to_string(), ts_fn.name.clone());
+            functions.push(ts_fn);
+        }
 
         // Generate base TypeScript files (always generated)
         collector.add_file("inlinedbaml.ts", render_inlinedbaml(&pkg, file_map)?)?;
@@ -95,6 +103,11 @@ $ pnpm add @boundaryml/baml
             "sync_request.ts",
             &render_sync_request(&functions, &types, &pkg)?,
         )?;
+
+        let event_collectors = events::build_event_collectors(args, &pkg, &function_name_map)?;
+        if !event_collectors.is_empty() {
+            collector.add_file("events.ts", events::render_events(&event_collectors)?)?;
+        }
 
         // Generate type files
         let classes = ir.walk_classes().collect::<Vec<_>>();

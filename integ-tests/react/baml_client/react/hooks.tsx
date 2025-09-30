@@ -12661,3 +12661,99 @@ export function useSumFromTo(
     return useBamlAction(action, props as HookInput<'SumFromTo', { stream: false }>)
   }
 }
+/**
+ * A specialized hook for the WorkflowEmit BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** number
+ * - **Streaming Partial:** number | null
+ * - **Streaming Final:** number
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useWorkflowEmit({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useWorkflowEmit({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useWorkflowEmit(props: HookInput<'WorkflowEmit', { stream: false }>): HookOutput<'WorkflowEmit', { stream: false }>
+export function useWorkflowEmit(props?: HookInput<'WorkflowEmit', { stream?: true }>): HookOutput<'WorkflowEmit', { stream: true }>
+export function useWorkflowEmit(
+  props: HookInput<'WorkflowEmit', { stream?: boolean }> = {},
+): HookOutput<'WorkflowEmit', { stream: true }> | HookOutput<'WorkflowEmit', { stream: false }> {
+  let action: ServerAction = Actions.WorkflowEmit;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.WorkflowEmit;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'WorkflowEmit', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the WorkflowEmitChild BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** number
+ * - **Streaming Partial:** number | null
+ * - **Streaming Final:** number
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useWorkflowEmitChild({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useWorkflowEmitChild({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useWorkflowEmitChild(props: HookInput<'WorkflowEmitChild', { stream: false }>): HookOutput<'WorkflowEmitChild', { stream: false }>
+export function useWorkflowEmitChild(props?: HookInput<'WorkflowEmitChild', { stream?: true }>): HookOutput<'WorkflowEmitChild', { stream: true }>
+export function useWorkflowEmitChild(
+  props: HookInput<'WorkflowEmitChild', { stream?: boolean }> = {},
+): HookOutput<'WorkflowEmitChild', { stream: true }> | HookOutput<'WorkflowEmitChild', { stream: false }> {
+  let action: ServerAction = Actions.WorkflowEmitChild;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.WorkflowEmitChild;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'WorkflowEmitChild', { stream: false }>)
+  }
+}
