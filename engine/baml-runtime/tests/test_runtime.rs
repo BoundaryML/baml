@@ -109,6 +109,7 @@ mod internal_tests {
                 None,
                 None,
                 None,
+                None,
                 HashMap::new(),
                 TripWire::new(None),
             )
@@ -638,6 +639,7 @@ test RecursiveAliasCycle {
             on_event,
             None,
             HashMap::new(),
+            None,
             TripWire::new(None),
             on_tick,
         );
@@ -1084,6 +1086,7 @@ test RecursiveAliasCycle {
             on_event,
             None,
             HashMap::new(),
+            None,
             TripWire::new(None),
             on_tick,
         );
@@ -1101,6 +1104,7 @@ test RecursiveAliasCycle {
             on_event,
             None,
             env_vars2.clone(),
+            None,
             TripWire::new(None),
             on_tick,
         );
