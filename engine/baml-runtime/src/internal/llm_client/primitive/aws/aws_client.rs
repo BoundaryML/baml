@@ -16,6 +16,7 @@ use aws_sdk_bedrockruntime::{
     self as bedrock,
     config::{Intercept, StalledStreamProtectionConfig},
     operation::converse::ConverseOutput,
+    types::CitationsConfig,
     Client as BedrockRuntimeClient,
 };
 use aws_smithy_json::serialize::JsonObjectWriter;
@@ -1083,6 +1084,9 @@ impl AwsClient {
                                 .set_source(Some(bedrock::types::DocumentSource::Bytes(Blob::new(
                                     url_media.url.as_bytes().to_vec(),
                                 ))))
+                                .set_citations(Some(
+                                    CitationsConfig::builder().set_enabled(Some(true)).build()?,
+                                ))
                                 .build()
                                 .context("Failed to build Pdf document block")?,
                         ))
