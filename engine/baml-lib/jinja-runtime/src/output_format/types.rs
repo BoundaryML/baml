@@ -336,7 +336,12 @@ impl EnumRender {
 impl std::fmt::Display for Attribute {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(description) = &self.description {
-            write!(f, "{}: {}", self.name, description.replace("\n", "\n  "))
+            write!(
+                f,
+                "{} // {}",
+                self.name,
+                description.replace("\n", "\n  // ")
+            )
         } else {
             write!(f, "{}", self.name)
         }
@@ -1255,7 +1260,7 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Enm
 ----
-- A: A description
+- A // A description
 - B
 - C
 - D
@@ -3240,7 +3245,7 @@ Answer in JSON using this schema: Ret"#
         let rendered = content.render(options).unwrap().unwrap();
 
         // After the fix, it should appear once without any prefix since prefix=null:
-        // EnumOutput\\n----\\n- ONE: The first enum.\\n- two: The second enum.\\n- hi: three
+        // EnumOutput\\n----\\n- ONE // The first enum.\\n- two // The second enum.\\n- hi // three
 
         let enum_definition_count = rendered.matches("EnumOutput\n----").count();
         assert_eq!(
@@ -3253,9 +3258,9 @@ Answer in JSON using this schema: Ret"#
             rendered,
             r"EnumOutput
 ----
-- ONE: The first enum.
-- two: The second enum.
-- hi: three"
+- ONE // The first enum.
+- two // The second enum.
+- hi // three"
         );
     }
 
@@ -3313,9 +3318,9 @@ VALUE_ENUM
             r"Answer with any of the categories:
 VALUE_ENUM
 ----
-- ONE: The first enum.
-- two: The second enum.
-- hi: three"
+- ONE // The first enum.
+- two // The second enum.
+- hi // three"
         );
     }
 }
