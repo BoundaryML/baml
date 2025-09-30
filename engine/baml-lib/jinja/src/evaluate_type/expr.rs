@@ -741,10 +741,10 @@ fn typecheck_attr_access_on_union(
         Type::Union(items) => items,
         Type::Alias { resolved, .. } => match resolved.as_ref() {
             Type::Union(items) => items,
-            other => return expected_class_got(other, get_attr, state),
+            _ => return expected_class_got(union_type, get_attr, state),
         },
-        other => {
-            return expected_class_got(other, get_attr, state);
+        _ => {
+            return expected_class_got(union_type, get_attr, state);
         }
     };
 
