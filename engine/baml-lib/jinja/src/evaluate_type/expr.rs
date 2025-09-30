@@ -725,6 +725,11 @@ pub fn evaluate_type(expr: &ast::Expr, types: &PredefinedTypes) -> Result<Type, 
 /// This functions returns the type of the attr if present in all items.
 /// Otherwise, it returns [`Type::Unknown`] and pushes a type error to the
 /// `state` param.
+///
+/// TODO: This function is very similar to `narrow_attr_access_on_union_var` in
+/// `stmt.rs`. Reusing the code is not straightforward though (at least if we
+/// want it to be readable), but we should try something because this is kind of
+/// error prone if we add more types that need to be covered.
 fn typecheck_attr_access_on_union(
     union_type: &Type,
     get_attr: &ast::Spanned<ast::GetAttr<'_>>,
@@ -761,8 +766,6 @@ fn typecheck_attr_access_on_union(
                     get_attr.name,
                     get_attr.span(),
                 );
-
-                eprintln!("err: {:?}", err);
 
                 // Prop not found in one of the types is a type error.
                 if err.is_some() {
