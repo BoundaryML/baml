@@ -6,11 +6,13 @@ import type {
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%}
 } from "./types"
 import type TypeBuilder from "./type_builder"
+import type * as events from "./events"
 
-type BamlCallOptions = {
+type BamlCallOptions<EventsT = never> = {
   tb?: TypeBuilder
   clientRegistry?: ClientRegistry
   env?: Record<string, string | undefined>
+  events?: EventsT
 }
 
 export class HttpRequest {
@@ -21,7 +23,7 @@ export class HttpRequest {
       {% for (name, arg_type) in func.args -%}
       {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
       {%- endfor %}
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<{{ func.event_type_param() }}>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -56,7 +58,7 @@ export class HttpStreamRequest {
       {% for (name, arg_type) in func.args -%}
       {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
       {%- endfor %}
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<{{ func.event_type_param() }}>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };

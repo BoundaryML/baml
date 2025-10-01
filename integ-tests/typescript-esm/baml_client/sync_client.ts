@@ -27,6 +27,7 @@ import type TypeBuilder from "./type_builder.js"
 import { HttpRequest, HttpStreamRequest } from "./sync_request.js"
 import { LlmResponseParser, LlmStreamParser } from "./parser.js"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals.js"
+import type * as events from "./events.js"
 
 /**
  * @deprecated Use RecursivePartialNull from 'baml_client/types' instead.
@@ -39,7 +40,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>;
 
 type TickReason = "Unknown";
 
-type BamlCallOptions = {
+type BamlCallOptions<EventsT = never> = {
   tb?: TypeBuilder
   clientRegistry?: ClientRegistry
   collector?: Collector | Collector[]
@@ -47,6 +48,7 @@ type BamlCallOptions = {
   tags?: Record<string, string>
   signal?: AbortSignal
   onTick?: (reason: TickReason, log: FunctionLog | null) => void
+  events?: EventsT
 }
 
 export class BamlSyncClient {
@@ -96,7 +98,7 @@ export class BamlSyncClient {
   
   AaaSamOutputFormat(
       recipe: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.Recipe {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -137,7 +139,7 @@ export class BamlSyncClient {
   
   AliasThatPointsToRecursiveType(
       data: types.LinkedListAliasNode,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.LinkedListAliasNode {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -178,7 +180,7 @@ export class BamlSyncClient {
   
   AliasWithMultipleAttrs(
       money: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.Checked<number,"gt_ten"> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -219,7 +221,7 @@ export class BamlSyncClient {
   
   AliasedInputClass(
       input: types.InputClass,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -260,7 +262,7 @@ export class BamlSyncClient {
   
   AliasedInputClass2(
       input: types.InputClass,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -301,7 +303,7 @@ export class BamlSyncClient {
   
   AliasedInputClassNested(
       input: types.InputClassNested,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -342,7 +344,7 @@ export class BamlSyncClient {
   
   AliasedInputEnum(
       input: types.AliasedEnum,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -383,7 +385,7 @@ export class BamlSyncClient {
   
   AliasedInputList(
       input: types.AliasedEnum[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -424,7 +426,7 @@ export class BamlSyncClient {
   
   AllowedOptionals(
       optionals: types.OptionalListAndMap,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.OptionalListAndMap {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -465,7 +467,7 @@ export class BamlSyncClient {
   
   AssertFn(
       a: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -506,7 +508,7 @@ export class BamlSyncClient {
   
   AudioInput(
       aud: Audio,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -547,7 +549,7 @@ export class BamlSyncClient {
   
   AudioInputOpenai(
       aud: Audio,prompt: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -588,7 +590,7 @@ export class BamlSyncClient {
   
   BuildLinkedList(
       input: number[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.LinkedList {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -629,7 +631,7 @@ export class BamlSyncClient {
   
   BuildTree(
       input: types.BinaryNode,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.Tree {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -670,7 +672,7 @@ export class BamlSyncClient {
   
   ChooseTodoTools(
       query: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): (types.AddTodoItem | types.TodoMessageToUser)[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -711,7 +713,7 @@ export class BamlSyncClient {
   
   ClassThatPointsToRecursiveClassThroughAlias(
       cls: types.ClassToRecAlias,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.ClassToRecAlias {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -752,7 +754,7 @@ export class BamlSyncClient {
   
   ClassifyDynEnumTwo(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): (string | types.DynEnumTwo) {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -793,7 +795,7 @@ export class BamlSyncClient {
   
   ClassifyDynamicStatus(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): (string | types.DynEnumOne) {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -834,7 +836,7 @@ export class BamlSyncClient {
   
   ClassifyMessage(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.Category {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -875,7 +877,7 @@ export class BamlSyncClient {
   
   ClassifyMessage2(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.Category {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -916,7 +918,7 @@ export class BamlSyncClient {
   
   ClassifyMessage3(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.Category {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -957,7 +959,7 @@ export class BamlSyncClient {
   
   Completion(
       prefix: string,suffix: string,language: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -998,7 +1000,7 @@ export class BamlSyncClient {
   
   CustomTask(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.BookOrder | types.FlightConfirmation | types.GroceryReceipt {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1039,7 +1041,7 @@ export class BamlSyncClient {
   
   DescribeAudio(
       audio: Audio,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1080,7 +1082,7 @@ export class BamlSyncClient {
   
   DescribeAudio2(
       audio: Audio,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1121,7 +1123,7 @@ export class BamlSyncClient {
   
   DescribeImage(
       img: Image,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1162,7 +1164,7 @@ export class BamlSyncClient {
   
   DescribeImage2(
       classWithImage: types.ClassWithImage,img2: Image,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1203,7 +1205,7 @@ export class BamlSyncClient {
   
   DescribeImage3(
       classWithImage: types.ClassWithImage,img2: Image,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1244,7 +1246,7 @@ export class BamlSyncClient {
   
   DescribeImage4(
       classWithImage: types.ClassWithImage,img2: Image,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1285,7 +1287,7 @@ export class BamlSyncClient {
   
   DescribeMedia1599(
       img: Image,client_sector: string,client_name: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1326,7 +1328,7 @@ export class BamlSyncClient {
   
   DifferentiateUnions(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.OriginalA | types.OriginalB {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1367,7 +1369,7 @@ export class BamlSyncClient {
   
   DummyOutputFunction(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.DummyOutput {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1408,7 +1410,7 @@ export class BamlSyncClient {
   
   DynamicFunc(
       input: types.DynamicClassOne,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.DynamicClassTwo {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1449,7 +1451,7 @@ export class BamlSyncClient {
   
   DynamicInputOutput(
       input: types.DynInputOutput,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.DynInputOutput {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1490,7 +1492,7 @@ export class BamlSyncClient {
   
   DynamicListInputOutput(
       input: types.DynInputOutput[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.DynInputOutput[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1531,7 +1533,7 @@ export class BamlSyncClient {
   
   ExpectFailure(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1572,7 +1574,7 @@ export class BamlSyncClient {
   
   ExtractContactInfo(
       document: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.ContactInfo {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1613,7 +1615,7 @@ export class BamlSyncClient {
   
   ExtractDynamicCategories(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): (string | types.DynEnumTwo)[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1654,7 +1656,7 @@ export class BamlSyncClient {
   
   ExtractEntities(
       text: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.DynamicSchema {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1695,7 +1697,7 @@ export class BamlSyncClient {
   
   ExtractHobby(
       text: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): (string | types.Hobby)[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1736,7 +1738,7 @@ export class BamlSyncClient {
   
   ExtractName(
       text: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1777,7 +1779,7 @@ export class BamlSyncClient {
   
   ExtractNames(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1818,7 +1820,7 @@ export class BamlSyncClient {
   
   ExtractPeople(
       text: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.Person[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1859,7 +1861,7 @@ export class BamlSyncClient {
   
   ExtractReceiptInfo(
       email: string,reason: "curiosity" | "personal_finance",
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.ReceiptInfo {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1900,7 +1902,7 @@ export class BamlSyncClient {
   
   ExtractResume(
       resume: string,img?: Image | null,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.Resume {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1941,7 +1943,7 @@ export class BamlSyncClient {
   
   ExtractResume2(
       resume: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.Resume {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -1982,7 +1984,7 @@ export class BamlSyncClient {
   
   FnAlwaysFails(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2023,7 +2025,7 @@ export class BamlSyncClient {
   
   FnClassOptionalOutput(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.ClassOptionalOutput | null {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2064,7 +2066,7 @@ export class BamlSyncClient {
   
   FnClassOptionalOutput2(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.ClassOptionalOutput2 | null {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2105,7 +2107,7 @@ export class BamlSyncClient {
   
   FnEnumListOutput(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.EnumOutput[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2146,7 +2148,7 @@ export class BamlSyncClient {
   
   FnEnumOutput(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.EnumOutput {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2187,7 +2189,7 @@ export class BamlSyncClient {
   
   FnFailRetryConstantDelay(
       retries: number,delay_ms: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2228,7 +2230,7 @@ export class BamlSyncClient {
   
   FnFailRetryExponentialDelay(
       retries: number,initial_delay_ms: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2269,7 +2271,7 @@ export class BamlSyncClient {
   
   FnFallbackAlwaysFails(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2310,7 +2312,7 @@ export class BamlSyncClient {
   
   FnLiteralClassInputOutput(
       input: types.LiteralClassHello,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.LiteralClassHello {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2351,7 +2353,7 @@ export class BamlSyncClient {
   
   FnLiteralUnionClassInputOutput(
       input: types.LiteralClassOne | types.LiteralClassTwo,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.LiteralClassOne | types.LiteralClassTwo {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2392,7 +2394,7 @@ export class BamlSyncClient {
   
   FnNamedArgsSingleStringOptional(
       myString?: string | null,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2433,7 +2435,7 @@ export class BamlSyncClient {
   
   FnOutputBool(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): boolean {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2474,7 +2476,7 @@ export class BamlSyncClient {
   
   FnOutputClass(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.TestOutputClass {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2515,7 +2517,7 @@ export class BamlSyncClient {
   
   FnOutputClassList(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.TestOutputClass[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2556,7 +2558,7 @@ export class BamlSyncClient {
   
   FnOutputClassNested(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.TestClassNested {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2597,7 +2599,7 @@ export class BamlSyncClient {
   
   FnOutputClassWithEnum(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.TestClassWithEnum {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2638,7 +2640,7 @@ export class BamlSyncClient {
   
   FnOutputInt(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2679,7 +2681,7 @@ export class BamlSyncClient {
   
   FnOutputLiteralBool(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): false {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2720,7 +2722,7 @@ export class BamlSyncClient {
   
   FnOutputLiteralInt(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): 5 {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2761,7 +2763,7 @@ export class BamlSyncClient {
   
   FnOutputLiteralString(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): "example output" {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2802,7 +2804,7 @@ export class BamlSyncClient {
   
   FnOutputStringList(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2843,7 +2845,7 @@ export class BamlSyncClient {
   
   FnTestAliasedEnumOutput(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.TestEnum {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2884,7 +2886,7 @@ export class BamlSyncClient {
   
   FnTestClassAlias(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.TestClassAlias {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2925,7 +2927,7 @@ export class BamlSyncClient {
   
   FnTestNamedArgsSingleEnum(
       myArg: types.NamedArgsSingleEnum,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -2966,7 +2968,7 @@ export class BamlSyncClient {
   
   GetDataType(
       text: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.RaysData {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3007,7 +3009,7 @@ export class BamlSyncClient {
   
   GetOrderInfo(
       email: types.Email,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.OrderInfo {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3048,7 +3050,7 @@ export class BamlSyncClient {
   
   GetQuery(
       query: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.SearchParams {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3089,7 +3091,7 @@ export class BamlSyncClient {
   
   InOutEnumMapKey(
       i1: Partial<Record<types.MapKey, string>>,i2: Partial<Record<types.MapKey, string>>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): Partial<Record<types.MapKey, string>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3130,7 +3132,7 @@ export class BamlSyncClient {
   
   InOutLiteralStringUnionMapKey(
       i1: Partial<Record<"one" | "two" | "three" | "four", string>>,i2: Partial<Record<"one" | "two" | "three" | "four", string>>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): Partial<Record<"one" | "two" | "three" | "four", string>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3171,7 +3173,7 @@ export class BamlSyncClient {
   
   InOutSingleLiteralStringMapKey(
       m: Record<"key", string>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): Record<"key", string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3212,7 +3214,7 @@ export class BamlSyncClient {
   
   JsonTypeAliasCycle(
       input: types.JsonValue,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.JsonValue {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3253,7 +3255,7 @@ export class BamlSyncClient {
   
   LLMEcho(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3294,7 +3296,7 @@ export class BamlSyncClient {
   
   LiteralUnionsTest(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): 1 | true | "string output" {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3335,7 +3337,7 @@ export class BamlSyncClient {
   
   LlmReturnNumber(
       n: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3376,7 +3378,7 @@ export class BamlSyncClient {
   
   MakeBlockConstraint(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.Checked<types.BlockConstraint,"cross_field"> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3417,7 +3419,7 @@ export class BamlSyncClient {
   
   MakeClassWithBlockDone(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.ClassWithBlockDone {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3458,7 +3460,7 @@ export class BamlSyncClient {
   
   MakeClassWithExternalDone(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.ClassWithoutDone {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3499,7 +3501,7 @@ export class BamlSyncClient {
   
   MakeNestedBlockConstraint(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.NestedBlockConstraint {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3540,7 +3542,7 @@ export class BamlSyncClient {
   
   MakeSemanticContainer(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.SemanticContainer {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3581,7 +3583,7 @@ export class BamlSyncClient {
   
   MapAlias(
       m: Record<string, string[]>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): Record<string, string[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3622,7 +3624,7 @@ export class BamlSyncClient {
   
   MergeAliasAttributes(
       money: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.MergeAttrs {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3663,7 +3665,7 @@ export class BamlSyncClient {
   
   MyFunc(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.DynamicOutput {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3704,7 +3706,7 @@ export class BamlSyncClient {
   
   NestedAlias(
       c: number | string | boolean | string[] | Record<string, string[]>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): number | string | boolean | string[] | Record<string, string[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3745,7 +3747,7 @@ export class BamlSyncClient {
   
   NullLiteralClassHello(
       s: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.ClassForNullLiteral {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3827,7 +3829,7 @@ export class BamlSyncClient {
   
   OpenAIWithAnthropicResponseHello(
       s: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3868,7 +3870,7 @@ export class BamlSyncClient {
   
   OptionalTest_Function(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): (types.OptionalTest_ReturnType | null)[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3909,7 +3911,7 @@ export class BamlSyncClient {
   
   PdfInput(
       pdf: Pdf,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3950,7 +3952,7 @@ export class BamlSyncClient {
   
   PdfInputAnthropic(
       pdf: Pdf,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -3991,7 +3993,7 @@ export class BamlSyncClient {
   
   PdfInputOpenai(
       pdf: Pdf,prompt: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4032,7 +4034,7 @@ export class BamlSyncClient {
   
   PdfInputVertex(
       pdf: Pdf,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4073,7 +4075,7 @@ export class BamlSyncClient {
   
   PredictAge(
       name: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.FooAny {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4114,7 +4116,7 @@ export class BamlSyncClient {
   
   PredictAgeBare(
       inp: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.Checked<number,"too_big"> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4155,7 +4157,7 @@ export class BamlSyncClient {
   
   PrimitiveAlias(
       p: number | string | boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): number | string | boolean {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4196,7 +4198,7 @@ export class BamlSyncClient {
   
   PromptTestClaude(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4237,7 +4239,7 @@ export class BamlSyncClient {
   
   PromptTestClaudeChat(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4278,7 +4280,7 @@ export class BamlSyncClient {
   
   PromptTestClaudeChatNoSystem(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4319,7 +4321,7 @@ export class BamlSyncClient {
   
   PromptTestOpenAI(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4360,7 +4362,7 @@ export class BamlSyncClient {
   
   PromptTestOpenAIChat(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4401,7 +4403,7 @@ export class BamlSyncClient {
   
   PromptTestOpenAIChatNoSystem(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4442,7 +4444,7 @@ export class BamlSyncClient {
   
   PromptTestStreaming(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4483,7 +4485,7 @@ export class BamlSyncClient {
   
   RecursiveAliasCycle(
       input: types.RecAliasOne,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.RecAliasOne {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4524,7 +4526,7 @@ export class BamlSyncClient {
   
   RecursiveClassWithAliasIndirection(
       cls: types.NodeWithAliasIndirection,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.NodeWithAliasIndirection {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4565,7 +4567,7 @@ export class BamlSyncClient {
   
   RecursiveUnionTest(
       input: types.RecursiveUnion,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.RecursiveUnion {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4606,7 +4608,7 @@ export class BamlSyncClient {
   
   RenderDynamicClass(
       input: types.RenderTestClass,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4647,7 +4649,7 @@ export class BamlSyncClient {
   
   RenderDynamicEnum(
       bike: (string | types.RenderTestEnum),other: (string | types.RenderTestEnum),
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4688,7 +4690,7 @@ export class BamlSyncClient {
   
   ReturnAliasWithMergedAttributes(
       money: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.Checked<number,"gt_ten"> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4729,7 +4731,7 @@ export class BamlSyncClient {
   
   ReturnFailingAssert(
       inp: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4770,7 +4772,7 @@ export class BamlSyncClient {
   
   ReturnJsonEntry(
       s: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.JsonTemplate {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4811,7 +4813,7 @@ export class BamlSyncClient {
   
   ReturnMalformedConstraints(
       a: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.MalformedConstraints {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4852,7 +4854,7 @@ export class BamlSyncClient {
   
   SchemaDescriptions(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.Schema {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4893,7 +4895,7 @@ export class BamlSyncClient {
   
   SimpleRecursiveListAlias(
       input: types.RecursiveListAlias,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.RecursiveListAlias {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4934,7 +4936,7 @@ export class BamlSyncClient {
   
   SimpleRecursiveMapAlias(
       input: types.RecursiveMapAlias,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.RecursiveMapAlias {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4975,7 +4977,7 @@ export class BamlSyncClient {
   
   StreamBigNumbers(
       digits: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.BigNumbers {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5016,7 +5018,7 @@ export class BamlSyncClient {
   
   StreamFailingAssertion(
       theme: string,length: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.TwoStoriesOneTitle {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5057,7 +5059,7 @@ export class BamlSyncClient {
   
   StreamFailingCheck(
       theme: string,length: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.TwoStoriesOneTitleCheck {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5098,7 +5100,7 @@ export class BamlSyncClient {
   
   StreamOneBigNumber(
       digits: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5139,7 +5141,7 @@ export class BamlSyncClient {
   
   StreamUnionIntegers(
       digits: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): (number | string)[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5180,7 +5182,7 @@ export class BamlSyncClient {
   
   StreamingCompoundNumbers(
       digits: number,yapping: boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.CompoundBigNumbers {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5221,7 +5223,7 @@ export class BamlSyncClient {
   
   StructureDocument1559(
       document_txt: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.Document1559 {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5262,7 +5264,7 @@ export class BamlSyncClient {
   
   TakeRecAliasDep(
       input: types.RecursiveAliasDependency,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.RecursiveAliasDependency {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5303,7 +5305,7 @@ export class BamlSyncClient {
   
   TellStory(
       story: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5344,7 +5346,7 @@ export class BamlSyncClient {
   
   TestAbortFallbackChain(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5385,7 +5387,7 @@ export class BamlSyncClient {
   
   TestAnthropic(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5426,7 +5428,7 @@ export class BamlSyncClient {
   
   TestAnthropicShorthand(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5467,7 +5469,7 @@ export class BamlSyncClient {
   
   TestAws(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5508,7 +5510,7 @@ export class BamlSyncClient {
   
   TestAwsClaude37(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5549,7 +5551,7 @@ export class BamlSyncClient {
   
   TestAwsInferenceProfile(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5590,7 +5592,7 @@ export class BamlSyncClient {
   
   TestAwsInvalidAccessKey(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5631,7 +5633,7 @@ export class BamlSyncClient {
   
   TestAwsInvalidProfile(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5672,7 +5674,7 @@ export class BamlSyncClient {
   
   TestAwsInvalidRegion(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5713,7 +5715,7 @@ export class BamlSyncClient {
   
   TestAwsInvalidSessionToken(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5754,7 +5756,7 @@ export class BamlSyncClient {
   
   TestAzure(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5795,7 +5797,7 @@ export class BamlSyncClient {
   
   TestAzureFailure(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5836,7 +5838,7 @@ export class BamlSyncClient {
   
   TestAzureO1NoMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5877,7 +5879,7 @@ export class BamlSyncClient {
   
   TestAzureO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5918,7 +5920,7 @@ export class BamlSyncClient {
   
   TestAzureO1WithMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -5959,7 +5961,7 @@ export class BamlSyncClient {
   
   TestAzureO3NoMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6000,7 +6002,7 @@ export class BamlSyncClient {
   
   TestAzureO3WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6041,7 +6043,7 @@ export class BamlSyncClient {
   
   TestAzureWithMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6082,7 +6084,7 @@ export class BamlSyncClient {
   
   TestCaching(
       input: string,not_cached: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6123,7 +6125,7 @@ export class BamlSyncClient {
   
   TestFallbackClient(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6164,7 +6166,7 @@ export class BamlSyncClient {
   
   TestFallbackStrategy(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6205,7 +6207,7 @@ export class BamlSyncClient {
   
   TestFallbackToShorthand(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6246,7 +6248,7 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleBool(
       myBool: boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6287,7 +6289,7 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleClass(
       myArg: types.NamedArgsSingleClass,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6328,7 +6330,7 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleEnumList(
       myArg: types.NamedArgsSingleEnumList[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6369,7 +6371,7 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleFloat(
       myFloat: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6410,7 +6412,7 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleInt(
       myInt: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6451,7 +6453,7 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleMapStringToClass(
       myMap: Record<string, types.StringToClassEntry>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): Record<string, types.StringToClassEntry> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6492,7 +6494,7 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleMapStringToMap(
       myMap: Record<string, Record<string, string>>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): Record<string, Record<string, string>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6533,7 +6535,7 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleMapStringToString(
       myMap: Record<string, string>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): Record<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6574,7 +6576,7 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleString(
       myString: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6615,7 +6617,7 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleStringArray(
       myStringArray: string[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6656,7 +6658,7 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleStringList(
       myArg: string[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string[] {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6697,7 +6699,7 @@ export class BamlSyncClient {
   
   TestGemini(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6738,7 +6740,7 @@ export class BamlSyncClient {
   
   TestGeminiOpenAiGeneric(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6779,7 +6781,7 @@ export class BamlSyncClient {
   
   TestGeminiSystem(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6820,7 +6822,7 @@ export class BamlSyncClient {
   
   TestGeminiSystemAsChat(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6861,7 +6863,7 @@ export class BamlSyncClient {
   
   TestGeminiThinking(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6902,7 +6904,7 @@ export class BamlSyncClient {
   
   TestGroq(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6943,7 +6945,7 @@ export class BamlSyncClient {
   
   TestImageInput(
       img: Image,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -6984,7 +6986,7 @@ export class BamlSyncClient {
   
   TestImageInputAnthropic(
       img: Image,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7025,7 +7027,7 @@ export class BamlSyncClient {
   
   TestImageListInput(
       imgs: Image[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7066,7 +7068,7 @@ export class BamlSyncClient {
   
   TestMemory(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.TestMemoryOutput {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7107,7 +7109,7 @@ export class BamlSyncClient {
   
   TestMulticlassNamedArgs(
       myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7148,7 +7150,7 @@ export class BamlSyncClient {
   
   TestNamedArgsLiteralBool(
       myBool: true,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7189,7 +7191,7 @@ export class BamlSyncClient {
   
   TestNamedArgsLiteralInt(
       myInt: 1,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7230,7 +7232,7 @@ export class BamlSyncClient {
   
   TestNamedArgsLiteralString(
       myString: "My String",
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7271,7 +7273,7 @@ export class BamlSyncClient {
   
   TestOllama(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string | null {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7312,7 +7314,7 @@ export class BamlSyncClient {
   
   TestOllamaHaiku(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.Haiku {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7353,7 +7355,7 @@ export class BamlSyncClient {
   
   TestOpenAI(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7394,7 +7396,7 @@ export class BamlSyncClient {
   
   TestOpenAIDummyClient(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7435,7 +7437,7 @@ export class BamlSyncClient {
   
   TestOpenAIGPT4oMini(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7476,7 +7478,7 @@ export class BamlSyncClient {
   
   TestOpenAIGPT4oMini2(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7517,7 +7519,7 @@ export class BamlSyncClient {
   
   TestOpenAIGPT4oMini3(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7558,7 +7560,7 @@ export class BamlSyncClient {
   
   TestOpenAILegacyProvider(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7599,7 +7601,7 @@ export class BamlSyncClient {
   
   TestOpenAIO1NoMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7640,7 +7642,7 @@ export class BamlSyncClient {
   
   TestOpenAIO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7681,7 +7683,7 @@ export class BamlSyncClient {
   
   TestOpenAIO1WithMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7722,7 +7724,7 @@ export class BamlSyncClient {
   
   TestOpenAIProviderWithResponsesType(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7763,7 +7765,7 @@ export class BamlSyncClient {
   
   TestOpenAIResponses(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7804,7 +7806,7 @@ export class BamlSyncClient {
   
   TestOpenAIResponsesAllRoles(
       problem: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7845,7 +7847,7 @@ export class BamlSyncClient {
   
   TestOpenAIResponsesAutoType(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7886,7 +7888,7 @@ export class BamlSyncClient {
   
   TestOpenAIResponsesConversation(
       topic: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7927,7 +7929,7 @@ export class BamlSyncClient {
   
   TestOpenAIResponsesCustomURL(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -7968,7 +7970,7 @@ export class BamlSyncClient {
   
   TestOpenAIResponsesDifferentModel(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8009,7 +8011,7 @@ export class BamlSyncClient {
   
   TestOpenAIResponsesEndpoint(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8050,7 +8052,7 @@ export class BamlSyncClient {
   
   TestOpenAIResponsesExplicit(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8091,7 +8093,7 @@ export class BamlSyncClient {
   
   TestOpenAIResponsesFunctionCall(
       query: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8132,7 +8134,7 @@ export class BamlSyncClient {
   
   TestOpenAIResponsesImageInput(
       image: Image | string | Pdf | Audio,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8173,7 +8175,7 @@ export class BamlSyncClient {
   
   TestOpenAIResponsesReasoning(
       problem: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8214,7 +8216,7 @@ export class BamlSyncClient {
   
   TestOpenAIResponsesShorthand(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8255,7 +8257,7 @@ export class BamlSyncClient {
   
   TestOpenAIResponsesWebSearch(
       query: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8296,7 +8298,7 @@ export class BamlSyncClient {
   
   TestOpenAIResponsesWithOpenAIResponseType(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8337,7 +8339,7 @@ export class BamlSyncClient {
   
   TestOpenAIShorthand(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8378,7 +8380,7 @@ export class BamlSyncClient {
   
   TestOpenAIWithFinishReasonError(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8419,7 +8421,7 @@ export class BamlSyncClient {
   
   TestOpenAIWithMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8460,7 +8462,7 @@ export class BamlSyncClient {
   
   TestOpenAIWithNullMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8501,7 +8503,7 @@ export class BamlSyncClient {
   
   TestOpenRouterMistralSmall3_1_24b(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8542,7 +8544,7 @@ export class BamlSyncClient {
   
   TestOpenaiResponsesPdfs(
       pdf: Pdf,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8583,7 +8585,7 @@ export class BamlSyncClient {
   
   TestRetryConstant(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8624,7 +8626,7 @@ export class BamlSyncClient {
   
   TestRetryExponential(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8665,7 +8667,7 @@ export class BamlSyncClient {
   
   TestRoundRobinStrategy(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8706,7 +8708,7 @@ export class BamlSyncClient {
   
   TestSingleFallbackClient(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8747,7 +8749,7 @@ export class BamlSyncClient {
   
   TestThinking(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.CustomStory {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8788,7 +8790,7 @@ export class BamlSyncClient {
   
   TestUniverseQuestion(
       question: types.UniverseQuestionInput,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.UniverseQuestion {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8829,7 +8831,7 @@ export class BamlSyncClient {
   
   TestVertex(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8870,7 +8872,7 @@ export class BamlSyncClient {
   
   TestVertexClaude(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8911,7 +8913,7 @@ export class BamlSyncClient {
   
   TestVertexWithSystemInstructions(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8952,7 +8954,7 @@ export class BamlSyncClient {
   
   UnionTest_Function(
       input: string | boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.UnionTest_ReturnType {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -8993,7 +8995,7 @@ export class BamlSyncClient {
   
   UseBlockConstraint(
       inp: types.BlockConstraintForParam,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9034,7 +9036,7 @@ export class BamlSyncClient {
   
   UseMaintainFieldOrder(
       input: types.MaintainFieldOrder,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): types.MaintainFieldOrder {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9075,7 +9077,7 @@ export class BamlSyncClient {
   
   UseMalformedConstraints(
       a: types.MalformedConstraints2,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9116,7 +9118,7 @@ export class BamlSyncClient {
   
   UseNestedBlockConstraint(
       inp: types.NestedBlockConstraintForParam,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9157,7 +9159,7 @@ export class BamlSyncClient {
   
   ValidateBasicResponses(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9198,7 +9200,7 @@ export class BamlSyncClient {
   
   ValidateResponseTypes(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9239,7 +9241,7 @@ export class BamlSyncClient {
   
   VideoInputGemini(
       vid: Video,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9280,7 +9282,7 @@ export class BamlSyncClient {
   
   VideoInputVertex(
       vid: Video,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9321,7 +9323,7 @@ export class BamlSyncClient {
   
   AssignElseIfExpr(
       a: boolean,b: boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.AssignElseIfExprEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9362,7 +9364,7 @@ export class BamlSyncClient {
   
   BoolToIntWithIfElse(
       b: boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.BoolToIntWithIfElseEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9403,7 +9405,7 @@ export class BamlSyncClient {
   
   BoolToIntWithIfElseCallingLlm(
       b: boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.BoolToIntWithIfElseCallingLlmEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9444,7 +9446,7 @@ export class BamlSyncClient {
   
   CallLlmDescribeImage(
       img: Image,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.CallLlmDescribeImageEventCollector>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9485,7 +9487,7 @@ export class BamlSyncClient {
   
   CallReturnOne(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.CallReturnOneEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9526,7 +9528,7 @@ export class BamlSyncClient {
   
   ChainedCalls(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ChainedCallsEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9567,7 +9569,7 @@ export class BamlSyncClient {
   
   EchoWorkflow(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.EchoWorkflowEventCollector>
   ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9608,7 +9610,7 @@ export class BamlSyncClient {
   
   ExecFetchAs(
       url: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ExecFetchAsEventCollector>
   ): types.DummyJsonTodo {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9649,7 +9651,7 @@ export class BamlSyncClient {
   
   HomeEnvVarIsEmpty(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.HomeEnvVarIsEmptyEventCollector>
   ): boolean {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9690,7 +9692,7 @@ export class BamlSyncClient {
   
   IterativeFibonacci(
       n: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.IterativeFibonacciEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9731,7 +9733,7 @@ export class BamlSyncClient {
   
   NormalElseIfStmt(
       a: boolean,b: boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.NormalElseIfStmtEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9772,7 +9774,7 @@ export class BamlSyncClient {
   
   ReturnCategory(
       category: types.Category,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ReturnCategoryEventCollector>
   ): types.Category {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9813,7 +9815,7 @@ export class BamlSyncClient {
   
   ReturnElseIfExpr(
       a: boolean,b: boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ReturnElseIfExprEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9854,7 +9856,7 @@ export class BamlSyncClient {
   
   ReturnImageFromUrl(
       url: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ReturnImageFromUrlEventCollector>
   ): Image {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9895,7 +9897,7 @@ export class BamlSyncClient {
   
   ReturnNumber(
       n: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ReturnNumberEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9936,7 +9938,7 @@ export class BamlSyncClient {
   
   ReturnNumberCallingLlm(
       n: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ReturnNumberCallingLlmEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -9977,7 +9979,7 @@ export class BamlSyncClient {
   
   ReturnOne(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ReturnOneEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -10018,7 +10020,7 @@ export class BamlSyncClient {
   
   StoreFnCallInLocalVar(
       n: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.StoreFnCallInLocalVarEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -10059,7 +10061,7 @@ export class BamlSyncClient {
   
   StoreLlmCallInLocalVar(
       n: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.StoreLlmCallInLocalVarEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -10100,7 +10102,7 @@ export class BamlSyncClient {
   
   SumArray(
       arr: number[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.SumArrayEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -10141,7 +10143,7 @@ export class BamlSyncClient {
   
   SumFromTo(
       x: number,y: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.SumFromToEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -10182,7 +10184,7 @@ export class BamlSyncClient {
   
   WorkflowEmit(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.WorkflowEmitEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -10223,7 +10225,7 @@ export class BamlSyncClient {
   
   WorkflowEmitChild(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.WorkflowEmitChildEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }

@@ -80,6 +80,21 @@ $ pnpm add @boundaryml/baml
             functions.push(ts_fn);
         }
 
+        let event_collectors = events::build_event_collectors(args, &pkg, &function_name_map)?;
+
+        // Build a map of function names to their event collector types
+        let mut event_collector_map: HashMap<String, String> = HashMap::new();
+        for collector in &event_collectors {
+            event_collector_map.insert(collector.ts_name.clone(), collector.interface_name.clone());
+        }
+
+        // Update functions with their event collector types
+        for func in &mut functions {
+            if let Some(collector_type) = event_collector_map.get(&func.name) {
+                func.event_collector_type = Some(collector_type.clone());
+            }
+        }
+
         // Generate base TypeScript files (always generated)
         collector.add_file("inlinedbaml.ts", render_inlinedbaml(&pkg, file_map)?)?;
         collector.add_file("config.ts", render_config()?)?;
@@ -104,7 +119,6 @@ $ pnpm add @boundaryml/baml
             &render_sync_request(&functions, &types, &pkg)?,
         )?;
 
-        let event_collectors = events::build_event_collectors(args, &pkg, &function_name_map)?;
         if !event_collectors.is_empty() {
             collector.add_file("events.ts", events::render_events(&event_collectors)?)?;
         }

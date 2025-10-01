@@ -29,6 +29,7 @@ pub fn ir_function_to_ts(function: &FunctionNode, pkg: &CurrentRenderPackage) ->
             &function.elem.output().to_streaming_type(pkg.lookup()),
             pkg.lookup(),
         ),
+        event_collector_type: None,
     }
 }
 
