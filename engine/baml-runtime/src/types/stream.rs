@@ -153,9 +153,12 @@ impl FunctionResultStream {
         let trace_event = TraceEvent::new_function_end(
             call_stack,
             match &res {
-                Ok(result) => Ok(baml_types::BamlValueWithMeta::<TypeNonStreaming>::Null(
-                    TypeNonStreaming::null(),
-                )),
+                Ok(result) => match result.result_with_constraints_content() {
+                    Ok(value) => Ok(value
+                        .0
+                        .map_meta(|f| f.3.to_non_streaming_type(self.ir.as_ref()))),
+                    Err(e) => Err((&e).to_baml_error()),
+                },
                 Err(e) => Err(e.to_baml_error()),
             },
         );

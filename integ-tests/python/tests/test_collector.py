@@ -262,7 +262,7 @@ async def test_collector_async_no_stream_no_getting_logs():
 
 
 @pytest.mark.asyncio
-async def test_collector_async_stream_success():
+async def test_collector_async_stream_success_openai():
     collector = Collector(name="my-collector")
     function_logs = collector.logs
     assert len(function_logs) == 0
