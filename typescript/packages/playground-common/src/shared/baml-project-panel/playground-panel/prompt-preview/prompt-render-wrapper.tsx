@@ -15,6 +15,7 @@ import { renderedPromptAtom } from './prompt-preview-content';
 import { PromptPreviewCurl, curlAtom } from './prompt-preview-curl';
 import { ClientGraphView } from './test-panel/components/ClientGraphView';
 import { MermaidGraphView } from './test-panel/components/MermaidGraphView';
+import { WorkflowView } from './test-panel/components/WorkflowView';
 
 // FunctionMetadata component
 const FunctionMetadata: React.FC = () => {
@@ -87,7 +88,7 @@ export const PromptRenderWrapper = () => {
   const [showCopied, setShowCopied] = React.useState(false);
   const { open: isSidebarOpen } = useSidebar();
   const isBetaEnabled = useAtomValue(betaFeatureEnabledAtom);
-  const [activeTab, setActiveTab] = React.useState<'preview' | 'curl' | 'client-graph' | 'mermaid-graph'>('preview');
+  const [activeTab, setActiveTab] = React.useState<'preview' | 'curl' | 'client-graph' | 'mermaid-graph' | 'workflow'>('workflow');
   const curl = useAtomValue(curlAtom);
 
   // Hide text when sidebar is open or on smaller screens
@@ -129,10 +130,11 @@ export const PromptRenderWrapper = () => {
 
   return (
     // this used to be flex flex-col h-full min-h-0
-    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex flex-col min-h-0">
+    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex flex-col min-h-0 h-full">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <TabsList>
+            <TabsTrigger value="workflow">Workflow</TabsTrigger>
             <TabsTrigger value="preview">Preview</TabsTrigger>
             <TabsTrigger value="curl">cURL</TabsTrigger>
             <TabsTrigger value="client-graph">Client Graph</TabsTrigger>
@@ -177,6 +179,9 @@ export const PromptRenderWrapper = () => {
           </Button>
         </div>
       </div>
+      <TabsContent value="workflow" className="flex h-full flex-1 flex-col min-h-0 overflow-hidden">
+        <WorkflowView />
+      </TabsContent>
       <TabsContent value="preview">
         <PromptPreviewContent />
       </TabsContent>

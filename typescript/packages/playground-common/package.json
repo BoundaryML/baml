@@ -10,7 +10,7 @@
     "build": "tsc",
     "release": "tsc",
     "clean": "git clean -xdf .turbo node_modules dist",
-    "typecheck": "tsc --noEmit --emitDeclarationOnly false"
+    "typecheck": "tsc --noEmit"
   },
   "exports": {
     ".": "./src/index.ts",

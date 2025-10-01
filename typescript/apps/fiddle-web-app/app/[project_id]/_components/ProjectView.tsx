@@ -109,7 +109,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
         )}
 
         <div className="flex w-full h-full">
-          {!isMobile && <ProjectSidebar />}
+          {/* {!isMobile && <ProjectSidebar />} */}
 
           <div className="flex-1 flex flex-col w-full h-full font-sans">
             <TopNavbar
@@ -204,7 +204,7 @@ export const FunctionSelectorProvider = () => {
 };
 
 export const ProjectSidebar = () => (
-  <div className="w-64 h-full dark:bg-[#020309] bg-muted overflow-hidden">
+  <div className="w-64 fixed left-0 top-0 h-full dark:bg-[#020309] bg-muted overflow-hidden">
     <div className="flex flex-row justify-center items-center pt-4 w-full">
       <a
         href={'/'}
