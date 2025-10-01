@@ -46,7 +46,7 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Java
         uses: ./.github/actions/setup-java
@@ -88,7 +88,7 @@ jobs:
 
   #     # Check out the current repository
   #     - name: Fetch Sources
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v5
 
   #     # Set up Java environment for the next steps
   #     - name: Setup Java
@@ -130,7 +130,7 @@ jobs:
   #     pull-requests: write
   #   steps:
   #     # Check out the current repository
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v5
   #       with:
   #         ref: ${{ github.event.pull_request.head.sha }}  # to check out the actual pull request commit, not the merge commit
   #         fetch-depth: 0  # a full history is required for pull request analysis
@@ -153,7 +153,7 @@ jobs:
   #   needs: [ build ]
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v5
 
   #     # Set up Java environment for the next steps
   #     - name: Setup Java
