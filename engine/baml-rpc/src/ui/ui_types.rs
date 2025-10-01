@@ -122,6 +122,8 @@ pub struct UiFunctionCall {
     pub llm_request: Option<UiLlmRequest>,
     #[ts(optional)]
     pub llm_response: Option<UiLlmResponse>,
+    #[ts(optional)]
+    pub http_metadata_summary: Option<Vec<UiHttpMetadataSummary>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -189,6 +191,15 @@ pub struct UiHttpRequest {
     #[ts(type = "Record<string, string> | undefined")]
     pub headers: Option<HashMap<String, String>>,
     pub body: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UiHttpMetadataSummary {
+    pub client_name: String,
+    pub client_provider: String,
+    pub model: Option<String>,
+    pub status: u16,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]

@@ -506,6 +506,7 @@ async def test_works_with_retries2():
 
 
 @pytest.mark.asyncio
+@trace
 async def test_works_with_fallbacks():
     res = await b.TestFallbackClient()
     assert len(res) > 0, "Expected non-empty result but got empty."
