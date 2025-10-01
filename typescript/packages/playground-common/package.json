@@ -55,6 +55,7 @@
     "anser": "2.3.2",
     "class-variance-authority": "0.7.1",
     "codemirror-copilot": "0.0.7",
+    "d3-hierarchy": "^3.1.2",
     "date-fns": "4.1.0",
     "dotenv": "16.5.0",
     "hast-util-has-property": "3.0.0",
@@ -80,6 +81,7 @@
     "zod": "3.25.66"
   },
   "devDependencies": {
+    "@types/d3-hierarchy": "^3.1.7",
     "@types/hast": "3.0.4",
     "@types/he": "1.2.3",
     "@types/lodash": "4.17.17",
