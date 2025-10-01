@@ -321,11 +321,19 @@ impl BamlAsyncInterpreterRuntime {
                 )))
             };
 
+        let emit_handler_state = Arc::new(Mutex::new(todo!("EMIT_TODO")));
+        let emit_event_handler = |event| {
+            let mut state = emit_handler_state.lock().unwrap();
+            eprintln!("EMIT HANDLER");
+            todo!("EMIT_TODO");
+        };
+
         // Execute the interpreter
         let result = interpret_thir(
             self.thir_program.clone(),
             function_expr,
             llm_handler,
+            emit_event_handler,
             extra_bindings,
             env_vars,
         )

@@ -69,6 +69,7 @@ pub async fn interpret_thir<F, Fut>(
     thir: THir<ExprMetadata>,
     expr: Expr<ExprMetadata>,
     mut run_llm_function: F,
+    mut emit_event_handler: impl FnMut(Event),
     extra_bindings: BamlMap<String, BamlValueWithMeta<ExprMetadata>>,
     env_vars: HashMap<String, String>,
 ) -> Result<BamlValueWithMeta<ExprMetadata>>
