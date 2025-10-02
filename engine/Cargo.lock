@@ -990,15 +990,15 @@ dependencies = [
 
 [[package]]
 name = "baml-client-rust"
-version = "0.205.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "baml-types",
  "baml_cffi",
  "futures",
- "indexmap 2.10.0",
+ "indexmap 2.9.0",
  "once_cell",
- "prost",
+ "prost 0.14.1",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -3100,7 +3100,7 @@ dependencies = [
 
 [[package]]
 name = "generators-rust"
-version = "0.205.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "askama",

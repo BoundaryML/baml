@@ -161,6 +161,11 @@ pub(crate) fn stream_type_to_rust(field: &TypeStreaming, lookup: &impl TypeLooku
                 }
             }
         },
+        // TODO(Cecilia): actually deal with this
+        T::Top(_) => TypeRust::Any {
+            reason: "top types are not supported in Rust".to_string(),
+            meta,
+        },
     };
 
     type_rust
@@ -278,6 +283,10 @@ pub(crate) fn type_to_rust(field: &TypeNonStreaming, lookup: &impl TypeLookups) 
                     meta,
                 }
             }
+        },
+        T::Top(_) => TypeRust::Any {
+            reason: "top types are not supported in Rust".to_string(),
+            meta,
         },
     };
 

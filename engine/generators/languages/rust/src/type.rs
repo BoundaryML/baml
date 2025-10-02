@@ -431,6 +431,8 @@ pub fn to_rust_type(ty: &TypeNonStreaming) -> String {
         TypeNonStreaming::Tuple(_, _) => "serde_json::Value".to_string(), // Fallback for tuples
         TypeNonStreaming::RecursiveTypeAlias { .. } => "serde_json::Value".to_string(), // Fallback
         TypeNonStreaming::Arrow(_, _) => "serde_json::Value".to_string(), // Fallback for function types
+        // TODO(Cecilia): actually deal with this
+        TypeNonStreaming::Top(_) => "serde_json::Value".to_string(), // Fallback for top type
     }
 }
 

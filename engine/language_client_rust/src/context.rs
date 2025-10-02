@@ -15,6 +15,8 @@ pub struct BamlContext {
     pub(crate) type_builder: Option<crate::types::TypeBuilder>,
     /// Collectors for usage tracking
     pub(crate) collectors: Vec<std::sync::Arc<crate::types::Collector>>,
+    /// Tags for metadata
+    pub(crate) tags: HashMap<String, String>,
 }
 
 impl BamlContext {
@@ -26,6 +28,7 @@ impl BamlContext {
             client_registry: None,
             type_builder: None,
             collectors: Vec::new(),
+            tags: HashMap::new(),
         }
     }
 
@@ -100,6 +103,25 @@ impl BamlContext {
         self
     }
 
+    /// Set a tag
+    pub fn set_tag<K: Into<String>, V: Into<String>>(mut self, key: K, value: V) -> Self {
+        self.tags.insert(key.into(), value.into());
+        self
+    }
+
+    /// Set multiple tags
+    pub fn set_tags<I, K, V>(mut self, tags: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<String>,
+    {
+        for (key, value) in tags {
+            self.tags.insert(key.into(), value.into());
+        }
+        self
+    }
+
     /// Get the function arguments
     pub fn args(&self) -> &BamlMap<String, BamlValue> {
         &self.args
@@ -123,6 +145,11 @@ impl BamlContext {
     /// Get the collectors
     pub fn collectors(&self) -> &[std::sync::Arc<crate::types::Collector>] {
         &self.collectors
+    }
+
+    /// Get the tags
+    pub fn tags(&self) -> &HashMap<String, String> {
+        &self.tags
     }
 }
 
@@ -175,6 +202,12 @@ impl BamlContextBuilder {
     /// Add collector
     pub fn collector(mut self, collector: std::sync::Arc<crate::types::Collector>) -> Self {
         self.context = self.context.with_collector(collector);
+        self
+    }
+
+    /// Set a tag
+    pub fn tag<K: Into<String>, V: Into<String>>(mut self, key: K, value: V) -> Self {
+        self.context = self.context.set_tag(key, value);
         self
     }
 

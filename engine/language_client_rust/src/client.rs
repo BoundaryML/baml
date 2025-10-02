@@ -620,12 +620,24 @@ impl BamlClient {
             .as_ref()
             .map(|builder| builder.to_cffi());
 
+        let mut tags = Vec::with_capacity(context.tags.len());
+        for (key, value) in context.tags.iter() {
+            tags.push(CffiMapEntry {
+                key: key.clone(),
+                value: Some(CffiValueHolder {
+                    value: Some(cffi_value_holder::Value::StringValue(value.clone())),
+                    r#type: None,
+                }),
+            });
+        }
+
         let args = CffiFunctionArguments {
             kwargs,
             client_registry: None,
             env,
             collectors,
             type_builder,
+            tags,
         };
 
         let mut buffer = Vec::new();

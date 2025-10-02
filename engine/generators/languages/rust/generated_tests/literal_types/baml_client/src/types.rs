@@ -1337,6 +1337,14 @@ impl Union3KActiveOrKInactiveOrKPending {
     pub fn k_pending() -> Self {
         Self::KPending
     }
+    /// Return the literal string value represented by this union.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::KActive => "active",
+            Self::KInactive => "inactive",
+            Self::KPending => "pending",
+        }
+    }
 }
 
 /// Pattern matching helper for Union3KActiveOrKInactiveOrKPending
@@ -1471,6 +1479,14 @@ impl Union3KAdminOrKGuestOrKUser {
     /// Create a new Union3KAdminOrKGuestOrKUser with a KGuest variant
     pub fn k_guest() -> Self {
         Self::KGuest
+    }
+    /// Return the literal string value represented by this union.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::KUser => "user",
+            Self::KAdmin => "admin",
+            Self::KGuest => "guest",
+        }
     }
 }
 
@@ -1607,6 +1623,14 @@ impl Union3KDevOrKProdOrKStaging {
     pub fn k_prod() -> Self {
         Self::KProd
     }
+    /// Return the literal string value represented by this union.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::KDev => "dev",
+            Self::KStaging => "staging",
+            Self::KProd => "prod",
+        }
+    }
 }
 
 /// Pattern matching helper for Union3KDevOrKProdOrKStaging
@@ -1742,6 +1766,14 @@ impl Union3KErrorOrKSuccessOrKTimeout {
     pub fn k_timeout() -> Self {
         Self::KTimeout
     }
+    /// Return the literal string value represented by this union.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::KSuccess => "success",
+            Self::KError => "error",
+            Self::KTimeout => "timeout",
+        }
+    }
 }
 
 /// Pattern matching helper for Union3KErrorOrKSuccessOrKTimeout
@@ -1876,6 +1908,14 @@ impl Union3KV1OrKV2OrKV3 {
     /// Create a new Union3KV1OrKV2OrKV3 with a KV3 variant
     pub fn kv3() -> Self {
         Self::KV3
+    }
+    /// Return the literal string value represented by this union.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::KV1 => "v1",
+            Self::KV2 => "v2",
+            Self::KV3 => "v3",
+        }
     }
 }
 
@@ -2198,6 +2238,15 @@ impl Union4KArchivedOrKDeletedOrKDraftOrKPublished {
     pub fn k_deleted() -> Self {
         Self::KDeleted
     }
+    /// Return the literal string value represented by this union.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::KDraft => "draft",
+            Self::KPublished => "published",
+            Self::KArchived => "archived",
+            Self::KDeleted => "deleted",
+        }
+    }
 }
 
 /// Pattern matching helper for Union4KArchivedOrKDeletedOrKDraftOrKPublished
@@ -2357,6 +2406,15 @@ impl Union4KDeleteOrKGetOrKPostOrKPut {
     /// Create a new Union4KDeleteOrKGetOrKPostOrKPut with a KDelete variant
     pub fn k_delete() -> Self {
         Self::KDelete
+    }
+    /// Return the literal string value represented by this union.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::KGet => "GET",
+            Self::KPost => "POST",
+            Self::KPut => "PUT",
+            Self::KDelete => "DELETE",
+        }
     }
 }
 

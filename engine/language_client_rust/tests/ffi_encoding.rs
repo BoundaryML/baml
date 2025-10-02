@@ -25,6 +25,9 @@ fn encoded_arguments_include_env_and_handles() {
     let collector = Arc::new(Collector::new(None).expect("allocate collector"));
     context = context.with_collector(collector);
 
+    context = context.set_tag("environment", "test");
+    context = context.set_tag("version", "1.0.0");
+
     let encoded = BamlClient::encode_context_for_test(&context).expect("encode context");
     let decoded = CffiFunctionArguments::decode(encoded.as_slice()).expect("decode proto");
 
@@ -46,5 +49,29 @@ fn encoded_arguments_include_env_and_handles() {
     assert!(
         decoded.type_builder.is_some(),
         "type builder handle should be present"
+    );
+
+    assert_eq!(decoded.tags.len(), 2, "should have 2 tags");
+    assert!(
+        decoded
+            .tags
+            .iter()
+            .any(|tag| tag.key == "environment"
+                && tag.value.as_ref().and_then(|v| v.value.as_ref()).map(|v| match v {
+                    baml_cffi::baml::cffi::cffi_value_holder::Value::StringValue(s) => s == "test",
+                    _ => false,
+                }) == Some(true)),
+        "should have environment tag with value 'test'"
+    );
+    assert!(
+        decoded
+            .tags
+            .iter()
+            .any(|tag| tag.key == "version"
+                && tag.value.as_ref().and_then(|v| v.value.as_ref()).map(|v| match v {
+                    baml_cffi::baml::cffi::cffi_value_holder::Value::StringValue(s) => s == "1.0.0",
+                    _ => false,
+                }) == Some(true)),
+        "should have version tag with value '1.0.0'"
     );
 }
