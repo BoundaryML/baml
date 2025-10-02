@@ -1,9 +1,5 @@
 The `test` command runs BAML function tests defined in your BAML files. It provides comprehensive testing capabilities including filtering, parallel execution, and various output formats.
 
-<Info>
-For more details about the test command implementation and feature requests, see [GitHub issue #1772](https://github.com/BoundaryML/baml/issues/1772).
-</Info>
-
 ## Usage
 
 ```
@@ -26,13 +22,33 @@ baml-cli test [OPTIONS]
 
 ## Description
 
-The `test` command performs the following actions:
+The `test` command executes BAML function tests and validates their outputs against defined assertions. It provides a comprehensive testing framework for LLM-based functions.
 
-1. Discovers and parses all test cases defined in BAML files
-2. Applies include/exclude filters to select which tests to run
-3. Executes tests in parallel (configurable concurrency)
-4. Reports results with detailed output and assertions
-5. Supports various output formats and CI integration
+### How It Works
+
+1. **Discovery**: Scans your BAML source directory for test definitions
+2. **Filtering**: Applies include/exclude patterns to select which tests to run
+3. **Execution**: Runs tests in parallel with configurable concurrency
+4. **Validation**: Evaluates assertions (`@@assert`) and checks (`@@check`) against function outputs
+5. **Reporting**: Displays real-time progress and detailed results with pass/fail status
+
+### Test Execution Flow
+
+When you run tests:
+- Tests execute concurrently (default: 10 parallel tests)
+- Progress updates appear in real-time showing running/completed tests
+- Failed tests and assertions are displayed immediately
+- You can cancel execution anytime with Ctrl+C
+- Final summary shows all test results grouped by function
+
+### Assertions vs Checks
+
+Tests can include two types of validations:
+
+- **`@@assert`**: Must pass for the test to succeed. If an assertion fails, the test fails immediately.
+- **`@@check`**: Used for validation that needs human review. Failing checks mark the test as "needs evaluation" but don't fail it outright.
+
+Both use Jinja expressions and can access the function's output via `this`.
 
 ## Test Filtering
 
@@ -176,7 +192,12 @@ baml-cli test --list -i "Extract*::" -x "*::TestSlow*"
 
 ## Test Definition
 
-Tests are defined in BAML files using the `test` block syntax:
+Tests are defined in BAML files using the `test` block syntax. Each test specifies:
+- The function(s) to test
+- Input arguments to pass to the function
+- Assertions and/or checks to validate the output
+
+### Basic Test Example
 
 ```baml
 function ExtractResume(resume: string) -> Resume {
@@ -193,6 +214,33 @@ test TestBasicResume {
   @@assert({{ this.email == "john@example.com" }})
 }
 ```
+
+### Using Assertions and Checks
+
+```baml
+test TestResumeWithValidation {
+  functions [ExtractResume]
+  args {
+    resume "Jane Smith\nSenior Engineer at TechCorp\n5 years experience"
+  }
+  // Assertions must pass for the test to succeed
+  @@assert({{ this.name != null }})
+  @@assert({{ this.years_experience > 0 }})
+  
+  // Checks flag issues for human review without failing the test
+  @@check({{ this.years_experience == 5 }})
+  @@check({{ "TechCorp" in this.company }})
+}
+```
+
+### Test Output
+
+When tests run, you'll see:
+- **PASSED**: All assertions passed
+- **FAILED**: One or more assertions failed (shows which assertion and why)
+- **NEEDS EVAL**: All assertions passed, but one or more checks failed (needs human review)
+- Test execution time and function/test names
+- Detailed error messages for failures
 
 ## Related Commands
 
