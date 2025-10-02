@@ -561,7 +561,8 @@ impl BamlRuntime {
             };
 
             Ok(TestResponse {
-                function_response: res,
+                function_response: Some(res),
+                expr_function_response: None,
                 function_call: call_uuid,
                 constraints_result: test_constraints_result,
             })
@@ -626,6 +627,129 @@ impl BamlRuntime {
             )
             .await;
         res
+    }
+
+    /// Run an expr function test - simpler path that doesn't involve LLM infrastructure
+    pub async fn run_expr_test(
+        &self,
+        function_name: &str,
+        test_name: &str,
+        ctx: &RuntimeContextManager,
+        env_vars: HashMap<String, String>,
+    ) -> (Result<TestResponse>, FunctionCallId) {
+        // Get test parameters
+        let rctx = ctx.create_ctx_with_default();
+        let params = match self.get_test_params(function_name, test_name, &rctx, true) {
+            Ok(params) => params,
+            Err(e) => return (Err(e), FunctionCallId::new()),
+        };
+
+        // Get constraints for the test
+        let constraints = match self
+            .inner
+            .get_test_constraints(function_name, test_name, &rctx)
+        {
+            Ok(c) => c,
+            Err(e) => return (Err(e), FunctionCallId::new()),
+        };
+
+        // Create a call ID for tracing
+        let call_id = self
+            .tracer_wrapper
+            .get_or_create_tracer(&env_vars)
+            .start_call(
+                function_name,
+                ctx,
+                &params,
+                true,
+                false,
+                None, // collectors
+                None, // tags
+            )
+            .curr_call_id();
+
+        // For expr functions, we need to use a runtime that can handle them
+        // The AsyncInterpreterRuntime or AsyncVMRuntime would work, but since
+        // we're in the basic BamlRuntime (LLM-only), we cannot call expr functions
+        // directly. Instead, we need to return an error or use the interpreter directly.
+        //
+        // For now, let's call through the proper runtime path by creating an interpreter runtime
+        use crate::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreRuntime;
+        // use crate::async_vm_runtime::BamlAsyncVmRuntime as CoreRuntime;
+
+        let interpreter_runtime = match CoreRuntime::try_from(self.clone()) {
+            Ok(runtime) => runtime,
+            Err(e) => return (Err(e), call_id),
+        };
+
+        let (result, _) = interpreter_runtime
+            .call_function(
+                function_name.to_string(),
+                &params,
+                ctx,
+                None, // tb
+                None, // cb
+                None, // collectors
+                env_vars.clone(),
+                None, // tags
+                TripWire::new(None),
+            )
+            .await;
+
+        // For expr functions, extract the parsed value directly
+        let expr_response = match result {
+            Ok(func_result) => {
+                // Extract the parsed value from the FunctionResult
+                func_result.parsed().as_ref().map(|r| match r {
+                    Ok(val) => Ok(val.clone()),
+                    Err(e) => Err(anyhow::anyhow!("{}", e)),
+                })
+            }
+            Err(e) => Some(Err(e)),
+        };
+
+        // Evaluate constraints if any
+        let constraints_result = if constraints.is_empty() {
+            TestConstraintsResult::empty()
+        } else {
+            match &expr_response {
+                Some(Ok(val)) => {
+                    let value_with_constraints = val.0.map_meta(|m| m.1.clone());
+                    evaluate_test_constraints(
+                        &params,
+                        &value_with_constraints,
+                        &LLMCompleteResponse {
+                            client: "expr_function".to_string(),
+                            model: "expr_function".to_string(),
+                            prompt: RenderedPrompt::Chat(vec![]),
+                            request_options: BamlMap::new(),
+                            start_time: web_time::SystemTime::now(),
+                            latency: web_time::Duration::from_millis(0),
+                            content: String::new(),
+                            metadata: LLMCompleteResponseMetadata {
+                                baml_is_complete: true,
+                                finish_reason: None,
+                                prompt_tokens: None,
+                                output_tokens: None,
+                                total_tokens: None,
+                                cached_input_tokens: None,
+                            },
+                        },
+                        constraints,
+                    )
+                }
+                _ => TestConstraintsResult::empty(),
+            }
+        };
+
+        let test_response = TestResponse {
+            function_response: None,
+            expr_function_response: expr_response,
+            function_call: call_id.clone(),
+            constraints_result,
+        };
+
+        (Ok(test_response), call_id)
     }
 
     #[cfg(not(target_arch = "wasm32"))]

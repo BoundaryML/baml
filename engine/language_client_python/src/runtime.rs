@@ -227,8 +227,8 @@ impl BamlRuntime {
                     cb.as_ref(),
                     Some(collector_list),
                     env_vars,
-                    tripwire,
                     tags.as_ref(),
+                    tripwire,
                 )
                 .await;
 

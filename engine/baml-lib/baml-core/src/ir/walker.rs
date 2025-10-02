@@ -26,6 +26,14 @@ impl<'a> Walker<'a, &'a ExprFunctionNode> {
         self.elem().inputs()
     }
 
+    pub fn output(&self) -> &'a baml_types::TypeIR {
+        &self.elem().output
+    }
+
+    pub fn span(&self) -> Option<&crate::Span> {
+        self.item.attributes.span.as_ref()
+    }
+
     pub fn walk_tests(
         &'a self,
     ) -> impl Iterator<Item = Walker<'a, (&'a ExprFunctionNode, &'a TestCase)>> {
@@ -270,6 +278,13 @@ impl<'a> Walker<'a, (&'a ExprFunctionNode, &'a TestCase)> {
             .iter()
             .map(|(k, v)| Ok((k.clone(), v.resolve_serde::<BamlValue>(ctx))))
             .collect()
+    }
+
+    pub fn function(&'a self) -> Walker<'a, &'a ExprFunctionNode> {
+        Walker {
+            ir: self.ir,
+            item: self.item.0,
+        }
     }
 }
 
