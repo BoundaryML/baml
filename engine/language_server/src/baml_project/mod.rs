@@ -739,9 +739,7 @@ impl BamlRuntimeExt for BamlRuntime {
                         let params = f
                             .inputs()
                             .iter()
-                            .map(|(k, runtime_type)| {
-                                (k.clone(), runtime_type.clone())
-                            })
+                            .map(|(k, runtime_type)| (k.clone(), runtime_type.clone()))
                             .collect::<indexmap::IndexMap<String, _>>();
 
                         self.inner.ir.get_dummy_args(2, true, &params)

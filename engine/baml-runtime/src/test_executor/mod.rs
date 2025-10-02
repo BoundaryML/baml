@@ -159,21 +159,24 @@ impl TestExecutor for BamlRuntime {
             });
 
             // Expr function tests
-            let expr_fn_tests: Vec<(String, String)> = ir.walk_expr_fns().flat_map(|f| {
-                f.walk_tests().filter_map(|node_pair| {
-                    let function_name = node_pair.function().name();
-                    let test_name = &node_pair.test_case().name;
-                    if args.includes(function_name, test_name) {
-                        Some((function_name.to_string(), test_name.to_string()))
-                    } else {
-                        None
-                    }
-                }).collect::<Vec<_>>()
-            }).collect();
+            let expr_fn_tests: Vec<(String, String)> = ir
+                .walk_expr_fns()
+                .flat_map(|f| {
+                    f.walk_tests()
+                        .filter_map(|node_pair| {
+                            let function_name = node_pair.function().name();
+                            let test_name = &node_pair.test_case().name;
+                            if args.includes(function_name, test_name) {
+                                Some((function_name.to_string(), test_name.to_string()))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect();
 
-            from_fn_tests
-                .chain(expr_fn_tests)
-                .collect::<BTreeSet<_>>()
+            from_fn_tests.chain(expr_fn_tests).collect::<BTreeSet<_>>()
         };
 
         println!("Found {} tests", func_test_pairs.len());
@@ -225,33 +228,36 @@ impl TestExecutor for BamlRuntime {
             });
 
             // Expr function tests
-            let expr_fn_tests: Vec<((String, String), (String, FunctionType))> = ir.walk_expr_fns().flat_map(|f| {
-                f.walk_tests().filter_map(|node_pair| {
-                    let function_name = node_pair.function().name();
-                    let test_name = &node_pair.test_case().name;
-                    if args.includes(function_name, test_name) {
-                        node_pair.span().map(|s| {
-                            (
-                                (function_name.to_string(), test_name.to_string()),
-                                (
-                                    format!(
-                                        "{}:{}",
-                                        s.file.path(),
-                                        s.line_and_column().0 .0 + 1
-                                    ),
-                                    FunctionType::Expr,
-                                ),
-                            )
+            let expr_fn_tests: Vec<((String, String), (String, FunctionType))> = ir
+                .walk_expr_fns()
+                .flat_map(|f| {
+                    f.walk_tests()
+                        .filter_map(|node_pair| {
+                            let function_name = node_pair.function().name();
+                            let test_name = &node_pair.test_case().name;
+                            if args.includes(function_name, test_name) {
+                                node_pair.span().map(|s| {
+                                    (
+                                        (function_name.to_string(), test_name.to_string()),
+                                        (
+                                            format!(
+                                                "{}:{}",
+                                                s.file.path(),
+                                                s.line_and_column().0 .0 + 1
+                                            ),
+                                            FunctionType::Expr,
+                                        ),
+                                    )
+                                })
+                            } else {
+                                None
+                            }
                         })
-                    } else {
-                        None
-                    }
-                }).collect::<Vec<_>>()
-            }).collect();
+                        .collect::<Vec<_>>()
+                })
+                .collect();
 
-            from_fn_tests
-                .chain(expr_fn_tests)
-                .collect()
+            from_fn_tests.chain(expr_fn_tests).collect()
         };
 
         if selected_tests.is_empty() {

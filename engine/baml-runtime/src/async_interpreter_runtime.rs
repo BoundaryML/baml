@@ -17,8 +17,6 @@ use internal_baml_core::ir::IRHelper;
 use internal_baml_diagnostics::Diagnostics;
 use jsonish::{ResponseBamlValue, ResponseValueMeta};
 
-use crate::BamlTracerWrapper;
-
 #[cfg(not(target_arch = "wasm32"))]
 use crate::on_log_event::LogEventCallbackSync;
 use crate::{
@@ -29,8 +27,9 @@ use crate::{
     tracing::TracingCall,
     tracingv2::storage::storage::Collector,
     type_builder::TypeBuilder,
-    BamlRuntime as LlmRuntime, BamlSrcReader, FunctionResult, FunctionResultStream,
-    InnerTraceStats, InternalRuntimeInterface, RuntimeContextManager, TripWire,
+    BamlRuntime as LlmRuntime, BamlSrcReader, BamlTracerWrapper, FunctionResult,
+    FunctionResultStream, InnerTraceStats, InternalRuntimeInterface, RuntimeContextManager,
+    TripWire,
 };
 
 /// Async THIR interpreter runtime.
@@ -258,7 +257,7 @@ impl BamlAsyncInterpreterRuntime {
                         tb.as_ref(),
                         cb.as_ref(),
                         None, // TODO: collectors not supported yet
-                        tags.map(|t| t.clone()),
+                        tags.cloned(),
                         env_vars,
                         cancel_tripwire,
                     )
@@ -402,7 +401,7 @@ impl BamlAsyncInterpreterRuntime {
             cb,
             collectors,
             env_vars,
-            tags.map(|t| t.clone()),
+            tags.cloned(),
             cancel_tripwire,
         )
     }

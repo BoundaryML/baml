@@ -20,7 +20,6 @@ use baml_vm::{BamlVmProgram, EvalStack, FunctionKind, ObjectIndex, Vm, VmExecSta
 use internal_baml_core::ir::IRHelper;
 use jsonish::{deserializer::deserialize_flags::Flag, ResponseBamlValue, ResponseValueMeta};
 
-use crate::BamlTracerWrapper;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::on_log_event::LogEventCallbackSync;
 use crate::{
@@ -31,8 +30,9 @@ use crate::{
     tracing::TracingCall,
     tracingv2::storage::storage::Collector,
     type_builder::TypeBuilder,
-    BamlRuntime as LlmRuntime, BamlSrcReader, FunctionResult, FunctionResultStream,
-    InnerTraceStats, InternalRuntimeInterface, RuntimeContextManager, TripWire,
+    BamlRuntime as LlmRuntime, BamlSrcReader, BamlTracerWrapper, FunctionResult,
+    FunctionResultStream, InnerTraceStats, InternalRuntimeInterface, RuntimeContextManager,
+    TripWire,
 };
 
 /// Async VM runtime.
@@ -812,7 +812,8 @@ impl BamlAsyncVmRuntime {
         no_version_check: bool,
         generator_type: generators_lib::version_check::GeneratorType,
     ) -> anyhow::Result<Vec<generators_lib::GenerateOutput>> {
-        self.llm_runtime.run_codegen(input_files, no_version_check, generator_type)
+        self.llm_runtime
+            .run_codegen(input_files, no_version_check, generator_type)
     }
 
     pub fn codegen_generators(
@@ -833,7 +834,10 @@ impl BamlAsyncVmRuntime {
         tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<crate::TripWire>,
         on_tick: Option<G>,
-    ) -> (Result<crate::TestResponse, anyhow::Error>, baml_ids::FunctionCallId)
+    ) -> (
+        Result<crate::TestResponse, anyhow::Error>,
+        baml_ids::FunctionCallId,
+    )
     where
         F: Fn(crate::FunctionResult),
         G: Fn(),
@@ -859,13 +863,20 @@ impl BamlAsyncVmRuntime {
         test_name: &str,
         ctx: &RuntimeContextManager,
         on_event: Option<F>,
-        expr_tx: Option<futures::channel::mpsc::UnboundedSender<Vec<internal_baml_core::internal_baml_diagnostics::SerializedSpan>>>,
+        expr_tx: Option<
+            futures::channel::mpsc::UnboundedSender<
+                Vec<internal_baml_core::internal_baml_diagnostics::SerializedSpan>,
+            >,
+        >,
         collector: Option<Arc<crate::tracingv2::storage::storage::Collector>>,
         env_vars: HashMap<String, String>,
         tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<crate::TripWire>,
         on_tick: Option<G>,
-    ) -> (Result<crate::TestResponse, anyhow::Error>, baml_ids::FunctionCallId)
+    ) -> (
+        Result<crate::TestResponse, anyhow::Error>,
+        baml_ids::FunctionCallId,
+    )
     where
         F: Fn(crate::FunctionResult),
         G: Fn(),
@@ -1210,11 +1221,18 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncVmRuntime {
         self.llm_runtime.inner.orchestration_graph(client_name, ctx)
     }
 
-    fn function_graph(&self, function_name: &str, ctx: &crate::runtime_context::RuntimeContext) -> anyhow::Result<String> {
+    fn function_graph(
+        &self,
+        function_name: &str,
+        ctx: &crate::runtime_context::RuntimeContext,
+    ) -> anyhow::Result<String> {
         self.llm_runtime.inner.function_graph(function_name, ctx)
     }
 
-    fn get_function<'ir>(&'ir self, function_name: &str) -> anyhow::Result<internal_baml_core::ir::FunctionWalker<'ir>> {
+    fn get_function<'ir>(
+        &'ir self,
+        function_name: &str,
+    ) -> anyhow::Result<internal_baml_core::ir::FunctionWalker<'ir>> {
         self.llm_runtime.inner.get_function(function_name)
     }
 
@@ -1232,8 +1250,15 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncVmRuntime {
         ctx: &crate::runtime_context::RuntimeContext,
         params: &BamlMap<String, BamlValue>,
         node_index: Option<usize>,
-    ) -> anyhow::Result<(internal_baml_jinja::RenderedPrompt, crate::internal::llm_client::orchestrator::OrchestrationScope, internal_llm_client::AllowedRoleMetadata)> {
-        self.llm_runtime.inner.render_prompt(function_name, ctx, params, node_index).await
+    ) -> anyhow::Result<(
+        internal_baml_jinja::RenderedPrompt,
+        crate::internal::llm_client::orchestrator::OrchestrationScope,
+        internal_llm_client::AllowedRoleMetadata,
+    )> {
+        self.llm_runtime
+            .inner
+            .render_prompt(function_name, ctx, params, node_index)
+            .await
     }
 
     async fn render_raw_curl(
@@ -1244,7 +1269,10 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncVmRuntime {
         render_settings: crate::RenderCurlSettings,
         node_index: Option<usize>,
     ) -> anyhow::Result<String> {
-        self.llm_runtime.inner.render_raw_curl(function_name, ctx, prompt, render_settings, node_index).await
+        self.llm_runtime
+            .inner
+            .render_raw_curl(function_name, ctx, prompt, render_settings, node_index)
+            .await
     }
 
     fn ir(&self) -> &internal_baml_core::ir::repr::IntermediateRepr {
@@ -1258,7 +1286,9 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncVmRuntime {
         ctx: &crate::runtime_context::RuntimeContext,
         strict: bool,
     ) -> anyhow::Result<BamlMap<String, BamlValue>> {
-        self.llm_runtime.inner.get_test_params(function_name, test_name, ctx, strict)
+        self.llm_runtime
+            .inner
+            .get_test_params(function_name, test_name, ctx, strict)
     }
 
     fn get_test_constraints(
@@ -1267,7 +1297,9 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncVmRuntime {
         test_name: &str,
         ctx: &crate::runtime_context::RuntimeContext,
     ) -> anyhow::Result<Vec<baml_types::Constraint>> {
-        self.llm_runtime.inner.get_test_constraints(function_name, test_name, ctx)
+        self.llm_runtime
+            .inner
+            .get_test_constraints(function_name, test_name, ctx)
     }
 
     fn get_test_type_builder(
@@ -1275,6 +1307,8 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncVmRuntime {
         function_name: &str,
         test_name: &str,
     ) -> anyhow::Result<Option<TypeBuilder>> {
-        self.llm_runtime.inner.get_test_type_builder(function_name, test_name)
+        self.llm_runtime
+            .inner
+            .get_test_type_builder(function_name, test_name)
     }
 }

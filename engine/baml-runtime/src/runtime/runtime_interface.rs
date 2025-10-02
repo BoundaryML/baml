@@ -428,7 +428,11 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         // Try to find as expr function
         let expr_fn = self.ir().find_expr_fn(function_name)?;
         let test = expr_fn.find_test(test_name).ok_or_else(|| {
-            anyhow::anyhow!("Test '{}' not found for expr function '{}'", test_name, function_name)
+            anyhow::anyhow!(
+                "Test '{}' not found for expr function '{}'",
+                test_name,
+                function_name
+            )
         })?;
 
         if test.item.1.elem.type_builder.entries.is_empty() {
@@ -443,13 +447,25 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
             .recursive_type_aliases()
             .lock()
             .unwrap()
-            .extend(test.item.1.elem.type_builder.recursive_aliases.iter().cloned());
+            .extend(
+                test.item
+                    .1
+                    .elem
+                    .type_builder
+                    .recursive_aliases
+                    .iter()
+                    .cloned(),
+            );
 
-        type_builder
-            .recursive_classes()
-            .lock()
-            .unwrap()
-            .extend(test.item.1.elem.type_builder.recursive_classes.iter().cloned());
+        type_builder.recursive_classes().lock().unwrap().extend(
+            test.item
+                .1
+                .elem
+                .type_builder
+                .recursive_classes
+                .iter()
+                .cloned(),
+        );
 
         Ok(Some(type_builder))
     }

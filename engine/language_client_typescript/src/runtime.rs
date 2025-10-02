@@ -1,8 +1,11 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use baml_runtime::{
-    on_log_event::LogEvent, runtime_interface::ExperimentalTracingInterface,
-};
+// Conditional runtime selection based on the "interpreter" feature flag
+#[cfg(feature = "interpreter")]
+pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
+#[cfg(not(feature = "interpreter"))]
+pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
+use baml_runtime::{on_log_event::LogEvent, runtime_interface::ExperimentalTracingInterface};
 use baml_types::BamlValue;
 use napi::{
     bindgen_prelude::{
@@ -13,10 +16,6 @@ use napi::{
 };
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
-
-// Switch between runtimes here by importing the one you want to use.
-pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
-// pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
 
 use crate::{
     abort_controller::js_abort_signal_to_rust_tripwire,
@@ -66,11 +65,9 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
     ) -> napi::Result<Self> {
         let directory = PathBuf::from(directory);
-        Ok(
-            CoreBamlRuntime::from_directory(&directory, env_vars)
-                .map_err(from_anyhow_error)?
-                .into(),
-        )
+        Ok(CoreBamlRuntime::from_directory(&directory, env_vars)
+            .map_err(from_anyhow_error)?
+            .into())
     }
 
     #[napi(ts_return_type = "BamlRuntime")]
@@ -97,10 +94,9 @@ impl BamlRuntime {
         files: HashMap<String, String>,
         env_vars: HashMap<String, String>,
     ) -> napi::Result<()> {
-        self.inner =
-            CoreBamlRuntime::from_file_content(&root_path, &files, env_vars)
-                .map_err(from_anyhow_error)?
-                .into();
+        self.inner = CoreBamlRuntime::from_file_content(&root_path, &files, env_vars)
+            .map_err(from_anyhow_error)?
+            .into();
         Ok(())
     }
 
@@ -158,8 +154,8 @@ impl BamlRuntime {
                     cb.as_ref(),
                     Some(collector_list),
                     env_vars,
+                    Some(tags),
                     tripwire,
-                    Some(&tags),
                 )
                 .await;
 
@@ -212,8 +208,8 @@ impl BamlRuntime {
             cb.as_ref(),
             Some(collector_list),
             env_vars,
+            Some(tags),
             tripwire,
-            Some(&tags),
         );
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)
@@ -265,8 +261,8 @@ impl BamlRuntime {
                 client_registry.as_ref(),
                 Some(collector_list),
                 env_vars,
+                Some(tags),
                 tripwire,
-                Some(&tags),
             )
             .map_err(from_anyhow_error)?;
 
@@ -334,8 +330,8 @@ impl BamlRuntime {
                 client_registry.as_ref(),
                 Some(collector_list),
                 env_vars,
+                Some(tags),
                 tripwire,
-                Some(&tags),
             )
             .map_err(from_anyhow_error)?;
 

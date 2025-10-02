@@ -18,10 +18,11 @@ type PickleReduceResult = PyResult<(
     ),
 )>;
 
-// Switch between runtimes here by importing the one you want to use.
-
+// Conditional runtime selection based on the "interpreter" feature flag
+#[cfg(feature = "interpreter")]
 pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
-// pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
+#[cfg(not(feature = "interpreter"))]
+pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
 
 use crate::{
     errors::{BamlError, BamlInvalidArgumentError},
@@ -227,7 +228,7 @@ impl BamlRuntime {
                     cb.as_ref(),
                     Some(collector_list),
                     env_vars,
-                    tags.as_ref(),
+                    tags,
                     tripwire,
                 )
                 .await;
@@ -290,8 +291,8 @@ impl BamlRuntime {
                     cb.as_ref(),
                     Some(collector_list),
                     env_vars,
+                    tags,
                     tripwire,
-                    tags.as_ref(),
                 )
             })
         });
@@ -348,8 +349,8 @@ impl BamlRuntime {
                 cb.map(|cb| cb.inner.clone()).as_ref(),
                 Some(collector_list),
                 env_vars.clone(),
+                tags,
                 tripwire,
-                tags.as_ref(),
             )
             .map_err(BamlError::from_anyhow)?;
 
@@ -410,8 +411,8 @@ impl BamlRuntime {
                 cb.map(|cb| cb.inner.clone()).as_ref(),
                 Some(collector_list),
                 env_vars.clone(),
+                tags,
                 tripwire,
-                tags.as_ref(),
             )
             .map_err(BamlError::from_anyhow)?;
 

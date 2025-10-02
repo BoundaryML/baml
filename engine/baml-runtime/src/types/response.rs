@@ -373,7 +373,9 @@ impl TestResponse {
                     }
                 }
             } else {
-                TestStatus::Fail(TestFailReason::TestParseFailure(expr_res.as_ref().unwrap_err()))
+                TestStatus::Fail(TestFailReason::TestParseFailure(
+                    expr_res.as_ref().unwrap_err(),
+                ))
             };
         }
 
@@ -382,9 +384,9 @@ impl TestResponse {
             if let Some(parsed) = func_res.result_with_constraints() {
                 if parsed.is_ok() {
                     match self.constraints_result.clone() {
-                        TestConstraintsResult::InternalError { details } => {
-                            TestStatus::Fail(TestFailReason::TestUnspecified(anyhow::anyhow!(details)))
-                        }
+                        TestConstraintsResult::InternalError { details } => TestStatus::Fail(
+                            TestFailReason::TestUnspecified(anyhow::anyhow!(details)),
+                        ),
                         TestConstraintsResult::Completed {
                             checks,
                             failed_assert,
@@ -414,7 +416,9 @@ impl TestResponse {
                 TestStatus::Fail(TestFailReason::TestLLMFailure(func_res.llm_response()))
             }
         } else {
-            TestStatus::Fail(TestFailReason::TestUnspecified(anyhow::anyhow!("No response")))
+            TestStatus::Fail(TestFailReason::TestUnspecified(anyhow::anyhow!(
+                "No response"
+            )))
         }
     }
 }

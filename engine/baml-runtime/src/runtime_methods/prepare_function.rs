@@ -44,6 +44,7 @@ use crate::{
 
 pub(crate) struct PreparedFunction<'ir> {
     pub function_name: String,
+    /// If the function is an expr_fn, it won't have a `FunctionWalker`.
     pub func: Option<FunctionWalker<'ir>>,
     pub baml_args: PreparedFunctionArgs,
 }

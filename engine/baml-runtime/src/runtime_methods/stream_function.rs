@@ -94,8 +94,9 @@ impl InternalBamlRuntime {
                 .map_err(|e| e.into_error())?;
 
             // let func = self.get_function(&function_name)?;
-            let func = prepared.func.as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Cannot stream expr function through this code path"))?;
+            let func = prepared.func.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("Cannot stream expr function through this code path")
+            })?;
             let renderer = PromptRenderer::from_function(func, self.ir(), &ctx)?;
             let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
             Ok(FunctionResultStream {

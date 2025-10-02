@@ -25,6 +25,7 @@ pub mod tracingv2;
 pub mod type_builder;
 mod types;
 
+// Conditional runtime selection based on the "interpreter" feature flag
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
@@ -33,6 +34,10 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+#[cfg(feature = "interpreter")]
+use async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreRuntime;
+#[cfg(not(feature = "interpreter"))]
+use async_vm_runtime::BamlAsyncVmRuntime as CoreRuntime;
 use baml_ids::{FunctionCallId, HttpRequestId};
 use baml_types::{
     expr::{Expr, ExprMetadata},
@@ -479,7 +484,9 @@ impl BamlRuntime {
 
         // If it's an expr function, use the simpler expr execution path
         if is_expr_fn {
-            return self.run_expr_test(function_name, test_name, ctx, env_vars).await;
+            return self
+                .run_expr_test(function_name, test_name, ctx, env_vars)
+                .await;
         }
 
         let run_to_response = || async {
@@ -491,7 +498,7 @@ impl BamlRuntime {
 
             let type_builder = self
                 .inner
-                .get_test_type_builder(&function_name, test_name)
+                .get_test_type_builder(function_name, test_name)
                 .unwrap();
 
             let rctx = ctx.create_ctx(
@@ -677,11 +684,6 @@ impl BamlRuntime {
         // The AsyncInterpreterRuntime or AsyncVMRuntime would work, but since
         // we're in the basic BamlRuntime (LLM-only), we cannot call expr functions
         // directly. Instead, we need to return an error or use the interpreter directly.
-        //
-        // For now, let's call through the proper runtime path by creating an interpreter runtime
-        use crate::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreRuntime;
-        // use crate::async_vm_runtime::BamlAsyncVmRuntime as CoreRuntime;
-
         let interpreter_runtime = match CoreRuntime::try_from(self.clone()) {
             Ok(runtime) => runtime,
             Err(e) => return (Err(e), call_id),

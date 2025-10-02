@@ -1006,7 +1006,8 @@ impl ToLogSchema for TestResponse {
                 context: (api, event_chain, tags, &call).into(),
                 io: IO {
                     input: Some((&call.params).into()),
-                    output: self.expr_function_response
+                    output: self
+                        .expr_function_response
                         .as_ref()
                         .and_then(|r| r.as_ref().ok())
                         .map(|r| {
@@ -1014,7 +1015,8 @@ impl ToLogSchema for TestResponse {
                             IOValue::from(&v)
                         }),
                 },
-                error: self.expr_function_response
+                error: self
+                    .expr_function_response
                     .as_ref()
                     .and_then(|r| r.as_ref().err())
                     .map(|e| api_wrapper::core_types::Error {

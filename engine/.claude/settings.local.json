@@ -1,19 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cargo check:*)",
-      "Read(//Users/greghale/code/baml/**)",
-      "Bash(jj status:*)",
-      "Bash(jj resolve:*)",
-      "Bash(jj diff:*)",
-      "Bash(sed:*)",
-      "Bash(cargo test:*)",
-      "Bash(1)",
-      "Bash(find:*)",
-      "Bash(cut:*)",
-      "Read(///**)",
-      "Bash(cargo build:*)",
-      "Bash(awk:*)"
+      "Bash(cargo check:*)"
     ],
     "deny": []
   }

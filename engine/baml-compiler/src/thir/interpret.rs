@@ -13,29 +13,29 @@ use crate::thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, T
 
 // Type alias for pinned boxed futures - conditionally Send for non-WASM targets
 #[cfg(not(target_arch = "wasm32"))]
-type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 #[cfg(target_arch = "wasm32")]
-type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 
 // Trait aliases for conditional Send bounds
 #[cfg(not(target_arch = "wasm32"))]
-trait LlmHandler<Fut>: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync {}
+pub trait LlmHandler<Fut>: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync {}
 #[cfg(not(target_arch = "wasm32"))]
 impl<F, Fut> LlmHandler<Fut> for F where F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync {}
 
 #[cfg(target_arch = "wasm32")]
-trait LlmHandler<Fut>: FnMut(String, Vec<BamlValue>) -> Fut {}
+pub trait LlmHandler<Fut>: FnMut(String, Vec<BamlValue>) -> Fut {}
 #[cfg(target_arch = "wasm32")]
 impl<F, Fut> LlmHandler<Fut> for F where F: FnMut(String, Vec<BamlValue>) -> Fut {}
 
 #[cfg(not(target_arch = "wasm32"))]
-trait LlmFuture: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send {}
+pub trait LlmFuture: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send {}
 #[cfg(not(target_arch = "wasm32"))]
 impl<T> LlmFuture for T where T: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send {}
 
 #[cfg(target_arch = "wasm32")]
-trait LlmFuture: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> {}
+pub trait LlmFuture: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> {}
 #[cfg(target_arch = "wasm32")]
 impl<T> LlmFuture for T where T: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> {}
 
@@ -955,10 +955,14 @@ where
 
                     // Check if this is a builtin function call
                     if marker.starts_with("__BUILTIN_FUNCTION__") {
-                        let fn_name = marker.strip_prefix("__BUILTIN_FUNCTION__").unwrap().to_string();
+                        let fn_name = marker
+                            .strip_prefix("__BUILTIN_FUNCTION__")
+                            .unwrap()
+                            .to_string();
 
                         // Evaluate arguments
-                        let mut arg_vals: Vec<BamlValueWithMeta<ExprMetadata>> = Vec::with_capacity(args.len());
+                        let mut arg_vals: Vec<BamlValueWithMeta<ExprMetadata>> =
+                            Vec::with_capacity(args.len());
                         for a in args.iter() {
                             arg_vals.push(expect_value(
                                 evaluate_expr(a, scopes, thir, run_llm_function).await?,
@@ -966,7 +970,9 @@ where
                         }
 
                         // Handle builtin functions
-                        let result = evaluate_builtin_function(&fn_name, &arg_vals, type_args, &meta).await?;
+                        let result =
+                            evaluate_builtin_function(&fn_name, &arg_vals, type_args, &meta)
+                                .await?;
                         return Ok(EvalValue::Value(result));
                     }
                 }
@@ -1185,7 +1191,6 @@ where
         })
     })
 }
-
 
 fn expect_value(v: EvalValue) -> Result<BamlValueWithMeta<ExprMetadata>> {
     match v {
@@ -1450,16 +1455,20 @@ fn parse_json_to_baml_value(
 ) -> Result<BamlValueWithMeta<ExprMetadata>> {
     use baml_types::TypeIR;
 
-    let json_value: serde_json::Value = serde_json::from_str(json_str)
-        .with_context(|| format!("baml.fetch_as: failed to parse JSON response at {:?}", meta.0))?;
+    let json_value: serde_json::Value = serde_json::from_str(json_str).with_context(|| {
+        format!(
+            "baml.fetch_as: failed to parse JSON response at {:?}",
+            meta.0
+        )
+    })?;
 
     fn json_to_baml(
         json: &serde_json::Value,
         target_type: &TypeIR,
         meta: &ExprMetadata,
     ) -> Result<BamlValueWithMeta<ExprMetadata>> {
-        use serde_json::Value as JsonValue;
         use baml_types::TypeIR;
+        use serde_json::Value as JsonValue;
 
         match (json, target_type) {
             (JsonValue::Null, _) => Ok(BamlValueWithMeta::Null(meta.clone())),
@@ -1505,7 +1514,11 @@ fn parse_json_to_baml_value(
                     let field_value = json_to_baml_inferred(value, meta)?;
                     baml_fields.insert(key.clone(), field_value);
                 }
-                Ok(BamlValueWithMeta::Class(name.clone(), baml_fields, meta.clone()))
+                Ok(BamlValueWithMeta::Class(
+                    name.clone(),
+                    baml_fields,
+                    meta.clone(),
+                ))
             }
             _ => {
                 // Try to infer the type if we can't match
@@ -1607,9 +1620,12 @@ async fn evaluate_builtin_function(
             let target_type = &type_args[0];
 
             // Make HTTP request
-            let response = reqwest::get(&url)
-                .await
-                .with_context(|| format!("baml.fetch_as: failed to fetch URL '{}' at {:?}", url, meta.0))?;
+            let response = reqwest::get(&url).await.with_context(|| {
+                format!(
+                    "baml.fetch_as: failed to fetch URL '{}' at {:?}",
+                    url, meta.0
+                )
+            })?;
 
             let status = response.status();
             if !status.is_success() {
@@ -1625,10 +1641,12 @@ async fn evaluate_builtin_function(
                 );
             }
 
-            let body = response
-                .text()
-                .await
-                .with_context(|| format!("baml.fetch_as: failed to read response body at {:?}", meta.0))?;
+            let body = response.text().await.with_context(|| {
+                format!(
+                    "baml.fetch_as: failed to read response body at {:?}",
+                    meta.0
+                )
+            })?;
 
             // Parse the JSON body into the target type
             let parsed_value = parse_json_to_baml_value(&body, target_type, meta)?;
@@ -1683,17 +1701,22 @@ fn evaluate_method_call(
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     #[allow(unused_imports)]
     use baml_types::ir_type::TypeIR;
     use internal_baml_ast::parse_standalone_expression;
     use internal_baml_diagnostics::{Diagnostics, SourceFile, Span};
-    use std::path::PathBuf;
 
     use super::*;
-    use crate::hir::{self, Hir};
-    use crate::thir;
-    use crate::thir::typecheck::typecheck_expression;
-    use crate::thir::{typecheck::typecheck_returning_context, GlobalAssignment, THir};
+    use crate::{
+        hir::{self, Hir},
+        thir,
+        thir::{
+            typecheck::{typecheck_expression, typecheck_returning_context},
+            GlobalAssignment, THir,
+        },
+    };
 
     fn meta() -> ExprMetadata {
         (Span::fake(), None)
@@ -1736,8 +1759,7 @@ mod tests {
 
     #[tokio::test]
     async fn eval_atom_int() {
-        let thir = empty_thir();
-        let expr = Expr::Value(BamlValueWithMeta::Int(1, meta()));
+        let (thir, expr) = thir_from_src("", "1");
         let out = super::interpret_thir(
             thir,
             expr,
@@ -1780,30 +1802,15 @@ mod tests {
 
     #[tokio::test]
     async fn eval_function_uses_global() {
-        let mut thir = empty_thir();
-        thir.global_assignments.insert(
-            "x".to_string(),
-            GlobalAssignment {
-                expr: Expr::Value(BamlValueWithMeta::Int(7, meta())),
-                annotated_type: None,
-            },
-        );
+        let src = r#"
+            let x = 7;
 
-        // Function with arity 0 returning free var `x`
-        let body = Block {
-            env: BamlMap::new(),
-            statements: vec![],
-            trailing_expr: Some(Expr::Var("x".to_string(), meta())),
-            ty: None,
-            span: Span::fake(),
-        };
-        let func = Expr::Function(0, Arc::new(body), meta());
-        let call = Expr::Call {
-            func: Arc::new(func),
-            type_args: vec![],
-            args: vec![],
-            meta: meta(),
-        };
+            function UseGlobal() -> int {
+                x
+            }
+        "#;
+
+        let (thir, call) = thir_from_src(src, "UseGlobal()");
 
         let out = super::interpret_thir(
             thir,
@@ -1903,16 +1910,13 @@ mod tests {
 
     #[tokio::test]
     async fn env_get_returns_value() {
-        let thir = empty_thir();
-        let call = Expr::Call {
-            func: Arc::new(Expr::Var("env.get".to_string(), meta())),
-            type_args: vec![],
-            args: vec![Expr::Value(BamlValueWithMeta::String(
-                "API_KEY".to_string(),
-                meta(),
-            ))],
-            meta: meta(),
-        };
+        let src = r#"
+            function GetEnv() -> string {
+                env.get("API_KEY")
+            }
+        "#;
+
+        let (thir, call) = thir_from_src(src, "GetEnv()");
 
         let mut env_vars = HashMap::new();
         env_vars.insert("API_KEY".to_string(), "secret123".to_string());
@@ -2156,10 +2160,10 @@ mod tests {
     #[tokio::test]
     async fn test_compile_real_baml_to_thir() {
         // Test compiling real BAML code to see what THIR is actually generated
-        use crate::hir::Hir;
-        use crate::thir::typecheck::typecheck;
         use internal_baml_diagnostics::Diagnostics;
         use internal_baml_parser_database::parse_and_diagnostics;
+
+        use crate::{hir::Hir, thir::typecheck::typecheck};
 
         let baml_code = r#"
             function AssignElseIfExpr(a: bool, b: bool) -> int {
@@ -2198,26 +2202,11 @@ mod tests {
             panic!("Compilation errors: {errors}");
         }
 
-        // Find the AssignElseIfExpr function
-        let function = thir
-            .expr_functions
-            .iter()
-            .find(|f| f.name == "AssignElseIfExpr")
-            .expect(&format!("AssignElseIfExpr function not {}", "found"));
-
-        // Test the function
-        let call_expr = Expr::Call {
-            func: Arc::new(Expr::Var("AssignElseIfExpr".to_string(), meta())),
-            type_args: vec![],
-            args: vec![
-                Expr::Value(BamlValueWithMeta::Bool(true, meta())),
-                Expr::Value(BamlValueWithMeta::Bool(false, meta())),
-            ],
-            meta: meta(),
-        };
+        // Test the function by calling it
+        let (thir, call_expr) = thir_from_src(baml_code, "AssignElseIfExpr(true, false)");
 
         let result = super::interpret_thir(
-            thir.clone(),
+            thir,
             call_expr,
             mock_llm_function,
             BamlMap::new(),
@@ -2244,10 +2233,10 @@ mod tests {
     #[tokio::test]
     async fn test_debug_bool_to_int_with_if_else() {
         // Debug the BoolToIntWithIfElse function that's returning None
-        use crate::hir::Hir;
-        use crate::thir::typecheck::typecheck;
         use internal_baml_diagnostics::Diagnostics;
         use internal_baml_parser_database::parse_and_diagnostics;
+
+        use crate::{hir::Hir, thir::typecheck::typecheck};
 
         let baml_code = r#"
             function BoolToIntWithIfElse(b: bool) -> int {
@@ -2275,34 +2264,11 @@ mod tests {
             panic!("Compilation errors: {errors}");
         }
 
-        // Find the function and debug its structure
-        let function = thir
-            .expr_functions
-            .iter()
-            .find(|f| f.name == "BoolToIntWithIfElse")
-            .expect(&format!("BoolToIntWithIfElse function not {}", "found"));
-
-        println!("Function THIR: {}", function.body.dump_str());
-        println!("Statements count: {}", function.body.statements.len());
-        println!(
-            "Has trailing expr: {}",
-            function.body.trailing_expr.is_some()
-        );
-
-        if let Some(trailing_expr) = &function.body.trailing_expr {
-            println!("Trailing expr: {}", trailing_expr.dump_str());
-        }
-
         // Test with true
-        let call_expr = Expr::Call {
-            func: Arc::new(Expr::Var("BoolToIntWithIfElse".to_string(), meta())),
-            type_args: vec![],
-            args: vec![Expr::Value(BamlValueWithMeta::Bool(true, meta()))],
-            meta: meta(),
-        };
+        let (thir, call_expr) = thir_from_src(baml_code, "BoolToIntWithIfElse(true)");
 
         let result = super::interpret_thir(
-            thir.clone(),
+            thir,
             call_expr,
             mock_llm_function,
             BamlMap::new(),
@@ -2331,10 +2297,10 @@ mod tests {
     #[tokio::test]
     async fn test_iterative_fibonacci() {
         // Test the iterative Fibonacci function implementation
-        use crate::hir::Hir;
-        use crate::thir::typecheck::typecheck;
         use internal_baml_diagnostics::Diagnostics;
         use internal_baml_parser_database::parse_and_diagnostics;
+
+        use crate::{hir::Hir, thir::typecheck::typecheck};
 
         // function IterativeFibonacci(n: int) -> int {
         //     let a = 0;
