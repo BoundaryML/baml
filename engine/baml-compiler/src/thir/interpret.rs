@@ -1585,7 +1585,14 @@ mod tests {
         );
 
         // Since the interpreter uses our mock LLM function, this should return our mock value
-        let result = super::interpret_thir(thir, call, mock_llm_function, BamlMap::new(), HashMap::new()).await;
+        let result = super::interpret_thir(
+            thir,
+            call,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await;
         assert!(result.is_ok());
         let out = result.unwrap();
         match out {
@@ -1598,9 +1605,15 @@ mod tests {
     async fn test_method_call_array_len() {
         let (thir, expr) = thir_from_src("", "[1, 2, 3].len()");
 
-        let result = super::interpret_thir(thir, expr, mock_llm_function, BamlMap::new(), HashMap::new())
-            .await
-            .unwrap();
+        let result = super::interpret_thir(
+            thir,
+            expr,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
 
         match result {
             BamlValueWithMeta::Int(len, _) => assert_eq!(len, 3),
@@ -1612,9 +1625,15 @@ mod tests {
     async fn test_method_call_string_len() {
         let (thir, expr) = thir_from_src("", r#""hello".len()"#);
 
-        let result = super::interpret_thir(thir, expr, mock_llm_function, BamlMap::new(), HashMap::new())
-            .await
-            .unwrap();
+        let result = super::interpret_thir(
+            thir,
+            expr,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
 
         match result {
             BamlValueWithMeta::Int(len, _) => assert_eq!(len, 5),
@@ -1652,7 +1671,14 @@ mod tests {
     async fn test_method_call_unknown_method() {
         let (thir, expr) = thir_from_src("", r#""hello".unknown_method()"#);
 
-        let result = super::interpret_thir(thir, expr, mock_llm_function, BamlMap::new(), HashMap::new()).await;
+        let result = super::interpret_thir(
+            thir,
+            expr,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await;
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -1678,9 +1704,15 @@ mod tests {
 
         let (thir, fib_call) = thir_from_src(src, "Fib(5)");
 
-        let result = super::interpret_thir(thir, fib_call, mock_llm_function, BamlMap::new(), HashMap::new())
-            .await
-            .unwrap();
+        let result = super::interpret_thir(
+            thir,
+            fib_call,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
 
         match result {
             BamlValueWithMeta::Int(actual, _) => {
@@ -1697,9 +1729,15 @@ mod tests {
         // Test if (true) { 1 } else { 0 }
         let (thir, if_expr_true) = thir_from_src("", "if (true) { 1 } else { 0 }");
 
-        let result = super::interpret_thir(thir, if_expr_true, mock_llm_function, BamlMap::new(), HashMap::new())
-            .await
-            .unwrap();
+        let result = super::interpret_thir(
+            thir,
+            if_expr_true,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
 
         match result {
             BamlValueWithMeta::Int(actual, _) => {
@@ -1711,9 +1749,15 @@ mod tests {
         // Test if (false) { 1 } else { 0 }
         let (thir, if_expr_false) = thir_from_src("", "if (false) { 1 } else { 0 }");
 
-        let result = super::interpret_thir(thir, if_expr_false, mock_llm_function, BamlMap::new(), HashMap::new())
-            .await
-            .unwrap();
+        let result = super::interpret_thir(
+            thir,
+            if_expr_false,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
 
         match result {
             BamlValueWithMeta::Int(actual, _) => {
@@ -1735,9 +1779,15 @@ mod tests {
         // Test with true
         let (thir, call_true) = thir_from_src(src, "BoolToIntWithIfElse(true)");
 
-        let result = super::interpret_thir(thir, call_true, mock_llm_function, BamlMap::new(), HashMap::new())
-            .await
-            .unwrap();
+        let result = super::interpret_thir(
+            thir,
+            call_true,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
 
         match result {
             BamlValueWithMeta::Int(actual, _) => {
@@ -1752,9 +1802,15 @@ mod tests {
         // Test with false
         let (thir, call_false) = thir_from_src(src, "BoolToIntWithIfElse(false)");
 
-        let result = super::interpret_thir(thir, call_false, mock_llm_function, BamlMap::new(), HashMap::new())
-            .await
-            .unwrap();
+        let result = super::interpret_thir(
+            thir,
+            call_false,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
 
         match result {
             BamlValueWithMeta::Int(actual, _) => {
@@ -1783,9 +1839,15 @@ mod tests {
         // Test with value 42
         let (thir, call_expr) = thir_from_src(src, "StoreFnCallInLocalVar(42)");
 
-        let result = super::interpret_thir(thir, call_expr, mock_llm_function, BamlMap::new(), HashMap::new())
-            .await
-            .unwrap();
+        let result = super::interpret_thir(
+            thir,
+            call_expr,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
 
         match result {
             BamlValueWithMeta::Int(actual, _) => {
@@ -1810,9 +1872,15 @@ mod tests {
         // Test with (true, false) - should return 1
         let (thir, call_expr) = thir_from_src(src, "AssignElseIfExpr(true, false)");
 
-        let result = super::interpret_thir(thir, call_expr, mock_llm_function, BamlMap::new(), HashMap::new())
-            .await
-            .unwrap();
+        let result = super::interpret_thir(
+            thir,
+            call_expr,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
 
         match result {
             BamlValueWithMeta::Int(actual, _) => {
@@ -2050,9 +2118,15 @@ mod tests {
 
         let (thir, call_expr) = thir_from_src(src, "IterativeFibonacci(5)");
 
-        let result = super::interpret_thir(thir, call_expr, mock_llm_function, BamlMap::new(), HashMap::new())
-            .await
-            .unwrap();
+        let result = super::interpret_thir(
+            thir,
+            call_expr,
+            mock_llm_function,
+            BamlMap::new(),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
 
         match result {
             BamlValueWithMeta::Int(actual, _) => {
