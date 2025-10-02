@@ -151,7 +151,28 @@ pub enum IntermediateData<'a> {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HTTPBody<'a> {
+    #[serde(
+        serialize_with = "serialize_bytes_as_string",
+        deserialize_with = "deserialize_string_as_bytes"
+    )]
     pub raw: Cow<'a, [u8]>,
+}
+
+fn serialize_bytes_as_string<S>(bytes: &Cow<[u8]>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    // Serialize as text to avoid exploding arrays of bytes; use lossy UTF-8 if needed
+    let s = String::from_utf8_lossy(bytes);
+    serializer.serialize_str(&s)
+}
+
+fn deserialize_string_as_bytes<'de, D>(deserializer: D) -> Result<Cow<'static, [u8]>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    Ok(Cow::Owned(s.into_bytes()))
 }
 
 #[derive(Debug, Serialize, Deserialize)]

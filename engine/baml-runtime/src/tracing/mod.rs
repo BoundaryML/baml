@@ -566,38 +566,59 @@ impl BamlTracer {
         }
 
         // Tracerv2 event publishing here
-        let field_type_for_meta = match &response {
-            Some(val) => infer_type(val).unwrap_or_else(|| {
-                log::warn!(
-                    "Failed to infer FieldType for BamlValue in tracing. Defaulting to Null."
-                );
-                baml_types::ir_type::TypeNonStreaming::Primitive(
+        // Check if this is a Python exception (marked with special __PythonException__ class)
+        let is_python_exception =
+            matches!(&response, Some(BamlValue::Class(name, _)) if name == "__PythonException__");
+
+        let event = if is_python_exception {
+            // Extract error message from the exception
+            let error_message = match &response {
+                Some(BamlValue::Class(_, fields)) => {
+                    let msg = fields
+                        .get("message")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Unknown Python exception");
+                    let exc_type = fields
+                        .get("type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Exception");
+                    format!("{}: {}", exc_type, msg)
+                }
+                _ => "Unknown Python exception".to_string(),
+            };
+
+            TraceEvent::new_function_end(
+                call.new_call_id_stack.clone(),
+                Err(baml_types::tracing::events::BamlError::External {
+                    message: std::borrow::Cow::Owned(error_message),
+                }),
+            )
+        } else {
+            // Normal success case
+            let field_type_for_meta = match &response {
+                Some(val) => infer_type(val).unwrap_or_else(|| {
+                    log::warn!(
+                        "Failed to infer FieldType for BamlValue in tracing. Defaulting to Null."
+                    );
+                    baml_types::ir_type::TypeNonStreaming::Primitive(
+                        baml_types::TypeValue::Null,
+                        Default::default(),
+                    )
+                }),
+                None => baml_types::ir_type::TypeNonStreaming::Primitive(
                     baml_types::TypeValue::Null,
                     Default::default(),
-                )
-            }),
-            None => baml_types::ir_type::TypeNonStreaming::Primitive(
-                baml_types::TypeValue::Null,
-                Default::default(),
-            ),
+                ),
+            };
+            let baml_value_with_meta: BamlValueWithMeta<baml_types::ir_type::TypeNonStreaming> =
+                BamlValueWithMeta::with_const_meta(
+                    response.as_ref().unwrap_or(&baml_types::BamlValue::Null),
+                    field_type_for_meta,
+                );
+
+            TraceEvent::new_function_end(call.new_call_id_stack.clone(), Ok(baml_value_with_meta))
         };
-        let baml_value_with_meta: BamlValueWithMeta<baml_types::ir_type::TypeNonStreaming> =
-            BamlValueWithMeta::with_const_meta(
-                response.as_ref().unwrap_or(&baml_types::BamlValue::Null),
-                field_type_for_meta,
-            );
 
-        // let tags = global_and_user_tags
-        //     .clone()
-        //     .into_iter()
-        //     .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
-        //     .collect();
-        let event_chain = call.new_call_id_stack.clone();
-        // let tag_event = TraceEvent::new_set_tags(event_chain, tags);
-        // BAML_TRACER.lock().unwrap().put(Arc::new(tag_event));
-
-        let event =
-            TraceEvent::new_function_end(call.new_call_id_stack.clone(), Ok(baml_value_with_meta));
         BAML_TRACER.lock().unwrap().put(Arc::new(event));
 
         Ok(call_id)

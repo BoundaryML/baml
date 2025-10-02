@@ -6,8 +6,8 @@ use std::{
 
 use baml_rpc::runtime_api::baml_value::{BamlValue, MediaValue, ValueContent};
 use base64::{engine::general_purpose, Engine as _};
-use serde::{Deserialize, Serialize};
 use blake3;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::tracingv2::publisher::publisher::BlobUploaderMessage;

@@ -125,6 +125,7 @@ async def test_collector_async_no_stream_success():
 @pytest.mark.asyncio
 async def test_functionlog_tags_inherit_from_parent_trace():
     collector = Collector(name="tags-collector")
+   
 
     @trace
     async def parent_fn(msg: str):
