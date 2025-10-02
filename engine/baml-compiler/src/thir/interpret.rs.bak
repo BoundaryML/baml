@@ -18,27 +18,6 @@ type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 #[cfg(target_arch = "wasm32")]
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 
-// Trait aliases for conditional Send bounds
-#[cfg(not(target_arch = "wasm32"))]
-trait LlmHandler<Fut>: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync {}
-#[cfg(not(target_arch = "wasm32"))]
-impl<F, Fut> LlmHandler<Fut> for F where F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync {}
-
-#[cfg(target_arch = "wasm32")]
-trait LlmHandler<Fut>: FnMut(String, Vec<BamlValue>) -> Fut {}
-#[cfg(target_arch = "wasm32")]
-impl<F, Fut> LlmHandler<Fut> for F where F: FnMut(String, Vec<BamlValue>) -> Fut {}
-
-#[cfg(not(target_arch = "wasm32"))]
-trait LlmFuture: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send {}
-#[cfg(not(target_arch = "wasm32"))]
-impl<T> LlmFuture for T where T: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send {}
-
-#[cfg(target_arch = "wasm32")]
-trait LlmFuture: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> {}
-#[cfg(target_arch = "wasm32")]
-impl<T> LlmFuture for T where T: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> {}
-
 // TODO:
 //  - Variables should be expressions, not BamlValues. Because we want to be able to
 //    mutate them across REPL prompts and see the same downstream effects on their
@@ -73,8 +52,14 @@ pub async fn interpret_thir<F, Fut>(
     env_vars: HashMap<String, String>,
 ) -> Result<BamlValueWithMeta<ExprMetadata>>
 where
-    F: LlmHandler<Fut>,
-    Fut: LlmFuture,
+    #[cfg(not(target_arch = "wasm32"))]
+    F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync,
+    #[cfg(target_arch = "wasm32")]
+    F: FnMut(String, Vec<BamlValue>) -> Fut,
+    #[cfg(not(target_arch = "wasm32"))]
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send,
+    #[cfg(target_arch = "wasm32")]
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>>,
 {
     let env_vars_map = env_vars;
     let mut scopes = vec![Scope {
@@ -120,8 +105,14 @@ fn evaluate_block_with_control_flow<'a, F, Fut>(
     run_llm_function: &'a mut F,
 ) -> BoxFuture<'a, Result<ControlFlow>>
 where
-    F: LlmHandler<Fut>,
-    Fut: LlmFuture,
+    #[cfg(not(target_arch = "wasm32"))]
+    F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync,
+    #[cfg(target_arch = "wasm32")]
+    F: FnMut(String, Vec<BamlValue>) -> Fut,
+    #[cfg(not(target_arch = "wasm32"))]
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send,
+    #[cfg(target_arch = "wasm32")]
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>>,
 {
     Box::pin(async move {
         scopes.push(Scope {
@@ -633,8 +624,8 @@ async fn evaluate_block<F, Fut>(
     run_llm_function: &mut F,
 ) -> Result<BamlValueWithMeta<ExprMetadata>>
 where
-    F: LlmHandler<Fut>,
-    Fut: LlmFuture,
+    F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send,
 {
     match evaluate_block_with_control_flow(block, scopes, thir, run_llm_function).await? {
         ControlFlow::Normal(val) => Ok(val),
@@ -680,8 +671,8 @@ async fn assign_to_expr<F, Fut>(
     run_llm_function: &mut F,
 ) -> Result<()>
 where
-    F: LlmHandler<Fut>,
-    Fut: LlmFuture,
+    F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send,
 {
     let mut current_expr = target;
     let mut value_to_assign = new_value;
@@ -806,8 +797,14 @@ fn evaluate_expr<'a, F, Fut>(
     run_llm_function: &'a mut F,
 ) -> BoxFuture<'a, Result<EvalValue>>
 where
-    F: LlmHandler<Fut>,
-    Fut: LlmFuture,
+    #[cfg(not(target_arch = "wasm32"))]
+    F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync,
+    #[cfg(target_arch = "wasm32")]
+    F: FnMut(String, Vec<BamlValue>) -> Fut,
+    #[cfg(not(target_arch = "wasm32"))]
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send,
+    #[cfg(target_arch = "wasm32")]
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>>,
 {
     Box::pin(async move {
         Ok(match expr {
@@ -1186,6 +1183,211 @@ where
     })
 }
 
+#[cfg(target_arch = "wasm32")]
+fn evaluate_expr<'a, F, Fut>(
+    expr: &'a Expr<ExprMetadata>,
+    scopes: &'a mut Vec<Scope>,
+    thir: &'a THir<ExprMetadata>,
+    run_llm_function: &'a mut F,
+) -> std::pin::Pin<Box<dyn Future<Output = Result<EvalValue>> + 'a>>
+where
+    F: FnMut(String, Vec<BamlValue>) -> Fut,
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>>,
+{
+    Box::pin(async move {
+        Ok(match expr {
+            Expr::Value(v) => EvalValue::Value(v.clone()),
+            Expr::List(items, meta) => {
+                let mut out = Vec::with_capacity(items.len());
+                for it in items.iter() {
+                    out.push(expect_value(
+                        evaluate_expr(it, scopes, thir, run_llm_function).await?,
+                    )?);
+                }
+                EvalValue::Value(BamlValueWithMeta::List(out, meta.clone()))
+            }
+            Expr::Map(entries, meta) => {
+                let mut out: BamlMap<String, BamlValueWithMeta<ExprMetadata>> = BamlMap::new();
+                for (k, v) in entries.iter() {
+                    out.insert(
+                        k.clone(),
+                        expect_value(evaluate_expr(v, scopes, thir, run_llm_function).await?)?,
+                    );
+                }
+                EvalValue::Value(BamlValueWithMeta::Map(out, meta.clone()))
+            }
+            Expr::Identifier(name, _) => {
+                for scope in scopes.iter().rev() {
+                    if let Some(val) = scope.variables.get(name) {
+                        return Ok(EvalValue::Reference(val.clone()));
+                    }
+                }
+
+                bail!("variable {name} not found")
+            }
+            Expr::FieldAccess(receiver, field_name, _) => {
+                let receiver_val =
+                    expect_value(evaluate_expr(receiver, scopes, thir, run_llm_function).await?)?;
+
+                let result = evaluate_field_access(&receiver_val, field_name)?;
+                EvalValue::Value(result)
+            }
+            Expr::Index(receiver, index, _) => {
+                let receiver_val =
+                    expect_value(evaluate_expr(receiver, scopes, thir, run_llm_function).await?)?;
+                let index_val =
+                    expect_value(evaluate_expr(index, scopes, thir, run_llm_function).await?)?;
+
+                let result = evaluate_index(&receiver_val, &index_val)?;
+                EvalValue::Value(result)
+            }
+            Expr::If(cond, then_branch, else_branch, meta) => {
+                let cond_val =
+                    expect_value(evaluate_expr(cond, scopes, thir, run_llm_function).await?)?;
+
+                let cond_bool = match cond_val {
+                    BamlValueWithMeta::Bool(b, _) => b,
+                    _ => bail!("if condition must be a boolean"),
+                };
+
+                if cond_bool {
+                    expect_value(evaluate_expr(then_branch, scopes, thir, run_llm_function).await?)?
+                } else if let Some(else_branch) = else_branch {
+                    expect_value(evaluate_expr(else_branch, scopes, thir, run_llm_function).await?)?
+                } else {
+                    BamlValueWithMeta::Null(meta.clone())
+                };
+
+                EvalValue::Value(BamlValueWithMeta::Null(meta.clone()))
+            }
+            Expr::BinOp(op, lhs, rhs, meta) => {
+                let lhs = expect_value(evaluate_expr(lhs, scopes, thir, run_llm_function).await?)?;
+                let rhs = expect_value(evaluate_expr(rhs, scopes, thir, run_llm_function).await?)?;
+
+                let result = evaluate_binop(&lhs, op.as_str(), &rhs, meta)?;
+                EvalValue::Value(result)
+            }
+            Expr::UnaryOp(op, operand, meta) => {
+                let operand_val =
+                    expect_value(evaluate_expr(operand, scopes, thir, run_llm_function).await?)?;
+
+                let result = evaluate_unaryop(op.as_str(), &operand_val, meta)?;
+                EvalValue::Value(result)
+            }
+            Expr::ClassConstructor(class_name, fields, meta) => {
+                let mut field_vals: BamlMap<String, BamlValueWithMeta<ExprMetadata>> =
+                    BamlMap::new();
+
+                for field in fields.iter() {
+                    let field_val = match field {
+                        ClassConstructorField::Shorthand(name, _) => {
+                            let mut found = None;
+                            for scope in scopes.iter().rev() {
+                                if let Some(val) = scope.variables.get(name) {
+                                    found = Some(val.clone());
+                                    break;
+                                }
+                            }
+
+                            match found {
+                                Some(cell) => cell.lock().unwrap().clone(),
+                                None => bail!("variable {name} not found"),
+                            }
+                        }
+                        ClassConstructorField::Spread(expr, _) => {
+                            let val = expect_value(
+                                evaluate_expr(expr, scopes, thir, run_llm_function).await?,
+                            )?;
+
+                            match val {
+                                BamlValueWithMeta::Class(_, ref spread_fields, _) => {
+                                    for (k, v) in spread_fields.iter() {
+                                        field_vals.insert(k.clone(), v.clone());
+                                    }
+                                    continue;
+                                }
+                                _ => bail!("spread operator requires a class"),
+                            }
+                        }
+                        ClassConstructorField::Full(name, expr, _) => {
+                            expect_value(evaluate_expr(expr, scopes, thir, run_llm_function).await?)?
+                        }
+                    };
+
+                    if let ClassConstructorField::Full(name, _, _)
+                    | ClassConstructorField::Shorthand(name, _) = field
+                    {
+                        field_vals.insert(name.clone(), field_val);
+                    }
+                }
+
+                EvalValue::Value(BamlValueWithMeta::Class(
+                    class_name.clone(),
+                    field_vals,
+                    meta.clone(),
+                ))
+            }
+            Expr::Block(block, _) => {
+                let cf = execute_statement_block(block, scopes, thir, run_llm_function).await?;
+                let val = match cf {
+                    ControlFlow::Normal(v) => v,
+                    ControlFlow::Return(v) => v,
+                    _ => bail!("unexpected control flow"),
+                };
+                EvalValue::Value(val)
+            }
+            Expr::Call(func, args, meta) => {
+                let func_expr =
+                    expect_value(evaluate_expr(func, scopes, thir, run_llm_function).await?)?;
+                let func_arity = match &func_expr {
+                    BamlValueWithMeta::Null(_) => {
+                        bail!("cannot call null")
+                    }
+                    _ => bail!("expected function, found {}", func_expr),
+                };
+
+                let mut arg_vals = Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    arg_vals.push(expect_value(
+                        evaluate_expr(arg, scopes, thir, run_llm_function).await?,
+                    )?);
+                }
+
+                if arg_vals.len() != func_arity {
+                    bail!(
+                        "function expects {} arguments, got {}",
+                        func_arity,
+                        arg_vals.len()
+                    );
+                }
+
+                let eval_result = match &func_expr {
+                    BamlValueWithMeta::Null(_) => EvalValue::Value(BamlValueWithMeta::Null(meta.clone())),
+                    _ => {
+                        bail!("expected function, found {}", func_expr)
+                    }
+                };
+
+                eval_result
+            }
+            Expr::MethodCall(receiver, method_name, args, meta) => {
+                let receiver_val =
+                    expect_value(evaluate_expr(receiver, scopes, thir, run_llm_function).await?)?;
+
+                let mut arg_vals = Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    arg_vals.push(expect_value(
+                        evaluate_expr(arg, scopes, thir, run_llm_function).await?,
+                    )?);
+                }
+
+                let result = evaluate_method_call(&receiver_val, &method_name, &arg_vals, meta)?;
+                EvalValue::Value(result)
+            }
+            Expr::Paren(inner, _) => evaluate_expr(inner, scopes, thir, run_llm_function).await?,
+        })
+    })
+}
 
 fn expect_value(v: EvalValue) -> Result<BamlValueWithMeta<ExprMetadata>> {
     match v {

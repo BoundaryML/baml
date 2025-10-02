@@ -12,9 +12,13 @@ use baml_runtime::{
         prompt_renderer::PromptRenderer,
     },
     internal_baml_diagnostics::SerializedSpan,
-    BamlRuntime, BamlSrcReader, DiagnosticsError, FunctionResult, IRHelper,
+    BamlSrcReader, DiagnosticsError, FunctionResult, IRHelper,
     InternalRuntimeInterface, RenderCurlSettings, RenderedPrompt,
 };
+
+// Switch between runtimes here by importing the one you want to use.
+pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
+// pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
 use baml_types::{BamlValue, GeneratorOutputType, ResponseCheck};
 use futures::{channel::mpsc, StreamExt};
 use generators_lib::version_check::{check_version, GeneratorType, VersionCheckMode};
@@ -258,7 +262,7 @@ impl WasmProject {
                 .map_err(|e| JsValue::from_str(&format!("Invalid feature flags: {e:?}")))?
         };
 
-        BamlRuntime::from_file_content(&self.root_dir_name, &hm, env_vars, feature_flags)
+        CoreBamlRuntime::from_file_content_with_features(&self.root_dir_name, &hm, env_vars, feature_flags)
             .map(|r| WasmRuntime { runtime: r })
             .map_err(|e| match e.downcast::<DiagnosticsError>() {
                 Ok(e) => {
@@ -302,7 +306,7 @@ impl WasmProject {
 #[wasm_bindgen(inspectable, getter_with_clone)]
 #[derive(Clone)]
 pub struct WasmRuntime {
-    runtime: BamlRuntime,
+    runtime: CoreBamlRuntime,
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -1600,7 +1604,7 @@ impl WasmRuntime {
                             test_response,
                             span: Some(span.to_string()),
                             tracing_project_id: rt
-                                .tracer_wrapper
+                                .tracer_wrapper()
                                 .get_or_create_tracer(&env_vars)
                                 .tracing_project_id(),
                             // tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
@@ -1780,7 +1784,7 @@ impl WasmFunction {
 
     #[wasm_bindgen]
     pub fn client_name(&self, rt: &WasmRuntime) -> Result<String, JsValue> {
-        let rt: &BamlRuntime = &rt.runtime;
+        let rt = &rt.runtime;
         let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
         let ctx = ctx_manager.create_ctx_with_default();
         let ir = rt.internal().ir();
@@ -1957,7 +1961,7 @@ impl WasmFunction {
             test_response,
             span: Some(span.to_string()),
             tracing_project_id: rt
-                .tracer_wrapper
+                .tracer_wrapper()
                 .get_or_create_tracer(&env_vars)
                 .tracing_project_id(),
             func_test_pair: WasmFunctionTestPair {
@@ -2033,7 +2037,7 @@ impl WasmFunction {
             test_response,
             span: Some(span.to_string()),
             tracing_project_id: rt
-                .tracer_wrapper
+                .tracer_wrapper()
                 .get_or_create_tracer(&env_vars)
                 .tracing_project_id(),
             func_test_pair: WasmFunctionTestPair {
@@ -2044,7 +2048,7 @@ impl WasmFunction {
     }
 
     pub fn function_graph(&self, rt: &WasmRuntime) -> Result<String, JsValue> {
-        let rt: &BamlRuntime = &rt.runtime;
+        let rt = &rt.runtime;
         let ctx = rt
             .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
             .create_ctx_with_default();
@@ -2056,7 +2060,7 @@ impl WasmFunction {
     }
 
     pub fn orchestration_graph(&self, rt: &WasmRuntime) -> Result<Vec<WasmScope>, JsValue> {
-        let rt: &BamlRuntime = &rt.runtime;
+        let rt = &rt.runtime;
 
         let ctx = rt
             .create_ctx_manager(BamlValue::String("wasm".to_string()), None)

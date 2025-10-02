@@ -120,8 +120,14 @@ fn evaluate_block_with_control_flow<'a, F, Fut>(
     run_llm_function: &'a mut F,
 ) -> BoxFuture<'a, Result<ControlFlow>>
 where
-    F: LlmHandler<Fut>,
-    Fut: LlmFuture,
+    #[cfg(not(target_arch = "wasm32"))]
+    F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync,
+    #[cfg(target_arch = "wasm32")]
+    F: FnMut(String, Vec<BamlValue>) -> Fut,
+    #[cfg(not(target_arch = "wasm32"))]
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send,
+    #[cfg(target_arch = "wasm32")]
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>>,
 {
     Box::pin(async move {
         scopes.push(Scope {
@@ -633,8 +639,14 @@ async fn evaluate_block<F, Fut>(
     run_llm_function: &mut F,
 ) -> Result<BamlValueWithMeta<ExprMetadata>>
 where
-    F: LlmHandler<Fut>,
-    Fut: LlmFuture,
+    #[cfg(not(target_arch = "wasm32"))]
+    F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync,
+    #[cfg(target_arch = "wasm32")]
+    F: FnMut(String, Vec<BamlValue>) -> Fut,
+    #[cfg(not(target_arch = "wasm32"))]
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send,
+    #[cfg(target_arch = "wasm32")]
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>>,
 {
     match evaluate_block_with_control_flow(block, scopes, thir, run_llm_function).await? {
         ControlFlow::Normal(val) => Ok(val),
@@ -680,8 +692,14 @@ async fn assign_to_expr<F, Fut>(
     run_llm_function: &mut F,
 ) -> Result<()>
 where
-    F: LlmHandler<Fut>,
-    Fut: LlmFuture,
+    #[cfg(not(target_arch = "wasm32"))]
+    F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync,
+    #[cfg(target_arch = "wasm32")]
+    F: FnMut(String, Vec<BamlValue>) -> Fut,
+    #[cfg(not(target_arch = "wasm32"))]
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send,
+    #[cfg(target_arch = "wasm32")]
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>>,
 {
     let mut current_expr = target;
     let mut value_to_assign = new_value;
@@ -806,8 +824,14 @@ fn evaluate_expr<'a, F, Fut>(
     run_llm_function: &'a mut F,
 ) -> BoxFuture<'a, Result<EvalValue>>
 where
-    F: LlmHandler<Fut>,
-    Fut: LlmFuture,
+    #[cfg(not(target_arch = "wasm32"))]
+    F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync,
+    #[cfg(target_arch = "wasm32")]
+    F: FnMut(String, Vec<BamlValue>) -> Fut,
+    #[cfg(not(target_arch = "wasm32"))]
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send,
+    #[cfg(target_arch = "wasm32")]
+    Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>>,
 {
     Box::pin(async move {
         Ok(match expr {

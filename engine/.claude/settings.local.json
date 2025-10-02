@@ -9,7 +9,11 @@
       "Bash(sed:*)",
       "Bash(cargo test:*)",
       "Bash(1)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(cut:*)",
+      "Read(///**)",
+      "Bash(cargo build:*)",
+      "Bash(awk:*)"
     ],
     "deny": []
   }
