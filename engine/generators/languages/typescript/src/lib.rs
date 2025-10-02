@@ -65,6 +65,11 @@ $ pnpm add @boundaryml/baml
             .functions
             .iter()
             .map(|f| ir_to_ts::functions::ir_function_to_ts(f, &pkg))
+            .chain(
+                ir.expr_fns
+                    .iter()
+                    .map(|f| ir_to_ts::functions::ir_expr_fn_to_ts(f, &pkg)),
+            )
             .collect::<Vec<_>>();
 
         // Generate base TypeScript files (always generated)

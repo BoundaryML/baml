@@ -32,7 +32,9 @@ async def test_call_llm_describe_image():
     # Call an expression function that calls an LLM function to check if the
     # media type is passed correctly.
     description = await b.CallLlmDescribeImage(
-        Image.from_url("https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png")
+        Image.from_url(
+            "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+        )
     )
 
     assert "ogre" in description.lower()

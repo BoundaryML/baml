@@ -5,12 +5,12 @@ use baml_types::BamlValue;
 use napi_derive::napi;
 
 use super::runtime_ctx_manager::RuntimeContextManager;
-use crate::{errors::invalid_argument_error, BamlRuntime};
+use crate::{errors::invalid_argument_error, runtime::CoreBamlRuntime, BamlRuntime};
 
 crate::lang_wrapper!(BamlSpan,
   Option<baml_runtime::tracing::TracingCall>,
   no_from,
-  rt: std::sync::Arc<baml_runtime::BamlRuntime>
+  rt: std::sync::Arc<CoreBamlRuntime>
 );
 
 #[napi]

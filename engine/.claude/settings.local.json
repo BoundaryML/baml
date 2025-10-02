@@ -8,7 +8,8 @@
       "Bash(jj diff:*)",
       "Bash(sed:*)",
       "Bash(cargo test:*)",
-      "Bash(1)"
+      "Bash(1)",
+      "Bash(find:*)"
     ],
     "deny": []
   }

@@ -16,6 +16,8 @@ internal-baml-parser-database = { path = "../baml-lib/parser-database" }
 itertools = { workspace = true }
 log = { workspace = true }
 pretty = { workspace = true }
+reqwest = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }

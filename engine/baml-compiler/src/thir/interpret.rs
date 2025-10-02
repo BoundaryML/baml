@@ -826,6 +826,24 @@ where
                         meta.clone(),
                     )
                 }
+                // Check if it's a builtin function
+                else if name.starts_with("baml.") {
+                    // Return a special marker for builtin functions
+                    EvalValue::Function(
+                        0, // Arity will be checked at call site
+                        Arc::new(Block {
+                            env: BamlMap::new(),
+                            statements: vec![],
+                            trailing_expr: Some(Expr::Value(BamlValueWithMeta::String(
+                                format!("__BUILTIN_FUNCTION__{name}"),
+                                meta.clone(),
+                            ))),
+                            ty: None,
+                            span: internal_baml_diagnostics::Span::fake(),
+                        }),
+                        meta.clone(),
+                    )
+                }
                 // Check if it's an expression function
                 else if let Some(expr_func) = thir.expr_functions.iter().find(|f| &f.name == name)
                 {
@@ -845,7 +863,7 @@ where
             }
             Expr::Call {
                 func,
-                type_args: _,
+                type_args,
                 args,
                 meta: _,
             } => {
@@ -903,6 +921,23 @@ where
 
                         // Call the LLM function
                         let result = run_llm_function(fn_name, llm_args).await?;
+                        return Ok(EvalValue::Value(result));
+                    }
+
+                    // Check if this is a builtin function call
+                    if marker.starts_with("__BUILTIN_FUNCTION__") {
+                        let fn_name = marker.strip_prefix("__BUILTIN_FUNCTION__").unwrap().to_string();
+
+                        // Evaluate arguments
+                        let mut arg_vals: Vec<BamlValueWithMeta<ExprMetadata>> = Vec::with_capacity(args.len());
+                        for a in args.iter() {
+                            arg_vals.push(expect_value(
+                                evaluate_expr(a, scopes, thir, run_llm_function).await?,
+                            )?);
+                        }
+
+                        // Handle builtin functions
+                        let result = evaluate_builtin_function(&fn_name, &arg_vals, type_args, &meta).await?;
                         return Ok(EvalValue::Value(result));
                     }
                 }
@@ -1376,6 +1411,201 @@ fn compare_values(
         (BamlValueWithMeta::String(a, _), BamlValueWithMeta::String(b, _)) => Some(a.cmp(b)),
         _ => None,
     })
+}
+
+fn parse_json_to_baml_value(
+    json_str: &str,
+    target_type: &baml_types::TypeIR,
+    meta: &ExprMetadata,
+) -> Result<BamlValueWithMeta<ExprMetadata>> {
+    use baml_types::TypeIR;
+
+    let json_value: serde_json::Value = serde_json::from_str(json_str)
+        .with_context(|| format!("baml.fetch_as: failed to parse JSON response at {:?}", meta.0))?;
+
+    fn json_to_baml(
+        json: &serde_json::Value,
+        target_type: &TypeIR,
+        meta: &ExprMetadata,
+    ) -> Result<BamlValueWithMeta<ExprMetadata>> {
+        use serde_json::Value as JsonValue;
+        use baml_types::TypeIR;
+
+        match (json, target_type) {
+            (JsonValue::Null, _) => Ok(BamlValueWithMeta::Null(meta.clone())),
+            (JsonValue::Bool(b), TypeIR::Primitive(baml_types::TypeValue::Bool, _)) => {
+                Ok(BamlValueWithMeta::Bool(*b, meta.clone()))
+            }
+            (JsonValue::Number(n), TypeIR::Primitive(baml_types::TypeValue::Int, _)) => {
+                if let Some(i) = n.as_i64() {
+                    Ok(BamlValueWithMeta::Int(i, meta.clone()))
+                } else {
+                    bail!("Expected integer, got {}", n)
+                }
+            }
+            (JsonValue::Number(n), TypeIR::Primitive(baml_types::TypeValue::Float, _)) => {
+                if let Some(f) = n.as_f64() {
+                    Ok(BamlValueWithMeta::Float(f, meta.clone()))
+                } else {
+                    bail!("Expected float, got {}", n)
+                }
+            }
+            (JsonValue::String(s), TypeIR::Primitive(baml_types::TypeValue::String, _)) => {
+                Ok(BamlValueWithMeta::String(s.clone(), meta.clone()))
+            }
+            (JsonValue::Array(arr), TypeIR::List(elem_type, _)) => {
+                let mut baml_list = Vec::new();
+                for item in arr {
+                    baml_list.push(json_to_baml(item, elem_type, meta)?);
+                }
+                Ok(BamlValueWithMeta::List(baml_list, meta.clone()))
+            }
+            (JsonValue::Object(obj), TypeIR::Map(_, value_type, _)) => {
+                let mut baml_map = BamlMap::new();
+                for (key, value) in obj {
+                    baml_map.insert(key.clone(), json_to_baml(value, value_type, meta)?);
+                }
+                Ok(BamlValueWithMeta::Map(baml_map, meta.clone()))
+            }
+            (JsonValue::Object(obj), TypeIR::Class { name, .. }) => {
+                let mut baml_fields = BamlMap::new();
+                for (key, value) in obj {
+                    // For now, we'll infer the type from the JSON value
+                    // In a real implementation, we'd look up the class definition
+                    let field_value = json_to_baml_inferred(value, meta)?;
+                    baml_fields.insert(key.clone(), field_value);
+                }
+                Ok(BamlValueWithMeta::Class(name.clone(), baml_fields, meta.clone()))
+            }
+            _ => {
+                // Try to infer the type if we can't match
+                json_to_baml_inferred(json, meta)
+            }
+        }
+    }
+
+    fn json_to_baml_inferred(
+        json: &serde_json::Value,
+        meta: &ExprMetadata,
+    ) -> Result<BamlValueWithMeta<ExprMetadata>> {
+        use serde_json::Value as JsonValue;
+
+        match json {
+            JsonValue::Null => Ok(BamlValueWithMeta::Null(meta.clone())),
+            JsonValue::Bool(b) => Ok(BamlValueWithMeta::Bool(*b, meta.clone())),
+            JsonValue::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Ok(BamlValueWithMeta::Int(i, meta.clone()))
+                } else if let Some(f) = n.as_f64() {
+                    Ok(BamlValueWithMeta::Float(f, meta.clone()))
+                } else {
+                    bail!("Invalid number: {}", n)
+                }
+            }
+            JsonValue::String(s) => Ok(BamlValueWithMeta::String(s.clone(), meta.clone())),
+            JsonValue::Array(arr) => {
+                let mut baml_list = Vec::new();
+                for item in arr {
+                    baml_list.push(json_to_baml_inferred(item, meta)?);
+                }
+                Ok(BamlValueWithMeta::List(baml_list, meta.clone()))
+            }
+            JsonValue::Object(obj) => {
+                let mut baml_map = BamlMap::new();
+                for (key, value) in obj {
+                    baml_map.insert(key.clone(), json_to_baml_inferred(value, meta)?);
+                }
+                Ok(BamlValueWithMeta::Map(baml_map, meta.clone()))
+            }
+        }
+    }
+
+    json_to_baml(&json_value, target_type, meta)
+}
+
+async fn evaluate_builtin_function(
+    fn_name: &str,
+    args: &[BamlValueWithMeta<ExprMetadata>],
+    type_args: &[baml_types::TypeIR],
+    meta: &ExprMetadata,
+) -> Result<BamlValueWithMeta<ExprMetadata>> {
+    match fn_name {
+        "baml.media.image.from_url" => {
+            if args.len() != 1 {
+                bail!(
+                    "baml.media.image.from_url expects 1 argument, got {} at {:?}",
+                    args.len(),
+                    meta.0
+                );
+            }
+            let url = match &args[0] {
+                BamlValueWithMeta::String(s, _) => s.clone(),
+                _ => bail!(
+                    "baml.media.image.from_url expects a string argument at {:?}",
+                    meta.0
+                ),
+            };
+            Ok(BamlValueWithMeta::Media(
+                baml_types::BamlMedia::url(baml_types::BamlMediaType::Image, url, None),
+                meta.clone(),
+            ))
+        }
+        "baml.fetch_as" => {
+            if args.len() != 1 {
+                bail!(
+                    "baml.fetch_as expects 1 argument (url), got {} at {:?}",
+                    args.len(),
+                    meta.0
+                );
+            }
+            if type_args.len() != 1 {
+                bail!(
+                    "baml.fetch_as expects 1 type argument, got {} at {:?}",
+                    type_args.len(),
+                    meta.0
+                );
+            }
+
+            let url = match &args[0] {
+                BamlValueWithMeta::String(s, _) => s.clone(),
+                _ => bail!(
+                    "baml.fetch_as expects a string URL argument at {:?}",
+                    meta.0
+                ),
+            };
+
+            let target_type = &type_args[0];
+
+            // Make HTTP request
+            let response = reqwest::get(&url)
+                .await
+                .with_context(|| format!("baml.fetch_as: failed to fetch URL '{}' at {:?}", url, meta.0))?;
+
+            let status = response.status();
+            if !status.is_success() {
+                let body = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "<failed to read body>".to_string());
+                bail!(
+                    "baml.fetch_as: HTTP request failed: HTTP {}\nBody: {} at {:?}",
+                    status,
+                    body,
+                    meta.0
+                );
+            }
+
+            let body = response
+                .text()
+                .await
+                .with_context(|| format!("baml.fetch_as: failed to read response body at {:?}", meta.0))?;
+
+            // Parse the JSON body into the target type
+            let parsed_value = parse_json_to_baml_value(&body, target_type, meta)?;
+            Ok(parsed_value)
+        }
+        _ => bail!("unknown builtin function '{}' at {:?}", fn_name, meta.0),
+    }
 }
 
 fn evaluate_method_call(

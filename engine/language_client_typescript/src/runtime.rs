@@ -2,10 +2,8 @@ use std::{collections::HashMap, path::PathBuf};
 
 use baml_runtime::{
     on_log_event::LogEvent, runtime_interface::ExperimentalTracingInterface,
-    BamlRuntime as CoreRuntime,
 };
 use baml_types::BamlValue;
-use internal_baml_core::feature_flags::FeatureFlags;
 use napi::{
     bindgen_prelude::{
         FnArgs, Function, FunctionRef, Object, ObjectFinalize, Promise, PromiseRaw, Undefined,
@@ -15,6 +13,10 @@ use napi::{
 };
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
+
+// Switch between runtimes here by importing the one you want to use.
+pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
+// pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
 
 use crate::{
     abort_controller::js_abort_signal_to_rust_tripwire,
@@ -31,7 +33,7 @@ use crate::{
 type LogEventCallbackArgs = FnArgs<(Option<Error>, BamlLogEvent)>;
 
 crate::lang_wrapper!(BamlRuntime,
-    CoreRuntime,
+    CoreBamlRuntime,
     clone_safe,
     custom_finalize,
     callback: Option<FunctionRef<LogEventCallbackArgs, ()>> = None
@@ -65,7 +67,7 @@ impl BamlRuntime {
     ) -> napi::Result<Self> {
         let directory = PathBuf::from(directory);
         Ok(
-            CoreRuntime::from_directory(&directory, env_vars, FeatureFlags::new())
+            CoreBamlRuntime::from_directory(&directory, env_vars)
                 .map_err(from_anyhow_error)?
                 .into(),
         )
@@ -82,7 +84,7 @@ impl BamlRuntime {
             .filter_map(|(key, value)| value.map(|value| (key, value)))
             .collect();
         Ok(
-            CoreRuntime::from_file_content(&root_path, &files, env_vars, FeatureFlags::new())
+            CoreBamlRuntime::from_file_content(&root_path, &files, env_vars)
                 .map_err(from_anyhow_error)?
                 .into(),
         )
@@ -96,7 +98,7 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
     ) -> napi::Result<()> {
         self.inner =
-            CoreRuntime::from_file_content(&root_path, &files, env_vars, FeatureFlags::new())
+            CoreBamlRuntime::from_file_content(&root_path, &files, env_vars)
                 .map_err(from_anyhow_error)?
                 .into();
         Ok(())
@@ -155,9 +157,9 @@ impl BamlRuntime {
                     tb.as_ref(),
                     cb.as_ref(),
                     Some(collector_list),
-                    Some(tags),
                     env_vars,
                     tripwire,
+                    Some(&tags),
                 )
                 .await;
 
@@ -210,8 +212,8 @@ impl BamlRuntime {
             cb.as_ref(),
             Some(collector_list),
             env_vars,
-            Some(tags),
             tripwire,
+            Some(&tags),
         );
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)
@@ -263,8 +265,8 @@ impl BamlRuntime {
                 client_registry.as_ref(),
                 Some(collector_list),
                 env_vars,
-                Some(tags),
                 tripwire,
+                Some(&tags),
             )
             .map_err(from_anyhow_error)?;
 
@@ -332,8 +334,8 @@ impl BamlRuntime {
                 client_registry.as_ref(),
                 Some(collector_list),
                 env_vars,
-                Some(tags),
                 tripwire,
+                Some(&tags),
             )
             .map_err(from_anyhow_error)?;
 
