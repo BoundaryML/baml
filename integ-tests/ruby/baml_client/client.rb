@@ -398,6 +398,31 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
+          query: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(T::Array[T.any(BamlClient::Types::AddTodoItem, BamlClient::Types::TodoMessageToUser)])}
+      def ChooseTodoTools(
+          *varargs,
+          query:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("ChooseTodoTools may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          result = options.call_function_sync(function_name: "ChooseTodoTools", args: {
+              query: query,
+          })
+
+          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          parsed.cast_to(T::Array[T.any(BamlClient::Types::AddTodoItem, BamlClient::Types::TodoMessageToUser)])
+      end
+      sig {params(
+          varargs: T.untyped,
           cls: BamlClient::Types::ClassToRecAlias,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::ClassToRecAlias)}
@@ -5978,6 +6003,31 @@ module BamlClient
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::Tree, BamlClient::Types::Tree].new(
+              ffi_stream: result,
+              ctx_manager: ctx
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          query: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[T::Array[T.any(BamlClient::Types::AddTodoItem, BamlClient::StreamTypes::TodoMessageToUser)], T::Array[T.any(BamlClient::Types::AddTodoItem, BamlClient::Types::TodoMessageToUser)]])}
+      def ChooseTodoTools(
+          *varargs,
+          query:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("ChooseTodoTools may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          ctx, result = options.create_sync_stream(function_name: "ChooseTodoTools", args: {
+              query: query,
+          })
+
+          Baml::BamlStream[T::Array[T.any(BamlClient::Types::AddTodoItem, BamlClient::StreamTypes::TodoMessageToUser)], T::Array[T.any(BamlClient::Types::AddTodoItem, BamlClient::Types::TodoMessageToUser)]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )

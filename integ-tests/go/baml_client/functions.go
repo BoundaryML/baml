@@ -947,6 +947,72 @@ func BuildTree(ctx context.Context, input types.BinaryNode, opts ...CallOptionFu
 	}
 }
 
+func ChooseTodoTools(ctx context.Context, query string, opts ...CallOptionFunc) ([]types.Union2AddTodoItemOrTodoMessageToUser, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"query": query},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ChooseTodoTools", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).([]types.Union2AddTodoItemOrTodoMessageToUser)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ChooseTodoTools", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.([]types.Union2AddTodoItemOrTodoMessageToUser), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
+	}
+}
+
 func ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, cls types.ClassToRecAlias, opts ...CallOptionFunc) (types.ClassToRecAlias, error) {
 
 	var callOpts callOption

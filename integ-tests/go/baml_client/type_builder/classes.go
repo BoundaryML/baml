@@ -15,6 +15,50 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
+type AddTodoItemClassView struct {
+	inner baml.ClassBuilder
+}
+
+func (t *AddTodoItemClassView) ListProperties() ([]ClassPropertyView, error) {
+	result, err := t.inner.ListProperties()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]ClassPropertyView, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+func (t *AddTodoItemClassView) PropertyType() (ClassPropertyView, error) {
+	return t.inner.Property("type")
+}
+
+func (t *AddTodoItemClassView) PropertyItem() (ClassPropertyView, error) {
+	return t.inner.Property("item")
+}
+
+func (t *AddTodoItemClassView) PropertyTime() (ClassPropertyView, error) {
+	return t.inner.Property("time")
+}
+
+func (t *AddTodoItemClassView) PropertyDescription() (ClassPropertyView, error) {
+	return t.inner.Property("description")
+}
+
+func (t *TypeBuilder) AddTodoItem() (*AddTodoItemClassView, error) {
+	bld, err := t.inner.Class("AddTodoItem")
+	if err != nil {
+		return nil, err
+	}
+	return &AddTodoItemClassView{inner: bld}, nil
+}
+
+func (t *AddTodoItemClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+
 type AnotherObjectClassView struct {
 	inner baml.ClassBuilder
 }
@@ -3612,6 +3656,42 @@ func (t *TypeBuilder) TestOutputClass() (*TestOutputClassClassView, error) {
 }
 
 func (t *TestOutputClassClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+
+type TodoMessageToUserClassView struct {
+	inner baml.ClassBuilder
+}
+
+func (t *TodoMessageToUserClassView) ListProperties() ([]ClassPropertyView, error) {
+	result, err := t.inner.ListProperties()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]ClassPropertyView, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+func (t *TodoMessageToUserClassView) PropertyType() (ClassPropertyView, error) {
+	return t.inner.Property("type")
+}
+
+func (t *TodoMessageToUserClassView) PropertyMessage() (ClassPropertyView, error) {
+	return t.inner.Property("message")
+}
+
+func (t *TypeBuilder) TodoMessageToUser() (*TodoMessageToUserClassView, error) {
+	bld, err := t.inner.Class("TodoMessageToUser")
+	if err != nil {
+		return nil, err
+	}
+	return &TodoMessageToUserClassView{inner: bld}, nil
+}
+
+func (t *TodoMessageToUserClassView) Type() (baml.Type, error) {
 	return t.inner.Type()
 }
 

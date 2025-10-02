@@ -19,6 +19,7 @@ on:
     branches:
       - gofix2
       - cursor/implement-collector-clear-and-update-docs-7c67
+      - greg/bedrock-pdf-citations
 concurrency:
   # No suffix specified - in reusable workflows we need a statically-defined suffix
   # to prevent workflow_call workflows from triggering a concurrency deadlock

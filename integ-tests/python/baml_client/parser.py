@@ -108,6 +108,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="BuildTree", llm_response=llm_response, mode="request")
         return typing.cast(types.Tree, result)
 
+    def ChooseTodoTools(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.List[typing.Union["types.AddTodoItem", "types.TodoMessageToUser"]]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ChooseTodoTools", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List[typing.Union["types.AddTodoItem", "types.TodoMessageToUser"]], result)
+
     def ClassThatPointsToRecursiveClassThroughAlias(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.ClassToRecAlias:
@@ -1579,6 +1585,12 @@ class LlmStreamParser:
     ) -> stream_types.Tree:
         result = self.__options.merge_options(baml_options).parse_response(function_name="BuildTree", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.Tree, result)
+
+    def ChooseTodoTools(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.List[typing.Union["types.AddTodoItem", "stream_types.TodoMessageToUser"]]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ChooseTodoTools", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List[typing.Union["types.AddTodoItem", "stream_types.TodoMessageToUser"]], result)
 
     def ClassThatPointsToRecursiveClassThroughAlias(
         self, llm_response: str, baml_options: BamlCallOptions = {},

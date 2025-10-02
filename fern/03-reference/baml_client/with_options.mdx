@@ -274,6 +274,55 @@ print(collector.last.usage)
 </Tab>
 </Tabs>
 
+### Per-call Tags
+
+Add tags to a specific BAML function call. Tags are useful for correlating requests, A/B versions, user IDs, etc.
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_py import Collector
+
+collector = Collector(name="tags-collector")
+res = b.TestOpenAIGPT4oMini(
+    "hello",
+    baml_options={
+        "collector": collector,
+        "tags": {"call_id": "first", "version": "v1"},
+    },
+)
+
+print(collector.last.tags)
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import { b } from "baml_client";
+import { Collector } from "@boundaryml/baml";
+
+const collector = new Collector("tags-collector");
+await b.TestOpenAIGPT4oMini("hello", { collector, tags: { callId: "first", version: "v1" } });
+console.log(collector.last!.tags);
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+ctx := context.Background()
+collector, _ := b.NewCollector("tags-collector")
+tags := map[string]string{"callId": "first", "version": "v1"}
+_, _ = b.TestOpenAIGPT4oMini(ctx, "hello", b.WithCollector(collector), b.WithTags(tags))
+logs, _ := collector.Logs()
+if len(logs) > 0 {
+    t, _ := logs[0].Tags()
+    fmt.Println(t)
+}
+```
+</Tab>
+</Tabs>
+
 ### Parallel Execution
 
 When running functions in parallel, `with_options` helps maintain consistent configuration across all calls. This works seamlessly with the [`Collector`](./collector) functionality.
@@ -298,8 +347,9 @@ async def run():
     # Access results and logs
     print(res)
     print(invoice)
-    print(collector.id(res.id).usage)
-    print(collector.id(invoice.id).usage)
+    # Use tags or iterate logs to correlate specific calls
+    for log in collector.logs:
+        print(log.usage)
 ```
 </Tab>
 
@@ -322,8 +372,10 @@ const [
 // Access results and logs
 console.log(res)
 console.log(invoice)
-console.log(collector.id(resumeId)?.usage)
-console.log(collector.id(invoiceId)?.usage)
+// Use tags or iterate logs to correlate specific calls
+for (const log of collector.logs) {
+  console.log(log.usage)
+}
 ```
 </Tab>
 
@@ -351,7 +403,8 @@ async def run():
         print(chunk)
     
     result = await stream.get_final_result()
-    print(collector.id(stream.id).usage)
+    # Use tags or collector.last / collector.logs for usage
+    print(collector.last.usage)
 ```
 </Tab>
 
@@ -368,7 +421,8 @@ for await (const chunk of stream) {
 }
 
 const result = await stream.getFinalResult()
-console.log(collector.id(stream.id)?.usage)
+// Use tags or collector.last / collector.logs for usage
+console.log(collector.last?.usage)
 ```
 </Tab>
 
@@ -385,7 +439,8 @@ stream.each do |chunk|
 end
 
 result = stream.get_final_result
-print(collector.id(stream.id).usage)
+# Use tags or collector.last / collector.logs for usage
+print(collector.last.usage)
 ```
 </Tab>
 </Tabs>
@@ -404,6 +459,7 @@ These can always be overridden on a per-call basis with the `baml_options` param
 | `client_registry` | `ClientRegistry` | Registry for managing LLM clients and their configurations |
 | `type_builder` | [`TypeBuilder`](/ref/baml_client/type-builder) | Custom type builder for function inputs and outputs |
 | `env` | `Dict/Object` | Environment variables to set for the client |
+| `tags` (per-call) | `Dict/Object` | Arbitrary metadata for this call; merged with parent trace tags |
 
 ### Configured Client Properties
 

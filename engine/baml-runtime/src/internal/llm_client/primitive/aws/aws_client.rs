@@ -16,6 +16,7 @@ use aws_sdk_bedrockruntime::{
     self as bedrock,
     config::{Intercept, StalledStreamProtectionConfig},
     operation::converse::ConverseOutput,
+    types::CitationsConfig,
     Client as BedrockRuntimeClient,
 };
 use aws_smithy_json::serialize::JsonObjectWriter;
@@ -89,7 +90,7 @@ fn media_to_content_block_json(media: &BamlMedia) -> Result<serde_json::Value> {
                 if let Some(mime) = media.mime_type.as_deref() {
                     doc_obj.insert("format".into(), json!(strip_mime_prefix(mime)));
                 }
-                doc_obj.insert("name".into(), json!("document.pdf"));
+                doc_obj.insert("name".into(), json!("document"));
                 doc_obj.insert("source".into(), json!({ "bytes": b64.base64 }));
                 Ok(json!({ "document": serde_json::Value::Object(doc_obj) }))
             }
@@ -1079,10 +1080,13 @@ impl AwsClient {
                         Ok(bedrock::types::ContentBlock::Document(
                             bedrock::types::DocumentBlock::builder()
                                 .set_format(Some(bedrock::types::DocumentFormat::Pdf))
-                                .set_name(Some("document.pdf".to_string())) // Default name for URL-based Pdfs
+                                .set_name(Some("document".to_string())) // Default name for URL-based Pdfs
                                 .set_source(Some(bedrock::types::DocumentSource::Bytes(Blob::new(
                                     url_media.url.as_bytes().to_vec(),
                                 ))))
+                                .set_citations(Some(
+                                    CitationsConfig::builder().set_enabled(Some(true)).build()?,
+                                ))
                                 .build()
                                 .context("Failed to build Pdf document block")?,
                         ))
@@ -1092,7 +1096,7 @@ impl AwsClient {
                         Ok(bedrock::types::ContentBlock::Document(
                             bedrock::types::DocumentBlock::builder()
                                 .set_format(Some(bedrock::types::DocumentFormat::Pdf))
-                                .set_name(Some("document.pdf".to_string())) // Default name for Base64 Pdfs
+                                .set_name(Some("document".to_string())) // Default name for Base64 Pdfs
                                 .set_source(Some(bedrock::types::DocumentSource::Bytes(Blob::new(
                                     aws_smithy_types::base64::decode(b64_media.base64.clone())?,
                                 ))))

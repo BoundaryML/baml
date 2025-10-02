@@ -178,3 +178,113 @@ async def pre_process_text(text):
     set_tags(**tags_dict) # "**" unpacks the dictionary
     return text.replace("\n", " ")
 ```
+
+### Tags on BAML calls and retrieving them with the Collector
+
+You can also set tags directly on a BAML function call and then retrieve them from the `Collector`. Tags from a parent trace are inherited by the BAML function call and merged with any function-specific tags you pass.
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_client.tracing import trace, set_tags
+from baml_py import Collector
+
+@trace
+async def parent_fn(msg: str):
+    # Set tags on the parent trace (these propagate to child BAML calls)
+    set_tags(parent_id="p123", run="xyz")
+
+    collector = Collector(name="tags-collector")
+
+    # You can also set per-call tags via baml_options
+    await b.TestOpenAIGPT4oMini(
+        msg,
+        baml_options={
+            "collector": collector,
+            "tags": {"call_id": "first", "version": "v1"},
+        },
+    )
+
+    # Retrieve tags from the last function log
+    log = collector.last
+    assert log is not None
+    print(log.tags)  # {"parent_id": "p123", "run": "xyz", "call_id": "first", "version": "v1"}
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import { b } from "baml_client";
+import { Collector } from "@boundaryml/baml";
+import { traceAsync, setTags } from "../baml_client/tracing";
+
+const parent = traceAsync("parentTS", async (msg: string) => {
+  setTags({ parentId: "p123", run: "xyz" });
+
+  const collector = new Collector("tags-collector");
+
+  await b.TestOpenAIGPT4oMini(msg, {
+    collector,
+    tags: { callId: "first", version: "v1" },
+  });
+
+  const log = collector.last!;
+  const tags = log.tags;
+  console.log(tags); // { parentId: "p123", run: "xyz", callId: "first", version: "v1" }
+});
+
+await parent("hi");
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    b "example.com/integ-tests/baml_client"
+)
+
+func run() error {
+    ctx := context.Background()
+
+    collector, err := b.NewCollector("tags-collector")
+    if err != nil {
+        return err
+    }
+
+    // Set per-call tags using WithTags
+    tags := map[string]string{
+        "callId":  "first",
+        "version": "v1",
+    }
+    _, err = b.TestOpenAIGPT4oMini(ctx, "hello", b.WithCollector(collector), b.WithTags(tags))
+    if err != nil {
+        return err
+    }
+
+    logs, err := collector.Logs()
+    if err != nil {
+        return err
+    }
+    if len(logs) > 0 {
+        t, err := logs[0].Tags()
+        if err != nil {
+            return err
+        }
+        fmt.Printf("Tags: %+v\n", t)
+    }
+    return nil
+}
+```
+</Tab>
+</Tabs>
+
+Notes:
+- Tags from `set_tags`/`setTags` on a parent `trace` are merged into the BAML function’s tags.
+- Per-call tags are provided via `baml_options` in Python and the options object in TypeScript; in Go use `b.WithTags(map[string]string)`.
+- Retrieve tags from a `FunctionLog` using `log.tags` (Python/TypeScript) or `log.Tags()` (Go).
+

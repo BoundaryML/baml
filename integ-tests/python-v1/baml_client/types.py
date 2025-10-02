@@ -154,8 +154,16 @@ class TestEnum(str, Enum):
     G = "G"
 
 # #########################################################################
-# Generated classes (102)
+# Generated classes (104)
 # #########################################################################
+
+class AddTodoItem(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    type: typing_extensions.Literal['add_todo_item']
+    item: str
+    time: str
+    description: str
 
 class AnotherObject(BaseModel):
     class Config:
@@ -777,6 +785,12 @@ class TestOutputClass(BaseModel):
     prop1: str
     prop2: int
 
+class TodoMessageToUser(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    type: typing_extensions.Literal['todo_message_to_user']
+    message: str
+
 class Tree(BaseModel):
     class Config:
         arbitrary_types_allowed = True
@@ -823,7 +837,7 @@ class WithReasoning(BaseModel):
     reasoning: str
 
 # #########################################################################
-# Generated type aliases (20)
+# Generated type aliases (21)
 # #########################################################################
 
 
@@ -885,3 +899,6 @@ RecursiveMapAlias: typing_extensions.TypeAlias = typing.Dict[str, "RecursiveMapA
 
 
 RecursiveUnion: typing_extensions.TypeAlias = typing.Union[str, typing.Dict[str, "RecursiveUnion"]]
+
+
+TodoTool: typing_extensions.TypeAlias = typing.Union["AddTodoItem", "TodoMessageToUser"]

@@ -5,6 +5,8 @@
 use baml_types::ir_type::TypeIR;
 use internal_baml_diagnostics::Span;
 
+use crate::emit::EmitSpec;
+
 pub mod dump;
 pub mod lowering;
 
@@ -40,12 +42,6 @@ impl Hir {
             global_assignments: baml_types::BamlMap::new(),
         }
     }
-}
-
-// TODO: Unused?
-pub struct Function {
-    pub params: Vec<TypeIR>,
-    pub return_type: Box<TypeIR>,
 }
 
 #[derive(Clone, Debug)]
@@ -122,6 +118,7 @@ pub enum Statement {
         name: String,
         value: Expression,
         annotated_type: Option<TypeIR>,
+        emit: Option<EmitSpec>,
         span: Span,
     },
     /// Declare a (mutable) reference.
@@ -148,6 +145,7 @@ pub enum Statement {
         name: String,
         value: Expression,
         annotated_type: Option<TypeIR>,
+        emit: Option<EmitSpec>,
         span: Span,
     },
     /// Return from a function.

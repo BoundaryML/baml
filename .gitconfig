@@ -1,4 +1,6 @@
 [merge "baml_client"]
+        # this just says the 'true' command is the merge driver, which stubs it out as a noop
+        # normally it would be something like meld or tkdiff
         driver = true
 [checkout]
         defaultRemote = origin

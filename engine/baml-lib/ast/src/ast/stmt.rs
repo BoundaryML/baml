@@ -11,6 +11,59 @@ pub struct LetStmt {
     pub expr: Expression,
     pub span: Span,
     pub annotations: Vec<std::sync::Arc<Header>>,
+    pub emit: Option<EmitDecorator>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EmitDecorator {
+    pub arguments: Vec<EmitArgument>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct EmitArgument {
+    pub name: Identifier,
+    pub value: Expression,
+    pub span: Span,
+}
+
+impl EmitDecorator {
+    pub fn assert_eq_up_to_span(&self, other: &EmitDecorator) {
+        assert_eq!(self.arguments.len(), other.arguments.len());
+        for (left, right) in self.arguments.iter().zip(&other.arguments) {
+            left.assert_eq_up_to_span(right);
+        }
+    }
+}
+
+impl EmitArgument {
+    pub fn assert_eq_up_to_span(&self, other: &EmitArgument) {
+        self.name.assert_eq_up_to_span(&other.name);
+        self.value.assert_eq_up_to_span(&other.value);
+    }
+}
+
+impl fmt::Display for EmitDecorator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("@emit")?;
+        if !self.arguments.is_empty() {
+            f.write_str("(")?;
+            for (idx, arg) in self.arguments.iter().enumerate() {
+                if idx > 0 {
+                    f.write_str(", ")?;
+                }
+                fmt::Display::fmt(arg, f)?;
+            }
+            f.write_str(")")?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for EmitArgument {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} = {}", self.name, self.value)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -147,10 +200,14 @@ impl fmt::Display for Stmt {
         match self {
             Stmt::Let(stmt) => {
                 if let Some(ann) = &stmt.annotation {
-                    write!(f, "let {}: {} = {}", stmt.identifier, ann, stmt.expr)
+                    write!(f, "let {}: {} = {}", stmt.identifier, ann, stmt.expr)?;
                 } else {
-                    write!(f, "let {} = {}", stmt.identifier, stmt.expr)
+                    write!(f, "let {} = {}", stmt.identifier, stmt.expr)?;
                 }
+                if let Some(emit) = &stmt.emit {
+                    write!(f, " {}", emit)?;
+                }
+                Ok(())
             }
             Stmt::ForLoop(stmt) => {
                 if stmt.has_let {
@@ -219,6 +276,7 @@ impl Stmt {
                     _ => panic!("Let annotations do not match up to span"),
                 }
                 stmt1.expr.assert_eq_up_to_span(&stmt2.expr);
+                assert_opt(&stmt1.emit, &stmt2.emit, |a, b| a.assert_eq_up_to_span(b));
             }
             (Stmt::ForLoop(stmt1), Stmt::ForLoop(stmt2)) => {
                 stmt1.identifier.assert_eq_up_to_span(&stmt2.identifier);

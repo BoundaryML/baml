@@ -1050,6 +1050,56 @@ export function useBuildTree(
   }
 }
 /**
+ * A specialized hook for the ChooseTodoTools BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - query: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** (types.AddTodoItem | types.TodoMessageToUser)[]
+ * - **Streaming Partial:** (types.AddTodoItem | TodoMessageToUser)[]
+ * - **Streaming Final:** (types.AddTodoItem | types.TodoMessageToUser)[]
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useChooseTodoTools({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useChooseTodoTools({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useChooseTodoTools(props: HookInput<'ChooseTodoTools', { stream: false }>): HookOutput<'ChooseTodoTools', { stream: false }>
+export function useChooseTodoTools(props?: HookInput<'ChooseTodoTools', { stream?: true }>): HookOutput<'ChooseTodoTools', { stream: true }>
+export function useChooseTodoTools(
+  props: HookInput<'ChooseTodoTools', { stream?: boolean }> = {},
+): HookOutput<'ChooseTodoTools', { stream: true }> | HookOutput<'ChooseTodoTools', { stream: false }> {
+  let action: ServerAction = Actions.ChooseTodoTools;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.ChooseTodoTools;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'ChooseTodoTools', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the ClassThatPointsToRecursiveClassThroughAlias BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -1412,9 +1462,9 @@ export function useCompletion(
  *
  *
  * **Return Type:**
- * - **Non‑streaming:** BookOrder | FlightConfirmation | GroceryReceipt
+ * - **Non‑streaming:** types.BookOrder | types.FlightConfirmation | types.GroceryReceipt
  * - **Streaming Partial:** BookOrder | FlightConfirmation | GroceryReceipt
- * - **Streaming Final:** BookOrder | FlightConfirmation | GroceryReceipt
+ * - **Streaming Final:** types.BookOrder | types.FlightConfirmation | types.GroceryReceipt
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**
@@ -1820,9 +1870,9 @@ export function useDescribeMedia1599(
  *
  *
  * **Return Type:**
- * - **Non‑streaming:** OriginalA | OriginalB
+ * - **Non‑streaming:** types.OriginalA | types.OriginalB
  * - **Streaming Partial:** OriginalA | OriginalB
- * - **Streaming Final:** OriginalA | OriginalB
+ * - **Streaming Final:** types.OriginalA | types.OriginalB
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**
@@ -3072,13 +3122,13 @@ export function useFnLiteralClassInputOutput(
  *
  * **Input Types:**
  *
- * - input: LiteralClassOne | LiteralClassTwo
+ * - input: types.LiteralClassOne | types.LiteralClassTwo
  *
  *
  * **Return Type:**
- * - **Non‑streaming:** LiteralClassOne | LiteralClassTwo
+ * - **Non‑streaming:** types.LiteralClassOne | types.LiteralClassTwo
  * - **Streaming Partial:** LiteralClassOne | LiteralClassTwo
- * - **Streaming Final:** LiteralClassOne | LiteralClassTwo
+ * - **Streaming Final:** types.LiteralClassOne | types.LiteralClassTwo
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**
@@ -4716,13 +4766,13 @@ export function useMyFunc(
  *
  * **Input Types:**
  *
- * - c: number | string | boolean | number | string[] | Record<string, string[]>
+ * - c: number | string | boolean | string[] | Record<string, string[]>
  *
  *
  * **Return Type:**
- * - **Non‑streaming:** number | string | boolean | number | string[] | Record<string, string[]>
- * - **Streaming Partial:** number | string | boolean | number | string[] | Record<string, string[]>
- * - **Streaming Final:** number | string | boolean | number | string[] | Record<string, string[]>
+ * - **Non‑streaming:** number | string | boolean | string[] | Record<string, string[]>
+ * - **Streaming Partial:** number | string | boolean | string[] | Record<string, string[]>
+ * - **Streaming Final:** number | string | boolean | string[] | Record<string, string[]>
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**
@@ -5218,13 +5268,13 @@ export function usePredictAgeBare(
  *
  * **Input Types:**
  *
- * - p: number | string | boolean | number
+ * - p: number | string | boolean
  *
  *
  * **Return Type:**
- * - **Non‑streaming:** number | string | boolean | number
- * - **Streaming Partial:** number | string | boolean | number
- * - **Streaming Final:** number | string | boolean | number
+ * - **Non‑streaming:** number | string | boolean
+ * - **Streaming Partial:** number | string | boolean
+ * - **Streaming Final:** number | string | boolean
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**

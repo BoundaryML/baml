@@ -10,9 +10,12 @@ use baml_types::{
 };
 use internal_baml_ast::ast::{self, App, AssertStmt, Attribute, ReturnStmt, WithName, WithSpan};
 
-use crate::hir::{
-    self, Block, Class, ClassConstructor, ClassConstructorField, Enum, EnumVariant, ExprFunction,
-    Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg,
+use crate::{
+    emit::EmitSpec,
+    hir::{
+        self, Block, Class, ClassConstructor, ClassConstructorField, Enum, EnumVariant,
+        ExprFunction, Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg,
+    },
 };
 
 impl Hir {
@@ -90,6 +93,13 @@ impl Hir {
             });
 
         hir
+    }
+
+    #[cfg(test)]
+    /// Test helper to generate HIR from BAML source.
+    pub fn from_source(source: &'static str) -> Self {
+        let parser_db = crate::test::ast(source).unwrap_or_else(|e| panic!("{}", e));
+        Hir::from_ast(&parser_db.ast)
     }
 }
 
@@ -404,15 +414,21 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
             expr,
             span,
             annotations: _,
+            emit,
         }) => {
             let lifted_expr = Expression::from_ast(expr);
             let annotated_type = annotation.as_ref().map(type_ir_from_ast);
+
+            let emit_spec = emit
+                .as_ref()
+                .map(|e| EmitSpec::from_ast_with_name(e, identifier.to_string()));
 
             if *is_mutable {
                 Statement::DeclareAndAssign {
                     name: identifier.to_string(),
                     value: lifted_expr,
                     annotated_type,
+                    emit: emit_spec,
                     span: span.clone(),
                 }
             } else {
@@ -420,6 +436,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
                     name: identifier.to_string(),
                     value: lifted_expr,
                     annotated_type,
+                    emit: emit_spec,
                     span: span.clone(),
                 }
             }
@@ -726,7 +743,7 @@ mod tests {
     use super::*;
 
     /// Test helper to generate HIR from BAML source
-    fn hir_from_source(source: &'static str) -> String {
+    fn pretty_hir_from_source(source: &'static str) -> String {
         let parser_db = crate::test::ast(source).unwrap_or_else(|e| panic!("{}", e));
         let hir = Hir::from_ast(&parser_db.ast);
         hir.pretty_print()
@@ -774,7 +791,7 @@ mod tests {
               Foo { a: if true { 1 } else { 0 }, b: { let y = 1; y } }
           }
       "#;
-        let result = hir_from_source(source);
+        let result = pretty_hir_from_source(source);
         // The if expression in field 'a' should get lifted to temporary variables
         // The expression block in field 'b' should work correctly.
         let expected = r#"function TestConstructor() {

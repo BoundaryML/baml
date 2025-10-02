@@ -24,7 +24,7 @@ import { toBamlError, BamlStream, BamlAbortError, Collector } from "@boundaryml/
 import type { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types"
 import type { partial_types } from "./partial_types"
 import type * as types from "./types"
-import type {AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, ClientDetails1559, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, Document1559, DummyJsonTodo, DummyOutput, DynEnumOne, DynEnumThree, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, DynamicSchema, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Haiku, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MaintainFieldOrder, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, Note1599, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, RecursiveUnion, RenderEnumInput, RenderStatusEnum, RenderTestClass, RenderTestEnum, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, Tree, TwoStoriesOneTitle, TwoStoriesOneTitleCheck, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types"
+import type {AddTodoItem, AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, ClientDetails1559, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, Document1559, DummyJsonTodo, DummyOutput, DynEnumOne, DynEnumThree, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, DynamicSchema, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Haiku, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MaintainFieldOrder, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, Note1599, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, RecursiveUnion, RenderEnumInput, RenderStatusEnum, RenderTestClass, RenderTestEnum, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, TodoMessageToUser, Tree, TwoStoriesOneTitle, TwoStoriesOneTitleCheck, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types"
 import type TypeBuilder from "./type_builder"
 import { AsyncHttpRequest, AsyncHttpStreamRequest } from "./async_request"
 import { LlmResponseParser, LlmStreamParser } from "./parser"
@@ -752,6 +752,53 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             }
             }
             
+        async ChooseTodoTools(
+        query: string,
+        __baml_options__?: BamlCallOptions
+        ): Promise<(types.AddTodoItem | types.TodoMessageToUser)[]> {
+          try {
+          const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const signal = options.signal;
+
+          if (signal?.aborted) {
+          throw new BamlAbortError('Operation was aborted', signal.reason);
+          }
+
+          // Check if onTick is provided - route through streaming if so
+          if (options.onTick) {
+          const stream = this.stream.ChooseTodoTools(
+          query,
+          __baml_options__
+          );
+
+          return await stream.getFinalResponse();
+          }
+
+          const collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
+          [options.collector]) : [];
+          const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const env: Record<string, string> = Object.fromEntries(
+            Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+            );
+            const raw = await this.runtime.callFunction(
+            "ChooseTodoTools",
+            {
+            "query": query
+            },
+            this.ctxManager.cloneContext(),
+            options.tb?.__tb(),
+            options.clientRegistry,
+            collector,
+            options.tags || {},
+            env,
+            signal,
+            )
+            return raw.parsed(false) as (types.AddTodoItem | types.TodoMessageToUser)[]
+            } catch (error) {
+            throw toBamlError(error);
+            }
+            }
+            
         async ClassThatPointsToRecursiveClassThroughAlias(
         cls: types.ClassToRecAlias,
         __baml_options__?: BamlCallOptions
@@ -1084,7 +1131,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         async CustomTask(
         input: string,
         __baml_options__?: BamlCallOptions
-        ): Promise<BookOrder | FlightConfirmation | GroceryReceipt> {
+        ): Promise<types.BookOrder | types.FlightConfirmation | types.GroceryReceipt> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
           const signal = options.signal;
@@ -1122,7 +1169,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             env,
             signal,
             )
-            return raw.parsed(false) as BookOrder | FlightConfirmation | GroceryReceipt
+            return raw.parsed(false) as types.BookOrder | types.FlightConfirmation | types.GroceryReceipt
             } catch (error) {
             throw toBamlError(error);
             }
@@ -1460,7 +1507,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         async DifferentiateUnions(
         
         __baml_options__?: BamlCallOptions
-        ): Promise<OriginalA | OriginalB> {
+        ): Promise<types.OriginalA | types.OriginalB> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
           const signal = options.signal;
@@ -1498,7 +1545,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             env,
             signal,
             )
-            return raw.parsed(false) as OriginalA | OriginalB
+            return raw.parsed(false) as types.OriginalA | types.OriginalB
             } catch (error) {
             throw toBamlError(error);
             }
@@ -2633,9 +2680,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             }
             
         async FnLiteralUnionClassInputOutput(
-        input: LiteralClassOne | LiteralClassTwo,
+        input: types.LiteralClassOne | types.LiteralClassTwo,
         __baml_options__?: BamlCallOptions
-        ): Promise<LiteralClassOne | LiteralClassTwo> {
+        ): Promise<types.LiteralClassOne | types.LiteralClassTwo> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
           const signal = options.signal;
@@ -2673,7 +2720,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             env,
             signal,
             )
-            return raw.parsed(false) as LiteralClassOne | LiteralClassTwo
+            return raw.parsed(false) as types.LiteralClassOne | types.LiteralClassTwo
             } catch (error) {
             throw toBamlError(error);
             }
@@ -4184,9 +4231,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             }
             
         async NestedAlias(
-        c: number | string | boolean | number | string[] | Record<string, string[]>,
+        c: number | string | boolean | string[] | Record<string, string[]>,
         __baml_options__?: BamlCallOptions
-        ): Promise<number | string | boolean | number | string[] | Record<string, string[]>> {
+        ): Promise<number | string | boolean | string[] | Record<string, string[]>> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
           const signal = options.signal;
@@ -4224,7 +4271,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             env,
             signal,
             )
-            return raw.parsed(false) as number | string | boolean | number | string[] | Record<string, string[]>
+            return raw.parsed(false) as number | string | boolean | string[] | Record<string, string[]>
             } catch (error) {
             throw toBamlError(error);
             }
@@ -4654,9 +4701,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             }
             
         async PrimitiveAlias(
-        p: number | string | boolean | number,
+        p: number | string | boolean,
         __baml_options__?: BamlCallOptions
-        ): Promise<number | string | boolean | number> {
+        ): Promise<number | string | boolean> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
           const signal = options.signal;
@@ -4694,7 +4741,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             env,
             signal,
             )
-            return raw.parsed(false) as number | string | boolean | number
+            return raw.parsed(false) as number | string | boolean
             } catch (error) {
             throw toBamlError(error);
             }
@@ -11513,6 +11560,72 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   }
                   }
                   
+            ChooseTodoTools(
+            query: string,
+            __baml_options__?: BamlCallOptions
+            ): BamlStream<(types.AddTodoItem | partial_types.TodoMessageToUser)[], (types.AddTodoItem | types.TodoMessageToUser)[]>
+              {
+              try {
+              const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const signal = options.signal;
+
+              if (signal?.aborted) {
+              throw new BamlAbortError('Operation was aborted', signal.reason);
+              }
+
+              let collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
+              [options.collector]) : [];
+
+              let onTickWrapper: (() => void) | undefined;
+
+              // Create collector and wrap onTick if provided
+              if (options.onTick) {
+              const tickCollector = new Collector("on-tick-collector");
+              collector = [...collector, tickCollector];
+
+              onTickWrapper = () => {
+              const log = tickCollector.last;
+              if (log) {
+              try {
+              options.onTick!("Unknown", log);
+              } catch (error) {
+              console.error("Error in onTick callback for ChooseTodoTools", error);
+              }
+              }
+              };
+              }
+
+              const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const env: Record<string, string> = Object.fromEntries(
+                Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+                );
+                const raw = this.runtime.streamFunction(
+                "ChooseTodoTools",
+                {
+                "query": query
+                },
+                undefined,
+                this.ctxManager.cloneContext(),
+                options.tb?.__tb(),
+                options.clientRegistry,
+                collector,
+                options.tags || {},
+                env,
+                signal,
+                onTickWrapper,
+                )
+                return new BamlStream<(types.AddTodoItem | partial_types.TodoMessageToUser)[], (types.AddTodoItem | types.TodoMessageToUser)[]>(
+                  raw,
+                  (a): (types.AddTodoItem | partial_types.TodoMessageToUser)[] => a,
+                  (a): (types.AddTodoItem | types.TodoMessageToUser)[] => a,
+                  this.ctxManager.cloneContext(),
+                  options.signal,
+                  )
+                  } catch (error) {
+                  throw toBamlError(error);
+                  }
+                  }
+                  
             ClassThatPointsToRecursiveClassThroughAlias(
             cls: types.ClassToRecAlias,
             __baml_options__?: BamlCallOptions
@@ -11978,7 +12091,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             CustomTask(
             input: string,
             __baml_options__?: BamlCallOptions
-            ): BamlStream<BookOrder | FlightConfirmation | GroceryReceipt, BookOrder | FlightConfirmation | GroceryReceipt>
+            ): BamlStream<partial_types.BookOrder | partial_types.FlightConfirmation | partial_types.GroceryReceipt, types.BookOrder | types.FlightConfirmation | types.GroceryReceipt>
               {
               try {
               const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -12029,10 +12142,10 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 signal,
                 onTickWrapper,
                 )
-                return new BamlStream<BookOrder | FlightConfirmation | GroceryReceipt, BookOrder | FlightConfirmation | GroceryReceipt>(
+                return new BamlStream<partial_types.BookOrder | partial_types.FlightConfirmation | partial_types.GroceryReceipt, types.BookOrder | types.FlightConfirmation | types.GroceryReceipt>(
                   raw,
-                  (a): BookOrder | FlightConfirmation | GroceryReceipt => a,
-                  (a): BookOrder | FlightConfirmation | GroceryReceipt => a,
+                  (a): partial_types.BookOrder | partial_types.FlightConfirmation | partial_types.GroceryReceipt => a,
+                  (a): types.BookOrder | types.FlightConfirmation | types.GroceryReceipt => a,
                   this.ctxManager.cloneContext(),
                   options.signal,
                   )
@@ -12506,7 +12619,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             DifferentiateUnions(
             
             __baml_options__?: BamlCallOptions
-            ): BamlStream<OriginalA | OriginalB, OriginalA | OriginalB>
+            ): BamlStream<partial_types.OriginalA | partial_types.OriginalB, types.OriginalA | types.OriginalB>
               {
               try {
               const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -12557,10 +12670,10 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 signal,
                 onTickWrapper,
                 )
-                return new BamlStream<OriginalA | OriginalB, OriginalA | OriginalB>(
+                return new BamlStream<partial_types.OriginalA | partial_types.OriginalB, types.OriginalA | types.OriginalB>(
                   raw,
-                  (a): OriginalA | OriginalB => a,
-                  (a): OriginalA | OriginalB => a,
+                  (a): partial_types.OriginalA | partial_types.OriginalB => a,
+                  (a): types.OriginalA | types.OriginalB => a,
                   this.ctxManager.cloneContext(),
                   options.signal,
                   )
@@ -14154,9 +14267,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   }
                   
             FnLiteralUnionClassInputOutput(
-            input: LiteralClassOne | LiteralClassTwo,
+            input: types.LiteralClassOne | types.LiteralClassTwo,
             __baml_options__?: BamlCallOptions
-            ): BamlStream<LiteralClassOne | LiteralClassTwo, LiteralClassOne | LiteralClassTwo>
+            ): BamlStream<partial_types.LiteralClassOne | partial_types.LiteralClassTwo, types.LiteralClassOne | types.LiteralClassTwo>
               {
               try {
               const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -14207,10 +14320,10 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 signal,
                 onTickWrapper,
                 )
-                return new BamlStream<LiteralClassOne | LiteralClassTwo, LiteralClassOne | LiteralClassTwo>(
+                return new BamlStream<partial_types.LiteralClassOne | partial_types.LiteralClassTwo, types.LiteralClassOne | types.LiteralClassTwo>(
                   raw,
-                  (a): LiteralClassOne | LiteralClassTwo => a,
-                  (a): LiteralClassOne | LiteralClassTwo => a,
+                  (a): partial_types.LiteralClassOne | partial_types.LiteralClassTwo => a,
+                  (a): types.LiteralClassOne | types.LiteralClassTwo => a,
                   this.ctxManager.cloneContext(),
                   options.signal,
                   )
@@ -16332,9 +16445,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   }
                   
             NestedAlias(
-            c: number | string | boolean | number | string[] | Record<string, string[]>,
+            c: number | string | boolean | string[] | Record<string, string[]>,
             __baml_options__?: BamlCallOptions
-            ): BamlStream<number | string | boolean | number | string[] | Record<string, string[]>, number | string | boolean | number | string[] | Record<string, string[]>>
+            ): BamlStream<number | string | boolean | string[] | Record<string, string[]>, number | string | boolean | string[] | Record<string, string[]>>
               {
               try {
               const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -16385,10 +16498,10 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 signal,
                 onTickWrapper,
                 )
-                return new BamlStream<number | string | boolean | number | string[] | Record<string, string[]>, number | string | boolean | number | string[] | Record<string, string[]>>(
+                return new BamlStream<number | string | boolean | string[] | Record<string, string[]>, number | string | boolean | string[] | Record<string, string[]>>(
                   raw,
-                  (a): number | string | boolean | number | string[] | Record<string, string[]> => a,
-                  (a): number | string | boolean | number | string[] | Record<string, string[]> => a,
+                  (a): number | string | boolean | string[] | Record<string, string[]> => a,
+                  (a): number | string | boolean | string[] | Record<string, string[]> => a,
                   this.ctxManager.cloneContext(),
                   options.signal,
                   )
@@ -16992,9 +17105,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   }
                   
             PrimitiveAlias(
-            p: number | string | boolean | number,
+            p: number | string | boolean,
             __baml_options__?: BamlCallOptions
-            ): BamlStream<number | string | boolean | number, number | string | boolean | number>
+            ): BamlStream<number | string | boolean, number | string | boolean>
               {
               try {
               const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -17045,10 +17158,10 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 signal,
                 onTickWrapper,
                 )
-                return new BamlStream<number | string | boolean | number, number | string | boolean | number>(
+                return new BamlStream<number | string | boolean, number | string | boolean>(
                   raw,
-                  (a): number | string | boolean | number => a,
-                  (a): number | string | boolean | number => a,
+                  (a): number | string | boolean => a,
+                  (a): number | string | boolean => a,
                   this.ctxManager.cloneContext(),
                   options.signal,
                   )

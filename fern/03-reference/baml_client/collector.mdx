@@ -173,6 +173,76 @@ run
 </Tabs>
 
 
+### Tags
+
+You can attach custom metadata to function calls using tags. These can come from a parent `trace` context or be specified per call.
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_client.tracing import trace, set_tags
+from baml_py import Collector
+
+@trace
+async def run_with_tags():
+    # Parent trace tags
+    set_tags(parent_id="p123", run="xyz")
+
+    collector = Collector(name="tags-collector")
+
+    # Per-call tags via baml_options
+    await b.TestOpenAIGPT4oMini(
+        "hi",
+        baml_options={"collector": collector, "tags": {"call_id": "first"}},
+    )
+
+    # Retrieve merged tags from the last log
+    log = collector.last
+    assert log is not None
+    print(log.tags)  # {'parent_id': 'p123', 'run': 'xyz', 'call_id': 'first'}
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import { b } from "baml_client";
+import { Collector } from "@boundaryml/baml";
+import { traceAsync, setTags } from "../baml_client/tracing";
+
+const parent = traceAsync("parentTS", async () => {
+  setTags({ parentId: "p123", run: "xyz" });
+  const collector = new Collector("tags-collector");
+  await b.TestOpenAIGPT4oMini("hi", { collector, tags: { callId: "first" } });
+  const tags = collector.last!.tags;
+  console.log(tags);
+});
+
+await parent();
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+ctx := context.Background()
+collector, _ := b.NewCollector("tags-collector")
+_, _ = b.TestOpenAIGPT4oMini(
+    ctx,
+    "hi",
+    b.WithCollector(collector),
+    b.WithTags(map[string]string{"callId": "first", "version": "v1"}),
+)
+
+logs, _ := collector.Logs()
+if len(logs) > 0 {
+    tags, _ := logs[0].Tags()
+    fmt.Printf("Tags: %+v\n", tags)
+}
+```
+</Tab>
+</Tabs>
+
+
 ### Managing Collector State
 
 <Tabs>
@@ -379,7 +449,7 @@ The Collector class provides the following methods:
 
 | Method | Type | Description |
 |--------|------|-------------|
-| `id(id: string)` | `FunctionLog \| null` | Get the function log by id. |
+| (removed) |  | IDs are not exposed in the client. Use tags to correlate calls. |
 | `clear()` | `void` | Clears all logs. |
 
 ### FunctionLog Class
