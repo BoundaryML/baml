@@ -19,10 +19,15 @@ export const runtimeStateAtom: Atom<{
     if (lastValidRt === undefined) {
       return { functions: [], stale: false };
     }
-    return { functions: lastValidRt.list_functions(), stale: true };
+    // Include both LLM functions and expr functions
+    const llmFunctions = lastValidRt.list_functions();
+    const exprFunctions = lastValidRt.list_expr_fns();
+    return { functions: [...llmFunctions, ...exprFunctions], stale: true };
   }
-  const functions = rt.list_functions();
-  return { functions, stale: false };
+  // Include both LLM functions and expr functions
+  const llmFunctions = rt.list_functions();
+  const exprFunctions = rt.list_expr_fns();
+  return { functions: [...llmFunctions, ...exprFunctions], stale: false };
 });
 
 export const selectedFunctionAtom = atom<string | undefined>(undefined);

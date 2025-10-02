@@ -477,6 +477,11 @@ impl BamlRuntime {
         let expr_fn = self.inner.ir().find_expr_fn(function_name);
         let is_expr_fn = expr_fn.is_ok();
 
+        // If it's an expr function, use the simpler expr execution path
+        if is_expr_fn {
+            return self.run_expr_test(function_name, test_name, ctx, env_vars).await;
+        }
+
         let run_to_response = || async {
             // acceptable clone, just used for testing
             let rctx_no_tb =
