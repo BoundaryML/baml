@@ -219,6 +219,8 @@ impl InitUI {
         let height = self.steps.len() as u16 + 4; // Steps + title + spacing
         execute!(io::stdout(), crossterm::cursor::MoveDown(height))?;
 
+        execute!(io::stdout(), LeaveAlternateScreen)?;
+
         Ok(())
     }
 }
