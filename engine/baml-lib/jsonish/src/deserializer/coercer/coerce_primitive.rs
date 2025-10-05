@@ -150,7 +150,8 @@ fn coerce_string(
         // Handle AnyOf explicitly to extract the original string content
         // instead of using the Display impl which shows "AnyOf[...]"
         crate::jsonish::Value::AnyOf(_, original_string) => {
-            let mut baml_value = BamlValueWithFlags::String((original_string.clone(), target).into());
+            let mut baml_value =
+                BamlValueWithFlags::String((original_string.clone(), target).into());
             let completion_state = value.completion_state();
             if completion_state == &CompletionState::Incomplete {
                 baml_value.add_flag(Flag::Incomplete);
@@ -463,8 +464,10 @@ mod tests {
 
     #[test]
     fn test_coerce_anyof_to_string() {
-        use crate::jsonish::Value;
-        use crate::helpers::{load_test_ir, render_output_format};
+        use crate::{
+            helpers::{load_test_ir, render_output_format},
+            jsonish::Value,
+        };
 
         // Create an AnyOf value similar to what the parser creates
         let anyof_value = Value::AnyOf(
@@ -477,7 +480,13 @@ mod tests {
 
         let ir = load_test_ir("");
         let target = TypeIR::Primitive(TypeValue::String, Default::default());
-        let output_format = render_output_format(&ir, &target, &Default::default(), baml_types::StreamingMode::Streaming).unwrap();
+        let output_format = render_output_format(
+            &ir,
+            &target,
+            &Default::default(),
+            baml_types::StreamingMode::Streaming,
+        )
+        .unwrap();
         let ctx = ParsingContext::new(&output_format, baml_types::StreamingMode::Streaming);
 
         let result = coerce_string(&ctx, &target, Some(&anyof_value));
