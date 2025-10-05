@@ -42,7 +42,7 @@ pub fn builtin_classes() -> Vec<Class> {
             },
             Field {
                 name: String::from("json"),
-                r#type: TypeIR::Top(Default::default()), // any (including null)
+                r#type: TypeIR::optional(TypeIR::Top(Default::default())), // generic T
                 span: Span::fake(),
             },
         ],

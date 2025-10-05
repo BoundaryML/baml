@@ -60,14 +60,20 @@ function AnalyzeSentiment(text: string) -> Sentiment {
 //   prompt "Analyze the sentiment of this text: {{ text }}\n\nRespond with exactly one of: POSITIVE, NEGATIVE, NEUTRAL"
 // }
 //
-// class std::Request {
-//   base_url: string
-//   headers: map<string, string>
-//   query_params: map<string, string>
+// class baml.HttpRequest {
+//   url: string
+//   method: baml.HttpMethod
+//   headers: (map<string, string> | null)
+//   query_params: (map<string, string> | null)
+//   json: (ANY | null)
 // }
 //
-// enum std::HttpMethod {
+// enum baml.HttpMethod {
 //   Get
+//   Post
+//   Put
+//   Delete
+//   Patch
 // }
 //
 // enum Sentiment {

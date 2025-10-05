@@ -44,8 +44,8 @@ function ArrayAccessWithVariable(arr: float[], idx: int) -> float {
 // 15   3   LOAD_VAR 3           (result)
 //      4   RETURN               
 //
-// Class: std::Request with 3 fields
-// Enum std::HttpMethod
+// Class: baml.HttpRequest with 5 fields
+// Enum baml.HttpMethod
 // Function: baml.Array.length
 //
 // Function: baml.Map.length

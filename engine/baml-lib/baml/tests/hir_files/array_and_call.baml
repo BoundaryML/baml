@@ -30,12 +30,18 @@ function ArrayAccess() -> int {
 //   arr[1]
 // }
 //
-// class std::Request {
-//   base_url: string
-//   headers: map<string, string>
-//   query_params: map<string, string>
+// class baml.HttpRequest {
+//   url: string
+//   method: baml.HttpMethod
+//   headers: (map<string, string> | null)
+//   query_params: (map<string, string> | null)
+//   json: (ANY | null)
 // }
 //
-// enum std::HttpMethod {
+// enum baml.HttpMethod {
 //   Get
+//   Post
+//   Put
+//   Delete
+//   Patch
 // }

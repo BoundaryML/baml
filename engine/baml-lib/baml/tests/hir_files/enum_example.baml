@@ -9,10 +9,12 @@ class Widget {
   size int
 }
 
-// class std::Request {
-//   base_url: string
-//   headers: map<string, string>
-//   query_params: map<string, string>
+// class baml.HttpRequest {
+//   url: string
+//   method: baml.HttpMethod
+//   headers: (map<string, string> | null)
+//   query_params: (map<string, string> | null)
+//   json: (ANY | null)
 // }
 //
 // class Widget {
@@ -20,8 +22,12 @@ class Widget {
 //   size: int
 // }
 //
-// enum std::HttpMethod {
+// enum baml.HttpMethod {
 //   Get
+//   Post
+//   Put
+//   Delete
+//   Patch
 // }
 //
 // enum Color {

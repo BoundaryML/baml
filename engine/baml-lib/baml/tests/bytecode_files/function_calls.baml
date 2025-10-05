@@ -52,8 +52,8 @@ function Nested(x: int) -> int {
 //      9    CALL 2          
 //      10   RETURN          
 //
-// Class: std::Request with 3 fields
-// Enum std::HttpMethod
+// Class: baml.HttpRequest with 5 fields
+// Enum baml.HttpMethod
 // Function: baml.Array.length
 //
 // Function: baml.Map.length

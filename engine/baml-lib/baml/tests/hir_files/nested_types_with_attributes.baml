@@ -5,10 +5,12 @@ class DataModel {
   config map<string, bool> @stream.not_null
 }
 
-// class std::Request {
-//   base_url: string
-//   headers: map<string, string>
-//   query_params: map<string, string>
+// class baml.HttpRequest {
+//   url: string
+//   method: baml.HttpMethod
+//   headers: (map<string, string> | null)
+//   query_params: (map<string, string> | null)
+//   json: (ANY | null)
 // }
 //
 // class DataModel {
@@ -18,6 +20,10 @@ class DataModel {
 //   config: map<string, bool> @stream.needed
 // }
 //
-// enum std::HttpMethod {
+// enum baml.HttpMethod {
 //   Get
+//   Post
+//   Put
+//   Delete
+//   Patch
 // }

@@ -35,8 +35,8 @@ function AnalyzeSentiment(text: string) -> Sentiment {
 //
 // Function: AnalyzeSentiment
 //
-// Class: std::Request with 3 fields
-// Enum std::HttpMethod
+// Class: baml.HttpRequest with 5 fields
+// Enum baml.HttpMethod
 // Enum Sentiment
 // Function: baml.Array.length
 //

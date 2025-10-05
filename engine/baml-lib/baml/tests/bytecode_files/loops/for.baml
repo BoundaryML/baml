@@ -223,8 +223,8 @@ function NestedFor(as: int[], bs: int[]) -> int {
 // 46   49   LOAD_VAR 3           (result)
 //      50   RETURN               
 //
-// Class: std::Request with 3 fields
-// Enum std::HttpMethod
+// Class: baml.HttpRequest with 5 fields
+// Enum baml.HttpMethod
 // Function: baml.Array.length
 //
 // Function: baml.Map.length

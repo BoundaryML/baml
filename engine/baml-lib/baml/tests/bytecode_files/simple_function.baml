@@ -7,8 +7,8 @@ function GetName(person: string) -> string {
 // 1   0   LOAD_CONST 0   (Antonio)
 //     1   RETURN         
 //
-// Class: std::Request with 3 fields
-// Enum std::HttpMethod
+// Class: baml.HttpRequest with 5 fields
+// Enum baml.HttpMethod
 // Function: baml.Array.length
 //
 // Function: baml.Map.length

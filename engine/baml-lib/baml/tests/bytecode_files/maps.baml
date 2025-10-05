@@ -138,8 +138,8 @@ function Len() -> int {
 //      4   CALL 1           
 //      5   RETURN           
 //
-// Class: std::Request with 3 fields
-// Enum std::HttpMethod
+// Class: baml.HttpRequest with 5 fields
+// Enum baml.HttpMethod
 // Function: baml.Array.length
 //
 // Function: baml.Map.length

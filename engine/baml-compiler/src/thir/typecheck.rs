@@ -1738,9 +1738,9 @@ pub fn typecheck_expression(
                                     ));
                                 }
                                 "baml.fetch_as" => {
-                                    generic_return_type_inferred = match &type_args[0] {
-                                        hir::TypeArg::Type(t) => Some(t.to_owned()),
-                                        hir::TypeArg::TypeName(n) => context
+                                    generic_return_type_inferred = match type_args.first() {
+                                        Some(hir::TypeArg::Type(t)) => Some(t.to_owned()),
+                                        Some(hir::TypeArg::TypeName(n)) => context
                                             .classes
                                             .get(n)
                                             .map(|c| TypeIR::class(c.name.clone()))
@@ -1751,6 +1751,7 @@ pub fn typecheck_expression(
                                                     .map(|e| TypeIR::r#enum(&e.name))
                                             })
                                             .or_else(|| context.get_type(n).map(|t| t.to_owned())),
+                                        None => None,
                                     };
 
                                     match &generic_return_type_inferred {
@@ -1903,10 +1904,16 @@ pub fn typecheck_expression(
                             // Check field type if field exists in class
                             if let Some(expected_type) = class_field_types.get(name) {
                                 if let Some(actual_type) = typed_value.meta().1.as_ref() {
-                                    // Skip type "ANY"
-                                    if !matches!(expected_type, TypeIR::Top(_))
-                                        && !actual_type.is_subtype(expected_type)
-                                    {
+                                    let needs_type_check = match expected_type {
+                                        TypeIR::Top(_) => false, // generic T
+                                        TypeIR::Union(union, _) => union
+                                            .iter_include_null()
+                                            .iter()
+                                            .all(|t| !matches!(t, TypeIR::Top(_))),
+                                        _ => true,
+                                    };
+
+                                    if needs_type_check && !actual_type.is_subtype(expected_type) {
                                         let expected_str = {
                                             let doc = expected_type.to_doc();
                                             let mut buf = Vec::new();
