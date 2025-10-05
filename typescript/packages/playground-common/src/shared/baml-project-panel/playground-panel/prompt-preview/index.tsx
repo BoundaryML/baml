@@ -74,7 +74,7 @@ export const PromptPreview = () => {
 
   return (
     <>
-      <SidebarProvider defaultOpen={vscode.isVscode()} className="h-full">
+      <SidebarProvider defaultOpen={vscode.isVscode()} className="h-full min-h-0">
         <SidebarInset>
           {wasm ? (
             <div className="h-full flex flex-col overflow-hidden relative">
