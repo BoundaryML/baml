@@ -147,9 +147,43 @@ fn coerce_string(
             Ok(baml_value)
         }
         crate::jsonish::Value::Null => Err(ctx.error_unexpected_null(target)),
-        v => Ok(BamlValueWithFlags::String(
-            (v.to_string(), target, Flag::JsonToString(v.clone())).into(),
-        )),
+        v => {
+            // In streaming mode, avoid stringifying parser-wrapper and structured values
+            // that would leak artifacts (AnyOf, FixedJson, Markdown, Objects, Arrays).
+            if ctx.do_not_use_mode == baml_types::StreamingMode::Streaming {
+                match v {
+                    // Parser wrapper types: don't coerce to string; reject so unions prefer
+                    // the structural types (e.g. GraphJson) rather than a string wrapper class.
+                    crate::jsonish::Value::AnyOf(..)
+                    | crate::jsonish::Value::FixedJson(..)
+                    | crate::jsonish::Value::Markdown(..) => {
+                        return Err(ctx.error_unexpected_type(target, &v));
+                    }
+                    // Structured JSON values: surface a null placeholder instead of artifact stringification.
+                    crate::jsonish::Value::Object(..)
+                    | crate::jsonish::Value::Array(..) => {
+                        return Ok(BamlValueWithFlags::Null(
+                            target.clone().as_optional(),
+                            DeserializerConditions::new().with_flag(Flag::Incomplete),
+                        ));
+                    }
+                    crate::jsonish::Value::Boolean(_)
+                    | crate::jsonish::Value::Number(_, _) => {
+                        // Allow primitive conversions (bool/number -> string)
+                    }
+                    crate::jsonish::Value::Null => {
+                        return Err(ctx.error_unexpected_null(target));
+                    }
+                    crate::jsonish::Value::String(_, _) => unreachable!(
+                        "handled in previous arm"
+                    ),
+                }
+            }
+
+            Ok(BamlValueWithFlags::String(
+                (v.to_string(), target, Flag::JsonToString(v.clone())).into(),
+            ))
+        }
     }
 }
 

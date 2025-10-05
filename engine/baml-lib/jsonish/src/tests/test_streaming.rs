@@ -428,6 +428,25 @@ test_partial_deserializer_streaming_failure!(
     }
 );
 
+// Regression test for BAML issue #2567: ensure we don't stringify
+// partial object artifacts into string fields during streaming.
+const STRING_FIELD_NO_ARTIFACTS: &str = r#"
+class Inspiration {
+  Description string
+}
+"#;
+
+// When the LLM starts with a partial object, we should not leak
+// parser internals (like AnyOf[...] or JSON stringified objects)
+// into the string field. It should remain null until a string arrives.
+test_partial_deserializer_streaming!(
+    test_string_field_does_not_stringify_objects_in_streaming,
+    STRING_FIELD_NO_ARTIFACTS,
+    r#"{\n  \"Description\": {\n    \"__proto\": null\n  }\n"#,
+    TypeIR::class("Inspiration"),
+    {"Description": null}
+);
+
 // Test for @stream.not_null fields receiving null values during streaming
 const STREAM_NOT_NULL_TEST: &str = r#"
 class ClassWithBlockDone {
