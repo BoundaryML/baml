@@ -1,7 +1,7 @@
 import pytest
 
 from ..baml_client import b
-from baml_py.errors import BamlClientHttpError
+from baml_py.errors import BamlClientHttpError, BamlError
 from hamcrest import assert_that, equal_to
 
 
@@ -36,4 +36,7 @@ Attempt 2: LLM client "openai/gpt-2-noexist" failed with status code: Unspecifie
 
 @pytest.mark.asyncio
 async def test_error_on_missing_url_env_var():
-    response = await b.OpenAIGPT4oMissingBaseUrlEnvVar("computers")
+    with pytest.raises(BamlError) as err:
+        await b.OpenAIGPT4oMissingBaseUrlEnvVar("computers")
+
+    assert_that(str(err.value), equal_to("LLM client 'GPT4oBaseUrlNotSet' requires environment variable 'OPEN_API_BASE_DO_NOT_SET_THIS' to be set but it is not"))
