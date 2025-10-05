@@ -8,11 +8,11 @@ pub mod functions {
 }
 
 pub mod classes {
-    pub const REQUEST: &str = "std::Request";
+    pub const REQUEST: &str = "baml.HttpRequest";
 }
 
 pub mod enums {
-    pub const HTTP_METHOD: &str = "std::HttpMethod";
+    pub const HTTP_METHOD: &str = "baml.HttpMethod";
 }
 
 pub fn builtin_classes() -> Vec<Class> {
@@ -21,18 +21,28 @@ pub fn builtin_classes() -> Vec<Class> {
         methods: vec![],
         fields: vec![
             Field {
-                name: String::from("base_url"),
+                name: String::from("url"),
                 r#type: TypeIR::string(),
                 span: Span::fake(),
             },
             Field {
+                name: String::from("method"),
+                r#type: TypeIR::r#enum(enums::HTTP_METHOD),
+                span: Span::fake(),
+            },
+            Field {
                 name: String::from("headers"),
-                r#type: TypeIR::map(TypeIR::string(), TypeIR::string()),
+                r#type: TypeIR::optional(TypeIR::map(TypeIR::string(), TypeIR::string())),
                 span: Span::fake(),
             },
             Field {
                 name: String::from("query_params"),
-                r#type: TypeIR::map(TypeIR::string(), TypeIR::string()),
+                r#type: TypeIR::optional(TypeIR::map(TypeIR::string(), TypeIR::string())),
+                span: Span::fake(),
+            },
+            Field {
+                name: String::from("json"),
+                r#type: TypeIR::Top(Default::default()), // any (including null)
                 span: Span::fake(),
             },
         ],
@@ -43,17 +53,39 @@ pub fn builtin_classes() -> Vec<Class> {
 pub fn builtin_enums() -> Vec<Enum> {
     vec![Enum {
         name: String::from(enums::HTTP_METHOD),
-        variants: vec![EnumVariant {
-            name: String::from("Get"),
-            span: Span::fake(),
-        }],
+        variants: vec![
+            EnumVariant {
+                name: String::from("Get"),
+                span: Span::fake(),
+            },
+            EnumVariant {
+                name: String::from("Post"),
+                span: Span::fake(),
+            },
+            EnumVariant {
+                name: String::from("Put"),
+                span: Span::fake(),
+            },
+            EnumVariant {
+                name: String::from("Delete"),
+                span: Span::fake(),
+            },
+            EnumVariant {
+                name: String::from("Patch"),
+                span: Span::fake(),
+            },
+        ],
         span: Span::fake(),
     }]
 }
 
 /// Create a type for the std::Request class
-pub fn std_request_type() -> TypeIR {
+pub fn baml_request_type() -> TypeIR {
     TypeIR::class(classes::REQUEST)
+}
+
+pub fn baml_http_method_type() -> TypeIR {
+    TypeIR::r#enum(enums::HTTP_METHOD)
 }
 
 /// Create a function signature for std::fetch_value<T>

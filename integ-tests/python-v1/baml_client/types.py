@@ -154,7 +154,7 @@ class TestEnum(str, Enum):
     G = "G"
 
 # #########################################################################
-# Generated classes (104)
+# Generated classes (105)
 # #########################################################################
 
 class AddTodoItem(BaseModel):
@@ -308,6 +308,13 @@ class DummyJsonTodo(BaseModel):
     class Config:
         arbitrary_types_allowed = True
     id: int
+    todo: str
+    completed: bool
+    userId: int
+
+class DummyJsonTodoUpdate(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     todo: str
     completed: bool
     userId: int

@@ -159,3 +159,36 @@ function ExecFetchAs(url: string) -> DummyJsonTodo {
 
     todo
 }
+
+function ExecFetchAsWithHttpPostRequest() -> DummyJsonTodo {
+    baml.fetch_as<DummyJsonTodo>(baml.HttpRequest {
+        method: baml.HttpMethod.Post,
+        url: "https://dummyjson.com/todos/add",
+        json: {
+            "todo": "Buy milk",
+            "completed": false,
+            "userId": 5
+        },
+    })
+}
+
+// No ID cause API fails
+class DummyJsonTodoUpdate {
+    todo string
+    completed bool
+    userId int
+}
+
+function ExecFetchAsWithHttpPutRequestAndClassJson() -> DummyJsonTodo {
+    let updated_todo = DummyJsonTodoUpdate {
+        todo: "Buy milk",
+        completed: false,
+        userId: 5
+    };
+
+    baml.fetch_as<DummyJsonTodo>(baml.HttpRequest {
+        method: baml.HttpMethod.Put,
+        url: "https://dummyjson.com/todos/1",
+        json: updated_todo,
+    })
+}

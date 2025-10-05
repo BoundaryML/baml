@@ -482,7 +482,7 @@ lambda = { named_argument_list ~ "=>" ~ expression }
 // Class constructors.
 // e.g. `new MyClass { x = 1, y = 2 }`.
 //
-class_constructor = { identifier ~ "{" ~ NEWLINE? ~ (class_field_value_pair ~ COMMA? ~ NEWLINE?)* ~ NEWLINE? ~ "}" }
+class_constructor = { (path_identifier | identifier) ~ "{" ~ NEWLINE? ~ (class_field_value_pair ~ COMMA? ~ NEWLINE?)* ~ NEWLINE? ~ "}" }
 
 // A single field in a class constructor.
 class_field_value_pair = { (identifier ~ COLON ~ expression) | struct_spread }

@@ -13,7 +13,10 @@ use super::{
 use crate::{
     assert_correct_parser,
     ast::*,
-    parser::parse_expr::{consume_if_rule, consume_span_if_rule},
+    parser::{
+        parse_expr::{consume_if_rule, consume_span_if_rule},
+        parse_identifier::parse_path_identifier,
+    },
     unreachable_rule,
 };
 
@@ -627,10 +630,15 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
 
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
-    let class_name = parse_identifier(
-        tokens.next().expect("Guaranteed by the grammar"),
-        diagnostics,
-    );
+
+    let ident_token = tokens.next().expect("Guaranteed by the grammar");
+
+    let class_name = match ident_token.as_rule() {
+        Rule::identifier => parse_identifier(ident_token, diagnostics),
+        Rule::path_identifier => parse_path_identifier(ident_token, diagnostics),
+        _ => unreachable_rule!(ident_token, Rule::class_constructor),
+    };
+
     let mut fields = Vec::new();
     while let Some(field_or_close_bracket) = tokens.next() {
         if field_or_close_bracket.as_str() == "}" {
