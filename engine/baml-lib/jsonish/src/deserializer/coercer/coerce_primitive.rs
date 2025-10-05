@@ -147,6 +147,16 @@ fn coerce_string(
             Ok(baml_value)
         }
         crate::jsonish::Value::Null => Err(ctx.error_unexpected_null(target)),
+        // Handle AnyOf explicitly to extract the original string content
+        // instead of using the Display impl which shows "AnyOf[...]"
+        crate::jsonish::Value::AnyOf(_, original_string) => {
+            let mut baml_value = BamlValueWithFlags::String((original_string.clone(), target).into());
+            let completion_state = value.completion_state();
+            if completion_state == &CompletionState::Incomplete {
+                baml_value.add_flag(Flag::Incomplete);
+            }
+            Ok(baml_value)
+        }
         v => Ok(BamlValueWithFlags::String(
             (v.to_string(), target, Flag::JsonToString(v.clone())).into(),
         )),
@@ -448,6 +458,46 @@ mod tests {
                 result, expected,
                 "Failed to parse '{input}'. Expected {expected:?}, got {result:?}"
             );
+        }
+    }
+
+    #[test]
+    fn test_coerce_anyof_to_string() {
+        use crate::jsonish::Value;
+        use crate::helpers::{load_test_ir, render_output_format};
+
+        // Create an AnyOf value similar to what the parser creates
+        let anyof_value = Value::AnyOf(
+            vec![
+                Value::String("[json\n".to_string(), CompletionState::Incomplete),
+                Value::Object(vec![], CompletionState::Incomplete),
+            ],
+            "[json\nAnyOf[{,AnyOf[{,{},],]".to_string(), // This is the raw string
+        );
+
+        let ir = load_test_ir("");
+        let target = TypeIR::Primitive(TypeValue::String, Default::default());
+        let output_format = render_output_format(&ir, &target, &Default::default(), baml_types::StreamingMode::Streaming).unwrap();
+        let ctx = ParsingContext::new(&output_format, baml_types::StreamingMode::Streaming);
+
+        let result = coerce_string(&ctx, &target, Some(&anyof_value));
+
+        // The bug would cause this to return "AnyOf[..."
+        // The fix should return the original raw string
+        assert!(result.is_ok());
+        let baml_value = result.unwrap();
+        match baml_value {
+            BamlValueWithFlags::String(v) => {
+                // Should NOT start with "AnyOf[" - that's the bug!
+                assert!(
+                    !v.value.starts_with("AnyOf["),
+                    "Got parsing artifact in string: {}",
+                    v.value
+                );
+                // Should be the original string instead
+                assert_eq!(v.value, "[json\nAnyOf[{,AnyOf[{,{},],]");
+            }
+            _ => panic!("Expected String, got {:?}", baml_value),
         }
     }
 }
