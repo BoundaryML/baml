@@ -2285,6 +2285,31 @@ export class HttpRequest {
     }
   }
   
+  OpenAIGPT4oMissingBaseUrlEnvVar(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "OpenAIGPT4oMissingBaseUrlEnvVar",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   OpenAIWithAnthropicResponseHello(
       s: string,
       __baml_options__?: BamlCallOptions
@@ -7879,6 +7904,31 @@ export class HttpStreamRequest {
         "NullLiteralClassHello",
         {
           "s": s
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  OpenAIGPT4oMissingBaseUrlEnvVar(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "OpenAIGPT4oMissingBaseUrlEnvVar",
+        {
+          "input": input
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),

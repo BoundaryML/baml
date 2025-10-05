@@ -105,16 +105,27 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                     .context(format!("Could not find client with name: {client_name}"))?;
                 // Get required env vars from the client walker
                 let new_client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
-                // Only store the required env vars
-                let filtered_env_vars = ctx
-                    .env_vars()
-                    .iter()
-                    .filter(|(k, _)| walker.required_env_vars().contains(*k))
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect();
+
+                // Get required environment variables and error if they are not
+                // set.
+                let required_env_vars = walker.required_env_vars().iter().map(|key| {
+                    ctx
+                        .env_vars()
+                        .get(key)
+                        .ok_or_else(|| anyhow::anyhow!(
+                            "LLM client '{client_name}' requires environment variable '{key}' to be set but it is not"
+                        ))
+                        .inspect(|value| if value.trim().is_empty() {
+                            baml_log::warn!(
+                                "Required environment variable '{key}' for client '{client_name}' is set but is empty: {key}='{value}'"
+                            );
+                        })
+                        .map(|value| (key.to_owned(), value.to_owned()))
+                }).collect::<Result<HashMap<String, String>>>()?;
+
                 clients.insert(
                     client_name.into(),
-                    CachedClient::new(new_client.clone(), filtered_env_vars),
+                    CachedClient::new(new_client.clone(), required_env_vars),
                 );
                 Ok(new_client)
             }

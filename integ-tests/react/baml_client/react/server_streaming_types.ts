@@ -117,6 +117,7 @@ export type StreamingServerTypes = {
   MyFunc: DynamicOutput,
   NestedAlias: number | string | boolean | string[] | Record<string, string[]>,
   NullLiteralClassHello: ClassForNullLiteral,
+  OpenAIGPT4oMissingBaseUrlEnvVar: string,
   OpenAIWithAnthropicResponseHello: string,
   OptionalTest_Function: (OptionalTest_ReturnType | null)[],
   PdfInput: string,

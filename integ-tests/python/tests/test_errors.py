@@ -33,3 +33,7 @@ Attempt 1: LLM client "openai/gpt-1-noexist" failed with status code: Unspecifie
 Attempt 2: LLM client "openai/gpt-2-noexist" failed with status code: Unspecified error code: 404
     Message: Request failed with status code: 404 Not Found. {"error":{"message":"The model `gpt-2-noexist` does not exist or you do not have access to it.","type":"invalid_request_error","param":null,"code":"model_not_found"}}"""),
     )
+
+@pytest.mark.asyncio
+async def test_error_on_missing_url_env_var():
+    response = await b.OpenAIGPT4oMissingBaseUrlEnvVar("computers")

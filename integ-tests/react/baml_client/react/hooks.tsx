@@ -4862,6 +4862,56 @@ export function useNullLiteralClassHello(
   }
 }
 /**
+ * A specialized hook for the OpenAIGPT4oMissingBaseUrlEnvVar BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useOpenAIGPT4oMissingBaseUrlEnvVar({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useOpenAIGPT4oMissingBaseUrlEnvVar({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useOpenAIGPT4oMissingBaseUrlEnvVar(props: HookInput<'OpenAIGPT4oMissingBaseUrlEnvVar', { stream: false }>): HookOutput<'OpenAIGPT4oMissingBaseUrlEnvVar', { stream: false }>
+export function useOpenAIGPT4oMissingBaseUrlEnvVar(props?: HookInput<'OpenAIGPT4oMissingBaseUrlEnvVar', { stream?: true }>): HookOutput<'OpenAIGPT4oMissingBaseUrlEnvVar', { stream: true }>
+export function useOpenAIGPT4oMissingBaseUrlEnvVar(
+  props: HookInput<'OpenAIGPT4oMissingBaseUrlEnvVar', { stream?: boolean }> = {},
+): HookOutput<'OpenAIGPT4oMissingBaseUrlEnvVar', { stream: true }> | HookOutput<'OpenAIGPT4oMissingBaseUrlEnvVar', { stream: false }> {
+  let action: ServerAction = Actions.OpenAIGPT4oMissingBaseUrlEnvVar;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.OpenAIGPT4oMissingBaseUrlEnvVar;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'OpenAIGPT4oMissingBaseUrlEnvVar', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the OpenAIWithAnthropicResponseHello BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**

@@ -1674,6 +1674,24 @@ export const NullLiteralClassHello = async (
 };
 
 /**
+ * Executes the "OpenAIGPT4oMissingBaseUrlEnvVar" BAML action.
+ *
+ * This server action calls the underlying BAML function "OpenAIGPT4oMissingBaseUrlEnvVar"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const OpenAIGPT4oMissingBaseUrlEnvVar = async (
+  input: string,
+): Promise<string> => {
+  return b.OpenAIGPT4oMissingBaseUrlEnvVar(
+    input,
+  );
+};
+
+/**
  * Executes the "OpenAIWithAnthropicResponseHello" BAML action.
  *
  * This server action calls the underlying BAML function "OpenAIWithAnthropicResponseHello"
