@@ -109,7 +109,7 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                 // Collect required environment variables.
                 let mut required_env_vars = HashMap::new();
 
-                // If the client is Vertex of AWS Bedrock, we don't fail on
+                // If the client is Vertex or AWS Bedrock, we don't fail on
                 // missing required environment variables because we run a bunch
                 // of additional logic to resolve required values (i.e for
                 // Vertex if GOOGLE_CLOUD_PROJECT is not provided it can be
