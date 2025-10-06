@@ -9,6 +9,7 @@ use crate::{
 
 pub mod interpret;
 pub mod typecheck;
+pub mod typecheck_bidirectional;
 
 use std::{
     collections::{HashSet, VecDeque},
