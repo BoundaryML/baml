@@ -114,7 +114,10 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                 // of additional logic to resolve required values (i.e for
                 // Vertex if GOOGLE_CLOUD_PROJECT is not provided it can be
                 // found on the credentials property).
-                let fail_on_missing_required_env_vars = !matches!(
+                //
+                // If called with modular API, we don't fail either. User might
+                // want to insert the values later.
+                let fail_on_missing_required_env_vars = !ctx.is_modular_api() && !matches!(
                     walker.item.elem.provider,
                     ClientProvider::AwsBedrock | ClientProvider::Vertex
                 );

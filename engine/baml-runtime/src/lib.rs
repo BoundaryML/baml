@@ -1057,7 +1057,10 @@ impl BamlRuntime {
         stream: bool,
     ) -> Result<HTTPRequest> {
         baml_log::set_from_env(&env_vars).unwrap();
-        let ctx = context_manager.create_ctx(tb, cb, env_vars, vec![])?;
+        let mut ctx = context_manager.create_ctx(tb, cb, env_vars, vec![])?;
+
+        // Called from modular API.
+        ctx.set_modular_api(true);
 
         let provider = self.llm_provider_from_function(&function_name, &ctx)?;
 
