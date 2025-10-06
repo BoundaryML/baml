@@ -1,10 +1,10 @@
 cff-version: 1.2.0
 message: "If you use BAML in your research or project, please cite it using the metadata from this file."
 type: software
-title: "BAML: Basically a Made-up Language"
+title: "BAML - A new programming language for building agents"
 abstract: "BAML is a simple prompting language for building reliable AI workflows and agents. BAML makes prompt engineering easy by turning it into schema engineering -- where you mostly focus on the models of your prompt -- to get more reliable outputs."
 authors:
-  - name: "Boundary ML"
+  - name: "Boundary"
     email: "contact@boundaryml.com"
     website: "https://www.boundaryml.com"
 repository-code: "https://github.com/BoundaryML/baml"
