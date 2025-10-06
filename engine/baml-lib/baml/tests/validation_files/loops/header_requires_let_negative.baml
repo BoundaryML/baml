@@ -53,12 +53,6 @@ function MissingLetAfter() -> int {
 //  3 | 
 //  4 | for (i = 0; i < 3; i += 1) {
 //    | 
-// error: Error validating: Invalid binary operation: cannot infer type of left operand
-//   -->  loops/header_requires_let_negative.baml:4
-//    | 
-//  3 | 
-//  4 | for (i = 0; i < 3; i += 1) {
-//    | 
 // error: Error validating: Unknown variable i
 //   -->  loops/header_requires_let_negative.baml:4
 //    | 

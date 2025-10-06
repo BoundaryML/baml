@@ -2,6 +2,10 @@
 
 Next.js integration for BAML, providing seamless support for server components, server actions, and streaming responses.
 
+## Requirements
+
+- **Next.js 15 or higher**
+
 ## Installation
 
 ```bash

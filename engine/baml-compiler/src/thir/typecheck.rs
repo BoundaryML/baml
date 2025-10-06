@@ -2363,20 +2363,6 @@ pub fn typecheck_expression(
 
                 _ => {
                     match (left.meta().1.as_ref(), right.meta().1.as_ref()) {
-                        (None, Some(_)) => {
-                            diagnostics.push_error(DatamodelError::new_validation_error(
-                                "Invalid binary operation: cannot infer type of left operand",
-                                span.clone(),
-                            ))
-                        }
-
-                        (Some(_), None) => {
-                            diagnostics.push_error(DatamodelError::new_validation_error(
-                                "Invalid binary operation: cannot infer type of right operand",
-                                span.clone(),
-                            ))
-                        }
-
                         (Some(left_type), Some(right_type)) => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
                                 &format!("Invalid binary operation ({operator}) on different types: {} {operator} {}",
@@ -2387,11 +2373,9 @@ pub fn typecheck_expression(
                             ));
                         }
 
-                        (None, None) => {
-                            diagnostics.push_error(DatamodelError::new_validation_error(
-                                "Invalid binary operation: cannot infer type of operands",
-                                span.clone(),
-                            ));
+                        _ => {
+                            // We won't emit more diagnostics here because if either of the branches
+                            // has no type we've already emitted an error for that branch
                         }
                     };
 

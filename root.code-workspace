@@ -9,10 +9,6 @@
       "path": ".github"
     },
     {
-      "name": "docs",
-      "path": "docs"
-    },
-    {
       "name": "fern",
       "path": "fern"
     },
