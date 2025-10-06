@@ -183,3 +183,15 @@ func stringPtr(s string) *string {
 >
   Convert the image to a JSON representation. Returns either a URL object or a base64 object with media type.
 </ParamField>
+
+## URL Handling
+
+When you create an Image using `from_url`, BAML processes the URL according to your client's `media_url_resolver` configuration:
+
+- **OpenAI**: By default keeps URLs as-is (`never`). Set to `always` to convert to base64.
+- **Anthropic**: By default keeps URLs as-is (`never`). The provider accepts both formats.
+- **Google AI**: By default uses `if_google_uri` to preserve gs:// URLs while converting others.
+- **Vertex AI**: By default uses `ensure_mime` to include MIME type information.
+- **AWS Bedrock**: By default converts to base64 (`always`).
+
+You can override these defaults in your client configuration. See [media_url_resolver](/reference/baml/clients/providers#media_url_resolver) for details.

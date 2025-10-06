@@ -100,6 +100,17 @@ pub enum ResolveMediaUrls {
     Never,
 }
 
+impl From<internal_llm_client::ResolveMediaUrls> for ResolveMediaUrls {
+    fn from(value: internal_llm_client::ResolveMediaUrls) -> Self {
+        match value {
+            internal_llm_client::ResolveMediaUrls::Always => ResolveMediaUrls::Always,
+            internal_llm_client::ResolveMediaUrls::IfMatchesGoogleFileUri => ResolveMediaUrls::IfMatchesGoogleFileUri,
+            internal_llm_client::ResolveMediaUrls::EnsureMime => ResolveMediaUrls::EnsureMime,
+            internal_llm_client::ResolveMediaUrls::Never => ResolveMediaUrls::Never,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct ModelFeatures {
     pub completion: bool,

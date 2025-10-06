@@ -21,6 +21,35 @@ client<llm> GPT4 {
   }
 }
 
+// Test client with media URL handling configuration
+client<llm> TestOpenAIWithMediaHandling {
+  provider openai
+  options {
+    model "gpt-4o"
+    api_key env.OPENAI_API_KEY
+    media_url_resolver {
+      image "always"     // Override default (never)
+      audio "never"      // Override default (always)
+      pdf "always"       // Override default (never)
+      video "never"      // Keep default
+    }
+  }
+}
+
+client<llm> TestAnthropicWithMediaHandling {
+  provider anthropic
+  options {
+    model "claude-3-5-sonnet-20241022"
+    api_key env.ANTHROPIC_API_KEY
+    media_url_resolver {
+      image "ensure_mime"
+      audio "always"
+      pdf "never"        // Override default (always)
+      video "never"
+    }
+  }
+}
+
 
 client<llm> GPT4o {
   provider openai

@@ -184,3 +184,13 @@ func stringPtr(s string) *string {
 >
   Convert the audio to a JSON representation. Returns either a URL object or a base64 object with media type.
 </ParamField>
+
+## URL Handling
+
+Audio URLs are processed according to your client's `media_url_resolver` configuration:
+
+- **OpenAI**: By default converts to base64 (`always`) for compatibility.
+- **Vertex AI**: By default uses `ensure_mime` to include MIME type.
+- **Other providers**: By default keep URLs as-is (`never`).
+
+Note: OpenAI requires audio to be base64-encoded, which is why the default is `always`.

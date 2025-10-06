@@ -516,6 +516,95 @@ impl UnresolvedResponseType {
     }
 }
 
+// Duplicate of the ResolveMediaUrls enum from baml-runtime
+// This will be properly resolved when the runtime imports from llm-client
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
+pub enum ResolveMediaUrls {
+    Always,
+    IfMatchesGoogleFileUri,
+    EnsureMime,
+    Never,
+}
+
+/// Controls how media URLs are processed before sending to LLM providers
+///
+/// # Variants
+///
+/// * `Always` - Always download URLs and convert to base64
+/// * `Never` - Pass URLs through unchanged
+/// * `EnsureMime` - Ensure MIME type is present (may require download)
+/// * `IfMatchesGoogleFileUri` - Only process non-gs:// URLs
+#[derive(Clone, Debug, Hash)]
+pub enum UnresolvedResolveMediaUrls {
+    Always,
+    Never,
+    EnsureMime,
+    IfMatchesGoogleFileUri,
+}
+
+impl UnresolvedResolveMediaUrls {
+    pub fn required_env_vars(&self) -> HashSet<String> {
+        HashSet::new()
+    }
+
+    pub fn resolve(&self, _: &impl GetEnvVar) -> Result<ResolveMediaUrls> {
+        Ok(match self {
+            Self::Always => ResolveMediaUrls::Always,
+            Self::Never => ResolveMediaUrls::Never,
+            Self::EnsureMime => ResolveMediaUrls::EnsureMime,
+            Self::IfMatchesGoogleFileUri => ResolveMediaUrls::IfMatchesGoogleFileUri,
+        })
+    }
+}
+
+/// Configuration for media URL handling behavior
+///
+/// # Example
+///
+/// ```baml
+/// client<llm> MyClient {
+///   provider openai
+///   options {
+///     media_url_resolver {
+///       image "always"     // Convert image URLs to base64
+///       audio "never"      // Pass audio URLs through
+///       pdf "ensure_mime"  // Add MIME type if missing
+///       video "never"      // Pass video URLs through
+///     }
+///   }
+/// }
+/// ```
+#[derive(Clone, Debug, Default, Hash)]
+pub struct UnresolvedMediaUrlResolver {
+    pub images: Option<UnresolvedResolveMediaUrls>,
+    pub audio: Option<UnresolvedResolveMediaUrls>,
+    pub pdf: Option<UnresolvedResolveMediaUrls>,
+    pub video: Option<UnresolvedResolveMediaUrls>,
+}
+
+impl UnresolvedMediaUrlResolver {
+    pub fn required_env_vars(&self) -> HashSet<String> {
+        HashSet::new()
+    }
+
+    pub fn resolve(&self, ctx: &impl GetEnvVar) -> Result<MediaUrlResolver> {
+        Ok(MediaUrlResolver {
+            images: self.images.as_ref().map(|u| u.resolve(ctx)).transpose()?,
+            audio: self.audio.as_ref().map(|u| u.resolve(ctx)).transpose()?,
+            pdf: self.pdf.as_ref().map(|u| u.resolve(ctx)).transpose()?,
+            video: self.video.as_ref().map(|u| u.resolve(ctx)).transpose()?,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct MediaUrlResolver {
+    pub images: Option<ResolveMediaUrls>,
+    pub audio: Option<ResolveMediaUrls>,
+    pub pdf: Option<ResolveMediaUrls>,
+    pub video: Option<ResolveMediaUrls>,
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;

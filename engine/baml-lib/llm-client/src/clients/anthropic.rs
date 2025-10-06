@@ -8,8 +8,9 @@ use secrecy::SecretString;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 use crate::{
-    AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes,
-    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
+    AllowedRoleMetadata, FinishReasonFilter, MediaUrlResolver, RolesSelection,
+    SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
+    UnresolvedMediaUrlResolver, UnresolvedRolesSelection,
 };
 
 pub const DEFAULT_ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -27,6 +28,7 @@ pub struct UnresolvedAnthropic<Meta> {
     #[baml_safe_hash]
     properties: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
     finish_reason_filter: UnresolvedFinishReasonFilter,
+    media_url_resolver: UnresolvedMediaUrlResolver,
 }
 
 impl<Meta> UnresolvedAnthropic<Meta> {
@@ -48,6 +50,7 @@ impl<Meta> UnresolvedAnthropic<Meta> {
                 .map(|(k, (_, v))| (k.clone(), ((), v.without_meta())))
                 .collect(),
             finish_reason_filter: self.finish_reason_filter.clone(),
+            media_url_resolver: self.media_url_resolver.clone(),
         }
     }
 }
@@ -62,6 +65,7 @@ pub struct ResolvedAnthropic {
     pub properties: IndexMap<String, serde_json::Value>,
     pub proxy_url: Option<String>,
     pub finish_reason_filter: FinishReasonFilter,
+    pub media_url_resolver: MediaUrlResolver,
 }
 
 impl ResolvedAnthropic {
@@ -109,6 +113,7 @@ impl ResolvedAnthropic {
             role_selection,
             allowed_metadata: AllowedRoleMetadata::All,
             supported_request_modes: SupportedRequestModes { stream: Some(true) },
+            media_url_resolver: MediaUrlResolver::default(),
         }
     }
 }
@@ -169,6 +174,7 @@ impl<Meta: Clone> UnresolvedAnthropic<Meta> {
             properties,
             proxy_url: super::helpers::get_proxy_url(ctx),
             finish_reason_filter: self.finish_reason_filter.resolve(ctx)?,
+            media_url_resolver: self.media_url_resolver.resolve(ctx)?,
         })
     }
 
@@ -185,6 +191,7 @@ impl<Meta: Clone> UnresolvedAnthropic<Meta> {
         let supported_request_modes = properties.ensure_supported_request_modes();
         let headers = properties.ensure_headers().unwrap_or_default();
         let finish_reason_filter = properties.ensure_finish_reason_filter();
+        let media_url_resolver = properties.ensure_media_url_resolver();
         let (properties, errors) = properties.finalize();
         if !errors.is_empty() {
             return Err(errors);
@@ -199,6 +206,7 @@ impl<Meta: Clone> UnresolvedAnthropic<Meta> {
             headers,
             properties,
             finish_reason_filter,
+            media_url_resolver,
         })
     }
 }

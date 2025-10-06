@@ -7,8 +7,9 @@ use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 use crate::{
-    AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes,
-    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
+    AllowedRoleMetadata, FinishReasonFilter, MediaUrlResolver, RolesSelection,
+    SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
+    UnresolvedMediaUrlResolver, UnresolvedRolesSelection,
 };
 
 #[derive(Debug, Clone, BamlHash)]
@@ -24,6 +25,7 @@ pub struct UnresolvedGoogleAI<Meta> {
     finish_reason_filter: UnresolvedFinishReasonFilter,
     #[baml_safe_hash]
     properties: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
+    media_url_resolver: UnresolvedMediaUrlResolver,
 }
 
 impl<Meta> UnresolvedGoogleAI<Meta> {
@@ -46,6 +48,7 @@ impl<Meta> UnresolvedGoogleAI<Meta> {
                 .map(|(k, (_, v))| (k.clone(), ((), v.without_meta())))
                 .collect::<IndexMap<_, _>>(),
             finish_reason_filter: self.finish_reason_filter.clone(),
+            media_url_resolver: self.media_url_resolver.clone(),
         }
     }
 }
@@ -61,6 +64,7 @@ pub struct ResolvedGoogleAI {
     pub properties: IndexMap<String, serde_json::Value>,
     pub proxy_url: Option<String>,
     pub finish_reason_filter: FinishReasonFilter,
+    pub media_url_resolver: MediaUrlResolver,
 }
 
 impl ResolvedGoogleAI {
@@ -156,6 +160,7 @@ impl<Meta: Clone> UnresolvedGoogleAI<Meta> {
                 .collect::<Result<IndexMap<_, _>>>()?,
             proxy_url: super::helpers::get_proxy_url(ctx),
             finish_reason_filter: self.finish_reason_filter.resolve(ctx)?,
+            media_url_resolver: self.media_url_resolver.resolve(ctx)?,
         })
     }
 
@@ -177,6 +182,7 @@ impl<Meta: Clone> UnresolvedGoogleAI<Meta> {
         let supported_request_modes = properties.ensure_supported_request_modes();
         let headers = properties.ensure_headers().unwrap_or_default();
         let finish_reason_filter = properties.ensure_finish_reason_filter();
+        let media_url_resolver = properties.ensure_media_url_resolver();
         let (properties, errors) = properties.finalize();
 
         if !errors.is_empty() {
@@ -193,6 +199,7 @@ impl<Meta: Clone> UnresolvedGoogleAI<Meta> {
             supported_request_modes,
             properties,
             finish_reason_filter,
+            media_url_resolver,
         })
     }
 }

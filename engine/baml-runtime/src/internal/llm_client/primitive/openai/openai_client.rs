@@ -484,11 +484,6 @@ impl WithStreamChat for OpenAIClient {
 
 macro_rules! make_openai_client {
     ($client:ident, $properties:ident, $provider:expr, dynamic) => {{
-        let resolve_pdf_urls = if $provider == "openai-responses" {
-            ResolveMediaUrls::Never
-        } else {
-            ResolveMediaUrls::Always
-        };
         Ok(Self {
             name: $client.name.clone(),
             provider: $provider.into(),
@@ -504,10 +499,18 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: false,
-                resolve_audio_urls: ResolveMediaUrls::Always,
-                resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: $properties.media_url_resolver.audio
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::Always),
+                resolve_image_urls: $properties.media_url_resolver.images
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::Never),
+                resolve_pdf_urls: $properties.media_url_resolver.pdf
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::Never),
+                resolve_video_urls: $properties.media_url_resolver.video
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::Never),
                 allowed_metadata: $properties.allowed_metadata.clone(),
             },
             properties: $properties,
@@ -516,11 +519,6 @@ macro_rules! make_openai_client {
         })
     }};
     ($client:ident, $properties:ident, $provider:expr) => {{
-        let resolve_pdf_urls = if $provider == "openai-responses" {
-            ResolveMediaUrls::Never
-        } else {
-            ResolveMediaUrls::Always
-        };
         Ok(Self {
             name: $client.name().into(),
             provider: $provider.into(),
@@ -536,10 +534,18 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: false,
-                resolve_audio_urls: ResolveMediaUrls::Always,
-                resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: $properties.media_url_resolver.audio
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::Always),
+                resolve_image_urls: $properties.media_url_resolver.images
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::Never),
+                resolve_pdf_urls: $properties.media_url_resolver.pdf
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::Never),
+                resolve_video_urls: $properties.media_url_resolver.video
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::Never),
                 allowed_metadata: $properties.allowed_metadata.clone(),
             },
             properties: $properties,

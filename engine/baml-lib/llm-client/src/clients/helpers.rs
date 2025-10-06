@@ -5,7 +5,8 @@ use indexmap::IndexMap;
 
 use crate::{
     SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
-    UnresolvedResponseType, UnresolvedRolesSelection,
+    UnresolvedMediaUrlResolver, UnresolvedResolveMediaUrls, UnresolvedResponseType,
+    UnresolvedRolesSelection,
 };
 
 #[derive(Debug, Clone, Hash)]
@@ -407,6 +408,66 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                     None
                 }
             })
+    }
+
+    pub fn ensure_media_url_resolver(&mut self) -> UnresolvedMediaUrlResolver {
+        let mut result = UnresolvedMediaUrlResolver::default();
+
+        if let Some((_span, map, _)) = self.ensure_map("media_url_resolver", false) {
+            for (key, (key_span, value)) in map {
+                let resolve_mode = self.parse_resolve_media_urls(&value, &key_span);
+
+                match key.as_str() {
+                    "image" => result.images = resolve_mode,
+                    "audio" => result.audio = resolve_mode,
+                    "pdf" => result.pdf = resolve_mode,
+                    "video" => result.video = resolve_mode,
+                    other => {
+                        self.push_error(
+                            format!("Unknown media type in media_url_resolver: {}. Expected one of: image, audio, pdf, video", other),
+                            key_span
+                        );
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    fn parse_resolve_media_urls(&mut self, value: &UnresolvedValue<Meta>, span: &Meta) -> Option<UnresolvedResolveMediaUrls> {
+        match value.as_str() {
+            Some(StringOr::Value(s)) => match s.as_str() {
+                "always" => Some(UnresolvedResolveMediaUrls::Always),
+                "never" => Some(UnresolvedResolveMediaUrls::Never),
+                "ensure_mime" => Some(UnresolvedResolveMediaUrls::EnsureMime),
+                "if_google_uri" => Some(UnresolvedResolveMediaUrls::IfMatchesGoogleFileUri),
+                other => {
+                    self.push_error(
+                        format!(
+                            "Invalid media URL resolution mode: {}. Expected one of: always, never, ensure_mime, if_google_uri",
+                            other
+                        ),
+                        span.clone()
+                    );
+                    None
+                }
+            },
+            Some(StringOr::EnvVar(_)) => {
+                self.push_error(
+                    "media_url_resolver values cannot be environment variables",
+                    span.clone()
+                );
+                None
+            },
+            _ => {
+                self.push_error(
+                    "media_url_resolver values must be strings",
+                    span.clone()
+                );
+                None
+            }
+        }
     }
 
     pub fn ensure_query_params(&mut self) -> Option<IndexMap<String, StringOr>> {
