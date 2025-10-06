@@ -33,13 +33,12 @@ use crate::{
         },
         prompt_renderer::PromptRenderer,
     },
-    runtime::InternalBamlRuntime,
-    runtime_interface::{InternalClientLookup, RuntimeConstructor},
+    runtime_interface::RuntimeConstructor,
     tracing::BamlTracer,
     tracingv2::storage::storage::{Collector, BAML_TRACER},
     type_builder::TypeBuilder,
-    FunctionResult, FunctionResultStream, InternalRuntimeInterface, RenderCurlSettings,
-    RuntimeContext, RuntimeContextManager,
+    BamlRuntime, FunctionResult, FunctionResultStream, InternalRuntimeInterface,
+    RenderCurlSettings, RuntimeContext, RuntimeContextManager,
 };
 
 pub(crate) struct PreparedFunction<'ir> {
@@ -99,7 +98,7 @@ impl From<PrepareFunctionError> for Result<FunctionResult> {
     }
 }
 
-impl InternalBamlRuntime {
+impl BamlRuntime {
     // TODO: this is introduced so that tracing can hook into function calls
     // _after_ prepare_function but before call_function_impl, which is why
     // `prepare_function` is not used in `FunctionResultStream`.  We should try

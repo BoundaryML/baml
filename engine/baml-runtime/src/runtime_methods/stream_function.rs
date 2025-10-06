@@ -33,15 +33,15 @@ use crate::{
         },
         prompt_renderer::PromptRenderer,
     },
-    runtime_interface::{InternalClientLookup, RuntimeConstructor},
+    runtime_interface::RuntimeConstructor,
     tracing::BamlTracer,
     tracingv2::storage::storage::{Collector, BAML_TRACER},
     type_builder::TypeBuilder,
-    FunctionResult, FunctionResultStream, InternalBamlRuntime, InternalRuntimeInterface,
+    BamlRuntime, FunctionResult, FunctionResultStream, InternalRuntimeInterface,
     RenderCurlSettings, RuntimeContext, RuntimeContextManager, TripWire,
 };
 
-impl InternalBamlRuntime {
+impl BamlRuntime {
     pub(crate) fn stream_function_impl(
         &self,
         function_name: String,

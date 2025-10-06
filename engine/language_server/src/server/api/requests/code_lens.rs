@@ -50,7 +50,7 @@ impl SyncRequestHandler for CodeLens {
                 .as_ref()
                 .unwrap_or(&default_flags),
         ) {
-            Ok(runtime) => runtime.internal().diagnostics().clone(),
+            Ok(runtime) => runtime.diagnostics().clone(),
             Err(err) => err,
         };
 

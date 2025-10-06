@@ -37,10 +37,7 @@ use wasmtimer::tokio::*;
 use super::rpc_converters::{
     to_rpc_event, BlobRefCache, BlobStorage, IRRpcState, IntoRpcEvent, TypeLookup,
 };
-use crate::{
-    runtime::{AstSignatureWrapper, InternalBamlRuntime},
-    tracingv2::storage::interface::TraceEventWithMeta,
-};
+use crate::{runtime::AstSignatureWrapper, tracingv2::storage::interface::TraceEventWithMeta};
 
 enum PublisherMessage {
     Trace(Arc<TraceEventWithMeta>),

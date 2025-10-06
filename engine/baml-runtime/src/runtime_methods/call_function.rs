@@ -33,16 +33,15 @@ use crate::{
         },
         prompt_renderer::PromptRenderer,
     },
-    runtime::InternalBamlRuntime,
-    runtime_interface::{InternalClientLookup, RuntimeConstructor},
+    runtime_interface::RuntimeConstructor,
     tracing::BamlTracer,
     tracingv2::storage::storage::{Collector, BAML_TRACER},
     type_builder::TypeBuilder,
-    FunctionResult, FunctionResultStream, InternalRuntimeInterface, RenderCurlSettings,
-    RuntimeContext, RuntimeContextManager, TripWire,
+    BamlRuntime, FunctionResult, FunctionResultStream, InternalRuntimeInterface,
+    RenderCurlSettings, RuntimeContext, RuntimeContextManager, TripWire,
 };
 
-impl InternalBamlRuntime {
+impl BamlRuntime {
     pub(crate) async fn call_function_impl<'ir>(
         &'ir self,
         prepared_func_call: PreparedFunction<'ir>,

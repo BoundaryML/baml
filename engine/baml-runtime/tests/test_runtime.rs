@@ -179,7 +179,7 @@ mod internal_tests {
         )?;
         log::info!("Runtime:");
 
-        let missing_env_vars = runtime.internal().ir().required_env_vars();
+        let missing_env_vars = runtime.ir.required_env_vars();
 
         let ctx = runtime
             .create_ctx_manager(BamlValue::String("test".to_string()), None)
