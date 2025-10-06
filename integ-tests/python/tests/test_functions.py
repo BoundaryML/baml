@@ -8,7 +8,6 @@ from assertpy import assert_that
 from .base64_test_data import image_b64, audio_b64
 import baml_py
 from baml_py import errors
-import tempfile
 
 # also test importing the error from the baml_py submodules
 from ..baml_client import b
@@ -60,7 +59,7 @@ def count_trace_events_from_file(trace_file_path: str) -> dict:
     if not os.path.exists(trace_file_path):
         raise FileNotFoundError(f"Trace file not found: {trace_file_path}")
 
-    with open(trace_file_path, 'r') as f:
+    with open(trace_file_path, "r") as f:
         for line in f:
             try:
                 event = json.loads(line.strip())
@@ -919,14 +918,12 @@ async def test_tracing_async_only():
         _ = DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.drain_stats()
 
         try:
-            res = await top_level_async_tracing()  
+            res = await top_level_async_tracing()
             assert_that(res).is_equal_to(1)
         except Exception as e:
             print("ERROR", e)
-        
 
         DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.flush()
-
 
         # Verify trace events were written to file
         event_counts = count_trace_events_from_file(trace_file)
@@ -934,7 +931,9 @@ async def test_tracing_async_only():
         assert_that(event_counts["function_start"]).is_equal_to(10)
         assert_that(event_counts["function_end"]).is_equal_to(10)
         # Function starts and ends should match
-        assert_that(event_counts["function_start"]).is_equal_to(event_counts["function_end"])
+        assert_that(event_counts["function_start"]).is_equal_to(
+            event_counts["function_end"]
+        )
     finally:
         pass
 
@@ -1656,7 +1655,6 @@ async def test_openai_responses_all_roles():
     _res = await b.TestOpenAIResponsesAllRoles(
         "a world without horses, should be titled 'A World Without Horses'. Make it short, 2 sentences."
     )
-
 
 
 @pytest.fixture(scope="session", autouse=True)

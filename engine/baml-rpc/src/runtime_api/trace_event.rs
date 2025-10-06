@@ -171,8 +171,56 @@ fn deserialize_string_as_bytes<'de, D>(deserializer: D) -> Result<Cow<'static, [
 where
     D: serde::Deserializer<'de>,
 {
-    let s = String::deserialize(deserializer)?;
-    Ok(Cow::Owned(s.into_bytes()))
+    struct BytesVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for BytesVisitor {
+        type Value = Cow<'static, [u8]>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a string or byte array")
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(Cow::Owned(value.as_bytes().to_vec()))
+        }
+
+        fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(Cow::Owned(value.into_bytes()))
+        }
+
+        fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(Cow::Owned(value.to_vec()))
+        }
+
+        fn visit_byte_buf<E>(self, value: Vec<u8>) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(Cow::Owned(value))
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::SeqAccess<'de>,
+        {
+            let mut bytes = Vec::new();
+            while let Some(byte) = seq.next_element::<u8>()? {
+                bytes.push(byte);
+            }
+            Ok(Cow::Owned(bytes))
+        }
+    }
+
+    deserializer.deserialize_any(BytesVisitor)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
