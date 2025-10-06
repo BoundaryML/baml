@@ -117,10 +117,11 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                 //
                 // If called with modular API, we don't fail either. User might
                 // want to insert the values later.
-                let fail_on_missing_required_env_vars = !ctx.is_modular_api() && !matches!(
-                    walker.item.elem.provider,
-                    ClientProvider::AwsBedrock | ClientProvider::Vertex
-                );
+                let fail_on_missing_required_env_vars = !ctx.is_modular_api()
+                    && !matches!(
+                        walker.item.elem.provider,
+                        ClientProvider::AwsBedrock | ClientProvider::Vertex
+                    );
 
                 for key in walker.required_env_vars() {
                     if let Some(value) = ctx.env_vars().get(&key) {
