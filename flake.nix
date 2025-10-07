@@ -777,7 +777,7 @@
             BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
               "" # Rely on default includes provided by stdenv.cc + libclang
             else
-              "-isystem ${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/include -isystem ${pkgs.llvmPackages_17.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
+              "-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.llvmPackages.libclang.version}/include -isystem ${pkgs.llvmPackages.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
 
             # Prevent SDK conflicts on macOS
             shellHook = pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
