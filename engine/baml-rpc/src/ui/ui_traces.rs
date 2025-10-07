@@ -393,6 +393,6 @@ impl ApiEndpoint for ListTraceFunctionSummaries {
     type Request<'a> = ListTraceFunctionSummariesRequest;
     type Response<'a> = ListTraceFunctionSummariesResponse;
 
-    const PATH: &'static str = "/v1/traces/summaries";
+    const PATH: &'static str = "/v1/traces/function-summaries";
 }
 
