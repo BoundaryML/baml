@@ -394,9 +394,9 @@ dependencies = [
 
 [[package]]
 name = "aws-credential-types"
-version = "1.2.3"
+version = "1.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "687bc16bc431a8533fe0097c7f0182874767f920989d7260950172ae8e3c4465"
+checksum = "d025db5d9f52cbc413b167136afb3d8aeea708c0d8884783cf6253be5e22f6f2"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
@@ -406,14 +406,15 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.5.8"
+version = "1.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f6c68419d8ba16d9a7463671593c54f81ba58cab466e9b759418da606dcc2e2"
+checksum = "c034a1bc1d70e16e7f4e4caf7e9f7693e4c9c24cd91cf17c2a0b21abaebc7c8b"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
  "aws-smithy-async",
- "aws-smithy-http 0.62.1",
+ "aws-smithy-eventstream",
+ "aws-smithy-http 0.62.3",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -430,16 +431,17 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-bedrockruntime"
-version = "1.76.0"
+version = "1.106.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b538f72f5ab8d23de44aacd109788c37e268fe9f4d060168714a12514d73b434"
+checksum = "65d69fe4cf7e0f812c12ad76b5a50ad7c5e030a424a02896c60af229ea8a2c38"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
+ "aws-sigv4",
  "aws-smithy-async",
  "aws-smithy-eventstream",
- "aws-smithy-http 0.61.1",
- "aws-smithy-json 0.61.4",
+ "aws-smithy-http 0.62.3",
+ "aws-smithy-json 0.61.5",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -447,7 +449,7 @@ dependencies = [
  "bytes",
  "fastrand",
  "http 0.2.12",
- "once_cell",
+ "hyper 0.14.32",
  "regex-lite",
  "tracing",
 ]
@@ -461,8 +463,8 @@ dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-smithy-async",
- "aws-smithy-http 0.62.1",
- "aws-smithy-json 0.61.4",
+ "aws-smithy-http 0.62.3",
+ "aws-smithy-json 0.61.5",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -483,8 +485,8 @@ dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-smithy-async",
- "aws-smithy-http 0.62.1",
- "aws-smithy-json 0.61.4",
+ "aws-smithy-http 0.62.3",
+ "aws-smithy-json 0.61.5",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -505,8 +507,8 @@ dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-smithy-async",
- "aws-smithy-http 0.62.1",
- "aws-smithy-json 0.61.4",
+ "aws-smithy-http 0.62.3",
+ "aws-smithy-json 0.61.5",
  "aws-smithy-query",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
@@ -521,12 +523,13 @@ dependencies = [
 
 [[package]]
 name = "aws-sigv4"
-version = "1.3.3"
+version = "1.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddfb9021f581b71870a17eac25b52335b82211cdc092e02b6876b2bcefa61666"
+checksum = "084c34162187d39e3740cb635acd73c4e3a551a36146ad6fe8883c929c9f876c"
 dependencies = [
  "aws-credential-types",
- "aws-smithy-http 0.62.1",
+ "aws-smithy-eventstream",
+ "aws-smithy-http 0.62.3",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "bytes",
@@ -554,9 +557,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.60.9"
+version = "0.60.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "338a3642c399c0a5d157648426110e199ca7fd1c689cc395676b81aa563700c4"
+checksum = "182b03393e8c677347fb5705a04a9392695d47d20ef0a2f8cfe28c8e6b9b9778"
 dependencies = [
  "aws-smithy-types",
  "bytes",
@@ -585,31 +588,11 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.61.1"
+version = "0.62.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6f276f21c7921fe902826618d1423ae5bf74cf8c1b8472aee8434f3dfd31824"
+checksum = "7c4dacf2d38996cf729f55e7a762b30918229917eca115de45dfa8dfb97796c9"
 dependencies = [
  "aws-smithy-eventstream",
- "aws-smithy-runtime-api",
- "aws-smithy-types",
- "bytes",
- "bytes-utils",
- "futures-core",
- "http 0.2.12",
- "http-body 0.4.6",
- "once_cell",
- "percent-encoding",
- "pin-project-lite",
- "pin-utils",
- "tracing",
-]
-
-[[package]]
-name = "aws-smithy-http"
-version = "0.62.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99335bec6cdc50a346fda1437f9fefe33abf8c99060739a546a16457f2862ca9"
-dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "bytes",
@@ -626,15 +609,15 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.0.5"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f491388e741b7ca73b24130ff464c1478acc34d5b331b7dd0a2ee4643595a15"
+checksum = "147e8eea63a40315d704b97bf9bc9b8c1402ae94f89d5ad6f7550d963309da1b"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "h2 0.3.26",
- "h2 0.4.10",
+ "h2 0.4.12",
  "http 0.2.12",
  "http-body 0.4.6",
  "hyper 0.14.32",
@@ -656,9 +639,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.61.4"
+version = "0.61.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a16e040799d29c17412943bdbf488fd75db04112d0c0d4b9290bacf5ae0014b9"
+checksum = "eaa31b350998e703e9826b2104dd6f63be0508666e1aba88137af060e8944047"
 dependencies = [
  "aws-smithy-types",
 ]
@@ -684,12 +667,12 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.8.3"
+version = "1.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14302f06d1d5b7d333fd819943075b13d27c7700b414f574c3c35859bfb55d5e"
+checksum = "4fa63ad37685ceb7762fa4d73d06f1d5493feb88e3f27259b9ed277f4c01b185"
 dependencies = [
  "aws-smithy-async",
- "aws-smithy-http 0.62.1",
+ "aws-smithy-http 0.62.3",
  "aws-smithy-http-client",
  "aws-smithy-observability",
  "aws-smithy-runtime-api",
@@ -708,9 +691,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.8.1"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd8531b6d8882fd8f48f82a9754e682e29dd44cff27154af51fa3eb730f59efb"
+checksum = "07f5e0fc8a6b3f2303f331b94504bbf754d85488f402d6f1dd7a6080f99afe56"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -757,9 +740,9 @@ dependencies = [
 
 [[package]]
 name = "aws-types"
-version = "1.3.7"
+version = "1.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a322fec39e4df22777ed3ad8ea868ac2f94cd15e1a55f6ee8d8d6305057689a"
+checksum = "b069d19bf01e46298eaedd7c6f283fe565a59263e53eebec945f3e6398f42390"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-async",
@@ -924,7 +907,7 @@ dependencies = [
 
 [[package]]
 name = "baml-cli"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1013,7 +996,7 @@ dependencies = [
 
 [[package]]
 name = "baml-compiler"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -1022,13 +1005,16 @@ dependencies = [
  "internal-baml-diagnostics",
  "internal-baml-parser-database",
  "itertools 0.14.0",
+ "log",
  "pretty",
+ "reqwest",
+ "serde_json",
  "tokio",
 ]
 
 [[package]]
 name = "baml-derive"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1050,7 +1036,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lib"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "baml-compiler",
  "baml-vm",
@@ -1068,7 +1054,7 @@ dependencies = [
 
 [[package]]
 name = "baml-log"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1083,7 +1069,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lsp-types"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "baml-runtime",
@@ -1114,7 +1100,7 @@ dependencies = [
 
 [[package]]
 name = "baml-python-ffi"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1195,7 +1181,7 @@ dependencies = [
 
 [[package]]
 name = "baml-runtime"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1326,7 +1312,7 @@ dependencies = [
 
 [[package]]
 name = "baml-schema-build"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "baml-ids",
@@ -1372,7 +1358,7 @@ dependencies = [
 
 [[package]]
 name = "baml-types"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "baml-ids",
@@ -1398,7 +1384,7 @@ dependencies = [
 
 [[package]]
 name = "baml-typescript-ffi"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1425,7 +1411,7 @@ dependencies = [
 
 [[package]]
 name = "baml-vm"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "baml-compiler",
@@ -1442,7 +1428,7 @@ dependencies = [
 
 [[package]]
 name = "baml_cffi"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1625,7 +1611,7 @@ dependencies = [
 
 [[package]]
 name = "bstd"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2514,7 +2500,7 @@ dependencies = [
 
 [[package]]
 name = "dir-writer"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -3047,7 +3033,7 @@ dependencies = [
 
 [[package]]
 name = "generators-go"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3060,7 +3046,7 @@ dependencies = [
 
 [[package]]
 name = "generators-lib"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -3078,7 +3064,7 @@ dependencies = [
 
 [[package]]
 name = "generators-openapi"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3097,7 +3083,7 @@ dependencies = [
 
 [[package]]
 name = "generators-python"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3110,7 +3096,7 @@ dependencies = [
 
 [[package]]
 name = "generators-ruby"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3123,7 +3109,7 @@ dependencies = [
 
 [[package]]
 name = "generators-typescript"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3314,9 +3300,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.4.10"
+version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9421a676d1b147b16b82c9225157dc629087ef8ec4d5e2960f9437a90dac0a5"
+checksum = "f3c0b69cfcb4e1b9f1bf2f53f95f766e4661169728ec61cd3fe5a0166f2d1386"
 dependencies = [
  "atomic-waker",
  "bytes",
@@ -3567,7 +3553,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
- "h2 0.4.10",
+ "h2 0.4.12",
  "http 1.3.1",
  "http-body 1.0.1",
  "httparse",
@@ -3953,7 +3939,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-ast"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -3974,7 +3960,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-core"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "baml-compiler",
@@ -4015,7 +4001,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-diagnostics"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -4028,7 +4014,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -4049,7 +4035,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja-types"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -4068,7 +4054,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-parser-database"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "baml-derive",
@@ -4094,7 +4080,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-prompt-parser"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "internal-baml-ast",
  "internal-baml-diagnostics",
@@ -4106,7 +4092,7 @@ dependencies = [
 
 [[package]]
 name = "internal-llm-client"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -4306,7 +4292,7 @@ checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 
 [[package]]
 name = "jsonish"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -4394,7 +4380,7 @@ dependencies = [
 
 [[package]]
 name = "language-server"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -4509,7 +4495,7 @@ checksum = "241eaef5fd12c88705a01fc1066c48c4b36e0dd4377dcdc7ec3942cea7a69956"
 
 [[package]]
 name = "llm-response-parser"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -5393,7 +5379,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "playground-server"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -6282,7 +6268,7 @@ dependencies = [
  "encoding_rs",
  "futures-core",
  "futures-util",
- "h2 0.4.10",
+ "h2 0.4.12",
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
@@ -7313,7 +7299,7 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 
 [[package]]
 name = "test-harness"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -7649,7 +7635,7 @@ dependencies = [
  "axum 0.7.9",
  "base64 0.22.1",
  "bytes",
- "h2 0.4.10",
+ "h2 0.4.12",
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
@@ -7690,7 +7676,7 @@ dependencies = [
 
 [[package]]
 name = "tools"
-version = "0.209.0"
+version = "0.210.0"
 dependencies = [
  "anyhow",
  "notify-debouncer-full",

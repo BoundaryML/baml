@@ -147,6 +147,28 @@ fn coerce_string(
             Ok(baml_value)
         }
         crate::jsonish::Value::Null => Err(ctx.error_unexpected_null(target)),
+        // Handle AnyOf explicitly to extract the string content.
+        // If one of the variants is a String, prefer that over the raw input.
+        // Otherwise, use the original raw string.
+        crate::jsonish::Value::AnyOf(choices, original_string) => {
+            // Try to find a String variant in the choices
+            let string_value = choices.iter().find_map(|choice| {
+                if let crate::jsonish::Value::String(s, completion_state) = choice {
+                    Some((s.clone(), completion_state.clone()))
+                } else {
+                    None
+                }
+            });
+
+            let (string_val, completion_state) = string_value
+                .unwrap_or_else(|| (original_string.clone(), value.completion_state().clone()));
+
+            let mut baml_value = BamlValueWithFlags::String((string_val, target).into());
+            if completion_state == CompletionState::Incomplete {
+                baml_value.add_flag(Flag::Incomplete);
+            }
+            Ok(baml_value)
+        }
         v => Ok(BamlValueWithFlags::String(
             (v.to_string(), target, Flag::JsonToString(v.clone())).into(),
         )),
@@ -448,6 +470,94 @@ mod tests {
                 result, expected,
                 "Failed to parse '{input}'. Expected {expected:?}, got {result:?}"
             );
+        }
+    }
+
+    #[test]
+    fn test_coerce_anyof_to_string() {
+        use crate::{
+            helpers::{load_test_ir, render_output_format},
+            jsonish::Value,
+        };
+
+        // Create an AnyOf value similar to what the parser creates
+        let anyof_value = Value::AnyOf(
+            vec![
+                Value::String("[json\n".to_string(), CompletionState::Incomplete),
+                Value::Object(vec![], CompletionState::Incomplete),
+            ],
+            "[json\nAnyOf[{,AnyOf[{,{},],]".to_string(), // This is the raw string
+        );
+
+        let ir = load_test_ir("");
+        let target = TypeIR::Primitive(TypeValue::String, Default::default());
+        let output_format = render_output_format(
+            &ir,
+            &target,
+            &Default::default(),
+            baml_types::StreamingMode::Streaming,
+        )
+        .unwrap();
+        let ctx = ParsingContext::new(&output_format, baml_types::StreamingMode::Streaming);
+
+        let result = coerce_string(&ctx, &target, Some(&anyof_value));
+
+        // The bug would cause this to return "AnyOf[..."
+        // The fix should prefer the String variant from the choices if available
+        assert!(result.is_ok());
+        let baml_value = result.unwrap();
+        match baml_value {
+            BamlValueWithFlags::String(v) => {
+                // Should NOT start with "AnyOf[" - that's the bug!
+                assert!(
+                    !v.value.starts_with("AnyOf["),
+                    "Got parsing artifact in string: {}",
+                    v.value
+                );
+                // Should be the String variant from the choices, not the Display repr
+                assert_eq!(v.value, "[json\n");
+            }
+            _ => panic!("Expected String, got {:?}", baml_value),
+        }
+    }
+
+    #[test]
+    fn test_coerce_anyof_to_string_no_string_variant() {
+        use crate::{
+            helpers::{load_test_ir, render_output_format},
+            jsonish::Value,
+        };
+
+        // Create an AnyOf value with NO string variant - should fall back to raw string
+        let anyof_value = Value::AnyOf(
+            vec![
+                Value::Object(vec![], CompletionState::Incomplete),
+                Value::Array(vec![], CompletionState::Incomplete),
+            ],
+            "some raw input".to_string(),
+        );
+
+        let ir = load_test_ir("");
+        let target = TypeIR::Primitive(TypeValue::String, Default::default());
+        let output_format = render_output_format(
+            &ir,
+            &target,
+            &Default::default(),
+            baml_types::StreamingMode::Streaming,
+        )
+        .unwrap();
+        let ctx = ParsingContext::new(&output_format, baml_types::StreamingMode::Streaming);
+
+        let result = coerce_string(&ctx, &target, Some(&anyof_value));
+
+        assert!(result.is_ok());
+        let baml_value = result.unwrap();
+        match baml_value {
+            BamlValueWithFlags::String(v) => {
+                // Should fall back to the raw input string
+                assert_eq!(v.value, "some raw input");
+            }
+            _ => panic!("Expected String, got {:?}", baml_value),
         }
     }
 }

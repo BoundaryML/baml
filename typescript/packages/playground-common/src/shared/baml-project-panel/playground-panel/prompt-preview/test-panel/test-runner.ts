@@ -399,6 +399,18 @@ const useParallelRunTests = (maxBatchSize = 5) => {
             while ((response = results.yield_next()) != undefined) {
               const pair = response.func_test_pair()
               const status = response.status()
+
+              // Debug: Log the response details
+              console.log('[DEBUG] Test response received:', {
+                functionName: pair.function_name,
+                testName: pair.test_name,
+                status: status,
+                hasParsedResponse: !!response.parsed_response(),
+                parsedResponse: response.parsed_response(),
+                hasLlmResponse: !!response.llm_response(),
+                failureMessage: response.failure_message(),
+              })
+
               setState(
                 { functionName: pair.function_name, testName: pair.test_name },
                 {

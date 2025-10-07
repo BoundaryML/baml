@@ -182,11 +182,14 @@ web-sys = { version = "0.3.78", features = [
 web-time = "1.1.0"
 
 [workspace.package]
-version = "0.209.0"
+version = "0.210.0"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"
 license-file = "LICENSE"
+
+[workspace.metadata.crane]
+name = "baml-workspace"
 
 [workspace.metadata.workspaces]
 allow_branch = "canary"

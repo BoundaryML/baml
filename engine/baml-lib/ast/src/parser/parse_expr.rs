@@ -8,8 +8,9 @@ use super::{
 use crate::{
     assert_correct_parser,
     ast::{
-        self, expr::ExprFn, App, ArgumentsList, AssignOp, AssignOpStmt, AssignStmt, ExprStmt,
-        Expression, ExpressionBlock, ForLoopStmt, LetStmt, Stmt, TopLevelAssignment, *,
+        self, expr::ExprFn, App, ArgumentsList, AssignOp, AssignOpStmt, AssignStmt, EmitArgument,
+        EmitDecorator, ExprStmt, Expression, ExpressionBlock, ForLoopStmt, LetStmt, Stmt,
+        TopLevelAssignment, *,
     },
     parser::{
         parse_arguments::parse_arguments_list, parse_expression::parse_expression,
@@ -525,6 +526,16 @@ fn parse_statement_inner_rule(
 
             let rhs_span = diagnostics.span(rhs_pair.as_span());
             let maybe_body = parse_assignment_expr(diagnostics, rhs_pair, rhs_span);
+            let mut emit = None;
+            if let Some(trailing) = let_binding_tokens.next() {
+                match trailing.as_rule() {
+                    Rule::emit_decorator => {
+                        emit = parse_emit_decorator(trailing, diagnostics);
+                    }
+                    _ => parsing_catch_all(trailing, "let expression"),
+                }
+            }
+
             maybe_body.map(|body| {
                 Stmt::Let(LetStmt {
                     identifier,
@@ -533,6 +544,7 @@ fn parse_statement_inner_rule(
                     expr: body,
                     span: span.clone(),
                     annotations: vec![],
+                    emit,
                 })
             })
         }
@@ -632,6 +644,114 @@ fn parse_assignment_expr(
                 "Parser only allows expr_block and expr here",
                 rhs_span,
             ));
+            None
+        }
+    }
+}
+
+fn parse_emit_decorator(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<EmitDecorator> {
+    assert_correct_parser!(token, Rule::emit_decorator);
+    let span = diagnostics.span(token.as_span());
+    let mut decorator = EmitDecorator {
+        arguments: Vec::new(),
+        span,
+    };
+
+    for inner in token.into_inner() {
+        match inner.as_rule() {
+            Rule::emit_arguments => {
+                parse_emit_arguments(inner, diagnostics, &mut decorator.arguments)
+            }
+            Rule::SPACER_TEXT => {}
+            _ => parsing_catch_all(inner, "emit decorator"),
+        }
+    }
+
+    Some(decorator)
+}
+
+fn parse_emit_arguments(
+    token: Pair<'_>,
+    diagnostics: &mut Diagnostics,
+    arguments: &mut Vec<EmitArgument>,
+) {
+    assert_correct_parser!(token, Rule::emit_arguments);
+    for inner in token.into_inner() {
+        match inner.as_rule() {
+            Rule::emit_argument_kv => {
+                if let Some(argument) = parse_emit_argument(inner, diagnostics) {
+                    arguments.push(argument);
+                }
+            }
+            Rule::emit_argument_invalid => {
+                let span = diagnostics.span(inner.as_span());
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    "@emit options must use `name=value` syntax (e.g. `name=updates`).",
+                    span,
+                ));
+
+                // Consume the invalid expression to keep parser state consistent.
+                for expr in inner.into_inner() {
+                    if expr.as_rule() == Rule::expression {
+                        let _ = parse_expression(expr, diagnostics);
+                    }
+                }
+            }
+            Rule::emit_argument_missing_value => {
+                let span = diagnostics.span(inner.as_span());
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    "@emit options must provide a value after `=` (e.g. `name=updates`).",
+                    span,
+                ));
+            }
+            Rule::SPACER_TEXT => {}
+            _ => parsing_catch_all(inner, "emit decorator arguments"),
+        }
+    }
+}
+
+fn parse_emit_argument(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<EmitArgument> {
+    assert_correct_parser!(token, Rule::emit_argument_kv);
+    let span = diagnostics.span(token.as_span());
+    let mut inner = token.into_inner();
+
+    let name_pair = inner.next()?;
+    let name = parse_identifier(name_pair, diagnostics);
+    let maybe_value_pair = inner.next();
+    if maybe_value_pair.is_none() {
+        let suggestion = match name.name() {
+            "when" => "e.g. false, MyCustomFunction",
+            "skip_def" => "e.g. true, false",
+            "name" => "e.g. any_channel_name",
+            _ => "",
+        };
+        diagnostics.push_error(DatamodelError::new_validation_error(
+            &format!("Missing value for emit argument {}", suggestion),
+            span.clone(),
+        ));
+    }
+    let value_pair = maybe_value_pair?;
+
+    let value = match value_pair.as_rule() {
+        Rule::emit_argument_value => parse_emit_argument_value(value_pair, diagnostics)?,
+        _ => {
+            parsing_catch_all(value_pair, "emit decorator argument");
+            return None;
+        }
+    };
+
+    Some(EmitArgument { name, value, span })
+}
+
+fn parse_emit_argument_value(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
+    assert_correct_parser!(token, Rule::emit_argument_value);
+    let inner = token.into_inner().next()?;
+    let span = diagnostics.span(inner.as_span());
+
+    match inner.as_rule() {
+        Rule::expr_block | Rule::expression => parse_assignment_expr(diagnostics, inner, span),
+        _ => {
+            parsing_catch_all(inner, "emit decorator argument value");
             None
         }
     }
@@ -952,7 +1072,7 @@ fn bind_headers_to_statement(
     }
 }
 
-fn parse_fn_args(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Vec<Expression> {
+pub(crate) fn parse_fn_args(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Vec<Expression> {
     assert_correct_parser!(token, Rule::fn_args);
 
     token

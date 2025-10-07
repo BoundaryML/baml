@@ -85,7 +85,7 @@ parenthesized_type = { openParen ~ field_type_with_attr ~ closeParen }
 
 path_identifier       =  { single_word ~ ("." ~ single_word)+ }
 identifier            =  { namespaced_identifier | single_word }
-single_word           = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+single_word           = @{ DOLLAR? ~ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
 namespaced_identifier = ${ single_word ~ ("::" ~ single_word)+ }
 
 // ######################################
@@ -265,6 +265,7 @@ CONTINUE_KEYWORD     = { "continue" }
 SEMICOLON = { ";" }
 COLON = { ":" }
 COMMA = { "," }
+DOLLAR = { "$" }
 INVALID_STMT_STARTING_CHAR = { !ASCII_ALPHA ~ !WHITESPACE ~ !NEWLINE ~ !BLOCK_OPEN ~ !comment ~ ANY }
 
 // #################################################
@@ -387,7 +388,23 @@ stmt = {
 // Let-binding statement with optional type annotation.
 // e.g. `let x: int|float = 10.0;` or `let x = 10.0;`
 let_type_annotation = { COLON ~ field_type_chain }
-let_expr = { "let" ~ identifier ~ let_type_annotation? ~ "=" ~ expression }
+let_expr = { "let" ~ identifier ~ let_type_annotation? ~ "=" ~ expression ~ emit_decorator? }
+
+emit_decorator = { SPACER_TEXT? ~ "@emit" ~ emit_arguments? }
+emit_arguments = {
+    "("
+        ~ SPACER_TEXT?
+        ~ emit_argument?
+        ~ ("," ~ SPACER_TEXT? ~ emit_argument)*
+        ~ ","?
+        ~ SPACER_TEXT?
+    ~ ")"
+}
+emit_argument = _{ emit_argument_kv | emit_argument_invalid | emit_argument_missing_value }
+emit_argument_kv = { identifier? ~ "=" ~ emit_argument_value? }
+emit_argument_invalid = { expression }
+emit_argument_missing_value = { identifier ~ "=" ~ SPACER_TEXT? ~ &("," | ")") }
+emit_argument_value = { expression }
 
 // NOTE: Needs to supports things like `object.getter().field[x + y] = value`,
 // so can't be just `identifier ~ "=" ~ expression`.

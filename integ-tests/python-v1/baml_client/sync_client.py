@@ -1351,6 +1351,20 @@ class BamlSyncClient:
                 "s": s,
             })
             return typing.cast(types.ClassForNullLiteral, result.cast_to(types, types, stream_types, False, __runtime__))
+    def OpenAIGPT4oMissingBaseUrlEnvVar(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.OpenAIGPT4oMissingBaseUrlEnvVar(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="OpenAIGPT4oMissingBaseUrlEnvVar", args={
+                "input": input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def OpenAIWithAnthropicResponseHello(self, s: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -4610,6 +4624,18 @@ class BamlStreamClient:
           lambda x: typing.cast(types.ClassForNullLiteral, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def OpenAIGPT4oMissingBaseUrlEnvVar(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="OpenAIGPT4oMissingBaseUrlEnvVar", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def OpenAIWithAnthropicResponseHello(self, s: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
@@ -7108,6 +7134,13 @@ class BamlHttpRequestClient:
             "s": s,
         }, mode="request")
         return result
+    def OpenAIGPT4oMissingBaseUrlEnvVar(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="OpenAIGPT4oMissingBaseUrlEnvVar", args={
+            "input": input,
+        }, mode="request")
+        return result
     def OpenAIWithAnthropicResponseHello(self, s: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -8829,6 +8862,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="NullLiteralClassHello", args={
             "s": s,
+        }, mode="stream")
+        return result
+    def OpenAIGPT4oMissingBaseUrlEnvVar(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="OpenAIGPT4oMissingBaseUrlEnvVar", args={
+            "input": input,
         }, mode="stream")
         return result
     def OpenAIWithAnthropicResponseHello(self, s: str,
