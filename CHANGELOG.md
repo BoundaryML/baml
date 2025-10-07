@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.211.0](https://github.com/boundaryml/baml/compare/0.210.0..0.211.0) - 2025-10-07
+
+### Bug Fixes
+
+- **(compiler)** duplicate diagnostics when typechecking (#2535) - ([5a8de50](https://github.com/boundaryml/baml/commit/5a8de50aaf42dc9cdac77e02374c8ad1396b3765)) - José Rafael Oses
+- Properly leave the secondary screen after non-erroring baml-cli init (#2565) - ([b911a19](https://github.com/boundaryml/baml/commit/b911a1927046b7a36d43fdaee1b25ebbfbc37f31)) - Greg Hale
+- Fix json parser in cases where it would output intermediate representations (#2572) - ([c1a0b0e](https://github.com/boundaryml/baml/commit/c1a0b0e15fa36745a4a59d6a322f182cef034a6e)) - aaronvg
+- **(python)** export set_log_max_message_length config for baml logs (#2553) - ([2c689dc](https://github.com/boundaryml/baml/commit/2c689dc3341b1f8ef4030b397b5e93f46cb25b2e)) - Samuel Lijin
+- Add specific error for missing required env vars in clients (#2570) - ([5ea6adb](https://github.com/boundaryml/baml/commit/5ea6adb02f6e4246dd53cd626189ec1578d69b69)) - Antonio Sarosi
+- [Promptfiddle] fix play button disappearing (#2571) - ([7d31c37](https://github.com/boundaryml/baml/commit/7d31c37142d89758ccff805853db0855af2bd318)) - aaronvg
+- Lots of tracing improvements for Boundary Studio [#2576](https://github.com/BoundaryML/baml/pull/2576)
+
+### Documentation
+
+- fix @description documentation (#2544) - ([32aec21](https://github.com/boundaryml/baml/commit/32aec21f10840d28e837216f14ffed116e9bc377)) - Samuel Lijin
+- Document Next.js version 15 requirement (#2540) - ([c1ce2ab](https://github.com/boundaryml/baml/commit/c1ce2abab0bddb42a84e492ef300a4dc14129a0a)) - Greg Hale
+
 
 ## [0.210.0](https://github.com/boundaryml/baml/compare/0.209.0..0.210.0) - 2025-09-30
 
