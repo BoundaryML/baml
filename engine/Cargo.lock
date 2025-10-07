@@ -1001,6 +1001,8 @@ dependencies = [
  "itertools 0.14.0",
  "log",
  "pretty",
+ "reqwest",
+ "serde_json",
  "tokio",
 ]
 

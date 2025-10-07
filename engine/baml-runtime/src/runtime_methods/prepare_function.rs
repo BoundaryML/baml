@@ -44,7 +44,8 @@ use crate::{
 
 pub(crate) struct PreparedFunction<'ir> {
     pub function_name: String,
-    pub func: FunctionWalker<'ir>,
+    /// If the function is an expr_fn, it won't have a `FunctionWalker`.
+    pub func: Option<FunctionWalker<'ir>>,
     pub baml_args: PreparedFunctionArgs,
 }
 
@@ -108,13 +109,52 @@ impl InternalBamlRuntime {
         function_name: String,
         params: &BamlMap<String, BamlValue>,
     ) -> Result<PreparedFunction<'_>, PrepareFunctionError> {
+        // Try LLM function first
         let func = match self.get_function(&function_name) {
             Ok(func) => func,
-            Err(error) => {
-                return Err(PrepareFunctionError::FunctionNotFound {
-                    function_name,
-                    error,
-                });
+            Err(llm_error) => {
+                // Try expr function
+                match self.ir().find_expr_fn(&function_name) {
+                    Ok(expr_fn) => {
+                        // For expr functions, validate params and return
+                        let baml_args = match self.ir().check_function_params(
+                            expr_fn.inputs(),
+                            params,
+                            ArgCoercer {
+                                span_path: None,
+                                allow_implicit_cast_to_string: false,
+                            },
+                        ) {
+                            Ok(baml_args) => baml_args,
+                            Err(error) => {
+                                return Err(PrepareFunctionError::InvalidParams {
+                                    function_name,
+                                    error,
+                                });
+                            }
+                        };
+
+                        // For expr functions, return PreparedFunction with None for func
+                        return Ok(PreparedFunction {
+                            function_name,
+                            func: None,
+                            baml_args: PreparedFunctionArgs {
+                                value: baml_args
+                                    .clone()
+                                    .into_iter()
+                                    .map(|(k, v)| (k, v.value()))
+                                    .collect(),
+                                value2: baml_args,
+                            },
+                        });
+                    }
+                    Err(_) => {
+                        return Err(PrepareFunctionError::FunctionNotFound {
+                            function_name,
+                            error: llm_error,
+                        });
+                    }
+                }
             }
         };
 
@@ -137,7 +177,7 @@ impl InternalBamlRuntime {
 
         Ok(PreparedFunction {
             function_name,
-            func,
+            func: Some(func),
             baml_args: PreparedFunctionArgs {
                 value: baml_args
                     .clone()

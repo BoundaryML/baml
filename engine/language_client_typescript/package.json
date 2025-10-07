@@ -111,10 +111,15 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
-    "moduleFileExtensions": ["ts", "js"],
+    "moduleFileExtensions": [
+      "ts",
+      "js"
+    ],
     "transform": {
       "^.+\\.ts$": "ts-jest"
     },
-    "testMatch": ["**/__test__/**/*.test.ts"]
+    "testMatch": [
+      "**/__test__/**/*.test.ts"
+    ]
   }
 }

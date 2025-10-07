@@ -199,6 +199,8 @@ reedline = "0.37"
 defaults = ["skip-integ-tests"]
 internal = []
 skip-integ-tests = []
+# Use the THIR interpreter runtime instead of the VM bytecode runtime
+interpreter = []
 
 
 [dev-dependencies]

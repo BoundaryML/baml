@@ -993,8 +993,41 @@ impl ToLogSchema for TestResponse {
         tags: HashMap<String, BamlValue>,
         call: TracingCall,
     ) -> LogSchema {
-        self.function_response
-            .to_log_schema(api, event_chain, tags, call)
+        if let Some(func_response) = &self.function_response {
+            func_response.to_log_schema(api, event_chain, tags, call)
+        } else {
+            // For expr functions, create a simpler log schema
+            LogSchema {
+                project_id: api.project_id().map(str::to_string),
+                event_type: api_wrapper::core_types::EventType::FuncCode,
+                root_event_id: event_chain.first().map(|s| s.call_id).unwrap().to_string(),
+                event_id: event_chain.last().map(|s| s.call_id).unwrap().to_string(),
+                parent_event_id: None,
+                context: (api, event_chain, tags, &call).into(),
+                io: IO {
+                    input: Some((&call.params).into()),
+                    output: self
+                        .expr_function_response
+                        .as_ref()
+                        .and_then(|r| r.as_ref().ok())
+                        .map(|r| {
+                            let v: BamlValue = r.0.clone().into();
+                            IOValue::from(&v)
+                        }),
+                },
+                error: self
+                    .expr_function_response
+                    .as_ref()
+                    .and_then(|r| r.as_ref().err())
+                    .map(|e| api_wrapper::core_types::Error {
+                        code: 2,
+                        message: e.to_string(),
+                        traceback: None,
+                        r#override: None,
+                    }),
+                metadata: None,
+            }
+        }
     }
 }
 

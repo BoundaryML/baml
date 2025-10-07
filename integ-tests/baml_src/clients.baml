@@ -30,6 +30,16 @@ client<llm> GPT4o {
   }
 }
 
+// For integ tests
+client<llm> GPT4oBaseUrlNotSet {
+  provider openai
+  options {
+    model gpt-4o
+    api_key env.OPENAI_API_KEY
+    base_url env.OPEN_API_BASE_DO_NOT_SET_THIS
+  }
+}
+
 
 client<llm> GPT4Turbo {
   retry_policy Bar

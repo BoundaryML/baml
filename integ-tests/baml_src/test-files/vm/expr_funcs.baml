@@ -159,3 +159,9 @@ function ExecFetchAs(url: string) -> DummyJsonTodo {
 
     todo
 }
+
+test Fib5() {
+  functions [IterativeFibonacci]
+  args { n 5 }
+  @@assert( {{ this == 5 }} )
+}
