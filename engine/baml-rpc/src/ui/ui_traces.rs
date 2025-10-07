@@ -349,7 +349,7 @@ pub struct FunctionSummary {
     #[ts(optional)]
     pub function_id: Option<ui_types::UiFunctionIdString>,
     pub function_name: String,
-    pub function_type: String,  // 'baml_llm' or 'native'
+    pub function_type: String, // 'baml_llm' or 'native'
     #[ts(type = "Record<string, unknown>")]
     pub tags: serde_json::Map<String, serde_json::Value>,
 
@@ -384,7 +384,7 @@ pub struct ListTraceFunctionSummariesResponse {
     pub type_definitions: Vec<ui_types::UiTypeDefinition>,
     pub has_more: bool,
     #[ts(optional)]
-    pub next_cursor: Option<String>,  // function_name for pagination
+    pub next_cursor: Option<String>, // function_name for pagination
 }
 
 pub struct ListTraceFunctionSummaries;
@@ -395,4 +395,3 @@ impl ApiEndpoint for ListTraceFunctionSummaries {
 
     const PATH: &'static str = "/v1/traces/function-summaries";
 }
-
