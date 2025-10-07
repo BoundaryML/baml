@@ -4,5 +4,5 @@ requires-python = ">=3.13"
 
 [[package]]
 name = "baml-py"
-version = "0.208.2"
+version = "0.210.0"
 source = { editable = "." }

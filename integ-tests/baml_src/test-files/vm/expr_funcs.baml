@@ -192,3 +192,9 @@ function ExecFetchAsWithHttpPutRequestAndClassJson() -> DummyJsonTodo {
         json: updated_todo,
     })
 }
+
+test Fib5() {
+  functions [IterativeFibonacci]
+  args { n 5 }
+  @@assert( {{ this == 5 }} )
+}

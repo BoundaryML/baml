@@ -50,6 +50,10 @@ impl UiFunctionIdString {
     pub fn inner(&self) -> &String {
         &self.0
     }
+
+    pub fn from_string(s: String) -> Self {
+        UiFunctionIdString(s)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, TS)]
@@ -94,7 +98,7 @@ pub struct UiFunctionCall {
     #[ts(optional)]
     pub function_id: Option<UiFunctionIdString>,
 
-    #[ts(type = "Record<string, string>")]
+    #[ts(type = "Record<string, unknown>")]
     pub tags: serde_json::Map<String, serde_json::Value>,
 
     #[serde(rename = "start_epoch_ms")]
@@ -105,7 +109,7 @@ pub struct UiFunctionCall {
     pub end_time: Option<EpochMsTimestamp>,
     pub status: String,
 
-    #[ts(type = "any")]
+    #[ts(type = "unknown")]
     pub baml_options: serde_json::Value,
     pub inputs: Vec<UiFunctionInput>,
     #[ts(as = "Option<BamlValue>")]
@@ -122,6 +126,8 @@ pub struct UiFunctionCall {
     pub llm_request: Option<UiLlmRequest>,
     #[ts(optional)]
     pub llm_response: Option<UiLlmResponse>,
+    #[ts(optional)]
+    pub http_metadata_summary: Option<Vec<UiHttpMetadataSummary>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -130,9 +136,9 @@ pub struct UiLlmRequest {
     pub client_name: String,
     pub client_provider: String,
     // TODO: type this out properly.
-    #[ts(type = "any")]
+    #[ts(type = "unknown")]
     pub params: serde_json::Value,
-    #[ts(type = "any")]
+    #[ts(type = "unknown")]
     pub prompt: serde_json::Value,
 }
 
@@ -186,9 +192,18 @@ pub struct UiHttpRequest {
     pub start_time: EpochMsTimestamp,
     pub url: String,
     pub method: String,
-    #[ts(type = "Record<string, any> | undefined")]
+    #[ts(type = "Record<string, string> | undefined")]
     pub headers: Option<HashMap<String, String>>,
     pub body: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UiHttpMetadataSummary {
+    pub client_name: String,
+    pub client_provider: String,
+    pub model: Option<String>,
+    pub status: u16,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -197,7 +212,7 @@ pub struct UiHttpResponse {
     #[ts(type = "number")]
     pub end_time: EpochMsTimestamp,
     pub status_code: u16,
-    #[ts(type = "Record<string, any>")]
+    #[ts(type = "Record<string, unknown>")]
     pub headers: HashMap<String, serde_json::Value>,
     pub body: String,
 }

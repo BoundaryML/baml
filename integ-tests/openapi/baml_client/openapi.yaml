@@ -1319,6 +1319,19 @@ paths:
                 title: NullLiteralClassHelloResponse
                 $ref: '#/components/schemas/ClassForNullLiteral'
       operationId: NullLiteralClassHello
+  /call/OpenAIGPT4oMissingBaseUrlEnvVar:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/OpenAIGPT4oMissingBaseUrlEnvVar'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: OpenAIGPT4oMissingBaseUrlEnvVarResponse
+                type: string
+      operationId: OpenAIGPT4oMissingBaseUrlEnvVar
   /call/OpenAIWithAnthropicResponseHello:
     post:
       requestBody:
@@ -4633,6 +4646,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - s
+            additionalProperties: false
+    OpenAIGPT4oMissingBaseUrlEnvVar:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: OpenAIGPT4oMissingBaseUrlEnvVarRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     OpenAIWithAnthropicResponseHello:
       required: true

@@ -659,26 +659,29 @@ impl TracePublisher {
         //     batch_size = batch.len()
         // );
 
-        // Serialize to JSON.
-        // #[cfg(not(target_arch = "wasm32"))]
-        // {
-        //     use tokio::fs::OpenOptions;
-        //     if let Ok(mut file) = OpenOptions::new()
-        //         .create(true)
-        //         .append(true)
-        //         .open("/tmp/trace_events.json")
-        //         .await
-        //     {
-        //         for e in trace_event_batch.events.iter() {
-        //             if let Ok(json) = serde_json::to_string(e) {
-        //                 use tokio::io::AsyncWriteExt;
-        //                 if let Err(e) = file.write_all(format!("{}\n", json).as_bytes()).await {
-        //                     log::error!("Failed to write to trace file: {}", e);
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
+        // Serialize to JSON - optionally write to file for testing
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Ok(trace_file_path) = std::env::var("BAML_TRACE_FILE") {
+                println!("Writing trace events to file: {}", trace_file_path);
+                use tokio::fs::OpenOptions;
+                if let Ok(mut file) = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&trace_file_path)
+                    .await
+                {
+                    for e in trace_event_batch.events.iter() {
+                        if let Ok(json) = serde_json::to_string(e) {
+                            use tokio::io::AsyncWriteExt;
+                            if let Err(e) = file.write_all(format!("{}\n", json).as_bytes()).await {
+                                log::error!("Failed to write to trace file: {}", e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // Upload via HTTP with retry logic.
         // TODO watch out with time crate

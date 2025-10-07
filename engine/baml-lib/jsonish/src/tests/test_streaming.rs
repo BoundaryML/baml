@@ -563,3 +563,31 @@ test_partial_deserializer_streaming!(
     TypeIR::class("Foo"),
     {"y": "hello"}
 );
+
+// Regression test for GitHub issue #2567: Streaming Bug with Parsing Artifacts
+// When streaming with partial data, AnyOf values should extract the original
+// string content, not leak internal parsing representations like "AnyOf[..."
+const STREAMING_ANYOF_BUG: &str = r#"
+class Inspiration {
+  Description string
+}
+"#;
+
+test_partial_deserializer_streaming!(
+    test_streaming_anyof_string_field,
+    STREAMING_ANYOF_BUG,
+    r#"{"Description": "A beautiful sunset over the ocean"#,
+    TypeIR::class("Inspiration"),
+    {"Description": "A beautiful sunset over the ocean"}
+);
+
+// Test with a more complex partial input that might trigger AnyOf creation
+// This simulates the scenario where the parser is uncertain about structure
+test_partial_deserializer_streaming!(
+    test_streaming_anyof_with_markdown_partial,
+    STREAMING_ANYOF_BUG,
+    r#"```json
+{"Description": "Test"#,
+    TypeIR::class("Inspiration"),
+    {"Description": "Test"}
+);

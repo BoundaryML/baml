@@ -1,4 +1,4 @@
-use baml_types::ir_type::TypeIR;
+use baml_types::ir_type::{TypeIR, UnionConstructor};
 use internal_baml_diagnostics::Span;
 
 use crate::hir::{Class, Enum, EnumVariant, Field};
@@ -8,7 +8,7 @@ pub mod functions {
 }
 
 pub mod classes {
-    pub const REQUEST: &str = "baml.HttpRequest";
+    pub const HTTP_REQUEST: &str = "baml.HttpRequest";
 }
 
 pub mod enums {
@@ -17,7 +17,7 @@ pub mod enums {
 
 pub fn builtin_classes() -> Vec<Class> {
     vec![Class {
-        name: String::from(classes::REQUEST),
+        name: String::from(classes::HTTP_REQUEST),
         methods: vec![],
         fields: vec![
             Field {
@@ -81,7 +81,7 @@ pub fn builtin_enums() -> Vec<Enum> {
 
 /// Create a type for the std::Request class
 pub fn baml_request_type() -> TypeIR {
-    TypeIR::class(classes::REQUEST)
+    TypeIR::class(classes::HTTP_REQUEST)
 }
 
 pub fn baml_http_method_type() -> TypeIR {
@@ -90,9 +90,11 @@ pub fn baml_http_method_type() -> TypeIR {
 
 /// Create a function signature for std::fetch_value<T>
 pub fn baml_fetch_as_signature(return_type: TypeIR) -> TypeIR {
-    TypeIR::arrow(vec![TypeIR::string()], return_type)
-}
-
-pub fn is_builtin_identifier(identifier: &str) -> bool {
-    identifier.starts_with("std::") || identifier == "true" || identifier == "false"
+    TypeIR::arrow(
+        vec![TypeIR::union(vec![
+            TypeIR::string(),
+            TypeIR::class(classes::HTTP_REQUEST),
+        ])],
+        return_type,
+    )
 }

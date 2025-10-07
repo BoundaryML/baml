@@ -6,8 +6,8 @@ use std::{
 
 use baml_rpc::runtime_api::baml_value::{BamlValue, MediaValue, ValueContent};
 use base64::{engine::general_purpose, Engine as _};
+use blake3;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 
 use crate::tracingv2::publisher::publisher::BlobUploaderMessage;
@@ -82,11 +82,10 @@ impl BlobRefCache {
         }
     }
 
-    /// Generate a hash for a blob
+    /// Generate a hash for a blob using BLAKE3
     pub fn hash_blob(content: &[u8]) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(content);
-        format!("{:x}", hasher.finalize())
+        let hash = blake3::hash(content);
+        hash.to_hex().to_string()
     }
 
     /// Store a blob (as base64 string) and associate it with a function_call_id

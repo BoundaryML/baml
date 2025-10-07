@@ -50,8 +50,10 @@ impl InternalBamlRuntime {
         cancel_tripwire: Arc<TripWire>,
     ) -> Result<crate::FunctionResult> {
         let future = async {
-            let renderer =
-                PromptRenderer::from_function(&prepared_func_call.func, self.ir(), &ctx)?;
+            let func = prepared_func_call.func.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("Cannot call expr function through call_function_impl")
+            })?;
+            let renderer = PromptRenderer::from_function(func, self.ir(), &ctx)?;
             let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
 
             let baml_args = BamlValue::Map(prepared_func_call.baml_args.value);

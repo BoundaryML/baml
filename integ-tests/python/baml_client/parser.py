@@ -564,6 +564,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="NullLiteralClassHello", llm_response=llm_response, mode="request")
         return typing.cast(types.ClassForNullLiteral, result)
 
+    def OpenAIGPT4oMissingBaseUrlEnvVar(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="OpenAIGPT4oMissingBaseUrlEnvVar", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def OpenAIWithAnthropicResponseHello(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -2053,6 +2059,12 @@ class LlmStreamParser:
     ) -> stream_types.ClassForNullLiteral:
         result = self.__options.merge_options(baml_options).parse_response(function_name="NullLiteralClassHello", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.ClassForNullLiteral, result)
+
+    def OpenAIGPT4oMissingBaseUrlEnvVar(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="OpenAIGPT4oMissingBaseUrlEnvVar", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
 
     def OpenAIWithAnthropicResponseHello(
         self, llm_response: str, baml_options: BamlCallOptions = {},

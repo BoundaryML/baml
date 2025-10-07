@@ -171,7 +171,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                 {!isMobile && (
                   <ResizablePanel defaultSize={50} className="tour-playground">
                     <div className="flex flex-col h-full overflow-hidden">
-                      <div className="flex-1 min-h-0 overflow-hidden">
+                      <div className="h-full min-h-0 overflow-hidden">
                         <PlaygroundView />
                       </div>
                     </div>
@@ -204,7 +204,7 @@ export const FunctionSelectorProvider = () => {
 };
 
 export const ProjectSidebar = () => (
-  <div className="w-64 h-full dark:bg-[#020309] bg-muted overflow-hidden">
+  <div className="w-[200px] h-full dark:bg-[#020309] bg-muted overflow-hidden">
     <div className="flex flex-row justify-center items-center pt-4 w-full">
       <a
         href={'/'}

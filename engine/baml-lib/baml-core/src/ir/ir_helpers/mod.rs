@@ -667,8 +667,9 @@ impl IRHelper for IntermediateRepr {
             Some(f) => Ok(f),
 
             None => {
-                // Get best match.
-                let functions = self.walk_functions().map(|f| f.name()).collect::<Vec<_>>();
+                // Get best match from both LLM functions and expr functions
+                let mut functions = self.walk_functions().map(|f| f.name()).collect::<Vec<_>>();
+                functions.extend(self.walk_expr_fns().map(|f| f.item.elem.name.as_str()));
                 error_not_found!("function", function_name, &functions)
             }
         }
@@ -686,11 +687,12 @@ impl IRHelper for IntermediateRepr {
             Some(f) => Ok(f),
 
             None => {
-                // Get best match.
-                let functions = self
+                // Get best match from both expr functions and LLM functions
+                let mut functions = self
                     .walk_expr_fns()
                     .map(|f| f.item.elem.name.clone())
                     .collect::<Vec<_>>();
+                functions.extend(self.walk_functions().map(|f| f.name().to_string()));
                 error_not_found!("function", function_name, &functions)
             }
         }

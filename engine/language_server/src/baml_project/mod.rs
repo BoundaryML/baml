@@ -416,12 +416,14 @@ impl BamlProject {
 
 pub trait BamlRuntimeExt {
     fn list_function_test_pairs(&self) -> Vec<BamlFunctionTestCasePair>;
+    fn list_expr_fn_test_pairs(&self) -> Vec<BamlFunctionTestCasePair>;
 
     fn search_for_symbol(&self, symbol: &str) -> Option<SymbolLocation>;
     fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation>;
     fn search_for_enum_locations(&self, symbol: &str) -> Vec<SymbolLocation>;
     fn search_for_type_alias_locations(&self, symbol: &str) -> Vec<SymbolLocation>;
     fn list_functions(&self) -> Vec<BamlFunction>;
+    fn list_expr_fns(&self) -> Vec<BamlFunction>;
     fn list_generators(&self) -> Vec<BamlGeneratorConfig>;
     fn is_valid_class(&self, symbol: &str) -> bool;
     fn is_valid_enum(&self, symbol: &str) -> bool;
@@ -714,6 +716,149 @@ impl BamlRuntimeExt for BamlRuntime {
             })
             .collect()
     }
+
+    fn list_expr_fns(&self) -> Vec<BamlFunction> {
+        let ctx = &self.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
+        let ctx = ctx.create_ctx_with_default();
+        let ctx = ctx.eval_ctx(false);
+
+        self.inner
+            .ir
+            .walk_expr_fns()
+            .map(|f| {
+                let snippet = format!(
+                    r#"test TestName {{
+  functions [{name}]
+  args {{
+{args}
+  }}
+}}
+"#,
+                    name = f.name(),
+                    args = {
+                        let params = f
+                            .inputs()
+                            .iter()
+                            .map(|(k, runtime_type)| (k.clone(), runtime_type.clone()))
+                            .collect::<indexmap::IndexMap<String, _>>();
+
+                        self.inner.ir.get_dummy_args(2, true, &params)
+                    }
+                );
+
+                let wasm_span = match f.span() {
+                    Some(span) => span.into(),
+                    None => BamlSpan::default(),
+                };
+
+                BamlFunction {
+                    name: f.name().to_string(),
+                    span: wasm_span,
+                    signature: {
+                        let inputs = {
+                            let params = f
+                                .inputs()
+                                .iter()
+                                .map(|(k, runtime_type)| (k.clone(), runtime_type.clone()))
+                                .collect::<indexmap::IndexMap<String, _>>();
+
+                            self.inner
+                                .ir
+                                .get_dummy_args(2, false, &params)
+                                .split('\n')
+                                .map(|line| line.trim().to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        };
+
+                        format!("({}) -> {}", inputs, f.output())
+                    },
+                    test_snippet: snippet,
+                    test_cases: f
+                        .walk_tests()
+                        .map(|tc| {
+                            let params = match tc.test_case_params(&ctx) {
+                                Ok(params) => Ok(params
+                                    .iter()
+                                    .map(|(k, v)| {
+                                        let as_str = match v {
+                                            Ok(v) => match serde_json::to_string(v) {
+                                                Ok(s) => Ok(s),
+                                                Err(e) => Err(e.to_string()),
+                                            },
+                                            Err(e) => Err(e.to_string()),
+                                        };
+
+                                        let (value, error) = match as_str {
+                                            Ok(s) => (Some(s), None),
+                                            Err(e) => (None, Some(e)),
+                                        };
+
+                                        BamlParam {
+                                            name: k.to_string(),
+                                            value,
+                                            error,
+                                        }
+                                    })
+                                    .collect()),
+                                Err(e) => Err(e.to_string()),
+                            };
+
+                            let (mut params, error) = match params {
+                                Ok(p) => (p, None),
+                                Err(e) => (Vec::new(), Some(e)),
+                            };
+
+                            f.inputs().iter().for_each(|(param_name, t)| {
+                                if !params.iter().any(|p| p.name == *param_name) && !t.is_optional()
+                                {
+                                    params.insert(
+                                        0,
+                                        BamlParam {
+                                            name: param_name.to_string(),
+                                            value: None,
+                                            error: Some("Missing parameter".to_string()),
+                                        },
+                                    );
+                                }
+                            });
+
+                            let wasm_span = match tc.span() {
+                                Some(span) => span.into(),
+                                None => BamlSpan::default(),
+                            };
+                            let function_name_span = tc
+                                .test_case()
+                                .functions
+                                .iter()
+                                .find(|func| func.elem.name() == tc.function().name())
+                                .and_then(|func| func.attributes.span.as_ref())
+                                .map(|span| span.into());
+
+                            BamlFunctionTestCasePair {
+                                name: tc.test_case().name.clone(),
+                                inputs: params,
+                                error,
+                                span: wasm_span,
+                                function: {
+                                    let func = tc.function();
+                                    let (start, end) =
+                                        func.span().map_or((0, 0), |f| (f.start, f.end));
+                                    BamlParentFunction {
+                                        start,
+                                        end,
+                                        name: func.name().to_string(),
+                                    }
+                                },
+                                function_name_span,
+                            }
+                        })
+                        .collect(),
+                }
+            })
+            .collect()
+    }
+
     fn search_for_symbol(&self, symbol: &str) -> Option<SymbolLocation> {
         let runtime = self.inner.ir.clone();
 
@@ -857,6 +1002,90 @@ impl BamlRuntimeExt for BamlRuntime {
                 };
                 // Any missing params should be set to an error
                 // Any missing params should be set to an error
+                tc.function().inputs().iter().for_each(|func_params| {
+                    let (param_name, t) = func_params;
+                    if !params.iter().any(|p| p.name == *param_name) && !t.is_optional() {
+                        params.push(BamlParam {
+                            name: param_name.to_string(),
+                            value: None,
+                            error: Some("Missing parameter".to_string()),
+                        });
+                    }
+                });
+                let wasm_span = match tc.span() {
+                    Some(span) => span.into(),
+                    None => BamlSpan::default(),
+                };
+
+                let function_name_span = tc
+                    .test_case()
+                    .functions
+                    .iter()
+                    .find(|f| f.elem.name() == tc.function().name())
+                    .and_then(|f| f.attributes.span.as_ref())
+                    .map(|span| span.into());
+                BamlFunctionTestCasePair {
+                    name: tc.test_case().name.clone(),
+                    inputs: params,
+                    error,
+                    span: wasm_span,
+                    function: {
+                        let f = tc.function();
+                        let (start, end) = f.span().map_or((0, 0), |f| (f.start, f.end));
+                        BamlParentFunction {
+                            start,
+                            end,
+                            name: f.name().to_string(),
+                        }
+                    },
+                    function_name_span,
+                }
+            })
+            .collect()
+    }
+
+    fn list_expr_fn_test_pairs(&self) -> Vec<BamlFunctionTestCasePair> {
+        let ctx = self.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
+
+        let ctx = ctx.create_ctx_with_default();
+        let ctx = ctx.eval_ctx(true);
+
+        self.inner
+            .ir
+            .walk_expr_fn_test_pairs()
+            .map(|tc| {
+                let params = match tc.test_case_params(&ctx) {
+                    Ok(params) => Ok(params
+                        .iter()
+                        .map(|(k, v)| {
+                            let as_str = match v {
+                                Ok(v) => match serde_json::to_string(v) {
+                                    Ok(s) => Ok(s),
+                                    Err(e) => Err(e.to_string()),
+                                },
+                                Err(e) => Err(e.to_string()),
+                            };
+
+                            let (value, error) = match as_str {
+                                Ok(s) => (Some(s), None),
+                                Err(e) => (None, Some(e)),
+                            };
+
+                            BamlParam {
+                                name: k.to_string(),
+                                value,
+                                error,
+                            }
+                        })
+                        .collect()),
+                    Err(e) => Err(e.to_string()),
+                };
+
+                let (mut params, error) = match params {
+                    Ok(p) => (p, None),
+                    Err(e) => (Vec::new(), Some(e)),
+                };
+
                 tc.function().inputs().iter().for_each(|func_params| {
                     let (param_name, t) = func_params;
                     if !params.iter().any(|p| p.name == *param_name) && !t.is_optional() {
@@ -1158,10 +1387,28 @@ impl Project {
         }
     }
 
+    /// Returns a list of expr functions from the WASM runtime.
+    pub fn list_expr_fns(&self) -> Result<Vec<BamlFunction>, &str> {
+        if let Ok(runtime) = self.runtime() {
+            Ok(runtime.list_expr_fns())
+        } else {
+            Err("BAML Generate failed. Project has errors.")
+        }
+    }
+
     /// Returns a list of test cases from the WASM runtime.
     pub fn list_function_test_pairs(&self) -> Result<Vec<BamlFunctionTestCasePair>, &str> {
         if let Ok(runtime) = self.runtime() {
             Ok(runtime.list_function_test_pairs())
+        } else {
+            Err("BAML Generate failed. Project has errors.")
+        }
+    }
+
+    /// Returns a list of expr function test pairs from the WASM runtime.
+    pub fn list_expr_fn_test_pairs(&self) -> Result<Vec<BamlFunctionTestCasePair>, &str> {
+        if let Ok(runtime) = self.runtime() {
+            Ok(runtime.list_expr_fn_test_pairs())
         } else {
             Err("BAML Generate failed. Project has errors.")
         }

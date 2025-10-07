@@ -791,6 +791,17 @@ impl IntermediateRepr {
         })
     }
 
+    pub fn walk_expr_fn_test_pairs(
+        &self,
+    ) -> impl Iterator<Item = Walker<'_, (&Node<ExprFunction>, &Node<TestCase>)>> {
+        self.expr_fns.iter().flat_map(move |f| {
+            f.elem.tests.iter().map(move |t| Walker {
+                ir: self,
+                item: (f, t),
+            })
+        })
+    }
+
     pub fn walk_clients(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<Client>>> {
         self.clients.iter().map(|e| Walker { ir: self, item: e })
     }

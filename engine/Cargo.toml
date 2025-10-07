@@ -188,6 +188,9 @@ authors = ["Boundary <contact@boundaryml.com>"]
 description = "BAML Toolchain"
 license-file = "LICENSE"
 
+[workspace.metadata.crane]
+name = "baml-workspace"
+
 [workspace.metadata.workspaces]
 allow_branch = "canary"
 

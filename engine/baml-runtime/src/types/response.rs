@@ -257,14 +257,34 @@ impl FunctionResult {
 
 #[derive(Debug)]
 pub struct TestResponse {
-    pub function_response: FunctionResult,
+    pub function_response: Option<FunctionResult>,
+    pub expr_function_response: Option<Result<ResponseBamlValue>>,
     pub function_call: baml_ids::FunctionCallId,
     pub constraints_result: TestConstraintsResult,
 }
 
 impl std::fmt::Display for TestResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{}", self.function_response)
+        if let Some(func_response) = &self.function_response {
+            writeln!(f, "{}", func_response)
+        } else if let Some(expr_response) = &self.expr_function_response {
+            match expr_response {
+                Ok(val) => {
+                    writeln!(
+                        f,
+                        "{}",
+                        format!("---Parsed Response ({})---", val.0.r#type()).blue()
+                    )?;
+                    write!(f, "{:#}", serde_json::json!(val.serialize_partial()))
+                }
+                Err(e) => {
+                    writeln!(f, "{}", "---Parsed Response---".blue())?;
+                    write!(f, "{}", e.to_string().red())
+                }
+            }
+        } else {
+            write!(f, "No response")
+        }
     }
 }
 
@@ -329,9 +349,9 @@ impl Eq for TestFailReason<'_> {}
 
 impl TestResponse {
     pub fn status(&self) -> TestStatus<'_> {
-        let func_res = &self.function_response;
-        if let Some(parsed) = func_res.result_with_constraints() {
-            if parsed.is_ok() {
+        // Handle expr function response
+        if let Some(expr_res) = &self.expr_function_response {
+            return if expr_res.is_ok() {
                 match self.constraints_result.clone() {
                     TestConstraintsResult::InternalError { details } => {
                         TestStatus::Fail(TestFailReason::TestUnspecified(anyhow::anyhow!(details)))
@@ -353,16 +373,52 @@ impl TestResponse {
                     }
                 }
             } else {
-                let err = parsed.as_ref().unwrap_err();
-                match err.downcast_ref::<crate::errors::ExposedError>() {
-                    Some(ExposedError::FinishReasonError { .. }) => {
-                        TestStatus::Fail(TestFailReason::TestFinishReasonFailed(err))
+                TestStatus::Fail(TestFailReason::TestParseFailure(
+                    expr_res.as_ref().unwrap_err(),
+                ))
+            };
+        }
+
+        // Handle LLM function response
+        if let Some(func_res) = &self.function_response {
+            if let Some(parsed) = func_res.result_with_constraints() {
+                if parsed.is_ok() {
+                    match self.constraints_result.clone() {
+                        TestConstraintsResult::InternalError { details } => TestStatus::Fail(
+                            TestFailReason::TestUnspecified(anyhow::anyhow!(details)),
+                        ),
+                        TestConstraintsResult::Completed {
+                            checks,
+                            failed_assert,
+                        } => {
+                            let n_failed_checks: usize =
+                                checks.iter().filter(|(_, pass)| !pass).count();
+                            if failed_assert.is_some() || n_failed_checks > 0 {
+                                TestStatus::Fail(TestFailReason::TestConstraintsFailure {
+                                    checks,
+                                    failed_assert,
+                                })
+                            } else {
+                                TestStatus::Pass
+                            }
+                        }
                     }
-                    _ => TestStatus::Fail(TestFailReason::TestParseFailure(err)),
+                } else {
+                    let err = parsed.as_ref().unwrap_err();
+                    match err.downcast_ref::<crate::errors::ExposedError>() {
+                        Some(ExposedError::FinishReasonError { .. }) => {
+                            TestStatus::Fail(TestFailReason::TestFinishReasonFailed(err))
+                        }
+                        _ => TestStatus::Fail(TestFailReason::TestParseFailure(err)),
+                    }
                 }
+            } else {
+                TestStatus::Fail(TestFailReason::TestLLMFailure(func_res.llm_response()))
             }
         } else {
-            TestStatus::Fail(TestFailReason::TestLLMFailure(func_res.llm_response()))
+            TestStatus::Fail(TestFailReason::TestUnspecified(anyhow::anyhow!(
+                "No response"
+            )))
         }
     }
 }
