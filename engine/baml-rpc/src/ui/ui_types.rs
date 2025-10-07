@@ -50,6 +50,10 @@ impl UiFunctionIdString {
     pub fn inner(&self) -> &String {
         &self.0
     }
+
+    pub fn from_string(s: String) -> Self {
+        UiFunctionIdString(s)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, TS)]

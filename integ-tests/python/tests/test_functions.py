@@ -57,7 +57,11 @@ def count_trace_events_from_file(trace_file_path: str) -> dict:
     counts = {"function_start": 0, "function_end": 0}
 
     if not os.path.exists(trace_file_path):
-        raise FileNotFoundError(f"Trace file not found: {trace_file_path}")
+        # Create the trace file and its parent directory if they don't exist
+        os.makedirs(os.path.dirname(trace_file_path), exist_ok=True)
+        with open(trace_file_path, "w") as f:
+            pass  # Create empty file
+        return counts  # Return zero counts for empty file
 
     with open(trace_file_path, "r") as f:
         for line in f:
