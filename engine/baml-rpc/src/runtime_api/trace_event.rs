@@ -158,7 +158,7 @@ pub struct HTTPBody<'a> {
     pub raw: Cow<'a, [u8]>,
 }
 
-fn serialize_bytes_as_string<S>(bytes: &Cow<[u8]>, serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_bytes_as_string<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
