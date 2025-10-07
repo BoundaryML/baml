@@ -387,9 +387,16 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         test_name: &str,
         ctx: &RuntimeContext,
     ) -> Result<Vec<Constraint>> {
-        let func = self.get_function(function_name)?;
-        let walker = self.ir().find_test(&func, test_name)?;
-        Ok(walker.item.1.elem.constraints.clone())
+        // Try LLM function first
+        if let Ok(func) = self.get_function(function_name) {
+            let walker = self.ir().find_test(&func, test_name)?;
+            return Ok(walker.item.1.elem.constraints.clone());
+        }
+
+        // Try expr function
+        let expr_fn = self.get_expr_function(function_name, ctx)?;
+        let test = self.ir().find_expr_fn_test(&expr_fn, test_name)?;
+        Ok(test.item.1.elem.constraints.clone())
     }
 
     fn get_test_type_builder(
@@ -397,28 +404,74 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         function_name: &str,
         test_name: &str,
     ) -> Result<Option<TypeBuilder>> {
-        let func = self.get_function(function_name)?;
-        let test = self.ir().find_test(&func, test_name)?;
+        // Try to find as LLM function first
+        if let Ok(func) = self.get_function(function_name) {
+            let test = self.ir().find_test(&func, test_name)?;
 
-        if test.type_builder_contents().is_empty() {
+            if test.type_builder_contents().is_empty() {
+                return Ok(None);
+            }
+
+            let type_builder = TypeBuilder::new();
+
+            type_builder.add_entries(test.type_builder_contents());
+
+            type_builder
+                .recursive_type_aliases()
+                .lock()
+                .unwrap()
+                .extend(test.type_builder_recursive_aliases().iter().cloned());
+
+            type_builder
+                .recursive_classes()
+                .lock()
+                .unwrap()
+                .extend(test.type_builder_recursive_classes().iter().cloned());
+
+            return Ok(Some(type_builder));
+        }
+
+        // Try to find as expr function
+        let expr_fn = self.ir().find_expr_fn(function_name)?;
+        let test = expr_fn.find_test(test_name).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Test '{}' not found for expr function '{}'",
+                test_name,
+                function_name
+            )
+        })?;
+
+        if test.item.1.elem.type_builder.entries.is_empty() {
             return Ok(None);
         }
 
         let type_builder = TypeBuilder::new();
 
-        type_builder.add_entries(test.type_builder_contents());
+        type_builder.add_entries(&test.item.1.elem.type_builder.entries);
 
         type_builder
             .recursive_type_aliases()
             .lock()
             .unwrap()
-            .extend(test.type_builder_recursive_aliases().iter().cloned());
+            .extend(
+                test.item
+                    .1
+                    .elem
+                    .type_builder
+                    .recursive_aliases
+                    .iter()
+                    .cloned(),
+            );
 
-        type_builder
-            .recursive_classes()
-            .lock()
-            .unwrap()
-            .extend(test.type_builder_recursive_classes().iter().cloned());
+        type_builder.recursive_classes().lock().unwrap().extend(
+            test.item
+                .1
+                .elem
+                .type_builder
+                .recursive_classes
+                .iter()
+                .cloned(),
+        );
 
         Ok(Some(type_builder))
     }

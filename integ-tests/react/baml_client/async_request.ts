@@ -5664,6 +5664,531 @@ env?: Record<string, string | undefined>
       }
       }
       
+  async AssignElseIfExpr(
+  a: boolean,b: boolean,
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "AssignElseIfExpr",
+      {
+      "a": a,"b": b
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async BoolToIntWithIfElse(
+  b: boolean,
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "BoolToIntWithIfElse",
+      {
+      "b": b
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async BoolToIntWithIfElseCallingLlm(
+  b: boolean,
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "BoolToIntWithIfElseCallingLlm",
+      {
+      "b": b
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async CallLlmDescribeImage(
+  img: Image,
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "CallLlmDescribeImage",
+      {
+      "img": img
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async CallReturnOne(
+  
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "CallReturnOne",
+      {
+      
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async ChainedCalls(
+  
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "ChainedCalls",
+      {
+      
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async EchoWorkflow(
+  
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "EchoWorkflow",
+      {
+      
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async ExecFetchAs(
+  url: string,
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "ExecFetchAs",
+      {
+      "url": url
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async HomeEnvVarIsEmpty(
+  
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "HomeEnvVarIsEmpty",
+      {
+      
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async IterativeFibonacci(
+  n: number,
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "IterativeFibonacci",
+      {
+      "n": n
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async NormalElseIfStmt(
+  a: boolean,b: boolean,
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "NormalElseIfStmt",
+      {
+      "a": a,"b": b
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async ReturnCategory(
+  category: types.Category,
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "ReturnCategory",
+      {
+      "category": category
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async ReturnElseIfExpr(
+  a: boolean,b: boolean,
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "ReturnElseIfExpr",
+      {
+      "a": a,"b": b
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async ReturnImageFromUrl(
+  url: string,
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "ReturnImageFromUrl",
+      {
+      "url": url
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async ReturnNumber(
+  n: number,
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "ReturnNumber",
+      {
+      "n": n
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async ReturnNumberCallingLlm(
+  n: number,
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "ReturnNumberCallingLlm",
+      {
+      "n": n
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async ReturnOne(
+  
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "ReturnOne",
+      {
+      
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async StoreFnCallInLocalVar(
+  n: number,
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "StoreFnCallInLocalVar",
+      {
+      "n": n
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async StoreLlmCallInLocalVar(
+  n: number,
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "StoreLlmCallInLocalVar",
+      {
+      "n": n
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async SumArray(
+  arr: number[],
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "SumArray",
+      {
+      "arr": arr
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async SumFromTo(
+  x: number,y: number,
+  __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "SumFromTo",
+      {
+      "x": x,"y": y
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
       }
 
       export class AsyncHttpStreamRequest {
@@ -11283,6 +11808,531 @@ env?: Record<string, string | undefined>
           "VideoInputVertex",
           {
           "vid": vid
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async AssignElseIfExpr(
+      a: boolean,b: boolean,
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "AssignElseIfExpr",
+          {
+          "a": a,"b": b
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async BoolToIntWithIfElse(
+      b: boolean,
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "BoolToIntWithIfElse",
+          {
+          "b": b
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async BoolToIntWithIfElseCallingLlm(
+      b: boolean,
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "BoolToIntWithIfElseCallingLlm",
+          {
+          "b": b
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async CallLlmDescribeImage(
+      img: Image,
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "CallLlmDescribeImage",
+          {
+          "img": img
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async CallReturnOne(
+      
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "CallReturnOne",
+          {
+          
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async ChainedCalls(
+      
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "ChainedCalls",
+          {
+          
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async EchoWorkflow(
+      
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "EchoWorkflow",
+          {
+          
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async ExecFetchAs(
+      url: string,
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "ExecFetchAs",
+          {
+          "url": url
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async HomeEnvVarIsEmpty(
+      
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "HomeEnvVarIsEmpty",
+          {
+          
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async IterativeFibonacci(
+      n: number,
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "IterativeFibonacci",
+          {
+          "n": n
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async NormalElseIfStmt(
+      a: boolean,b: boolean,
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "NormalElseIfStmt",
+          {
+          "a": a,"b": b
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async ReturnCategory(
+      category: types.Category,
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "ReturnCategory",
+          {
+          "category": category
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async ReturnElseIfExpr(
+      a: boolean,b: boolean,
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "ReturnElseIfExpr",
+          {
+          "a": a,"b": b
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async ReturnImageFromUrl(
+      url: string,
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "ReturnImageFromUrl",
+          {
+          "url": url
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async ReturnNumber(
+      n: number,
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "ReturnNumber",
+          {
+          "n": n
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async ReturnNumberCallingLlm(
+      n: number,
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "ReturnNumberCallingLlm",
+          {
+          "n": n
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async ReturnOne(
+      
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "ReturnOne",
+          {
+          
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async StoreFnCallInLocalVar(
+      n: number,
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "StoreFnCallInLocalVar",
+          {
+          "n": n
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async StoreLlmCallInLocalVar(
+      n: number,
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "StoreLlmCallInLocalVar",
+          {
+          "n": n
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async SumArray(
+      arr: number[],
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "SumArray",
+          {
+          "arr": arr
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async SumFromTo(
+      x: number,y: number,
+      __baml_options__?: BamlCallOptions
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "SumFromTo",
+          {
+          "x": x,"y": y
           },
           this.ctxManager.cloneContext(),
           __baml_options__?.tb?.__tb(),

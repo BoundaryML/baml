@@ -176,6 +176,21 @@ pub fn typecheck_returning_context<'a>(
             "baml.media.pdf.mime" => TypeIR::arrow(vec![TypeIR::pdf()], TypeIR::string()),
             "env.get" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::string()),
 
+            // Generic functions - these get their types inferred during typechecking
+            "baml.deep_copy" => {
+                // baml.deep_copy<T>(T) -> T
+                // Use Top as placeholder, will be specialized during typechecking
+                TypeIR::arrow(
+                    vec![TypeIR::Top(Default::default())],
+                    TypeIR::Top(Default::default()),
+                )
+            }
+            "baml.unstable.string" => {
+                // baml.unstable.string<T>(T) -> string
+                // Takes any type and returns string representation
+                TypeIR::arrow(vec![TypeIR::Top(Default::default())], TypeIR::string())
+            }
+
             _ => {
                 // Generic function type for other natives
                 let param_types = vec![TypeIR::null(); arity];
@@ -1527,6 +1542,132 @@ pub fn typecheck_expression(
             type_args,
             span,
         } => {
+            // Special case for namespace method calls (e.g., env.get, baml.fetch_as)
+            // We need to check this before typechecking the receiver to avoid "unknown variable" errors
+            if let hir::Expression::Identifier(name, id_span) = receiver.as_ref() {
+                let namespace_method = match (name.as_str(), method.as_str()) {
+                    ("env", "get") => Some("env.get"),
+                    ("baml", "deep_copy") => Some("baml.deep_copy"),
+                    ("baml", "fetch_as") => Some("baml.fetch_as"),
+                    ("image", "from_url") => Some("baml.media.image.from_url"),
+                    ("audio", "from_url") => Some("baml.media.audio.from_url"),
+                    ("video", "from_url") => Some("baml.media.video.from_url"),
+                    ("pdf", "from_url") => Some("baml.media.pdf.from_url"),
+                    ("image", "from_base64") => Some("baml.media.image.from_base64"),
+                    ("audio", "from_base64") => Some("baml.media.audio.from_base64"),
+                    ("video", "from_base64") => Some("baml.media.video.from_base64"),
+                    ("pdf", "from_base64") => Some("baml.media.pdf.from_base64"),
+                    ("baml.unstable", "string") => Some("baml.unstable.string"),
+                    _ => None,
+                };
+
+                if let Some(full_name) = namespace_method {
+                    let mut func_type = context.get_type(full_name).cloned();
+                    let typed_args: Vec<_> = args
+                        .iter()
+                        .map(|arg| typecheck_expression(arg, context, diagnostics))
+                        .collect();
+
+                    let mut return_type = None;
+
+                    // Handle generic functions with special type inference
+                    match full_name {
+                        "baml.deep_copy" => {
+                            // baml.deep_copy<T>(T) -> T
+                            if let Some(arg) = typed_args.first() {
+                                if let Some(arg_type) = &arg.meta().1 {
+                                    match arg_type {
+                                        TypeIR::Class { name, .. } => {
+                                            // Specialize the function type for this specific call
+                                            func_type = Some(TypeIR::arrow(
+                                                vec![TypeIR::class(name)],
+                                                TypeIR::class(name),
+                                            ));
+                                            return_type = Some(TypeIR::class(name));
+                                        }
+                                        _ => {
+                                            diagnostics.push_error(
+                                                DatamodelError::new_validation_error(
+                                                    "deep_copy expects an instance of a class",
+                                                    arg.meta().0.clone(),
+                                                ),
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        "baml.unstable.string" => {
+                            // baml.unstable.string<T>(T) -> string
+                            if let Some(arg) = typed_args.first() {
+                                if let Some(arg_type) = &arg.meta().1 {
+                                    // Specialize the function type for this specific call
+                                    func_type = Some(TypeIR::arrow(
+                                        vec![arg_type.clone()],
+                                        TypeIR::string(),
+                                    ));
+                                    return_type = Some(TypeIR::string());
+                                }
+                            }
+                        }
+                        _ => {
+                            // Standard type checking for non-generic functions
+                            return_type = match func_type.as_mut() {
+                                Some(TypeIR::Arrow(arrow_generic, _)) => {
+                                    let ArrowGeneric {
+                                        param_types,
+                                        return_type,
+                                    } = arrow_generic.as_ref();
+                                    // Type-check arguments against parameter types
+                                    for (i, (arg, param_type)) in
+                                        typed_args.iter().zip(param_types.iter()).enumerate()
+                                    {
+                                        if let Some(arg_type) = &arg.meta().1 {
+                                            if !arg_type.is_subtype(param_type) {
+                                                diagnostics.push_error(
+                                                    DatamodelError::new_validation_error(
+                                                        &format!(
+                                                        "Type mismatch in argument {}: expected {}, got {}",
+                                                        i + 1,
+                                                        param_type.basename(),
+                                                        arg_type.basename()
+                                                    ),
+                                                        arg.meta().0.clone(),
+                                                    ),
+                                                );
+                                            }
+                                        }
+                                    }
+                                    Some(return_type.clone())
+                                }
+                                _ => None,
+                            };
+                        }
+                    }
+
+                    return thir::Expr::Call {
+                        func: Arc::new(thir::Expr::Var(
+                            full_name.to_string(),
+                            (id_span.clone(), func_type),
+                        )),
+                        type_args: type_args
+                            .iter()
+                            .map(|arg| match arg {
+                                hir::TypeArg::Type(ty) => ty.clone(),
+                                hir::TypeArg::TypeName(name) => TypeIR::Class {
+                                    name: name.clone(),
+                                    mode: baml_types::ir_type::StreamingMode::NonStreaming,
+                                    dynamic: false,
+                                    meta: Default::default(),
+                                },
+                            })
+                            .collect(),
+                        args: typed_args,
+                        meta: (span.clone(), return_type),
+                    };
+                }
+            }
+
             let typed_receiver = typecheck_expression(receiver, context, diagnostics);
 
             // TODO: Flatten this nested logic.
@@ -1639,6 +1780,8 @@ pub fn typecheck_expression(
                             ("baml", "fetch_as") => Some("baml.fetch_as".to_string()),
 
                             ("baml.unstable", "string") => Some("baml.unstable.string".to_string()),
+
+                            ("env", "get") => Some("env.get".to_string()),
 
                             _ => {
                                 diagnostics.push_error(DatamodelError::new_validation_error(
