@@ -496,8 +496,13 @@ impl<'g> HirCompiler<'g> {
                 // Locals come after.
                 names.resize_with(names.capacity(), String::new);
 
+                log::info!("There are {} locals loremipsum", locals.len());
+
                 // Distribute locals to their respective indexes.
                 for (name, index) in locals {
+                    if *index >= names.len() {
+                        break;
+                    }
                     names[*index] = name.to_string();
                 }
 

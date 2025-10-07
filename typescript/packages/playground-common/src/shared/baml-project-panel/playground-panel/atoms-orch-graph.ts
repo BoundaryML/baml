@@ -105,6 +105,11 @@ export const functionGraphAtom = atom(
         length: typeof graph === 'string' ? graph.length : undefined,
         preview: typeof graph === 'string' ? graph.slice(0, 160) : graph,
       });
+      if (typeof graph !== 'string') {
+        console.error('[functionGraphAtom] graph is not a string', { type: typeof graph });
+      } else if (graph.trim().length === 0) {
+        console.warn('[functionGraphAtom] graph string is empty after trimming');
+      }
       return { graph };
     } catch (e) {
       console.error('[functionGraphAtom] failed to generate graph', e);

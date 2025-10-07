@@ -116,6 +116,12 @@ const useRunTests = (maxBatchSize = 5) => {
               hasSignal: !!controller.signal,
               signalAborted: controller.signal.aborted
             })
+            console.log('[TestRunner] Starting run_test_with_expr_events', {
+              functionName: testCase.fn.name,
+              testCaseName: testCase.tc.name,
+              signature: testCase.fn.signature,
+              abortSignalAborted: controller.signal.aborted,
+            })
             const result = await testCase.fn.run_test_with_expr_events(
               rt,
               testCase.tc.name,
@@ -154,6 +160,11 @@ const useRunTests = (maxBatchSize = 5) => {
 
             const endTime = performance.now()
             const response_status = result.status()
+            console.log('[TestRunner] run_test_with_expr_events completed', {
+              functionName: testCase.fn.name,
+              testCaseName: testCase.tc.name,
+              responseStatus: response_status,
+            })
             const responseStatusMap = {
               [wasm.TestStatus.Passed]: 'passed',
               [wasm.TestStatus.LLMFailure]: 'llm_failed',
@@ -172,7 +183,11 @@ const useRunTests = (maxBatchSize = 5) => {
             })
           } catch (e) {
             console.log('test error!')
-            console.error(e)
+            console.error('[TestRunner] run_test_with_expr_events error', {
+              functionName: test.functionName,
+              testCaseName: test.testName,
+              error: e,
+            })
 
             // Check if this is an abort error
             if (e instanceof Error && (e.name === 'AbortError' || e.message?.includes('BamlAbortError'))) {

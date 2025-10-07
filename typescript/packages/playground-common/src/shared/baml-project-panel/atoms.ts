@@ -1,4 +1,4 @@
-import { atom, useAtomValue, useSetAtom } from 'jotai';
+import { atom, getDefaultStore, useAtomValue, useSetAtom } from 'jotai';
 import { atomFamily, atomWithStorage } from 'jotai/utils';
 import { useEffect } from 'react';
 
@@ -100,7 +100,7 @@ export const useClearWasmPanic = () => {
 // Unified beta feature atom that works in both VS Code and standalone environments
 export const betaFeatureEnabledAtom = atom((get) => {
   const isInVSCode = isVSCodeEnvironment();
-  
+
   if (isInVSCode) {
     // In VSCode: try vscodeSettingsAtom, then bamlConfig fallback
     const vscodeSettings = get(vscodeSettingsAtom);
@@ -117,14 +117,45 @@ export const betaFeatureEnabledAtom = atom((get) => {
   }
 });
 
-const wasmAtomAsync = atom(async () => {
+
+let wasmAtomAsync = atom(async () => {
   const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build');
   // Enable WASM logging for debugging
   wasm.init_js_callback_bridge(vscode.loadAwsCreds, vscode.loadGcpCreds);
   return wasm;
-});
+},
+
+  async (_get, set, newValue: null) => {
+    set(wasmAtomAsync, null)
+  }
+);
 
 export const wasmAtom = unwrap(wasmAtomAsync);
+
+const store = getDefaultStore();
+
+declare const module: {
+  hot?: {
+    dispose(callback: () => void): void;
+  };
+};
+
+if (module.hot) {
+  module.hot.dispose(() => {
+    console.log("sam HMR module.hot.dispose")
+    wasmAtomAsync = atom(async () => {
+      const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build');
+      // Enable WASM logging for debugging
+      wasm.init_js_callback_bridge(vscode.loadAwsCreds, vscode.loadGcpCreds);
+      return wasm;
+    },
+
+      async (_get, set, newValue: null) => {
+        set(wasmAtomAsync, null)
+      }
+    )
+  });
+}
 
 export const useWaitForWasm = () => {
   const wasm = useAtomValue(wasmAtom);
@@ -188,7 +219,7 @@ export const runtimeAtom = atom<{
     // Determine environment and get appropriate feature flags
     const isInVSCode = isVSCodeEnvironment();
     let featureFlags: string[];
-    
+
     if (isInVSCode) {
       // In VSCode: try vscodeSettingsAtom, then bamlConfig fallback
       const vscodeSettings = get(vscodeSettingsAtom);

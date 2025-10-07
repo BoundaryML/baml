@@ -4,7 +4,8 @@ import { useEffect, useRef, useCallback } from 'react';
 import mermaid from 'mermaid';
 import { Button } from '@baml/ui/button';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
-import svgPanZoom from 'svg-pan-zoom';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
+import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import { functionGraphAtom } from '../../../atoms-orch-graph';
 import { vscode } from '../../../../vscode';
 import { flashRangesAtom } from '../../../atoms';
@@ -129,22 +130,64 @@ export const MermaidGraphView: React.FC = () => {
   const mermaidRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const panZoomRef = useRef<ReturnType<typeof svgPanZoom> | null>(null);
-  const setFlashRanges = useSetAtom(flashRangesAtom)
+  const transformRef = useRef<ReactZoomPanPinchRef | null>(null);
+  const setFlashRanges = useSetAtom(flashRangesAtom);
+
+  const computeFitScale = useCallback(() => {
+    const containerEl = containerRef.current;
+    const svgEl = svgRef.current;
+    if (!containerEl || !svgEl) return 1;
+
+    const containerRect = containerEl.getBoundingClientRect();
+    if (containerRect.width <= 0 || containerRect.height <= 0) return 1;
+
+    let bbox: DOMRect | null = null;
+    try {
+      const rawBox = svgEl.getBBox();
+      if (rawBox.width > 0 && rawBox.height > 0) {
+        bbox = rawBox as DOMRect;
+      }
+    } catch {
+      // getBBox may throw if SVG isn't in the DOM yet; fall back to client rect
+    }
+
+    const targetBox = bbox ?? svgEl.getBoundingClientRect();
+    const svgWidth = targetBox.width;
+    const svgHeight = targetBox.height;
+    if (svgWidth <= 0 || svgHeight <= 0) return 1;
+
+    const PADDING = 32;
+    const availableWidth = Math.max(containerRect.width - PADDING, 1);
+    const availableHeight = Math.max(containerRect.height - PADDING, 1);
+    const widthRatio = availableWidth / svgWidth;
+    const heightRatio = availableHeight / svgHeight;
+    const fitScale = Math.min(widthRatio, heightRatio);
+    if (!Number.isFinite(fitScale) || fitScale <= 0) return 1;
+    return Math.min(1, fitScale);
+  }, []);
 
   const zoomIn = useCallback(() => {
-    panZoomRef.current?.zoomBy(1.2);
+    transformRef.current?.zoomIn(0.2);
   }, []);
   const zoomOut = useCallback(() => {
-    panZoomRef.current?.zoomBy(1 / 1.2);
+    transformRef.current?.zoomOut(0.2);
   }, []);
+  const centerGraph = useCallback((scale?: number, animationTime = 0) => {
+    const instance = transformRef.current;
+    if (!instance) return;
+    const fallbackScale = computeFitScale();
+    const nextScale = typeof scale === 'number' ? scale : fallbackScale;
+    if (!Number.isFinite(nextScale)) return;
+    instance.centerView(nextScale, animationTime);
+  }, [computeFitScale]);
   const resetView = useCallback(() => {
-    if (!panZoomRef.current) return;
-    panZoomRef.current.resetZoom();
-    panZoomRef.current.resize();
-    panZoomRef.current.fit();
-    panZoomRef.current.center();
-  }, []);
+    const instance = transformRef.current;
+    if (!instance) return;
+    requestAnimationFrame(() => {
+      const initialScale = computeFitScale();
+      centerGraph(initialScale, 200);
+    });
+  }, [centerGraph, computeFitScale]);
 
   useEffect(() => {
     if (!graph || !mermaidRef.current) return;
@@ -158,10 +201,7 @@ export const MermaidGraphView: React.FC = () => {
     } catch { }
 
     const onResize = () => {
-      if (!panZoomRef.current) return;
-      panZoomRef.current.resize();
-      panZoomRef.current.fit();
-      panZoomRef.current.center();
+      requestAnimationFrame(() => centerGraph());
     };
     window.addEventListener('resize', onResize);
 
@@ -237,22 +277,14 @@ export const MermaidGraphView: React.FC = () => {
         const { svg } = await mermaid.render('bamlMermaidSvg', graph);
         if (isCancelled || !mermaidRef.current) return;
 
-        const normalizedSvg = svg
-          .replace(/[ ]*max-width:[ 0-9\.]*px;/i, '')
-          .replace(/width="[0-9\.]+px"/i, '')
-          .replace(/height="[0-9\.]+px"/i, '');
+        const normalizedSvg = svg.replace(/[ ]*max-width:[ 0-9\.]*px;/i, '');
         mermaidRef.current.innerHTML = normalizedSvg;
 
         const svgEl = mermaidRef.current.querySelector('#bamlMermaidSvg') as SVGSVGElement | null;
         if (!svgEl) return;
         svgRef.current = svgEl;
-        // Make the SVG fill the container
-        svgEl.setAttribute('width', '100%');
-        svgEl.setAttribute('height', '100%');
+        // Ensure the SVG keeps its natural size while preserving aspect ratio
         svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        svgEl.style.width = '100%';
-        svgEl.style.height = '100%';
-        svgEl.style.display = 'block';
 
         // Inject CSS override so it takes precedence over Mermaid defaults inside the SVG
         try {
@@ -289,31 +321,10 @@ export const MermaidGraphView: React.FC = () => {
         } catch { }
 
         // Keep arrowhead markers near default sizing (no scaling), only color is overridden via CSS
-
-        // Initialize svg-pan-zoom on the generated SVG
-        panZoomRef.current = svgPanZoom(svgEl as unknown as SVGElement, {
-          panEnabled: true,
-          zoomEnabled: true,
-          controlIconsEnabled: false,
-          fit: true,
-          center: true,
-          minZoom: 0.25,
-          maxZoom: 4,
-          zoomScaleSensitivity: 0.3,
-          preventMouseEventsDefault: false,
+        requestAnimationFrame(() => {
+          const initialScale = computeFitScale();
+          centerGraph(initialScale);
         });
-
-        // After init, ensure proper fit/center
-        panZoomRef.current.resize();
-        panZoomRef.current.fit();
-        panZoomRef.current.center();
-
-        // Prevent wheel from scrolling parent while zooming/panning
-        const wheelPreventer = (e: WheelEvent) => {
-          e.preventDefault();
-        };
-        // Attach to the container hosting the SVG
-        svgEl.addEventListener('wheel', wheelPreventer, { passive: false });
 
         // Parse span map from a special mermaid comment emitted at the end
         // Look for a comment node like %%__BAML_SPANMAP__={...}
@@ -413,10 +424,7 @@ export const MermaidGraphView: React.FC = () => {
         // Observe container size changes (ResizablePanel drags)
         if (containerRef.current && typeof ResizeObserver !== 'undefined') {
           resizeObserver = new ResizeObserver(() => {
-            if (!panZoomRef.current) return;
-            panZoomRef.current.resize();
-            panZoomRef.current.fit();
-            panZoomRef.current.center();
+            requestAnimationFrame(() => centerGraph());
           });
           resizeObserver.observe(containerRef.current);
         }
@@ -429,36 +437,51 @@ export const MermaidGraphView: React.FC = () => {
       isCancelled = true;
       window.removeEventListener('resize', onResize);
       if (resizeObserver) resizeObserver.disconnect();
-      panZoomRef.current?.destroy();
-      panZoomRef.current = null;
       try {
         const svgEl = svgRef.current;
-        if (svgEl) {
-          svgEl.removeEventListener('wheel', (e: any) => e.preventDefault());
-        }
         if ((window as any).__bamlCleanupListeners) {
           (window as any).__bamlCleanupListeners();
           delete (window as any).__bamlCleanupListeners;
         }
       } catch { }
     };
-  }, [graph]);
+  }, [graph, centerGraph, computeFitScale]);
 
   return (
     <div className="flex flex-col w-full h-full min-h-0">
       <MermaidHeader />
       <div
         ref={containerRef}
-        className="relative flex-1 min-h-0 overflow-hidden border rounded bg-transparent"
+        className="relative overflow-hidden border rounded bg-transparent"
         style={{
           borderColor: 'var(--vscode-panel-border)',
           backgroundColor: 'transparent',
+          height: '70%',
         }}
       >
-        <div
-          ref={mermaidRef}
-          className="absolute inset-0 overflow-hidden p-2"
-        />
+        <div className="h-full w-full">
+          <TransformWrapper
+            ref={transformRef}
+            minScale={0.1}
+            maxScale={6}
+            initialScale={1}
+            wheel={{ step: 0.15, smoothStep: 0.05 }}
+            doubleClick={{ disabled: true }}
+            pinch={{ disabled: false }}
+            panning={{ velocityDisabled: true }}
+          >
+            <TransformComponent
+              wrapperStyle={{ width: '100%', height: '100%' }}
+            >
+              <div className="flex h-full w-full items-center justify-center">
+                <div
+                  ref={mermaidRef}
+                  className="overflow-hidden p-2"
+                />
+              </div>
+            </TransformComponent>
+          </TransformWrapper>
+        </div>
 
         {/* Controls overlay */}
         <div className="absolute top-2 right-2 z-10">
@@ -478,5 +501,3 @@ export const MermaidGraphView: React.FC = () => {
     </div>
   );
 };
-
-

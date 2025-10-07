@@ -771,6 +771,12 @@ impl BamlRuntime {
     {
         baml_log::set_from_env(&env_vars).unwrap();
 
+        log::info!(
+            "[Runtime] run_test_with_expr_events start function={} test={}",
+            function_name,
+            test_name
+        );
+
         let call = self
             .tracer_wrapper
             .get_or_create_tracer(&env_vars)
@@ -789,10 +795,35 @@ impl BamlRuntime {
 
         // If it's an expr function, use the simpler expr execution path
         if is_expr_fn {
-            return self
+            log::info!(
+                "[Runtime] run_test_with_expr_events taking expr path for function={} test={}",
+                function_name,
+                test_name
+            );
+            let result = self
                 .run_expr_test(function_name, test_name, ctx, env_vars)
                 .await;
+            match &result.0 {
+                Ok(_) => log::info!(
+                    "[Runtime] run_test_with_expr_events expr path success function={} test={}",
+                    function_name,
+                    test_name
+                ),
+                Err(e) => log::error!(
+                    "[Runtime] run_test_with_expr_events expr path error function={} test={} err={:?}",
+                    function_name,
+                    test_name,
+                    e
+                ),
+            }
+            return result;
         }
+
+        log::info!(
+            "[Runtime] run_test_with_expr_events taking LLM path function={} test={}",
+            function_name,
+            test_name
+        );
 
         let run_to_response = || async {
             // acceptable clone, just used for testing
@@ -885,6 +916,19 @@ impl BamlRuntime {
         };
 
         let response = run_to_response().await;
+        match &response {
+            Ok(_) => log::info!(
+                "[Runtime] run_test_with_expr_events LLM path success function={} test={}",
+                function_name,
+                test_name
+            ),
+            Err(e) => log::error!(
+                "[Runtime] run_test_with_expr_events LLM path error function={} test={} err={:?}",
+                function_name,
+                test_name,
+                e
+            ),
+        }
 
         let call_id = call.curr_call_id();
         {
@@ -953,6 +997,11 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         env_vars: HashMap<String, String>,
     ) -> (Result<TestResponse>, FunctionCallId) {
+        log::info!(
+            "[Runtime] run_expr_test start function={} test={}",
+            function_name,
+            test_name
+        );
         // Get test parameters
         let rctx = ctx.create_ctx_with_default();
         let params = match self.get_test_params(function_name, test_name, &rctx, true) {
@@ -1057,6 +1106,25 @@ impl BamlRuntime {
             function_call: call_id.clone(),
             constraints_result,
         };
+
+        match &test_response.expr_function_response {
+            Some(Ok(_)) => log::info!(
+                "[Runtime] run_expr_test success function={} test={}",
+                function_name,
+                test_name
+            ),
+            Some(Err(e)) => log::error!(
+                "[Runtime] run_expr_test evaluation error function={} test={} err={:?}",
+                function_name,
+                test_name,
+                e
+            ),
+            None => log::warn!(
+                "[Runtime] run_expr_test produced no response function={} test={}",
+                function_name,
+                test_name
+            ),
+        }
 
         (Ok(test_response), call_id)
     }
@@ -1825,10 +1893,15 @@ impl InternalRuntimeInterface for BamlRuntime {
         client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self)
     }
 
-    fn function_graph(&self, _function_name: &str, _ctx: &RuntimeContext) -> Result<String> {
+    fn function_graph(&self, function_name: &str, _ctx: &RuntimeContext) -> Result<String> {
         let ast = self.db.ast();
-        let graph =
-            internal_baml_core::ast::BamlVisDiagramGenerator::generate_headers_flowchart(ast);
+        let graph = internal_baml_core::ast::diagram_generator::generate_with_styling(
+            internal_baml_core::ast::diagram_generator::MermaidGeneratorContext {
+                use_fancy: false,
+                function_filter: Some(function_name.to_string()),
+            },
+            ast,
+        );
         Ok(graph)
     }
 

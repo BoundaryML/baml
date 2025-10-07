@@ -26,6 +26,7 @@ either.workspace = true
 test-log.workspace = true
 pretty = { workspace = true }
 regex.workspace = true
+indexmap.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true

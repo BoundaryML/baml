@@ -5,6 +5,7 @@ packages:
   - integ-tests/*
   - engine
   - engine/*
+  - engine/baml-lib/baml/tests/validation_files/headers/mermaid-sandbox/
   - engine/baml-schema-wasm/*
   - fern
   # - engine/language_client_typescript/npm/darwin-arm64

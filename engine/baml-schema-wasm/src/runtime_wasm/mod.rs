@@ -1121,9 +1121,13 @@ impl WasmRuntime {
         let ctx = ctx.create_ctx_with_default();
         let ctx = ctx.eval_ctx(false);
 
-        self.runtime
-            .ir()
-            .walk_expr_fns()
+        let expr_fns = self.runtime.ir().walk_expr_fns().collect::<Vec<_>>();
+        log::info!(
+            "[WasmRuntime] list_expr_fns discovered {} functions",
+            expr_fns.len()
+        );
+        expr_fns
+            .into_iter()
             .map(|f| {
                 let snippet = format!(
                     r#"test TestName {{
@@ -2000,6 +2004,11 @@ impl WasmFunction {
         get_baml_src_cb: js_sys::Function,
         env: js_sys::Object,
     ) -> JsResult<WasmPrompt> {
+        log::info!(
+            "[WasmFunction] render_prompt_for_test start function={} test={}",
+            self.name,
+            test_name
+        );
         let context_manager = rt.runtime.create_ctx_manager(
             BamlValue::String("wasm".to_string()),
             js_fn_to_baml_src_reader(get_baml_src_cb),
@@ -2034,13 +2043,31 @@ impl WasmFunction {
             .get_test_params(&self.name, &test_name, &ctx, false)
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
-        rt.runtime
+        match rt
+            .runtime
             .internal()
             .render_prompt(&self.name, &ctx, &params, wasm_call_context.node_index)
             .await
-            .as_ref()
-            .map(|(p, scope, allowed)| (p, scope, allowed).into())
-            .map_err(|e| JsError::new(format!("{e:?}").as_str()))
+        {
+            Ok(rendered) => {
+                log::info!(
+                    "[WasmFunction] render_prompt_for_test success function={} test={}",
+                    self.name,
+                    test_name
+                );
+                let prompt = (&rendered.0, &rendered.1, &rendered.2).into();
+                Ok(prompt)
+            }
+            Err(e) => {
+                log::error!(
+                    "[WasmFunction] render_prompt_for_test error function={} test={} err={:?}",
+                    self.name,
+                    test_name,
+                    e
+                );
+                Err(JsError::new(format!("{e:?}").as_str()))
+            }
+        }
     }
 
     #[wasm_bindgen]
@@ -2165,9 +2192,13 @@ impl WasmFunction {
 
         let rt = &rt.runtime;
         let function_name = self.name.clone();
-
         let function_name_for_test_pair = function_name.clone();
         let test_name_for_test_pair = test_name.clone();
+        log::info!(
+            "[WasmFunction] run_test_with_expr_events start function={} test={}",
+            function_name,
+            test_name.as_str()
+        );
 
         // Create the closure to handle partial responses:
         let cb = Box::new(move |r: FunctionResult| {
@@ -2232,6 +2263,19 @@ impl WasmFunction {
             .await;
 
         let (test_response, span) = result;
+        match &test_response {
+            Ok(_) => log::info!(
+                "[WasmFunction] run_test_with_expr_events success function={} test={}",
+                function_name,
+                test_name.as_str()
+            ),
+            Err(e) => log::error!(
+                "[WasmFunction] run_test_with_expr_events error function={} test={} err={:?}",
+                function_name,
+                test_name.as_str(),
+                e
+            ),
+        }
 
         Ok(WasmTestResponse {
             test_response,
@@ -2328,10 +2372,18 @@ impl WasmFunction {
         let ctx = rt
             .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
             .create_ctx_with_default();
+        log::info!(
+            "[wasm::function_graph] generating graph for function {}",
+            self.name
+        );
         let graph = rt
             .internal()
             .function_graph(&self.name, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
+        log::info!(
+            "[wasm::function_graph] generated Mermaid graph (chars={})",
+            graph.len()
+        );
         Ok(graph)
     }
 

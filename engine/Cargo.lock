@@ -1048,6 +1048,7 @@ dependencies = [
  "indoc",
  "internal-baml-core",
  "itertools 0.14.0",
+ "log",
  "pretty_assertions",
  "strip-ansi-escapes",
 ]
@@ -3949,6 +3950,7 @@ dependencies = [
  "baml-types",
  "bstd",
  "either",
+ "indexmap 2.9.0",
  "internal-baml-diagnostics",
  "log",
  "pest",
