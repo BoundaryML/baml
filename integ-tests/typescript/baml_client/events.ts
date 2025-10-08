@@ -34,19 +34,21 @@ export interface VarEvent<T> {
 
 type BlockHandler = (event: BlockEvent) => void
 type VarHandler<T> = (event: VarEvent<T>) => void
-type StreamHandler<T> = (stream: BamlStream<VarEvent<T>>) => void
+type StreamHandler<PartialT, FinalT> = (stream: BamlStream<VarEvent<PartialT>, VarEvent<FinalT>>) => void
 
 export interface InternalEventBindings {
   functionName: string
   block: BlockHandler[]
   vars: Record<string, VarHandler<any>[]>
-  streams: Record<string, StreamHandler<any>[]>
+  streams: Record<string, StreamHandler<any, any>[]>
   functions: Record<string, InternalEventBindings>
 }
 
 export interface EventCollectorInternal {
   __handlers(): InternalEventBindings
 }
+
+
 
 
 export interface AnotherTakedownEventCollector extends EventCollectorInternal {
@@ -62,7 +64,7 @@ export function AnotherTakedown(): AnotherTakedownEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -85,10 +87,10 @@ export function AnotherTakedown(): AnotherTakedownEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -109,6 +111,8 @@ export function AnotherTakedown(): AnotherTakedownEventCollector {
 }
 
 
+
+
 export interface AssignElseIfExprEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -122,7 +126,7 @@ export function AssignElseIfExpr(): AssignElseIfExprEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -145,10 +149,10 @@ export function AssignElseIfExpr(): AssignElseIfExprEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -169,6 +173,8 @@ export function AssignElseIfExpr(): AssignElseIfExprEventCollector {
 }
 
 
+
+
 export interface BoolToIntWithIfElseEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -182,7 +188,7 @@ export function BoolToIntWithIfElse(): BoolToIntWithIfElseEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -205,10 +211,10 @@ export function BoolToIntWithIfElse(): BoolToIntWithIfElseEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -229,6 +235,8 @@ export function BoolToIntWithIfElse(): BoolToIntWithIfElseEventCollector {
 }
 
 
+
+
 export interface BoolToIntWithIfElseCallingLlmEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -242,7 +250,7 @@ export function BoolToIntWithIfElseCallingLlm(): BoolToIntWithIfElseCallingLlmEv
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -265,10 +273,10 @@ export function BoolToIntWithIfElseCallingLlm(): BoolToIntWithIfElseCallingLlmEv
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -289,6 +297,8 @@ export function BoolToIntWithIfElseCallingLlm(): BoolToIntWithIfElseCallingLlmEv
 }
 
 
+
+
 export interface CallLlmDescribeImageEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -302,7 +312,7 @@ export function CallLlmDescribeImage(): CallLlmDescribeImageEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -325,10 +335,10 @@ export function CallLlmDescribeImage(): CallLlmDescribeImageEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -349,6 +359,8 @@ export function CallLlmDescribeImage(): CallLlmDescribeImageEventCollector {
 }
 
 
+
+
 export interface CallReturnOneEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -362,7 +374,7 @@ export function CallReturnOne(): CallReturnOneEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -385,10 +397,10 @@ export function CallReturnOne(): CallReturnOneEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -409,6 +421,8 @@ export function CallReturnOne(): CallReturnOneEventCollector {
 }
 
 
+
+
 export interface ChainedCallsEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -422,7 +436,7 @@ export function ChainedCalls(): ChainedCallsEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -445,10 +459,10 @@ export function ChainedCalls(): ChainedCallsEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -469,6 +483,8 @@ export function ChainedCalls(): ChainedCallsEventCollector {
 }
 
 
+
+
 export interface EchoWorkflowEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -482,7 +498,7 @@ export function EchoWorkflow(): EchoWorkflowEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -505,10 +521,10 @@ export function EchoWorkflow(): EchoWorkflowEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -529,6 +545,8 @@ export function EchoWorkflow(): EchoWorkflowEventCollector {
 }
 
 
+
+
 export interface ExecFetchAsEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -542,7 +560,7 @@ export function ExecFetchAs(): ExecFetchAsEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -565,10 +583,10 @@ export function ExecFetchAs(): ExecFetchAsEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -589,6 +607,8 @@ export function ExecFetchAs(): ExecFetchAsEventCollector {
 }
 
 
+
+
 export interface HomeEnvVarIsEmptyEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -602,7 +622,7 @@ export function HomeEnvVarIsEmpty(): HomeEnvVarIsEmptyEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -625,10 +645,10 @@ export function HomeEnvVarIsEmpty(): HomeEnvVarIsEmptyEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -649,6 +669,8 @@ export function HomeEnvVarIsEmpty(): HomeEnvVarIsEmptyEventCollector {
 }
 
 
+
+
 export interface IterativeFibonacciEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -662,7 +684,7 @@ export function IterativeFibonacci(): IterativeFibonacciEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -685,10 +707,10 @@ export function IterativeFibonacci(): IterativeFibonacciEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -709,6 +731,8 @@ export function IterativeFibonacci(): IterativeFibonacciEventCollector {
 }
 
 
+
+
 export interface NormalElseIfStmtEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -722,7 +746,7 @@ export function NormalElseIfStmt(): NormalElseIfStmtEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -745,10 +769,10 @@ export function NormalElseIfStmt(): NormalElseIfStmtEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -769,6 +793,8 @@ export function NormalElseIfStmt(): NormalElseIfStmtEventCollector {
 }
 
 
+
+
 export interface ReturnCategoryEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -782,7 +808,7 @@ export function ReturnCategory(): ReturnCategoryEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -805,10 +831,10 @@ export function ReturnCategory(): ReturnCategoryEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -829,6 +855,8 @@ export function ReturnCategory(): ReturnCategoryEventCollector {
 }
 
 
+
+
 export interface ReturnElseIfExprEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -842,7 +870,7 @@ export function ReturnElseIfExpr(): ReturnElseIfExprEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -865,10 +893,10 @@ export function ReturnElseIfExpr(): ReturnElseIfExprEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -889,6 +917,8 @@ export function ReturnElseIfExpr(): ReturnElseIfExprEventCollector {
 }
 
 
+
+
 export interface ReturnImageFromUrlEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -902,7 +932,7 @@ export function ReturnImageFromUrl(): ReturnImageFromUrlEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -925,10 +955,10 @@ export function ReturnImageFromUrl(): ReturnImageFromUrlEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -949,6 +979,8 @@ export function ReturnImageFromUrl(): ReturnImageFromUrlEventCollector {
 }
 
 
+
+
 export interface ReturnNumberEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -962,7 +994,7 @@ export function ReturnNumber(): ReturnNumberEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -985,10 +1017,10 @@ export function ReturnNumber(): ReturnNumberEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -1009,6 +1041,8 @@ export function ReturnNumber(): ReturnNumberEventCollector {
 }
 
 
+
+
 export interface ReturnNumberCallingLlmEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -1022,7 +1056,7 @@ export function ReturnNumberCallingLlm(): ReturnNumberCallingLlmEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -1045,10 +1079,10 @@ export function ReturnNumberCallingLlm(): ReturnNumberCallingLlmEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -1069,6 +1103,8 @@ export function ReturnNumberCallingLlm(): ReturnNumberCallingLlmEventCollector {
 }
 
 
+
+
 export interface ReturnOneEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -1082,7 +1118,7 @@ export function ReturnOne(): ReturnOneEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -1105,10 +1141,10 @@ export function ReturnOne(): ReturnOneEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -1129,6 +1165,8 @@ export function ReturnOne(): ReturnOneEventCollector {
 }
 
 
+
+
 export interface StoreFnCallInLocalVarEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -1142,7 +1180,7 @@ export function StoreFnCallInLocalVar(): StoreFnCallInLocalVarEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -1165,10 +1203,10 @@ export function StoreFnCallInLocalVar(): StoreFnCallInLocalVarEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -1189,6 +1227,8 @@ export function StoreFnCallInLocalVar(): StoreFnCallInLocalVarEventCollector {
 }
 
 
+
+
 export interface StoreLlmCallInLocalVarEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -1202,7 +1242,7 @@ export function StoreLlmCallInLocalVar(): StoreLlmCallInLocalVarEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -1225,10 +1265,10 @@ export function StoreLlmCallInLocalVar(): StoreLlmCallInLocalVarEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -1249,6 +1289,8 @@ export function StoreLlmCallInLocalVar(): StoreLlmCallInLocalVarEventCollector {
 }
 
 
+
+
 export interface SumArrayEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -1262,7 +1304,7 @@ export function SumArray(): SumArrayEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -1285,10 +1327,10 @@ export function SumArray(): SumArrayEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -1309,6 +1351,8 @@ export function SumArray(): SumArrayEventCollector {
 }
 
 
+
+
 export interface SumFromToEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -1322,7 +1366,7 @@ export function SumFromTo(): SumFromToEventCollector {
 
   
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   
 
   
@@ -1345,10 +1389,10 @@ export function SumFromTo(): SumFromToEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -1369,11 +1413,45 @@ export function SumFromTo(): SumFromToEventCollector {
 }
 
 
+
+type WorkflowEmitEventCollectorVarTypes = {
+  
+  "once": string,
+  
+  "twice": string[],
+  
+  "x": number,
+  
+  "y": boolean
+  
+}
+
+type WorkflowEmitEventCollectorStreamTypes = {
+  
+  "once": string | null,
+  
+  "twice": string[],
+  
+  "x": number | null,
+  
+  "y": boolean | null
+  
+}
+
+
 export interface WorkflowEmitEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
-  on_var(channel: "once" | "twice" | "x" | "y", handler: VarHandler<any>): void
-  on_stream(channel: "once" | "twice" | "x" | "y", handler: StreamHandler<any>): void
+  on_var<K extends keyof WorkflowEmitEventCollectorVarTypes>(channel: K, handler: (event: VarEvent<WorkflowEmitEventCollectorVarTypes[K]>) => void): void
+  
+  on_stream(channel: "once", handler: StreamHandler<string | null, string | null>): void
+  
+  on_stream(channel: "twice", handler: StreamHandler<string[], string[]>): void
+  
+  on_stream(channel: "x", handler: StreamHandler<number | null, number | null>): void
+  
+  on_stream(channel: "y", handler: StreamHandler<boolean | null, boolean | null>): void
+  
   
   
   function_WorkflowEmitChild: WorkflowEmitChildEventCollector
@@ -1385,16 +1463,16 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
 
   
   const varHandlers_once = new Set<VarHandler<string>>()
-  const streamHandlers_once = new Set<StreamHandler<string | null>>()
+  const streamHandlers_once = new Set<StreamHandler<string | null, string | null>>()
   
   const varHandlers_twice = new Set<VarHandler<string[]>>()
-  const streamHandlers_twice = new Set<StreamHandler<string[]>>()
+  const streamHandlers_twice = new Set<StreamHandler<string[], string[]>>()
   
   const varHandlers_x = new Set<VarHandler<number>>()
-  const streamHandlers_x = new Set<StreamHandler<number | null>>()
+  const streamHandlers_x = new Set<StreamHandler<number | null, number | null>>()
   
   const varHandlers_y = new Set<VarHandler<boolean>>()
-  const streamHandlers_y = new Set<StreamHandler<boolean | null>>()
+  const streamHandlers_y = new Set<StreamHandler<boolean | null, boolean | null>>()
   
 
   
@@ -1440,16 +1518,16 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
       blockHandlers.add(handler)
     },
     
-    on_var(channel, handler) {
+    on_var<K extends keyof WorkflowEmitEventCollectorVarTypes>(channel: K, handler: (event: VarEvent<WorkflowEmitEventCollectorVarTypes[K]>) => void) {
       const handlers = varHandlerMap[channel]
       if (handlers) {
-        handlers.add(handler)
+        handlers.add(handler as any)
       }
     },
-    on_stream(channel, handler) {
+    on_stream<K extends keyof WorkflowEmitEventCollectorStreamTypes>(channel: K, handler: (stream: BamlStream<VarEvent<WorkflowEmitEventCollectorStreamTypes[K]>>) => void) {
       const handlers = streamHandlerMap[channel]
       if (handlers) {
-        handlers.add(handler)
+        handlers.add(handler as any)
       }
     },
     
@@ -1464,10 +1542,10 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
@@ -1488,11 +1566,27 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
 }
 
 
+
+type WorkflowEmitChildEventCollectorVarTypes = {
+  
+  "x": string
+  
+}
+
+type WorkflowEmitChildEventCollectorStreamTypes = {
+  
+  "x": string | null
+  
+}
+
+
 export interface WorkflowEmitChildEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
-  on_var(channel: "x", handler: VarHandler<any>): void
-  on_stream(channel: "x", handler: StreamHandler<any>): void
+  on_var<K extends keyof WorkflowEmitChildEventCollectorVarTypes>(channel: K, handler: (event: VarEvent<WorkflowEmitChildEventCollectorVarTypes[K]>) => void): void
+  
+  on_stream(channel: "x", handler: StreamHandler<string | null, string | null>): void
+  
   
   
 }
@@ -1502,7 +1596,7 @@ export function WorkflowEmitChild(): WorkflowEmitChildEventCollector {
 
   
   const varHandlers_x = new Set<VarHandler<string>>()
-  const streamHandlers_x = new Set<StreamHandler<string | null>>()
+  const streamHandlers_x = new Set<StreamHandler<string | null, string | null>>()
   
 
   
@@ -1530,16 +1624,16 @@ export function WorkflowEmitChild(): WorkflowEmitChildEventCollector {
       blockHandlers.add(handler)
     },
     
-    on_var(channel, handler) {
+    on_var<K extends keyof WorkflowEmitChildEventCollectorVarTypes>(channel: K, handler: (event: VarEvent<WorkflowEmitChildEventCollectorVarTypes[K]>) => void) {
       const handlers = varHandlerMap[channel]
       if (handlers) {
-        handlers.add(handler)
+        handlers.add(handler as any)
       }
     },
-    on_stream(channel, handler) {
+    on_stream<K extends keyof WorkflowEmitChildEventCollectorStreamTypes>(channel: K, handler: (stream: BamlStream<VarEvent<WorkflowEmitChildEventCollectorStreamTypes[K]>>) => void) {
       const handlers = streamHandlerMap[channel]
       if (handlers) {
-        handlers.add(handler)
+        handlers.add(handler as any)
       }
     },
     
@@ -1552,10 +1646,10 @@ export function WorkflowEmitChild(): WorkflowEmitChildEventCollector {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 

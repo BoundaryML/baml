@@ -14,13 +14,13 @@ export interface VarEvent<T> {
 
 type BlockHandler = (event: BlockEvent) => void
 type VarHandler<T> = (event: VarEvent<T>) => void
-type StreamHandler<T> = (stream: BamlStream<VarEvent<T>>) => void
+type StreamHandler<PartialT, FinalT> = (stream: BamlStream<VarEvent<PartialT>, VarEvent<FinalT>>) => void
 
 export interface InternalEventBindings {
   functionName: string
   block: BlockHandler[]
   vars: Record<string, VarHandler<any>[]>
-  streams: Record<string, StreamHandler<any>[]>
+  streams: Record<string, StreamHandler<any, any>[]>
   functions: Record<string, InternalEventBindings>
 }
 
@@ -29,11 +29,27 @@ export interface EventCollectorInternal {
 }
 
 {% for collector in collectors %}
+{% if collector.has_var_events %}
+type {{ collector.interface_name }}VarTypes = {
+  {% for var in collector.var_events %}
+  "{{ var.channel_name }}": {{ var.value_type }}{% if !loop.last %},{% endif %}
+  {% endfor %}
+}
+
+type {{ collector.interface_name }}StreamTypes = {
+  {% for var in collector.var_events %}
+  "{{ var.channel_name }}": {{ var.stream_type }}{% if !loop.last %},{% endif %}
+  {% endfor %}
+}
+{% endif %}
+
 export interface {{ collector.interface_name }} extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   {% if collector.has_var_events %}
-  on_var(channel: {% for var in collector.var_events %}"{{ var.channel_name }}"{% if !loop.last %} | {% endif %}{% endfor %}, handler: VarHandler<any>): void
-  on_stream(channel: {% for var in collector.var_events %}"{{ var.channel_name }}"{% if !loop.last %} | {% endif %}{% endfor %}, handler: StreamHandler<any>): void
+  on_var<K extends keyof {{ collector.interface_name }}VarTypes>(channel: K, handler: (event: VarEvent<{{ collector.interface_name }}VarTypes[K]>) => void): void
+  {% for var in collector.var_events %}
+  on_stream(channel: "{{ var.channel_name }}", handler: StreamHandler<{{ var.stream_type }}, {{ var.stream_type }}>): void
+  {% endfor %}
   {% endif %}
   {% for child in collector.child_collectors %}
   {{ child.property_name }}: {{ child.interface_name }}
@@ -45,7 +61,7 @@ export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
 
   {% for var in collector.var_events %}
   const varHandlers_{{ var.method_suffix }} = new Set<VarHandler<{{ var.value_type }}>>()
-  const streamHandlers_{{ var.method_suffix }} = new Set<StreamHandler<{{ var.stream_type }}>>()
+  const streamHandlers_{{ var.method_suffix }} = new Set<StreamHandler<{{ var.stream_type }}, {{ var.stream_type }}>>()
   {% endfor %}
 
   {% if collector.has_var_events %}
@@ -62,7 +78,7 @@ export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
   }
   {% else %}
   const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
-  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
   {% endif %}
 
   {% if collector.has_child_collectors %}
@@ -84,16 +100,16 @@ export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
       blockHandlers.add(handler)
     },
     {% if collector.has_var_events %}
-    on_var(channel, handler) {
+    on_var<K extends keyof {{ collector.interface_name }}VarTypes>(channel: K, handler: (event: VarEvent<{{ collector.interface_name }}VarTypes[K]>) => void) {
       const handlers = varHandlerMap[channel]
       if (handlers) {
-        handlers.add(handler)
+        handlers.add(handler as any)
       }
     },
-    on_stream(channel, handler) {
+    on_stream<K extends keyof {{ collector.interface_name }}StreamTypes>(channel: K, handler: (stream: BamlStream<VarEvent<{{ collector.interface_name }}StreamTypes[K]>>) => void) {
       const handlers = streamHandlerMap[channel]
       if (handlers) {
-        handlers.add(handler)
+        handlers.add(handler as any)
       }
     },
     {% endif %}
@@ -108,10 +124,10 @@ export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
         }
       }
 
-      const streams: Record<string, StreamHandler<any>[]> = {}
+      const streams: Record<string, StreamHandler<any, any>[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
         }
       }
 
