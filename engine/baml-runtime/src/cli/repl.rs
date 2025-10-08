@@ -576,6 +576,7 @@ impl ReplState {
         };
 
         let eval_result = interpret_thir(
+            "repl".to_string(),
             thir.clone(),
             input_expr_thir,
             handle_llm_function,

@@ -332,6 +332,7 @@ impl BamlAsyncInterpreterRuntime {
 
         // Execute the interpreter
         let result = interpret_thir(
+            function_name.clone(),
             self.thir_program.clone(),
             function_expr,
             llm_handler,

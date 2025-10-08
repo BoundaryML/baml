@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use baml_types::{ir_type::UnionConstructor, BamlMap, TypeIR};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
-pub use crate::emit::emit_event::EmitEvent;
+pub use crate::emit::emit_event::{EmitEvent, EmitValueMetadata};
 pub use crate::emit::emit_options::{EmitSpec, EmitWhen};
 use crate::thir::{self, typecheck::TypeCompatibility, ClassConstructorField, ExprMetadata, THir};
 

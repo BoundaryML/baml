@@ -4,10 +4,16 @@ function WorkflowEmit() -> int {
 
   y = false;
   x = WorkflowEmitChild();
+  x = 101;
   x
 }
 
 function WorkflowEmitChild() -> int {
   let x: string = "Hello" @emit;
   100
+}
+
+test TestWorkflowEmit() {
+  functions [WorkflowEmit]
+  args {}
 }
