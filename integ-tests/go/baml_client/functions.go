@@ -947,6 +947,72 @@ func BuildTree(ctx context.Context, input types.BinaryNode, opts ...CallOptionFu
 	}
 }
 
+func CheckWordEquality(ctx context.Context, word string, target string, opts ...CallOptionFunc) (bool, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"word": word, "target": target},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "CheckWordEquality", encoded, callOpts.onTick)
+		if err != nil {
+			return false, err
+		}
+
+		if result.Error != nil {
+			return false, result.Error
+		}
+
+		casted := (result.Data).(bool)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "CheckWordEquality", encoded, callOpts.onTick)
+		if err != nil {
+			return false, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return false, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(bool), nil
+			}
+		}
+
+		return false, fmt.Errorf("No data returned from stream")
+	}
+}
+
 func ChooseTodoTools(ctx context.Context, query string, opts ...CallOptionFunc) ([]types.Union2AddTodoItemOrTodoMessageToUser, error) {
 
 	var callOpts callOption

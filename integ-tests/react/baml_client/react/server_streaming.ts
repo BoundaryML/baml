@@ -302,6 +302,28 @@ export const BuildTree = async (
 };
 
 /**
+ * Executes the streaming variant of the "CheckWordEquality" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } word - Input parameter.
+ * @param { string } target - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const CheckWordEquality = async (
+  word: string,
+  target: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.CheckWordEquality(
+    word,
+    target,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "ChooseTodoTools" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -4532,6 +4554,50 @@ export const HomeEnvVarIsEmpty = async (
 };
 
 /**
+ * Executes the streaming variant of the "IsTargetWord" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } prev - Input parameter.
+ * @param { string } next - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const IsTargetWord = async (
+  prev: string,
+  next: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.IsTargetWord(
+    prev,
+    next,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "IsTargetWord2" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } prev - Input parameter.
+ * @param { string } next - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const IsTargetWord2 = async (
+  prev: string,
+  next: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.IsTargetWord2(
+    prev,
+    next,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "IterativeFibonacci" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -4568,6 +4634,28 @@ export const NormalElseIfStmt = async (
   const stream = b.stream.NormalElseIfStmt(
     a,
     b,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "NotEmpty" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } prev - Input parameter.
+ * @param { string } next - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const NotEmpty = async (
+  prev: string,
+  next: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.NotEmpty(
+    prev,
+    next,
   );
   return Promise.resolve(stream.toStreamable());
 };
@@ -4687,6 +4775,22 @@ export const ReturnOne = async (
 };
 
 /**
+ * Executes the streaming variant of the "SimpleEmitWithFilter" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const SimpleEmitWithFilter = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.SimpleEmitWithFilter(
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "StoreFnCallInLocalVar" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -4793,6 +4897,22 @@ export const WorkflowEmit = async (
 export const WorkflowEmitChild = async (
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.WorkflowEmitChild(
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "WorkflowEmitWithFilter" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const WorkflowEmitWithFilter = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.WorkflowEmitWithFilter(
   );
   return Promise.resolve(stream.toStreamable());
 };

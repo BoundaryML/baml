@@ -1050,6 +1050,58 @@ export function useBuildTree(
   }
 }
 /**
+ * A specialized hook for the CheckWordEquality BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - word: string
+ *
+ * - target: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** boolean
+ * - **Streaming Partial:** boolean
+ * - **Streaming Final:** boolean
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useCheckWordEquality({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useCheckWordEquality({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useCheckWordEquality(props: HookInput<'CheckWordEquality', { stream: false }>): HookOutput<'CheckWordEquality', { stream: false }>
+export function useCheckWordEquality(props?: HookInput<'CheckWordEquality', { stream?: true }>): HookOutput<'CheckWordEquality', { stream: true }>
+export function useCheckWordEquality(
+  props: HookInput<'CheckWordEquality', { stream?: boolean }> = {},
+): HookOutput<'CheckWordEquality', { stream: true }> | HookOutput<'CheckWordEquality', { stream: false }> {
+  let action: ServerAction = Actions.CheckWordEquality;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.CheckWordEquality;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'CheckWordEquality', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the ChooseTodoTools BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -12158,6 +12210,110 @@ export function useHomeEnvVarIsEmpty(
   }
 }
 /**
+ * A specialized hook for the IsTargetWord BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - prev: string
+ *
+ * - next: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** boolean
+ * - **Streaming Partial:** boolean | null
+ * - **Streaming Final:** boolean
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useIsTargetWord({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useIsTargetWord({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useIsTargetWord(props: HookInput<'IsTargetWord', { stream: false }>): HookOutput<'IsTargetWord', { stream: false }>
+export function useIsTargetWord(props?: HookInput<'IsTargetWord', { stream?: true }>): HookOutput<'IsTargetWord', { stream: true }>
+export function useIsTargetWord(
+  props: HookInput<'IsTargetWord', { stream?: boolean }> = {},
+): HookOutput<'IsTargetWord', { stream: true }> | HookOutput<'IsTargetWord', { stream: false }> {
+  let action: ServerAction = Actions.IsTargetWord;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.IsTargetWord;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'IsTargetWord', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the IsTargetWord2 BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - prev: string
+ *
+ * - next: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** boolean
+ * - **Streaming Partial:** boolean | null
+ * - **Streaming Final:** boolean
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useIsTargetWord2({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useIsTargetWord2({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useIsTargetWord2(props: HookInput<'IsTargetWord2', { stream: false }>): HookOutput<'IsTargetWord2', { stream: false }>
+export function useIsTargetWord2(props?: HookInput<'IsTargetWord2', { stream?: true }>): HookOutput<'IsTargetWord2', { stream: true }>
+export function useIsTargetWord2(
+  props: HookInput<'IsTargetWord2', { stream?: boolean }> = {},
+): HookOutput<'IsTargetWord2', { stream: true }> | HookOutput<'IsTargetWord2', { stream: false }> {
+  let action: ServerAction = Actions.IsTargetWord2;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.IsTargetWord2;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'IsTargetWord2', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the IterativeFibonacci BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -12257,6 +12413,58 @@ export function useNormalElseIfStmt(
     return useBamlAction(action, props)
   } else {
     return useBamlAction(action, props as HookInput<'NormalElseIfStmt', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the NotEmpty BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - prev: string
+ *
+ * - next: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** boolean
+ * - **Streaming Partial:** boolean | null
+ * - **Streaming Final:** boolean
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useNotEmpty({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useNotEmpty({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useNotEmpty(props: HookInput<'NotEmpty', { stream: false }>): HookOutput<'NotEmpty', { stream: false }>
+export function useNotEmpty(props?: HookInput<'NotEmpty', { stream?: true }>): HookOutput<'NotEmpty', { stream: true }>
+export function useNotEmpty(
+  props: HookInput<'NotEmpty', { stream?: boolean }> = {},
+): HookOutput<'NotEmpty', { stream: true }> | HookOutput<'NotEmpty', { stream: false }> {
+  let action: ServerAction = Actions.NotEmpty;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.NotEmpty;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'NotEmpty', { stream: false }>)
   }
 }
 /**
@@ -12560,6 +12768,54 @@ export function useReturnOne(
   }
 }
 /**
+ * A specialized hook for the SimpleEmitWithFilter BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** number
+ * - **Streaming Partial:** number | null
+ * - **Streaming Final:** number
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useSimpleEmitWithFilter({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useSimpleEmitWithFilter({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useSimpleEmitWithFilter(props: HookInput<'SimpleEmitWithFilter', { stream: false }>): HookOutput<'SimpleEmitWithFilter', { stream: false }>
+export function useSimpleEmitWithFilter(props?: HookInput<'SimpleEmitWithFilter', { stream?: true }>): HookOutput<'SimpleEmitWithFilter', { stream: true }>
+export function useSimpleEmitWithFilter(
+  props: HookInput<'SimpleEmitWithFilter', { stream?: boolean }> = {},
+): HookOutput<'SimpleEmitWithFilter', { stream: true }> | HookOutput<'SimpleEmitWithFilter', { stream: false }> {
+  let action: ServerAction = Actions.SimpleEmitWithFilter;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.SimpleEmitWithFilter;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'SimpleEmitWithFilter', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the StoreFnCallInLocalVar BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -12855,5 +13111,53 @@ export function useWorkflowEmitChild(
     return useBamlAction(action, props)
   } else {
     return useBamlAction(action, props as HookInput<'WorkflowEmitChild', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the WorkflowEmitWithFilter BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** number
+ * - **Streaming Partial:** number | null
+ * - **Streaming Final:** number
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useWorkflowEmitWithFilter({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useWorkflowEmitWithFilter({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useWorkflowEmitWithFilter(props: HookInput<'WorkflowEmitWithFilter', { stream: false }>): HookOutput<'WorkflowEmitWithFilter', { stream: false }>
+export function useWorkflowEmitWithFilter(props?: HookInput<'WorkflowEmitWithFilter', { stream?: true }>): HookOutput<'WorkflowEmitWithFilter', { stream: true }>
+export function useWorkflowEmitWithFilter(
+  props: HookInput<'WorkflowEmitWithFilter', { stream?: boolean }> = {},
+): HookOutput<'WorkflowEmitWithFilter', { stream: true }> | HookOutput<'WorkflowEmitWithFilter', { stream: false }> {
+  let action: ServerAction = Actions.WorkflowEmitWithFilter;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.WorkflowEmitWithFilter;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'WorkflowEmitWithFilter', { stream: false }>)
   }
 }

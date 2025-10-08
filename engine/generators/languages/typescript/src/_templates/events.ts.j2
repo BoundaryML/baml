@@ -12,15 +12,72 @@ export interface VarEvent<T> {
   function_name: string
 }
 
+// Internal stream event from Rust FFI
+interface InternalStreamEvent {
+  streamId: string
+  eventType: "start" | "update" | "end"
+  value?: any
+}
+
+// Simple async iterable stream for emit events
+class EmitStream<PartialT, FinalT> implements BamlStream<PartialT, FinalT> {
+  private eventQueue: (PartialT | null)[] = []
+  private isComplete = false
+
+  pushValue(value: PartialT): void {
+    this.eventQueue.push(value)
+  }
+
+  complete(): void {
+    this.isComplete = true
+    this.eventQueue.push(null)
+  }
+
+  async *[Symbol.asyncIterator](): AsyncIterableIterator<PartialT> {
+    while (true) {
+      const event = this.eventQueue.shift()
+
+      if (event === undefined) {
+        if (this.isComplete) {
+          break
+        }
+        // Wait a bit for more events
+        await new Promise(resolve => setTimeout(resolve, 10))
+        continue
+      }
+
+      if (event === null) {
+        break
+      }
+
+      yield event
+    }
+  }
+
+  async getFinalResponse(): Promise<FinalT> {
+    // For emit streams, just get the last value
+    let lastValue: PartialT | null = null
+    for await (const value of this) {
+      lastValue = value
+    }
+    return lastValue as unknown as FinalT
+  }
+
+  toStreamable(): ReadableStream<Uint8Array> {
+    throw new Error("toStreamable not implemented for EmitStream")
+  }
+}
+
 type BlockHandler = (event: BlockEvent) => void
 type VarHandler<T> = (event: VarEvent<T>) => void
-type StreamHandler<PartialT, FinalT> = (stream: BamlStream<VarEvent<PartialT>, VarEvent<FinalT>>) => void
+type StreamHandler<PartialT, FinalT> = (event: VarEvent<BamlStream<PartialT, FinalT>>) => void
+type InternalStreamHandler = (event: InternalStreamEvent) => void
 
 export interface InternalEventBindings {
   functionName: string
   block: BlockHandler[]
   vars: Record<string, VarHandler<any>[]>
-  streams: Record<string, StreamHandler<any, any>[]>
+  streams: Record<string, InternalStreamHandler[]>
   functions: Record<string, InternalEventBindings>
 }
 
@@ -64,6 +121,45 @@ export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
   const streamHandlers_{{ var.method_suffix }} = new Set<StreamHandler<{{ var.stream_type }}, {{ var.stream_type }}>>()
   {% endfor %}
 
+  // Track active streams by stream_id
+  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+
+  // Internal handler for stream lifecycle events
+  const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
+    if (event.eventType === "start") {
+      // Create new stream and fire to handlers immediately
+      const stream = new EmitStream<any, any>()
+      activeStreams.set(event.streamId, { stream, varName, functionName })
+
+      const handlers = streamHandlerMap[varName]
+      if (handlers) {
+        const varEvent: VarEvent<BamlStream<any, any>> = {
+          variable_name: varName,
+          value: stream,
+          timestamp: Date.now().toString(),
+          function_name: functionName
+        }
+
+        for (const handler of handlers) {
+          handler(varEvent)
+        }
+      }
+    } else if (event.eventType === "update") {
+      // Push value to existing stream
+      const streamInfo = activeStreams.get(event.streamId)
+      if (streamInfo && event.value !== undefined) {
+        streamInfo.stream.pushValue(event.value)
+      }
+    } else if (event.eventType === "end") {
+      // Complete and cleanup stream
+      const streamInfo = activeStreams.get(event.streamId)
+      if (streamInfo) {
+        streamInfo.stream.complete()
+        activeStreams.delete(event.streamId)
+      }
+    }
+  }
+
   {% if collector.has_var_events %}
   const varHandlerMap = {
     {% for var in collector.var_events %}
@@ -106,7 +202,7 @@ export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
         handlers.add(handler as any)
       }
     },
-    on_stream<K extends keyof {{ collector.interface_name }}StreamTypes>(channel: K, handler: (stream: BamlStream<VarEvent<{{ collector.interface_name }}StreamTypes[K]>>) => void) {
+    on_stream<K extends keyof {{ collector.interface_name }}StreamTypes>(channel: K, handler: StreamHandler<{{ collector.interface_name }}StreamTypes[K], {{ collector.interface_name }}StreamTypes[K]>) {
       const handlers = streamHandlerMap[channel]
       if (handlers) {
         handlers.add(handler as any)
@@ -124,10 +220,15 @@ export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
         }
       }
 
-      const streams: Record<string, StreamHandler<any, any>[]> = {}
+      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
-          streams[channel] = Array.from(handlers) as StreamHandler<any, any>[]
+          // Create a wrapper that processes stream lifecycle events
+          const wrapper: InternalStreamHandler = (event: InternalStreamEvent) => {
+            handleInternalStreamEvent(channel, event, "{{ collector.baml_name }}")
+          }
+          streams[channel] = [wrapper]
         }
       }
 

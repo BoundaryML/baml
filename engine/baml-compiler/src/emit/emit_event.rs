@@ -2,10 +2,16 @@ use std::fmt;
 
 use baml_types::{BamlValueWithMeta, Completion, Constraint, ResponseCheck, TypeIR};
 
+/// Unique identifier for a streaming emit event
+pub type StreamId = String;
+
 #[derive(Debug)]
 pub enum EmitBamlValue {
     Value(BamlValueWithMeta<EmitValueMetadata>),
     Block(String),
+    StreamStart(StreamId),
+    StreamUpdate(StreamId, BamlValueWithMeta<EmitValueMetadata>),
+    StreamEnd(StreamId),
 }
 
 /// The BamlValueWithMeta metadata for a
@@ -38,6 +44,20 @@ impl fmt::Display for EmitEvent {
             }
             EmitBamlValue::Block(label) => {
                 write!(f, "(block) {}", label)
+            }
+            EmitBamlValue::StreamStart(stream_id) => {
+                write!(f, "(stream start) {}", stream_id)
+            }
+            EmitBamlValue::StreamUpdate(stream_id, value) => {
+                write!(
+                    f,
+                    "(stream update) {}: {}",
+                    stream_id,
+                    value.clone().value()
+                )
+            }
+            EmitBamlValue::StreamEnd(stream_id) => {
+                write!(f, "(stream end) {}", stream_id)
             }
         }
     }
@@ -76,6 +96,46 @@ impl EmitEvent {
             variable_name: None,
             function_name,
             is_stream: false,
+        }
+    }
+
+    pub fn new_stream_start(
+        variable_name: String,
+        stream_id: StreamId,
+        function_name: String,
+    ) -> Self {
+        Self {
+            value: EmitBamlValue::StreamStart(stream_id),
+            variable_name: Some(variable_name),
+            function_name,
+            is_stream: true,
+        }
+    }
+
+    pub fn new_stream_update(
+        variable_name: String,
+        stream_id: StreamId,
+        value: BamlValueWithMeta<EmitValueMetadata>,
+        function_name: String,
+    ) -> Self {
+        Self {
+            value: EmitBamlValue::StreamUpdate(stream_id, value),
+            variable_name: Some(variable_name),
+            function_name,
+            is_stream: true,
+        }
+    }
+
+    pub fn new_stream_end(
+        variable_name: String,
+        stream_id: StreamId,
+        function_name: String,
+    ) -> Self {
+        Self {
+            value: EmitBamlValue::StreamEnd(stream_id),
+            variable_name: Some(variable_name),
+            function_name,
+            is_stream: true,
         }
     }
 }

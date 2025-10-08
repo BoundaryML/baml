@@ -201,16 +201,19 @@ impl ConformanceSuite {
             meta: fake_meta(),
         };
 
-        let result = interpret_thir(
-            "test".to_string(),
-            thir,
-            call,
-            |name, _args| async move { bail!("unexpected LLM function call: {name}") },
-            |_event| {},
-            BamlMap::new(),
-            self.project.env_vars.clone(),
-        )
-        .await?;
+        let result =
+            interpret_thir(
+                "test".to_string(),
+                thir,
+                call,
+                |name, _args, _emit_context| async move {
+                    bail!("unexpected LLM function call: {name}")
+                },
+                |_event| {},
+                BamlMap::new(),
+                self.project.env_vars.clone(),
+            )
+            .await?;
 
         Ok(BamlValue::from(result))
     }
