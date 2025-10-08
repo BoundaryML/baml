@@ -570,10 +570,16 @@ impl ReplState {
                 }
             }
         };
+        // REPL emit handler: print events to stdout
+        let emit_handler = |event: baml_compiler::emit::EmitEvent| {
+            eprintln!("EMIT EVENT: {:?}", event);
+        };
+
         let eval_result = interpret_thir(
             thir.clone(),
             input_expr_thir,
             handle_llm_function,
+            emit_handler,
             variables,
             self.env_vars.clone(),
         )

@@ -58,5 +58,6 @@ pub fn ir_expr_fn_to_ts(function: &ExprFunctionNode, pkg: &CurrentRenderPackage)
             &function.elem.output.to_streaming_type(pkg.lookup()),
             pkg.lookup(),
         ),
+        event_collector_type: Some(format!("{}EventCollector", function.elem.name)),
     }
 }

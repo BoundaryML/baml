@@ -161,6 +161,7 @@ impl BamlAsyncInterpreterRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<&HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
+        emit_handler: Option<impl FnMut(baml_compiler::emit::EmitEvent) + Send + 'static>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         // Check if this is an expression function
         let expr_fn = self
@@ -321,12 +322,13 @@ impl BamlAsyncInterpreterRuntime {
                 )))
             };
 
-        let emit_handler_state = Arc::new(Mutex::new(todo!("EMIT_TODO")));
-        let emit_event_handler = |event| {
-            let mut state = emit_handler_state.lock().unwrap();
-            eprintln!("EMIT HANDLER");
-            todo!("EMIT_TODO");
-        };
+        // Create the emit event handler - either use the provided one or create a no-op
+        let mut emit_event_handler: Box<dyn FnMut(baml_compiler::emit::EmitEvent) + Send> =
+            if let Some(handler) = emit_handler {
+                Box::new(handler)
+            } else {
+                Box::new(|_event| {})
+            };
 
         // Execute the interpreter
         let result = interpret_thir(
@@ -373,6 +375,7 @@ impl BamlAsyncInterpreterRuntime {
         env_vars: HashMap<String, String>,
         cancel_tripwire: Arc<TripWire>,
         tags: Option<&HashMap<String, String>>,
+        emit_handler: Option<impl FnMut(baml_compiler::emit::EmitEvent) + Send + 'static>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         self.async_runtime.block_on(self.call_function(
             function_name,
@@ -384,6 +387,7 @@ impl BamlAsyncInterpreterRuntime {
             env_vars,
             tags,
             cancel_tripwire,
+            emit_handler,
         ))
     }
 

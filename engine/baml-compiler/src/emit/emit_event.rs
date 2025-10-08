@@ -1,5 +1,6 @@
 use baml_types::{BamlValueWithMeta, Completion, Constraint, ResponseCheck, TypeIR};
 
+#[derive(Debug)]
 pub enum EmitBamlValue {
     Value(BamlValueWithMeta<EmitValueMetadata>),
     Block(String),
@@ -7,6 +8,7 @@ pub enum EmitBamlValue {
 
 /// The BamlValueWithMeta metadata for a
 /// BamlValue in an event.
+#[derive(Debug)]
 pub struct EmitValueMetadata {
     pub constraints: Vec<Constraint>,
     pub response_checks: Vec<ResponseCheck>,
@@ -14,6 +16,47 @@ pub struct EmitValueMetadata {
     pub r#type: TypeIR,
 }
 
+#[derive(Debug)]
 pub struct EmitEvent {
-    value: EmitBamlValue,
+    pub value: EmitBamlValue,
+    pub variable_name: Option<String>,
+    pub function_name: String,
+    pub is_stream: bool,
+}
+
+impl EmitEvent {
+    pub fn new_var(
+        variable_name: String,
+        value: BamlValueWithMeta<EmitValueMetadata>,
+        function_name: String,
+    ) -> Self {
+        Self {
+            value: EmitBamlValue::Value(value),
+            variable_name: Some(variable_name),
+            function_name,
+            is_stream: false,
+        }
+    }
+
+    pub fn new_stream(
+        variable_name: String,
+        value: BamlValueWithMeta<EmitValueMetadata>,
+        function_name: String,
+    ) -> Self {
+        Self {
+            value: EmitBamlValue::Value(value),
+            variable_name: Some(variable_name),
+            function_name,
+            is_stream: true,
+        }
+    }
+
+    pub fn new_block(block_label: String, function_name: String) -> Self {
+        Self {
+            value: EmitBamlValue::Block(block_label),
+            variable_name: None,
+            function_name,
+            is_stream: false,
+        }
+    }
 }
