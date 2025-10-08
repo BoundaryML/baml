@@ -1,5 +1,6 @@
-use baml_types::{BamlValueWithMeta, Completion, Constraint, ResponseCheck, TypeIR};
 use std::fmt;
+
+use baml_types::{BamlValueWithMeta, Completion, Constraint, ResponseCheck, TypeIR};
 
 #[derive(Debug)]
 pub enum EmitBamlValue {

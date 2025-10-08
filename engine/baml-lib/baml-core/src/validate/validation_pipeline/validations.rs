@@ -14,13 +14,11 @@ mod types;
 use std::collections::HashSet;
 
 use anyhow::Result;
+use baml_compiler::{emit::EmitChannels, hir::Hir, thir::typecheck::typecheck};
 use baml_types::GeneratorOutputType;
 
 use super::context::Context;
 use crate::{configuration::Generator, validate::generator_loader::load_generators_from_ast};
-use baml_compiler::emit::EmitChannels;
-use baml_compiler::hir::Hir;
-use baml_compiler::thir::typecheck::typecheck;
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
     enums::validate(ctx);

@@ -1374,6 +1374,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def AnotherTakedown(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="AnotherTakedown", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
     def AssignElseIfExpr(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
@@ -2869,6 +2875,12 @@ class LlmStreamParser:
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
+
+    def AnotherTakedown(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="AnotherTakedown", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
 
     def AssignElseIfExpr(
         self, llm_response: str, baml_options: BamlCallOptions = {},

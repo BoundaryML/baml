@@ -1,6 +1,5 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
-use crate::r#type::SerializeType;
 use anyhow::{anyhow, Result};
 use askama::Template;
 use baml_compiler::{
@@ -18,6 +17,7 @@ use internal_baml_core::{
 use crate::{
     ir_to_ts::{stream_type_to_ts, type_to_ts},
     package::CurrentRenderPackage,
+    r#type::SerializeType,
 };
 
 #[derive(Debug, Clone)]
@@ -159,7 +159,7 @@ pub fn build_event_collectors(
         return Ok(Vec::new());
     }
 
-    let hir = Hir::from_ast(&validated.db.ast());
+    let hir = Hir::from_ast(validated.db.ast());
     let mut type_diagnostics = Diagnostics::new(args.baml_src_dir.clone());
     let thir = typecheck(&hir, &mut type_diagnostics);
 
@@ -251,7 +251,7 @@ fn sanitize_identifier(input: &str) -> String {
     for (idx, ch) in input.chars().enumerate() {
         let is_valid = matches!(ch, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '$');
         if is_valid {
-            if idx == 0 && matches!(ch, '0'..='9') {
+            if idx == 0 && ch.is_ascii_digit() {
                 result.push('_');
             }
             result.push(ch);

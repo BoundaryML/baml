@@ -18,9 +18,6 @@ use napi::{
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "interpreter")]
-use baml_compiler;
-
 use crate::{
     abort_controller::js_abort_signal_to_rust_tripwire,
     errors::{from_anyhow_error, invalid_argument_error},
@@ -329,7 +326,7 @@ impl BamlRuntime {
                         baml_compiler::emit::EmitBamlValue::Value(value) => {
                             if let Some(var_name) = &event.variable_name {
                                 // Serialize BamlValue to JSON
-                                let serialized = serde_json::to_value(&value.value())
+                                let serialized = serde_json::to_value(value.value())
                                     .unwrap_or(serde_json::Value::Null);
 
                                 let var_event = VarEvent {

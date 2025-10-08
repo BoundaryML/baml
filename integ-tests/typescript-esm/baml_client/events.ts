@@ -49,6 +49,66 @@ export interface EventCollectorInternal {
 }
 
 
+export interface AnotherTakedownEventCollector extends EventCollectorInternal {
+  on_block(handler: BlockHandler): void
+  
+  
+}
+
+export function AnotherTakedown(): AnotherTakedownEventCollector {
+  const blockHandlers = new Set<BlockHandler>()
+
+  
+
+  
+  const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any>>> = {}
+  
+
+  
+  const functionHandlerMap: Record<string, EventCollectorInternal> = {}
+  
+
+  
+
+  return {
+    on_block(handler) {
+      blockHandlers.add(handler)
+    },
+    
+    
+    __handlers() {
+      const vars: Record<string, VarHandler<any>[]> = {}
+      for (const [channel, handlers] of Object.entries(varHandlerMap)) {
+        if (handlers.size > 0) {
+          vars[channel] = Array.from(handlers) as VarHandler<any>[]
+        }
+      }
+
+      const streams: Record<string, StreamHandler<any>[]> = {}
+      for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
+        if (handlers.size > 0) {
+          streams[channel] = Array.from(handlers) as StreamHandler<any>[]
+        }
+      }
+
+      const functions: Record<string, InternalEventBindings> = {}
+      for (const [fn, collector] of Object.entries(functionHandlerMap)) {
+        functions[fn] = collector.__handlers()
+      }
+
+      return {
+        functionName: "AnotherTakedown",
+        block: Array.from(blockHandlers),
+        vars,
+        streams,
+        functions,
+      }
+    },
+  }
+}
+
+
 export interface AssignElseIfExprEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -1312,11 +1372,8 @@ export function SumFromTo(): SumFromToEventCollector {
 export interface WorkflowEmitEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
-  on_var_x(handler: VarHandler<number>): void
-  on_stream_x(handler: StreamHandler<number | null>): void
-  
-  on_var_y(handler: VarHandler<boolean>): void
-  on_stream_y(handler: StreamHandler<boolean | null>): void
+  on_var(channel: "once" | "twice" | "x" | "y", handler: VarHandler<any>): void
+  on_stream(channel: "once" | "twice" | "x" | "y", handler: StreamHandler<any>): void
   
   
   function_WorkflowEmitChild: WorkflowEmitChildEventCollector
@@ -1326,6 +1383,12 @@ export interface WorkflowEmitEventCollector extends EventCollectorInternal {
 export function WorkflowEmit(): WorkflowEmitEventCollector {
   const blockHandlers = new Set<BlockHandler>()
 
+  
+  const varHandlers_once = new Set<VarHandler<string>>()
+  const streamHandlers_once = new Set<StreamHandler<string | null>>()
+  
+  const varHandlers_twice = new Set<VarHandler<string[]>>()
+  const streamHandlers_twice = new Set<StreamHandler<string[]>>()
   
   const varHandlers_x = new Set<VarHandler<number>>()
   const streamHandlers_x = new Set<StreamHandler<number | null>>()
@@ -1337,6 +1400,10 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
   
   const varHandlerMap = {
     
+    "once": varHandlers_once,
+    
+    "twice": varHandlers_twice,
+    
     "x": varHandlers_x,
     
     "y": varHandlers_y
@@ -1344,6 +1411,10 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
   }
 
   const streamHandlerMap = {
+    
+    "once": streamHandlers_once,
+    
+    "twice": streamHandlers_twice,
     
     "x": streamHandlers_x,
     
@@ -1369,18 +1440,17 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
       blockHandlers.add(handler)
     },
     
-    on_var_x(handler) {
-      varHandlers_x.add(handler)
+    on_var(channel, handler) {
+      const handlers = varHandlerMap[channel]
+      if (handlers) {
+        handlers.add(handler)
+      }
     },
-    on_stream_x(handler) {
-      streamHandlers_x.add(handler)
-    },
-    
-    on_var_y(handler) {
-      varHandlers_y.add(handler)
-    },
-    on_stream_y(handler) {
-      streamHandlers_y.add(handler)
+    on_stream(channel, handler) {
+      const handlers = streamHandlerMap[channel]
+      if (handlers) {
+        handlers.add(handler)
+      }
     },
     
     
@@ -1421,8 +1491,8 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
 export interface WorkflowEmitChildEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
-  on_var_x(handler: VarHandler<string>): void
-  on_stream_x(handler: StreamHandler<string | null>): void
+  on_var(channel: "x", handler: VarHandler<any>): void
+  on_stream(channel: "x", handler: StreamHandler<any>): void
   
   
 }
@@ -1460,11 +1530,17 @@ export function WorkflowEmitChild(): WorkflowEmitChildEventCollector {
       blockHandlers.add(handler)
     },
     
-    on_var_x(handler) {
-      varHandlers_x.add(handler)
+    on_var(channel, handler) {
+      const handlers = varHandlerMap[channel]
+      if (handlers) {
+        handlers.add(handler)
+      }
     },
-    on_stream_x(handler) {
-      streamHandlers_x.add(handler)
+    on_stream(channel, handler) {
+      const handlers = streamHandlerMap[channel]
+      if (handlers) {
+        handlers.add(handler)
+      }
     },
     
     

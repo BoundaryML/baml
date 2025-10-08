@@ -4107,6 +4107,24 @@ export const VideoInputVertex = async (
 };
 
 /**
+ * Executes the "AnotherTakedown" BAML action.
+ *
+ * This server action calls the underlying BAML function "AnotherTakedown"
+ * with the specified parameters.
+ *
+ * @param { string[] } xs - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const AnotherTakedown = async (
+  xs: string[],
+): Promise<number> => {
+  return b.AnotherTakedown(
+    xs,
+  );
+};
+
+/**
  * Executes the "AssignElseIfExpr" BAML action.
  *
  * This server action calls the underlying BAML function "AssignElseIfExpr"

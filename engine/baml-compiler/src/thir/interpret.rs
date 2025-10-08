@@ -9,7 +9,10 @@ use anyhow::{anyhow, bail, Context, Result};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
 use internal_baml_diagnostics::Span;
 
-use crate::thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, THir};
+use crate::{
+    emit::EmitEvent,
+    thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, THir},
+};
 
 // Type alias for pinned boxed futures - conditionally Send for non-WASM targets
 #[cfg(not(target_arch = "wasm32"))]
@@ -46,15 +49,15 @@ impl<T> LlmFuture for T where T: Future<Output = Result<BamlValueWithMeta<ExprMe
 
 /// Information about a variable with @emit
 #[derive(Clone)]
-struct EmitVariable {
+pub struct EmitVariable {
     /// The name of the variable
-    name: String,
+    pub name: String,
     /// The emit spec from the declaration
-    spec: crate::emit::EmitSpec,
+    pub spec: crate::emit::EmitSpec,
     /// Reference to the variable's value for change detection
-    value_ref: Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>,
+    pub value_ref: Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>,
     /// Last emitted value (for change detection)
-    last_emitted: Arc<Mutex<Option<BamlValue>>>,
+    pub last_emitted: Arc<Mutex<Option<BamlValue>>>,
 }
 
 /// A scope is a map of variable names to their values.
@@ -91,9 +94,7 @@ fn expr_value_to_emit_value(
         constraints: Vec::new(),
         response_checks: Vec::new(),
         completion: baml_types::Completion::default(),
-        r#type: type_ir
-            .clone()
-            .unwrap_or_else(|| baml_types::TypeIR::string()),
+        r#type: type_ir.clone().unwrap_or(baml_types::TypeIR::string()),
     })
 }
 
@@ -138,7 +139,7 @@ enum ControlFlow {
 /// Check all @emit variables for changes and fire events
 fn check_emit_changes(
     scopes: &[Scope],
-    emit_event_handler: &mut impl FnMut(crate::emit::EmitEvent),
+    emit_event_handler: &mut impl FnMut(EmitEvent),
     function_name: &str,
 ) {
     for scope in scopes {
@@ -176,7 +177,7 @@ pub async fn interpret_thir<F, Fut>(
     thir: THir<ExprMetadata>,
     expr: Expr<ExprMetadata>,
     mut run_llm_function: F,
-    mut emit_event_handler: impl FnMut(crate::emit::EmitEvent) + Send,
+    mut emit_event_handler: impl FnMut(EmitEvent) + Send,
     extra_bindings: BamlMap<String, BamlValueWithMeta<ExprMetadata>>,
     env_vars: HashMap<String, String>,
 ) -> Result<BamlValueWithMeta<ExprMetadata>>
@@ -2366,18 +2367,48 @@ mod tests {
         (thir, expr_thir)
     }
 
-    async fn mock_llm_function(
+    fn mock_llm_function(
         _fn_name: String,
         _args: Vec<BamlValue>,
-    ) -> Result<BamlValueWithMeta<ExprMetadata>> {
+    ) -> BoxFuture<'static, Result<BamlValueWithMeta<ExprMetadata>>> {
         // Mock LLM function that returns an error to simulate unsupported operation
-        Ok(BamlValueWithMeta::Int(10, (Span::fake(), None)))
+        Box::pin(async move { Ok(BamlValueWithMeta::Int(10, (Span::fake(), None))) })
+    }
+
+    async fn interpret_thir_ignoring_emit<F>(
+        thir: THir<ExprMetadata>,
+        expr: Expr<ExprMetadata>,
+        handle_llm_call: F,
+        extra_bindings: BamlMap<String, BamlValueWithMeta<ExprMetadata>>,
+        env_vars: HashMap<String, String>,
+    ) -> Result<BamlValueWithMeta<ExprMetadata>>
+    where
+        F: FnMut(
+                String,
+                Vec<BamlValue>,
+            ) -> BoxFuture<'static, Result<BamlValueWithMeta<ExprMetadata>>>
+            + Send
+            + Sync,
+    {
+        let handle_emit = |ev: EmitEvent| {
+            eprintln!("Ignoring emit event: {}", ev);
+        };
+        interpret_thir(
+            "test".to_string(),
+            thir,
+            expr,
+            handle_llm_call,
+            handle_emit,
+            extra_bindings,
+            env_vars,
+        )
+        .await
     }
 
     #[tokio::test]
     async fn eval_atom_int() {
         let (thir, expr) = thir_from_src("", "1");
-        let out = super::interpret_thir(
+        let out = interpret_thir_ignoring_emit(
             thir,
             expr,
             mock_llm_function,
@@ -2402,7 +2433,7 @@ mod tests {
 
         let (thir, call) = thir_from_src(src, "ConstantFunction(42)");
 
-        let out = super::interpret_thir(
+        let out = interpret_thir_ignoring_emit(
             thir,
             call,
             mock_llm_function,
@@ -2429,7 +2460,7 @@ mod tests {
 
         let (thir, call) = thir_from_src(src, "UseGlobal()");
 
-        let out = super::interpret_thir(
+        let out = interpret_thir_ignoring_emit(
             thir,
             call,
             mock_llm_function,
@@ -2469,7 +2500,7 @@ mod tests {
         );
 
         // Since the interpreter uses our mock LLM function, this should return our mock value
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call,
             mock_llm_function,
@@ -2489,7 +2520,7 @@ mod tests {
     async fn test_method_call_array_len() {
         let (thir, expr) = thir_from_src("", "[1, 2, 3].len()");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             expr,
             mock_llm_function,
@@ -2509,7 +2540,7 @@ mod tests {
     async fn test_method_call_string_len() {
         let (thir, expr) = thir_from_src("", r#""hello".len()"#);
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             expr,
             mock_llm_function,
@@ -2538,9 +2569,10 @@ mod tests {
         let mut env_vars = HashMap::new();
         env_vars.insert("API_KEY".to_string(), "secret123".to_string());
 
-        let result = super::interpret_thir(thir, call, mock_llm_function, BamlMap::new(), env_vars)
-            .await
-            .unwrap();
+        let result =
+            interpret_thir_ignoring_emit(thir, call, mock_llm_function, BamlMap::new(), env_vars)
+                .await
+                .unwrap();
 
         match result {
             BamlValueWithMeta::String(value, _) => assert_eq!(value, "secret123"),
@@ -2552,7 +2584,7 @@ mod tests {
     async fn test_method_call_unknown_method() {
         let (thir, expr) = thir_from_src("", r#""hello".unknown_method()"#);
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             expr,
             mock_llm_function,
@@ -2585,7 +2617,7 @@ mod tests {
 
         let (thir, fib_call) = thir_from_src(src, "Fib(5)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             fib_call,
             mock_llm_function,
@@ -2610,7 +2642,7 @@ mod tests {
         // Test if (true) { 1 } else { 0 }
         let (thir, if_expr_true) = thir_from_src("", "if (true) { 1 } else { 0 }");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             if_expr_true,
             mock_llm_function,
@@ -2630,7 +2662,7 @@ mod tests {
         // Test if (false) { 1 } else { 0 }
         let (thir, if_expr_false) = thir_from_src("", "if (false) { 1 } else { 0 }");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             if_expr_false,
             mock_llm_function,
@@ -2660,7 +2692,7 @@ mod tests {
         // Test with true
         let (thir, call_true) = thir_from_src(src, "BoolToIntWithIfElse(true)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call_true,
             mock_llm_function,
@@ -2683,7 +2715,7 @@ mod tests {
         // Test with false
         let (thir, call_false) = thir_from_src(src, "BoolToIntWithIfElse(false)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call_false,
             mock_llm_function,
@@ -2720,7 +2752,7 @@ mod tests {
         // Test with value 42
         let (thir, call_expr) = thir_from_src(src, "StoreFnCallInLocalVar(42)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call_expr,
             mock_llm_function,
@@ -2753,7 +2785,7 @@ mod tests {
         // Test with (true, false) - should return 1
         let (thir, call_expr) = thir_from_src(src, "AssignElseIfExpr(true, false)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call_expr,
             mock_llm_function,
@@ -2822,7 +2854,7 @@ mod tests {
         // Test the function by calling it
         let (thir, call_expr) = thir_from_src(baml_code, "AssignElseIfExpr(true, false)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call_expr,
             mock_llm_function,
@@ -2884,7 +2916,7 @@ mod tests {
         // Test with true
         let (thir, call_expr) = thir_from_src(baml_code, "BoolToIntWithIfElse(true)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call_expr,
             mock_llm_function,
@@ -2961,7 +2993,7 @@ mod tests {
 
         let (thir, call_expr) = thir_from_src(src, "IterativeFibonacci(5)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call_expr,
             mock_llm_function,

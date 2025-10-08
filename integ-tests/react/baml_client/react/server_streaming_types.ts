@@ -36,6 +36,7 @@ export type StreamingServerTypes = {
   AliasedInputEnum: string,
   AliasedInputList: string,
   AllowedOptionals: OptionalListAndMap,
+  AnotherTakedown: number | null,
   AssertFn: number,
   AssignElseIfExpr: number | null,
   AudioInput: string,

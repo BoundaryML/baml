@@ -31,10 +31,10 @@ export interface EventCollectorInternal {
 {% for collector in collectors %}
 export interface {{ collector.interface_name }} extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
-  {% for var in collector.var_events %}
-  on_var_{{ var.method_suffix }}(handler: VarHandler<{{ var.value_type }}>): void
-  on_stream_{{ var.method_suffix }}(handler: StreamHandler<{{ var.stream_type }}>): void
-  {% endfor %}
+  {% if collector.has_var_events %}
+  on_var(channel: {% for var in collector.var_events %}"{{ var.channel_name }}"{% if !loop.last %} | {% endif %}{% endfor %}, handler: VarHandler<any>): void
+  on_stream(channel: {% for var in collector.var_events %}"{{ var.channel_name }}"{% if !loop.last %} | {% endif %}{% endfor %}, handler: StreamHandler<any>): void
+  {% endif %}
   {% for child in collector.child_collectors %}
   {{ child.property_name }}: {{ child.interface_name }}
   {% endfor %}
@@ -83,14 +83,20 @@ export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
     on_block(handler) {
       blockHandlers.add(handler)
     },
-    {% for var in collector.var_events %}
-    on_var_{{ var.method_suffix }}(handler) {
-      varHandlers_{{ var.method_suffix }}.add(handler)
+    {% if collector.has_var_events %}
+    on_var(channel, handler) {
+      const handlers = varHandlerMap[channel]
+      if (handlers) {
+        handlers.add(handler)
+      }
     },
-    on_stream_{{ var.method_suffix }}(handler) {
-      streamHandlers_{{ var.method_suffix }}.add(handler)
+    on_stream(channel, handler) {
+      const handlers = streamHandlerMap[channel]
+      if (handlers) {
+        handlers.add(handler)
+      }
     },
-    {% endfor %}
+    {% endif %}
     {% for child in collector.child_collectors %}
     {{ child.property_name }},
     {% endfor %}
