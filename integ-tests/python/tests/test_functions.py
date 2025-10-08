@@ -911,6 +911,7 @@ async def test_tracing_async_only():
         # )
         return 1
 
+
     # Set up trace file for verification
     trace_file = os.environ["BAML_TRACE_FILE"]
     if os.path.exists(trace_file):
