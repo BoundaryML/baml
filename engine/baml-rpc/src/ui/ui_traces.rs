@@ -45,6 +45,10 @@ pub struct NodeDetails {
     pub children_limit: Option<u32>, // How many children were requested/returned
     #[ts(type = "number", optional)]
     pub children_offset: Option<u32>, // Pagination offset for children
+
+    // Match highlighting - IDs of descendants that matched filters
+    #[ts(optional)]
+    pub matched_descendant_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -130,6 +134,9 @@ pub struct ListTracesRequest {
     /// Filter to only show LLM function calls (function_type = 'baml_llm')
     #[ts(optional)]
     pub llm_only: Option<FilterExpression<bool>>,
+    /// Whether to include matched_descendant_ids in the response for match highlighting. Defaults to false.
+    #[ts(optional)]
+    pub include_match_highlights: Option<bool>,
 }
 
 impl Default for ListTracesRequest {
@@ -160,6 +167,7 @@ impl Default for ListTracesRequest {
             relative_time: None,
             search: None,
             llm_only: None,
+            include_match_highlights: Some(false),
         }
     }
 }
@@ -272,4 +280,118 @@ mod tests {
         assert_eq!(request.max_depth, Some(3));
         assert_eq!(request.limit, Some(50));
     }
+}
+
+// API for listing function summaries with aggregate statistics
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct ListTraceFunctionSummariesRequest {
+    #[ts(type = "string")]
+    pub project_id: ProjectId,
+    /// Maximum number of functions to return. Defaults to 100 if not specified.
+    #[ts(optional)]
+    pub limit: Option<u32>,
+    /// Cursor for pagination: fetch functions starting after this function_name
+    #[ts(optional)]
+    pub starting_after: Option<String>,
+
+    // Time filters
+    #[ts(optional)]
+    pub relative_time: Option<RelativeTime>,
+    #[ts(type = "FilterExpression<number>", optional)]
+    pub start_time: Option<FilterExpression<EpochMsTimestamp>>,
+    #[ts(type = "FilterExpression<number>", optional)]
+    pub end_time: Option<FilterExpression<EpochMsTimestamp>>,
+
+    // Function filters
+    #[ts(optional)]
+    pub function_name: Option<FilterExpression<String>>,
+    #[ts(optional)]
+    pub function_id: Option<FilterExpression<String>>,
+    #[ts(optional)]
+    pub llm_only: Option<FilterExpression<bool>>,
+
+    // Status and other filters
+    #[ts(optional)]
+    pub status: Option<FilterExpression<FunctionCallStatus>>,
+    #[ts(optional)]
+    pub tag_filters: Option<Vec<TagFilter>>,
+    #[ts(optional)]
+    pub error_filters: Option<Vec<TagFilter>>,
+    #[ts(optional)]
+    pub search: Option<String>,
+}
+
+impl Default for ListTraceFunctionSummariesRequest {
+    fn default() -> Self {
+        Self {
+            project_id: ProjectId::new(),
+            limit: Some(100),
+            starting_after: None,
+            relative_time: None,
+            start_time: None,
+            end_time: None,
+            function_name: None,
+            function_id: None,
+            llm_only: None,
+            status: None,
+            tag_filters: None,
+            error_filters: None,
+            search: None,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct FunctionSummary {
+    #[ts(optional)]
+    pub function_id: Option<ui_types::UiFunctionIdString>,
+    pub function_name: String,
+    pub function_type: String, // 'baml_llm' or 'native'
+    #[ts(type = "Record<string, unknown>")]
+    pub tags: serde_json::Map<String, serde_json::Value>,
+
+    // Aggregate statistics
+    #[ts(type = "number")]
+    pub total_traces: u64,
+    #[ts(type = "number")]
+    pub success_count: u64,
+    #[ts(type = "number")]
+    pub error_count: u64,
+    #[ts(type = "number")]
+    pub running_count: u64,
+
+    // Time range for this function's traces
+    #[ts(type = "number")]
+    pub first_trace_time: EpochMsTimestamp,
+    #[ts(type = "number")]
+    pub last_trace_time: EpochMsTimestamp,
+
+    // Optional cost aggregates (if available)
+    #[ts(type = "number", optional)]
+    pub total_cost: Option<f64>,
+    #[ts(type = "number", optional)]
+    pub avg_duration_ms: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ListTraceFunctionSummariesResponse {
+    pub summaries: Vec<FunctionSummary>,
+    pub function_definitions: Vec<ui_types::UiFunctionDefinition>,
+    pub type_definitions: Vec<ui_types::UiTypeDefinition>,
+    pub has_more: bool,
+    #[ts(optional)]
+    pub next_cursor: Option<String>, // function_name for pagination
+}
+
+pub struct ListTraceFunctionSummaries;
+
+impl ApiEndpoint for ListTraceFunctionSummaries {
+    type Request<'a> = ListTraceFunctionSummariesRequest;
+    type Response<'a> = ListTraceFunctionSummariesResponse;
+
+    const PATH: &'static str = "/v1/traces/function-summaries";
 }

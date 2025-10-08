@@ -147,7 +147,7 @@ fn file_reader_pinned(
 impl TestExecutor for BamlRuntime {
     fn cli_list_tests(&self, args: &TestFilter) -> Result<()> {
         let func_test_pairs = {
-            let ir = &self.inner.ir;
+            let ir = &self.ir;
             // Regular LLM function tests
             let from_fn_tests = ir.walk_function_test_pairs().filter_map(|node_pair| {
                 let (function_name, test_name) = node_pair.name();
@@ -208,7 +208,7 @@ impl TestExecutor for BamlRuntime {
     ) -> TestRunStatus {
         let renderer = AggregateRenderer::new(output_format, junit_path);
         let selected_tests: BTreeMap<(String, String), (String, FunctionType)> = {
-            let ir = &self.inner.ir;
+            let ir = &self.ir;
             // Regular LLM function tests
             let from_fn_tests = ir.walk_function_test_pairs().filter_map(|node_pair| {
                 let (function_name, test_name) = node_pair.name();

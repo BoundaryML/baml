@@ -11,8 +11,8 @@ use internal_baml_core::{
 };
 
 use crate::{
-    runtime::InternalBamlRuntime,
     runtime_context::{PropertyAttributes, RuntimeClassOverride, RuntimeEnumOverride},
+    BamlRuntime,
 };
 
 type MetaData = Arc<Mutex<IndexMap<String, BamlValue>>>;
@@ -669,7 +669,7 @@ impl TypeBuilder {
     ///
     /// Python, TS and Ruby wrappers will call this function when the user runs
     /// `type_builder.add_baml("BAML CODE")`
-    pub fn add_baml(&self, baml: &str, rt: &InternalBamlRuntime) -> anyhow::Result<()> {
+    pub fn add_baml(&self, baml: &str, rt: &BamlRuntime) -> anyhow::Result<()> {
         use internal_baml_core::{
             internal_baml_ast::parse_type_builder_contents_from_str,
             internal_baml_diagnostics::{Diagnostics, SourceFile},
@@ -1221,7 +1221,7 @@ mod tests {
             }
         "##;
 
-        builder.add_baml(baml, runtime.inner.as_ref())?;
+        builder.add_baml(baml, &runtime)?;
         println!("{builder}");
         builder.to_overrides();
         Ok(())

@@ -18,7 +18,6 @@ use crate::{
             retry_policy::CallablePolicy,
         },
     },
-    runtime::InternalBamlRuntime,
     tracing::{BamlTracer, TracingCall},
     tracingv2::storage::storage::Collector,
     type_builder::TypeBuilder,
@@ -26,18 +25,18 @@ use crate::{
     FunctionResult, RenderCurlSettings, RuntimeContext, RuntimeContextManager,
 };
 
-pub(crate) trait RuntimeConstructor {
+pub(crate) trait RuntimeConstructor: Sized {
     #[cfg(not(target_arch = "wasm32"))]
     fn from_directory(
         dir: &std::path::Path,
         feature_flags: internal_baml_core::feature_flags::FeatureFlags,
-    ) -> Result<InternalBamlRuntime>;
+    ) -> Result<Self>;
 
     fn from_file_content<T: AsRef<str>>(
         root_path: &str,
         files: &HashMap<T, T>,
         feature_flags: internal_baml_core::feature_flags::FeatureFlags,
-    ) -> Result<InternalBamlRuntime>;
+    ) -> Result<Self>;
 }
 
 // These are UNSTABLE, and should be considered as a work in progress
