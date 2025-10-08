@@ -272,7 +272,7 @@ impl ReplState {
         }
         let mut names = Vec::new();
         if let Some(runtime) = &self.runtime {
-            let internal = &runtime.inner;
+            let internal = &runtime;
             for function in internal.db.walk_functions() {
                 names.push(function.name().to_string());
             }
@@ -285,7 +285,7 @@ impl ReplState {
     fn function_parameters(&self) -> Result<HashMap<String, Vec<String>>> {
         let hir = match self.runtime.as_ref() {
             Some(runtime) => {
-                let internal = &runtime.inner;
+                let internal = &runtime;
                 Hir::from_ast(&internal.db.ast)
             }
             None => Hir::empty(),
@@ -311,7 +311,7 @@ impl ReplState {
             .as_ref()
             .ok_or_else(|| anyhow!("No BAML sources loaded. Use :load <path> to load sources."))?;
 
-        let internal = &runtime.inner;
+        let internal = &runtime;
 
         // Convert AST to HIR
         let hir = Hir::from_ast(&internal.db.ast);
@@ -460,7 +460,7 @@ impl ReplState {
         let hir = match self.runtime.as_ref() {
             Some(runtime) => {
                 // Get the internal runtime to access the existing context
-                let internal = &runtime.inner;
+                let internal = &runtime;
 
                 // Convert AST to HIR from existing loaded sources
                 Hir::from_ast(&internal.db.ast)
@@ -596,7 +596,7 @@ impl ReplState {
         let hir = match self.runtime.as_ref() {
             Some(runtime) => {
                 // Get the internal runtime to access the existing context
-                let internal = &runtime.inner;
+                let internal = &runtime;
 
                 // Convert AST to HIR from existing loaded sources
                 Hir::from_ast(&internal.db.ast)
@@ -679,7 +679,7 @@ impl ReplState {
 
         // Add functions and declarations from THIR if available
         if let Some(runtime) = &self.runtime {
-            let internal = &runtime.inner;
+            let internal = &runtime;
 
             // Add function names
             for function in internal.db.walk_functions() {

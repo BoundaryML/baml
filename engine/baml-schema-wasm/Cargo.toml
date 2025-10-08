@@ -69,6 +69,10 @@ wasm-logger = "0.2.0"
 wasmtimer = "0.4.1"
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
 
+[features]
+default = []
+# Use the THIR interpreter runtime instead of the VM bytecode runtime
+interpreter = ["baml-runtime/interpreter"]
 
 # [profile.release]
 # debug = true

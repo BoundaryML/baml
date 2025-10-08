@@ -56,7 +56,7 @@ pub struct TypeBuilder {
 
 impl TypeBuilder {
     pub fn add_enum(&self, rt: &BamlRuntime, name: &str) -> anyhow::Result<EnumBuilder> {
-        match rt.internal().ir().find_enum(name) {
+        match rt.ir.find_enum(name) {
             Ok(_) => {
                 anyhow::bail!("Enum with name {name} already exists");
             }
@@ -69,7 +69,7 @@ impl TypeBuilder {
     }
 
     pub fn add_class(&self, rt: &BamlRuntime, name: &str) -> anyhow::Result<ClassBuilder> {
-        match rt.internal().ir().find_class(name) {
+        match rt.ir.find_class(name) {
             Ok(_) => {
                 anyhow::bail!("Class with name {name} already exists");
             }
@@ -82,7 +82,7 @@ impl TypeBuilder {
     }
 
     pub fn class(&self, rt: &BamlRuntime, name: &str) -> anyhow::Result<ClassBuilder> {
-        match rt.internal().ir().find_class(name) {
+        match rt.ir.find_class(name) {
             Ok(cls) => {
                 let _ = self.type_builder.upsert_class(name);
                 let builder = ClassBuilder::new(self.type_builder.clone(), name.to_string());
@@ -105,7 +105,7 @@ impl TypeBuilder {
     }
 
     pub fn r#enum(&self, rt: &BamlRuntime, name: &str) -> anyhow::Result<EnumBuilder> {
-        match rt.internal().ir().find_enum(name) {
+        match rt.ir.find_enum(name) {
             Ok(enm) => {
                 let _ = self.type_builder.upsert_enum(name);
                 let builder = EnumBuilder::new(self.type_builder.clone(), name.to_string());
@@ -127,11 +127,11 @@ impl TypeBuilder {
     }
 
     pub fn add_baml(&self, baml: &str, rt: &BamlRuntime) -> anyhow::Result<()> {
-        self.type_builder.add_baml(baml, &rt.inner)
+        self.type_builder.add_baml(baml, rt)
     }
 
     pub fn list_enums(&self, rt: &BamlRuntime) -> Vec<EnumBuilder> {
-        let ir = rt.internal().ir();
+        let ir = &rt.ir;
         let enums = ir.walk_enums();
         enums
             .map(|enm| enm.name().to_string())
@@ -143,7 +143,7 @@ impl TypeBuilder {
     }
 
     pub fn list_classes(&self, rt: &BamlRuntime) -> Vec<ClassBuilder> {
-        let ir = rt.internal().ir();
+        let ir = &rt.ir;
         let classes = ir.walk_classes();
         classes
             .map(|cls| cls.name().to_string())
@@ -186,7 +186,7 @@ impl ClassBuilder {
             NodeRW::ReadOnly => NodeRW::ReadOnly,
             NodeRW::LLMOnly => NodeRW::LLMOnly,
             NodeRW::ReadWrite => {
-                if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+                if let Ok(cls) = rt.ir.find_class(self.class_name.as_str()) {
                     if cls.find_field(name).is_some() {
                         NodeRW::LLMOnly
                     } else {
@@ -206,12 +206,7 @@ impl ClassBuilder {
         rt: &BamlRuntime,
     ) -> anyhow::Result<std::sync::Arc<std::sync::Mutex<type_builder::ClassBuilder>>> {
         // if the IR defines the class, then its always valid
-        if rt
-            .internal()
-            .ir()
-            .find_class(self.class_name.as_str())
-            .is_ok()
-        {
+        if rt.ir.find_class(self.class_name.as_str()).is_ok() {
             let cls = self.type_builder.upsert_class(self.class_name.as_str());
             return Ok(cls);
         }
@@ -235,7 +230,7 @@ impl ClassBuilder {
         let lock = self.cls(rt)?;
         let builder = lock.lock().unwrap();
 
-        let ir_properties = match rt.internal().ir().find_class(self.class_name.as_str()) {
+        let ir_properties = match rt.ir.find_class(self.class_name.as_str()) {
             Ok(ir_cls) => ir_cls
                 .item
                 .elem
@@ -281,7 +276,7 @@ impl ClassBuilder {
         self.mode.at_least(NodeRW::ReadOnly)?;
 
         let ast_alias = || {
-            if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+            if let Ok(cls) = rt.ir.find_class(self.class_name.as_str()) {
                 cls.alias(&Default::default()).ok().flatten()
             } else {
                 None
@@ -302,7 +297,7 @@ impl ClassBuilder {
 
         // ast does not support description
         let ast_description = || {
-            if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+            if let Ok(cls) = rt.ir.find_class(self.class_name.as_str()) {
                 cls.description(&Default::default()).ok().flatten()
             } else {
                 None
@@ -328,7 +323,7 @@ impl ClassBuilder {
         let cls = self.cls(rt)?;
 
         // if the IR already has the property, then its not valid to add it again
-        if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+        if let Ok(cls) = rt.ir.find_class(self.class_name.as_str()) {
             if cls.find_field(name).is_some() {
                 anyhow::bail!(
                     "Property already exists: {} in class {}",
@@ -353,7 +348,7 @@ impl ClassBuilder {
             Some(_) => Ok(self.create_property(name, rt)),
             None => {
                 // if the IR has the property, then its valid to add it again
-                if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+                if let Ok(cls) = rt.ir.find_class(self.class_name.as_str()) {
                     if cls.find_field(name).is_some() {
                         let _ = builder.upsert_property(name);
                         Ok(self.create_property(name, rt))
@@ -369,11 +364,7 @@ impl ClassBuilder {
 
     pub fn is_from_ast(&self, rt: &BamlRuntime) -> anyhow::Result<bool> {
         self.mode.at_least(NodeRW::ReadOnly)?;
-        Ok(rt
-            .internal()
-            .ir()
-            .find_class(self.class_name.as_str())
-            .is_ok())
+        Ok(rt.ir.find_class(self.class_name.as_str()).is_ok())
     }
 }
 
@@ -404,7 +395,7 @@ impl ClassPropertyBuilder {
         rt: &BamlRuntime,
     ) -> anyhow::Result<std::sync::Arc<std::sync::Mutex<type_builder::ClassPropertyBuilder>>> {
         // if the class is defined in the IR, then its always valid
-        if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+        if let Ok(cls) = rt.ir.find_class(self.class_name.as_str()) {
             if cls.find_field(&self.property_name).is_some() {
                 let cls = self.type_builder.upsert_class(self.class_name.as_str());
                 let builder = cls.lock().unwrap();
@@ -435,7 +426,7 @@ impl ClassPropertyBuilder {
         let prop = self.prop(rt)?;
 
         let ast_description = || {
-            if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+            if let Ok(cls) = rt.ir.find_class(self.class_name.as_str()) {
                 if let Some(field) = cls.find_field(&self.property_name) {
                     field.description(&Default::default()).ok().flatten()
                 } else {
@@ -459,7 +450,7 @@ impl ClassPropertyBuilder {
         let prop = self.prop(rt)?;
 
         let ast_alias = || {
-            if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+            if let Ok(cls) = rt.ir.find_class(self.class_name.as_str()) {
                 if let Some(field) = cls.find_field(&self.property_name) {
                     field.description(&Default::default()).ok().flatten()
                 } else {
@@ -481,7 +472,7 @@ impl ClassPropertyBuilder {
         self.mode.at_least(NodeRW::ReadOnly)?;
 
         let ast_type = || {
-            if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+            if let Ok(cls) = rt.ir.find_class(self.class_name.as_str()) {
                 cls.find_field(&self.property_name)
                     .map(|field| field.r#type().clone())
             } else {
@@ -530,7 +521,7 @@ impl ClassPropertyBuilder {
 
     pub fn is_from_ast(&self, rt: &BamlRuntime) -> anyhow::Result<bool> {
         self.mode.at_least(NodeRW::ReadOnly)?;
-        if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+        if let Ok(cls) = rt.ir.find_class(self.class_name.as_str()) {
             if cls.find_field(&self.property_name).is_some() {
                 return Ok(true);
             }
@@ -564,12 +555,7 @@ impl EnumBuilder {
         rt: &BamlRuntime,
     ) -> anyhow::Result<std::sync::Arc<std::sync::Mutex<type_builder::EnumBuilder>>> {
         // if the IR defines the enum, then its always valid
-        if rt
-            .internal()
-            .ir()
-            .find_enum(self.enum_name.as_str())
-            .is_ok()
-        {
+        if rt.ir.find_enum(self.enum_name.as_str()).is_ok() {
             return Ok(self.type_builder.upsert_enum(self.enum_name.as_str()));
         }
 
@@ -584,7 +570,7 @@ impl EnumBuilder {
             NodeRW::ReadOnly => NodeRW::ReadOnly,
             NodeRW::LLMOnly => NodeRW::LLMOnly,
             NodeRW::ReadWrite => {
-                if let Ok(enm) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+                if let Ok(enm) = rt.ir.find_enum(self.enum_name.as_str()) {
                     if enm.find_value(name).is_some() {
                         NodeRW::LLMOnly
                     } else {
@@ -609,7 +595,7 @@ impl EnumBuilder {
         let enm = self.enm(rt)?;
 
         // if the IR already has the value, then its not valid to add it again
-        if let Ok(enm_ir) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+        if let Ok(enm_ir) = rt.ir.find_enum(self.enum_name.as_str()) {
             if enm_ir.find_value(value).is_some() {
                 anyhow::bail!(
                     "Enum value already exists: {} in enum {}",
@@ -644,7 +630,7 @@ impl EnumBuilder {
 
     pub fn alias(&self, rt: &BamlRuntime) -> Result<Option<String>, anyhow::Error> {
         let ast_alias = || {
-            if let Ok(enm) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+            if let Ok(enm) = rt.ir.find_enum(self.enum_name.as_str()) {
                 enm.alias(&Default::default()).ok().flatten()
             } else {
                 None
@@ -662,7 +648,7 @@ impl EnumBuilder {
 
     pub fn description(&self, rt: &BamlRuntime) -> Result<Option<String>, anyhow::Error> {
         let ast_description = || {
-            if let Ok(enm) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+            if let Ok(enm) = rt.ir.find_enum(self.enum_name.as_str()) {
                 enm.description(&Default::default()).ok().flatten()
             } else {
                 None
@@ -690,7 +676,7 @@ impl EnumBuilder {
 
         let enm = self.enm(rt)?;
 
-        let ir_values = match rt.internal().ir().find_enum(self.enum_name.as_str()) {
+        let ir_values = match rt.ir.find_enum(self.enum_name.as_str()) {
             Ok(ir_enm) => ir_enm
                 .item
                 .elem
@@ -725,7 +711,7 @@ impl EnumBuilder {
             Ok(self.create_value(name, rt))
         } else {
             // if the IR has the value, then its valid to add it again
-            if let Ok(enm_ir) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+            if let Ok(enm_ir) = rt.ir.find_enum(self.enum_name.as_str()) {
                 if enm_ir.find_value(name).is_some() {
                     let _ = builder.upsert_value(name);
                     Ok(self.create_value(name, rt))
@@ -740,11 +726,7 @@ impl EnumBuilder {
 
     pub fn is_from_ast(&self, rt: &BamlRuntime) -> anyhow::Result<bool> {
         self.mode.at_least(NodeRW::ReadOnly)?;
-        Ok(rt
-            .internal()
-            .ir()
-            .find_enum(self.enum_name.as_str())
-            .is_ok())
+        Ok(rt.ir.find_enum(self.enum_name.as_str()).is_ok())
     }
 }
 
@@ -775,7 +757,7 @@ impl EnumValueBuilder {
         rt: &BamlRuntime,
     ) -> anyhow::Result<std::sync::Arc<std::sync::Mutex<type_builder::EnumValueBuilder>>> {
         // if the enum is defined in the IR, then its always valid
-        if let Ok(enm) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+        if let Ok(enm) = rt.ir.find_enum(self.enum_name.as_str()) {
             if enm.find_value(self.value_name.as_str()).is_some() {
                 let enm = self.type_builder.upsert_enum(self.enum_name.as_str());
                 let builder = enm.lock().unwrap();
@@ -820,7 +802,7 @@ impl EnumValueBuilder {
 
     pub fn description(&self, rt: &BamlRuntime) -> Result<Option<String>, anyhow::Error> {
         let ast_description = || {
-            if let Ok(enm) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+            if let Ok(enm) = rt.ir.find_enum(self.enum_name.as_str()) {
                 if let Some(value) = enm.find_value(&self.value_name) {
                     value.description(&Default::default()).ok().flatten()
                 } else {
@@ -842,7 +824,7 @@ impl EnumValueBuilder {
 
     pub fn alias(&self, rt: &BamlRuntime) -> Result<Option<String>, anyhow::Error> {
         let ast_alias = || {
-            if let Ok(enm) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+            if let Ok(enm) = rt.ir.find_enum(self.enum_name.as_str()) {
                 if let Some(value) = enm.find_value(&self.value_name) {
                     value.alias(&Default::default()).ok().flatten()
                 } else {
@@ -875,7 +857,7 @@ impl EnumValueBuilder {
         self.mode.at_least(NodeRW::ReadOnly)?;
 
         let ast_skip = || {
-            if let Ok(enm) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+            if let Ok(enm) = rt.ir.find_enum(self.enum_name.as_str()) {
                 if let Some(value) = enm.find_value(&self.value_name) {
                     value.skip(&Default::default()).ok()
                 } else {
@@ -898,7 +880,7 @@ impl EnumValueBuilder {
 
     pub fn is_from_ast(&self, rt: &BamlRuntime) -> anyhow::Result<bool> {
         self.mode.at_least(NodeRW::ReadOnly)?;
-        if let Ok(enm) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+        if let Ok(enm) = rt.ir.find_enum(self.enum_name.as_str()) {
             if enm.find_value(&self.value_name).is_some() {
                 return Ok(true);
             }
