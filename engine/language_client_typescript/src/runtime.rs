@@ -9,11 +9,11 @@ use baml_runtime::{on_log_event::LogEvent, runtime_interface::ExperimentalTracin
 use baml_types::BamlValue;
 use napi::{
     bindgen_prelude::{
-        FnArgs, Function, FunctionRef, JsObjectValue, Object, ObjectFinalize, Promise, PromiseRaw,
-        Undefined,
+        FnArgs, FromNapiValue, Function, FunctionRef, JsObjectValue, Object, ObjectFinalize,
+        Promise, PromiseRaw, ToNapiValue, Undefined, Unknown,
     },
     threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode},
-    Env, Error,
+    Env, Error, JsString,
 };
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
@@ -79,66 +79,127 @@ pub struct VarEvent {
 }
 
 // Storage for event handlers extracted from EventCollector
+// Using the full ThreadsafeFunction type with all generics to match what build_threadsafe_function creates
 #[cfg(feature = "interpreter")]
 struct EmitCallbacks {
-    var_handlers: HashMap<String, napi::threadsafe_function::ThreadsafeFunction<VarEvent, ()>>,
-    stream_handlers: HashMap<String, napi::threadsafe_function::ThreadsafeFunction<VarEvent, ()>>,
-    block_handlers: Vec<napi::threadsafe_function::ThreadsafeFunction<BlockEvent, ()>>,
+    var_handlers: HashMap<
+        String,
+        napi::threadsafe_function::ThreadsafeFunction<
+            VarEvent,
+            napi::Unknown<'static>,
+            VarEvent,
+            napi::Status,
+            false,
+        >,
+    >,
+    stream_handlers: HashMap<
+        String,
+        napi::threadsafe_function::ThreadsafeFunction<
+            VarEvent,
+            napi::Unknown<'static>,
+            VarEvent,
+            napi::Status,
+            false,
+        >,
+    >,
+    block_handlers: Vec<
+        napi::threadsafe_function::ThreadsafeFunction<
+            BlockEvent,
+            napi::Unknown<'static>,
+            BlockEvent,
+            napi::Status,
+            false,
+        >,
+    >,
 }
 
 // Extract event handlers from the EventCollector.__handlers() result
 #[cfg(feature = "interpreter")]
 fn extract_emit_callbacks(env: &Env, events_obj: &Object) -> napi::Result<Option<EmitCallbacks>> {
     // Call __handlers() method to get InternalEventBindings
-    let handlers_fn: Function = events_obj.get_named_property("__handlers")?;
-    let bindings: Object = handlers_fn.call(None, &[])?;
+    let handlers_fn: Function = match events_obj.get_named_property("__handlers") {
+        Ok(f) => {
+            log::debug!("Found __handlers function");
+            f
+        }
+        Err(e) => {
+            log::debug!("No __handlers function found: {:?}", e);
+            return Ok(None);
+        }
+    };
+
+    // Call the function with `this` set to events_obj and no arguments
+    let empty_args = env.create_array(0)?;
+    let bindings_result: Unknown = handlers_fn.apply(events_obj, empty_args.into_unknown(env)?)?;
+    let bindings: Object = Object::from_unknown(bindings_result)?;
 
     // Extract block handlers
-    let block_array: Vec<Function> = bindings.get_named_property("block").unwrap_or_default();
-    let block_handlers = block_array
-        .into_iter()
-        .filter_map(|handler| {
-            handler
-                .build_threadsafe_function()
-                .build_callback(|ctx: ThreadSafeCallContext<BlockEvent>| Ok(vec![ctx.value]))
-                .ok()
-        })
-        .collect::<Vec<_>>();
+    let block_handlers =
+        if let Ok(block_array) = bindings.get_named_property::<Vec<Function>>("block") {
+            block_array
+                .into_iter()
+                .filter_map(|handler| {
+                    handler
+                        .build_threadsafe_function()
+                        .weak::<false>()
+                        .build_callback(|ctx: ThreadSafeCallContext<BlockEvent>| Ok(ctx.value))
+                        .ok()
+                })
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
 
     // Extract var handlers
-    let vars_obj: Object = bindings
-        .get_named_property("vars")
-        .unwrap_or_else(|_| env.create_object().unwrap());
-    let var_names: Vec<String> = vars_obj.get_property_names()?.into_iter().collect();
     let mut var_handlers = HashMap::new();
-
-    for var_name in var_names {
-        let handler_array: Vec<Function> = vars_obj.get_named_property(&var_name)?;
-        if let Some(handler) = handler_array.first() {
-            if let Ok(tsfn) = handler
-                .build_threadsafe_function()
-                .build_callback(|ctx: ThreadSafeCallContext<VarEvent>| Ok(vec![ctx.value]))
-            {
-                var_handlers.insert(var_name, tsfn);
+    if let Ok(vars_obj) = bindings.get_named_property::<Object>("vars") {
+        // Get property names as JS array
+        if let Ok(keys) = vars_obj.get_property_names() {
+            let num_keys = keys.get_array_length()?;
+            for i in 0..num_keys {
+                if let Ok(key_str) = keys.get_element::<JsString>(i) {
+                    let key = key_str.into_utf8()?.as_str()?.to_string();
+                    if let Ok(handler_array) = vars_obj.get_named_property::<Vec<Function>>(&key) {
+                        if let Some(handler) = handler_array.first() {
+                            if let Ok(tsfn) = handler
+                                .build_threadsafe_function()
+                                .weak::<false>()
+                                .build_callback(
+                                    |ctx: ThreadSafeCallContext<VarEvent>| Ok(ctx.value),
+                                )
+                            {
+                                var_handlers.insert(key, tsfn);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
     // Extract stream handlers
-    let streams_obj: Object = bindings
-        .get_named_property("streams")
-        .unwrap_or_else(|_| env.create_object().unwrap());
-    let stream_names: Vec<String> = streams_obj.get_property_names()?.into_iter().collect();
     let mut stream_handlers = HashMap::new();
-
-    for stream_name in stream_names {
-        let handler_array: Vec<Function> = streams_obj.get_named_property(&stream_name)?;
-        if let Some(handler) = handler_array.first() {
-            if let Ok(tsfn) = handler
-                .build_threadsafe_function()
-                .build_callback(|ctx: ThreadSafeCallContext<VarEvent>| Ok(vec![ctx.value]))
-            {
-                stream_handlers.insert(stream_name, tsfn);
+    if let Ok(streams_obj) = bindings.get_named_property::<Object>("streams") {
+        if let Ok(keys) = streams_obj.get_property_names() {
+            let num_keys = keys.get_array_length()?;
+            for i in 0..num_keys {
+                if let Ok(key_str) = keys.get_element::<JsString>(i) {
+                    let key = key_str.into_utf8()?.as_str()?.to_string();
+                    if let Ok(handler_array) = streams_obj.get_named_property::<Vec<Function>>(&key)
+                    {
+                        if let Some(handler) = handler_array.first() {
+                            if let Ok(tsfn) = handler
+                                .build_threadsafe_function()
+                                .weak::<false>()
+                                .build_callback(
+                                    |ctx: ThreadSafeCallContext<VarEvent>| Ok(ctx.value),
+                                )
+                            {
+                                stream_handlers.insert(key, tsfn);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -262,7 +323,7 @@ impl BamlRuntime {
                                     event_type: "enter".to_string(), // TODO: track enter/exit
                                 };
                                 let _ = handler
-                                    .call(Ok(block_event), ThreadsafeFunctionCallMode::NonBlocking);
+                                    .call(block_event, ThreadsafeFunctionCallMode::NonBlocking);
                             }
                         }
                         baml_compiler::emit::EmitBamlValue::Value(value) => {
@@ -290,10 +351,8 @@ impl BamlRuntime {
                                 };
 
                                 if let Some(handler) = handlers.get(var_name) {
-                                    let _ = handler.call(
-                                        Ok(var_event),
-                                        ThreadsafeFunctionCallMode::NonBlocking,
-                                    );
+                                    let _ = handler
+                                        .call(var_event, ThreadsafeFunctionCallMode::NonBlocking);
                                 }
                             }
                         }
@@ -311,7 +370,7 @@ impl BamlRuntime {
                     cb.as_ref(),
                     Some(collector_list),
                     env_vars,
-                    Some(tags),
+                    Some(&tags),
                     tripwire,
                     Some(emit_handler), // pass emit handler for interpreter runtime
                 )
@@ -381,8 +440,9 @@ impl BamlRuntime {
             cb.as_ref(),
             Some(collector_list),
             env_vars,
-            Some(tags),
             tripwire,
+            Some(&tags),
+            None::<fn(baml_compiler::emit::EmitEvent)>,
         );
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)
@@ -434,8 +494,8 @@ impl BamlRuntime {
                 client_registry.as_ref(),
                 Some(collector_list),
                 env_vars,
-                Some(tags),
                 tripwire,
+                Some(&tags),
             )
             .map_err(from_anyhow_error)?;
 
@@ -503,8 +563,8 @@ impl BamlRuntime {
                 client_registry.as_ref(),
                 Some(collector_list),
                 env_vars,
-                Some(tags),
                 tripwire,
+                Some(&tags),
             )
             .map_err(from_anyhow_error)?;
 

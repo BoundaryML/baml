@@ -1001,6 +1001,7 @@ impl BamlRuntime {
                 env_vars.clone(),
                 None, // tags
                 TripWire::new(None),
+                None::<fn(baml_compiler::emit::EmitEvent)>, // emit_handler
             )
             .await;
 

@@ -136,6 +136,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Recipe
             } catch (error) {
@@ -183,6 +184,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.LinkedListAliasNode
             } catch (error) {
@@ -230,6 +232,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Checked<number,"gt_ten">
             } catch (error) {
@@ -277,6 +280,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -324,6 +328,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -371,6 +376,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -418,6 +424,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -465,6 +472,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -512,6 +520,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.OptionalListAndMap
             } catch (error) {
@@ -559,6 +568,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -606,6 +616,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -653,6 +664,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -700,6 +712,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.LinkedList
             } catch (error) {
@@ -747,6 +760,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Tree
             } catch (error) {
@@ -794,6 +808,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as (types.AddTodoItem | types.TodoMessageToUser)[]
             } catch (error) {
@@ -841,6 +856,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.ClassToRecAlias
             } catch (error) {
@@ -888,6 +904,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as (string | types.DynEnumTwo)
             } catch (error) {
@@ -935,6 +952,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as (string | types.DynEnumOne)
             } catch (error) {
@@ -982,6 +1000,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Category
             } catch (error) {
@@ -1029,6 +1048,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Category
             } catch (error) {
@@ -1076,6 +1096,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Category
             } catch (error) {
@@ -1123,6 +1144,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -1170,6 +1192,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.BookOrder | types.FlightConfirmation | types.GroceryReceipt
             } catch (error) {
@@ -1217,6 +1240,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -1264,6 +1288,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -1311,6 +1336,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -1358,6 +1384,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -1405,6 +1432,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -1452,6 +1480,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -1499,6 +1528,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -1546,6 +1576,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.OriginalA | types.OriginalB
             } catch (error) {
@@ -1593,6 +1624,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.DummyOutput
             } catch (error) {
@@ -1640,6 +1672,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.DynamicClassTwo
             } catch (error) {
@@ -1687,6 +1720,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.DynInputOutput
             } catch (error) {
@@ -1734,6 +1768,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.DynInputOutput[]
             } catch (error) {
@@ -1781,6 +1816,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -1828,6 +1864,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.ContactInfo
             } catch (error) {
@@ -1875,6 +1912,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as (string | types.DynEnumTwo)[]
             } catch (error) {
@@ -1922,6 +1960,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.DynamicSchema
             } catch (error) {
@@ -1969,6 +2008,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as (string | types.Hobby)[]
             } catch (error) {
@@ -2016,6 +2056,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -2063,6 +2104,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string[]
             } catch (error) {
@@ -2110,6 +2152,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Person[]
             } catch (error) {
@@ -2157,6 +2200,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.ReceiptInfo
             } catch (error) {
@@ -2204,6 +2248,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Resume
             } catch (error) {
@@ -2251,6 +2296,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Resume
             } catch (error) {
@@ -2298,6 +2344,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -2345,6 +2392,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.ClassOptionalOutput | null
             } catch (error) {
@@ -2392,6 +2440,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.ClassOptionalOutput2 | null
             } catch (error) {
@@ -2439,6 +2488,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.EnumOutput[]
             } catch (error) {
@@ -2486,6 +2536,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.EnumOutput
             } catch (error) {
@@ -2533,6 +2584,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -2580,6 +2632,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -2627,6 +2680,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -2674,6 +2728,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.LiteralClassHello
             } catch (error) {
@@ -2721,6 +2776,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.LiteralClassOne | types.LiteralClassTwo
             } catch (error) {
@@ -2768,6 +2824,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -2815,6 +2872,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as boolean
             } catch (error) {
@@ -2862,6 +2920,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.TestOutputClass
             } catch (error) {
@@ -2909,6 +2968,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.TestOutputClass[]
             } catch (error) {
@@ -2956,6 +3016,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.TestClassNested
             } catch (error) {
@@ -3003,6 +3064,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.TestClassWithEnum
             } catch (error) {
@@ -3050,6 +3112,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -3097,6 +3160,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as false
             } catch (error) {
@@ -3144,6 +3208,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as 5
             } catch (error) {
@@ -3191,6 +3256,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as "example output"
             } catch (error) {
@@ -3238,6 +3304,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string[]
             } catch (error) {
@@ -3285,6 +3352,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.TestEnum
             } catch (error) {
@@ -3332,6 +3400,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.TestClassAlias
             } catch (error) {
@@ -3379,6 +3448,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -3426,6 +3496,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.RaysData
             } catch (error) {
@@ -3473,6 +3544,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.OrderInfo
             } catch (error) {
@@ -3520,6 +3592,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.SearchParams
             } catch (error) {
@@ -3567,6 +3640,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as Partial<Record<types.MapKey, string>>
             } catch (error) {
@@ -3614,6 +3688,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as Partial<Record<"one" | "two" | "three" | "four", string>>
             } catch (error) {
@@ -3661,6 +3736,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as Record<"key", string>
             } catch (error) {
@@ -3708,6 +3784,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.JsonValue
             } catch (error) {
@@ -3755,6 +3832,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -3802,6 +3880,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as 1 | true | "string output"
             } catch (error) {
@@ -3849,6 +3928,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -3896,6 +3976,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Checked<types.BlockConstraint,"cross_field">
             } catch (error) {
@@ -3943,6 +4024,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.ClassWithBlockDone
             } catch (error) {
@@ -3990,6 +4072,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.ClassWithoutDone
             } catch (error) {
@@ -4037,6 +4120,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.NestedBlockConstraint
             } catch (error) {
@@ -4084,6 +4168,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.SemanticContainer
             } catch (error) {
@@ -4131,6 +4216,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as Record<string, string[]>
             } catch (error) {
@@ -4178,6 +4264,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.MergeAttrs
             } catch (error) {
@@ -4225,6 +4312,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.DynamicOutput
             } catch (error) {
@@ -4272,6 +4360,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number | string | boolean | string[] | Record<string, string[]>
             } catch (error) {
@@ -4319,6 +4408,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.ClassForNullLiteral
             } catch (error) {
@@ -4328,7 +4418,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async OpenAIGPT4oMissingBaseUrlEnvVar(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<string> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -4366,6 +4456,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -4413,6 +4504,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -4460,6 +4552,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as (types.OptionalTest_ReturnType | null)[]
             } catch (error) {
@@ -4507,6 +4600,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -4554,6 +4648,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -4601,6 +4696,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -4648,6 +4744,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -4695,6 +4792,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.FooAny
             } catch (error) {
@@ -4742,6 +4840,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Checked<number,"too_big">
             } catch (error) {
@@ -4789,6 +4888,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number | string | boolean
             } catch (error) {
@@ -4836,6 +4936,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -4883,6 +4984,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -4930,6 +5032,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -4977,6 +5080,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -5024,6 +5128,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -5071,6 +5176,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -5118,6 +5224,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -5165,6 +5272,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.RecAliasOne
             } catch (error) {
@@ -5212,6 +5320,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.NodeWithAliasIndirection
             } catch (error) {
@@ -5259,6 +5368,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.RecursiveUnion
             } catch (error) {
@@ -5306,6 +5416,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -5353,6 +5464,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -5400,6 +5512,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Checked<number,"gt_ten">
             } catch (error) {
@@ -5447,6 +5560,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -5494,6 +5608,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.JsonTemplate
             } catch (error) {
@@ -5541,6 +5656,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.MalformedConstraints
             } catch (error) {
@@ -5588,6 +5704,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Schema
             } catch (error) {
@@ -5635,6 +5752,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.RecursiveListAlias
             } catch (error) {
@@ -5682,6 +5800,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.RecursiveMapAlias
             } catch (error) {
@@ -5729,6 +5848,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.BigNumbers
             } catch (error) {
@@ -5776,6 +5896,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.TwoStoriesOneTitle
             } catch (error) {
@@ -5823,6 +5944,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.TwoStoriesOneTitleCheck
             } catch (error) {
@@ -5870,6 +5992,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -5917,6 +6040,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as (number | string)[]
             } catch (error) {
@@ -5964,6 +6088,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.CompoundBigNumbers
             } catch (error) {
@@ -6011,6 +6136,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Document1559
             } catch (error) {
@@ -6058,6 +6184,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.RecursiveAliasDependency
             } catch (error) {
@@ -6105,6 +6232,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6152,6 +6280,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6199,6 +6328,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6246,6 +6376,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6293,6 +6424,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6340,6 +6472,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6387,6 +6520,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6434,6 +6568,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6481,6 +6616,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6528,6 +6664,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6575,6 +6712,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6622,6 +6760,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6669,6 +6808,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6716,6 +6856,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6763,6 +6904,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6810,6 +6952,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6857,6 +7000,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6904,6 +7048,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6951,6 +7096,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -6998,6 +7144,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7045,6 +7192,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7092,6 +7240,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7139,6 +7288,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7186,6 +7336,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7233,6 +7384,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7280,6 +7432,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7327,6 +7480,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7374,6 +7528,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7421,6 +7576,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as Record<string, types.StringToClassEntry>
             } catch (error) {
@@ -7468,6 +7624,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as Record<string, Record<string, string>>
             } catch (error) {
@@ -7515,6 +7672,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as Record<string, string>
             } catch (error) {
@@ -7562,6 +7720,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7609,6 +7768,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7656,6 +7816,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string[]
             } catch (error) {
@@ -7703,6 +7864,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7750,6 +7912,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7797,6 +7960,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7844,6 +8008,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7891,6 +8056,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7938,6 +8104,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -7985,6 +8152,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8032,6 +8200,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8079,6 +8248,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8126,6 +8296,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.TestMemoryOutput
             } catch (error) {
@@ -8173,6 +8344,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8220,6 +8392,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8267,6 +8440,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8314,6 +8488,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8361,6 +8536,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string | null
             } catch (error) {
@@ -8408,6 +8584,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Haiku
             } catch (error) {
@@ -8455,6 +8632,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8502,6 +8680,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8549,6 +8728,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8596,6 +8776,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8643,6 +8824,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8690,6 +8872,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8737,6 +8920,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8784,6 +8968,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8831,6 +9016,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8878,6 +9064,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8925,6 +9112,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -8972,6 +9160,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9019,6 +9208,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9066,6 +9256,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9113,6 +9304,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9160,6 +9352,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9207,6 +9400,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9254,6 +9448,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9301,6 +9496,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9348,6 +9544,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9395,6 +9592,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9442,6 +9640,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9489,6 +9688,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9536,6 +9736,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9583,6 +9784,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9630,6 +9832,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9677,6 +9880,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9724,6 +9928,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9771,6 +9976,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9818,6 +10024,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9865,6 +10072,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9912,6 +10120,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -9959,6 +10168,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -10006,6 +10216,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -10053,6 +10264,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.CustomStory
             } catch (error) {
@@ -10100,6 +10312,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.UniverseQuestion
             } catch (error) {
@@ -10147,6 +10360,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -10194,6 +10408,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -10241,6 +10456,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -10288,6 +10504,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.UnionTest_ReturnType
             } catch (error) {
@@ -10335,6 +10552,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -10382,6 +10600,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.MaintainFieldOrder
             } catch (error) {
@@ -10429,6 +10648,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -10476,6 +10696,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -10523,6 +10744,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -10570,6 +10792,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -10617,6 +10840,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -10664,6 +10888,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -10711,6 +10936,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -10758,6 +10984,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -10805,6 +11032,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -10852,6 +11080,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -10899,6 +11128,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -10946,6 +11176,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -10993,6 +11224,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as string
             } catch (error) {
@@ -11040,6 +11272,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.DummyJsonTodo
             } catch (error) {
@@ -11087,6 +11320,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as boolean
             } catch (error) {
@@ -11134,6 +11368,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -11181,6 +11416,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -11228,6 +11464,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as types.Category
             } catch (error) {
@@ -11275,6 +11512,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -11322,6 +11560,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as Image
             } catch (error) {
@@ -11369,6 +11608,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -11416,6 +11656,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -11463,6 +11704,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -11510,6 +11752,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -11557,6 +11800,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -11604,6 +11848,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -11651,6 +11896,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -11698,6 +11944,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -11745,6 +11992,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as number
             } catch (error) {
@@ -17708,7 +17956,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             OpenAIGPT4oMissingBaseUrlEnvVar(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<string, string>
               {
               try {

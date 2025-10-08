@@ -164,6 +164,7 @@ impl BamlAsyncVmRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
+        _emit_handler: Option<impl FnMut(baml_compiler::emit::EmitEvent) + Send + 'static>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         // Find the function.
         let Some((function_index, function_kind)) =
@@ -674,6 +675,7 @@ impl BamlAsyncVmRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
+        emit_handler: Option<impl FnMut(baml_compiler::emit::EmitEvent) + Send + 'static>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         self.async_runtime.block_on(self.call_function(
             function_name,
@@ -685,6 +687,7 @@ impl BamlAsyncVmRuntime {
             env_vars,
             tags,
             cancel_tripwire,
+            emit_handler,
         ))
     }
 

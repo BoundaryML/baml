@@ -124,6 +124,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as {{func.return_type.serialize_type(pkg)}}
             } catch (error) {

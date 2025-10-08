@@ -435,20 +435,38 @@ impl ReplState {
             let expr_str = expr_str.trim();
 
             // Parse and evaluate the BAML expression
-            let value = self
+            let (value, emit_events) = self
                 .parse_and_evaluate_baml_expression_with_status(expr_str, status_tx)
                 .await?;
             self.variables.insert(var_name.clone(), value.clone());
-            Ok(format!("✓ {} = {}", var_name, self.format_value(&value)))
+
+            let mut output = String::new();
+            if !emit_events.is_empty() {
+                for event in &emit_events {
+                    output.push_str(event);
+                    output.push('\n');
+                }
+            }
+            output.push_str(&format!("✓ {} = {}", var_name, self.format_value(&value)));
+            Ok(output)
         } else if let Some(value) = self.variables.get(input.trim()) {
             // Return variable value
             Ok(self.format_value(value).to_string())
         } else {
             // Try to parse as a BAML expression
-            let value = self
+            let (value, emit_events) = self
                 .parse_and_evaluate_baml_expression_with_status(input, status_tx)
                 .await?;
-            Ok(self.format_value(&value))
+
+            let mut output = String::new();
+            if !emit_events.is_empty() {
+                for event in &emit_events {
+                    output.push_str(event);
+                    output.push('\n');
+                }
+            }
+            output.push_str(&self.format_value(&value));
+            Ok(output)
         }
     }
 
@@ -456,7 +474,7 @@ impl ReplState {
         &self,
         input: &str,
         status_tx: Option<std::sync::mpsc::Sender<LlmStatusEvent>>,
-    ) -> Result<BamlValueWithMeta<ExprMetadata>> {
+    ) -> Result<(BamlValueWithMeta<ExprMetadata>, Vec<String>)> {
         let hir = match self.runtime.as_ref() {
             Some(runtime) => {
                 // Get the internal runtime to access the existing context
@@ -570,9 +588,11 @@ impl ReplState {
                 }
             }
         };
-        // REPL emit handler: print events to stdout
-        let emit_handler = |event: baml_compiler::emit::EmitEvent| {
-            eprintln!("EMIT EVENT: {:?}", event);
+        // REPL emit handler: collect events
+        let emit_events = Arc::new(Mutex::new(Vec::new()));
+        let emit_events_clone = emit_events.clone();
+        let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
+            emit_events_clone.lock().unwrap().push(format!("{}", event));
         };
 
         let eval_result = interpret_thir(
@@ -586,13 +606,14 @@ impl ReplState {
         )
         .await?;
 
-        Ok(eval_result)
+        let events = emit_events.lock().unwrap().clone();
+        Ok((eval_result, events))
     }
 
     async fn parse_and_evaluate_baml_expression(
         &self,
         input: &str,
-    ) -> Result<BamlValueWithMeta<ExprMetadata>> {
+    ) -> Result<(BamlValueWithMeta<ExprMetadata>, Vec<String>)> {
         self.parse_and_evaluate_baml_expression_with_status(input, None)
             .await
     }

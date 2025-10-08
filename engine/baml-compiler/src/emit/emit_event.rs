@@ -1,4 +1,5 @@
 use baml_types::{BamlValueWithMeta, Completion, Constraint, ResponseCheck, TypeIR};
+use std::fmt;
 
 #[derive(Debug)]
 pub enum EmitBamlValue {
@@ -8,7 +9,7 @@ pub enum EmitBamlValue {
 
 /// The BamlValueWithMeta metadata for a
 /// BamlValue in an event.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EmitValueMetadata {
     pub constraints: Vec<Constraint>,
     pub response_checks: Vec<ResponseCheck>,
@@ -22,6 +23,23 @@ pub struct EmitEvent {
     pub variable_name: Option<String>,
     pub function_name: String,
     pub is_stream: bool,
+}
+
+impl fmt::Display for EmitEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.value {
+            EmitBamlValue::Value(value) => {
+                if let Some(var_name) = &self.variable_name {
+                    write!(f, "(var) {}: {}", var_name, value.clone().value())
+                } else {
+                    write!(f, "{}", value.clone().value())
+                }
+            }
+            EmitBamlValue::Block(label) => {
+                write!(f, "(block) {}", label)
+            }
+        }
+    }
 }
 
 impl EmitEvent {

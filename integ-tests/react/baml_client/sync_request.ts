@@ -2289,7 +2289,7 @@ export class HttpRequest {
   
   OpenAIGPT4oMissingBaseUrlEnvVar(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8495,7 +8495,7 @@ export class HttpStreamRequest {
   
   OpenAIGPT4oMissingBaseUrlEnvVar(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };

@@ -2293,7 +2293,7 @@ env?: Record<string, string | undefined>
       
   async OpenAIGPT4oMissingBaseUrlEnvVar(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8499,7 +8499,7 @@ env?: Record<string, string | undefined>
           
       async OpenAIGPT4oMissingBaseUrlEnvVar(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };

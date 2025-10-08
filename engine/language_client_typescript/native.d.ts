@@ -33,7 +33,7 @@ export declare class BamlRuntime {
   static fromFiles(rootPath: string, files: Record<string, string>, envVars: Record<string, string | undefined | null>): BamlRuntime
   reset(rootPath: string, files: Record<string, string>, envVars: Record<string, string>): void
   createContextManager(): RuntimeContextManager
-  callFunction(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, collectors: Array<Collector>, tags: Record<string, string>, envVars: Record<string, string>, signal?: object | undefined | null): Promise<FunctionResult>
+  callFunction(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, collectors: Array<Collector>, tags: Record<string, string>, envVars: Record<string, string>, signal?: object | undefined | null, events?: object | undefined | null): Promise<FunctionResult>
   callFunctionSync(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, collectors: Array<Collector>, tags: Record<string, string>, envVars: Record<string, string>, signal?: object | undefined | null): FunctionResult
   streamFunction(functionName: string, args: { [name: string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, clientRegistry: ClientRegistry | undefined | null, collectors: Array<Collector>, tags: Record<string, string>, envVars: Record<string, string>, signal?: object | undefined | null, onTick?: (() => void) | undefined): FunctionResultStream
   streamFunctionSync(functionName: string, args: { [name: string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, clientRegistry: ClientRegistry | undefined | null, collectors: Array<Collector>, tags: Record<string, string>, envVars: Record<string, string>, signal?: object | undefined | null, onTick?: (() => void) | undefined): FunctionResultStream
@@ -256,6 +256,11 @@ export interface BamlLogEvent {
   startTime: string
 }
 
+export interface BlockEvent {
+  blockLabel: string
+  eventType: string
+}
+
 export declare function get_version(): string
 
 export declare function getLogLevel(): string
@@ -273,3 +278,10 @@ export declare function setLogJsonMode(useJson: boolean): void
 export declare function setLogLevel(level: string): void
 
 export declare function setLogMaxChunkLength(length: number): void
+
+export interface VarEvent {
+  variableName: string
+  value: any
+  timestamp: string
+  functionName: string
+}
