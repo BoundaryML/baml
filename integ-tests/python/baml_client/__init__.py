@@ -41,6 +41,9 @@ with EnsureBamlPyImport(__version__) as e:
   
   from .async_client import b
   
+  
+  from . import events
+  
 
 
 # FOR LEGACY COMPATIBILITY, expose "partial_types" as an alias for "stream_types"
@@ -55,4 +58,7 @@ __all__ = [
   "types",
   "reset_baml_env_vars",
   "config",
+  
+  "events",
+  
 ]

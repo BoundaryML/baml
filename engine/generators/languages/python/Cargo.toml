@@ -12,6 +12,7 @@ anyhow.workspace = true
 dir-writer = { path = "../../utils/dir_writer" }
 baml-types.workspace = true
 internal-baml-core.workspace = true
+baml-compiler = { path = "../../../baml-compiler" }
 
 
 [dev-dependencies]

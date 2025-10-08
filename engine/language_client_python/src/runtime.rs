@@ -8,6 +8,11 @@ use pyo3::{
     Bound, IntoPyObjectExt, PyObject, PyRef, Python,
 };
 
+#[cfg(feature = "interpreter")]
+use pyo3::types::PyDict;
+#[cfg(feature = "interpreter")]
+use std::time::SystemTime;
+
 // Type alias for pickle reduce return type
 type PickleReduceResult = PyResult<(
     PyObject,
@@ -101,6 +106,86 @@ impl BamlLogEvent {
     }
 }
 
+// Helper struct to store event callbacks
+#[cfg(feature = "interpreter")]
+struct EmitCallbacks {
+    var_handlers: HashMap<String, Vec<Arc<PyObject>>>,
+    stream_handlers: HashMap<String, Vec<Arc<PyObject>>>,
+    block_handlers: Vec<Arc<PyObject>>,
+}
+
+// Extract event handlers from the EventCollector.__handlers__() result
+#[cfg(feature = "interpreter")]
+fn extract_emit_callbacks(py: Python, events_obj: PyObject) -> PyResult<Option<EmitCallbacks>> {
+    // Call __handlers() method to get InternalEventBindings
+    let handlers_result = events_obj.call_method0(py, "__handlers__")?;
+    let bindings = handlers_result.downcast_bound::<PyDict>(py)?;
+
+    // Extract block handlers
+    let block_handlers = if let Ok(block_list) = bindings.get_item("block") {
+        if let Some(block_bound) = block_list {
+            if let Ok(block_list) = block_bound.downcast::<PyList>() {
+                block_list
+                    .iter()
+                    .map(|handler| Arc::new(handler.into_py_any(py).unwrap()))
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
+
+    // Extract var handlers
+    let mut var_handlers = HashMap::new();
+    if let Ok(Some(vars_dict)) = bindings.get_item("vars") {
+        if let Ok(vars_dict) = vars_dict.downcast::<PyDict>() {
+            for (key, value) in vars_dict.iter() {
+                if let Ok(key_str) = key.extract::<String>() {
+                    if let Ok(handler_list) = value.downcast::<PyList>() {
+                        let handlers: Vec<Arc<PyObject>> = handler_list
+                            .iter()
+                            .filter_map(|h| h.into_py_any(py).ok().map(Arc::new))
+                            .collect();
+                        if !handlers.is_empty() {
+                            var_handlers.insert(key_str, handlers);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Extract stream handlers
+    let mut stream_handlers = HashMap::new();
+    if let Ok(Some(streams_dict)) = bindings.get_item("streams") {
+        if let Ok(streams_dict) = streams_dict.downcast::<PyDict>() {
+            for (key, value) in streams_dict.iter() {
+                if let Ok(key_str) = key.extract::<String>() {
+                    if let Ok(handler_list) = value.downcast::<PyList>() {
+                        let handlers: Vec<Arc<PyObject>> = handler_list
+                            .iter()
+                            .filter_map(|h| h.into_py_any(py).ok().map(Arc::new))
+                            .collect();
+                        if !handlers.is_empty() {
+                            stream_handlers.insert(key_str, handlers);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(Some(EmitCallbacks {
+        var_handlers,
+        stream_handlers,
+        block_handlers,
+    }))
+}
+
 #[pymethods]
 impl BamlRuntime {
     // Called by pickle to serialize the object using __reduce__ protocol
@@ -175,7 +260,7 @@ impl BamlRuntime {
             .into()
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors, env_vars, tags, abort_controller=None))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors, env_vars, tags, abort_controller=None, events=None))]
     fn call_function(
         &self,
         py: Python<'_>,
@@ -188,6 +273,7 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<HashMap<String, String>>,
         abort_controller: Option<&crate::abort_controller::AbortController>,
+        events: Option<PyObject>,
     ) -> PyResult<PyObject> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -218,10 +304,108 @@ impl BamlRuntime {
             .map(|ac| ac.create_tripwire())
             .unwrap_or_else(|| TripWire::new(None));
 
-        let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
-            eprintln!("TODO: Handle notification: {:?}", notification);
+        // Extract emit callbacks from EventCollector (only for interpreter)
+        #[cfg(feature = "interpreter")]
+        let emit_callbacks = if let Some(events_obj) = events {
+            extract_emit_callbacks(py, events_obj)?
+        } else {
+            None
         };
 
+        #[cfg(feature = "interpreter")]
+        let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
+            if let Some(ref callbacks) = emit_callbacks {
+                Python::with_gil(|py| {
+                    match event.value {
+                        baml_compiler::emit::EmitBamlValue::Block(block_label) => {
+                            // Fire block events to all registered block handlers
+                            for handler in &callbacks.block_handlers {
+                                let block_event_dict = PyDict::new(py);
+                                let _ =
+                                    block_event_dict.set_item("block_label", block_label.clone());
+                                let _ = block_event_dict.set_item("event_type", "enter");
+                                let _ = handler.call1(py, (block_event_dict,));
+                            }
+                        }
+                        baml_compiler::emit::EmitBamlValue::Value(value) => {
+                            if let Some(var_name) = &event.variable_name {
+                                // Serialize BamlValue to JSON
+                                let serialized = serde_json::to_value(value.value())
+                                    .unwrap_or(serde_json::Value::Null);
+
+                                let var_event_dict = PyDict::new(py);
+                                let _ = var_event_dict.set_item("variable_name", var_name.clone());
+                                let _ = var_event_dict.set_item("value", serialized.to_string());
+                                let _ = var_event_dict.set_item(
+                                    "timestamp",
+                                    SystemTime::now()
+                                        .duration_since(SystemTime::UNIX_EPOCH)
+                                        .unwrap()
+                                        .as_millis()
+                                        .to_string(),
+                                );
+                                let _ = var_event_dict
+                                    .set_item("function_name", event.function_name.clone());
+
+                                // Fire to appropriate handler based on stream vs var
+                                let handlers = if event.is_stream {
+                                    &callbacks.stream_handlers
+                                } else {
+                                    &callbacks.var_handlers
+                                };
+
+                                if let Some(handler_list) = handlers.get(var_name) {
+                                    for handler in handler_list {
+                                        let _ = handler.call1(py, (var_event_dict.clone(),));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        };
+
+        #[cfg(feature = "interpreter")]
+        let result_future = baml_runtime.call_function(
+            function_name,
+            &args_map,
+            &ctx_mng,
+            tb.as_ref(),
+            cb.as_ref(),
+            Some(collector_list),
+            env_vars,
+            tags,
+            tripwire,
+            Some(emit_handler),
+        );
+
+        #[cfg(not(feature = "interpreter"))]
+        {
+            let _ = events; // Suppress unused variable warning
+            pyo3_async_runtimes::tokio::future_into_py(py, async move {
+                let (result, _) = baml_runtime
+                    .call_function(
+                        function_name,
+                        &args_map,
+                        &ctx_mng,
+                        tb.as_ref(),
+                        cb.as_ref(),
+                        Some(collector_list),
+                        env_vars,
+                        tags,
+                        tripwire,
+                        None::<fn(baml_compiler::emit::EmitEvent)>,
+                    )
+                    .await;
+                result
+                    .map(FunctionResult::from)
+                    .map_err(BamlError::from_anyhow)
+            })
+            .map(pyo3::Bound::into)
+        }
+
+        #[cfg(feature = "interpreter")]
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let (result, _) = baml_runtime
                 .call_function(
@@ -234,7 +418,7 @@ impl BamlRuntime {
                     env_vars,
                     tags,
                     tripwire,
-                    Some(watch_handler), // TODO: Notification handler.
+                    Some(watch_handler),
                 )
                 .await;
 
@@ -245,9 +429,10 @@ impl BamlRuntime {
         .map(pyo3::Bound::into)
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors, env_vars, tags, abort_controller=None))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors, env_vars, tags, abort_controller=None, events=None))]
     fn call_function_sync(
         &self,
+        py: Python<'_>,
         function_name: String,
         args: PyObject,
         ctx: &RuntimeContextManager,
@@ -257,6 +442,7 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<HashMap<String, String>>,
         abort_controller: Option<&crate::abort_controller::AbortController>,
+        #[allow(unused_variables)] events: Option<PyObject>,
     ) -> PyResult<FunctionResult> {
         let Some(args) = parse_py_type(args, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -286,25 +472,99 @@ impl BamlRuntime {
             .map(|ac| ac.create_tripwire())
             .unwrap_or_else(|| TripWire::new(None));
 
-        let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
-            eprintln!("TODO: Handle notification: {:?}", notification);
+        // Extract emit callbacks from EventCollector (only for interpreter)
+        #[cfg(feature = "interpreter")]
+        let emit_callbacks = if let Some(events_obj) = events {
+            extract_emit_callbacks(py, events_obj)?
+        } else {
+            None
         };
 
-        let (result, _event_id) = Python::with_gil(|py| {
-            py.allow_threads(|| {
-                self.inner.call_function_sync(
-                    function_name,
-                    &args_map,
-                    &ctx_mng,
-                    tb.as_ref(),
-                    cb.as_ref(),
-                    Some(collector_list),
-                    env_vars,
-                    tags,
-                    tripwire,
-                    Some(watch_handler), // TODO: Notification handler.
-                )
-            })
+        #[cfg(feature = "interpreter")]
+        let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
+            if let Some(ref callbacks) = emit_callbacks {
+                Python::with_gil(|py| {
+                    match event.value {
+                        baml_compiler::emit::EmitBamlValue::Block(block_label) => {
+                            // Fire block events to all registered block handlers
+                            for handler in &callbacks.block_handlers {
+                                let block_event_dict = PyDict::new(py);
+                                let _ =
+                                    block_event_dict.set_item("block_label", block_label.clone());
+                                let _ = block_event_dict.set_item("event_type", "enter");
+                                let _ = handler.call1(py, (block_event_dict,));
+                            }
+                        }
+                        baml_compiler::emit::EmitBamlValue::Value(value) => {
+                            if let Some(var_name) = &event.variable_name {
+                                // Serialize BamlValue to JSON
+                                let serialized = serde_json::to_value(value.value())
+                                    .unwrap_or(serde_json::Value::Null);
+
+                                let var_event_dict = PyDict::new(py);
+                                let _ = var_event_dict.set_item("variable_name", var_name.clone());
+                                let _ = var_event_dict.set_item("value", serialized.to_string());
+                                let _ = var_event_dict.set_item(
+                                    "timestamp",
+                                    SystemTime::now()
+                                        .duration_since(SystemTime::UNIX_EPOCH)
+                                        .unwrap()
+                                        .as_millis()
+                                        .to_string(),
+                                );
+                                let _ = var_event_dict
+                                    .set_item("function_name", event.function_name.clone());
+
+                                // Fire to appropriate handler based on stream vs var
+                                let handlers = if event.is_stream {
+                                    &callbacks.stream_handlers
+                                } else {
+                                    &callbacks.var_handlers
+                                };
+
+                                if let Some(handler_list) = handlers.get(var_name) {
+                                    for handler in handler_list {
+                                        let _ = handler.call1(py, (var_event_dict.clone(),));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        };
+
+        #[cfg(feature = "interpreter")]
+        let (result, _event_id) = py.allow_threads(|| {
+            self.inner.call_function_sync(
+                function_name,
+                &args_map,
+                &ctx_mng,
+                tb.as_ref(),
+                cb.as_ref(),
+                Some(collector_list),
+                env_vars,
+                tags,
+                tripwire,
+                Some(emit_handler),
+                Some(watch_handler), // TODO: Notification handler.
+            )
+        });
+
+        #[cfg(not(feature = "interpreter"))]
+        let (result, _event_id) = py.allow_threads(|| {
+            self.inner.call_function_sync(
+                function_name,
+                &args_map,
+                &ctx_mng,
+                tb.as_ref(),
+                cb.as_ref(),
+                Some(collector_list),
+                env_vars,
+                tags,
+                tripwire,
+                None::<fn(baml_compiler::emit::EmitEvent)>,
+            )
         });
 
         result
