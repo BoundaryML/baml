@@ -1,3 +1,4 @@
+mod emit_event;
 /// Utilities for analyzing the emit variables and their dependencies.
 pub mod emit_options;
 
@@ -6,7 +7,10 @@ use std::collections::HashSet;
 use baml_types::{ir_type::UnionConstructor, BamlMap, TypeIR};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
-pub use crate::emit::emit_options::{EmitSpec, EmitWhen};
+pub use crate::emit::{
+    emit_event::{EmitBamlValue, EmitEvent, EmitValueMetadata},
+    emit_options::{EmitSpec, EmitWhen},
+};
 use crate::thir::{self, typecheck::TypeCompatibility, ClassConstructorField, ExprMetadata, THir};
 
 /// The result of analyzing the emit variables in a BAML program.
@@ -92,33 +96,35 @@ impl EmitChannels {
         let mut dependencies = transitive_closures[fn_name].clone();
         dependencies.remove(fn_name);
         for subfunction in dependencies {
-            let FunctionMetadata {
+            if let Some(FunctionMetadata {
                 markdown_headers,
                 emit_vars,
                 ..
-            } = &function_metadatas[&subfunction];
-            let sub_md_channels = markdown_headers.iter().map(|header| {
-                (
-                    ChannelFQN {
-                        namespace: Some(subfunction.clone()),
-                        r#type: ChannelType::MarkdownHeader,
-                        name: header.clone(),
-                    },
-                    TypeIR::string(),
-                )
-            });
-            channels.extend(sub_md_channels);
-            let sub_var_channels = emit_vars.into_iter().map(|(_, (emit_spec, chan_type))| {
-                (
-                    ChannelFQN {
-                        namespace: Some(subfunction.clone()),
-                        r#type: ChannelType::Variable,
-                        name: emit_spec.name.clone(),
-                    },
-                    chan_type.clone(),
-                )
-            });
-            channels.extend(sub_var_channels);
+            }) = &function_metadatas.get(&subfunction)
+            {
+                let sub_md_channels = markdown_headers.iter().map(|header| {
+                    (
+                        ChannelFQN {
+                            namespace: Some(subfunction.clone()),
+                            r#type: ChannelType::MarkdownHeader,
+                            name: header.clone(),
+                        },
+                        TypeIR::string(),
+                    )
+                });
+                channels.extend(sub_md_channels);
+                let sub_var_channels = emit_vars.into_iter().map(|(_, (emit_spec, chan_type))| {
+                    (
+                        ChannelFQN {
+                            namespace: Some(subfunction.clone()),
+                            r#type: ChannelType::Variable,
+                            name: emit_spec.name.clone(),
+                        },
+                        chan_type.clone(),
+                    )
+                });
+                channels.extend(sub_var_channels);
+            }
         }
 
         FunctionChannels { channels }
@@ -154,6 +160,7 @@ pub enum ChannelType {
 /// A helper struct. When we analyze a function, we collect this data about the function.
 /// The fields are not transitive - they only include functions, emit vars and headers
 /// used **directly** by the function.
+#[derive(Debug)]
 struct FunctionMetadata {
     subfunctions: HashSet<String>,
     emit_vars: BamlMap<String, (EmitSpec, TypeIR)>,

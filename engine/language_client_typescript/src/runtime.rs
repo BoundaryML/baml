@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, time::SystemTime};
 
 // Conditional runtime selection based on the "interpreter" feature flag
 #[cfg(feature = "interpreter")]
@@ -9,10 +9,11 @@ use baml_runtime::{on_log_event::LogEvent, runtime_interface::ExperimentalTracin
 use baml_types::BamlValue;
 use napi::{
     bindgen_prelude::{
-        FnArgs, Function, FunctionRef, Object, ObjectFinalize, Promise, PromiseRaw, Undefined,
+        FnArgs, FromNapiValue, Function, FunctionRef, JsObjectValue, Object, ObjectFinalize,
+        Promise, PromiseRaw, ToNapiValue, Undefined, Unknown,
     },
     threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode},
-    Env, Error,
+    Env, Error, JsString,
 };
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
@@ -55,6 +56,156 @@ pub struct BamlLogEvent {
     // json structure or a string
     pub parsed_output: Option<String>,
     pub start_time: String,
+}
+
+// Emit event types matching the generated events.ts
+#[napi(object)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BlockEvent {
+    pub block_label: String,
+    pub event_type: String, // "enter" | "exit"
+}
+
+#[napi(object)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct VarEvent {
+    pub variable_name: String,
+    pub value: serde_json::Value, // Serialized BamlValue
+    pub timestamp: String,
+    pub function_name: String,
+}
+
+// Storage for event handlers extracted from EventCollector
+// Using the full ThreadsafeFunction type with all generics to match what build_threadsafe_function creates
+#[cfg(feature = "interpreter")]
+struct EmitCallbacks {
+    var_handlers: HashMap<
+        String,
+        napi::threadsafe_function::ThreadsafeFunction<
+            VarEvent,
+            napi::Unknown<'static>,
+            VarEvent,
+            napi::Status,
+            false,
+        >,
+    >,
+    stream_handlers: HashMap<
+        String,
+        napi::threadsafe_function::ThreadsafeFunction<
+            VarEvent,
+            napi::Unknown<'static>,
+            VarEvent,
+            napi::Status,
+            false,
+        >,
+    >,
+    block_handlers: Vec<
+        napi::threadsafe_function::ThreadsafeFunction<
+            BlockEvent,
+            napi::Unknown<'static>,
+            BlockEvent,
+            napi::Status,
+            false,
+        >,
+    >,
+}
+
+// Extract event handlers from the EventCollector.__handlers() result
+#[cfg(feature = "interpreter")]
+fn extract_emit_callbacks(env: &Env, events_obj: &Object) -> napi::Result<Option<EmitCallbacks>> {
+    // Call __handlers() method to get InternalEventBindings
+    let handlers_fn: Function = match events_obj.get_named_property("__handlers") {
+        Ok(f) => {
+            log::debug!("Found __handlers function");
+            f
+        }
+        Err(e) => {
+            log::debug!("No __handlers function found: {:?}", e);
+            return Ok(None);
+        }
+    };
+
+    // Call the function with `this` set to events_obj and no arguments
+    let empty_args = env.create_array(0)?;
+    let bindings_result: Unknown = handlers_fn.apply(events_obj, empty_args.into_unknown(env)?)?;
+    let bindings: Object = Object::from_unknown(bindings_result)?;
+
+    // Extract block handlers
+    let block_handlers =
+        if let Ok(block_array) = bindings.get_named_property::<Vec<Function>>("block") {
+            block_array
+                .into_iter()
+                .filter_map(|handler| {
+                    handler
+                        .build_threadsafe_function()
+                        .weak::<false>()
+                        .build_callback(|ctx: ThreadSafeCallContext<BlockEvent>| Ok(ctx.value))
+                        .ok()
+                })
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+
+    // Extract var handlers
+    let mut var_handlers = HashMap::new();
+    if let Ok(vars_obj) = bindings.get_named_property::<Object>("vars") {
+        // Get property names as JS array
+        if let Ok(keys) = vars_obj.get_property_names() {
+            let num_keys = keys.get_array_length()?;
+            for i in 0..num_keys {
+                if let Ok(key_str) = keys.get_element::<JsString>(i) {
+                    let key = key_str.into_utf8()?.as_str()?.to_string();
+                    if let Ok(handler_array) = vars_obj.get_named_property::<Vec<Function>>(&key) {
+                        if let Some(handler) = handler_array.first() {
+                            if let Ok(tsfn) = handler
+                                .build_threadsafe_function()
+                                .weak::<false>()
+                                .build_callback(
+                                    |ctx: ThreadSafeCallContext<VarEvent>| Ok(ctx.value),
+                                )
+                            {
+                                var_handlers.insert(key, tsfn);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Extract stream handlers
+    let mut stream_handlers = HashMap::new();
+    if let Ok(streams_obj) = bindings.get_named_property::<Object>("streams") {
+        if let Ok(keys) = streams_obj.get_property_names() {
+            let num_keys = keys.get_array_length()?;
+            for i in 0..num_keys {
+                if let Ok(key_str) = keys.get_element::<JsString>(i) {
+                    let key = key_str.into_utf8()?.as_str()?.to_string();
+                    if let Ok(handler_array) = streams_obj.get_named_property::<Vec<Function>>(&key)
+                    {
+                        if let Some(handler) = handler_array.first() {
+                            if let Ok(tsfn) = handler
+                                .build_threadsafe_function()
+                                .weak::<false>()
+                                .build_callback(
+                                    |ctx: ThreadSafeCallContext<VarEvent>| Ok(ctx.value),
+                                )
+                            {
+                                stream_handlers.insert(key, tsfn);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(Some(EmitCallbacks {
+        var_handlers,
+        stream_handlers,
+        block_handlers,
+    }))
 }
 
 #[napi]
@@ -119,7 +270,8 @@ impl BamlRuntime {
         collectors: Vec<&Collector>,
         tags: HashMap<String, String>,
         env_vars: HashMap<String, String>,
-        signal: Option<Object>, // NEW: AbortSignal parameter
+        signal: Option<Object>, // AbortSignal parameter
+        events: Option<Object>, // NEW: EventCollector parameter
     ) -> napi::Result<PromiseRaw<'e, FunctionResult>> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -134,6 +286,14 @@ impl BamlRuntime {
         // Convert AbortSignal to Tripwire
         let tripwire = js_abort_signal_to_rust_tripwire(env, signal)?;
 
+        // Extract emit callbacks from EventCollector (only for interpreter)
+        #[cfg(feature = "interpreter")]
+        let emit_callbacks = if let Some(ref events_obj) = events {
+            extract_emit_callbacks(env, events_obj)?
+        } else {
+            None
+        };
+
         let baml_runtime = self.inner.clone();
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
@@ -144,7 +304,76 @@ impl BamlRuntime {
             .map(|c| c.inner.clone())
             .collect::<Vec<_>>();
 
+        let function_name_clone = function_name.clone();
+
         let fut = async move {
+            // Create emit_handler closure (only for interpreter)
+            #[cfg(feature = "interpreter")]
+            let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
+                if let Some(ref callbacks) = emit_callbacks {
+                    match event.value {
+                        baml_compiler::emit::EmitBamlValue::Block(block_label) => {
+                            // Fire block events to all registered block handlers
+                            for handler in &callbacks.block_handlers {
+                                let block_event = BlockEvent {
+                                    block_label: block_label.clone(),
+                                    event_type: "enter".to_string(), // TODO: track enter/exit
+                                };
+                                let _ = handler
+                                    .call(block_event, ThreadsafeFunctionCallMode::NonBlocking);
+                            }
+                        }
+                        baml_compiler::emit::EmitBamlValue::Value(value) => {
+                            if let Some(var_name) = &event.variable_name {
+                                // Serialize BamlValue to JSON
+                                let serialized = serde_json::to_value(value.value())
+                                    .unwrap_or(serde_json::Value::Null);
+
+                                let var_event = VarEvent {
+                                    variable_name: var_name.clone(),
+                                    value: serialized,
+                                    timestamp: SystemTime::now()
+                                        .duration_since(SystemTime::UNIX_EPOCH)
+                                        .unwrap()
+                                        .as_millis()
+                                        .to_string(),
+                                    function_name: event.function_name.clone(),
+                                };
+
+                                // Fire to appropriate handler based on stream vs var
+                                let handlers = if event.is_stream {
+                                    &callbacks.stream_handlers
+                                } else {
+                                    &callbacks.var_handlers
+                                };
+
+                                if let Some(handler) = handlers.get(var_name) {
+                                    let _ = handler
+                                        .call(var_event, ThreadsafeFunctionCallMode::NonBlocking);
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            #[cfg(feature = "interpreter")]
+            let result = baml_runtime
+                .call_function(
+                    function_name,
+                    &args_map,
+                    &ctx_mng,
+                    tb.as_ref(),
+                    cb.as_ref(),
+                    Some(collector_list),
+                    env_vars,
+                    Some(&tags),
+                    tripwire,
+                    Some(emit_handler), // pass emit handler for interpreter runtime
+                )
+                .await;
+
+            #[cfg(not(feature = "interpreter"))]
             let result = baml_runtime
                 .call_function(
                     function_name,
@@ -208,8 +437,9 @@ impl BamlRuntime {
             cb.as_ref(),
             Some(collector_list),
             env_vars,
-            Some(tags),
             tripwire,
+            Some(&tags),
+            None::<fn(baml_compiler::emit::EmitEvent)>,
         );
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)
@@ -261,8 +491,8 @@ impl BamlRuntime {
                 client_registry.as_ref(),
                 Some(collector_list),
                 env_vars,
-                Some(tags),
                 tripwire,
+                Some(&tags),
             )
             .map_err(from_anyhow_error)?;
 
@@ -330,8 +560,8 @@ impl BamlRuntime {
                 client_registry.as_ref(),
                 Some(collector_list),
                 env_vars,
-                Some(tags),
                 tripwire,
+                Some(&tags),
             )
             .map_err(from_anyhow_error)?;
 

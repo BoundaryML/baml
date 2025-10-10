@@ -126,7 +126,7 @@ impl TypeBuilder {
     ) -> Result<()> {
         rb_self
             .inner
-            .add_baml(&baml, runtime.inner.internal())
+            .add_baml(&baml, &runtime.inner)
             .map_err(|e| magnus::Error::new(ruby.exception_runtime_error(), e.to_string()))
     }
 

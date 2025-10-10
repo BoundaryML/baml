@@ -22,7 +22,6 @@ use crate::on_log_event::LogEventCallbackSync;
 use crate::{
     client_registry::ClientRegistry,
     internal::llm_client::{orchestrator::OrchestrationScope, LLMResponse},
-    runtime::InternalBamlRuntime,
     runtime_interface::ExperimentalTracingInterface,
     tracing::TracingCall,
     tracingv2::storage::storage::Collector,
@@ -59,7 +58,7 @@ impl TryFrom<LlmRuntime> for BamlAsyncInterpreterRuntime {
         let async_runtime = Arc::clone(&llm_runtime.async_runtime);
 
         // Stage 1: AST -> HIR
-        let hir_program = hir::Hir::from_ast(&llm_runtime.inner.db.ast);
+        let hir_program = hir::Hir::from_ast(&llm_runtime.db.ast);
 
         // Stage 2: HIR -> THIR (typecheck)
         let mut diagnostics = Diagnostics::new("dummy".into());
@@ -81,8 +80,8 @@ impl TryFrom<LlmRuntime> for BamlAsyncInterpreterRuntime {
 }
 
 impl BamlAsyncInterpreterRuntime {
-    pub fn internal(&self) -> &Arc<InternalBamlRuntime> {
-        &self.llm_runtime.inner
+    pub fn internal(&self) -> &LlmRuntime {
+        &self.llm_runtime
     }
 
     pub fn disassemble(&self, function_name: &str) {
@@ -162,6 +161,7 @@ impl BamlAsyncInterpreterRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<&HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
+        emit_handler: Option<impl FnMut(baml_compiler::emit::EmitEvent) + Send + 'static>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         // Check if this is an expression function
         let expr_fn = self
@@ -236,7 +236,6 @@ impl BamlAsyncInterpreterRuntime {
             async move {
                 // Find the LLM function to get parameter names
                 let llm_fn = llm_runtime
-                    .inner
                     .ir()
                     .find_function(&fn_name)
                     .map_err(|e| anyhow::anyhow!("LLM function not found: {}: {}", fn_name, e))?;
@@ -323,11 +322,21 @@ impl BamlAsyncInterpreterRuntime {
                 )))
             };
 
+        // Create the emit event handler - either use the provided one or create a no-op
+        let mut emit_event_handler: Box<dyn FnMut(baml_compiler::emit::EmitEvent) + Send> =
+            if let Some(handler) = emit_handler {
+                Box::new(handler)
+            } else {
+                Box::new(|_event| {})
+            };
+
         // Execute the interpreter
         let result = interpret_thir(
+            function_name.clone(),
             self.thir_program.clone(),
             function_expr,
             llm_handler,
+            emit_event_handler,
             extra_bindings,
             env_vars,
         )
@@ -367,6 +376,7 @@ impl BamlAsyncInterpreterRuntime {
         env_vars: HashMap<String, String>,
         cancel_tripwire: Arc<TripWire>,
         tags: Option<&HashMap<String, String>>,
+        emit_handler: Option<impl FnMut(baml_compiler::emit::EmitEvent) + Send + 'static>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         self.async_runtime.block_on(self.call_function(
             function_name,
@@ -378,6 +388,7 @@ impl BamlAsyncInterpreterRuntime {
             env_vars,
             tags,
             cancel_tripwire,
+            emit_handler,
         ))
     }
 
@@ -596,7 +607,6 @@ impl BamlAsyncInterpreterRuntime {
         test_name: &str,
     ) -> Result<Option<TypeBuilder>> {
         self.llm_runtime
-            .inner
             .get_test_type_builder(function_name, test_name)
     }
 
@@ -759,11 +769,11 @@ fn baml_value_with_meta_to_baml_value(
 
 impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreterRuntime {
     fn features(&self) -> crate::internal::ir_features::IrFeatures {
-        self.llm_runtime.inner.features()
+        self.llm_runtime.features()
     }
 
     fn diagnostics(&self) -> &internal_baml_core::internal_baml_diagnostics::Diagnostics {
-        self.llm_runtime.inner.diagnostics()
+        self.llm_runtime.diagnostics()
     }
 
     fn orchestration_graph(
@@ -771,7 +781,7 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         client_name: &internal_llm_client::ClientSpec,
         ctx: &crate::runtime_context::RuntimeContext,
     ) -> Result<Vec<crate::internal::llm_client::orchestrator::OrchestratorNode>> {
-        self.llm_runtime.inner.orchestration_graph(client_name, ctx)
+        self.llm_runtime.orchestration_graph(client_name, ctx)
     }
 
     fn function_graph(
@@ -779,14 +789,14 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         function_name: &str,
         ctx: &crate::runtime_context::RuntimeContext,
     ) -> Result<String> {
-        self.llm_runtime.inner.function_graph(function_name, ctx)
+        self.llm_runtime.function_graph(function_name, ctx)
     }
 
     fn get_function<'ir>(
         &'ir self,
         function_name: &str,
     ) -> Result<internal_baml_core::ir::FunctionWalker<'ir>> {
-        self.llm_runtime.inner.get_function(function_name)
+        self.llm_runtime.get_function(function_name)
     }
 
     fn get_expr_function<'ir>(
@@ -794,7 +804,7 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         function_name: &str,
         ctx: &crate::runtime_context::RuntimeContext,
     ) -> Result<internal_baml_core::ir::ExprFunctionWalker<'ir>> {
-        self.llm_runtime.inner.get_expr_function(function_name, ctx)
+        self.llm_runtime.get_expr_function(function_name, ctx)
     }
 
     async fn render_prompt(
@@ -809,7 +819,6 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         internal_llm_client::AllowedRoleMetadata,
     )> {
         self.llm_runtime
-            .inner
             .render_prompt(function_name, ctx, params, node_index)
             .await
     }
@@ -823,13 +832,12 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         node_index: Option<usize>,
     ) -> Result<String> {
         self.llm_runtime
-            .inner
             .render_raw_curl(function_name, ctx, prompt, render_settings, node_index)
             .await
     }
 
     fn ir(&self) -> &internal_baml_core::ir::repr::IntermediateRepr {
-        self.llm_runtime.inner.ir()
+        self.llm_runtime.ir()
     }
 
     fn get_test_params(
@@ -840,7 +848,6 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         strict: bool,
     ) -> Result<BamlMap<String, BamlValue>> {
         self.llm_runtime
-            .inner
             .get_test_params(function_name, test_name, ctx, strict)
     }
 
@@ -851,7 +858,6 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         ctx: &crate::runtime_context::RuntimeContext,
     ) -> Result<Vec<baml_types::Constraint>> {
         self.llm_runtime
-            .inner
             .get_test_constraints(function_name, test_name, ctx)
     }
 
@@ -861,7 +867,6 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         test_name: &str,
     ) -> Result<Option<TypeBuilder>> {
         self.llm_runtime
-            .inner
             .get_test_type_builder(function_name, test_name)
     }
 }

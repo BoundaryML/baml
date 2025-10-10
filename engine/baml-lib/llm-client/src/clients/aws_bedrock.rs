@@ -22,6 +22,7 @@ pub struct UnresolvedAwsBedrock<Meta> {
     secret_access_key: Option<StringOr>,
     session_token: Option<StringOr>,
     profile: Option<StringOr>,
+    endpoint_url: Option<StringOr>,
     role_selection: UnresolvedRolesSelection,
     allowed_role_metadata: UnresolvedAllowedRoleMetadata,
     supported_request_modes: SupportedRequestModes,
@@ -78,6 +79,7 @@ pub struct ResolvedAwsBedrock {
     pub secret_access_key: Option<ApiKeyWithProvenance>,
     pub session_token: Option<String>,
     pub profile: Option<String>,
+    pub endpoint_url: Option<String>,
     pub inference_config: Option<InferenceConfiguration>,
     role_selection: RolesSelection,
     pub allowed_role_metadata: AllowedRoleMetadata,
@@ -95,6 +97,7 @@ impl std::fmt::Debug for ResolvedAwsBedrock {
             .field("secret_access_key", &"<no-repr-available>")
             .field("session_token", &self.session_token)
             .field("profile", &self.profile)
+            .field("endpoint_url", &self.endpoint_url)
             .field("inference_config", &"<no-repr-available>")
             .field("role_selection", &self.role_selection)
             .field("allowed_role_metadata", &self.allowed_role_metadata)
@@ -119,6 +122,12 @@ impl ResolvedAwsBedrock {
             options.insert(
                 "region".to_string(),
                 serde_json::Value::String(region.clone()),
+            );
+        }
+        if let Some(endpoint_url) = &self.endpoint_url {
+            options.insert(
+                "endpoint_url".to_string(),
+                serde_json::Value::String(endpoint_url.clone()),
             );
         }
         options
@@ -162,6 +171,7 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             secret_access_key: self.secret_access_key.clone(),
             session_token: self.session_token.clone(),
             profile: self.profile.clone(),
+            endpoint_url: self.endpoint_url.clone(),
             role_selection: self.role_selection.clone(),
             allowed_role_metadata: self.allowed_role_metadata.clone(),
             supported_request_modes: self.supported_request_modes.clone(),
@@ -213,6 +223,11 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
                 #[cfg(target_arch = "wasm32")]
                 env_vars.insert("AWS_PROFILE".into());
             }
+        }
+
+        match self.endpoint_url.as_ref() {
+            Some(endpoint_url) => env_vars.extend(endpoint_url.required_env_vars()),
+            None => {}
         }
 
         env_vars.extend(self.role_selection.required_env_vars());
@@ -357,6 +372,18 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             },
         };
 
+        let endpoint_url = match self.endpoint_url.as_ref() {
+            Some(endpoint_url) => {
+                let url = endpoint_url.resolve(ctx)?;
+                if url.is_empty() {
+                    None
+                } else {
+                    Some(url)
+                }
+            }
+            None => None,
+        };
+
         #[cfg(target_arch = "wasm32")]
         {
             if region.is_none() {
@@ -377,6 +404,7 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             secret_access_key,
             session_token,
             profile,
+            endpoint_url,
             role_selection,
             allowed_role_metadata: self.allowed_role_metadata.resolve(ctx)?,
             supported_request_modes: self.supported_request_modes.clone(),
@@ -429,6 +457,9 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             .map(|(_, v, _)| v.clone());
         let profile = properties
             .ensure_string("profile", false)
+            .map(|(_, v, _)| v.clone());
+        let endpoint_url = properties
+            .ensure_string("endpoint_url", false)
             .map(|(_, v, _)| v.clone());
 
         let role_selection = properties.ensure_roles_selection();
@@ -511,6 +542,7 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             secret_access_key,
             session_token,
             profile,
+            endpoint_url,
             role_selection,
             allowed_role_metadata: allowed_metadata,
             supported_request_modes,

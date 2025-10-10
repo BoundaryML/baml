@@ -583,7 +583,7 @@ if __name__ == "__main__":
 
 ```typescript toolAgent.ts
 import { b } from "@/baml_client";
-import { WeatherAPI, CalculatorAPI } from "@/baml-client/types";
+import { WeatherAPI, CalculatorAPI } from "@/baml_client/types";
 
 function handleWeather(weather: WeatherAPI): string {
   // Simulate weather API call
@@ -634,17 +634,13 @@ async function main() {
 
     switch (toolResponse.intent) {
       case "weather_request":
-      const result = handleWeather(toolResponse as WeatherAPI);
-      console.log(`Agent (Weather): ${result}`);
-    }
-    if () {
-      const result = handleWeather(toolResponse as WeatherAPI);
-      console.log(`Agent (Weather): ${result}`);
-    } else if ("numbers" in toolResponse && "operation" in toolResponse) {
-      const result = handleCalculator(toolResponse as CalculatorAPI);
-      console.log(`Agent (Calculator): ${result}`);
-    } else {
-      console.log("Agent: Sorry, I couldn't handle that input.");
+        const weatherResult = handleWeather(toolResponse);
+        console.log(`Agent (Weather): ${weatherResult}`);
+        break;
+      case "basic_calculator":
+        const calcResult = handleCalculator(toolResponse);
+        console.log(`Agent (Calculator): ${calcResult}`);
+        break;
     }
   });
 }

@@ -143,9 +143,9 @@ export interface ErrorResponse {
 export interface PrimitiveUnions {
   stringOrInt: string | number
   stringOrFloat: string | number
-  intOrFloat: number | number
+  intOrFloat: number
   boolOrString: boolean | string
-  anyPrimitive: string | number | number | boolean
+  anyPrimitive: string | number | boolean
   
 }
 
@@ -171,7 +171,7 @@ export interface RecursiveUnion {
 }
 
 export interface Result {
-  value: string | number | number
+  value: string | number
   metadata: Record<string, string>
   
 }

@@ -9,7 +9,10 @@ use anyhow::{anyhow, bail, Context, Result};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
 use internal_baml_diagnostics::Span;
 
-use crate::thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, THir};
+use crate::{
+    emit::EmitEvent,
+    thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, THir},
+};
 
 // Type alias for pinned boxed futures - conditionally Send for non-WASM targets
 #[cfg(not(target_arch = "wasm32"))]
@@ -44,11 +47,79 @@ impl<T> LlmFuture for T where T: Future<Output = Result<BamlValueWithMeta<ExprMe
 //    mutate them across REPL prompts and see the same downstream effects on their
 //    containers that we would for mutating values within functions.
 
+/// Information about a variable with @emit
+#[derive(Clone)]
+pub struct EmitVariable {
+    /// The name of the variable
+    pub name: String,
+    /// The emit spec from the declaration
+    pub spec: crate::emit::EmitSpec,
+    /// Reference to the variable's value for change detection
+    pub value_ref: Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>,
+    /// Last emitted value (for change detection)
+    pub last_emitted: Arc<Mutex<Option<BamlValue>>>,
+}
+
 /// A scope is a map of variable names to their values.
 ///
 /// Variables are stored in refcells to allow for mutation.
 pub struct Scope {
     pub variables: BamlMap<String, Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>>,
+    /// Track variables with @emit for change detection
+    pub emit_variables: Vec<EmitVariable>,
+}
+
+/// Register a variable with @emit for tracking
+fn register_emit_variable(
+    scopes: &mut [Scope],
+    name: &str,
+    value_ref: Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>,
+    emit_spec: crate::emit::EmitSpec,
+) {
+    if let Some(scope) = scopes.last_mut() {
+        scope.emit_variables.push(EmitVariable {
+            name: name.to_string(),
+            spec: emit_spec,
+            value_ref,
+            last_emitted: Arc::new(Mutex::new(None)),
+        });
+    }
+}
+
+/// Convert ExprMetadata value to EmitValueMetadata value
+fn expr_value_to_emit_value(
+    value: BamlValueWithMeta<ExprMetadata>,
+) -> BamlValueWithMeta<crate::emit::EmitValueMetadata> {
+    value.map_meta(|(_span, type_ir)| crate::emit::EmitValueMetadata {
+        constraints: Vec::new(),
+        response_checks: Vec::new(),
+        completion: baml_types::Completion::default(),
+        r#type: type_ir.clone().unwrap_or(baml_types::TypeIR::string()),
+    })
+}
+
+/// Fire an emit event for a specific variable (for manual $emit() calls)
+fn fire_emit_event_for_variable(
+    scopes: &[Scope],
+    var_name: &str,
+    emit_handler: &mut impl FnMut(crate::emit::EmitEvent),
+    function_name: &str,
+) -> Result<()> {
+    // Find the variable in scopes
+    for scope in scopes.iter().rev() {
+        if let Some(value_ref) = scope.variables.get(var_name) {
+            let current_value = value_ref.lock().unwrap();
+            let emit_value = expr_value_to_emit_value(current_value.clone());
+            let event = crate::emit::EmitEvent::new_var(
+                var_name.to_string(),
+                emit_value,
+                function_name.to_string(),
+            );
+            emit_handler(event);
+            return Ok(());
+        }
+    }
+    bail!("Variable '{}' not found for $emit()", var_name)
 }
 
 enum EvalValue {
@@ -65,10 +136,48 @@ enum ControlFlow {
     Return(BamlValueWithMeta<ExprMetadata>),
 }
 
+/// Check all @emit variables for changes and fire events
+fn check_emit_changes(
+    scopes: &[Scope],
+    emit_event_handler: &mut impl FnMut(EmitEvent),
+    function_name: &str,
+) {
+    for scope in scopes {
+        for emit_var in &scope.emit_variables {
+            let current_value = emit_var.value_ref.lock().unwrap();
+            let current_baml_value = current_value.clone().value().clone();
+
+            let mut last_emitted = emit_var.last_emitted.lock().unwrap();
+
+            // Check if value has changed
+            let has_changed = match last_emitted.as_ref() {
+                None => true,                              // First time, always emit
+                Some(last) => last != &current_baml_value, // Compare values
+            };
+
+            if has_changed {
+                // Update last emitted value
+                *last_emitted = Some(current_baml_value);
+
+                // Fire the event
+                let emit_value = expr_value_to_emit_value(current_value.clone());
+                let event = crate::emit::EmitEvent::new_var(
+                    emit_var.spec.name.clone(),
+                    emit_value,
+                    function_name.to_string(),
+                );
+                emit_event_handler(event);
+            }
+        }
+    }
+}
+
 pub async fn interpret_thir<F, Fut>(
+    function_name: String,
     thir: THir<ExprMetadata>,
     expr: Expr<ExprMetadata>,
     mut run_llm_function: F,
+    mut emit_event_handler: impl FnMut(EmitEvent) + Send,
     extra_bindings: BamlMap<String, BamlValueWithMeta<ExprMetadata>>,
     env_vars: HashMap<String, String>,
 ) -> Result<BamlValueWithMeta<ExprMetadata>>
@@ -83,6 +192,7 @@ where
                 .into_iter()
                 .map(|(k, v)| (k, Arc::new(Mutex::new(v)))),
         ),
+        emit_variables: Vec::new(),
     }];
 
     let mut env_entries = BamlMap::new();
@@ -102,30 +212,52 @@ where
 
     // Seed scope with global assignments
     for (name, g) in thir.global_assignments.iter() {
-        let v =
-            expect_value(evaluate_expr(&g.expr, &mut scopes, &thir, &mut run_llm_function).await?)?;
+        let v = expect_value(
+            evaluate_expr(
+                &g.expr,
+                &mut scopes,
+                &thir,
+                &mut run_llm_function,
+                &mut emit_event_handler,
+                &function_name,
+            )
+            .await?,
+        )?;
         declare(&mut scopes, name, v);
     }
 
     // Evaluate provided expression
-    let result =
-        expect_value(evaluate_expr(&expr, &mut scopes, &thir, &mut run_llm_function).await?)?;
+    let result = expect_value(
+        evaluate_expr(
+            &expr,
+            &mut scopes,
+            &thir,
+            &mut run_llm_function,
+            &mut emit_event_handler,
+            &function_name,
+        )
+        .await?,
+    )?;
     Ok(result)
 }
 
-fn evaluate_block_with_control_flow<'a, F, Fut>(
+fn evaluate_block_with_control_flow<'a, F, Fut, E>(
     block: &'a Block<ExprMetadata>,
     scopes: &'a mut Vec<Scope>,
     thir: &'a THir<ExprMetadata>,
     run_llm_function: &'a mut F,
+    emit_handler: &'a mut E,
+    function_name: &'a str,
 ) -> BoxFuture<'a, Result<ControlFlow>>
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
+    E: FnMut(crate::emit::EmitEvent) + Send,
 {
     Box::pin(async move {
         scopes.push(Scope {
             variables: BamlMap::new(),
+            emit_variables: Vec::new(),
         });
 
         // Check if we should treat the last statement as the implicit return value
@@ -140,50 +272,143 @@ where
 
         for stmt in block.statements.iter().take(statements_to_execute) {
             match stmt {
-                Statement::Let { name, value, .. } => {
-                    match evaluate_expr(value, scopes, thir, run_llm_function).await? {
+                Statement::Let {
+                    name, value, emit, ..
+                } => {
+                    match evaluate_expr(
+                        value,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?
+                    {
                         EvalValue::Value(v) => {
                             declare(scopes, name, v);
+                            // Register emit tracking if @emit is present
+                            if let Some(emit_spec) = emit {
+                                if let Some(var_ref) = lookup_variable(scopes, name) {
+                                    register_emit_variable(
+                                        scopes,
+                                        name,
+                                        var_ref,
+                                        emit_spec.clone(),
+                                    );
+                                }
+                            }
                         }
                         EvalValue::Reference(cell) => {
-                            declare_with_cell(scopes, name, cell);
+                            declare_with_cell(scopes, name, cell.clone());
+                            // Register emit tracking if @emit is present
+                            if let Some(emit_spec) = emit {
+                                register_emit_variable(scopes, name, cell, emit_spec.clone());
+                            }
                         }
                         EvalValue::Function(_, _, _) => {
                             bail!("cannot assign function to variable `{}`", name);
                         }
                     }
+                    // Check for changes in all emit variables after the let statement
+                    check_emit_changes(scopes, emit_handler, function_name);
                 }
                 Statement::Declare { name, span } => {
                     declare(scopes, name, BamlValueWithMeta::Null((span.clone(), None)));
                 }
                 Statement::Assign { left, value } => {
-                    let assigned_value =
-                        expect_value(evaluate_expr(value, scopes, thir, run_llm_function).await?)?;
-                    assign_to_expr(left, assigned_value, scopes, thir, run_llm_function).await?;
+                    let assigned_value = expect_value(
+                        evaluate_expr(
+                            value,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            emit_handler,
+                            function_name,
+                        )
+                        .await?,
+                    )?;
+                    assign_to_expr(
+                        left,
+                        assigned_value,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?;
+                    // Check for changes in emit variables after assignment
+                    check_emit_changes(scopes, emit_handler, function_name);
                 }
-                Statement::DeclareAndAssign { name, value, .. } => {
-                    match evaluate_expr(value, scopes, thir, run_llm_function).await? {
+                Statement::DeclareAndAssign {
+                    name, value, emit, ..
+                } => {
+                    match evaluate_expr(
+                        value,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?
+                    {
                         EvalValue::Value(v) => {
                             declare(scopes, name, v);
+                            // Register emit tracking if @emit is present
+                            if let Some(emit_spec) = emit {
+                                if let Some(var_ref) = lookup_variable(scopes, name) {
+                                    register_emit_variable(
+                                        scopes,
+                                        name,
+                                        var_ref,
+                                        emit_spec.clone(),
+                                    );
+                                }
+                            }
                         }
                         EvalValue::Reference(cell) => {
-                            declare_with_cell(scopes, name, cell);
+                            declare_with_cell(scopes, name, cell.clone());
+                            // Register emit tracking if @emit is present
+                            if let Some(emit_spec) = emit {
+                                register_emit_variable(scopes, name, cell, emit_spec.clone());
+                            }
                         }
                         EvalValue::Function(_, _, _) => {
                             bail!("cannot assign function to variable `{}`", name);
                         }
                     }
+                    // Check for changes in all emit variables after the declare and assign
+                    check_emit_changes(scopes, emit_handler, function_name);
                 }
                 Statement::Return { expr, .. } => {
-                    let v =
-                        expect_value(evaluate_expr(expr, scopes, thir, run_llm_function).await?)?;
+                    let v = expect_value(
+                        evaluate_expr(
+                            expr,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            emit_handler,
+                            function_name,
+                        )
+                        .await?,
+                    )?;
                     scopes.pop();
                     return Ok(ControlFlow::Return(v));
                 }
                 Statement::Expression { expr, .. } => {
                     // For expression statements, we still need to evaluate them for side effects
                     // (and the last one might be the implicit return value)
-                    let _ = evaluate_expr(expr, scopes, thir, run_llm_function).await?;
+                    let _ = evaluate_expr(
+                        expr,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?;
                 }
                 Statement::Break(_) => {
                     scopes.pop();
@@ -197,7 +422,15 @@ where
                     condition, block, ..
                 } => loop {
                     let cond_val = expect_value(
-                        evaluate_expr(condition, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            condition,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            emit_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?;
                     match cond_val {
                         BamlValueWithMeta::Bool(true, _) => match evaluate_block_with_control_flow(
@@ -205,6 +438,8 @@ where
                             scopes,
                             thir,
                             run_llm_function,
+                            emit_handler,
+                            function_name,
                         )
                         .await?
                         {
@@ -227,7 +462,15 @@ where
                     ..
                 } => {
                     let iterable_val = expect_value(
-                        evaluate_expr(iterator, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            iterator,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            emit_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?;
                     match iterable_val {
                         BamlValueWithMeta::List(items, _) => {
@@ -235,6 +478,7 @@ where
                                 // Create new scope for loop iteration
                                 scopes.push(Scope {
                                     variables: BamlMap::new(),
+                                    emit_variables: Vec::new(),
                                 });
                                 declare(scopes, identifier, item_val.clone());
 
@@ -243,6 +487,8 @@ where
                                     scopes,
                                     thir,
                                     run_llm_function,
+                                    emit_handler,
+                                    function_name,
                                 )
                                 .await?
                                 {
@@ -276,12 +522,30 @@ where
                 } => {
                     use crate::hir::AssignOp;
 
-                    let current_val =
-                        expect_value(evaluate_expr(left, scopes, thir, run_llm_function).await?)?;
+                    let current_val = expect_value(
+                        evaluate_expr(
+                            left,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            emit_handler,
+                            function_name,
+                        )
+                        .await?,
+                    )?;
 
                     // Evaluate the right-hand side expression
-                    let rhs_val =
-                        expect_value(evaluate_expr(value, scopes, thir, run_llm_function).await?)?;
+                    let rhs_val = expect_value(
+                        evaluate_expr(
+                            value,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            emit_handler,
+                            function_name,
+                        )
+                        .await?,
+                    )?;
 
                     // Perform the compound assignment operation
                     let result_val = match assign_op {
@@ -409,10 +673,29 @@ where
                     };
 
                     // Assign the result back to the target expression
-                    assign_to_expr(left, result_val, scopes, thir, run_llm_function).await?;
+                    assign_to_expr(
+                        left,
+                        result_val,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?;
+                    // Check for changes in emit variables after compound assignment
+                    check_emit_changes(scopes, emit_handler, function_name);
                 }
                 Statement::SemicolonExpression { expr, .. } => {
-                    let _ = evaluate_expr(expr, scopes, thir, run_llm_function).await?;
+                    let _ = evaluate_expr(
+                        expr,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?;
                 }
                 Statement::CForLoop {
                     condition,
@@ -423,7 +706,15 @@ where
                         // Check condition (if present)
                         if let Some(cond_expr) = condition {
                             let cond_val = expect_value(
-                                evaluate_expr(cond_expr, scopes, thir, run_llm_function).await?,
+                                evaluate_expr(
+                                    cond_expr,
+                                    scopes,
+                                    thir,
+                                    run_llm_function,
+                                    emit_handler,
+                                    function_name,
+                                )
+                                .await?,
                             )?;
                             match cond_val {
                                 BamlValueWithMeta::Bool(false, _) => break,
@@ -438,6 +729,8 @@ where
                             scopes,
                             thir,
                             run_llm_function,
+                            emit_handler,
+                            function_name,
                         )
                         .await?
                         {
@@ -456,8 +749,15 @@ where
                                             use crate::hir::AssignOp;
 
                                             let current_val = expect_value(
-                                                evaluate_expr(left, scopes, thir, run_llm_function)
-                                                    .await?,
+                                                evaluate_expr(
+                                                    left,
+                                                    scopes,
+                                                    thir,
+                                                    run_llm_function,
+                                                    emit_handler,
+                                                    function_name,
+                                                )
+                                                .await?,
                                             )?;
                                             let rhs_val = expect_value(
                                                 evaluate_expr(
@@ -465,6 +765,8 @@ where
                                                     scopes,
                                                     thir,
                                                     run_llm_function,
+                                                    emit_handler,
+                                                    function_name,
                                                 )
                                                 .await?,
                                             )?;
@@ -491,6 +793,8 @@ where
                                                 scopes,
                                                 thir,
                                                 run_llm_function,
+                                                emit_handler,
+                                                function_name,
                                             )
                                             .await?;
                                         }
@@ -501,11 +805,21 @@ where
                                                     scopes,
                                                     thir,
                                                     run_llm_function,
+                                                    emit_handler,
+                                                    function_name,
                                                 )
                                                 .await?,
                                             )?;
-                                            assign_to_expr(left, v, scopes, thir, run_llm_function)
-                                                .await?;
+                                            assign_to_expr(
+                                                left,
+                                                v,
+                                                scopes,
+                                                thir,
+                                                run_llm_function,
+                                                emit_handler,
+                                                function_name,
+                                            )
+                                            .await?;
                                         }
                                         _ => bail!(
                                             "unsupported statement type in C-for after clause"
@@ -528,8 +842,15 @@ where
                                             use crate::hir::AssignOp;
 
                                             let current_val = expect_value(
-                                                evaluate_expr(left, scopes, thir, run_llm_function)
-                                                    .await?,
+                                                evaluate_expr(
+                                                    left,
+                                                    scopes,
+                                                    thir,
+                                                    run_llm_function,
+                                                    emit_handler,
+                                                    function_name,
+                                                )
+                                                .await?,
                                             )?;
                                             let rhs_val = expect_value(
                                                 evaluate_expr(
@@ -537,6 +858,8 @@ where
                                                     scopes,
                                                     thir,
                                                     run_llm_function,
+                                                    emit_handler,
+                                                    function_name,
                                                 )
                                                 .await?,
                                             )?;
@@ -563,6 +886,8 @@ where
                                                 scopes,
                                                 thir,
                                                 run_llm_function,
+                                                emit_handler,
+                                                function_name,
                                             )
                                             .await?;
                                         }
@@ -573,11 +898,21 @@ where
                                                     scopes,
                                                     thir,
                                                     run_llm_function,
+                                                    emit_handler,
+                                                    function_name,
                                                 )
                                                 .await?,
                                             )?;
-                                            assign_to_expr(left, v, scopes, thir, run_llm_function)
-                                                .await?;
+                                            assign_to_expr(
+                                                left,
+                                                v,
+                                                scopes,
+                                                thir,
+                                                run_llm_function,
+                                                emit_handler,
+                                                function_name,
+                                            )
+                                            .await?;
                                         }
                                         _ => bail!(
                                             "unsupported statement type in C-for after clause"
@@ -594,7 +929,15 @@ where
                 }
                 Statement::Assert { condition, .. } => {
                     let cond_val = expect_value(
-                        evaluate_expr(condition, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            condition,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            emit_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?;
                     match cond_val {
                         BamlValueWithMeta::Bool(true, _) => {}
@@ -608,12 +951,32 @@ where
         // Compute the return value
         let ret = if let Some(trailing_expr) = &block.trailing_expr {
             // Explicit trailing expression
-            expect_value(evaluate_expr(trailing_expr, scopes, thir, run_llm_function).await?)?
+            expect_value(
+                evaluate_expr(
+                    trailing_expr,
+                    scopes,
+                    thir,
+                    run_llm_function,
+                    emit_handler,
+                    function_name,
+                )
+                .await?,
+            )?
         } else if use_last_expr_as_return {
             // No explicit trailing expression, but last statement is an expression statement,
             // so use that as the implicit return value (handles cases like if-else at the end of a block)
             if let Some(Statement::Expression { expr, .. }) = block.statements.last() {
-                expect_value(evaluate_expr(expr, scopes, thir, run_llm_function).await?)?
+                expect_value(
+                    evaluate_expr(
+                        expr,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?
             } else {
                 unreachable!("use_last_expr_as_return is true but last statement is not Expression")
             }
@@ -626,17 +989,29 @@ where
     })
 }
 
-async fn evaluate_block<F, Fut>(
+async fn evaluate_block<F, Fut, E>(
     block: &Block<ExprMetadata>,
     scopes: &mut Vec<Scope>,
     thir: &THir<ExprMetadata>,
     run_llm_function: &mut F,
+    emit_handler: &mut E,
+    function_name: &str,
 ) -> Result<BamlValueWithMeta<ExprMetadata>>
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
+    E: FnMut(crate::emit::EmitEvent) + Send,
 {
-    match evaluate_block_with_control_flow(block, scopes, thir, run_llm_function).await? {
+    match evaluate_block_with_control_flow(
+        block,
+        scopes,
+        thir,
+        run_llm_function,
+        emit_handler,
+        function_name,
+    )
+    .await?
+    {
         ControlFlow::Normal(val) => Ok(val),
         ControlFlow::Return(val) => Ok(val),
         ControlFlow::Break => bail!("break statement not in loop context"),
@@ -672,16 +1047,19 @@ fn assign(scopes: &mut [Scope], name: &str, value: BamlValueWithMeta<ExprMetadat
     bail!("assign to undeclared variable `{}`", name)
 }
 
-async fn assign_to_expr<F, Fut>(
+async fn assign_to_expr<F, Fut, E>(
     target: &Expr<ExprMetadata>,
     new_value: BamlValueWithMeta<ExprMetadata>,
     scopes: &mut Vec<Scope>,
     thir: &THir<ExprMetadata>,
     run_llm_function: &mut F,
+    emit_handler: &mut E,
+    function_name: &str,
 ) -> Result<()>
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
+    E: FnMut(crate::emit::EmitEvent) + Send,
 {
     let mut current_expr = target;
     let mut value_to_assign = new_value;
@@ -690,8 +1068,17 @@ where
         match current_expr {
             Expr::Var(name, _) => return assign(scopes, name, value_to_assign),
             Expr::FieldAccess { base, field, .. } => {
-                let mut base_value =
-                    expect_value(evaluate_expr(base, scopes, thir, run_llm_function).await?)?;
+                let mut base_value = expect_value(
+                    evaluate_expr(
+                        base,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
 
                 match &mut base_value {
                     BamlValueWithMeta::Class(_, fields, _) => {
@@ -713,10 +1100,28 @@ where
                 current_expr = base.as_ref();
             }
             Expr::ArrayAccess { base, index, meta } => {
-                let mut base_value =
-                    expect_value(evaluate_expr(base, scopes, thir, run_llm_function).await?)?;
-                let index_value =
-                    expect_value(evaluate_expr(index, scopes, thir, run_llm_function).await?)?;
+                let mut base_value = expect_value(
+                    evaluate_expr(
+                        base,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
+                let index_value = expect_value(
+                    evaluate_expr(
+                        index,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
 
                 let idx = match index_value {
                     BamlValueWithMeta::Int(i, _) if i >= 0 => i as usize,
@@ -765,6 +1170,14 @@ fn lookup_cell(
     None
 }
 
+/// Alias for lookup_cell - looks up a variable and returns its Arc<Mutex<>>
+fn lookup_variable(
+    scopes: &[Scope],
+    name: &str,
+) -> Option<Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>> {
+    lookup_cell(scopes, name)
+}
+
 /// Convert BamlValueWithMeta to BamlValue by stripping metadata
 fn baml_value_with_meta_to_baml_value(value: BamlValueWithMeta<ExprMetadata>) -> BamlValue {
     match value {
@@ -799,15 +1212,18 @@ fn baml_value_with_meta_to_baml_value(value: BamlValueWithMeta<ExprMetadata>) ->
     }
 }
 
-fn evaluate_expr<'a, F, Fut>(
+fn evaluate_expr<'a, F, Fut, E>(
     expr: &'a Expr<ExprMetadata>,
     scopes: &'a mut Vec<Scope>,
     thir: &'a THir<ExprMetadata>,
     run_llm_function: &'a mut F,
+    emit_handler: &'a mut E,
+    function_name: &'a str,
 ) -> BoxFuture<'a, Result<EvalValue>>
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
+    E: FnMut(crate::emit::EmitEvent) + Send,
 {
     Box::pin(async move {
         Ok(match expr {
@@ -816,7 +1232,15 @@ where
                 let mut out = Vec::with_capacity(items.len());
                 for it in items.iter() {
                     out.push(expect_value(
-                        evaluate_expr(it, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            it,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            emit_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?);
                 }
                 EvalValue::Value(BamlValueWithMeta::List(out, meta.clone()))
@@ -826,13 +1250,31 @@ where
                 for (k, v) in entries.iter() {
                     out.insert(
                         k.clone(),
-                        expect_value(evaluate_expr(v, scopes, thir, run_llm_function).await?)?,
+                        expect_value(
+                            evaluate_expr(
+                                v,
+                                scopes,
+                                thir,
+                                run_llm_function,
+                                emit_handler,
+                                function_name,
+                            )
+                            .await?,
+                        )?,
                     );
                 }
                 EvalValue::Value(BamlValueWithMeta::Map(out, meta.clone()))
             }
             Expr::Block(block, _meta) => {
-                let v = evaluate_block(block, scopes, thir, run_llm_function).await?;
+                let v = evaluate_block(
+                    block,
+                    scopes,
+                    thir,
+                    run_llm_function,
+                    emit_handler,
+                    function_name,
+                )
+                .await?;
                 EvalValue::Value(v)
             }
             Expr::Var(name, meta) => {
@@ -903,7 +1345,15 @@ where
                         }
 
                         let key_val = expect_value(
-                            evaluate_expr(&args[0], scopes, thir, run_llm_function).await?,
+                            evaluate_expr(
+                                &args[0],
+                                scopes,
+                                thir,
+                                run_llm_function,
+                                emit_handler,
+                                function_name,
+                            )
+                            .await?,
                         )?;
 
                         let key = match key_val {
@@ -927,7 +1377,15 @@ where
                     }
                 }
 
-                let callee = evaluate_expr(func, scopes, thir, run_llm_function).await?;
+                let callee = evaluate_expr(
+                    func,
+                    scopes,
+                    thir,
+                    run_llm_function,
+                    emit_handler,
+                    function_name,
+                )
+                .await?;
                 let (arity, body, meta) = match callee {
                     EvalValue::Function(a, b, m) => (a, b, m),
                     _ => bail!("attempted to call non-function"),
@@ -943,7 +1401,15 @@ where
                         let mut llm_args: Vec<BamlValue> = Vec::with_capacity(args.len());
                         for a in args.iter() {
                             let arg_val = expect_value(
-                                evaluate_expr(a, scopes, thir, run_llm_function).await?,
+                                evaluate_expr(
+                                    a,
+                                    scopes,
+                                    thir,
+                                    run_llm_function,
+                                    emit_handler,
+                                    function_name,
+                                )
+                                .await?,
                             )?;
                             llm_args.push(baml_value_with_meta_to_baml_value(arg_val));
                         }
@@ -965,7 +1431,15 @@ where
                             Vec::with_capacity(args.len());
                         for a in args.iter() {
                             arg_vals.push(expect_value(
-                                evaluate_expr(a, scopes, thir, run_llm_function).await?,
+                                evaluate_expr(
+                                    a,
+                                    scopes,
+                                    thir,
+                                    run_llm_function,
+                                    emit_handler,
+                                    function_name,
+                                )
+                                .await?,
                             )?);
                         }
 
@@ -990,7 +1464,15 @@ where
                     Vec::with_capacity(args.len());
                 for a in args.iter() {
                     arg_vals.push(expect_value(
-                        evaluate_expr(a, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            a,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            emit_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?);
                 }
 
@@ -1025,34 +1507,89 @@ where
                         .zip(arg_vals)
                         .map(|(k, v)| (k, Arc::new(Mutex::new(v))))
                         .collect(),
+                    emit_variables: Vec::new(),
                 });
 
                 // Execute the function body
-                let result = evaluate_block(&body, scopes, thir, run_llm_function).await?;
+                let result = evaluate_block(
+                    &body,
+                    scopes,
+                    thir,
+                    run_llm_function,
+                    emit_handler,
+                    function_name,
+                )
+                .await?;
                 scopes.pop();
                 EvalValue::Value(result)
             }
             Expr::If(cond, then, else_, meta) => {
-                let cv = expect_value(evaluate_expr(cond, scopes, thir, run_llm_function).await?)?;
+                let cv = expect_value(
+                    evaluate_expr(
+                        cond,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
                 let b = match cv {
                     BamlValueWithMeta::Bool(v, _) => v,
                     _ => bail!("condition not bool at {:?}", meta.0),
                 };
                 if b {
                     EvalValue::Value(expect_value(
-                        evaluate_expr(then, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            then,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            emit_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?)
                 } else if let Some(e) = else_ {
                     EvalValue::Value(expect_value(
-                        evaluate_expr(e, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            e,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            emit_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?)
                 } else {
                     EvalValue::Value(BamlValueWithMeta::Null(meta.clone()))
                 }
             }
             Expr::ArrayAccess { base, index, meta } => {
-                let b = expect_value(evaluate_expr(base, scopes, thir, run_llm_function).await?)?;
-                let i = expect_value(evaluate_expr(index, scopes, thir, run_llm_function).await?)?;
+                let b = expect_value(
+                    evaluate_expr(
+                        base,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
+                let i = expect_value(
+                    evaluate_expr(
+                        index,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
                 let arr = match b.clone() {
                     BamlValueWithMeta::List(v, _) => v,
                     _ => bail!("array access on non-list at {:?}", meta),
@@ -1065,7 +1602,17 @@ where
                 EvalValue::Value(v.clone())
             }
             Expr::FieldAccess { base, field, meta } => {
-                let b = expect_value(evaluate_expr(base, scopes, thir, run_llm_function).await?)?;
+                let b = expect_value(
+                    evaluate_expr(
+                        base,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
                 match b.clone() {
                     BamlValueWithMeta::Map(m, _) => {
                         let v = m.get(field).context("missing field")?;
@@ -1088,14 +1635,30 @@ where
                             field_map.insert(
                                 name.clone(),
                                 expect_value(
-                                    evaluate_expr(value, scopes, thir, run_llm_function).await?,
+                                    evaluate_expr(
+                                        value,
+                                        scopes,
+                                        thir,
+                                        run_llm_function,
+                                        emit_handler,
+                                        function_name,
+                                    )
+                                    .await?,
                                 )?,
                             );
                         }
 
                         ClassConstructorField::Spread { value } => {
                             let spread_val = expect_value(
-                                evaluate_expr(value, scopes, thir, run_llm_function).await?,
+                                evaluate_expr(
+                                    value,
+                                    scopes,
+                                    thir,
+                                    run_llm_function,
+                                    emit_handler,
+                                    function_name,
+                                )
+                                .await?,
                             )?;
                             match spread_val.clone() {
                                 BamlValueWithMeta::Class(_, spread_fields, _) => {
@@ -1142,10 +1705,28 @@ where
                 right,
                 meta,
             } => {
-                let left_val =
-                    expect_value(evaluate_expr(left, scopes, thir, run_llm_function).await?)?;
-                let right_val =
-                    expect_value(evaluate_expr(right, scopes, thir, run_llm_function).await?)?;
+                let left_val = expect_value(
+                    evaluate_expr(
+                        left,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
+                let right_val = expect_value(
+                    evaluate_expr(
+                        right,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
 
                 let result = evaluate_binary_op(operator, &left_val, &right_val, meta)?;
                 EvalValue::Value(result)
@@ -1155,7 +1736,17 @@ where
                 expr,
                 meta,
             } => {
-                let val = expect_value(evaluate_expr(expr, scopes, thir, run_llm_function).await?)?;
+                let val = expect_value(
+                    evaluate_expr(
+                        expr,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
 
                 let result = evaluate_unary_op(operator, &val, meta)?;
                 EvalValue::Value(result)
@@ -1166,8 +1757,17 @@ where
                 args,
                 meta,
             } => {
-                let receiver_val =
-                    expect_value(evaluate_expr(receiver, scopes, thir, run_llm_function).await?)?;
+                let receiver_val = expect_value(
+                    evaluate_expr(
+                        receiver,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        emit_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
 
                 // Extract method name
                 let method_name = match method.as_ref() {
@@ -1180,14 +1780,32 @@ where
                     Vec::with_capacity(args.len());
                 for arg in args.iter() {
                     arg_vals.push(expect_value(
-                        evaluate_expr(arg, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            arg,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            emit_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?);
                 }
 
                 let result = evaluate_method_call(&receiver_val, &method_name, &arg_vals, meta)?;
                 EvalValue::Value(result)
             }
-            Expr::Paren(inner, _) => evaluate_expr(inner, scopes, thir, run_llm_function).await?,
+            Expr::Paren(inner, _) => {
+                evaluate_expr(
+                    inner,
+                    scopes,
+                    thir,
+                    run_llm_function,
+                    emit_handler,
+                    function_name,
+                )
+                .await?
+            }
         })
     })
 }
@@ -1749,18 +2367,48 @@ mod tests {
         (thir, expr_thir)
     }
 
-    async fn mock_llm_function(
+    fn mock_llm_function(
         _fn_name: String,
         _args: Vec<BamlValue>,
-    ) -> Result<BamlValueWithMeta<ExprMetadata>> {
+    ) -> BoxFuture<'static, Result<BamlValueWithMeta<ExprMetadata>>> {
         // Mock LLM function that returns an error to simulate unsupported operation
-        Ok(BamlValueWithMeta::Int(10, (Span::fake(), None)))
+        Box::pin(async move { Ok(BamlValueWithMeta::Int(10, (Span::fake(), None))) })
+    }
+
+    async fn interpret_thir_ignoring_emit<F>(
+        thir: THir<ExprMetadata>,
+        expr: Expr<ExprMetadata>,
+        handle_llm_call: F,
+        extra_bindings: BamlMap<String, BamlValueWithMeta<ExprMetadata>>,
+        env_vars: HashMap<String, String>,
+    ) -> Result<BamlValueWithMeta<ExprMetadata>>
+    where
+        F: FnMut(
+                String,
+                Vec<BamlValue>,
+            ) -> BoxFuture<'static, Result<BamlValueWithMeta<ExprMetadata>>>
+            + Send
+            + Sync,
+    {
+        let handle_emit = |ev: EmitEvent| {
+            eprintln!("Ignoring emit event: {}", ev);
+        };
+        interpret_thir(
+            "test".to_string(),
+            thir,
+            expr,
+            handle_llm_call,
+            handle_emit,
+            extra_bindings,
+            env_vars,
+        )
+        .await
     }
 
     #[tokio::test]
     async fn eval_atom_int() {
         let (thir, expr) = thir_from_src("", "1");
-        let out = super::interpret_thir(
+        let out = interpret_thir_ignoring_emit(
             thir,
             expr,
             mock_llm_function,
@@ -1785,7 +2433,7 @@ mod tests {
 
         let (thir, call) = thir_from_src(src, "ConstantFunction(42)");
 
-        let out = super::interpret_thir(
+        let out = interpret_thir_ignoring_emit(
             thir,
             call,
             mock_llm_function,
@@ -1812,7 +2460,7 @@ mod tests {
 
         let (thir, call) = thir_from_src(src, "UseGlobal()");
 
-        let out = super::interpret_thir(
+        let out = interpret_thir_ignoring_emit(
             thir,
             call,
             mock_llm_function,
@@ -1852,7 +2500,7 @@ mod tests {
         );
 
         // Since the interpreter uses our mock LLM function, this should return our mock value
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call,
             mock_llm_function,
@@ -1872,7 +2520,7 @@ mod tests {
     async fn test_method_call_array_len() {
         let (thir, expr) = thir_from_src("", "[1, 2, 3].len()");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             expr,
             mock_llm_function,
@@ -1892,7 +2540,7 @@ mod tests {
     async fn test_method_call_string_len() {
         let (thir, expr) = thir_from_src("", r#""hello".len()"#);
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             expr,
             mock_llm_function,
@@ -1921,9 +2569,10 @@ mod tests {
         let mut env_vars = HashMap::new();
         env_vars.insert("API_KEY".to_string(), "secret123".to_string());
 
-        let result = super::interpret_thir(thir, call, mock_llm_function, BamlMap::new(), env_vars)
-            .await
-            .unwrap();
+        let result =
+            interpret_thir_ignoring_emit(thir, call, mock_llm_function, BamlMap::new(), env_vars)
+                .await
+                .unwrap();
 
         match result {
             BamlValueWithMeta::String(value, _) => assert_eq!(value, "secret123"),
@@ -1935,7 +2584,7 @@ mod tests {
     async fn test_method_call_unknown_method() {
         let (thir, expr) = thir_from_src("", r#""hello".unknown_method()"#);
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             expr,
             mock_llm_function,
@@ -1968,7 +2617,7 @@ mod tests {
 
         let (thir, fib_call) = thir_from_src(src, "Fib(5)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             fib_call,
             mock_llm_function,
@@ -1993,7 +2642,7 @@ mod tests {
         // Test if (true) { 1 } else { 0 }
         let (thir, if_expr_true) = thir_from_src("", "if (true) { 1 } else { 0 }");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             if_expr_true,
             mock_llm_function,
@@ -2013,7 +2662,7 @@ mod tests {
         // Test if (false) { 1 } else { 0 }
         let (thir, if_expr_false) = thir_from_src("", "if (false) { 1 } else { 0 }");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             if_expr_false,
             mock_llm_function,
@@ -2043,7 +2692,7 @@ mod tests {
         // Test with true
         let (thir, call_true) = thir_from_src(src, "BoolToIntWithIfElse(true)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call_true,
             mock_llm_function,
@@ -2066,7 +2715,7 @@ mod tests {
         // Test with false
         let (thir, call_false) = thir_from_src(src, "BoolToIntWithIfElse(false)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call_false,
             mock_llm_function,
@@ -2103,7 +2752,7 @@ mod tests {
         // Test with value 42
         let (thir, call_expr) = thir_from_src(src, "StoreFnCallInLocalVar(42)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call_expr,
             mock_llm_function,
@@ -2136,7 +2785,7 @@ mod tests {
         // Test with (true, false) - should return 1
         let (thir, call_expr) = thir_from_src(src, "AssignElseIfExpr(true, false)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call_expr,
             mock_llm_function,
@@ -2205,7 +2854,7 @@ mod tests {
         // Test the function by calling it
         let (thir, call_expr) = thir_from_src(baml_code, "AssignElseIfExpr(true, false)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call_expr,
             mock_llm_function,
@@ -2267,7 +2916,7 @@ mod tests {
         // Test with true
         let (thir, call_expr) = thir_from_src(baml_code, "BoolToIntWithIfElse(true)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call_expr,
             mock_llm_function,
@@ -2344,7 +2993,7 @@ mod tests {
 
         let (thir, call_expr) = thir_from_src(src, "IterativeFibonacci(5)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_emit(
             thir,
             call_expr,
             mock_llm_function,

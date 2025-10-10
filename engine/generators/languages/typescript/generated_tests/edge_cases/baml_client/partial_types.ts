@@ -109,7 +109,7 @@ export namespace partial_types {
       singleChar?: string | null
       veryLongArray: string[]
       deeplyNestedMap: Record<string, Record<string, Record<string, string>>>
-      mixedTypeArray: (string | number | boolean)[]
+      mixedTypeArray: (string | number | boolean | null)[]
       optionalEverything?: OptionalEverything | null
     }
     export interface NestedNullable {
