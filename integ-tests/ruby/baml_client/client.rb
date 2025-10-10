@@ -3426,6 +3426,31 @@ module BamlClient
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
+      def TestAwsInvalidEndpoint(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestAwsInvalidEndpoint may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          result = options.call_function_sync(function_name: "TestAwsInvalidEndpoint", args: {
+              input: input,
+          })
+
+          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          parsed.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
       def TestAwsInvalidProfile(
           *varargs,
           input:,
@@ -9049,6 +9074,31 @@ module BamlClient
           options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
           ctx, result = options.create_sync_stream(function_name: "TestAwsInvalidAccessKey", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: result,
+              ctx_manager: ctx
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestAwsInvalidEndpoint(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestAwsInvalidEndpoint may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          ctx, result = options.create_sync_stream(function_name: "TestAwsInvalidEndpoint", args: {
               input: input,
           })
 

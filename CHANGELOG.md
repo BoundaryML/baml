@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.211.1](https://github.com/boundaryml/baml/compare/0.211.0..0.211.1) - 2025-10-10
+
+### Docs
+
+- fix TypeScript tool call example (#2550) - ([73bc201](https://github.com/boundaryml/baml/commit/73bc201230fddc410ddcf9547b41d11039eebce1)) - Eric Winer
+- Fix variable name of LLM response in modular-api.mdx docs (#2579) - ([8074499](https://github.com/boundaryml/baml/commit/8074499cc1413e36d37318f00936d4997922b06e)) - Caio Lang
+
+### Features
+
+- added endpoint_url to amazon bedrock (#2555) - ([10fd013](https://github.com/boundaryml/baml/commit/10fd0132bbac6a57f1b9540ac38262286356a744)) - Roey Ben Chaim
+
 ## [0.211.0](https://github.com/boundaryml/baml/compare/0.210.0..0.211.0) - 2025-10-07
 
 ### Bug Fixes

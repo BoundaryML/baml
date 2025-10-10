@@ -2499,6 +2499,24 @@ export const TestAwsInvalidAccessKey = async (
 };
 
 /**
+ * Executes the "TestAwsInvalidEndpoint" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestAwsInvalidEndpoint"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestAwsInvalidEndpoint = async (
+  input: string,
+): Promise<string> => {
+  return b.TestAwsInvalidEndpoint(
+    input,
+  );
+};
+
+/**
  * Executes the "TestAwsInvalidProfile" BAML action.
  *
  * This server action calls the underlying BAML function "TestAwsInvalidProfile"

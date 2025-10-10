@@ -222,8 +222,8 @@ case "$_path" in
       # command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=dev -- uv run pytest -s"
       # command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=dev -- uv run pytest -s tests/test_functions.py::test_openai_responses_all_roles"
       # command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=dev -- uv run pytest -s tests/test_errors.py"
-      command="${command} && BAML_LOG=debug,baml_runtime=trace  uv run pytest -s tests/test_functions.py::test_should_work_with_vertex_claude"
-      # command="${command} && BAML_LOG=info infisical run --env=dev -- uv run pytest"
+      # command="${command} && BAML_LOG=debug,baml_runtime=trace  uv run pytest -s tests/test_functions.py::test_aws_bedrock_invalid_endpoint"
+      command="${command} && BAML_LOG=info infisical run --env=dev -- uv run pytest"
       # command="${command} && BAML_LOG=info  uv run pytest -s tests/test_dynamic_enum_request.py"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
@@ -301,7 +301,8 @@ case "$_path" in
     if [ "$_test_mode" -eq 1 ]; then
       # Set BAML_LIBRARY_PATH and run tests with verbose output
       # The library path must point to the compiled CFFI shared library
-      command="${command} && BAML_LIBRARY_PATH=${_repo_root}/engine/target/debug/libbaml_cffi.dylib infisical run --env=test -- go test -timeout 0 -v -run TestTimeoutBehavior"
+      # command="${command} && BAML_LIBRARY_PATH=${_repo_root}/engine/target/debug/libbaml_cffi.dylib infisical run --env=test -- go test -timeout 0 -v -run TestTimeoutBehavior"
+      command="${command} && BAML_LIBRARY_PATH=${_repo_root}/engine/target/debug/libbaml_cffi.dylib infisical run --env=test -- bash -lc 'set -o pipefail; go test -timeout 0 -v | grep -v \"^=== RUN   TestCollectorBeforeStreaming$\"'"
     fi
 
     if [ "$_watch_mode" -eq 1 ]; then
@@ -357,4 +358,3 @@ case "$_path" in
     ;;
 
 esac
-

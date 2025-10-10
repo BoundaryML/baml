@@ -184,6 +184,7 @@ export type StreamingServerTypes = {
   TestAwsClaude37: string,
   TestAwsInferenceProfile: string,
   TestAwsInvalidAccessKey: string,
+  TestAwsInvalidEndpoint: string,
   TestAwsInvalidProfile: string,
   TestAwsInvalidRegion: string,
   TestAwsInvalidSessionToken: string,

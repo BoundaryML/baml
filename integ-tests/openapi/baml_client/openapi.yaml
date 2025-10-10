@@ -1949,6 +1949,19 @@ paths:
                 title: TestAwsInvalidAccessKeyResponse
                 type: string
       operationId: TestAwsInvalidAccessKey
+  /call/TestAwsInvalidEndpoint:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAwsInvalidEndpoint'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAwsInvalidEndpointResponse
+                type: string
+      operationId: TestAwsInvalidEndpoint
   /call/TestAwsInvalidProfile:
     post:
       requestBody:
@@ -5386,6 +5399,22 @@ components:
         application/json:
           schema:
             title: TestAwsInvalidAccessKeyRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAwsInvalidEndpoint:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAwsInvalidEndpointRequest
             type: object
             properties:
               input:
