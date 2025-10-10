@@ -52,9 +52,18 @@ async fn run_parser_loop<'a, ParseFn, EventFn>(
     let mut parse_interval = interval(web_time::Duration::from_millis(50));
     parse_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
+    // ERROR 1: Random parser loop failure
+    let mut tick_count = 0;
+
     loop {
         tokio::select! {
             _ = parse_interval.tick() => {
+                // ERROR 1: Panic every 5 ticks
+                tick_count += 1;
+                // if tick_count % 5 == 0 {
+                //     panic!("ERROR 1: Injected parser loop panic at tick {}", tick_count);
+                // }
+
                 process_latest_snapshot(
                     &scope,
                     &parse_state,
@@ -101,6 +110,14 @@ async fn process_latest_snapshot<'a, ParseFn, EventFn>(
 
     if !should_attempt {
         return;
+    }
+
+    // ERROR 2: Random snapshot parsing failure
+    if snapshot.content.len() > 50 && snapshot.content.len() % 7 == 0 {
+        panic!(
+            "ERROR 2: Injected snapshot parsing panic at content length {}",
+            snapshot.content.len()
+        );
     }
 
     match partial_parse_fn(&snapshot.content) {
@@ -213,6 +230,17 @@ where
                     }
                 };
 
+                // // ERROR 3: Random prompt rendering error
+                // Always inject the error with 100% certainty using a math random function
+                // if true { // always true, 100% certainty
+                //     println!("ERROR 3: Injecting prompt error (100% certainty)");
+                //     return Some((
+                //         node.scope,
+                //         LLMResponse::InternalFailure("Random injected prompt error".to_string()),
+                //         Some(Err(anyhow::anyhow!("Random injected prompt error"))),
+                //     )); // ok handling
+                // }
+
                 let (system_start, instant_start) = (web_time::SystemTime::now(), web_time::Instant::now());
                 let ctx = CtxWithHttpRequestId::from(ctx);
                 let stream_res = node.stream(&ctx, &prompt).await;
@@ -243,9 +271,21 @@ where
                         let parse_state_for_sse = parse_state.clone();
                         let sse_future = async move {
                             let snapshot_sender = snapshot_tx;
+                            // ERROR 4: Random stream chunk counter
+                            let mut chunk_count = 0;
                             while let Some(stream_part) = FuturesStreamExt::next(&mut response_stream).await {
                                 if let Some(on_tick) = on_tick_cb {
                                     on_tick();
+                                }
+
+                                // ERROR 4: Inject error after certain chunks
+                                chunk_count += 1;
+                                if chunk_count == 10 {
+                                    // println!("ERROR 4: Injecting stream chunk error at chunk {}", chunk_count);
+                                    // last_response = Some(LLMResponse::InternalFailure(
+                                    //     "Random injected stream chunk error".to_string()
+                                    // )); // good handling.
+                                    // break;
                                 }
 
                                 match &stream_part {
@@ -292,8 +332,19 @@ where
                     Err(response) => response,
                 };
 
+                // // ERROR 5: Random final response error
+                // if matches!(&final_response, LLMResponse::Success(s) if s.content.len() > 100) {
+                //     println!("ERROR 5: Injecting final response parsing error");
+                //     let final_response = LLMResponse::InternalFailure("Random injected final response error".to_string());
+                // }
+
                 let response_value = match &final_response {
                     LLMResponse::Success(s) => {
+                        // // ERROR 6: Random content-based error
+                        // if s.content.contains("error") || s.content.len() % 13 == 0 {
+                        //     println!("ERROR 6: Injecting content-based error at content length {}", s.content.len());
+                        //     Some(Err(anyhow::anyhow!("Random injected content error")))
+                        // } else
                         if !node
                             .finish_reason_filter()
                             .is_allowed(s.metadata.finish_reason.as_ref())

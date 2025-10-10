@@ -288,6 +288,51 @@ const DefaultErrorRenderer: React.FC<{ context: ErrorContext }> = ({ context }) 
   </ErrorAlert>
 );
 
+// WASM panic error renderer
+const WasmPanicErrorRenderer: CustomErrorRenderer = {
+  test: (errorMessage: string) => errorMessage.includes('WASM panic:'),
+  priority: 150,
+  render: (context: ErrorContext) => {
+    // Extract panic message
+    const panicMessage = context.errorMessage.replace('WASM panic: ', '');
+
+    return (
+      <ErrorAlert variant="destructive">
+        <ErrorAlertTitle>
+          <AlertCircle className="h-4 w-4" />
+          Internal Runtime Error
+        </ErrorAlertTitle>
+        <ErrorAlertDescription className="space-y-3">
+          <p className="text-sm text-[var(--vscode-charts-red)]" style={{ color: '#dc2626' }}>
+            The BAML runtime encountered an unexpected error and needs to be restarted.
+          </p>
+
+          <div
+            className="p-3 bg-[var(--vscode-editor-background)] border border-[var(--vscode-panel-border)] rounded-md"
+            style={{
+              background: `linear-gradient(rgba(220, 38, 38, 0.06), rgba(220, 38, 38, 0.06)), var(--vscode-editor-background)`,
+              borderColor: 'rgba(220, 38, 38, 0.3)',
+            }}
+          >
+            <pre className="text-xs whitespace-pre-wrap break-words font-mono text-[var(--vscode-charts-red)]" style={{ color: '#dc2626' }}>
+              {panicMessage}
+            </pre>
+          </div>
+
+          <p className="text-xs text-[var(--vscode-charts-red)]" style={{ color: '#dc2626' }}>
+            Please refresh the playground to continue.
+          </p>
+
+          <ErrorFooter>
+            <CopyErrorButton errorMessage={context.errorMessage} />
+            <AllErrorsButton />
+          </ErrorFooter>
+        </ErrorAlertDescription>
+      </ErrorAlert>
+    );
+  }
+};
+
 // Media fetch error renderer with enhanced styling
 const MediaFetchErrorRenderer: CustomErrorRenderer = {
   test: (errorMessage: string) => errorMessage.startsWith('Failed to fetch media'),
@@ -384,6 +429,7 @@ const MediaFetchErrorRenderer: CustomErrorRenderer = {
 let defaultRenderersRegistered = false;
 const initializeDefaultRenderers = () => {
   if (!defaultRenderersRegistered) {
+    registerErrorRenderer(WasmPanicErrorRenderer);
     registerErrorRenderer(MediaFetchErrorRenderer);
     defaultRenderersRegistered = true;
   }
