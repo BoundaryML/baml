@@ -3,9 +3,10 @@
 use baml_compiler::test::ast;
 use baml_types::{BamlMap, BamlMedia};
 use baml_vm::{
-    errors::VmError, BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool,
-    Instruction, Object as VmObject, ObjectIndex, ObjectPool, StackIndex, Value as VmValue, Vm,
-    VmExecState,
+    emit::{self, Emit},
+    errors::VmError,
+    BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool, Instruction,
+    Object as VmObject, ObjectIndex, ObjectPool, StackIndex, Value as VmValue, Vm, VmExecState,
 };
 use indexmap::IndexMap;
 
@@ -128,6 +129,8 @@ pub enum ExecState {
     ScheduleFuture(Object),
     /// VM has completed the execution with a test-friendly value.
     Complete(Value),
+
+    Emit(Vec<emit::NodeId>),
 }
 
 impl ExecState {
@@ -141,6 +144,7 @@ impl ExecState {
             VmExecState::Complete(value) => {
                 Value::from_vm_value(&value, vm).map(ExecState::Complete)
             }
+            VmExecState::Emit(roots) => Ok(ExecState::Emit(roots)),
         }
     }
 }
@@ -240,6 +244,8 @@ fn setup_and_exec_program(
         objects,
         globals,
         env_vars: Default::default(),
+        emit: Emit::new(),
+        emittable_vars: Default::default(),
     };
     let result = vm.exec();
     Ok((vm, result))
@@ -298,6 +304,8 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         objects: ObjectPool::from_vec(objects),
         globals: GlobalPool::from_vec(globals),
         env_vars: Default::default(),
+        emit: Emit::new(),
+        emittable_vars: Default::default(),
     };
 
     let result = vm.exec()?;

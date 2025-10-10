@@ -344,6 +344,10 @@ impl BamlAsyncVmRuntime {
                     }
                 }
 
+                Ok(VmExecState::Emit(roots)) => {
+                    println!("Emit: {roots:?}");
+                }
+
                 Ok(VmExecState::ScheduleFuture(idx)) => {
                     let pending_future = match vm.pending_future(idx) {
                         Ok(f) => f,

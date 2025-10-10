@@ -12,6 +12,7 @@
 
 pub mod bytecode;
 pub mod debug;
+pub mod emit;
 pub mod errors;
 pub mod indexable;
 pub mod native;
