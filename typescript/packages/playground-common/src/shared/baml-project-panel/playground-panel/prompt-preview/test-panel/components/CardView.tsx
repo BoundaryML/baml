@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import { useAtomValue, useSetAtom } from 'jotai'
-import { Play } from 'lucide-react'
+import { Play, Square } from 'lucide-react'
 import { useEffect, useRef, useCallback } from 'react'
 import { Button } from '@baml/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@baml/ui/tooltip'
@@ -43,12 +43,13 @@ interface TestResultProps {
 const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
   const response = useAtomValue(testCaseResponseAtom(testId))
   const displayResponse = historicalResponse || response
-  const { runTests: runBamlTests } = useRunBamlTests()
+  const { runTests: runBamlTests, cancelTests } = useRunBamlTests()
   const setSelectedItem = useSetAtom(selectedItemAtom)
   const selectedItem = useAtomValue(selectedItemAtom)
   const cardRef = useRef<HTMLDivElement>(null)
 
   const isSelected = selectedItem?.[0] === testId.functionName && selectedItem?.[1] === testId.testName
+  const isThisTestRunning = displayResponse?.status === 'running'
 
   useEffect(() => {
     if (isSelected && cardRef.current) {
@@ -87,15 +88,24 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
                   variant='ghost'
                   size='icon'
                   className='w-6 h-6 shrink-0'
-                  onClick={() => {
-                    runBamlTests([testId])
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (isThisTestRunning) {
+                      cancelTests()
+                    } else {
+                      runBamlTests([testId])
+                    }
                   }}
                 >
-                  <Play className='w-4 h-4' fill='#a855f7' stroke='#a855f7' />
+                  {isThisTestRunning ? (
+                    <Square className='w-4 h-4 fill-red-500 stroke-red-500' />
+                  ) : (
+                    <Play className='w-4 h-4' fill='#a855f7' stroke='#a855f7' />
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Re-run test</p>
+                <p>{isThisTestRunning ? 'Stop test' : 'Re-run test'}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
