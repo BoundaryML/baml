@@ -135,12 +135,12 @@ const ErrorDetails: React.FC<{ errorMessage: string }> = ({ errorMessage }) => {
 };
 
 // Custom Alert-like components using red error styling
-const ErrorAlert: React.FC<{ 
-  children: React.ReactNode; 
+const ErrorAlert: React.FC<{
+  children: React.ReactNode;
   variant?: 'default' | 'destructive';
   className?: string;
 }> = ({ children, variant = 'default', className = '' }) => (
-  <div 
+  <div
     className={`
       border border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)] rounded-lg p-4
       ${variant === 'destructive' ? 'border-l-4 border-l-red-500' : ''}
@@ -155,8 +155,8 @@ const ErrorAlert: React.FC<{
   </div>
 );
 
-const ErrorAlertTitle: React.FC<{ 
-  children: React.ReactNode; 
+const ErrorAlertTitle: React.FC<{
+  children: React.ReactNode;
   className?: string;
 }> = ({ children, className = '' }) => (
   <div className={`flex items-center gap-2 text-sm font-medium text-[var(--vscode-charts-red)] mb-3 ${className}`} style={{ color: '#dc2626' }}>
@@ -164,8 +164,8 @@ const ErrorAlertTitle: React.FC<{
   </div>
 );
 
-const ErrorAlertDescription: React.FC<{ 
-  children: React.ReactNode; 
+const ErrorAlertDescription: React.FC<{
+  children: React.ReactNode;
   className?: string;
 }> = ({ children, className = '' }) => (
   <div className={`text-[var(--vscode-charts-red)] ${className}`} style={{ color: '#dc2626' }}>
@@ -173,17 +173,17 @@ const ErrorAlertDescription: React.FC<{
   </div>
 );
 
-const ErrorBadge: React.FC<{ 
-  children: React.ReactNode; 
+const ErrorBadge: React.FC<{
+  children: React.ReactNode;
   variant?: 'outline';
   className?: string;
 }> = ({ children, variant = 'outline', className = '' }) => (
-  <span 
+  <span
     className={`
       inline-flex items-center px-2 py-1 rounded text-xs font-medium text-[var(--vscode-charts-red)]
       ${variant === 'outline' ? 'border border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)]' : 'bg-red-500 text-white'}
       ${className}
-    `} 
+    `}
     style={{
       color: variant === 'outline' ? '#dc2626' : undefined,
       ...(variant === 'outline' ? {
@@ -197,11 +197,11 @@ const ErrorBadge: React.FC<{
 );
 
 // Error Footer Component for action buttons
-const ErrorFooter: React.FC<{ 
+const ErrorFooter: React.FC<{
   children: React.ReactNode;
   className?: string;
 }> = ({ children, className = '' }) => (
-  <div 
+  <div
     className={`flex flex-wrap gap-2 pt-3 mt-3 border-t border-[var(--vscode-panel-border)] ${className}`}
     style={{ borderTopColor: 'rgba(220, 38, 38, 0.2)' }}
   >
@@ -215,7 +215,7 @@ const AllErrorsButton: React.FC = () => {
   const diagnostics = useAtomValue(diagnosticsAtom) as Array<any>;
   const errors = diagnostics.filter((d) => d.type === 'error');
   const warnings = diagnostics.filter((d) => d.type === 'warning');
-  
+
   if (errors.length === 0 && warnings.length === 0) {
     return null;
   }
@@ -227,7 +227,7 @@ const AllErrorsButton: React.FC = () => {
         size="xs"
         onClick={() => setShowDialog(true)}
         className="h-7 px-2 text-xs border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] hover:bg-[var(--vscode-editor-background)] cursor-pointer hover:opacity-80"
-        style={{ 
+        style={{
           color: '#dc2626',
           borderColor: 'rgba(220, 38, 38, 0.3)',
           background: 'var(--vscode-editor-background)',
@@ -252,7 +252,7 @@ const DefaultErrorRenderer: React.FC<{ context: ErrorContext }> = ({ context }) 
       Syntax Error
     </ErrorAlertTitle>
     <ErrorAlertDescription className="space-y-3">
-      <div 
+      <div
         className="p-3 bg-[var(--vscode-editor-background)] border border-[var(--vscode-panel-border)] rounded-md"
         style={{
           background: `linear-gradient(rgba(220, 38, 38, 0.06), rgba(220, 38, 38, 0.06)), var(--vscode-editor-background)`,
@@ -263,7 +263,7 @@ const DefaultErrorRenderer: React.FC<{ context: ErrorContext }> = ({ context }) 
           {context.errorMessage}
         </pre>
       </div>
-      
+
       <ErrorFooter>
         {context.onRetry && (
           <Button
@@ -271,7 +271,7 @@ const DefaultErrorRenderer: React.FC<{ context: ErrorContext }> = ({ context }) 
             size="xs"
             onClick={context.onRetry}
             className="h-7 px-2 text-xs border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] hover:bg-[var(--vscode-editor-background)] cursor-pointer hover:opacity-80"
-            style={{ 
+            style={{
               color: '#dc2626',
               borderColor: 'rgba(220, 38, 38, 0.3)',
               background: 'var(--vscode-editor-background)',
@@ -320,7 +320,7 @@ const WasmPanicErrorRenderer: CustomErrorRenderer = {
           </div>
 
           <p className="text-xs text-[var(--vscode-charts-red)]" style={{ color: '#dc2626' }}>
-            Please refresh the playground to continue.
+            Please reopen the playground to continue. Reach out to us at boundaryml.com/discord.
           </p>
 
           <ErrorFooter>
@@ -341,14 +341,14 @@ const MediaFetchErrorRenderer: CustomErrorRenderer = {
     // Extract additional info from the error message if available
     const lines = context.errorMessage.split('\n');
     const mainError = lines[0] || context.errorMessage;
-    
+
     // Try to extract URL and status from the error message
     const urlMatch = mainError.match(/https?:\/\/[^\s,]+/);
     const statusMatch = mainError.match(/(\d{3})\s/);
-    
+
     const url = urlMatch ? urlMatch[0] : null;
     const statusCode = statusMatch ? statusMatch[1] : null;
-    
+
     return (
       <ErrorAlert variant="destructive">
         <ErrorAlertTitle>
@@ -364,14 +364,14 @@ const MediaFetchErrorRenderer: CustomErrorRenderer = {
           <p className="text-sm text-[var(--vscode-charts-red)]" style={{ color: '#dc2626' }}>
             Unable to fetch media content. This could be due to:
           </p>
-          
+
           <ul className="text-sm space-y-1 ml-4 list-disc text-[var(--vscode-charts-red)]" style={{ color: '#dc2626' }}>
             <li>Network connectivity issues</li>
             <li>Invalid or expired URL</li>
             <li>Server-side restrictions or rate limiting</li>
             <li>CORS policy blocking the request</li>
           </ul>
-          
+
           <ErrorFooter>
             {context.onRetry && (
               <Button
@@ -379,7 +379,7 @@ const MediaFetchErrorRenderer: CustomErrorRenderer = {
                 size="xs"
                 onClick={context.onRetry}
                 className="h-7 px-2 text-xs border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] hover:bg-[var(--vscode-editor-background)] cursor-pointer hover:opacity-80"
-                style={{ 
+                style={{
                   color: '#dc2626',
                   borderColor: 'rgba(220, 38, 38, 0.3)',
                   background: 'var(--vscode-editor-background)',
@@ -396,7 +396,7 @@ const MediaFetchErrorRenderer: CustomErrorRenderer = {
                 variant="outline"
                 size="xs"
                 className="h-7 px-2 text-xs gap-1 border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] hover:bg-[var(--vscode-editor-background)] cursor-pointer hover:opacity-80"
-                style={{ 
+                style={{
                   color: '#dc2626',
                   borderColor: 'rgba(220, 38, 38, 0.3)',
                   background: 'var(--vscode-editor-background)',
@@ -454,7 +454,7 @@ export const EnhancedErrorRenderer: React.FC<EnhancedErrorRendererProps> = React
 }) => {
   // Initialize default renderers
   initializeDefaultRenderers();
-  
+
   // Create a stable context object that doesn't depend on function references
   const context: ErrorContext = useMemo(() => ({
     errorMessage,
@@ -464,11 +464,11 @@ export const EnhancedErrorRenderer: React.FC<EnhancedErrorRendererProps> = React
   }), [errorMessage, functionName, testName, Boolean(onRetry)]);
 
   // Find the appropriate error renderer
-  const renderer = useMemo(() => 
+  const renderer = useMemo(() =>
     errorRenderers.find(r => r.test(errorMessage)),
     [errorMessage]
   );
-  
+
   const renderedContent = useMemo(() => {
     if (renderer) {
       return renderer.render(context);
