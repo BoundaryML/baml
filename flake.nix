@@ -45,6 +45,31 @@
 
         craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
 
+        protocGenGo =
+            pkgs.buildGoModule rec {
+            pname = "protoc-gen-go";
+            version = "1.34.2";
+
+            src = pkgs.fetchFromGitHub {
+                owner = "protocolbuffers";
+                repo = "protobuf-go";
+                rev = "v${version}";
+                hash = "sha256-467+AhA3tADBg6+qbTd1SvLW+INL/1QVR8PzfAMYKFA=";
+            };
+
+            vendorHash = "sha256-nGI/Bd6eMEoY0sBwWEtyhFowHVvwLKjbT4yfzFz6Z3E=";
+
+            subPackages = [ "cmd/protoc-gen-go" ];
+
+            meta = with pkgs.lib; {
+                description = "Go support for Google's protocol buffers";
+                mainProgram = "protoc-gen-go";
+                homepage = "https://google.golang.org/protobuf";
+                license = licenses.bsd3;
+                maintainers = with maintainers; [ jojosch ];
+            };
+        };
+
         # Common source filtering for crane
         src = pkgs.lib.cleanSourceWith {
           src = ./engine;
@@ -76,7 +101,7 @@
           OPENSSL_DIR = "${pkgs.openssl.dev}";
           OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
           OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include";
-          PROTOC_GEN_GO_PATH = "${pkgs.protoc-gen-go}/bin/protoc-gen-go";
+          PROTOC_GEN_GO_PATH = "${protocGenGo}/bin/protoc-gen-go";
           SKIP_BAML_VALIDATION = "1";
         };
 
@@ -100,7 +125,7 @@
           pythonEnv
           maturin
           pnpm
-	        protoc-gen-go
+	        protocGenGo
           vsce # VSCode extension packaging tool
           toolchain
           pkgs-unstable.nodejs_20
