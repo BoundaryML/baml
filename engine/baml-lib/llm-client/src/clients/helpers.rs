@@ -435,7 +435,11 @@ impl<Meta: Clone> PropertyHandler<Meta> {
         result
     }
 
-    fn parse_resolve_media_urls(&mut self, value: &UnresolvedValue<Meta>, span: &Meta) -> Option<UnresolvedResolveMediaUrls> {
+    fn parse_resolve_media_urls(
+        &mut self,
+        value: &UnresolvedValue<Meta>,
+        span: &Meta,
+    ) -> Option<UnresolvedResolveMediaUrls> {
         match value.as_str() {
             Some(StringOr::Value(s)) => match s.as_str() {
                 "always" => Some(UnresolvedResolveMediaUrls::Always),
@@ -456,15 +460,12 @@ impl<Meta: Clone> PropertyHandler<Meta> {
             Some(StringOr::EnvVar(_)) => {
                 self.push_error(
                     "media_url_resolver values cannot be environment variables",
-                    span.clone()
+                    span.clone(),
                 );
                 None
-            },
+            }
             _ => {
-                self.push_error(
-                    "media_url_resolver values must be strings",
-                    span.clone()
-                );
+                self.push_error("media_url_resolver values must be strings", span.clone());
                 None
             }
         }

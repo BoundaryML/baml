@@ -499,16 +499,24 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: false,
-                resolve_audio_urls: $properties.media_url_resolver.audio
+                resolve_audio_urls: $properties
+                    .media_url_resolver
+                    .audio
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Always),
-                resolve_image_urls: $properties.media_url_resolver.images
+                resolve_image_urls: $properties
+                    .media_url_resolver
+                    .images
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Never),
-                resolve_pdf_urls: $properties.media_url_resolver.pdf
+                resolve_pdf_urls: $properties
+                    .media_url_resolver
+                    .pdf
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Never),
-                resolve_video_urls: $properties.media_url_resolver.video
+                resolve_video_urls: $properties
+                    .media_url_resolver
+                    .video
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Never),
                 allowed_metadata: $properties.allowed_metadata.clone(),
@@ -534,16 +542,24 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: false,
-                resolve_audio_urls: $properties.media_url_resolver.audio
+                resolve_audio_urls: $properties
+                    .media_url_resolver
+                    .audio
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Always),
-                resolve_image_urls: $properties.media_url_resolver.images
+                resolve_image_urls: $properties
+                    .media_url_resolver
+                    .images
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Never),
-                resolve_pdf_urls: $properties.media_url_resolver.pdf
+                resolve_pdf_urls: $properties
+                    .media_url_resolver
+                    .pdf
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Never),
-                resolve_video_urls: $properties.media_url_resolver.video
+                resolve_video_urls: $properties
+                    .media_url_resolver
+                    .video
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Never),
                 allowed_metadata: $properties.allowed_metadata.clone(),
@@ -704,10 +720,28 @@ impl ToProviderMessage for OpenAIClient {
                             }),
                         );
                     }
-                    BamlMediaContent::Url(_) => {
-                        anyhow::bail!(
-                            "BAML internal error (openai): Audio content is a URL. Expected Base64 for '{}' type due to client's ResolveMediaUrls::Always setting. The URL should have been resolved to base64 before this stage.",
-                            type_value
+                    BamlMediaContent::Url(url_content) => {
+                        // note: openai only supports mp3/wav for audio input
+                        // but we can still send other formats and allow openai to handle
+                        // the conversion
+                        let extension = url_content.url.split('.').last();
+
+                        // use mime type if it exists otherwise use extension, otherwise error.
+                        let extension = match media.mime_type.as_deref() {
+                            Some(mime) => mime,
+                            None => match extension {
+                                Some(ext) => ext,
+                                None => anyhow::bail!("BAML internal error (openai): audio url has no extension and no mime type"),
+                            },
+                        };
+
+                        let format_str = match extension {
+                            "mpeg" => "mp3",
+                            other => other,
+                        };
+                        content.insert(
+                            payload_key.into(),
+                            json!({ "data": url_content.url, "format": format_str }),
                         );
                     }
                     BamlMediaContent::File(_) => {
@@ -860,6 +894,7 @@ mod tests {
                 proxy_url: None,
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAIResponses,
+                media_url_resolver: internal_llm_client::MediaUrlResolver::default(),
             },
             client: reqwest::Client::new(),
         };
@@ -912,6 +947,7 @@ mod tests {
                 proxy_url: None,
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAI,
+                media_url_resolver: internal_llm_client::MediaUrlResolver::default(),
             },
             client: reqwest::Client::new(),
         };
@@ -1006,6 +1042,7 @@ mod tests {
                 proxy_url: None,
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAIResponses,
+                media_url_resolver: internal_llm_client::MediaUrlResolver::default(),
             },
             client: reqwest::Client::new(),
         };

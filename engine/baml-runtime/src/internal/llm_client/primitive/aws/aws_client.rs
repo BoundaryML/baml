@@ -458,16 +458,24 @@ impl AwsClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_audio_urls: properties.media_url_resolver.audio
+                resolve_audio_urls: properties
+                    .media_url_resolver
+                    .audio
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Always),
-                resolve_image_urls: properties.media_url_resolver.images
+                resolve_image_urls: properties
+                    .media_url_resolver
+                    .images
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Always),
-                resolve_pdf_urls: properties.media_url_resolver.pdf
+                resolve_pdf_urls: properties
+                    .media_url_resolver
+                    .pdf
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Always),
-                resolve_video_urls: properties.media_url_resolver.video
+                resolve_video_urls: properties
+                    .media_url_resolver
+                    .video
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Never),
                 allowed_metadata: properties.allowed_role_metadata.clone(),
@@ -494,16 +502,24 @@ impl AwsClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_audio_urls: properties.media_url_resolver.audio
+                resolve_audio_urls: properties
+                    .media_url_resolver
+                    .audio
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Always),
-                resolve_image_urls: properties.media_url_resolver.images
+                resolve_image_urls: properties
+                    .media_url_resolver
+                    .images
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Always),
-                resolve_pdf_urls: properties.media_url_resolver.pdf
+                resolve_pdf_urls: properties
+                    .media_url_resolver
+                    .pdf
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Always),
-                resolve_video_urls: properties.media_url_resolver.video
+                resolve_video_urls: properties
+                    .media_url_resolver
+                    .video
                     .map(Into::into)
                     .unwrap_or(ResolveMediaUrls::Never),
                 allowed_metadata: properties.allowed_role_metadata.clone(),
