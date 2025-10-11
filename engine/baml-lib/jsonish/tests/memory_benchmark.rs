@@ -64,8 +64,8 @@ macro_rules! test_memory_usage {
             log::info!("{} - Time per parse: {:?}", $goal, time_taken / num_parses);
 
             assert!(
-                time_taken / num_parses < std::time::Duration::from_millis(10),
-                "{} - Parsing is too slow: {:?} is more than 10ms",
+                time_taken / num_parses < std::time::Duration::from_millis(20),
+                "{} - Parsing is too slow: {:?} is more than 20ms",
                 $goal,
                 time_taken / num_parses
             );

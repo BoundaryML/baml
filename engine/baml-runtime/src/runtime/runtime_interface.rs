@@ -15,7 +15,7 @@ use internal_baml_core::{
     validate,
 };
 use internal_baml_jinja::RenderedPrompt;
-use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
+use internal_llm_client::{AllowedRoleMetadata, ClientProvider, ClientSpec};
 
 use crate::{
     client_registry::ClientProperty,
@@ -105,17 +105,52 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                     .context(format!("Could not find client with name: {client_name}"))?;
                 // Get required env vars from the client walker
                 let new_client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
-                // Only store the required env vars
-                let filtered_env_vars = ctx
-                    .env_vars()
-                    .iter()
-                    .filter(|(k, _)| walker.required_env_vars().contains(*k))
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect();
+
+                // Collect required environment variables.
+                let mut required_env_vars = HashMap::new();
+
+                let uses_proxy_server = ctx.proxy_url().is_some();
+
+                // If the client is Vertex or AWS Bedrock, we don't fail on
+                // missing required environment variables because we run a bunch
+                // of additional logic to resolve required values (i.e for
+                // Vertex if GOOGLE_CLOUD_PROJECT is not provided it can be
+                // found on the credentials property).
+                //
+                // If called with modular API, we don't fail either. User might
+                // want to insert the values later.
+                //
+                // When a proxy server is used, don't fail on missing required
+                // env vars because the proxy server is likely to provide them.
+                let fail_on_missing_required_env_vars = !ctx.is_modular_api()
+                    && !uses_proxy_server
+                    && !matches!(
+                        walker.item.elem.provider,
+                        ClientProvider::AwsBedrock | ClientProvider::Vertex
+                    );
+
+                for key in walker.required_env_vars() {
+                    if let Some(value) = ctx.env_vars().get(&key) {
+                        // Exists but is empty
+                        if fail_on_missing_required_env_vars && value.trim().is_empty() {
+                            baml_log::warn!(
+                                "Required environment variable '{key}' for client '{client_name}' is set but is empty: {key}='{value}'"
+                            );
+                        }
+                        required_env_vars.insert(key, value.to_owned());
+                    } else if fail_on_missing_required_env_vars {
+                        // It's not set and we have to fail, bail
+                        anyhow::bail!(
+                            "LLM client '{client_name}' requires environment variable '{key}' to be set but it is not"
+                        );
+                    }
+                }
+
                 clients.insert(
                     client_name.into(),
-                    CachedClient::new(new_client.clone(), filtered_env_vars),
+                    CachedClient::new(new_client.clone(), required_env_vars),
                 );
+
                 Ok(new_client)
             }
         }
@@ -352,9 +387,16 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         test_name: &str,
         ctx: &RuntimeContext,
     ) -> Result<Vec<Constraint>> {
-        let func = self.get_function(function_name)?;
-        let walker = self.ir().find_test(&func, test_name)?;
-        Ok(walker.item.1.elem.constraints.clone())
+        // Try LLM function first
+        if let Ok(func) = self.get_function(function_name) {
+            let walker = self.ir().find_test(&func, test_name)?;
+            return Ok(walker.item.1.elem.constraints.clone());
+        }
+
+        // Try expr function
+        let expr_fn = self.get_expr_function(function_name, ctx)?;
+        let test = self.ir().find_expr_fn_test(&expr_fn, test_name)?;
+        Ok(test.item.1.elem.constraints.clone())
     }
 
     fn get_test_type_builder(
@@ -362,28 +404,74 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         function_name: &str,
         test_name: &str,
     ) -> Result<Option<TypeBuilder>> {
-        let func = self.get_function(function_name)?;
-        let test = self.ir().find_test(&func, test_name)?;
+        // Try to find as LLM function first
+        if let Ok(func) = self.get_function(function_name) {
+            let test = self.ir().find_test(&func, test_name)?;
 
-        if test.type_builder_contents().is_empty() {
+            if test.type_builder_contents().is_empty() {
+                return Ok(None);
+            }
+
+            let type_builder = TypeBuilder::new();
+
+            type_builder.add_entries(test.type_builder_contents());
+
+            type_builder
+                .recursive_type_aliases()
+                .lock()
+                .unwrap()
+                .extend(test.type_builder_recursive_aliases().iter().cloned());
+
+            type_builder
+                .recursive_classes()
+                .lock()
+                .unwrap()
+                .extend(test.type_builder_recursive_classes().iter().cloned());
+
+            return Ok(Some(type_builder));
+        }
+
+        // Try to find as expr function
+        let expr_fn = self.ir().find_expr_fn(function_name)?;
+        let test = expr_fn.find_test(test_name).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Test '{}' not found for expr function '{}'",
+                test_name,
+                function_name
+            )
+        })?;
+
+        if test.item.1.elem.type_builder.entries.is_empty() {
             return Ok(None);
         }
 
         let type_builder = TypeBuilder::new();
 
-        type_builder.add_entries(test.type_builder_contents());
+        type_builder.add_entries(&test.item.1.elem.type_builder.entries);
 
         type_builder
             .recursive_type_aliases()
             .lock()
             .unwrap()
-            .extend(test.type_builder_recursive_aliases().iter().cloned());
+            .extend(
+                test.item
+                    .1
+                    .elem
+                    .type_builder
+                    .recursive_aliases
+                    .iter()
+                    .cloned(),
+            );
 
-        type_builder
-            .recursive_classes()
-            .lock()
-            .unwrap()
-            .extend(test.type_builder_recursive_classes().iter().cloned());
+        type_builder.recursive_classes().lock().unwrap().extend(
+            test.item
+                .1
+                .elem
+                .type_builder
+                .recursive_classes
+                .iter()
+                .cloned(),
+        );
 
         Ok(Some(type_builder))
     }

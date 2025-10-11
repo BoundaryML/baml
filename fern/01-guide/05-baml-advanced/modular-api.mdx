@@ -102,7 +102,7 @@ def run():
   res = requests.post(url=req.url, headers=req.headers, json=req.body.json())
 
   # Parse the LLM response.
-  parsed = b.parse.ExtractResume(response.json()["choices"][0]["message"]["content"])
+  parsed = b.parse.ExtractResume(res.json()["choices"][0]["message"]["content"])
 
   # Fully parsed Resume type.
   print(parsed)

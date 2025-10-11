@@ -289,6 +289,21 @@ class BamlAsyncClient:
                 "input": input,
             })
             return typing.cast(types.Tree, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def CheckWordEquality(self, word: str,target: str,
+        baml_options: BamlCallOptions = {},
+    ) -> bool:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.CheckWordEquality(word=word,target=target,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="CheckWordEquality", args={
+                "word": word,"target": target,
+            })
+            return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
     async def ChooseTodoTools(self, query: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.Union["types.AddTodoItem", "types.TodoMessageToUser"]]:
@@ -1429,6 +1444,21 @@ class BamlAsyncClient:
                 "s": s,
             })
             return typing.cast(types.ClassForNullLiteral, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def OpenAIGPT4oMissingBaseUrlEnvVar(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.OpenAIGPT4oMissingBaseUrlEnvVar(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="OpenAIGPT4oMissingBaseUrlEnvVar", args={
+                "input": input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def OpenAIWithAnthropicResponseHello(self, s: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -2086,6 +2116,21 @@ class BamlAsyncClient:
         else:
             # Original non-streaming code
             result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestAwsInvalidAccessKey", args={
+                "input": input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestAwsInvalidEndpoint(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestAwsInvalidEndpoint(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestAwsInvalidEndpoint", args={
                 "input": input,
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
@@ -3439,6 +3484,21 @@ class BamlAsyncClient:
                 "vid": vid,
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def AnotherTakedown(self, xs: typing.List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.AnotherTakedown(xs=xs,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="AnotherTakedown", args={
+                "xs": xs,
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     async def AssignElseIfExpr(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -3574,6 +3634,36 @@ class BamlAsyncClient:
                 
             })
             return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def IsTargetWord(self, prev: str,next: str,
+        baml_options: BamlCallOptions = {},
+    ) -> bool:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.IsTargetWord(prev=prev,next=next,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="IsTargetWord", args={
+                "prev": prev,"next": next,
+            })
+            return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def IsTargetWord2(self, prev: str,next: str,
+        baml_options: BamlCallOptions = {},
+    ) -> bool:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.IsTargetWord2(prev=prev,next=next,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="IsTargetWord2", args={
+                "prev": prev,"next": next,
+            })
+            return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
     async def IterativeFibonacci(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -3604,6 +3694,21 @@ class BamlAsyncClient:
                 "a": a,"b": b,
             })
             return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def NotEmpty(self, prev: str,next: str,
+        baml_options: BamlCallOptions = {},
+    ) -> bool:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.NotEmpty(prev=prev,next=next,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="NotEmpty", args={
+                "prev": prev,"next": next,
+            })
+            return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
     async def ReturnCategory(self, category: types.Category,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
@@ -3694,6 +3799,21 @@ class BamlAsyncClient:
                 
             })
             return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def SimpleEmitWithFilter(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.SimpleEmitWithFilter(
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="SimpleEmitWithFilter", args={
+                
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     async def StoreFnCallInLocalVar(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -3752,6 +3872,51 @@ class BamlAsyncClient:
             # Original non-streaming code
             result = await self.__options.merge_options(baml_options).call_function_async(function_name="SumFromTo", args={
                 "x": x,"y": y,
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def WorkflowEmit(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.WorkflowEmit(
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="WorkflowEmit", args={
+                
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def WorkflowEmitChild(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.WorkflowEmitChild(
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="WorkflowEmitChild", args={
+                
+            })
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def WorkflowEmitWithFilter(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.WorkflowEmitWithFilter(
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="WorkflowEmitWithFilter", args={
+                
             })
             return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     
@@ -3929,6 +4094,18 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(stream_types.Tree, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.Tree, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def CheckWordEquality(self, word: str,target: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[bool, bool]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="CheckWordEquality", args={
+            "word": word,"target": target,
+        })
+        return baml_py.BamlStream[bool, bool](
+          result,
+          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ChooseTodoTools(self, query: str,
@@ -4843,6 +5020,18 @@ class BamlStreamClient:
           lambda x: typing.cast(types.ClassForNullLiteral, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def OpenAIGPT4oMissingBaseUrlEnvVar(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="OpenAIGPT4oMissingBaseUrlEnvVar", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def OpenAIWithAnthropicResponseHello(self, s: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[str, str]:
@@ -5363,6 +5552,18 @@ class BamlStreamClient:
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestAwsInvalidAccessKey", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestAwsInvalidEndpoint(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestAwsInvalidEndpoint", args={
             "input": input,
         })
         return baml_py.BamlStream[str, str](
@@ -6451,6 +6652,18 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def AnotherTakedown(self, xs: typing.List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="AnotherTakedown", args={
+            "xs": xs,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def AssignElseIfExpr(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[int], int]:
@@ -6559,6 +6772,30 @@ class BamlStreamClient:
           lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def IsTargetWord(self, prev: str,next: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[bool], bool]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="IsTargetWord", args={
+            "prev": prev,"next": next,
+        })
+        return baml_py.BamlStream[typing.Optional[bool], bool](
+          result,
+          lambda x: typing.cast(typing.Optional[bool], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def IsTargetWord2(self, prev: str,next: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[bool], bool]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="IsTargetWord2", args={
+            "prev": prev,"next": next,
+        })
+        return baml_py.BamlStream[typing.Optional[bool], bool](
+          result,
+          lambda x: typing.cast(typing.Optional[bool], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def IterativeFibonacci(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[int], int]:
@@ -6581,6 +6818,18 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def NotEmpty(self, prev: str,next: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[bool], bool]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="NotEmpty", args={
+            "prev": prev,"next": next,
+        })
+        return baml_py.BamlStream[typing.Optional[bool], bool](
+          result,
+          lambda x: typing.cast(typing.Optional[bool], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ReturnCategory(self, category: types.Category,
@@ -6655,6 +6904,18 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def SimpleEmitWithFilter(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="SimpleEmitWithFilter", args={
+            
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def StoreFnCallInLocalVar(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[int], int]:
@@ -6696,6 +6957,42 @@ class BamlStreamClient:
     ) -> baml_py.BamlStream[typing.Optional[int], int]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="SumFromTo", args={
             "x": x,"y": y,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def WorkflowEmit(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="WorkflowEmit", args={
+            
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def WorkflowEmitChild(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="WorkflowEmitChild", args={
+            
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def WorkflowEmitWithFilter(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="WorkflowEmitWithFilter", args={
+            
         })
         return baml_py.BamlStream[typing.Optional[int], int](
           result,
@@ -6809,6 +7106,13 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
+    async def CheckWordEquality(self, word: str,target: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="CheckWordEquality", args={
+            "word": word,"target": target,
+        }, mode="request")
+        return result
     async def ChooseTodoTools(self, query: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -7341,6 +7645,13 @@ class BamlHttpRequestClient:
             "s": s,
         }, mode="request")
         return result
+    async def OpenAIGPT4oMissingBaseUrlEnvVar(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="OpenAIGPT4oMissingBaseUrlEnvVar", args={
+            "input": input,
+        }, mode="request")
+        return result
     async def OpenAIWithAnthropicResponseHello(self, s: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -7646,6 +7957,13 @@ class BamlHttpRequestClient:
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestAwsInvalidAccessKey", args={
+            "input": input,
+        }, mode="request")
+        return result
+    async def TestAwsInvalidEndpoint(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestAwsInvalidEndpoint", args={
             "input": input,
         }, mode="request")
         return result
@@ -8279,6 +8597,13 @@ class BamlHttpRequestClient:
             "vid": vid,
         }, mode="request")
         return result
+    async def AnotherTakedown(self, xs: typing.List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="AnotherTakedown", args={
+            "xs": xs,
+        }, mode="request")
+        return result
     async def AssignElseIfExpr(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -8342,6 +8667,20 @@ class BamlHttpRequestClient:
             
         }, mode="request")
         return result
+    async def IsTargetWord(self, prev: str,next: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="IsTargetWord", args={
+            "prev": prev,"next": next,
+        }, mode="request")
+        return result
+    async def IsTargetWord2(self, prev: str,next: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="IsTargetWord2", args={
+            "prev": prev,"next": next,
+        }, mode="request")
+        return result
     async def IterativeFibonacci(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -8354,6 +8693,13 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NormalElseIfStmt", args={
             "a": a,"b": b,
+        }, mode="request")
+        return result
+    async def NotEmpty(self, prev: str,next: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NotEmpty", args={
+            "prev": prev,"next": next,
         }, mode="request")
         return result
     async def ReturnCategory(self, category: types.Category,
@@ -8398,6 +8744,13 @@ class BamlHttpRequestClient:
             
         }, mode="request")
         return result
+    async def SimpleEmitWithFilter(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="SimpleEmitWithFilter", args={
+            
+        }, mode="request")
+        return result
     async def StoreFnCallInLocalVar(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -8424,6 +8777,27 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="SumFromTo", args={
             "x": x,"y": y,
+        }, mode="request")
+        return result
+    async def WorkflowEmit(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowEmit", args={
+            
+        }, mode="request")
+        return result
+    async def WorkflowEmitChild(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowEmitChild", args={
+            
+        }, mode="request")
+        return result
+    async def WorkflowEmitWithFilter(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowEmitWithFilter", args={
+            
         }, mode="request")
         return result
     
@@ -8532,6 +8906,13 @@ class BamlHttpStreamRequestClient:
             "input": input,
         }, mode="stream")
         return result
+    async def CheckWordEquality(self, word: str,target: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="CheckWordEquality", args={
+            "word": word,"target": target,
+        }, mode="stream")
+        return result
     async def ChooseTodoTools(self, query: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -9064,6 +9445,13 @@ class BamlHttpStreamRequestClient:
             "s": s,
         }, mode="stream")
         return result
+    async def OpenAIGPT4oMissingBaseUrlEnvVar(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="OpenAIGPT4oMissingBaseUrlEnvVar", args={
+            "input": input,
+        }, mode="stream")
+        return result
     async def OpenAIWithAnthropicResponseHello(self, s: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -9369,6 +9757,13 @@ class BamlHttpStreamRequestClient:
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestAwsInvalidAccessKey", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    async def TestAwsInvalidEndpoint(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestAwsInvalidEndpoint", args={
             "input": input,
         }, mode="stream")
         return result
@@ -10002,6 +10397,13 @@ class BamlHttpStreamRequestClient:
             "vid": vid,
         }, mode="stream")
         return result
+    async def AnotherTakedown(self, xs: typing.List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="AnotherTakedown", args={
+            "xs": xs,
+        }, mode="stream")
+        return result
     async def AssignElseIfExpr(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -10065,6 +10467,20 @@ class BamlHttpStreamRequestClient:
             
         }, mode="stream")
         return result
+    async def IsTargetWord(self, prev: str,next: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="IsTargetWord", args={
+            "prev": prev,"next": next,
+        }, mode="stream")
+        return result
+    async def IsTargetWord2(self, prev: str,next: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="IsTargetWord2", args={
+            "prev": prev,"next": next,
+        }, mode="stream")
+        return result
     async def IterativeFibonacci(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -10077,6 +10493,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NormalElseIfStmt", args={
             "a": a,"b": b,
+        }, mode="stream")
+        return result
+    async def NotEmpty(self, prev: str,next: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NotEmpty", args={
+            "prev": prev,"next": next,
         }, mode="stream")
         return result
     async def ReturnCategory(self, category: types.Category,
@@ -10121,6 +10544,13 @@ class BamlHttpStreamRequestClient:
             
         }, mode="stream")
         return result
+    async def SimpleEmitWithFilter(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="SimpleEmitWithFilter", args={
+            
+        }, mode="stream")
+        return result
     async def StoreFnCallInLocalVar(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -10147,6 +10577,27 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="SumFromTo", args={
             "x": x,"y": y,
+        }, mode="stream")
+        return result
+    async def WorkflowEmit(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowEmit", args={
+            
+        }, mode="stream")
+        return result
+    async def WorkflowEmitChild(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowEmitChild", args={
+            
+        }, mode="stream")
+        return result
+    async def WorkflowEmitWithFilter(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowEmitWithFilter", args={
+            
         }, mode="stream")
         return result
     

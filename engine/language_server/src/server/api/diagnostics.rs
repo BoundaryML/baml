@@ -141,7 +141,7 @@ pub fn project_diagnostics(
     let fake_env = HashMap::new();
     let baml_diagnostics = match guard.baml_project.runtime(fake_env, feature_flags) {
         Ok(runtime) => {
-            runtime.internal().diagnostics().clone()
+            runtime.diagnostics().clone()
             // Diagnostics::new(PathBuf::from("/fake1"))
         }
         Err(err) => err,
@@ -326,7 +326,7 @@ pub fn file_diagnostics(
     let root_path = PathBuf::from(guard.root_path());
     let fake_env = HashMap::new();
     let baml_diagnostics = match guard.baml_project.runtime(fake_env, feature_flags) {
-        Ok(runtime) => runtime.internal().diagnostics().clone(),
+        Ok(runtime) => runtime.diagnostics().clone(),
         Err(err) => err,
     };
 

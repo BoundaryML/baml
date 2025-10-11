@@ -97,7 +97,7 @@ export class BamlSyncClient {
   Bar(
       x: number,
       __baml_options__?: BamlCallOptions
-  ): Example | Example2 {
+  ): types.Example | types.Example2 {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const signal = options.signal;
@@ -129,7 +129,7 @@ export class BamlSyncClient {
         env,
         signal,
       )
-      return raw.parsed(false) as Example | Example2
+      return raw.parsed(false) as types.Example | types.Example2
     } catch (error: any) {
       throw toBamlError(error);
     }
@@ -138,7 +138,7 @@ export class BamlSyncClient {
   Foo(
       x: number,
       __baml_options__?: BamlCallOptions
-  ): Example2 | Example {
+  ): types.Example2 | types.Example {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const signal = options.signal;
@@ -170,7 +170,7 @@ export class BamlSyncClient {
         env,
         signal,
       )
-      return raw.parsed(false) as Example2 | Example
+      return raw.parsed(false) as types.Example2 | types.Example
     } catch (error: any) {
       throw toBamlError(error);
     }

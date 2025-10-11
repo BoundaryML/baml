@@ -217,6 +217,19 @@ paths:
                 title: BuildTreeResponse
                 $ref: '#/components/schemas/Tree'
       operationId: BuildTree
+  /call/CheckWordEquality:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/CheckWordEquality'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: CheckWordEqualityResponse
+                type: boolean
+      operationId: CheckWordEquality
   /call/ChooseTodoTools:
     post:
       requestBody:
@@ -1319,6 +1332,19 @@ paths:
                 title: NullLiteralClassHelloResponse
                 $ref: '#/components/schemas/ClassForNullLiteral'
       operationId: NullLiteralClassHello
+  /call/OpenAIGPT4oMissingBaseUrlEnvVar:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/OpenAIGPT4oMissingBaseUrlEnvVar'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: OpenAIGPT4oMissingBaseUrlEnvVarResponse
+                type: string
+      operationId: OpenAIGPT4oMissingBaseUrlEnvVar
   /call/OpenAIWithAnthropicResponseHello:
     post:
       requestBody:
@@ -1936,6 +1962,19 @@ paths:
                 title: TestAwsInvalidAccessKeyResponse
                 type: string
       operationId: TestAwsInvalidAccessKey
+  /call/TestAwsInvalidEndpoint:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAwsInvalidEndpoint'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAwsInvalidEndpointResponse
+                type: string
+      operationId: TestAwsInvalidEndpoint
   /call/TestAwsInvalidProfile:
     post:
       requestBody:
@@ -3359,6 +3398,25 @@ components:
             required:
             - input
             additionalProperties: false
+    CheckWordEquality:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: CheckWordEqualityRequest
+            type: object
+            properties:
+              target:
+                type: string
+              word:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - target
+            - word
+            additionalProperties: false
     ChooseTodoTools:
       required: true
       content:
@@ -4634,6 +4692,22 @@ components:
             required:
             - s
             additionalProperties: false
+    OpenAIGPT4oMissingBaseUrlEnvVar:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: OpenAIGPT4oMissingBaseUrlEnvVarRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     OpenAIWithAnthropicResponseHello:
       required: true
       content:
@@ -5357,6 +5431,22 @@ components:
         application/json:
           schema:
             title: TestAwsInvalidAccessKeyRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAwsInvalidEndpoint:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAwsInvalidEndpointRequest
             type: object
             properties:
               input:

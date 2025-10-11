@@ -18,8 +18,10 @@ type PickleReduceResult = PyResult<(
     ),
 )>;
 
-// Switch between runtimes here by importing the one you want to use.
-
+// Conditional runtime selection based on the "interpreter" feature flag
+#[cfg(feature = "interpreter")]
+pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
+#[cfg(not(feature = "interpreter"))]
 pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
 
 use crate::{
@@ -216,6 +218,10 @@ impl BamlRuntime {
             .map(|ac| ac.create_tripwire())
             .unwrap_or_else(|| TripWire::new(None));
 
+        let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
+            eprintln!("TODO: Handle event: {:?}", event);
+        };
+
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let (result, _) = baml_runtime
                 .call_function(
@@ -228,6 +234,7 @@ impl BamlRuntime {
                     env_vars,
                     tags,
                     tripwire,
+                    Some(emit_handler), // TODO: Event handler.
                 )
                 .await;
 
@@ -279,6 +286,10 @@ impl BamlRuntime {
             .map(|ac| ac.create_tripwire())
             .unwrap_or_else(|| TripWire::new(None));
 
+        let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
+            eprintln!("TODO: Handle event: {:?}", event);
+        };
+
         let (result, _event_id) = Python::with_gil(|py| {
             py.allow_threads(|| {
                 self.inner.call_function_sync(
@@ -291,6 +302,7 @@ impl BamlRuntime {
                     env_vars,
                     tags,
                     tripwire,
+                    Some(emit_handler), // TODO: Event handler.
                 )
             })
         });

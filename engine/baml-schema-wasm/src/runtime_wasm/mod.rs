@@ -3,6 +3,11 @@ pub mod runtime_prompt;
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use anyhow::Context;
+// Conditional runtime selection based on the "interpreter" feature flag
+#[cfg(feature = "interpreter")]
+pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
+#[cfg(not(feature = "interpreter"))]
+pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
 use baml_runtime::{
     internal::{
         llm_client::{
@@ -12,14 +17,14 @@ use baml_runtime::{
         prompt_renderer::PromptRenderer,
     },
     internal_baml_diagnostics::SerializedSpan,
-    BamlRuntime, BamlSrcReader, DiagnosticsError, FunctionResult, IRHelper,
-    InternalRuntimeInterface, RenderCurlSettings, RenderedPrompt,
+    BamlSrcReader, DiagnosticsError, FunctionResult, IRHelper, InternalRuntimeInterface,
+    RenderCurlSettings, RenderedPrompt,
 };
 use baml_types::{BamlValue, GeneratorOutputType, ResponseCheck};
 use futures::{channel::mpsc, StreamExt};
 use generators_lib::version_check::{check_version, GeneratorType, VersionCheckMode};
 use indexmap::IndexMap;
-use internal_baml_core::{feature_flags::FeatureFlags, ir::repr::Walker};
+use internal_baml_core::feature_flags::FeatureFlags;
 use internal_llm_client::AllowedRoleMetadata;
 use itertools::join;
 use js_sys::{Promise, Uint8Array};
@@ -226,7 +231,7 @@ impl WasmProject {
         hm.extend(self.unsaved_files.iter());
 
         WasmDiagnosticError {
-            errors: rt.runtime.internal().diagnostics().clone(),
+            errors: rt.runtime.diagnostics().clone(),
             all_files: hm.keys().map(|s| s.to_string()).collect(),
         }
     }
@@ -258,22 +263,27 @@ impl WasmProject {
                 .map_err(|e| JsValue::from_str(&format!("Invalid feature flags: {e:?}")))?
         };
 
-        BamlRuntime::from_file_content(&self.root_dir_name, &hm, env_vars, feature_flags)
-            .map(|r| WasmRuntime { runtime: r })
-            .map_err(|e| match e.downcast::<DiagnosticsError>() {
-                Ok(e) => {
-                    let wasm_error = WasmDiagnosticError {
-                        errors: e,
-                        all_files: hm.keys().map(|s| s.to_string()).collect(),
-                    }
-                    .into();
-                    wasm_error
+        CoreBamlRuntime::from_file_content_with_features(
+            &self.root_dir_name,
+            &hm,
+            env_vars,
+            feature_flags,
+        )
+        .map(|r| WasmRuntime { runtime: r })
+        .map_err(|e| match e.downcast::<DiagnosticsError>() {
+            Ok(e) => {
+                let wasm_error = WasmDiagnosticError {
+                    errors: e,
+                    all_files: hm.keys().map(|s| s.to_string()).collect(),
                 }
-                Err(e) => {
-                    log::debug!("Error: {e:#?}");
-                    JsValue::from_str(&e.to_string())
-                }
-            })
+                .into();
+                wasm_error
+            }
+            Err(e) => {
+                log::debug!("Error: {e:#?}");
+                JsValue::from_str(&e.to_string())
+            }
+        })
     }
 
     #[wasm_bindgen]
@@ -302,7 +312,7 @@ impl WasmProject {
 #[wasm_bindgen(inspectable, getter_with_clone)]
 #[derive(Clone)]
 pub struct WasmRuntime {
-    runtime: BamlRuntime,
+    runtime: CoreBamlRuntime,
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -621,17 +631,56 @@ impl WasmTestResponse {
     }
 
     fn parsed_response_impl(&self) -> anyhow::Result<WasmParsedTestResponse> {
-        let maybe_parsed_response = &self
+        let test_response = self
             .test_response
             .as_ref()
             .ok()
-            .context("No test response")?
+            .context("No test response")?;
+
+        log::debug!(
+            "[BAML parsed_response_impl] has function_response: {}, has expr_function_response: {}",
+            test_response.function_response.is_some(),
+            test_response.expr_function_response.is_some()
+        );
+
+        // Check for LLM function response first
+        let maybe_parsed_response = test_response
             .function_response
-            .parsed()
-            .as_ref();
+            .as_ref()
+            .and_then(|fr| fr.parsed().as_ref());
+
+        // If no LLM function response, check for expr function response
         let parsed_response = match maybe_parsed_response {
-            Some(Ok(value)) => Ok(value),
-            _ => Err(anyhow::anyhow!("No parsed value")),
+            Some(Ok(value)) => {
+                log::debug!("[BAML parsed_response_impl] Using LLM function response");
+                Ok(value)
+            }
+            _ => {
+                // Try expr function response
+                if let Some(expr_response) = &test_response.expr_function_response {
+                    log::debug!(
+                        "[BAML parsed_response_impl] Found expr_function_response: {:?}",
+                        expr_response.as_ref().map(|v| format!("{:?}", v))
+                    );
+                    match expr_response {
+                        Ok(value) => {
+                            log::debug!(
+                                "[BAML parsed_response_impl] Using expr function response value"
+                            );
+                            Ok(value)
+                        }
+                        Err(e) => {
+                            log::debug!("[BAML parsed_response_impl] Expr function error: {}", e);
+                            Err(anyhow::anyhow!("Expr function error: {}", e))
+                        }
+                    }
+                } else {
+                    log::debug!(
+                        "[BAML parsed_response_impl] No parsed value found in either response type"
+                    );
+                    Err(anyhow::anyhow!("No parsed value"))
+                }
+            }
         }
         .context("No parsed value")?;
         let (flattened_checks, check_count) = serialize_value_counting_checks(parsed_response);
@@ -657,21 +706,18 @@ impl WasmTestResponse {
     #[wasm_bindgen]
     pub fn llm_failure(&self) -> Option<WasmLLMFailure> {
         self.test_response.as_ref().ok().and_then(|r| {
-            llm_response_to_wasm_error(
-                r.function_response.llm_response(),
-                r.function_response.scope(),
-            )
+            r.function_response
+                .as_ref()
+                .and_then(|fr| llm_response_to_wasm_error(fr.llm_response(), fr.scope()))
         })
     }
 
     #[wasm_bindgen]
     pub fn llm_response(&self) -> Option<WasmLLMResponse> {
         self.test_response.as_ref().ok().and_then(|r| {
-            (
-                r.function_response.llm_response(),
-                r.function_response.scope(),
-            )
-                .to_wasm()
+            r.function_response
+                .as_ref()
+                .and_then(|fr| (fr.llm_response(), fr.scope()).to_wasm())
         })
     }
 
@@ -695,10 +741,13 @@ impl WasmTestResponse {
             Ok(t) => t,
             Err(e) => anyhow::bail!("Failed to get test response: {:?}", e),
         };
-        let start_time = match test_response.function_response.llm_response() {
-            LLMResponse::Success(s) => s.start_time,
-            LLMResponse::LLMFailure(f) => f.start_time,
-            _ => anyhow::bail!("Test has no start time"),
+        let start_time = match test_response.function_response.as_ref() {
+            Some(fr) => match fr.llm_response() {
+                LLMResponse::Success(s) => s.start_time,
+                LLMResponse::LLMFailure(f) => f.start_time,
+                _ => anyhow::bail!("Test has no start time"),
+            },
+            None => anyhow::bail!("Test has no LLM function response"),
         };
         let _start_time = time::OffsetDateTime::from_unix_timestamp(
             start_time
@@ -895,7 +944,7 @@ impl WasmRuntime {
 impl WasmRuntime {
     #[wasm_bindgen]
     pub fn check_if_in_prompt(&self, cursor_idx: usize) -> bool {
-        self.runtime.internal().ir().walk_functions().any(|f| {
+        self.runtime.ir().walk_functions().any(|f| {
             f.elem().configs().expect("configs").iter().any(|config| {
                 let span = &config.prompt_span;
                 cursor_idx >= span.start && cursor_idx <= span.end
@@ -912,20 +961,8 @@ impl WasmRuntime {
         let ctx = ctx.eval_ctx(false);
 
         self.runtime
-            .internal()
             .ir()
             .walk_functions()
-            .chain(
-                self.runtime
-                    .internal()
-                    .ir()
-                    .expr_fns_as_functions()
-                    .iter()
-                    .map(|f| Walker {
-                        ir: self.runtime.internal().ir(),
-                        item: f,
-                    }),
-            )
             .map(|f| {
                 let snippet = format!(
                     r#"test TestName {{
@@ -945,10 +982,7 @@ impl WasmRuntime {
                             .collect::<indexmap::IndexMap<String, _>>();
 
                         // Use the IR's get_dummy_args method
-                        self.runtime
-                            .internal()
-                            .ir()
-                            .get_dummy_args(2, true, &params)
+                        self.runtime.ir().get_dummy_args(2, true, &params)
                     }
                 );
 
@@ -969,7 +1003,153 @@ impl WasmRuntime {
                                 .collect::<indexmap::IndexMap<String, _>>();
 
                             self.runtime
-                                .internal()
+                                .ir()
+                                .get_dummy_args(2, false, &params)
+                                .split('\n')
+                                .map(|line| line.trim().to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        };
+
+                        format!("({}) -> {}", inputs, f.output())
+                    },
+                    test_snippet: snippet,
+                    test_cases: f
+                        .walk_tests()
+                        .map(|tc| {
+                            let params = match tc.test_case_params(&ctx) {
+                                Ok(params) => Ok(params
+                                    .iter()
+                                    .map(|(k, v)| {
+                                        let as_str = match v {
+                                            Ok(v) => match serde_json::to_string(v) {
+                                                Ok(s) => Ok(s),
+                                                Err(e) => Err(e.to_string()),
+                                            },
+                                            Err(e) => Err(e.to_string()),
+                                        };
+
+                                        let (value, error) = match as_str {
+                                            Ok(s) => (Some(s), None),
+                                            Err(e) => (None, Some(e)),
+                                        };
+
+                                        WasmParam {
+                                            name: k.to_string(),
+                                            value,
+                                            error,
+                                        }
+                                    })
+                                    .collect()),
+                                Err(e) => Err(e.to_string()),
+                            };
+
+                            let (mut params, error) = match params {
+                                Ok(p) => (p, None),
+                                Err(e) => (Vec::new(), Some(e)),
+                            };
+
+                            // Any missing params should be set to an error
+                            f.inputs().iter().for_each(|(param_name, t)| {
+                                if !params.iter().any(|p| p.name == *param_name) && !t.is_optional()
+                                {
+                                    params.insert(
+                                        0,
+                                        WasmParam {
+                                            name: param_name.to_string(),
+                                            value: None,
+                                            error: Some("Missing parameter".to_string()),
+                                        },
+                                    );
+                                }
+                            });
+
+                            let wasm_span = match tc.span() {
+                                Some(span) => span.into(),
+                                None => WasmSpan::default(),
+                            };
+
+                            WasmTestCase {
+                                name: tc.test_case().name.clone(),
+                                inputs: params,
+                                error,
+                                span: wasm_span,
+                                parent_functions: tc
+                                    .test_case()
+                                    .functions
+                                    .iter()
+                                    .map(|f| {
+                                        let (start, end) = f
+                                            .attributes
+                                            .span
+                                            .as_ref()
+                                            .map_or((0, 0), |f| (f.start, f.end));
+                                        WasmParentFunction {
+                                            start,
+                                            end,
+                                            name: f.elem.name().to_string(),
+                                        }
+                                    })
+                                    .collect(),
+                            }
+                        })
+                        .collect(),
+                }
+            })
+            .collect()
+    }
+
+    #[wasm_bindgen]
+    pub fn list_expr_fns(&self) -> Vec<WasmFunction> {
+        let ctx = &self
+            .runtime
+            .create_ctx_manager(BamlValue::String("wasm".to_string()), None);
+        let ctx = ctx.create_ctx_with_default();
+        let ctx = ctx.eval_ctx(false);
+
+        self.runtime
+            .ir()
+            .walk_expr_fns()
+            .map(|f| {
+                let snippet = format!(
+                    r#"test TestName {{
+  functions [{name}]
+  args {{
+{args}
+  }}
+}}
+"#,
+                    name = f.name(),
+                    args = {
+                        // Convert baml_runtime::TypeIR inputs to baml_types::TypeIR and use our improved dummy generator
+                        let params = f
+                            .inputs()
+                            .iter()
+                            .map(|(k, runtime_type)| (k.clone(), runtime_type.clone()))
+                            .collect::<indexmap::IndexMap<String, _>>();
+
+                        // Use the IR's get_dummy_args method
+                        self.runtime.ir().get_dummy_args(2, true, &params)
+                    }
+                );
+
+                let wasm_span = match f.span() {
+                    Some(span) => span.into(),
+                    None => WasmSpan::default(),
+                };
+
+                WasmFunction {
+                    name: f.name().to_string(),
+                    span: wasm_span,
+                    signature: {
+                        let inputs = {
+                            let params = f
+                                .inputs()
+                                .iter()
+                                .map(|(k, runtime_type)| (k.clone(), runtime_type.clone()))
+                                .collect::<indexmap::IndexMap<String, _>>();
+
+                            self.runtime
                                 .ir()
                                 .get_dummy_args(2, false, &params)
                                 .split('\n')
@@ -1129,7 +1309,6 @@ impl WasmRuntime {
     #[wasm_bindgen]
     pub fn required_env_vars(&self) -> Vec<String> {
         self.runtime
-            .internal()
             .ir()
             .required_env_vars()
             .into_iter()
@@ -1139,7 +1318,7 @@ impl WasmRuntime {
 
     #[wasm_bindgen]
     pub fn search_for_symbol(&self, symbol: &str) -> Option<SymbolLocation> {
-        let runtime = self.runtime.internal().ir();
+        let runtime = self.runtime.ir();
 
         if let Ok(walker) = runtime.find_enum(symbol) {
             let elem = walker.span().unwrap();
@@ -1241,28 +1420,28 @@ impl WasmRuntime {
 
     #[wasm_bindgen]
     pub fn is_valid_class(&self, symbol: &str) -> bool {
-        self.runtime.internal().ir().find_class(symbol).is_ok()
+        self.runtime.ir().find_class(symbol).is_ok()
     }
 
     #[wasm_bindgen]
     pub fn is_valid_enum(&self, symbol: &str) -> bool {
-        self.runtime.internal().ir().find_enum(symbol).is_ok()
+        self.runtime.ir().find_enum(symbol).is_ok()
     }
 
     #[wasm_bindgen]
     pub fn is_valid_type_alias(&self, symbol: &str) -> bool {
-        self.runtime.internal().ir().find_type_alias(symbol).is_ok()
+        self.runtime.ir().find_type_alias(symbol).is_ok()
     }
 
     #[wasm_bindgen]
     pub fn is_valid_function(&self, symbol: &str) -> bool {
-        self.runtime.internal().ir().find_function(symbol).is_ok()
+        let ir = self.runtime.ir();
+        ir.find_function(symbol).is_ok() || ir.find_expr_fn(symbol).is_ok()
     }
 
     #[wasm_bindgen]
     pub fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
         self.runtime
-            .internal()
             .ir()
             .find_class_locations(symbol)
             .into_iter()
@@ -1283,7 +1462,6 @@ impl WasmRuntime {
     #[wasm_bindgen]
     pub fn search_for_enum_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
         self.runtime
-            .internal()
             .ir()
             .find_enum_locations(symbol)
             .into_iter()
@@ -1304,7 +1482,6 @@ impl WasmRuntime {
     #[wasm_bindgen]
     pub fn search_for_type_alias_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
         self.runtime
-            .internal()
             .ir()
             .find_type_alias_locations(symbol)
             .into_iter()
@@ -1329,7 +1506,8 @@ impl WasmRuntime {
         selected_func: &str,
         cursor_idx: usize,
     ) -> Option<WasmFunction> {
-        let functions = self.list_functions();
+        let mut functions = self.list_functions();
+        functions.extend(self.list_expr_fns());
 
         for function in functions.clone() {
             let span = function.span.clone(); // Clone the span
@@ -1385,84 +1563,157 @@ impl WasmRuntime {
         let ctx = ctx.create_ctx_with_default();
         let ctx = ctx.eval_ctx(true);
 
-        self.runtime
-            .internal()
-            .ir()
-            .walk_function_test_pairs()
-            .map(|tc| {
-                let params = match tc.test_case_params(&ctx) {
-                    Ok(params) => Ok(params
-                        .iter()
-                        .map(|(k, v)| {
-                            let as_str = match v {
-                                Ok(v) => match serde_json::to_string(v) {
-                                    Ok(s) => Ok(s),
-                                    Err(e) => Err(e.to_string()),
-                                },
+        let ir = self.runtime.ir();
+
+        // Combine both LLM function test pairs and expr function test pairs
+        let llm_tests = ir.walk_function_test_pairs().map(|tc| {
+            let params = match tc.test_case_params(&ctx) {
+                Ok(params) => Ok(params
+                    .iter()
+                    .map(|(k, v)| {
+                        let as_str = match v {
+                            Ok(v) => match serde_json::to_string(v) {
+                                Ok(s) => Ok(s),
                                 Err(e) => Err(e.to_string()),
-                            };
+                            },
+                            Err(e) => Err(e.to_string()),
+                        };
 
-                            let (value, error) = match as_str {
-                                Ok(s) => (Some(s), None),
-                                Err(e) => (None, Some(e)),
-                            };
+                        let (value, error) = match as_str {
+                            Ok(s) => (Some(s), None),
+                            Err(e) => (None, Some(e)),
+                        };
 
-                            WasmParam {
-                                name: k.to_string(),
-                                value,
-                                error,
-                            }
-                        })
-                        .collect()),
-                    Err(e) => Err(e.to_string()),
-                };
+                        WasmParam {
+                            name: k.to_string(),
+                            value,
+                            error,
+                        }
+                    })
+                    .collect()),
+                Err(e) => Err(e.to_string()),
+            };
 
-                let (mut params, error) = match params {
-                    Ok(p) => (p, None),
-                    Err(e) => (Vec::new(), Some(e)),
-                };
-                // Any missing params should be set to an error
-                // Any missing params should be set to an error
-                tc.function().inputs().iter().for_each(|func_params| {
-                    let (param_name, t) = func_params;
-                    if !params.iter().any(|p| p.name == *param_name) && !t.is_optional() {
-                        params.push(WasmParam {
-                            name: param_name.to_string(),
-                            value: None,
-                            error: Some("Missing parameter".to_string()),
-                        });
-                    }
-                });
-                let wasm_span = match tc.span() {
-                    Some(span) => span.into(),
-                    None => WasmSpan::default(),
-                };
-
-                WasmTestCase {
-                    name: tc.test_case().name.clone(),
-                    inputs: params,
-                    error,
-                    span: wasm_span,
-                    parent_functions: tc
-                        .test_case()
-                        .functions
-                        .iter()
-                        .map(|f| {
-                            let (start, end) = f
-                                .attributes
-                                .span
-                                .as_ref()
-                                .map_or((0, 0), |f| (f.start, f.end));
-                            WasmParentFunction {
-                                start,
-                                end,
-                                name: f.elem.name().to_string(),
-                            }
-                        })
-                        .collect(),
+            let (mut params, error) = match params {
+                Ok(p) => (p, None),
+                Err(e) => (Vec::new(), Some(e)),
+            };
+            // Any missing params should be set to an error
+            // Any missing params should be set to an error
+            tc.function().inputs().iter().for_each(|func_params| {
+                let (param_name, t) = func_params;
+                if !params.iter().any(|p| p.name == *param_name) && !t.is_optional() {
+                    params.push(WasmParam {
+                        name: param_name.to_string(),
+                        value: None,
+                        error: Some("Missing parameter".to_string()),
+                    });
                 }
-            })
-            .collect()
+            });
+            let wasm_span = match tc.span() {
+                Some(span) => span.into(),
+                None => WasmSpan::default(),
+            };
+
+            WasmTestCase {
+                name: tc.test_case().name.clone(),
+                inputs: params,
+                error,
+                span: wasm_span,
+                parent_functions: tc
+                    .test_case()
+                    .functions
+                    .iter()
+                    .map(|f| {
+                        let (start, end) = f
+                            .attributes
+                            .span
+                            .as_ref()
+                            .map_or((0, 0), |f| (f.start, f.end));
+                        WasmParentFunction {
+                            start,
+                            end,
+                            name: f.elem.name().to_string(),
+                        }
+                    })
+                    .collect(),
+            }
+        });
+
+        let expr_tests = ir.walk_expr_fn_test_pairs().map(|tc| {
+            let params = match tc.test_case_params(&ctx) {
+                Ok(params) => Ok(params
+                    .iter()
+                    .map(|(k, v)| {
+                        let as_str = match v {
+                            Ok(v) => match serde_json::to_string(v) {
+                                Ok(s) => Ok(s),
+                                Err(e) => Err(e.to_string()),
+                            },
+                            Err(e) => Err(e.to_string()),
+                        };
+
+                        let (value, error) = match as_str {
+                            Ok(s) => (Some(s), None),
+                            Err(e) => (None, Some(e)),
+                        };
+
+                        WasmParam {
+                            name: k.to_string(),
+                            value,
+                            error,
+                        }
+                    })
+                    .collect()),
+                Err(e) => Err(e.to_string()),
+            };
+
+            let (mut params, error) = match params {
+                Ok(p) => (p, None),
+                Err(e) => (Vec::new(), Some(e)),
+            };
+
+            tc.function().inputs().iter().for_each(|func_params| {
+                let (param_name, t) = func_params;
+                if !params.iter().any(|p| p.name == *param_name) && !t.is_optional() {
+                    params.push(WasmParam {
+                        name: param_name.to_string(),
+                        value: None,
+                        error: Some("Missing parameter".to_string()),
+                    });
+                }
+            });
+            let wasm_span = match tc.span() {
+                Some(span) => span.into(),
+                None => WasmSpan::default(),
+            };
+
+            WasmTestCase {
+                name: tc.test_case().name.clone(),
+                inputs: params,
+                error,
+                span: wasm_span,
+                parent_functions: tc
+                    .test_case()
+                    .functions
+                    .iter()
+                    .map(|f| {
+                        let (start, end) = f
+                            .attributes
+                            .span
+                            .as_ref()
+                            .map_or((0, 0), |f| (f.start, f.end));
+                        WasmParentFunction {
+                            start,
+                            end,
+                            name: f.elem.name().to_string(),
+                        }
+                    })
+                    .collect(),
+            }
+        });
+
+        llm_tests.chain(expr_tests).collect()
     }
 
     #[wasm_bindgen]
@@ -1600,7 +1851,7 @@ impl WasmRuntime {
                             test_response,
                             span: Some(span.to_string()),
                             tracing_project_id: rt
-                                .tracer_wrapper
+                                .tracer_wrapper()
                                 .get_or_create_tracer(&env_vars)
                                 .tracing_project_id(),
                             // tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
@@ -1780,13 +2031,28 @@ impl WasmFunction {
 
     #[wasm_bindgen]
     pub fn client_name(&self, rt: &WasmRuntime) -> Result<String, JsValue> {
-        let rt: &BamlRuntime = &rt.runtime;
+        let rt = &rt.runtime;
         let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
         let ctx = ctx_manager.create_ctx_with_default();
-        let ir = rt.internal().ir();
-        let walker = ir
-            .find_function(&self.name)
-            .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
+        let ir = rt.ir();
+
+        // Try to find as LLM function first, if not found check if it's an expr function
+        let walker = match ir.find_function(&self.name) {
+            Ok(w) => w,
+            Err(_) => {
+                // Check if it's an expr function - they don't have clients
+                if ir.find_expr_fn(&self.name).is_ok() {
+                    // Expr functions don't have clients, return empty string
+                    return Ok(String::new());
+                }
+                // Neither LLM nor expr function found, return the original error
+                return Err(JsValue::from_str(&format!(
+                    "function `{}` not found",
+                    self.name
+                )));
+            }
+        };
+
         let renderer = PromptRenderer::from_function(&walker, ir, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
         Ok(renderer.client_spec().to_string())
@@ -1957,7 +2223,7 @@ impl WasmFunction {
             test_response,
             span: Some(span.to_string()),
             tracing_project_id: rt
-                .tracer_wrapper
+                .tracer_wrapper()
                 .get_or_create_tracer(&env_vars)
                 .tracing_project_id(),
             func_test_pair: WasmFunctionTestPair {
@@ -2033,7 +2299,7 @@ impl WasmFunction {
             test_response,
             span: Some(span.to_string()),
             tracing_project_id: rt
-                .tracer_wrapper
+                .tracer_wrapper()
                 .get_or_create_tracer(&env_vars)
                 .tracing_project_id(),
             func_test_pair: WasmFunctionTestPair {
@@ -2044,7 +2310,7 @@ impl WasmFunction {
     }
 
     pub fn function_graph(&self, rt: &WasmRuntime) -> Result<String, JsValue> {
-        let rt: &BamlRuntime = &rt.runtime;
+        let rt = &rt.runtime;
         let ctx = rt
             .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
             .create_ctx_with_default();
@@ -2056,16 +2322,30 @@ impl WasmFunction {
     }
 
     pub fn orchestration_graph(&self, rt: &WasmRuntime) -> Result<Vec<WasmScope>, JsValue> {
-        let rt: &BamlRuntime = &rt.runtime;
+        let rt = &rt.runtime;
 
         let ctx = rt
             .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
             .create_ctx_with_default();
 
-        let ir = rt.internal().ir();
-        let walker = ir
-            .find_function(&self.name)
-            .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
+        let ir = rt.ir();
+
+        // Try to find as LLM function first, if not found try expr function
+        let walker = match ir.find_function(&self.name) {
+            Ok(w) => w,
+            Err(_) => {
+                // Check if it's an expr function - they don't have orchestration graphs
+                if ir.find_expr_fn(&self.name).is_ok() {
+                    // Expr functions don't have orchestration graphs, return empty
+                    return Ok(Vec::new());
+                }
+                // Neither LLM nor expr function found, return the original error
+                return Err(JsValue::from_str(&format!(
+                    "function `{}` not found",
+                    self.name
+                )));
+            }
+        };
         let renderer = PromptRenderer::from_function(&walker, ir, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
         let client_spec = renderer.client_spec();

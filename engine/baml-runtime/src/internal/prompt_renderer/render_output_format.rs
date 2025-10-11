@@ -528,7 +528,7 @@ mod tests {
 
         let field_type = TypeIR::r#enum("Foo");
         let render_output = render_output_format(
-            baml_runtime.inner.ir.as_ref(),
+            baml_runtime.ir.as_ref(),
             &ctx,
             &field_type,
             StreamingMode::NonStreaming,
@@ -594,7 +594,7 @@ class Resume {
 
         let field_type = TypeIR::class("Resume");
         let render_output = render_output_format(
-            baml_runtime.inner.ir.as_ref(),
+            baml_runtime.ir.as_ref(),
             &ctx,
             &field_type,
             StreamingMode::NonStreaming,
@@ -699,7 +699,7 @@ class Resume {
 
         let field_type = TypeIR::class("Resume");
         let render_output = render_output_format(
-            baml_runtime.inner.ir.as_ref(),
+            baml_runtime.ir.as_ref(),
             &ctx,
             &field_type,
             StreamingMode::NonStreaming,
@@ -777,7 +777,7 @@ Answer in JSON using this schema:
 
         let field_type = TypeIR::class("Foo");
         let render_output = render_output_format(
-            baml_runtime.inner.ir.as_ref(),
+            baml_runtime.ir.as_ref(),
             &ctx,
             &field_type,
             StreamingMode::NonStreaming,

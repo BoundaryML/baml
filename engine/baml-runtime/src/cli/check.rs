@@ -64,7 +64,7 @@ impl CheckArgs {
                 exit(1);
             }
             Ok(runtime) => {
-                let diagnostics = runtime.inner.diagnostics();
+                let diagnostics = &runtime.diagnostics;
                 if diagnostics.has_warnings() {
                     println!("{}", diagnostics.warnings_to_pretty_string());
                 }

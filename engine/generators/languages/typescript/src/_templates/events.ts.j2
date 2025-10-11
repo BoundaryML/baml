@@ -1,0 +1,251 @@
+import { BamlStream } from "@boundaryml/baml"
+
+export interface BlockEvent {
+  block_label: string
+  event_type: "enter" | "exit"
+}
+
+export interface VarEvent<T> {
+  variable_name: string
+  value: T
+  timestamp: string
+  function_name: string
+}
+
+// Internal stream event from Rust FFI
+interface InternalStreamEvent {
+  streamId: string
+  eventType: "start" | "update" | "end"
+  value?: any
+}
+
+// Simple async iterable stream for emit events
+class EmitStream<PartialT, FinalT> implements BamlStream<PartialT, FinalT> {
+  private eventQueue: (PartialT | null)[] = []
+  private isComplete = false
+
+  pushValue(value: PartialT): void {
+    this.eventQueue.push(value)
+  }
+
+  complete(): void {
+    this.isComplete = true
+    this.eventQueue.push(null)
+  }
+
+  async *[Symbol.asyncIterator](): AsyncIterableIterator<PartialT> {
+    while (true) {
+      const event = this.eventQueue.shift()
+
+      if (event === undefined) {
+        if (this.isComplete) {
+          break
+        }
+        // Wait a bit for more events
+        await new Promise(resolve => setTimeout(resolve, 10))
+        continue
+      }
+
+      if (event === null) {
+        break
+      }
+
+      yield event
+    }
+  }
+
+  async getFinalResponse(): Promise<FinalT> {
+    // For emit streams, just get the last value
+    let lastValue: PartialT | null = null
+    for await (const value of this) {
+      lastValue = value
+    }
+    return lastValue as unknown as FinalT
+  }
+
+  toStreamable(): ReadableStream<Uint8Array> {
+    throw new Error("toStreamable not implemented for EmitStream")
+  }
+}
+
+type BlockHandler = (event: BlockEvent) => void
+type VarHandler<T> = (event: VarEvent<T>) => void
+type StreamHandler<PartialT, FinalT> = (event: VarEvent<BamlStream<PartialT, FinalT>>) => void
+type InternalStreamHandler = (event: InternalStreamEvent) => void
+
+export interface InternalEventBindings {
+  functionName: string
+  block: BlockHandler[]
+  vars: Record<string, VarHandler<any>[]>
+  streams: Record<string, InternalStreamHandler[]>
+  functions: Record<string, InternalEventBindings>
+}
+
+export interface EventCollectorInternal {
+  __handlers(): InternalEventBindings
+}
+
+{% for collector in collectors %}
+{% if collector.has_var_events %}
+type {{ collector.interface_name }}VarTypes = {
+  {% for var in collector.var_events %}
+  "{{ var.channel_name }}": {{ var.value_type }}{% if !loop.last %},{% endif %}
+  {% endfor %}
+}
+
+type {{ collector.interface_name }}StreamTypes = {
+  {% for var in collector.var_events %}
+  "{{ var.channel_name }}": {{ var.stream_type }}{% if !loop.last %},{% endif %}
+  {% endfor %}
+}
+{% endif %}
+
+export interface {{ collector.interface_name }} extends EventCollectorInternal {
+  on_block(handler: BlockHandler): void
+  {% if collector.has_var_events %}
+  on_var<K extends keyof {{ collector.interface_name }}VarTypes>(channel: K, handler: (event: VarEvent<{{ collector.interface_name }}VarTypes[K]>) => void): void
+  {% for var in collector.var_events %}
+  on_stream(channel: "{{ var.channel_name }}", handler: StreamHandler<{{ var.stream_type }}, {{ var.stream_type }}>): void
+  {% endfor %}
+  {% endif %}
+  {% for child in collector.child_collectors %}
+  {{ child.property_name }}: {{ child.interface_name }}
+  {% endfor %}
+}
+
+export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
+  const blockHandlers = new Set<BlockHandler>()
+
+  {% for var in collector.var_events %}
+  const varHandlers_{{ var.method_suffix }} = new Set<VarHandler<{{ var.value_type }}>>()
+  const streamHandlers_{{ var.method_suffix }} = new Set<StreamHandler<{{ var.stream_type }}, {{ var.stream_type }}>>()
+  {% endfor %}
+
+  // Track active streams by stream_id
+  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+
+  // Internal handler for stream lifecycle events
+  const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
+    if (event.eventType === "start") {
+      // Create new stream and fire to handlers immediately
+      const stream = new EmitStream<any, any>()
+      activeStreams.set(event.streamId, { stream, varName, functionName })
+
+      const handlers = streamHandlerMap[varName]
+      if (handlers) {
+        const varEvent: VarEvent<BamlStream<any, any>> = {
+          variable_name: varName,
+          value: stream,
+          timestamp: Date.now().toString(),
+          function_name: functionName
+        }
+
+        for (const handler of handlers) {
+          handler(varEvent)
+        }
+      }
+    } else if (event.eventType === "update") {
+      // Push value to existing stream
+      const streamInfo = activeStreams.get(event.streamId)
+      if (streamInfo && event.value !== undefined) {
+        streamInfo.stream.pushValue(event.value)
+      }
+    } else if (event.eventType === "end") {
+      // Complete and cleanup stream
+      const streamInfo = activeStreams.get(event.streamId)
+      if (streamInfo) {
+        streamInfo.stream.complete()
+        activeStreams.delete(event.streamId)
+      }
+    }
+  }
+
+  {% if collector.has_var_events %}
+  const varHandlerMap = {
+    {% for var in collector.var_events %}
+    "{{ var.channel_name }}": varHandlers_{{ var.method_suffix }}{% if !loop.last %},{% endif %}
+    {% endfor %}
+  }
+
+  const streamHandlerMap = {
+    {% for var in collector.var_events %}
+    "{{ var.channel_name }}": streamHandlers_{{ var.method_suffix }}{% if !loop.last %},{% endif %}
+    {% endfor %}
+  }
+  {% else %}
+  const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
+  {% endif %}
+
+  {% if collector.has_child_collectors %}
+  const functionHandlerMap: Record<string, EventCollectorInternal> = {
+    {% for child in collector.child_collectors %}
+    "{{ child.baml_name }}": {{ child.factory_name }}(){% if !loop.last %},{% endif %}
+    {% endfor %}
+  }
+  {% else %}
+  const functionHandlerMap: Record<string, EventCollectorInternal> = {}
+  {% endif %}
+
+  {% for child in collector.child_collectors %}
+  const {{ child.property_name }} = functionHandlerMap["{{ child.baml_name }}"] as {{ child.interface_name }}
+  {% endfor %}
+
+  return {
+    on_block(handler) {
+      blockHandlers.add(handler)
+    },
+    {% if collector.has_var_events %}
+    on_var<K extends keyof {{ collector.interface_name }}VarTypes>(channel: K, handler: (event: VarEvent<{{ collector.interface_name }}VarTypes[K]>) => void) {
+      const handlers = varHandlerMap[channel]
+      if (handlers) {
+        handlers.add(handler as any)
+      }
+    },
+    on_stream<K extends keyof {{ collector.interface_name }}StreamTypes>(channel: K, handler: StreamHandler<{{ collector.interface_name }}StreamTypes[K], {{ collector.interface_name }}StreamTypes[K]>) {
+      const handlers = streamHandlerMap[channel]
+      if (handlers) {
+        handlers.add(handler as any)
+      }
+    },
+    {% endif %}
+    {% for child in collector.child_collectors %}
+    {{ child.property_name }},
+    {% endfor %}
+    __handlers() {
+      const vars: Record<string, VarHandler<any>[]> = {}
+      for (const [channel, handlers] of Object.entries(varHandlerMap)) {
+        if (handlers.size > 0) {
+          vars[channel] = Array.from(handlers) as VarHandler<any>[]
+        }
+      }
+
+      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      const streams: Record<string, InternalStreamHandler[]> = {}
+      for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
+        if (handlers.size > 0) {
+          // Create a wrapper that processes stream lifecycle events
+          const wrapper: InternalStreamHandler = (event: InternalStreamEvent) => {
+            handleInternalStreamEvent(channel, event, "{{ collector.baml_name }}")
+          }
+          streams[channel] = [wrapper]
+        }
+      }
+
+      const functions: Record<string, InternalEventBindings> = {}
+      for (const [fn, collector] of Object.entries(functionHandlerMap)) {
+        functions[fn] = collector.__handlers()
+      }
+
+      return {
+        functionName: "{{ collector.baml_name }}",
+        block: Array.from(blockHandlers),
+        vars,
+        streams,
+        functions,
+      }
+    },
+  }
+}
+
+{% endfor %}

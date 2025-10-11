@@ -288,6 +288,27 @@ export const BuildTree = async (
 };
 
 /**
+ * Executes the "CheckWordEquality" BAML action.
+ *
+ * This server action calls the underlying BAML function "CheckWordEquality"
+ * with the specified parameters.
+ *
+ * @param { string } word - Input parameter.
+ * @param { string } target - Input parameter.
+ *
+ * @returns {Promise<boolean>} A promise that resolves with the result of the action.
+ */
+export const CheckWordEquality = async (
+  word: string,
+  target: string,
+): Promise<boolean> => {
+  return b.CheckWordEquality(
+    word,
+    target,
+  );
+};
+
+/**
  * Executes the "ChooseTodoTools" BAML action.
  *
  * This server action calls the underlying BAML function "ChooseTodoTools"
@@ -1674,6 +1695,24 @@ export const NullLiteralClassHello = async (
 };
 
 /**
+ * Executes the "OpenAIGPT4oMissingBaseUrlEnvVar" BAML action.
+ *
+ * This server action calls the underlying BAML function "OpenAIGPT4oMissingBaseUrlEnvVar"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const OpenAIGPT4oMissingBaseUrlEnvVar = async (
+  input: string,
+): Promise<string> => {
+  return b.OpenAIGPT4oMissingBaseUrlEnvVar(
+    input,
+  );
+};
+
+/**
  * Executes the "OpenAIWithAnthropicResponseHello" BAML action.
  *
  * This server action calls the underlying BAML function "OpenAIWithAnthropicResponseHello"
@@ -2476,6 +2515,24 @@ export const TestAwsInvalidAccessKey = async (
   input: string,
 ): Promise<string> => {
   return b.TestAwsInvalidAccessKey(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestAwsInvalidEndpoint" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestAwsInvalidEndpoint"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestAwsInvalidEndpoint = async (
+  input: string,
+): Promise<string> => {
+  return b.TestAwsInvalidEndpoint(
     input,
   );
 };
@@ -4085,5 +4142,521 @@ export const VideoInputVertex = async (
 ): Promise<string> => {
   return b.VideoInputVertex(
     vid,
+  );
+};
+
+/**
+ * Executes the "AnotherTakedown" BAML action.
+ *
+ * This server action calls the underlying BAML function "AnotherTakedown"
+ * with the specified parameters.
+ *
+ * @param { string[] } xs - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const AnotherTakedown = async (
+  xs: string[],
+): Promise<number> => {
+  return b.AnotherTakedown(
+    xs,
+  );
+};
+
+/**
+ * Executes the "AssignElseIfExpr" BAML action.
+ *
+ * This server action calls the underlying BAML function "AssignElseIfExpr"
+ * with the specified parameters.
+ *
+ * @param { boolean } a - Input parameter.
+ * @param { boolean } b - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const AssignElseIfExpr = async (
+  a: boolean,
+  b: boolean,
+): Promise<number> => {
+  return b.AssignElseIfExpr(
+    a,
+    b,
+  );
+};
+
+/**
+ * Executes the "BoolToIntWithIfElse" BAML action.
+ *
+ * This server action calls the underlying BAML function "BoolToIntWithIfElse"
+ * with the specified parameters.
+ *
+ * @param { boolean } b - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const BoolToIntWithIfElse = async (
+  b: boolean,
+): Promise<number> => {
+  return b.BoolToIntWithIfElse(
+    b,
+  );
+};
+
+/**
+ * Executes the "BoolToIntWithIfElseCallingLlm" BAML action.
+ *
+ * This server action calls the underlying BAML function "BoolToIntWithIfElseCallingLlm"
+ * with the specified parameters.
+ *
+ * @param { boolean } b - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const BoolToIntWithIfElseCallingLlm = async (
+  b: boolean,
+): Promise<number> => {
+  return b.BoolToIntWithIfElseCallingLlm(
+    b,
+  );
+};
+
+/**
+ * Executes the "CallLlmDescribeImage" BAML action.
+ *
+ * This server action calls the underlying BAML function "CallLlmDescribeImage"
+ * with the specified parameters.
+ *
+ * @param { Image } img - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const CallLlmDescribeImage = async (
+  img: Image,
+): Promise<string> => {
+  return b.CallLlmDescribeImage(
+    img,
+  );
+};
+
+/**
+ * Executes the "CallReturnOne" BAML action.
+ *
+ * This server action calls the underlying BAML function "CallReturnOne"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const CallReturnOne = async (
+): Promise<number> => {
+  return b.CallReturnOne(
+  );
+};
+
+/**
+ * Executes the "ChainedCalls" BAML action.
+ *
+ * This server action calls the underlying BAML function "ChainedCalls"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const ChainedCalls = async (
+): Promise<number> => {
+  return b.ChainedCalls(
+  );
+};
+
+/**
+ * Executes the "EchoWorkflow" BAML action.
+ *
+ * This server action calls the underlying BAML function "EchoWorkflow"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const EchoWorkflow = async (
+): Promise<string> => {
+  return b.EchoWorkflow(
+  );
+};
+
+/**
+ * Executes the "ExecFetchAs" BAML action.
+ *
+ * This server action calls the underlying BAML function "ExecFetchAs"
+ * with the specified parameters.
+ *
+ * @param { string } url - Input parameter.
+ *
+ * @returns {Promise<types.DummyJsonTodo>} A promise that resolves with the result of the action.
+ */
+export const ExecFetchAs = async (
+  url: string,
+): Promise<types.DummyJsonTodo> => {
+  return b.ExecFetchAs(
+    url,
+  );
+};
+
+/**
+ * Executes the "HomeEnvVarIsEmpty" BAML action.
+ *
+ * This server action calls the underlying BAML function "HomeEnvVarIsEmpty"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<boolean>} A promise that resolves with the result of the action.
+ */
+export const HomeEnvVarIsEmpty = async (
+): Promise<boolean> => {
+  return b.HomeEnvVarIsEmpty(
+  );
+};
+
+/**
+ * Executes the "IsTargetWord" BAML action.
+ *
+ * This server action calls the underlying BAML function "IsTargetWord"
+ * with the specified parameters.
+ *
+ * @param { string } prev - Input parameter.
+ * @param { string } next - Input parameter.
+ *
+ * @returns {Promise<boolean>} A promise that resolves with the result of the action.
+ */
+export const IsTargetWord = async (
+  prev: string,
+  next: string,
+): Promise<boolean> => {
+  return b.IsTargetWord(
+    prev,
+    next,
+  );
+};
+
+/**
+ * Executes the "IsTargetWord2" BAML action.
+ *
+ * This server action calls the underlying BAML function "IsTargetWord2"
+ * with the specified parameters.
+ *
+ * @param { string } prev - Input parameter.
+ * @param { string } next - Input parameter.
+ *
+ * @returns {Promise<boolean>} A promise that resolves with the result of the action.
+ */
+export const IsTargetWord2 = async (
+  prev: string,
+  next: string,
+): Promise<boolean> => {
+  return b.IsTargetWord2(
+    prev,
+    next,
+  );
+};
+
+/**
+ * Executes the "IterativeFibonacci" BAML action.
+ *
+ * This server action calls the underlying BAML function "IterativeFibonacci"
+ * with the specified parameters.
+ *
+ * @param { number } n - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const IterativeFibonacci = async (
+  n: number,
+): Promise<number> => {
+  return b.IterativeFibonacci(
+    n,
+  );
+};
+
+/**
+ * Executes the "NormalElseIfStmt" BAML action.
+ *
+ * This server action calls the underlying BAML function "NormalElseIfStmt"
+ * with the specified parameters.
+ *
+ * @param { boolean } a - Input parameter.
+ * @param { boolean } b - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const NormalElseIfStmt = async (
+  a: boolean,
+  b: boolean,
+): Promise<number> => {
+  return b.NormalElseIfStmt(
+    a,
+    b,
+  );
+};
+
+/**
+ * Executes the "NotEmpty" BAML action.
+ *
+ * This server action calls the underlying BAML function "NotEmpty"
+ * with the specified parameters.
+ *
+ * @param { string } prev - Input parameter.
+ * @param { string } next - Input parameter.
+ *
+ * @returns {Promise<boolean>} A promise that resolves with the result of the action.
+ */
+export const NotEmpty = async (
+  prev: string,
+  next: string,
+): Promise<boolean> => {
+  return b.NotEmpty(
+    prev,
+    next,
+  );
+};
+
+/**
+ * Executes the "ReturnCategory" BAML action.
+ *
+ * This server action calls the underlying BAML function "ReturnCategory"
+ * with the specified parameters.
+ *
+ * @param { types.Category } category - Input parameter.
+ *
+ * @returns {Promise<types.Category>} A promise that resolves with the result of the action.
+ */
+export const ReturnCategory = async (
+  category: types.Category,
+): Promise<types.Category> => {
+  return b.ReturnCategory(
+    category,
+  );
+};
+
+/**
+ * Executes the "ReturnElseIfExpr" BAML action.
+ *
+ * This server action calls the underlying BAML function "ReturnElseIfExpr"
+ * with the specified parameters.
+ *
+ * @param { boolean } a - Input parameter.
+ * @param { boolean } b - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const ReturnElseIfExpr = async (
+  a: boolean,
+  b: boolean,
+): Promise<number> => {
+  return b.ReturnElseIfExpr(
+    a,
+    b,
+  );
+};
+
+/**
+ * Executes the "ReturnImageFromUrl" BAML action.
+ *
+ * This server action calls the underlying BAML function "ReturnImageFromUrl"
+ * with the specified parameters.
+ *
+ * @param { string } url - Input parameter.
+ *
+ * @returns {Promise<Image>} A promise that resolves with the result of the action.
+ */
+export const ReturnImageFromUrl = async (
+  url: string,
+): Promise<Image> => {
+  return b.ReturnImageFromUrl(
+    url,
+  );
+};
+
+/**
+ * Executes the "ReturnNumber" BAML action.
+ *
+ * This server action calls the underlying BAML function "ReturnNumber"
+ * with the specified parameters.
+ *
+ * @param { number } n - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const ReturnNumber = async (
+  n: number,
+): Promise<number> => {
+  return b.ReturnNumber(
+    n,
+  );
+};
+
+/**
+ * Executes the "ReturnNumberCallingLlm" BAML action.
+ *
+ * This server action calls the underlying BAML function "ReturnNumberCallingLlm"
+ * with the specified parameters.
+ *
+ * @param { number } n - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const ReturnNumberCallingLlm = async (
+  n: number,
+): Promise<number> => {
+  return b.ReturnNumberCallingLlm(
+    n,
+  );
+};
+
+/**
+ * Executes the "ReturnOne" BAML action.
+ *
+ * This server action calls the underlying BAML function "ReturnOne"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const ReturnOne = async (
+): Promise<number> => {
+  return b.ReturnOne(
+  );
+};
+
+/**
+ * Executes the "SimpleEmitWithFilter" BAML action.
+ *
+ * This server action calls the underlying BAML function "SimpleEmitWithFilter"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const SimpleEmitWithFilter = async (
+): Promise<number> => {
+  return b.SimpleEmitWithFilter(
+  );
+};
+
+/**
+ * Executes the "StoreFnCallInLocalVar" BAML action.
+ *
+ * This server action calls the underlying BAML function "StoreFnCallInLocalVar"
+ * with the specified parameters.
+ *
+ * @param { number } n - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const StoreFnCallInLocalVar = async (
+  n: number,
+): Promise<number> => {
+  return b.StoreFnCallInLocalVar(
+    n,
+  );
+};
+
+/**
+ * Executes the "StoreLlmCallInLocalVar" BAML action.
+ *
+ * This server action calls the underlying BAML function "StoreLlmCallInLocalVar"
+ * with the specified parameters.
+ *
+ * @param { number } n - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const StoreLlmCallInLocalVar = async (
+  n: number,
+): Promise<number> => {
+  return b.StoreLlmCallInLocalVar(
+    n,
+  );
+};
+
+/**
+ * Executes the "SumArray" BAML action.
+ *
+ * This server action calls the underlying BAML function "SumArray"
+ * with the specified parameters.
+ *
+ * @param { number[] } arr - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const SumArray = async (
+  arr: number[],
+): Promise<number> => {
+  return b.SumArray(
+    arr,
+  );
+};
+
+/**
+ * Executes the "SumFromTo" BAML action.
+ *
+ * This server action calls the underlying BAML function "SumFromTo"
+ * with the specified parameters.
+ *
+ * @param { number } x - Input parameter.
+ * @param { number } y - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const SumFromTo = async (
+  x: number,
+  y: number,
+): Promise<number> => {
+  return b.SumFromTo(
+    x,
+    y,
+  );
+};
+
+/**
+ * Executes the "WorkflowEmit" BAML action.
+ *
+ * This server action calls the underlying BAML function "WorkflowEmit"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const WorkflowEmit = async (
+): Promise<number> => {
+  return b.WorkflowEmit(
+  );
+};
+
+/**
+ * Executes the "WorkflowEmitChild" BAML action.
+ *
+ * This server action calls the underlying BAML function "WorkflowEmitChild"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const WorkflowEmitChild = async (
+): Promise<number> => {
+  return b.WorkflowEmitChild(
+  );
+};
+
+/**
+ * Executes the "WorkflowEmitWithFilter" BAML action.
+ *
+ * This server action calls the underlying BAML function "WorkflowEmitWithFilter"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const WorkflowEmitWithFilter = async (
+): Promise<number> => {
+  return b.WorkflowEmitWithFilter(
   );
 };
