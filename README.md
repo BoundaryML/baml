@@ -11,6 +11,7 @@
 <div align="center">
 
 [![BAML Version](https://img.shields.io/pypi/v/baml-py?color=006dad&label=BAML%20Version)](https://pypi.org/project/baml-py/)
+[![](https://getmanta.ai/api/badges?text=Manta%20Graph&link=manta)](https://getmanta.ai/pipecat)
 
 ## BAML: Basically a Made-up Language
 <h4>
