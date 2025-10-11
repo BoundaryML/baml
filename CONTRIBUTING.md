@@ -26,6 +26,7 @@ First off, thanks for your interest in contributing to BAML! We appreciate all t
   - [Grammar Testing](#grammar-testing)
   - [VSCode Extension Testing](#vscode-extension-testing)
   - [Testing promptfiddle.com](#testing-promptfiddlecom)
+  - [Architecture Graph in Manta](https://getmanta.ai/baml)
 
 ## How to Contribute
 
