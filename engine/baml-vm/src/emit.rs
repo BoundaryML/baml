@@ -422,7 +422,8 @@ impl Emit {
     /// children.
     ///
     /// This is used when an object is marked as @emit to establish all the
-    /// dependency edges.
+    /// dependency edges. It does not declare any root, call
+    /// [`Self::register_root`] separately.
     pub fn build_dependency_graph(&mut self, value: Value, objects: &ObjectPool) {
         let mut stack = vec![value];
 
@@ -439,7 +440,7 @@ impl Emit {
                     // For each field in the instance, build edges
                     for (field_idx, field_value) in instance.fields.iter().enumerate() {
                         if let Value::Object(child_obj) = field_value {
-                            self.link_edge(
+                            self.add_edge(
                                 node,
                                 Path::InstanceField(field_idx),
                                 NodeId::HeapObject(*child_obj),
@@ -454,7 +455,7 @@ impl Emit {
                     // For each element in the array, build edges
                     for (idx, elem_value) in array.iter().enumerate() {
                         if let Value::Object(child_obj) = elem_value {
-                            self.link_edge(
+                            self.add_edge(
                                 node,
                                 Path::ArrayIndex(idx),
                                 NodeId::HeapObject(*child_obj),
@@ -469,7 +470,7 @@ impl Emit {
                     // For each entry in the map, build edges
                     for (key, map_value) in map.iter() {
                         if let Value::Object(child_obj) = map_value {
-                            self.link_edge(
+                            self.add_edge(
                                 node,
                                 Path::MapKey(key.clone()),
                                 NodeId::HeapObject(*child_obj),
