@@ -36,6 +36,7 @@
     "@anthropic-ai/sdk": "0.39.0",
     "@aws-crypto/sha256-js": "^5.2.0",
     "@aws-sdk/client-sts": "3.721.0",
+    "@aws-sdk/credential-provider-node": "^3.908.0",
     "@aws-sdk/credential-providers": "3.830.0",
     "@boundaryml/baml": "workspace:*",
     "@google/generative-ai": "0.24.0",
