@@ -916,9 +916,7 @@ const plugin: BamlVSCodePlugin = {
         }
       }),
 
-      commands.registerCommand('baml.checkForUpdates', () => {
-        checkForUpdates({ showIfNoUpdates: true });
-      }),
+
 
       commands.registerCommand(
         'baml.selectTestCase',
