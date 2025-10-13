@@ -514,7 +514,11 @@ impl ReplState {
         let runtime_clone = self.runtime.clone();
         let env_vars = self.env_vars.clone();
         let run_id = self.current_run_id.unwrap_or(0);
-        let handle_llm_function = move |function_name: String, args: Vec<BamlValue>| {
+        let handle_llm_function = move |function_name: String,
+                                        args: Vec<BamlValue>,
+                                        _emit_context: Option<
+            baml_compiler::thir::interpret::EmitStreamContext,
+        >| {
             let fn_params = fn_params.clone();
             let runtime_clone = runtime_clone.clone();
             let env_vars = env_vars.clone();

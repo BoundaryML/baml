@@ -214,14 +214,6 @@ pub fn build_event_collectors(
         }
     }
 
-    let has_any_events = builders
-        .values()
-        .any(|builder| builder.has_markdown || !builder.var_channels.is_empty());
-
-    if !has_any_events {
-        return Ok(Vec::new());
-    }
-
     let mut names: Vec<String> = builders.keys().cloned().collect();
     names.sort();
 

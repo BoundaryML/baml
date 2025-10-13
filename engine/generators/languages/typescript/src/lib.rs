@@ -119,9 +119,7 @@ $ pnpm add @boundaryml/baml
             &render_sync_request(&functions, &types, &pkg)?,
         )?;
 
-        if !event_collectors.is_empty() {
-            collector.add_file("events.ts", events::render_events(&event_collectors)?)?;
-        }
+        collector.add_file("events.ts", events::render_events(&event_collectors)?)?;
 
         // Generate type files
         let classes = ir.walk_classes().collect::<Vec<_>>();

@@ -75,6 +75,15 @@ pub struct VarEvent {
     pub function_name: String,
 }
 
+// Simple stream event that will be pushed through threadsafe function
+#[napi(object)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StreamEvent {
+    pub stream_id: String,
+    pub event_type: String,               // "start" | "update" | "end"
+    pub value: Option<serde_json::Value>, // Only present for "update"
+}
+
 // Storage for event handlers extracted from EventCollector
 // Using the full ThreadsafeFunction type with all generics to match what build_threadsafe_function creates
 #[cfg(feature = "interpreter")]
@@ -92,9 +101,9 @@ struct EmitCallbacks {
     stream_handlers: HashMap<
         String,
         napi::threadsafe_function::ThreadsafeFunction<
-            VarEvent,
+            StreamEvent,
             napi::Unknown<'static>,
-            VarEvent,
+            StreamEvent,
             napi::Status,
             false,
         >,
@@ -177,21 +186,29 @@ fn extract_emit_callbacks(env: &Env, events_obj: &Object) -> napi::Result<Option
     // Extract stream handlers
     let mut stream_handlers = HashMap::new();
     if let Ok(streams_obj) = bindings.get_named_property::<Object>("streams") {
+        log::info!("[FFI] Found streams object in bindings");
         if let Ok(keys) = streams_obj.get_property_names() {
             let num_keys = keys.get_array_length()?;
+            log::info!("[FFI] Number of stream handler keys: {}", num_keys);
             for i in 0..num_keys {
                 if let Ok(key_str) = keys.get_element::<JsString>(i) {
                     let key = key_str.into_utf8()?.as_str()?.to_string();
+                    log::info!("[FFI] Found stream handler for channel: {}", key);
                     if let Ok(handler_array) = streams_obj.get_named_property::<Vec<Function>>(&key)
                     {
+                        log::info!(
+                            "[FFI] Got handler array with {} handlers",
+                            handler_array.len()
+                        );
                         if let Some(handler) = handler_array.first() {
                             if let Ok(tsfn) = handler
                                 .build_threadsafe_function()
                                 .weak::<false>()
-                                .build_callback(
-                                    |ctx: ThreadSafeCallContext<VarEvent>| Ok(ctx.value),
-                                )
+                                .build_callback(|ctx: ThreadSafeCallContext<StreamEvent>| {
+                                    Ok(ctx.value)
+                                })
                             {
+                                log::info!("[FFI] Successfully created threadsafe function for channel: {}", key);
                                 stream_handlers.insert(key, tsfn);
                             }
                         }
@@ -199,7 +216,13 @@ fn extract_emit_callbacks(env: &Env, events_obj: &Object) -> napi::Result<Option
                 }
             }
         }
+    } else {
+        log::info!("[FFI] No streams object found in bindings");
     }
+    log::info!(
+        "[FFI] Total stream handlers extracted: {}",
+        stream_handlers.len()
+    );
 
     Ok(Some(EmitCallbacks {
         var_handlers,
@@ -340,16 +363,77 @@ impl BamlRuntime {
                                     function_name: event.function_name.clone(),
                                 };
 
-                                // Fire to appropriate handler based on stream vs var
-                                let handlers = if event.is_stream {
-                                    &callbacks.stream_handlers
-                                } else {
-                                    &callbacks.var_handlers
-                                };
-
-                                if let Some(handler) = handlers.get(var_name) {
+                                // Fire to var handlers only
+                                if let Some(handler) = callbacks.var_handlers.get(var_name) {
                                     let _ = handler
                                         .call(var_event, ThreadsafeFunctionCallMode::NonBlocking);
+                                }
+                            }
+                        }
+                        baml_compiler::emit::EmitBamlValue::StreamStart(stream_id) => {
+                            log::info!(
+                                "[RUST] StreamStart event for var: {:?}, stream_id: {}",
+                                event.variable_name,
+                                stream_id
+                            );
+                            if let Some(var_name) = &event.variable_name {
+                                log::info!(
+                                    "[RUST] Stream handlers available: {:?}",
+                                    callbacks.stream_handlers.keys().collect::<Vec<_>>()
+                                );
+                                if let Some(handler) = callbacks.stream_handlers.get(var_name) {
+                                    log::info!(
+                                        "[RUST] Found stream handler for {}, calling it",
+                                        var_name
+                                    );
+                                    let stream_event = StreamEvent {
+                                        stream_id: stream_id.clone(),
+                                        event_type: "start".to_string(),
+                                        value: None,
+                                    };
+                                    let result = handler.call(
+                                        stream_event,
+                                        ThreadsafeFunctionCallMode::NonBlocking,
+                                    );
+                                    log::info!("[RUST] Handler call result: {:?}", result);
+                                } else {
+                                    log::info!(
+                                        "[RUST] No stream handler found for channel: {}",
+                                        var_name
+                                    );
+                                }
+                            }
+                        }
+                        baml_compiler::emit::EmitBamlValue::StreamUpdate(stream_id, value) => {
+                            if let Some(var_name) = &event.variable_name {
+                                if let Some(handler) = callbacks.stream_handlers.get(var_name) {
+                                    let serialized = serde_json::to_value(value.value())
+                                        .unwrap_or(serde_json::Value::Null);
+
+                                    let stream_event = StreamEvent {
+                                        stream_id: stream_id.clone(),
+                                        event_type: "update".to_string(),
+                                        value: Some(serialized),
+                                    };
+                                    let _ = handler.call(
+                                        stream_event,
+                                        ThreadsafeFunctionCallMode::NonBlocking,
+                                    );
+                                }
+                            }
+                        }
+                        baml_compiler::emit::EmitBamlValue::StreamEnd(stream_id) => {
+                            if let Some(var_name) = &event.variable_name {
+                                if let Some(handler) = callbacks.stream_handlers.get(var_name) {
+                                    let stream_event = StreamEvent {
+                                        stream_id: stream_id.clone(),
+                                        event_type: "end".to_string(),
+                                        value: None,
+                                    };
+                                    let _ = handler.call(
+                                        stream_event,
+                                        ThreadsafeFunctionCallMode::NonBlocking,
+                                    );
                                 }
                             }
                         }

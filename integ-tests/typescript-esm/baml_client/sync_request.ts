@@ -387,6 +387,31 @@ export class HttpRequest {
     }
   }
   
+  CheckWordEquality(
+      word: string,target: string,
+      __baml_options__?: BamlCallOptions<never>
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "CheckWordEquality",
+        {
+          "word": word,"target": target
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   ChooseTodoTools(
       query: string,
       __baml_options__?: BamlCallOptions<never>
@@ -5937,6 +5962,56 @@ export class HttpRequest {
     }
   }
   
+  IsTargetWord(
+      prev: string,next: string,
+      __baml_options__?: BamlCallOptions<events.IsTargetWordEventCollector>
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "IsTargetWord",
+        {
+          "prev": prev,"next": next
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  IsTargetWord2(
+      prev: string,next: string,
+      __baml_options__?: BamlCallOptions<events.IsTargetWord2EventCollector>
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "IsTargetWord2",
+        {
+          "prev": prev,"next": next
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   IterativeFibonacci(
       n: number,
       __baml_options__?: BamlCallOptions<events.IterativeFibonacciEventCollector>
@@ -5975,6 +6050,31 @@ export class HttpRequest {
         "NormalElseIfStmt",
         {
           "a": a,"b": b
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  NotEmpty(
+      prev: string,next: string,
+      __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "NotEmpty",
+        {
+          "prev": prev,"next": next
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -6137,6 +6237,31 @@ export class HttpRequest {
     }
   }
   
+  SimpleEmitWithFilter(
+      
+      __baml_options__?: BamlCallOptions<events.SimpleEmitWithFilterEventCollector>
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "SimpleEmitWithFilter",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   StoreFnCallInLocalVar(
       n: number,
       __baml_options__?: BamlCallOptions<events.StoreFnCallInLocalVarEventCollector>
@@ -6273,6 +6398,31 @@ export class HttpRequest {
       );
       return this.runtime.buildRequestSync(
         "WorkflowEmitChild",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  WorkflowEmitWithFilter(
+      
+      __baml_options__?: BamlCallOptions<events.WorkflowEmitWithFilterEventCollector>
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "WorkflowEmitWithFilter",
         {
           
         },
@@ -6643,6 +6793,31 @@ export class HttpStreamRequest {
     }
   }
   
+  CheckWordEquality(
+      word: string,target: string,
+      __baml_options__?: BamlCallOptions<never>
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "CheckWordEquality",
+        {
+          "word": word,"target": target
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   ChooseTodoTools(
       query: string,
       __baml_options__?: BamlCallOptions<never>
@@ -12193,6 +12368,56 @@ export class HttpStreamRequest {
     }
   }
   
+  IsTargetWord(
+      prev: string,next: string,
+      __baml_options__?: BamlCallOptions<events.IsTargetWordEventCollector>
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "IsTargetWord",
+        {
+          "prev": prev,"next": next
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  IsTargetWord2(
+      prev: string,next: string,
+      __baml_options__?: BamlCallOptions<events.IsTargetWord2EventCollector>
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "IsTargetWord2",
+        {
+          "prev": prev,"next": next
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   IterativeFibonacci(
       n: number,
       __baml_options__?: BamlCallOptions<events.IterativeFibonacciEventCollector>
@@ -12231,6 +12456,31 @@ export class HttpStreamRequest {
         "NormalElseIfStmt",
         {
           "a": a,"b": b
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  NotEmpty(
+      prev: string,next: string,
+      __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "NotEmpty",
+        {
+          "prev": prev,"next": next
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -12393,6 +12643,31 @@ export class HttpStreamRequest {
     }
   }
   
+  SimpleEmitWithFilter(
+      
+      __baml_options__?: BamlCallOptions<events.SimpleEmitWithFilterEventCollector>
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "SimpleEmitWithFilter",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   StoreFnCallInLocalVar(
       n: number,
       __baml_options__?: BamlCallOptions<events.StoreFnCallInLocalVarEventCollector>
@@ -12529,6 +12804,31 @@ export class HttpStreamRequest {
       );
       return this.runtime.buildRequestSync(
         "WorkflowEmitChild",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  WorkflowEmitWithFilter(
+      
+      __baml_options__?: BamlCallOptions<events.WorkflowEmitWithFilterEventCollector>
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "WorkflowEmitWithFilter",
         {
           
         },
