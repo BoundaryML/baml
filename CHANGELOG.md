@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.211.2](https://github.com/boundaryml/baml/compare/0.211.1..0.211.2) - 2025-10-12
+
+### Bug Fixes
+- Fix emit ts codegen bug (#2603) - ([39b1cf6](https://github.com/boundaryml/baml/commit/39b1cf6299b5080234e282367fdec238864c9df4)) - Greg Hale
+
 ## [0.211.1](https://github.com/boundaryml/baml/compare/0.211.0..0.211.1) - 2025-10-10
 
 ### Docs
@@ -372,7 +377,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 - Fix fatal log line showing up with publisher not started (#2038) - ([e02c30a](https://github.com/boundaryml/baml/commit/e02c30abf8aecfdccbd28386d0bc4049d017bc8c)) - aaronvg
-  
+
 ## [0.90.0](https://github.com/boundaryml/baml/compare/0.89.0..0.90.0) - 2025-06-14
 
 ### Bug Fixes
@@ -851,7 +856,7 @@ We added a new NextJS generator and deep support for Typebuilder!! Read the docs
 - Update README with better details (#1380) - ([02d1950](https://github.com/boundaryml/baml/commit/02d19503759986c0dba3b022afb03f45a52c31ad)) - hellovai
 - Semantic Streaming (#1293) - ([e30bdd5](https://github.com/boundaryml/baml/commit/e30bdd526910f11a6a9057cc4df90cf302939666)) - Greg Hale
 
-  
+
 ### Bugfixes
 - Drop unnecessary jsonwebtoken dep in wasm build (#1381) - ([7b85c71](https://github.com/boundaryml/baml/commit/7b85c715e07be8f908ee114c50b85bd784cf567b)) - Greg Hale
 - Removing broken links (#1388) - ([e4b0b5b](https://github.com/boundaryml/baml/commit/e4b0b5ba390d3449247bfebb1f24013df69b6068)) - hellovai
@@ -1724,4 +1729,3 @@ The default base URL for the Gemini provider has been updated to v1beta. This ch
 ### Vscode
 
 - check for updates on the hour (#434) - ([c70a3b3](https://github.com/boundaryml/baml/commit/c70a3b373cb2346a0df9a1eba0ebacb74d59b53e)) - Samuel Lijin
-
