@@ -8,7 +8,7 @@ import glooLens from './LanguageToBamlCodeLensProvider'
 import { WebviewPanelHost } from './panels/WebviewPanelHost'
 import plugins from './plugins'
 import {
-  requestBamlCLIVersion,
+  publishBamlVersionReport,
   requestDiagnostics,
   telemetry,
 } from './plugins/language-server-client'
@@ -349,8 +349,9 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   setInterval(() => {
-    requestBamlCLIVersion()
-  }, 30000)
+    console.log('requesting baml cli version')
+    publishBamlVersionReport()
+  }, 30_000)
 
   // TODO: Reactivate linter.
   // runDiagnostics()

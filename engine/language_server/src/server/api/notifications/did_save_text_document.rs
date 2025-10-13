@@ -9,8 +9,10 @@ use crate::{
     baml_project::{common_version_up_to_patch, Project},
     server::{
         api::{
-            self, diagnostics::not_in_baml_src_diagnostic,
-            notifications::baml_src_version::BamlSrcVersionPayload, ResultExt,
+            self,
+            diagnostics::not_in_baml_src_diagnostic,
+            notifications::baml_src_version::{BamlSrcVersionPayload, GeneratorInfo},
+            ResultExt,
         },
         client::{Notifier, Requester},
         Result, Task,
@@ -133,12 +135,28 @@ pub(crate) fn send_generator_version(
     opt_version: Option<&impl ToOwned<Owned = String>>,
 ) {
     if let Some(version) = opt_version.map(ToOwned::to_owned) {
+        // Collect generator information from the project's runtime
+        let generators = if let Ok(runtime) = project.runtime() {
+            runtime
+                .codegen_generators()
+                .map(|gen| GeneratorInfo {
+                    name: gen.name.clone(),
+                    output_type: gen.output_type.to_string(),
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        tracing::info!("Sending baml_src_generator_version notification to IDE: {version}");
+
         let _ = notifier
             .notify_raw(
                 "baml_src_generator_version".to_string(),
                 BamlSrcVersionPayload {
                     version,
                     root_path: project.root_path().to_string_lossy().to_string(),
+                    generators,
                 },
             )
             .inspect_err(|e| {
