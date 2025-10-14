@@ -13,3 +13,7 @@ export const getCurrentOpenedFile = () => {
     return visibleEditors[0]?.document.uri?.toString() ?? '';
   }
 };
+
+export const LAST_ACTIVE_BAML_FILE: { uri: undefined | vscode.Uri } = {
+  uri: undefined
+};
