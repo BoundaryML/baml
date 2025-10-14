@@ -5,7 +5,7 @@ use baml_derive::BamlHash;
 use baml_types::{ApiKeyWithProvenance, GetEnvVar, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 
-use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
+use super::helpers::{Error, HttpConfig, PropertyHandler, UnresolvedUrl};
 use crate::{
     AllowedRoleMetadata, FinishReasonFilter, ResponseType, RolesSelection, SupportedRequestModes,
     UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedResponseType,
@@ -27,6 +27,7 @@ pub struct UnresolvedOpenAI<Meta> {
     query_params: IndexMap<String, StringOr>,
     finish_reason_filter: UnresolvedFinishReasonFilter,
     client_response_type: Option<UnresolvedResponseType>,
+    http_config: HttpConfig,
 }
 
 impl<Meta> UnresolvedOpenAI<Meta> {
@@ -54,6 +55,7 @@ impl<Meta> UnresolvedOpenAI<Meta> {
                 .collect(),
             finish_reason_filter: self.finish_reason_filter.clone(),
             client_response_type: self.client_response_type.clone(),
+            http_config: self.http_config.clone(),
         }
     }
 }
@@ -70,6 +72,7 @@ pub struct ResolvedOpenAI {
     pub proxy_url: Option<String>,
     pub finish_reason_filter: FinishReasonFilter,
     pub client_response_type: ResponseType,
+    pub http_config: HttpConfig,
 }
 
 impl ResolvedOpenAI {
@@ -236,6 +239,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
                 .client_response_type
                 .as_ref()
                 .map_or(Ok(ResponseType::OpenAI), |v| v.resolve(ctx))?,
+            http_config: self.http_config.clone(),
         })
     }
 
@@ -251,7 +255,9 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
                 .unwrap_or_else(|| StringOr::EnvVar("OPENAI_API_KEY".to_string())),
         );
 
-        Self::create_common(properties, Some(either::Either::Left(base_url)), api_key)
+        let http_config = properties.ensure_http_config("openai");
+
+        Self::create_common(properties, Some(either::Either::Left(base_url)), api_key, http_config)
     }
 
     pub fn create_azure(mut properties: PropertyHandler<Meta>) -> Result<Self, Vec<Error<Meta>>> {
@@ -303,6 +309,8 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             .ensure_api_key()
             .unwrap_or_else(|| StringOr::EnvVar("AZURE_OPENAI_API_KEY".to_string()));
 
+        let http_config = properties.ensure_http_config("azure");
+
         let query_params = match properties.ensure_query_params() {
             Some(query_params) => query_params,
             None => {
@@ -315,7 +323,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             }
         };
 
-        let mut instance = Self::create_common(properties, base_url, None)?;
+        let mut instance = Self::create_common(properties, base_url, None, http_config)?;
         instance.query_params = query_params;
         instance
             .headers
@@ -330,10 +338,13 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
 
         let api_key = properties.ensure_api_key();
 
+        let http_config = properties.ensure_http_config("openai");
+
         Self::create_common(
             properties,
             base_url.map(|url| either::Either::Left(url.1)),
             api_key,
+            http_config,
         )
     }
 
@@ -343,8 +354,10 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
 
         let api_key = properties.ensure_api_key();
 
+        let http_config = properties.ensure_http_config("ollama");
+
         let mut instance =
-            Self::create_common(properties, Some(either::Either::Left(base_url)), api_key)?;
+            Self::create_common(properties, Some(either::Either::Left(base_url)), api_key, http_config)?;
         // Ollama uses smaller models many of which prefer the user role
         if instance.role_selection.default.is_none() {
             instance.role_selection.default = Some(StringOr::Value("user".to_string()));
@@ -365,8 +378,10 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
                 .unwrap_or_else(|| StringOr::EnvVar("OPENAI_API_KEY".to_string())),
         );
 
+        let http_config = properties.ensure_http_config("openai");
+
         let instance =
-            Self::create_common(properties, Some(either::Either::Left(base_url)), api_key)?;
+            Self::create_common(properties, Some(either::Either::Left(base_url)), api_key, http_config)?;
 
         Ok(instance)
     }
@@ -375,6 +390,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         mut properties: PropertyHandler<Meta>,
         base_url: Option<either::Either<UnresolvedUrl, (StringOr, StringOr)>>,
         api_key: Option<StringOr>,
+        http_config: HttpConfig,
     ) -> Result<Self, Vec<Error<Meta>>> {
         let role_selection = properties.ensure_roles_selection();
         let allowed_metadata = properties.ensure_allowed_metadata();
@@ -400,6 +416,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             query_params,
             finish_reason_filter,
             client_response_type,
+            http_config,
         })
     }
 }

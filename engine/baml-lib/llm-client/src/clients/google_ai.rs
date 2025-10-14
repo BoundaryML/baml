@@ -5,7 +5,7 @@ use baml_derive::BamlHash;
 use baml_types::{ApiKeyWithProvenance, EvaluationContext, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 
-use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
+use super::helpers::{Error, HttpConfig, PropertyHandler, UnresolvedUrl};
 use crate::{
     AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes,
     UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
@@ -24,6 +24,7 @@ pub struct UnresolvedGoogleAI<Meta> {
     finish_reason_filter: UnresolvedFinishReasonFilter,
     #[baml_safe_hash]
     properties: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
+    http_config: HttpConfig,
 }
 
 impl<Meta> UnresolvedGoogleAI<Meta> {
@@ -46,6 +47,7 @@ impl<Meta> UnresolvedGoogleAI<Meta> {
                 .map(|(k, (_, v))| (k.clone(), ((), v.without_meta())))
                 .collect::<IndexMap<_, _>>(),
             finish_reason_filter: self.finish_reason_filter.clone(),
+            http_config: self.http_config.clone(),
         }
     }
 }
@@ -61,6 +63,7 @@ pub struct ResolvedGoogleAI {
     pub properties: IndexMap<String, serde_json::Value>,
     pub proxy_url: Option<String>,
     pub finish_reason_filter: FinishReasonFilter,
+    pub http_config: HttpConfig,
 }
 
 impl ResolvedGoogleAI {
@@ -156,6 +159,7 @@ impl<Meta: Clone> UnresolvedGoogleAI<Meta> {
                 .collect::<Result<IndexMap<_, _>>>()?,
             proxy_url: super::helpers::get_proxy_url(ctx),
             finish_reason_filter: self.finish_reason_filter.resolve(ctx)?,
+            http_config: self.http_config.clone(),
         })
     }
 
@@ -172,6 +176,8 @@ impl<Meta: Clone> UnresolvedGoogleAI<Meta> {
         let base_url = properties.ensure_base_url_with_default(UnresolvedUrl::new_static(
             "https://generativelanguage.googleapis.com/v1beta",
         ));
+
+        let http_config = properties.ensure_http_config("google");
 
         let allowed_metadata = properties.ensure_allowed_metadata();
         let supported_request_modes = properties.ensure_supported_request_modes();
@@ -193,6 +199,7 @@ impl<Meta: Clone> UnresolvedGoogleAI<Meta> {
             supported_request_modes,
             properties,
             finish_reason_filter,
+            http_config,
         })
     }
 }
