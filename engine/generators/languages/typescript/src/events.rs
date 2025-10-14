@@ -3,7 +3,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use anyhow::{anyhow, Result};
 use askama::Template;
 use baml_compiler::{
-    emit::{ChannelType, EmitChannels},
+    watch::{ChannelType, EmitChannels},
     hir::Hir,
     thir::typecheck::typecheck,
 };

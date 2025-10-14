@@ -595,7 +595,7 @@ impl ReplState {
         // REPL emit handler: collect events
         let emit_events = Arc::new(Mutex::new(Vec::new()));
         let emit_events_clone = emit_events.clone();
-        let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
+        let emit_handler = move |event: baml_compiler::watch::EmitEvent| {
             emit_events_clone.lock().unwrap().push(format!("{}", event));
         };
 

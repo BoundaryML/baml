@@ -14,7 +14,7 @@ mod types;
 use std::collections::HashSet;
 
 use anyhow::Result;
-use baml_compiler::{emit::EmitChannels, hir::Hir, thir::typecheck::typecheck};
+use baml_compiler::{watch::EmitChannels, hir::Hir, thir::typecheck::typecheck};
 use baml_types::GeneratorOutputType;
 
 use super::context::Context;

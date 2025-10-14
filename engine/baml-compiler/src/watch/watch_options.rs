@@ -6,8 +6,8 @@ use internal_baml_diagnostics::Span;
 
 /// The user-specified options for an emit variable.
 #[derive(Clone, Debug, PartialEq)]
-pub struct EmitSpec {
-    pub when: EmitWhen,
+pub struct WatchSpec {
+    pub when: WatchWhen,
     pub skip_def: bool,
     pub name: String,
     pub span: Span,
@@ -15,21 +15,21 @@ pub struct EmitSpec {
 
 /// The user-specified option for when to auto-emit a variable.
 #[derive(Clone, Debug, PartialEq)]
-pub enum EmitWhen {
+pub enum WatchWhen {
     False, // TODO: Revisit the name for this variant. I prefer "Manual"
     True,
     FunctionName(Identifier),
 }
 
-impl EmitSpec {
+impl WatchSpec {
     /// Lower the EmitDecorator AST node into an EmitSpec.
     /// Ther are some invariants on `EmitSpec`. They are not handler here,
     /// they are handled upstream in the grammar (which rules out many invalid
     /// key/value combinations), and in the typechecker, which ensures that
     /// when-functions have the correct type.
     pub fn from_ast_with_name(ast_emit: &EmitDecorator, ast_channel_name: String) -> Self {
-        let mut emit = EmitSpec {
-            when: EmitWhen::True,
+        let mut emit = WatchSpec {
+            when: WatchWhen::True,
             skip_def: false,
             name: ast_channel_name.clone(),
             span: ast_emit.span.clone(),
@@ -46,15 +46,15 @@ impl EmitSpec {
                 // Enumerate all the valid key-value pairs.
                 match (key_str.as_ref(), val_str) {
                     ("when", "false") => {
-                        emit.when = EmitWhen::False;
+                        emit.when = WatchWhen::False;
                     }
                     ("when", "true") => {
-                        emit.when = EmitWhen::True;
+                        emit.when = WatchWhen::True;
                     }
                     ("when", _other) => {
                         match value {
                             Expression::Identifier(ident) => {
-                                emit.when = EmitWhen::FunctionName(ident.clone());
+                                emit.when = WatchWhen::FunctionName(ident.clone());
                             }
                             _ => {
                                 // Impossible case, ruled out by the parser.

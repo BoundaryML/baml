@@ -11,11 +11,11 @@ use baml_types::{
 use internal_baml_ast::ast::{self, App, AssertStmt, Attribute, ReturnStmt, WithName, WithSpan};
 
 use crate::{
-    emit::EmitSpec,
     hir::{
         self, Block, Class, ClassConstructor, ClassConstructorField, Enum, EnumVariant,
         ExprFunction, Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg,
     },
+    watch::WatchSpec,
 };
 
 impl Hir {
@@ -421,7 +421,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
 
             let emit_spec = emit
                 .as_ref()
-                .map(|e| EmitSpec::from_ast_with_name(e, identifier.to_string()));
+                .map(|e| WatchSpec::from_ast_with_name(e, identifier.to_string()));
 
             if *is_mutable {
                 Statement::DeclareAndAssign {

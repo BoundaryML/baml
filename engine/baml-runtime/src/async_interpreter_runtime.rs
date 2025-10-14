@@ -168,7 +168,7 @@ impl BamlAsyncInterpreterRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<&HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
-        emit_handler: Option<impl FnMut(baml_compiler::emit::EmitEvent) + Send + 'static>,
+        emit_handler: Option<impl FnMut(baml_compiler::watch::EmitEvent) + Send + 'static>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         // Check if this is an expression function
         let expr_fn = self
@@ -225,7 +225,7 @@ impl BamlAsyncInterpreterRuntime {
             .collect::<BamlMap<_, _>>();
 
         // Wrap emit handler in Arc<Mutex> so it can be shared with llm_handler
-        let emit_handler_shared: Arc<Mutex<Box<dyn FnMut(baml_compiler::emit::EmitEvent) + Send>>> =
+        let emit_handler_shared: Arc<Mutex<Box<dyn FnMut(baml_compiler::watch::EmitEvent) + Send>>> =
             Arc::new(Mutex::new(if let Some(handler) = emit_handler {
                 Box::new(handler)
             } else {
@@ -256,7 +256,7 @@ impl BamlAsyncInterpreterRuntime {
             let cb = cb_clone.clone();
             let env_vars = env_vars_clone.clone();
             let cancel_tripwire = cancel_tripwire_clone.clone();
-            let emit_handler: Arc<Mutex<Box<dyn FnMut(baml_compiler::emit::EmitEvent) + Send>>> =
+            let emit_handler: Arc<Mutex<Box<dyn FnMut(baml_compiler::watch::EmitEvent) + Send>>> =
                 Arc::clone(&emit_handler_for_llm);
             let parent_fn = parent_function_name.clone();
             let tags = tags_clone.clone();
@@ -316,7 +316,7 @@ impl BamlAsyncInterpreterRuntime {
                     // Fire stream start event
                     {
                         let mut handler = emit_handler.lock().unwrap();
-                        handler(baml_compiler::emit::EmitEvent::new_stream_start(
+                        handler(baml_compiler::watch::EmitEvent::new_stream_start(
                             emit_ctx.variable_name.clone(),
                             emit_ctx.stream_id.clone(),
                             parent_fn.clone(),
@@ -327,7 +327,7 @@ impl BamlAsyncInterpreterRuntime {
                     let variable_name = emit_ctx.variable_name.clone();
                     let stream_id = emit_ctx.stream_id.clone();
                     let emit_handler_for_stream: Arc<
-                        Mutex<Box<dyn FnMut(baml_compiler::emit::EmitEvent) + Send>>,
+                        Mutex<Box<dyn FnMut(baml_compiler::watch::EmitEvent) + Send>>,
                     > = Arc::clone(&emit_handler);
 
                     let parent_fn_for_stream = parent_fn.clone();
@@ -337,7 +337,7 @@ impl BamlAsyncInterpreterRuntime {
                                 // Convert ResponseBamlValue to BamlValueWithMeta<EmitValueMetadata>
                                 let baml_value_with_emit_meta =
                                     response_value.0.clone().map_meta(|meta| {
-                                        baml_compiler::emit::EmitValueMetadata {
+                                        baml_compiler::watch::EmitValueMetadata {
                                             // Constraints come from the TypeIR, not from the flags
                                             // Flags only contain ConstraintResults (the evaluation results)
                                             constraints: vec![],
@@ -348,7 +348,7 @@ impl BamlAsyncInterpreterRuntime {
                                     });
 
                                 let mut handler = emit_handler_for_stream.lock().unwrap();
-                                handler(baml_compiler::emit::EmitEvent::new_stream_update(
+                                handler(baml_compiler::watch::EmitEvent::new_stream_update(
                                     variable_name.clone(),
                                     stream_id.clone(),
                                     baml_value_with_emit_meta,
@@ -373,7 +373,7 @@ impl BamlAsyncInterpreterRuntime {
                     // Fire stream end event
                     {
                         let mut handler = emit_handler.lock().unwrap();
-                        handler(baml_compiler::emit::EmitEvent::new_stream_end(
+                        handler(baml_compiler::watch::EmitEvent::new_stream_end(
                             emit_ctx.variable_name.clone(),
                             emit_ctx.stream_id.clone(),
                             parent_fn.clone(),
@@ -475,7 +475,7 @@ impl BamlAsyncInterpreterRuntime {
 
         // Create emit event handler that reads from the shared handler
         let emit_handler_for_interp = Arc::clone(&emit_handler_shared);
-        let mut emit_event_handler = move |event: baml_compiler::emit::EmitEvent| {
+        let mut emit_event_handler = move |event: baml_compiler::watch::EmitEvent| {
             let mut handler = emit_handler_for_interp.lock().unwrap();
             handler(event);
         };
@@ -526,7 +526,7 @@ impl BamlAsyncInterpreterRuntime {
         env_vars: HashMap<String, String>,
         cancel_tripwire: Arc<TripWire>,
         tags: Option<&HashMap<String, String>>,
-        emit_handler: Option<impl FnMut(baml_compiler::emit::EmitEvent) + Send + 'static>,
+        emit_handler: Option<impl FnMut(baml_compiler::watch::EmitEvent) + Send + 'static>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         self.async_runtime.block_on(self.call_function(
             function_name,

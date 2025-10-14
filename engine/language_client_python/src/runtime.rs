@@ -218,7 +218,7 @@ impl BamlRuntime {
             .map(|ac| ac.create_tripwire())
             .unwrap_or_else(|| TripWire::new(None));
 
-        let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
+        let emit_handler = move |event: baml_compiler::watch::EmitEvent| {
             eprintln!("TODO: Handle event: {:?}", event);
         };
 
@@ -286,7 +286,7 @@ impl BamlRuntime {
             .map(|ac| ac.create_tripwire())
             .unwrap_or_else(|| TripWire::new(None));
 
-        let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
+        let emit_handler = move |event: baml_compiler::watch::EmitEvent| {
             eprintln!("TODO: Handle event: {:?}", event);
         };
 

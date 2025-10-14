@@ -332,10 +332,10 @@ impl BamlRuntime {
         let fut = async move {
             // Create emit_handler closure (only for interpreter)
             #[cfg(feature = "interpreter")]
-            let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
+            let emit_handler = move |event: baml_compiler::watch::EmitEvent| {
                 if let Some(ref callbacks) = emit_callbacks {
                     match event.value {
-                        baml_compiler::emit::EmitBamlValue::Block(block_label) => {
+                        baml_compiler::watch::EmitBamlValue::Block(block_label) => {
                             // Fire block events to all registered block handlers
                             for handler in &callbacks.block_handlers {
                                 let block_event = BlockEvent {
@@ -346,7 +346,7 @@ impl BamlRuntime {
                                     .call(block_event, ThreadsafeFunctionCallMode::NonBlocking);
                             }
                         }
-                        baml_compiler::emit::EmitBamlValue::Value(value) => {
+                        baml_compiler::watch::EmitBamlValue::Value(value) => {
                             if let Some(var_name) = &event.variable_name {
                                 // Serialize BamlValue to JSON
                                 let serialized = serde_json::to_value(value.value())
@@ -370,7 +370,7 @@ impl BamlRuntime {
                                 }
                             }
                         }
-                        baml_compiler::emit::EmitBamlValue::StreamStart(stream_id) => {
+                        baml_compiler::watch::EmitBamlValue::StreamStart(stream_id) => {
                             log::info!(
                                 "[RUST] StreamStart event for var: {:?}, stream_id: {}",
                                 event.variable_name,
@@ -404,7 +404,7 @@ impl BamlRuntime {
                                 }
                             }
                         }
-                        baml_compiler::emit::EmitBamlValue::StreamUpdate(stream_id, value) => {
+                        baml_compiler::watch::EmitBamlValue::StreamUpdate(stream_id, value) => {
                             if let Some(var_name) = &event.variable_name {
                                 if let Some(handler) = callbacks.stream_handlers.get(var_name) {
                                     let serialized = serde_json::to_value(value.value())
@@ -422,7 +422,7 @@ impl BamlRuntime {
                                 }
                             }
                         }
-                        baml_compiler::emit::EmitBamlValue::StreamEnd(stream_id) => {
+                        baml_compiler::watch::EmitBamlValue::StreamEnd(stream_id) => {
                             if let Some(var_name) = &event.variable_name {
                                 if let Some(handler) = callbacks.stream_handlers.get(var_name) {
                                     let stream_event = StreamEvent {
@@ -523,7 +523,7 @@ impl BamlRuntime {
             env_vars,
             tripwire,
             Some(&tags),
-            None::<fn(baml_compiler::emit::EmitEvent)>,
+            None::<fn(baml_compiler::watch::EmitEvent)>,
         );
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)

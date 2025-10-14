@@ -10,8 +10,8 @@ use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
 use internal_baml_diagnostics::Span;
 
 use crate::{
-    emit::EmitEvent,
     thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, THir},
+    watch::EmitEvent,
 };
 
 // Type alias for pinned boxed futures - conditionally Send for non-WASM targets
@@ -69,7 +69,7 @@ pub struct EmitVariable {
     /// The name of the variable
     pub name: String,
     /// The emit spec from the declaration
-    pub spec: crate::emit::EmitSpec,
+    pub spec: crate::watch::WatchSpec,
     /// Reference to the variable's value for change detection
     pub value_ref: Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>,
     /// Last emitted value (passed as prev to filter function)
@@ -95,7 +95,7 @@ fn register_emit_variable(
     scopes: &mut [Scope],
     name: &str,
     value_ref: Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>,
-    emit_spec: crate::emit::EmitSpec,
+    emit_spec: crate::watch::WatchSpec,
 ) {
     if let Some(scope) = scopes.last_mut() {
         scope.emit_variables.push(EmitVariable {
@@ -111,8 +111,8 @@ fn register_emit_variable(
 /// Convert ExprMetadata value to EmitValueMetadata value
 fn expr_value_to_emit_value(
     value: BamlValueWithMeta<ExprMetadata>,
-) -> BamlValueWithMeta<crate::emit::EmitValueMetadata> {
-    value.map_meta(|(_span, type_ir)| crate::emit::EmitValueMetadata {
+) -> BamlValueWithMeta<crate::watch::EmitValueMetadata> {
+    value.map_meta(|(_span, type_ir)| crate::watch::EmitValueMetadata {
         constraints: Vec::new(),
         response_checks: Vec::new(),
         completion: baml_types::Completion::default(),
@@ -124,7 +124,7 @@ fn expr_value_to_emit_value(
 fn fire_emit_event_for_variable(
     scopes: &[Scope],
     var_name: &str,
-    emit_handler: &mut impl FnMut(crate::emit::EmitEvent),
+    emit_handler: &mut impl FnMut(crate::watch::EmitEvent),
     function_name: &str,
 ) -> Result<()> {
     // Find the variable in scopes
@@ -132,7 +132,7 @@ fn fire_emit_event_for_variable(
         if let Some(value_ref) = scope.variables.get(var_name) {
             let current_value = value_ref.lock().unwrap();
             let emit_value = expr_value_to_emit_value(current_value.clone());
-            let event = crate::emit::EmitEvent::new_var(
+            let event = crate::watch::EmitEvent::new_var(
                 var_name.to_string(),
                 emit_value,
                 function_name.to_string(),
@@ -182,7 +182,7 @@ async fn check_emit_changes<F, Fut>(
     // We do this first to avoid holding locks during async operations
     let mut checks: Vec<(
         String,
-        crate::emit::EmitSpec,
+        crate::watch::WatchSpec,
         BamlValueWithMeta<ExprMetadata>,
         Option<BamlValue>,
         Option<BamlValue>,
@@ -238,10 +238,10 @@ async fn check_emit_changes<F, Fut>(
             }
         }
 
-        // Determine if we should emit based on the when condition
+        // Determine if we should emit to the watcher based on the when condition
         let should_emit = match &spec.when {
-            crate::emit::EmitWhen::False => false, // Manual emission only
-            crate::emit::EmitWhen::True => {
+            crate::watch::WatchWhen::False => false, // Manual emission only
+            crate::watch::WatchWhen::True => {
                 // For EmitWhen::True, use built-in change detection
                 let has_changed = match last_emitted.as_ref() {
                     None => true,                              // First time, always emit
@@ -249,7 +249,7 @@ async fn check_emit_changes<F, Fut>(
                 };
                 has_changed
             }
-            crate::emit::EmitWhen::FunctionName(fn_name) => {
+            crate::watch::WatchWhen::FunctionName(fn_name) => {
                 // For filter functions, ALWAYS call the filter - it subsumes change detection
                 // Evaluate the filter function
                 log::debug!(
@@ -300,7 +300,7 @@ async fn check_emit_changes<F, Fut>(
 
             // Fire the event
             let emit_value = expr_value_to_emit_value(current_value);
-            let event = crate::emit::EmitEvent::new_var(
+            let event = crate::watch::EmitEvent::new_var(
                 spec.name.clone(),
                 emit_value,
                 function_name.to_string(),
@@ -514,7 +514,7 @@ fn evaluate_block_with_control_flow<'a, F, Fut, E>(
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    E: FnMut(crate::emit::EmitEvent) + Send,
+    E: FnMut(crate::watch::EmitEvent) + Send,
 {
     Box::pin(async move {
         scopes.push(Scope {
@@ -1282,7 +1282,7 @@ async fn evaluate_block<F, Fut, E>(
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    E: FnMut(crate::emit::EmitEvent) + Send,
+    E: FnMut(crate::watch::EmitEvent) + Send,
 {
     match evaluate_block_with_control_flow(
         block,
@@ -1341,7 +1341,7 @@ async fn assign_to_expr<F, Fut, E>(
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    E: FnMut(crate::emit::EmitEvent) + Send,
+    E: FnMut(crate::watch::EmitEvent) + Send,
 {
     let mut current_expr = target;
     let mut value_to_assign = new_value;
@@ -1506,7 +1506,7 @@ fn evaluate_expr<'a, F, Fut, E>(
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    E: FnMut(crate::emit::EmitEvent) + Send,
+    E: FnMut(crate::watch::EmitEvent) + Send,
 {
     evaluate_expr_with_context(
         expr,
@@ -1532,7 +1532,7 @@ fn evaluate_expr_with_context<'a, F, Fut, E>(
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    E: FnMut(crate::emit::EmitEvent) + Send,
+    E: FnMut(crate::watch::EmitEvent) + Send,
 {
     Box::pin(async move {
         Ok(match expr {

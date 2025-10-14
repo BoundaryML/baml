@@ -1,17 +1,17 @@
-mod emit_event;
+mod watch_event;
 /// Utilities for analyzing the emit variables and their dependencies.
-pub mod emit_options;
+pub mod watch_options;
 
 use std::collections::HashSet;
 
 use baml_types::{ir_type::UnionConstructor, BamlMap, TypeIR};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
-pub use crate::emit::{
-    emit_event::{EmitBamlValue, EmitEvent, EmitValueMetadata},
-    emit_options::{EmitSpec, EmitWhen},
-};
 use crate::thir::{self, typecheck::TypeCompatibility, ClassConstructorField, ExprMetadata, THir};
+pub use crate::watch::{
+    watch_event::{EmitBamlValue, EmitEvent, EmitValueMetadata},
+    watch_options::{WatchSpec, WatchWhen},
+};
 
 /// The result of analyzing the emit variables in a BAML program.
 /// See `EmitChannels::analyze_program` for more details.
@@ -163,7 +163,7 @@ pub enum ChannelType {
 #[derive(Debug)]
 struct FunctionMetadata {
     subfunctions: HashSet<String>,
-    emit_vars: BamlMap<String, (EmitSpec, TypeIR)>,
+    emit_vars: BamlMap<String, (WatchSpec, TypeIR)>,
     markdown_headers: HashSet<String>,
 }
 
@@ -173,7 +173,7 @@ impl FunctionMetadata {
     /// use the existing channel and augment its type as
     /// needed (combine the existing and the new types into
     /// a union unless they are already subtypes).
-    pub fn push_emit_var(&mut self, name: String, spec: EmitSpec, ty: TypeIR) {
+    pub fn push_emit_var(&mut self, name: String, spec: WatchSpec, ty: TypeIR) {
         self.emit_vars
             .entry(name)
             .and_modify(|(_existing_spec, existing_type)| {

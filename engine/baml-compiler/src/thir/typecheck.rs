@@ -27,9 +27,9 @@ use internal_baml_ast::ast::WithSpan;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::{
-    emit::{EmitSpec, EmitWhen},
     hir::{self, dump::TypeDocumentRender, BinaryOperator, Hir},
     thir::{self as thir, ExprMetadata, THir},
+    watch::{WatchSpec, WatchWhen},
 };
 
 pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata> {
@@ -2551,13 +2551,13 @@ pub fn typecheck_expression(
 }
 
 fn typecheck_emit(
-    emit: &EmitSpec,
+    emit: &WatchSpec,
     var_type: &TypeIR,
     context: &mut TypeContext,
     diagnostics: &mut Diagnostics,
 ) {
     match &emit.when {
-        EmitWhen::FunctionName(fn_name) => {
+        WatchWhen::FunctionName(fn_name) => {
             let required_predicate_type = TypeIR::Arrow(
                 Box::new(ArrowGeneric {
                     param_types: vec![var_type.clone(), var_type.clone()],
@@ -2582,8 +2582,8 @@ fn typecheck_emit(
                 }
             }
         }
-        EmitWhen::True => {}
-        EmitWhen::False => {}
+        WatchWhen::True => {}
+        WatchWhen::False => {}
     }
 }
 
