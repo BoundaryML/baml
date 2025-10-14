@@ -81,6 +81,14 @@ impl BamlError {
                     message: message.to_string(),
                     status_code: status_code.to_u16(),
                 },
+                ExposedError::TimeoutError {
+                    client_name,
+                    message,
+                } => Self::ClientHttpError {
+                    client_name: client_name.to_string(),
+                    message: message.to_string(),
+                    status_code: 408, // HTTP 408 Request Timeout
+                },
                 ExposedError::AbortError { .. } => Self::InternalError {
                     message: "AbortError".into(),
                 },

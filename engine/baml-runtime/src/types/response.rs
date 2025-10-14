@@ -247,6 +247,10 @@ impl FunctionResult {
                 detailed_message: ref mut prev,
                 ..
             } => *prev = detail,
+            ExposedError::TimeoutError { .. } => {
+                // TimeoutError doesn't have a detailed_message field, so we can't update it
+                // We would need to redesign TimeoutError to include a detailed_message field if needed
+            }
             ExposedError::AbortError {
                 detailed_message: ref mut prev,
             } => *prev = detail,

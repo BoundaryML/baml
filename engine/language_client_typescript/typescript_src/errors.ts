@@ -181,7 +181,37 @@ export class BamlAbortError extends Error {
   }
 }
 
-export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientFinishReasonError | BamlAbortError
+export class BamlTimeoutError extends BamlClientHttpError {
+  constructor(client_name: string, message: string) {
+    super(client_name, message, 408, '')  // HTTP 408 Request Timeout
+    this.name = 'BamlTimeoutError'
+
+    Object.setPrototypeOf(this, BamlTimeoutError.prototype)
+  }
+
+  static from(error: Error): BamlTimeoutError | undefined {
+    if (error.message.includes('BamlTimeoutError') || error.message.includes('timed out')) {
+      try {
+        const errorData = JSON.parse(error.message)
+        if (errorData.type === 'BamlTimeoutError') {
+          return new BamlTimeoutError(
+            errorData.client_name || '',
+            errorData.message || error.message
+          )
+        }
+      } catch (parseError) {
+        // If parsing fails, check for timeout in message
+        if (error.message.includes('timed out')) {
+          return new BamlTimeoutError('', error.message)
+        }
+        console.warn('Failed to parse BamlTimeoutError:', parseError)
+      }
+    }
+    return undefined
+  }
+}
+
+export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientFinishReasonError | BamlAbortError | BamlTimeoutError
 
 function isError(error: unknown): error is Error {
   if (typeof error === 'string') {
@@ -210,6 +240,11 @@ function createBamlErrorUnsafe(error: unknown): BamlErrors | Error {
     return bamlAbortError
   }
 
+  const bamlTimeoutError = BamlTimeoutError.from(error)
+  if (bamlTimeoutError) {
+    return bamlTimeoutError
+  }
+
   const bamlClientHttpError = BamlClientHttpError.from(error)
   if (bamlClientHttpError) {
     return bamlClientHttpError
@@ -234,7 +269,8 @@ export function isBamlError(error: unknown): error is BamlErrors {
     (error as any).type === 'BamlClientHttpError' ||
     (error as any).type === 'BamlValidationError' ||
     (error as any).type === 'BamlClientFinishReasonError' ||
-    (error as any).type === 'BamlAbortError'
+    (error as any).type === 'BamlAbortError' ||
+    (error as any).type === 'BamlTimeoutError'
   ) {
     return true
   }
@@ -243,7 +279,8 @@ export function isBamlError(error: unknown): error is BamlErrors {
     (error as any).name === 'BamlClientHttpError' ||
     (error as any).name === 'BamlValidationError' ||
     (error as any).name === 'BamlClientFinishReasonError' ||
-    (error as any).name === 'BamlAbortError'
+    (error as any).name === 'BamlAbortError' ||
+    (error as any).name === 'BamlTimeoutError'
   ) {
     return true
   }
@@ -252,7 +289,8 @@ export function isBamlError(error: unknown): error is BamlErrors {
     error instanceof BamlClientHttpError ||
     error instanceof BamlValidationError ||
     error instanceof BamlClientFinishReasonError ||
-    error instanceof BamlAbortError
+    error instanceof BamlAbortError ||
+    error instanceof BamlTimeoutError
   )
 }
 
