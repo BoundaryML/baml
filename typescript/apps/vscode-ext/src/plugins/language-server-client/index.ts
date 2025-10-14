@@ -27,7 +27,6 @@ import TelemetryReporter from '../../telemetryReporter';
 import {
   checkForMinimalColorTheme,
   createLanguageServer,
-  isDebugOrTestSession,
 } from '../../util';
 import type { BamlVSCodePlugin } from '../types';
 import {
@@ -795,7 +794,7 @@ const plugin: BamlVSCodePlugin = {
   name: 'baml-language-server',
   enabled: () => true,
   activate: async (context, _outputChannel) => {
-    const isDebugOrTest = isDebugOrTestSession();
+    const isDebugOrTest = isDebugMode();
     bamlOutputChannel = _outputChannel;
     context.subscriptions.push(bamlOutputChannel);
     bamlOutputChannel.appendLine('Activating BAML Language Server plugin...');
@@ -808,7 +807,9 @@ const plugin: BamlVSCodePlugin = {
     );
 
     let serverAbsolutePath: string | null = null;
-    if (isDebugOrTest) {
+    if (!isDebugOrTest) {
+      console.log('Using debug cli in debug mode');
+      bamlOutputChannel.append('Using debug cli in debug mode');
       serverAbsolutePath = process.env.VSCODE_DEBUG_BAML_CLI_PATH || null;
     } else {
       try {
@@ -1029,21 +1030,21 @@ const plugin: BamlVSCodePlugin = {
 
     activateClient(context, serverOptions, clientOptions);
 
-    if (!isDebugOrTest) {
-      try {
-        const extensionId = `Boundary.${packageJson.name}`;
-        const extensionVersion: string = packageJson.version;
-        console.log(
-          `Initializing telemetry for ${extensionId} v${extensionVersion}`,
-        );
-        telemetry = new TelemetryReporter(extensionId, extensionVersion);
-        context.subscriptions.push(telemetry);
-        await telemetry.initialize();
-        console.log('Telemetry initialized.');
-      } catch (err) {
-        console.error('Failed to initialize telemetry:', err);
-      }
+
+    try {
+      const extensionId = `Boundary.${packageJson.name}`;
+      const extensionVersion: string = packageJson.version;
+      console.log(
+        `Initializing telemetry for ${extensionId} v${extensionVersion}`,
+      );
+      telemetry = new TelemetryReporter(extensionId, extensionVersion);
+      context.subscriptions.push(telemetry);
+      await telemetry.initialize();
+      console.log('Telemetry initialized.');
+    } catch (err) {
+      console.error('Failed to initialize telemetry:', err);
     }
+
 
     checkForMinimalColorTheme();
     console.log('BAML Language Server plugin activation finished.');
@@ -1061,7 +1062,7 @@ const plugin: BamlVSCodePlugin = {
       console.log('Client not running or already stopped.');
     }
 
-    if (!isDebugOrTestSession() && telemetry) {
+    if (!isDebugMode() && telemetry) {
       console.log('Disposing telemetry.');
       await telemetry.dispose().catch((err) => {
         console.error('Error disposing telemetry:', err);
