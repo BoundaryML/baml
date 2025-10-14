@@ -216,6 +216,7 @@ pub enum ErrorCode {
     RateLimited,           // 429
     ServerError,           // 500
     ServiceUnavailable,    // 503
+    Timeout,               // Request timeout
 
     // We failed to parse the response
     UnsupportedResponse(u16),
@@ -232,6 +233,7 @@ impl std::fmt::Display for ErrorCode {
             ErrorCode::RateLimited => f.write_str("RateLimited (429)"),
             ErrorCode::ServerError => f.write_str("ServerError (500)"),
             ErrorCode::ServiceUnavailable => f.write_str("ServiceUnavailable (503)"),
+            ErrorCode::Timeout => f.write_str("Timeout (408)"),
             ErrorCode::UnsupportedResponse(code) => write!(f, "BadResponse {code}"),
             ErrorCode::Other(code) => write!(f, "Unspecified error code: {code}"),
         }
@@ -268,6 +270,7 @@ impl ErrorCode {
             ErrorCode::RateLimited => 429,
             ErrorCode::ServerError => 500,
             ErrorCode::ServiceUnavailable => 503,
+            ErrorCode::Timeout => 408, // HTTP 408 Request Timeout
             ErrorCode::UnsupportedResponse(code) => *code,
             ErrorCode::Other(code) => *code,
         }

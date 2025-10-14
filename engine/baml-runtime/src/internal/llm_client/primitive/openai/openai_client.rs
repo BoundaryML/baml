@@ -26,7 +26,7 @@ use crate::{
         ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
         ModelFeatures, ResolveMediaUrls,
     },
-    request::create_client,
+    request::{create_client, create_http_client},
     RuntimeContext,
 };
 
@@ -430,6 +430,15 @@ impl RequestBuilder for OpenAIClient {
 
         let mut req = self.client.post(endpoint);
 
+        // Apply request timeout if configured
+        // Defaults were already applied during client creation
+        if let Some(ms) = self.properties.http_config.request_timeout_ms {
+            if ms > 0 {
+                req = req.timeout(std::time::Duration::from_millis(ms));
+            }
+            // If ms == 0, don't set timeout (infinite timeout)
+        }
+
         if !self.properties.query_params.is_empty() {
             req = req.query(&self.properties.query_params);
         }
@@ -489,6 +498,7 @@ macro_rules! make_openai_client {
         } else {
             ResolveMediaUrls::Always
         };
+        let http_client = create_http_client(&$properties.http_config)?;
         Ok(Self {
             name: $client.name.clone(),
             provider: $provider.into(),
@@ -512,7 +522,7 @@ macro_rules! make_openai_client {
             },
             properties: $properties,
             retry_policy: $client.retry_policy.clone(),
-            client: create_client()?,
+            client: http_client,
         })
     }};
     ($client:ident, $properties:ident, $provider:expr) => {{
@@ -521,6 +531,7 @@ macro_rules! make_openai_client {
         } else {
             ResolveMediaUrls::Always
         };
+        let http_client = create_http_client(&$properties.http_config)?;
         Ok(Self {
             name: $client.name().into(),
             provider: $provider.into(),
@@ -548,7 +559,7 @@ macro_rules! make_openai_client {
                 .retry_policy_id
                 .as_ref()
                 .map(|s| s.to_string()),
-            client: create_client()?,
+            client: http_client,
         })
     }};
 }

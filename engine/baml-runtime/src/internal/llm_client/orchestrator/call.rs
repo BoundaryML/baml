@@ -131,6 +131,15 @@ pub async fn orchestrate(
                         ..
                     }) => {
                         match code {
+                            // Timeout error
+                            crate::internal::llm_client::ErrorCode::Timeout => {
+                                Some(Err(anyhow::anyhow!(
+                                    crate::errors::ExposedError::TimeoutError {
+                                        client_name: client.clone(),
+                                        message: message.clone(),
+                                    }
+                                )))
+                            }
                             // This is some internal BAML error, so handle it like any other error
                             crate::internal::llm_client::ErrorCode::Other(2) => {
                                 Some(Err(anyhow::anyhow!(message.clone())))
