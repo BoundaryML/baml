@@ -706,9 +706,16 @@ impl<'g> HirCompiler<'g> {
                     _ => panic!("Invalid left hand of assignment, only variables, instance fields and array elements can be assigned"),
                 }
             }
-            thir::Statement::DeclareAndAssign { name, value, .. } => {
+            thir::Statement::DeclareAndAssign {
+                name, value, emit, ..
+            } => {
                 self.compile_expression(value);
                 self.track_local(name);
+                // TODO: Revisit this, track emittable should take channel and
+                // filter, which are given in the spec.
+                if let Some(spec) = emit {
+                    self.emit(Instruction::TrackEmittable);
+                }
             }
             thir::Statement::Return { expr, .. } => {
                 self.compile_expression(expr);
