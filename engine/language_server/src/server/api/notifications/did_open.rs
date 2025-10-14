@@ -38,7 +38,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
         requester: &mut Requester,
         params: DidOpenTextDocumentParams,
     ) -> Result<()> {
-        tracing::info!("DidOpenTextDocumentHandlerr");
+        tracing::info!("DidOpenTextDocumentHandler");
 
         let url = params.text_document.uri;
         let path = url
