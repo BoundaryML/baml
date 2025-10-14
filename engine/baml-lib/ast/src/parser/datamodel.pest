@@ -1,5 +1,5 @@
 schema = {
-    SOI ~ (mdx_header | expr_fn | top_level_assignment | value_expression_block | type_expression_block | template_declaration | type_alias | comment_block | raw_string_literal | empty_lines | CATCH_ALL)* ~ EOI
+    SOI ~ (expr_fn | top_level_assignment | value_expression_block | type_expression_block | template_declaration | type_alias | comment_block | raw_string_literal | empty_lines | CATCH_ALL)* ~ EOI
 }
 
 // ######################################
@@ -27,7 +27,7 @@ field_type_with_attr = { field_type ~ (NEWLINE? ~ (field_attribute | trailing_co
 value_expression_keyword  = { FUNCTION_KEYWORD | TEST_KEYWORD | CLIENT_KEYWORD | RETRY_POLICY_KEYWORD | GENERATOR_KEYWORD }
 value_expression_block    = { value_expression_keyword ~ identifier ~ named_argument_list? ~ ARROW? ~ field_type_chain? ~ SPACER_TEXT ~ BLOCK_OPEN ~ value_expression_contents ~ BLOCK_CLOSE }
 value_expression_contents = {
-    (mdx_header | stmt | type_builder_block | value_expression | comment_block | block_attribute | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
+    (stmt | type_builder_block | value_expression | comment_block | block_attribute | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 value_expression          = { identifier ~ config_expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
 
@@ -339,7 +339,7 @@ top_level_stmt = {
 expr_fn = { "function" ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_block }
 
 // Body of a function (including curly brackets).
-expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (mdx_header | expr_body_stmt | stmt | comment_block | empty_lines)* ~ expression? ~ (comment_block | empty_lines)* ~ BLOCK_CLOSE }
+expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (expr_body_stmt | stmt | comment_block | empty_lines)* ~ expression? ~ (comment_block | empty_lines)* ~ BLOCK_CLOSE }
 
 // More forgiving statement rule for function bodies - only for statements that commonly miss semicolons
 expr_body_stmt = {
@@ -356,8 +356,6 @@ expr_body_stmt = {
     ~ NEWLINE?
 }
 
-// Headers can include any characters except a newline; do not use unquoted_string_literal restrictions
-mdx_header = { WHITESPACE* ~ "#"+ ~ WHITESPACE* ~ (!NEWLINE ~ ANY)* ~ NEWLINE? }
 
 // Statement.
 stmt = {

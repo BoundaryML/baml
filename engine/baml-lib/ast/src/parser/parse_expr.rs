@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 use super::{
@@ -765,34 +767,56 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
     let mut expr = None;
     let _open_bracket = tokens.next()?;
 
-    // Collect all items first to process headers together
+    // Collect all items first so we can gather every header before we bind them
+    // to statements. We need two passes: the first pass collects and normalizes
+    // the headers (including establishing their relative levels), the second
+    // pass walks the statements in source order and attaches those normalized
+    // headers. If we tried to attach while parsing in a single pass, headers
+    // appearing inside comment blocks would be seen after their statements and
+    // could not participate in markdown hierarchy normalization.
     let mut items: Vec<Pair<'_>> = Vec::new();
     for item in tokens {
         items.push(item);
     }
 
     // Track headers with their hierarchy
+    // NB(sam): I don't entirely understand why we need to wrap Headers in Arc<>,
+    // but here are the notes from codex:
+    // <codex>
+    // Most AST nodes are owned outright—each node sits in exactly one place in
+    // the tree—so ordinary struct fields work fine. Header annotations are the
+    // odd case: the parser needs to attach the same logical header instance to
+    // multiple spots (statements, trailing expressions, top‑level block etc.)
+    // while also normalizing them later. To avoid copying or moving those
+    // structs repeatedly, the parser promotes headers into shared references
+    // (Arc<Header>). That lets the first pass create and normalize a header
+    // once, stash it in the lookup map, and then hand out clones of the pointer
+    // wherever the header appears, without duplication or life‑time juggling.
+    // Functionally, Arc is central here because headers get reused across many
+    // nodes, not because other AST structures require special thread‑safety
+    // treatment.
+    // </codex>
     let mut all_headers_in_block: Vec<std::sync::Arc<Header>> = Vec::new();
 
     // First pass: collect all headers
     for item in &items {
-        if item.as_rule() == Rule::mdx_header {
-            let header = parse_header(item.clone(), diagnostics);
-            if let Some(header) = header {
-                let header_arc = std::sync::Arc::new(header);
-                all_headers_in_block.push(header_arc.clone());
+        if item.as_rule() == Rule::comment_block {
+            let headers = headers_from_comment_block(item.clone(), diagnostics);
+            if !headers.is_empty() {
+                all_headers_in_block.extend(headers);
             }
         }
     }
 
-    // Normalize all headers in the block together
+    // normalize_headers adjusts header levels so the shallowest header in the
+    // scope becomes an h1
     normalize_headers(&mut all_headers_in_block);
 
-    // Debug: Print normalized headers (disabled)
-    // println!("PARSER: Normalized headers in block:");
-    // for (i, header) in all_headers_in_block.iter().enumerate() {
-    //     println!("  [{}] '{}' (Level: {})", i, header.title, header.level);
-    // }
+    // Lookup by span so we can reuse normalized headers later.
+    let mut header_lookup: HashMap<(usize, usize), std::sync::Arc<Header>> = HashMap::new();
+    for header in &all_headers_in_block {
+        header_lookup.insert((header.span.start, header.span.end), header.clone());
+    }
 
     // Second pass: process statements and expressions with normalized headers
     let mut current_headers: Vec<std::sync::Arc<Header>> = Vec::new();
@@ -826,26 +850,6 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
                     continue;
                 }
             }
-            Rule::mdx_header => {
-                // Headers are already processed, just update current headers
-                let header = parse_header(item, diagnostics);
-                if let Some(header) = header {
-                    let header_arc = std::sync::Arc::new(header);
-
-                    // Find the corresponding normalized header
-                    if let Some(normalized_header) = all_headers_in_block
-                        .iter()
-                        .find(|h| h.title == header_arc.title)
-                    {
-                        // Implement header hierarchy logic
-                        filter_headers_by_hierarchy(&mut current_headers, normalized_header);
-
-                        // Add to current headers and headers since last statement
-                        current_headers.push(normalized_header.clone());
-                        headers_since_last_stmt.push(normalized_header.clone());
-                    }
-                }
-            }
             Rule::BLOCK_CLOSE => {
                 // Commentend out because we can't have blocks without return
                 // expressions otherwise. Plus we need functions with no return
@@ -863,8 +867,18 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
                 continue;
             }
             Rule::comment_block => {
-                // Skip comments in function bodies
-                continue;
+                let headers = headers_from_comment_block(item, diagnostics);
+                if headers.is_empty() {
+                    continue;
+                }
+                for header in headers {
+                    attach_header_if_known(
+                        &header,
+                        &header_lookup,
+                        &mut current_headers,
+                        &mut headers_since_last_stmt,
+                    );
+                }
             }
             Rule::empty_lines => {
                 // Skip empty lines in function bodies
@@ -942,42 +956,73 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
     })
 }
 
-/// Parse a single header from an MDX header token
-pub fn parse_header(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Header> {
-    let full_text = token.as_str();
-    let header_span = diagnostics.span(token.as_span());
+fn headers_from_comment_block(
+    token: Pair<'_>,
+    diagnostics: &mut Diagnostics,
+) -> Vec<std::sync::Arc<Header>> {
+    if token.as_rule() != Rule::comment_block {
+        return Vec::new();
+    }
 
-    // Find the start of the hash sequence
-    let hash_start = full_text.find('#')?;
-    let after_whitespace = full_text[hash_start..].trim_start();
+    let mut headers = Vec::new();
+    for current in token.into_inner() {
+        if current.as_rule() == Rule::comment {
+            if let Some(header) = parse_comment_header_pair(&current, diagnostics) {
+                headers.push(std::sync::Arc::new(header));
+            }
+        }
+    }
+    headers
+}
 
-    // Count consecutive hash characters
-    let hash_count = after_whitespace.chars().take_while(|&c| c == '#').count();
+pub(crate) fn parse_comment_header_pair(
+    comment: &Pair<'_>,
+    diagnostics: &mut Diagnostics,
+) -> Option<Header> {
+    let span = diagnostics.span(comment.as_span());
+    let mut text = comment.as_str().trim_start();
+    if !text.starts_with("//") {
+        return None;
+    }
+    text = &text[2..];
+    let text = text.trim_start();
+    if !text.starts_with('#') {
+        return None;
+    }
 
-    // Extract the title after the hash sequence and whitespace
-    let after_hashes = &after_whitespace[hash_count..];
-    let title_text = after_hashes.trim().to_string();
+    let mut level = 0usize;
+    for ch in text.chars() {
+        if ch == '#' {
+            level += 1;
+        } else {
+            break;
+        }
+    }
+    if level == 0 {
+        return None;
+    }
 
-    // Remove trailing newline if present
-    let title_text = title_text
-        .trim_end_matches('\n')
-        .trim_end_matches('\r')
-        .to_string();
-
-    let level = hash_count as u8;
-
-    // Print debug information about the header (disabled)
-    // let indent = " ".repeat(level as usize);
-    // println!(
-    //     "{}└ HEADER Level {}: '{}' (hash count: {})",
-    //     indent, level, title_text, level
-    // );
+    let rest = text[level..].trim().to_string();
 
     Some(Header {
-        level,
-        title: title_text,
-        span: header_span,
+        level: level as u8,
+        title: rest,
+        span,
     })
+}
+
+fn attach_header_if_known(
+    header: &std::sync::Arc<Header>,
+    lookup: &HashMap<(usize, usize), std::sync::Arc<Header>>,
+    current_headers: &mut Vec<std::sync::Arc<Header>>,
+    headers_since_last_stmt: &mut Vec<std::sync::Arc<Header>>,
+) {
+    let key = (header.span.start, header.span.end);
+    if let Some(normalized_header) = lookup.get(&key) {
+        filter_headers_by_hierarchy(current_headers, normalized_header);
+        current_headers.push(normalized_header.clone());
+        headers_since_last_stmt.push(normalized_header.clone());
+    }
 }
 
 /// Filter headers based on hierarchy rules (markdown-style nesting)
