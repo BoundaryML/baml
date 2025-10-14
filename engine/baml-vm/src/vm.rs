@@ -550,20 +550,20 @@ impl Vm {
                 }
 
                 Instruction::StoreField(index) => {
-                    let reference = self.objects.as_object(
+                    let instance_index = self.objects.as_object(
                         &self.stack[self.stack.ensure_slot_from_top(1)?],
                         ObjectType::Instance,
                     )?;
 
-                    let Object::Instance(instance) = &mut self.objects[reference] else {
+                    let Object::Instance(instance) = &mut self.objects[instance_index] else {
                         return Err(InternalError::TypeError {
                             expected: ObjectType::Instance.into(),
-                            got: ObjectType::of(&self.objects[reference]).into(),
+                            got: ObjectType::of(&self.objects[instance_index]).into(),
                         }
                         .into());
                     };
 
-                    let emit_node = NodeId::HeapObject(reference);
+                    let emit_node = NodeId::HeapObject(instance_index);
 
                     if let Value::Object(old_node) = instance.fields[index] {
                         self.emit.unlink_edge(

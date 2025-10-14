@@ -100,6 +100,13 @@ impl Object {
             _ => anyhow::bail!("Unsupported object type for testing: {:?}", obj),
         }
     }
+
+    pub fn instance(class: &str, fields: IndexMap<&str, Value>) -> Self {
+        Object::Instance(Instance {
+            class: class.to_string(),
+            fields: Instance::fields(fields),
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
