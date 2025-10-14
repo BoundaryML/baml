@@ -15,7 +15,7 @@ Timeouts let you fail fast and either retry or fallback to alternative clients.
 
 ## Quick Start
 
-Add timeouts to any client by specifying timeout values in the `options` block:
+Add timeouts to any client by specifying timeout values in the `http` block within `options`:
 
 ```baml
 client<llm> MyClient {
@@ -25,8 +25,10 @@ client<llm> MyClient {
     api_key env.OPENAI_API_KEY
 
     // Set timeouts (all values in milliseconds)
-    connect_timeout_ms 5000      // 5 seconds to connect
-    request_timeout_ms 30000     // 30 seconds total
+    http {
+      connect_timeout_ms 5000      // 5 seconds to connect
+      request_timeout_ms 30000     // 30 seconds total
+    }
   }
 }
 ```
@@ -47,7 +49,9 @@ client<llm> MyClient {
   options {
     model "gpt-4"
     api_key env.OPENAI_API_KEY
-    connect_timeout_ms 3000  // Fail if can't connect within 3s
+    http {
+      connect_timeout_ms 3000  // Fail if can't connect within 3s
+    }
   }
 }
 ```
@@ -64,7 +68,9 @@ client<llm> MyClient {
   options {
     model "gpt-4"
     api_key env.OPENAI_API_KEY
-    time_to_first_token_timeout_ms 10000  // First token within 10s
+    http {
+      time_to_first_token_timeout_ms 10000  // First token within 10s
+    }
   }
 }
 ```
@@ -85,7 +91,9 @@ client<llm> MyClient {
   options {
     model "gpt-4"
     api_key env.OPENAI_API_KEY
-    idle_timeout_ms 15000  // No more than 15s between chunks
+    http {
+      idle_timeout_ms 15000  // No more than 15s between chunks
+    }
   }
 }
 ```
@@ -102,7 +110,9 @@ client<llm> MyClient {
   options {
     model "gpt-4"
     api_key env.OPENAI_API_KEY
-    request_timeout_ms 60000  // Complete within 60s total
+    http {
+      request_timeout_ms 60000  // Complete within 60s total
+    }
   }
 }
 ```
@@ -118,8 +128,9 @@ client<llm> ResilientClient {
   provider fallback
   options {
     strategy [Primary, Backup, LastResort]
-    request_timeout_ms 30000   // 30s per attempt
-    total_timeout_ms 120000    // 2 minutes for all attempts combined
+    http {
+      total_timeout_ms 120000    // 2 minutes for all attempts combined
+    }
   }
 }
 ```
@@ -142,7 +153,9 @@ client<llm> MyClient {
   options {
     model "gpt-4"
     api_key env.OPENAI_API_KEY
-    request_timeout_ms 30000  // 30s per attempt, including retries
+    http {
+      request_timeout_ms 30000  // 30s per attempt (applies to each retry)
+    }
   }
 }
 ```
@@ -153,7 +166,7 @@ If the first attempt times out at 30 seconds, the retry mechanism kicks in and t
 
 ## Timeouts with Fallback Clients
 
-When using fallback clients, timeouts compose using the **minimum rule**: the most restrictive timeout wins.
+When using fallback clients, each underlying client uses its own timeout settings, while the fallback client can set an overall `total_timeout_ms` to limit the entire chain.
 
 ```baml
 client<llm> FastClient {
@@ -161,7 +174,9 @@ client<llm> FastClient {
   options {
     model "gpt-3.5-turbo"
     api_key env.OPENAI_API_KEY
-    request_timeout_ms 20000  // Fast client: 20s
+    http {
+      request_timeout_ms 20000  // Fast client: 20s
+    }
   }
 }
 
@@ -170,7 +185,9 @@ client<llm> SlowClient {
   options {
     model "gpt-4"
     api_key env.OPENAI_API_KEY
-    request_timeout_ms 60000  // Slower client: 60s
+    http {
+      request_timeout_ms 60000  // Slower client: 60s
+    }
   }
 }
 
@@ -178,20 +195,21 @@ client<llm> MyFallback {
   provider fallback
   options {
     strategy [FastClient, SlowClient]
-    connect_timeout_ms 5000    // All subclients get 5s connect timeout
-    total_timeout_ms 120000    // 2 minutes for entire fallback chain
+    http {
+      total_timeout_ms 120000    // 2 minutes for entire fallback chain
+    }
   }
 }
 ```
 
 **Effective timeouts:**
 
-* `FastClient`: `min(5000, âˆž)` connect, `min(âˆž, 20000)` request = 5s connect, 20s request
-* `SlowClient`: `min(5000, âˆž)` connect, `min(âˆž, 60000)` request = 5s connect, 60s request
-* Total execution time: Limited to 120 seconds across all attempts
+* `FastClient`: Uses its own timeout settings (20s request timeout)
+* `SlowClient`: Uses its own timeout settings (60s request timeout)
+* Total execution time: Limited to 120 seconds across all attempts by the fallback client's `total_timeout_ms`
 
 <Tip>
-  The `total_timeout_ms` provides an upper bound regardless of individual client timeouts. If the fallback chain exhausts 120 seconds, no further clients are attempted.
+  The `total_timeout_ms` provides an upper bound regardless of individual client timeouts. If the fallback chain exhausts 120 seconds, no further clients are attempted. Low-level timeouts like `connect_timeout_ms`, `time_to_first_token_timeout_ms`, and `idle_timeout_ms` should be defined on the individual clients, not on the fallback client itself.
 </Tip>
 
 ## Runtime Timeout Overrides
@@ -266,10 +284,12 @@ client<llm> ProductionClient {
     model "gpt-4"
     api_key env.OPENAI_API_KEY
 
-    connect_timeout_ms 10000                // 10s to connect
-    time_to_first_token_timeout_ms 30000    // 30s to first token
-    idle_timeout_ms 2000                    // 2s between chunks
-    request_timeout_ms 300000               // 5 minutes total
+    http {
+      connect_timeout_ms 10000                // 10s to connect
+      time_to_first_token_timeout_ms 30000    // 30s to first token
+      idle_timeout_ms 2000                    // 2s between chunks
+      request_timeout_ms 300000               // 5 minutes total
+    }
   }
 }
 ```
@@ -282,11 +302,9 @@ client<llm> FallbackClient {
   options {
     strategy [Primary, Secondary, Tertiary]
 
-    connect_timeout_ms 5000                 // Faster failover
-    time_to_first_token_timeout_ms 15000
-    idle_timeout_ms 2000
-    request_timeout_ms 120000               // 2 min per attempt
-    total_timeout_ms 600000                 // 10 min overall
+    http {
+      total_timeout_ms 600000                 // 10 min overall
+    }
   }
 }
 ```
@@ -307,7 +325,9 @@ client<llm> FastTurbo {
   options {
     model "gpt-3.5-turbo"
     api_key env.OPENAI_API_KEY
-    request_timeout_ms 15000  // Turbo is fast
+    http {
+      request_timeout_ms 15000  // Turbo is fast
+    }
   }
 }
 
@@ -316,7 +336,9 @@ client<llm> SlowButSmart {
   options {
     model "gpt-4"
     api_key env.OPENAI_API_KEY
-    request_timeout_ms 60000  // GPT-4 needs more time
+    http {
+      request_timeout_ms 60000  // GPT-4 needs more time
+    }
   }
 }
 ```
@@ -330,7 +352,9 @@ client<llm> ChatbotClient {
   provider fallback
   options {
     strategy [FastModel, SlowModel]
-    total_timeout_ms 5000  // Must respond within 5s for good UX
+    http {
+      total_timeout_ms 5000  // Must respond within 5s for good UX
+    }
   }
 }
 ```
