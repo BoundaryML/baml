@@ -17,6 +17,7 @@ import type { Express } from 'express'
 import { Socket } from 'net'
 import StatusBarPanel from './panels/StatusBarPanel'
 import { Server } from 'http'
+import { LAST_ACTIVE_BAML_FILE } from './helpers/get-open-file'
 
 const outputChannel = vscode.window.createOutputChannel('baml')
 const diagnosticsCollection =
@@ -292,7 +293,18 @@ export function activate(context: vscode.ExtensionContext) {
   })
 
   // Add cursor movement listener
+  vscode.window.onDidChangeActiveTextEditor
   vscode.window.onDidChangeTextEditorSelection((event) => {
+
+    // properly track the actual last known baml file.
+    if (event.textEditor.document.fileName.endsWith(".baml")) {
+      LAST_ACTIVE_BAML_FILE.uri = event.textEditor.document.uri;
+    }
+
+
+
+    // The code below this line may not be fully accurate. The vscode.window.activeTextEditor may go
+    // undefined in some cases.
     const position = event.selections[0]?.active
 
     const editor = vscode.window.activeTextEditor
@@ -302,6 +314,8 @@ export function activate(context: vscode.ExtensionContext) {
     if (!name.endsWith('.baml')) {
       return
     }
+
+
 
     // TODO: buggy when used with multiple functions, needs a fix.
     WebviewPanelHost.currentPanel?.sendCommandToWebview({

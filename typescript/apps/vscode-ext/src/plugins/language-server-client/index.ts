@@ -20,7 +20,7 @@ import {
 import { URI } from 'vscode-uri';
 import { z } from 'zod';
 import packageJson from '../../../package.json';
-import { getCurrentOpenedFile } from '../../helpers/get-open-file';
+import { getCurrentOpenedFile, LAST_ACTIVE_BAML_FILE } from '../../helpers/get-open-file';
 import StatusBarPanel from '../../panels/StatusBarPanel';
 import { WebviewPanelHost } from '../../panels/WebviewPanelHost';
 import TelemetryReporter from '../../telemetryReporter';
@@ -543,15 +543,16 @@ export const registerClientEventHandlers = (client: LanguageClient, context: Ext
         }
 
         // Check if this version update is for the currently active baml_src directory
-        const activeEditor =
-          window.activeTextEditor || (window.visibleTextEditors.length > 0 ? window.visibleTextEditors[0] : null);
+        const activeEditor = LAST_ACTIVE_BAML_FILE.uri;
         if (activeEditor) {
           try {
-            const currentFilePath = URI.parse(activeEditor.document.uri.toString()).fsPath;
+
+            const currentFilePath = activeEditor.fsPath;
+
             const rootPathUri = URI.file(payload.root_path).fsPath;
             if (!isPathWithinParent(currentFilePath, rootPathUri)) {
               bamlOutputChannel.appendLine(
-                `baml_src_generator_version ignored: root path does not match active editor ${currentFilePath} ${rootPathUri}`,
+                `baml_src_generator_version ignored: root path does not match active editor ${currentFilePath} root: ${rootPathUri}`,
               );
               return;
             }
