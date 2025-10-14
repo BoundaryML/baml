@@ -227,13 +227,35 @@ pub async fn execute_request(
     let response = match client.http_client().execute(built_req).await {
         Ok(resp) => resp,
         Err(e) => {
+            // Detect timeout errors
+            let (message, code) = if e.is_timeout() {
+                ("Request timed out".to_string(), ErrorCode::Timeout)
+            } else {
+                (
+                    {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            format!("{e:?}")
+                        }
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            // Note, Wasm can't use :? for some reason (it makes it so the error looks like garbage). But only doing to_string also makes it so that the full error is not shown. E.g. DNS errors only say "error sending request for url".
+                            format!(
+                                "{e}\n\nIf you haven't yet, try enabling the proxy (See API Keys button)"
+                            )
+                        }
+                    },
+                    e.status().map_or(ErrorCode::Other(2), ErrorCode::from_status)
+                )
+            };
+
             log_http_response(
                 runtime_context,
                 e.status()
                     .unwrap_or(reqwest::StatusCode::INTERNAL_SERVER_ERROR)
                     .as_u16(),
                 None,
-                HTTPBody::new(format!("No response. Error: {e:?}").into_bytes()),
+                HTTPBody::new(format!("No response. Error: {message}").into_bytes()),
                 client.context(),
             )
             .await;
@@ -245,22 +267,8 @@ pub async fn execute_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: {
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        format!("{e:?}")
-                    }
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        // Note, Wasm can't use :? for some reason (it makes it so the error looks like garbage). But only doing to_string also makes it so that the full error is not shown. E.g. DNS errors only say "error sending request for url".
-                        format!(
-                            "{e}\n\nIf you haven't yet, try enabling the proxy (See API Keys button)"
-                        )
-                    }
-                },
-                code: e
-                    .status()
-                    .map_or(ErrorCode::Other(2), ErrorCode::from_status),
+                message,
+                code,
             }));
         }
     };

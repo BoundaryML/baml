@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent};
@@ -29,7 +30,7 @@ use crate::{
         ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
         ModelFeatures, ResolveMediaUrls,
     },
-    request::create_client,
+    request::{create_client, create_http_client},
     RuntimeContext,
 };
 
@@ -158,7 +159,7 @@ impl GoogleAIClient {
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),
-            client: create_client()?,
+            client: create_http_client(&properties.http_config)?,
             properties,
         })
     }
@@ -203,7 +204,7 @@ impl GoogleAIClient {
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.retry_policy.clone(),
-            client: create_client()?,
+            client: create_http_client(&properties.http_config)?,
             properties,
         })
     }
@@ -240,6 +241,15 @@ impl RequestBuilder for GoogleAIClient {
             }
             _ => self.client.post(baml_original_url),
         };
+
+        // Apply request timeout if configured
+        // Defaults were already applied during client creation
+        if let Some(ms) = self.properties.http_config.request_timeout_ms {
+            if ms > 0 {
+                req = req.timeout(Duration::from_millis(ms));
+            }
+            // If ms == 0, don't set timeout (infinite timeout)
+        }
 
         for (key, value) in &self.properties.headers {
             req = req.header(key, value);

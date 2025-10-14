@@ -169,6 +169,9 @@ impl BamlError {
                             failed.client, failed.message
                         ))
                     }
+                    baml_runtime::internal::llm_client::ErrorCode::Timeout => {
+                        raise_baml_timeout_error(failed.client.clone(), failed.message.clone())
+                    }
                     baml_runtime::internal::llm_client::ErrorCode::Other(_)
                     | baml_runtime::internal::llm_client::ErrorCode::InvalidAuthentication
                     | baml_runtime::internal::llm_client::ErrorCode::NotSupported
