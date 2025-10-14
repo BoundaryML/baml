@@ -76,7 +76,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             .internal_error()?;
 
         // session.open_text_document(
-        //     DocumentKey::from_path(&file_path, &file_path).internal_error()?,
+        //    q DocumentKey::from_path(&file_path, &file_path).internal_error()?,
         //     TextDocument::new(params.text_document.text, params.text_document.version),
         // );
 

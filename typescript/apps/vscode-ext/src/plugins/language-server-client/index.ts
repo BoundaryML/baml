@@ -808,7 +808,7 @@ const plugin: BamlVSCodePlugin = {
     );
 
     let serverAbsolutePath: string | null = null;
-    if (!isDebugOrTest) {
+    if (isDebugOrTest) {
       console.log('Using debug cli in debug mode');
       bamlOutputChannel.append('Using debug cli in debug mode');
       serverAbsolutePath = process.env.VSCODE_DEBUG_BAML_CLI_PATH || null;
