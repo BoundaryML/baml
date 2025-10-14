@@ -853,7 +853,7 @@ fn convert_completion_prompt_to_body(prompt: &str) -> serde_json::Map<String, se
 mod tests {
     use indexmap::IndexMap;
     use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
-    use internal_llm_client::{RolesSelection, SupportedRequestModes};
+    use internal_llm_client::{openai, RolesSelection, SupportedRequestModes};
 
     use super::*;
 
@@ -895,6 +895,7 @@ mod tests {
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAIResponses,
                 media_url_handler: internal_llm_client::MediaUrlHandler::default(),
+                http_config: Default::default(),
             },
             client: reqwest::Client::new(),
         };
@@ -948,6 +949,7 @@ mod tests {
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAI,
                 media_url_handler: internal_llm_client::MediaUrlHandler::default(),
+                http_config: Default::default(),
             },
             client: reqwest::Client::new(),
         };
@@ -1043,6 +1045,7 @@ mod tests {
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAIResponses,
                 media_url_handler: internal_llm_client::MediaUrlHandler::default(),
+                http_config: Default::default(),
             },
             client: reqwest::Client::new(),
         };
