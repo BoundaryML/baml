@@ -108,6 +108,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="BuildTree", llm_response=llm_response, mode="request")
         return typing.cast(types.Tree, result)
 
+    def CheckWordEquality(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> bool:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="CheckWordEquality", llm_response=llm_response, mode="request")
+        return typing.cast(bool, result)
+
     def ChooseTodoTools(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.Union["types.AddTodoItem", "types.TodoMessageToUser"]]:
@@ -1440,6 +1446,18 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="HomeEnvVarIsEmpty", llm_response=llm_response, mode="request")
         return typing.cast(bool, result)
 
+    def IsTargetWord(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> bool:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="IsTargetWord", llm_response=llm_response, mode="request")
+        return typing.cast(bool, result)
+
+    def IsTargetWord2(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> bool:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="IsTargetWord2", llm_response=llm_response, mode="request")
+        return typing.cast(bool, result)
+
     def IterativeFibonacci(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
@@ -1451,6 +1469,12 @@ class LlmResponseParser:
     ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="NormalElseIfStmt", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
+
+    def NotEmpty(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> bool:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="NotEmpty", llm_response=llm_response, mode="request")
+        return typing.cast(bool, result)
 
     def ReturnCategory(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -1488,6 +1512,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
+    def SimpleEmitWithFilter(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="SimpleEmitWithFilter", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
     def StoreFnCallInLocalVar(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
@@ -1522,6 +1552,12 @@ class LlmResponseParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowEmitChild", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def WorkflowEmitWithFilter(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowEmitWithFilter", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
     
@@ -1615,6 +1651,12 @@ class LlmStreamParser:
     ) -> stream_types.Tree:
         result = self.__options.merge_options(baml_options).parse_response(function_name="BuildTree", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.Tree, result)
+
+    def CheckWordEquality(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> bool:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="CheckWordEquality", llm_response=llm_response, mode="stream")
+        return typing.cast(bool, result)
 
     def ChooseTodoTools(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2948,6 +2990,18 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="HomeEnvVarIsEmpty", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[bool], result)
 
+    def IsTargetWord(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[bool]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="IsTargetWord", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[bool], result)
+
+    def IsTargetWord2(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[bool]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="IsTargetWord2", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[bool], result)
+
     def IterativeFibonacci(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
@@ -2959,6 +3013,12 @@ class LlmStreamParser:
     ) -> typing.Optional[int]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="NormalElseIfStmt", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
+
+    def NotEmpty(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[bool]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="NotEmpty", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[bool], result)
 
     def ReturnCategory(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2996,6 +3056,12 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
+    def SimpleEmitWithFilter(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="SimpleEmitWithFilter", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
     def StoreFnCallInLocalVar(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
@@ -3030,6 +3096,12 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowEmitChild", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def WorkflowEmitWithFilter(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowEmitWithFilter", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
     

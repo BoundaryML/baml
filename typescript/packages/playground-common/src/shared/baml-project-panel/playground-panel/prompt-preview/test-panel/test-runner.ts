@@ -1,9 +1,9 @@
 import type { WasmFunctionResponse, WasmSpan, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { ctxAtom, runtimeAtom, wasmAtom } from '../../../atoms';
+import { ctxAtom, runtimeAtom, wasmAtom, wasmPanicAtom } from '../../../atoms';
 import { useAtomCallback } from 'jotai/utils'
 import { vscode } from '../../../vscode'
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import {
   type TestState,
   testCaseAtom,
@@ -451,9 +451,65 @@ export const useRunBamlTests = () => {
   const currentAbortController = useAtomValue(currentAbortControllerAtom)
   const setCurrentAbortController = useSetAtom(currentAbortControllerAtom)
   const setAreTestsRunning = useSetAtom(areTestsRunningAtom)
+  const panicState = useAtomValue(wasmPanicAtom)
+  const setWasmPanic = useSetAtom(wasmPanicAtom)
+  const setTestHistory = useSetAtom(testHistoryAtom)
+
+  // Automatically cancel tests when WASM panics
+  useEffect(() => {
+    if (panicState && currentAbortController) {
+      console.error('[WASM Panic] Detected panic during test run, cancelling tests:', panicState.msg)
+
+      // Send telemetry about the panic
+      vscode.sendTelemetry({
+        action: 'wasm_panic',
+        data: {
+          panic_message: panicState.msg,
+          timestamp: panicState.timestamp,
+          during_test_execution: true,
+        },
+      })
+
+      // Abort the controller
+      currentAbortController.abort()
+      setCurrentAbortController(null)
+      setAreTestsRunning(false)
+
+      // Mark all running tests as cancelled due to panic
+      setTestHistory((prev) => {
+        const newHistory = [...prev]
+        const currentRun = newHistory[0]
+        if (!currentRun) return prev
+
+        // Update all tests that are still running to show they were cancelled
+        currentRun.tests = currentRun.tests.map((test) => {
+          if (test.response.status === 'running' || test.response.status === 'queued') {
+            return {
+              ...test,
+              response: {
+                status: 'error',
+                message: `WASM panic: ${panicState.msg}`,
+              },
+              timestamp: Date.now(),
+            }
+          }
+          return test
+        })
+
+        return newHistory
+      })
+    }
+  }, [panicState, currentAbortController, setCurrentAbortController, setAreTestsRunning, setTestHistory])
 
   const runTests = (tests: { functionName: string; testName: string }[]) => {
     console.warn('BAML Cancel: runTests called with', tests.length, 'tests, parallel:', isParallelTestsEnabled)
+
+    // Clear any previous panic state before starting new tests
+    if (panicState) {
+      console.log('[WASM Panic] Clearing previous panic state before starting new tests')
+      setWasmPanic(null)
+    }
+
     if (isParallelTestsEnabled) {
       console.warn('BAML Cancel: Calling setParallelTests')
       setParallelTests(tests)

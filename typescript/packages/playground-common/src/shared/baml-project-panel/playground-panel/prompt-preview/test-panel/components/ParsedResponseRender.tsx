@@ -61,7 +61,7 @@ const ParsedResponseRender = ({ response }: { response: string | undefined }) =>
   }
 
   return (
-    <div className='flex max-h-[500px]  text-xs'>
+    <div className='flex max-h-[600px]  text-xs'>
       <ScrollArea className='pr-2 w-full text-xs' type='always'>
         <JsonView
           className='p-1 w-full rounded-md'

@@ -21,16 +21,32 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 #[cfg(target_arch = "wasm32")]
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 
+// Context for emit streaming - passed to LLM handler when calling LLM function for @emit variable
+#[derive(Clone, Debug)]
+pub struct EmitStreamContext {
+    pub variable_name: String,
+    pub stream_id: String,
+}
+
 // Trait aliases for conditional Send bounds
 #[cfg(not(target_arch = "wasm32"))]
-pub trait LlmHandler<Fut>: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync {}
+pub trait LlmHandler<Fut>:
+    FnMut(String, Vec<BamlValue>, Option<EmitStreamContext>) -> Fut + Send + Sync
+{
+}
 #[cfg(not(target_arch = "wasm32"))]
-impl<F, Fut> LlmHandler<Fut> for F where F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync {}
+impl<F, Fut> LlmHandler<Fut> for F where
+    F: FnMut(String, Vec<BamlValue>, Option<EmitStreamContext>) -> Fut + Send + Sync
+{
+}
 
 #[cfg(target_arch = "wasm32")]
-pub trait LlmHandler<Fut>: FnMut(String, Vec<BamlValue>) -> Fut {}
+pub trait LlmHandler<Fut>: FnMut(String, Vec<BamlValue>, Option<EmitStreamContext>) -> Fut {}
 #[cfg(target_arch = "wasm32")]
-impl<F, Fut> LlmHandler<Fut> for F where F: FnMut(String, Vec<BamlValue>) -> Fut {}
+impl<F, Fut> LlmHandler<Fut> for F where
+    F: FnMut(String, Vec<BamlValue>, Option<EmitStreamContext>) -> Fut
+{
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 pub trait LlmFuture: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send {}
@@ -56,8 +72,10 @@ pub struct EmitVariable {
     pub spec: crate::emit::EmitSpec,
     /// Reference to the variable's value for change detection
     pub value_ref: Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>,
-    /// Last emitted value (for change detection)
+    /// Last emitted value (passed as prev to filter function)
     pub last_emitted: Arc<Mutex<Option<BamlValue>>>,
+    /// Last checked value (to avoid calling filter multiple times for same value)
+    pub last_checked: Arc<Mutex<Option<BamlValue>>>,
 }
 
 /// A scope is a map of variable names to their values.
@@ -67,6 +85,9 @@ pub struct Scope {
     pub variables: BamlMap<String, Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>>,
     /// Track variables with @emit for change detection
     pub emit_variables: Vec<EmitVariable>,
+    /// Flag to indicate this scope is for filter function evaluation
+    /// When true, check_emit_changes should skip checking emit variables
+    pub is_filter_context: bool,
 }
 
 /// Register a variable with @emit for tracking
@@ -82,6 +103,7 @@ fn register_emit_variable(
             spec: emit_spec,
             value_ref,
             last_emitted: Arc::new(Mutex::new(None)),
+            last_checked: Arc::new(Mutex::new(None)),
         });
     }
 }
@@ -137,38 +159,277 @@ enum ControlFlow {
 }
 
 /// Check all @emit variables for changes and fire events
-fn check_emit_changes(
-    scopes: &[Scope],
+///
+/// This function should only be called in the main execution context, not during
+/// filter function evaluation to avoid infinite recursion.
+#[allow(clippy::type_complexity)]
+async fn check_emit_changes<F, Fut>(
+    scopes: &mut Vec<Scope>,
     emit_event_handler: &mut impl FnMut(EmitEvent),
     function_name: &str,
-) {
-    for scope in scopes {
+    thir: &THir<ExprMetadata>,
+    run_llm_function: &mut F,
+) where
+    F: LlmHandler<Fut>,
+    Fut: LlmFuture,
+{
+    // Skip emit checking if we're in a filter function evaluation context
+    // This prevents infinite recursion when filter functions have local variables
+    if scopes.iter().any(|scope| scope.is_filter_context) {
+        return;
+    }
+    // Collect the variables to check and their current values
+    // We do this first to avoid holding locks during async operations
+    let mut checks: Vec<(
+        String,
+        crate::emit::EmitSpec,
+        BamlValueWithMeta<ExprMetadata>,
+        Option<BamlValue>,
+        Option<BamlValue>,
+    )> = Vec::new();
+
+    for scope in scopes.iter() {
         for emit_var in &scope.emit_variables {
-            let current_value = emit_var.value_ref.lock().unwrap();
-            let current_baml_value = current_value.clone().value().clone();
+            let current_value = emit_var.value_ref.lock().unwrap().clone();
+            let last_emitted = emit_var.last_emitted.lock().unwrap().clone();
+            let last_checked = emit_var.last_checked.lock().unwrap().clone();
 
-            let mut last_emitted = emit_var.last_emitted.lock().unwrap();
+            log::debug!(
+                "Collecting emit var '{}': current={:?}, last_emitted={:?}, last_checked={:?}",
+                emit_var.name,
+                current_value,
+                last_emitted,
+                last_checked
+            );
 
-            // Check if value has changed
-            let has_changed = match last_emitted.as_ref() {
-                None => true,                              // First time, always emit
-                Some(last) => last != &current_baml_value, // Compare values
-            };
+            checks.push((
+                emit_var.name.clone(),
+                emit_var.spec.clone(),
+                current_value,
+                last_emitted,
+                last_checked,
+            ));
+        }
+    }
 
-            if has_changed {
-                // Update last emitted value
-                *last_emitted = Some(current_baml_value);
+    // Process each check
+    for (var_name, spec, current_value, last_emitted, last_checked) in checks {
+        let current_baml_value = current_value.clone().value();
 
-                // Fire the event
-                let emit_value = expr_value_to_emit_value(current_value.clone());
-                let event = crate::emit::EmitEvent::new_var(
-                    emit_var.spec.name.clone(),
-                    emit_value,
-                    function_name.to_string(),
-                );
-                emit_event_handler(event);
+        // Check if the value has changed since last check
+        // This prevents calling the filter multiple times for the same value
+        let value_changed_since_last_check = match last_checked.as_ref() {
+            None => true,
+            Some(last) => last != &current_baml_value,
+        };
+
+        if !value_changed_since_last_check {
+            // Value hasn't changed since we last checked, skip
+            continue;
+        }
+
+        // Update last_checked for this variable
+        for scope in scopes.iter_mut() {
+            for emit_var in &mut scope.emit_variables {
+                if emit_var.name == var_name {
+                    *emit_var.last_checked.lock().unwrap() = Some(current_baml_value.clone());
+                    break;
+                }
             }
         }
+
+        // Determine if we should emit based on the when condition
+        let should_emit = match &spec.when {
+            crate::emit::EmitWhen::False => false, // Manual emission only
+            crate::emit::EmitWhen::True => {
+                // For EmitWhen::True, use built-in change detection
+                let has_changed = match last_emitted.as_ref() {
+                    None => true,                              // First time, always emit
+                    Some(last) => last != &current_baml_value, // Compare values
+                };
+                has_changed
+            }
+            crate::emit::EmitWhen::FunctionName(fn_name) => {
+                // For filter functions, ALWAYS call the filter - it subsumes change detection
+                // Evaluate the filter function
+                log::debug!(
+                    "Evaluating filter function '{}' for variable '{}': prev={:?}, next={:?}",
+                    fn_name,
+                    var_name,
+                    last_emitted,
+                    current_baml_value
+                );
+                match evaluate_filter_function(
+                    fn_name,
+                    last_emitted.as_ref(),
+                    &current_baml_value,
+                    scopes,
+                    thir,
+                    run_llm_function,
+                    function_name,
+                )
+                .await
+                {
+                    Ok(result) => {
+                        log::debug!("Filter function '{}' returned: {}", fn_name, result);
+                        result
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "Error evaluating filter function '{}' for variable '{}': {}",
+                            fn_name,
+                            var_name,
+                            e
+                        );
+                        false // Don't emit on error
+                    }
+                }
+            }
+        };
+
+        if should_emit {
+            // Update last emitted value
+            for scope in scopes.iter_mut() {
+                for emit_var in &mut scope.emit_variables {
+                    if emit_var.name == var_name {
+                        *emit_var.last_emitted.lock().unwrap() = Some(current_baml_value.clone());
+                        break;
+                    }
+                }
+            }
+
+            // Fire the event
+            let emit_value = expr_value_to_emit_value(current_value);
+            let event = crate::emit::EmitEvent::new_var(
+                spec.name.clone(),
+                emit_value,
+                function_name.to_string(),
+            );
+            emit_event_handler(event);
+        }
+    }
+}
+
+/// Evaluate a filter function for emit
+/// The filter function takes (prev_value, next_value) -> bool
+async fn evaluate_filter_function<F, Fut>(
+    fn_name: &internal_baml_ast::ast::Identifier,
+    prev_value: Option<&BamlValue>,
+    next_value: &BamlValue,
+    scopes: &mut Vec<Scope>,
+    thir: &THir<ExprMetadata>,
+    run_llm_function: &mut F,
+    function_name: &str,
+) -> Result<bool>
+where
+    F: LlmHandler<Fut>,
+    Fut: LlmFuture,
+{
+    // Look up the filter function
+    let filter_func = thir
+        .expr_functions
+        .iter()
+        .find(|f| f.name == fn_name.to_string())
+        .with_context(|| format!("Filter function '{}' not found", fn_name))?;
+
+    // Check arity
+    if filter_func.parameters.len() != 2 {
+        bail!(
+            "Filter function '{}' must take exactly 2 parameters (prev, next)",
+            fn_name
+        );
+    }
+
+    // Convert BamlValue to BamlValueWithMeta
+    let prev_with_meta = match prev_value {
+        Some(v) => {
+            log::debug!("Filter function prev_value (Some): {:?}", v);
+            baml_value_to_value_with_meta(v.clone())
+        }
+        None => {
+            log::debug!("Filter function prev_value: None");
+            BamlValueWithMeta::Null((Span::fake(), None))
+        }
+    };
+    log::debug!("Filter function next_value: {:?}", next_value);
+    let next_with_meta = baml_value_to_value_with_meta(next_value.clone());
+
+    // Create a new scope with the function parameters
+    // Mark this as a filter context to prevent infinite recursion
+    scopes.push(Scope {
+        variables: [
+            (
+                filter_func.parameters[0].name.clone(),
+                Arc::new(Mutex::new(prev_with_meta)),
+            ),
+            (
+                filter_func.parameters[1].name.clone(),
+                Arc::new(Mutex::new(next_with_meta)),
+            ),
+        ]
+        .into_iter()
+        .collect(),
+        emit_variables: Vec::new(),
+        is_filter_context: true,
+    });
+
+    // Create a no-op emit handler for the filter function evaluation
+    // Filter functions shouldn't emit their own events
+    let mut noop_emit_handler = |_event: EmitEvent| {};
+
+    // Evaluate the function body
+    let result = evaluate_block(
+        &filter_func.body,
+        scopes,
+        thir,
+        run_llm_function,
+        &mut noop_emit_handler,
+        function_name,
+    )
+    .await?;
+
+    scopes.pop();
+
+    // Extract boolean result
+    match result {
+        BamlValueWithMeta::Bool(b, _) => Ok(b),
+        _ => bail!(
+            "Filter function '{}' must return a boolean, got {:?}",
+            fn_name,
+            result
+        ),
+    }
+}
+
+/// Convert BamlValue to BamlValueWithMeta (with fake metadata)
+fn baml_value_to_value_with_meta(value: BamlValue) -> BamlValueWithMeta<ExprMetadata> {
+    let meta = (Span::fake(), None);
+    match value {
+        BamlValue::String(s) => BamlValueWithMeta::String(s, meta),
+        BamlValue::Int(i) => BamlValueWithMeta::Int(i, meta),
+        BamlValue::Float(f) => BamlValueWithMeta::Float(f, meta),
+        BamlValue::Bool(b) => BamlValueWithMeta::Bool(b, meta),
+        BamlValue::Map(m) => {
+            let converted = m
+                .into_iter()
+                .map(|(k, v)| (k, baml_value_to_value_with_meta(v)))
+                .collect();
+            BamlValueWithMeta::Map(converted, meta)
+        }
+        BamlValue::List(l) => {
+            let converted = l.into_iter().map(baml_value_to_value_with_meta).collect();
+            BamlValueWithMeta::List(converted, meta)
+        }
+        BamlValue::Media(m) => BamlValueWithMeta::Media(m, meta),
+        BamlValue::Enum(name, val) => BamlValueWithMeta::Enum(name, val, meta),
+        BamlValue::Class(name, fields) => {
+            let converted = fields
+                .into_iter()
+                .map(|(k, v)| (k, baml_value_to_value_with_meta(v)))
+                .collect();
+            BamlValueWithMeta::Class(name, converted, meta)
+        }
+        BamlValue::Null => BamlValueWithMeta::Null(meta),
     }
 }
 
@@ -193,6 +454,7 @@ where
                 .map(|(k, v)| (k, Arc::new(Mutex::new(v)))),
         ),
         emit_variables: Vec::new(),
+        is_filter_context: false,
     }];
 
     let mut env_entries = BamlMap::new();
@@ -258,6 +520,7 @@ where
         scopes.push(Scope {
             variables: BamlMap::new(),
             emit_variables: Vec::new(),
+            is_filter_context: false,
         });
 
         // Check if we should treat the last statement as the implicit return value
@@ -311,7 +574,8 @@ where
                         }
                     }
                     // Check for changes in all emit variables after the let statement
-                    check_emit_changes(scopes, emit_handler, function_name);
+                    check_emit_changes(scopes, emit_handler, function_name, thir, run_llm_function)
+                        .await;
                 }
                 Statement::Declare { name, span } => {
                     declare(scopes, name, BamlValueWithMeta::Null((span.clone(), None)));
@@ -339,18 +603,33 @@ where
                     )
                     .await?;
                     // Check for changes in emit variables after assignment
-                    check_emit_changes(scopes, emit_handler, function_name);
+                    check_emit_changes(scopes, emit_handler, function_name, thir, run_llm_function)
+                        .await;
                 }
                 Statement::DeclareAndAssign {
                     name, value, emit, ..
                 } => {
-                    match evaluate_expr(
+                    // Create emit context if @emit is present
+                    let emit_ctx = emit.as_ref().map(|_| {
+                        use std::time::{SystemTime, UNIX_EPOCH};
+                        let timestamp = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis();
+                        EmitStreamContext {
+                            variable_name: name.clone(),
+                            stream_id: format!("{}_{}_{}", function_name, name, timestamp),
+                        }
+                    });
+
+                    match evaluate_expr_with_context(
                         value,
                         scopes,
                         thir,
                         run_llm_function,
                         emit_handler,
                         function_name,
+                        emit_ctx.as_ref(),
                     )
                     .await?
                     {
@@ -380,7 +659,8 @@ where
                         }
                     }
                     // Check for changes in all emit variables after the declare and assign
-                    check_emit_changes(scopes, emit_handler, function_name);
+                    check_emit_changes(scopes, emit_handler, function_name, thir, run_llm_function)
+                        .await;
                 }
                 Statement::Return { expr, .. } => {
                     let v = expect_value(
@@ -479,6 +759,7 @@ where
                                 scopes.push(Scope {
                                     variables: BamlMap::new(),
                                     emit_variables: Vec::new(),
+                                    is_filter_context: false,
                                 });
                                 declare(scopes, identifier, item_val.clone());
 
@@ -684,7 +965,8 @@ where
                     )
                     .await?;
                     // Check for changes in emit variables after compound assignment
-                    check_emit_changes(scopes, emit_handler, function_name);
+                    check_emit_changes(scopes, emit_handler, function_name, thir, run_llm_function)
+                        .await;
                 }
                 Statement::SemicolonExpression { expr, .. } => {
                     let _ = evaluate_expr(
@@ -1212,6 +1494,7 @@ fn baml_value_with_meta_to_baml_value(value: BamlValueWithMeta<ExprMetadata>) ->
     }
 }
 
+// Helper wrapper that calls evaluate_expr_with_context with None context
 fn evaluate_expr<'a, F, Fut, E>(
     expr: &'a Expr<ExprMetadata>,
     scopes: &'a mut Vec<Scope>,
@@ -1219,6 +1502,32 @@ fn evaluate_expr<'a, F, Fut, E>(
     run_llm_function: &'a mut F,
     emit_handler: &'a mut E,
     function_name: &'a str,
+) -> BoxFuture<'a, Result<EvalValue>>
+where
+    F: LlmHandler<Fut>,
+    Fut: LlmFuture,
+    E: FnMut(crate::emit::EmitEvent) + Send,
+{
+    evaluate_expr_with_context(
+        expr,
+        scopes,
+        thir,
+        run_llm_function,
+        emit_handler,
+        function_name,
+        None,
+    )
+}
+
+// Internal function that accepts optional emit context
+fn evaluate_expr_with_context<'a, F, Fut, E>(
+    expr: &'a Expr<ExprMetadata>,
+    scopes: &'a mut Vec<Scope>,
+    thir: &'a THir<ExprMetadata>,
+    run_llm_function: &'a mut F,
+    emit_handler: &'a mut E,
+    function_name: &'a str,
+    emit_context: Option<&'a EmitStreamContext>,
 ) -> BoxFuture<'a, Result<EvalValue>>
 where
     F: LlmHandler<Fut>,
@@ -1414,8 +1723,9 @@ where
                             llm_args.push(baml_value_with_meta_to_baml_value(arg_val));
                         }
 
-                        // Call the LLM function
-                        let result = run_llm_function(fn_name, llm_args).await?;
+                        // Call the LLM function with emit context if available
+                        let result =
+                            run_llm_function(fn_name, llm_args, emit_context.cloned()).await?;
                         return Ok(EvalValue::Value(result));
                     }
 
@@ -1508,6 +1818,7 @@ where
                         .map(|(k, v)| (k, Arc::new(Mutex::new(v))))
                         .collect(),
                     emit_variables: Vec::new(),
+                    is_filter_context: false,
                 });
 
                 // Execute the function body
@@ -2370,6 +2681,7 @@ mod tests {
     fn mock_llm_function(
         _fn_name: String,
         _args: Vec<BamlValue>,
+        _emit_context: Option<EmitStreamContext>,
     ) -> BoxFuture<'static, Result<BamlValueWithMeta<ExprMetadata>>> {
         // Mock LLM function that returns an error to simulate unsupported operation
         Box::pin(async move { Ok(BamlValueWithMeta::Int(10, (Span::fake(), None))) })
@@ -2386,6 +2698,7 @@ mod tests {
         F: FnMut(
                 String,
                 Vec<BamlValue>,
+                Option<EmitStreamContext>,
             ) -> BoxFuture<'static, Result<BamlValueWithMeta<ExprMetadata>>>
             + Send
             + Sync,

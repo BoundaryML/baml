@@ -279,6 +279,12 @@ export declare function setLogLevel(level: string): void
 
 export declare function setLogMaxChunkLength(length: number): void
 
+export interface StreamEvent {
+  streamId: string
+  eventType: string
+  value?: any
+}
+
 export interface VarEvent {
   variableName: string
   value: any

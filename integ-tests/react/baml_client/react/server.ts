@@ -288,6 +288,27 @@ export const BuildTree = async (
 };
 
 /**
+ * Executes the "CheckWordEquality" BAML action.
+ *
+ * This server action calls the underlying BAML function "CheckWordEquality"
+ * with the specified parameters.
+ *
+ * @param { string } word - Input parameter.
+ * @param { string } target - Input parameter.
+ *
+ * @returns {Promise<boolean>} A promise that resolves with the result of the action.
+ */
+export const CheckWordEquality = async (
+  word: string,
+  target: string,
+): Promise<boolean> => {
+  return b.CheckWordEquality(
+    word,
+    target,
+  );
+};
+
+/**
  * Executes the "ChooseTodoTools" BAML action.
  *
  * This server action calls the underlying BAML function "ChooseTodoTools"
@@ -4296,6 +4317,48 @@ export const HomeEnvVarIsEmpty = async (
 };
 
 /**
+ * Executes the "IsTargetWord" BAML action.
+ *
+ * This server action calls the underlying BAML function "IsTargetWord"
+ * with the specified parameters.
+ *
+ * @param { string } prev - Input parameter.
+ * @param { string } next - Input parameter.
+ *
+ * @returns {Promise<boolean>} A promise that resolves with the result of the action.
+ */
+export const IsTargetWord = async (
+  prev: string,
+  next: string,
+): Promise<boolean> => {
+  return b.IsTargetWord(
+    prev,
+    next,
+  );
+};
+
+/**
+ * Executes the "IsTargetWord2" BAML action.
+ *
+ * This server action calls the underlying BAML function "IsTargetWord2"
+ * with the specified parameters.
+ *
+ * @param { string } prev - Input parameter.
+ * @param { string } next - Input parameter.
+ *
+ * @returns {Promise<boolean>} A promise that resolves with the result of the action.
+ */
+export const IsTargetWord2 = async (
+  prev: string,
+  next: string,
+): Promise<boolean> => {
+  return b.IsTargetWord2(
+    prev,
+    next,
+  );
+};
+
+/**
  * Executes the "IterativeFibonacci" BAML action.
  *
  * This server action calls the underlying BAML function "IterativeFibonacci"
@@ -4331,6 +4394,27 @@ export const NormalElseIfStmt = async (
   return b.NormalElseIfStmt(
     a,
     b,
+  );
+};
+
+/**
+ * Executes the "NotEmpty" BAML action.
+ *
+ * This server action calls the underlying BAML function "NotEmpty"
+ * with the specified parameters.
+ *
+ * @param { string } prev - Input parameter.
+ * @param { string } next - Input parameter.
+ *
+ * @returns {Promise<boolean>} A promise that resolves with the result of the action.
+ */
+export const NotEmpty = async (
+  prev: string,
+  next: string,
+): Promise<boolean> => {
+  return b.NotEmpty(
+    prev,
+    next,
   );
 };
 
@@ -4443,6 +4527,21 @@ export const ReturnOne = async (
 };
 
 /**
+ * Executes the "SimpleEmitWithFilter" BAML action.
+ *
+ * This server action calls the underlying BAML function "SimpleEmitWithFilter"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const SimpleEmitWithFilter = async (
+): Promise<number> => {
+  return b.SimpleEmitWithFilter(
+  );
+};
+
+/**
  * Executes the "StoreFnCallInLocalVar" BAML action.
  *
  * This server action calls the underlying BAML function "StoreFnCallInLocalVar"
@@ -4544,5 +4643,20 @@ export const WorkflowEmit = async (
 export const WorkflowEmitChild = async (
 ): Promise<number> => {
   return b.WorkflowEmitChild(
+  );
+};
+
+/**
+ * Executes the "WorkflowEmitWithFilter" BAML action.
+ *
+ * This server action calls the underlying BAML function "WorkflowEmitWithFilter"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const WorkflowEmitWithFilter = async (
+): Promise<number> => {
+  return b.WorkflowEmitWithFilter(
   );
 };
