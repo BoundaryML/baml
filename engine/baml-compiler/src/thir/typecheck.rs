@@ -808,7 +808,7 @@ fn typecheck_statement(
             name,
             value,
             annotated_type,
-            emit,
+            watch: emit,
             span,
         } => {
             let mut typed_value = typecheck_expression(value, context, diagnostics);
@@ -864,7 +864,7 @@ fn typecheck_statement(
             Some(thir::Statement::Let {
                 name: name.clone(),
                 value: typed_value,
-                emit: emit.clone(),
+                watch: emit.clone(),
                 span: span.clone(),
             })
         }
@@ -967,7 +967,7 @@ fn typecheck_statement(
             name,
             value,
             annotated_type,
-            emit,
+            watch: emit,
             span,
         } => {
             let mut typed_value = typecheck_expression(value, context, diagnostics);
@@ -1028,7 +1028,7 @@ fn typecheck_statement(
             Some(thir::Statement::DeclareAndAssign {
                 name: name.clone(),
                 value: typed_value,
-                emit: emit.clone(),
+                watch: emit.clone(),
                 span: span.clone(),
             })
         }
@@ -2583,7 +2583,7 @@ fn typecheck_emit(
             }
         }
         WatchWhen::True => {}
-        WatchWhen::False => {}
+        WatchWhen::Manual => {}
     }
 }
 

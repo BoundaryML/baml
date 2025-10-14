@@ -11,13 +11,13 @@ use functions::{
 use generated_types::{render_partial_types, render_ts_types, render_type_builder};
 use internal_baml_core::configuration::ModuleFormat;
 use regex::Regex;
-mod events;
 mod functions;
 mod generated_types;
 mod ir_to_ts;
 mod package;
 mod r#type;
 mod utils;
+mod watchers;
 
 #[derive(Default, Debug)]
 pub struct TsLanguageFeatures;
@@ -80,7 +80,7 @@ $ pnpm add @boundaryml/baml
             functions.push(ts_fn);
         }
 
-        let event_collectors = events::build_event_collectors(args, &pkg, &function_name_map)?;
+        let event_collectors = watchers::build_event_collectors(args, &pkg, &function_name_map)?;
 
         // Build a map of function names to their event collector types
         let mut event_collector_map: HashMap<String, String> = HashMap::new();
@@ -119,7 +119,7 @@ $ pnpm add @boundaryml/baml
             &render_sync_request(&functions, &types, &pkg)?,
         )?;
 
-        collector.add_file("events.ts", events::render_events(&event_collectors)?)?;
+        collector.add_file("watchers.ts", watchers::render_events(&event_collectors)?)?;
 
         // Generate type files
         let classes = ir.walk_classes().collect::<Vec<_>>();

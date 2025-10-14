@@ -640,7 +640,7 @@ pub enum Statement<T> {
     Let {
         name: String,
         value: Expr<T>,
-        emit: Option<WatchSpec>,
+        watch: Option<WatchSpec>,
         span: Span,
     },
     /// Declare a (mutable) reference.
@@ -665,7 +665,7 @@ pub enum Statement<T> {
     DeclareAndAssign {
         name: String,
         value: Expr<T>,
-        emit: Option<WatchSpec>,
+        watch: Option<WatchSpec>,
         span: Span,
     },
     /// Return from a function.
@@ -717,7 +717,7 @@ impl<T: Clone> Statement<T> {
             Statement::Let {
                 name,
                 value,
-                emit,
+                watch: emit,
                 span: _,
             } => {
                 format!(
@@ -740,7 +740,7 @@ impl<T: Clone> Statement<T> {
             Statement::DeclareAndAssign {
                 name,
                 value,
-                emit,
+                watch: emit,
                 span: _,
             } => {
                 format!(

@@ -10512,9 +10512,9 @@ export class BamlSyncClient {
     }
   }
   
-  SimpleEmitWithFilter(
+  SimpleWatchWithFilter(
       
-      __baml_options__?: BamlCallOptions<events.SimpleEmitWithFilterEventCollector>
+      __baml_options__?: BamlCallOptions<events.SimpleWatchWithFilterEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -10535,7 +10535,7 @@ export class BamlSyncClient {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       const raw = this.runtime.callFunctionSync(
-        "SimpleEmitWithFilter",
+        "SimpleWatchWithFilter",
         {
           
         },
@@ -10722,9 +10722,9 @@ export class BamlSyncClient {
     }
   }
   
-  WorkflowEmit(
+  WorkflowWatch(
       
-      __baml_options__?: BamlCallOptions<events.WorkflowEmitEventCollector>
+      __baml_options__?: BamlCallOptions<events.WorkflowWatchEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -10745,7 +10745,7 @@ export class BamlSyncClient {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       const raw = this.runtime.callFunctionSync(
-        "WorkflowEmit",
+        "WorkflowWatch",
         {
           
         },
@@ -10764,9 +10764,9 @@ export class BamlSyncClient {
     }
   }
   
-  WorkflowEmitChild(
+  WorkflowWatchChild(
       
-      __baml_options__?: BamlCallOptions<events.WorkflowEmitChildEventCollector>
+      __baml_options__?: BamlCallOptions<events.WorkflowWatchChildEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -10787,7 +10787,7 @@ export class BamlSyncClient {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       const raw = this.runtime.callFunctionSync(
-        "WorkflowEmitChild",
+        "WorkflowWatchChild",
         {
           
         },
@@ -10806,9 +10806,9 @@ export class BamlSyncClient {
     }
   }
   
-  WorkflowEmitWithFilter(
+  WorkflowWatchWithFilter(
       
-      __baml_options__?: BamlCallOptions<events.WorkflowEmitWithFilterEventCollector>
+      __baml_options__?: BamlCallOptions<events.WorkflowWatchWithFilterEventCollector>
   ): number {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -10829,7 +10829,7 @@ export class BamlSyncClient {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       const raw = this.runtime.callFunctionSync(
-        "WorkflowEmitWithFilter",
+        "WorkflowWatchWithFilter",
         {
           
         },

@@ -12768,7 +12768,7 @@ export function useReturnOne(
   }
 }
 /**
- * A specialized hook for the SimpleEmitWithFilter BAML function that supports both streaming and non‑streaming responses.
+ * A specialized hook for the SimpleWatchWithFilter BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
  *
@@ -12791,10 +12791,10 @@ export function useReturnOne(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useSimpleEmitWithFilter({ stream: false});
+ * const { data, error, isLoading, mutate } = useSimpleWatchWithFilter({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useSimpleEmitWithFilter({
+ * const { data, streamData, isLoading, error, mutate } = useSimpleWatchWithFilter({
  *   stream: true | undefined,
  *   onStreamData: (partial) => console.log('Partial update:', partial),
  *   onFinalData: (final) => console.log('Final result:', final),
@@ -12802,17 +12802,17 @@ export function useReturnOne(
  * });
  * ```
  */
-export function useSimpleEmitWithFilter(props: HookInput<'SimpleEmitWithFilter', { stream: false }>): HookOutput<'SimpleEmitWithFilter', { stream: false }>
-export function useSimpleEmitWithFilter(props?: HookInput<'SimpleEmitWithFilter', { stream?: true }>): HookOutput<'SimpleEmitWithFilter', { stream: true }>
-export function useSimpleEmitWithFilter(
-  props: HookInput<'SimpleEmitWithFilter', { stream?: boolean }> = {},
-): HookOutput<'SimpleEmitWithFilter', { stream: true }> | HookOutput<'SimpleEmitWithFilter', { stream: false }> {
-  let action: ServerAction = Actions.SimpleEmitWithFilter;
+export function useSimpleWatchWithFilter(props: HookInput<'SimpleWatchWithFilter', { stream: false }>): HookOutput<'SimpleWatchWithFilter', { stream: false }>
+export function useSimpleWatchWithFilter(props?: HookInput<'SimpleWatchWithFilter', { stream?: true }>): HookOutput<'SimpleWatchWithFilter', { stream: true }>
+export function useSimpleWatchWithFilter(
+  props: HookInput<'SimpleWatchWithFilter', { stream?: boolean }> = {},
+): HookOutput<'SimpleWatchWithFilter', { stream: true }> | HookOutput<'SimpleWatchWithFilter', { stream: false }> {
+  let action: ServerAction = Actions.SimpleWatchWithFilter;
   if (isStreamingProps(props)) {
-    action = StreamingActions.SimpleEmitWithFilter;
+    action = StreamingActions.SimpleWatchWithFilter;
     return useBamlAction(action, props)
   } else {
-    return useBamlAction(action, props as HookInput<'SimpleEmitWithFilter', { stream: false }>)
+    return useBamlAction(action, props as HookInput<'SimpleWatchWithFilter', { stream: false }>)
   }
 }
 /**
@@ -13018,7 +13018,7 @@ export function useSumFromTo(
   }
 }
 /**
- * A specialized hook for the WorkflowEmit BAML function that supports both streaming and non‑streaming responses.
+ * A specialized hook for the WorkflowWatch BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
  *
@@ -13041,10 +13041,10 @@ export function useSumFromTo(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useWorkflowEmit({ stream: false});
+ * const { data, error, isLoading, mutate } = useWorkflowWatch({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useWorkflowEmit({
+ * const { data, streamData, isLoading, error, mutate } = useWorkflowWatch({
  *   stream: true | undefined,
  *   onStreamData: (partial) => console.log('Partial update:', partial),
  *   onFinalData: (final) => console.log('Final result:', final),
@@ -13052,21 +13052,21 @@ export function useSumFromTo(
  * });
  * ```
  */
-export function useWorkflowEmit(props: HookInput<'WorkflowEmit', { stream: false }>): HookOutput<'WorkflowEmit', { stream: false }>
-export function useWorkflowEmit(props?: HookInput<'WorkflowEmit', { stream?: true }>): HookOutput<'WorkflowEmit', { stream: true }>
-export function useWorkflowEmit(
-  props: HookInput<'WorkflowEmit', { stream?: boolean }> = {},
-): HookOutput<'WorkflowEmit', { stream: true }> | HookOutput<'WorkflowEmit', { stream: false }> {
-  let action: ServerAction = Actions.WorkflowEmit;
+export function useWorkflowWatch(props: HookInput<'WorkflowWatch', { stream: false }>): HookOutput<'WorkflowWatch', { stream: false }>
+export function useWorkflowWatch(props?: HookInput<'WorkflowWatch', { stream?: true }>): HookOutput<'WorkflowWatch', { stream: true }>
+export function useWorkflowWatch(
+  props: HookInput<'WorkflowWatch', { stream?: boolean }> = {},
+): HookOutput<'WorkflowWatch', { stream: true }> | HookOutput<'WorkflowWatch', { stream: false }> {
+  let action: ServerAction = Actions.WorkflowWatch;
   if (isStreamingProps(props)) {
-    action = StreamingActions.WorkflowEmit;
+    action = StreamingActions.WorkflowWatch;
     return useBamlAction(action, props)
   } else {
-    return useBamlAction(action, props as HookInput<'WorkflowEmit', { stream: false }>)
+    return useBamlAction(action, props as HookInput<'WorkflowWatch', { stream: false }>)
   }
 }
 /**
- * A specialized hook for the WorkflowEmitChild BAML function that supports both streaming and non‑streaming responses.
+ * A specialized hook for the WorkflowWatchChild BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
  *
@@ -13089,10 +13089,10 @@ export function useWorkflowEmit(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useWorkflowEmitChild({ stream: false});
+ * const { data, error, isLoading, mutate } = useWorkflowWatchChild({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useWorkflowEmitChild({
+ * const { data, streamData, isLoading, error, mutate } = useWorkflowWatchChild({
  *   stream: true | undefined,
  *   onStreamData: (partial) => console.log('Partial update:', partial),
  *   onFinalData: (final) => console.log('Final result:', final),
@@ -13100,21 +13100,21 @@ export function useWorkflowEmit(
  * });
  * ```
  */
-export function useWorkflowEmitChild(props: HookInput<'WorkflowEmitChild', { stream: false }>): HookOutput<'WorkflowEmitChild', { stream: false }>
-export function useWorkflowEmitChild(props?: HookInput<'WorkflowEmitChild', { stream?: true }>): HookOutput<'WorkflowEmitChild', { stream: true }>
-export function useWorkflowEmitChild(
-  props: HookInput<'WorkflowEmitChild', { stream?: boolean }> = {},
-): HookOutput<'WorkflowEmitChild', { stream: true }> | HookOutput<'WorkflowEmitChild', { stream: false }> {
-  let action: ServerAction = Actions.WorkflowEmitChild;
+export function useWorkflowWatchChild(props: HookInput<'WorkflowWatchChild', { stream: false }>): HookOutput<'WorkflowWatchChild', { stream: false }>
+export function useWorkflowWatchChild(props?: HookInput<'WorkflowWatchChild', { stream?: true }>): HookOutput<'WorkflowWatchChild', { stream: true }>
+export function useWorkflowWatchChild(
+  props: HookInput<'WorkflowWatchChild', { stream?: boolean }> = {},
+): HookOutput<'WorkflowWatchChild', { stream: true }> | HookOutput<'WorkflowWatchChild', { stream: false }> {
+  let action: ServerAction = Actions.WorkflowWatchChild;
   if (isStreamingProps(props)) {
-    action = StreamingActions.WorkflowEmitChild;
+    action = StreamingActions.WorkflowWatchChild;
     return useBamlAction(action, props)
   } else {
-    return useBamlAction(action, props as HookInput<'WorkflowEmitChild', { stream: false }>)
+    return useBamlAction(action, props as HookInput<'WorkflowWatchChild', { stream: false }>)
   }
 }
 /**
- * A specialized hook for the WorkflowEmitWithFilter BAML function that supports both streaming and non‑streaming responses.
+ * A specialized hook for the WorkflowWatchWithFilter BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
  *
@@ -13137,10 +13137,10 @@ export function useWorkflowEmitChild(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useWorkflowEmitWithFilter({ stream: false});
+ * const { data, error, isLoading, mutate } = useWorkflowWatchWithFilter({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useWorkflowEmitWithFilter({
+ * const { data, streamData, isLoading, error, mutate } = useWorkflowWatchWithFilter({
  *   stream: true | undefined,
  *   onStreamData: (partial) => console.log('Partial update:', partial),
  *   onFinalData: (final) => console.log('Final result:', final),
@@ -13148,16 +13148,16 @@ export function useWorkflowEmitChild(
  * });
  * ```
  */
-export function useWorkflowEmitWithFilter(props: HookInput<'WorkflowEmitWithFilter', { stream: false }>): HookOutput<'WorkflowEmitWithFilter', { stream: false }>
-export function useWorkflowEmitWithFilter(props?: HookInput<'WorkflowEmitWithFilter', { stream?: true }>): HookOutput<'WorkflowEmitWithFilter', { stream: true }>
-export function useWorkflowEmitWithFilter(
-  props: HookInput<'WorkflowEmitWithFilter', { stream?: boolean }> = {},
-): HookOutput<'WorkflowEmitWithFilter', { stream: true }> | HookOutput<'WorkflowEmitWithFilter', { stream: false }> {
-  let action: ServerAction = Actions.WorkflowEmitWithFilter;
+export function useWorkflowWatchWithFilter(props: HookInput<'WorkflowWatchWithFilter', { stream: false }>): HookOutput<'WorkflowWatchWithFilter', { stream: false }>
+export function useWorkflowWatchWithFilter(props?: HookInput<'WorkflowWatchWithFilter', { stream?: true }>): HookOutput<'WorkflowWatchWithFilter', { stream: true }>
+export function useWorkflowWatchWithFilter(
+  props: HookInput<'WorkflowWatchWithFilter', { stream?: boolean }> = {},
+): HookOutput<'WorkflowWatchWithFilter', { stream: true }> | HookOutput<'WorkflowWatchWithFilter', { stream: false }> {
+  let action: ServerAction = Actions.WorkflowWatchWithFilter;
   if (isStreamingProps(props)) {
-    action = StreamingActions.WorkflowEmitWithFilter;
+    action = StreamingActions.WorkflowWatchWithFilter;
     return useBamlAction(action, props)
   } else {
-    return useBamlAction(action, props as HookInput<'WorkflowEmitWithFilter', { stream: false }>)
+    return useBamlAction(action, props as HookInput<'WorkflowWatchWithFilter', { stream: false }>)
   }
 }

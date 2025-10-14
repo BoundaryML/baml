@@ -118,7 +118,7 @@ pub enum Statement {
         name: String,
         value: Expression,
         annotated_type: Option<TypeIR>,
-        emit: Option<WatchSpec>,
+        watch: Option<WatchSpec>,
         span: Span,
     },
     /// Declare a (mutable) reference.
@@ -145,7 +145,7 @@ pub enum Statement {
         name: String,
         value: Expression,
         annotated_type: Option<TypeIR>,
-        emit: Option<WatchSpec>,
+        watch: Option<WatchSpec>,
         span: Span,
     },
     /// Return from a function.

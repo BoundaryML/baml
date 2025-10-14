@@ -1,6 +1,6 @@
 use internal_baml_ast::{
     self,
-    ast::{EmitArgument, EmitDecorator, Expression, Identifier},
+    ast::{Expression, Identifier, WatchArgument, WatchDecorator},
 };
 use internal_baml_diagnostics::Span;
 
@@ -13,10 +13,10 @@ pub struct WatchSpec {
     pub span: Span,
 }
 
-/// The user-specified option for when to auto-emit a variable.
+/// The user-specified option for when to auto-notify watchers for a variable.
 #[derive(Clone, Debug, PartialEq)]
 pub enum WatchWhen {
-    False, // TODO: Revisit the name for this variant. I prefer "Manual"
+    Manual, // Manual notification only (via .watchers.$notify())
     True,
     FunctionName(Identifier),
 }
@@ -27,14 +27,14 @@ impl WatchSpec {
     /// they are handled upstream in the grammar (which rules out many invalid
     /// key/value combinations), and in the typechecker, which ensures that
     /// when-functions have the correct type.
-    pub fn from_ast_with_name(ast_emit: &EmitDecorator, ast_channel_name: String) -> Self {
-        let mut emit = WatchSpec {
+    pub fn from_ast_with_name(ast_watch: &WatchDecorator, ast_channel_name: String) -> Self {
+        let mut watch = WatchSpec {
             when: WatchWhen::True,
             skip_def: false,
             name: ast_channel_name.clone(),
-            span: ast_emit.span.clone(),
+            span: ast_watch.span.clone(),
         };
-        for EmitArgument { name, value, .. } in &ast_emit.arguments {
+        for WatchArgument { name, value, .. } in &ast_watch.arguments {
             let mut has_error = false;
             let key_str = name.to_string();
 
@@ -45,16 +45,20 @@ impl WatchSpec {
             if let Some(val_str) = value.as_string_value().map(|(s, _)| s) {
                 // Enumerate all the valid key-value pairs.
                 match (key_str.as_ref(), val_str) {
+                    ("when", "manual") => {
+                        watch.when = WatchWhen::Manual;
+                    }
                     ("when", "false") => {
-                        emit.when = WatchWhen::False;
+                        // Support legacy "false" syntax, map to Manual
+                        watch.when = WatchWhen::Manual;
                     }
                     ("when", "true") => {
-                        emit.when = WatchWhen::True;
+                        watch.when = WatchWhen::True;
                     }
                     ("when", _other) => {
                         match value {
                             Expression::Identifier(ident) => {
-                                emit.when = WatchWhen::FunctionName(ident.clone());
+                                watch.when = WatchWhen::FunctionName(ident.clone());
                             }
                             _ => {
                                 // Impossible case, ruled out by the parser.
@@ -62,13 +66,13 @@ impl WatchSpec {
                         }
                     }
                     ("skip_def", "true") => {
-                        emit.skip_def = true;
+                        watch.skip_def = true;
                     }
                     ("skip_def", "false") => {
-                        emit.skip_def = false;
+                        watch.skip_def = false;
                     }
                     ("name", channel_name) => {
-                        emit.name = channel_name.to_string();
+                        watch.name = channel_name.to_string();
                     }
                     _ => {
                         has_error = true;
@@ -84,6 +88,6 @@ impl WatchSpec {
                 );
             }
         }
-        emit
+        watch
     }
 }

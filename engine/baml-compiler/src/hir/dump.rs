@@ -132,7 +132,7 @@ impl Statement {
                 name,
                 value,
                 annotated_type,
-                emit,
+                watch,
                 ..
             } => RcDoc::text("let")
                 .append(RcDoc::space())
@@ -145,8 +145,8 @@ impl Statement {
                 .append(RcDoc::text("="))
                 .append(RcDoc::space())
                 .append(value.to_doc())
-                .append(match emit {
-                    Some(emit) => emit.to_doc(),
+                .append(match watch {
+                    Some(watch) => watch.to_doc(),
                     None => RcDoc::nil(),
                 })
                 .append(RcDoc::text(";")),
@@ -177,7 +177,7 @@ impl Statement {
                 name,
                 value,
                 annotated_type,
-                emit,
+                watch,
                 ..
             } => RcDoc::text("let")
                 .append(RcDoc::space())
@@ -190,8 +190,8 @@ impl Statement {
                 .append(RcDoc::text("="))
                 .append(RcDoc::space())
                 .append(value.to_doc())
-                .append(match emit {
-                    Some(emit) => emit.to_doc(),
+                .append(match watch {
+                    Some(watch) => watch.to_doc(),
                     None => RcDoc::nil(),
                 })
                 .append(RcDoc::text(";")),
@@ -699,13 +699,13 @@ impl WatchSpec {
             args.push("skip_def=true".to_string())
         }
         match &self.when {
-            WatchWhen::False => args.push("when=false".to_string()),
+            WatchWhen::Manual => args.push("when=manual".to_string()),
             WatchWhen::True => {}
             WatchWhen::FunctionName(fn_name) => args.push(format!("when={fn_name}")),
         }
         args.push(format!("name={}", self.name));
         let args_doc = RcDoc::intersperse(args.iter().cloned().map(RcDoc::text), RcDoc::text(", "));
-        let doc = RcDoc::space().append(RcDoc::text("@emit"));
+        let doc = RcDoc::space().append(RcDoc::text("@watch"));
         if args.is_empty() {
             doc
         } else {

@@ -1,26 +1,26 @@
 import { BamlStream } from "@boundaryml/baml"
 
-export interface BlockEvent {
+export interface BlockNotification {
   block_label: string
-  event_type: "enter" | "exit"
+  notification_type: "enter" | "exit"
 }
 
-export interface VarEvent<T> {
+export interface VarNotification<T> {
   variable_name: string
   value: T
   timestamp: string
   function_name: string
 }
 
-// Internal stream event from Rust FFI
+// Internal stream notification from Rust FFI
 interface InternalStreamEvent {
   streamId: string
-  eventType: "start" | "update" | "end"
+  notificationType: "start" | "update" | "end"
   value?: any
 }
 
-// Simple async iterable stream for emit events
-class EmitStream<PartialT, FinalT> implements BamlStream<PartialT, FinalT> {
+// Simple async iterable stream for watch notifications
+class NotificationStream<PartialT, FinalT> implements BamlStream<PartialT, FinalT> {
   private eventQueue: (PartialT | null)[] = []
   private isComplete = false
 
@@ -68,9 +68,9 @@ class EmitStream<PartialT, FinalT> implements BamlStream<PartialT, FinalT> {
   }
 }
 
-type BlockHandler = (event: BlockEvent) => void
-type VarHandler<T> = (event: VarEvent<T>) => void
-type StreamHandler<PartialT, FinalT> = (event: VarEvent<BamlStream<PartialT, FinalT>>) => void
+type BlockHandler = (event: BlockNotification) => void
+type VarHandler<T> = (event: VarNotification<T>) => void
+type StreamHandler<PartialT, FinalT> = (event: VarNotification<BamlStream<PartialT, FinalT>>) => void
 type InternalStreamHandler = (event: InternalStreamEvent) => void
 
 export interface InternalEventBindings {
@@ -86,15 +86,15 @@ export interface EventCollectorInternal {
 }
 
 {% for collector in collectors %}
-{% if collector.has_var_events %}
+{% if collector.has_var_notifications %}
 type {{ collector.interface_name }}VarTypes = {
-  {% for var in collector.var_events %}
+  {% for var in collector.var_notifications %}
   "{{ var.channel_name }}": {{ var.value_type }}{% if !loop.last %},{% endif %}
   {% endfor %}
 }
 
 type {{ collector.interface_name }}StreamTypes = {
-  {% for var in collector.var_events %}
+  {% for var in collector.var_notifications %}
   "{{ var.channel_name }}": {{ var.stream_type }}{% if !loop.last %},{% endif %}
   {% endfor %}
 }
@@ -102,9 +102,9 @@ type {{ collector.interface_name }}StreamTypes = {
 
 export interface {{ collector.interface_name }} extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
-  {% if collector.has_var_events %}
-  on_var<K extends keyof {{ collector.interface_name }}VarTypes>(channel: K, handler: (event: VarEvent<{{ collector.interface_name }}VarTypes[K]>) => void): void
-  {% for var in collector.var_events %}
+  {% if collector.has_var_notifications %}
+  on_var<K extends keyof {{ collector.interface_name }}VarTypes>(channel: K, handler: (event: VarNotification<{{ collector.interface_name }}VarTypes[K]>) => void): void
+  {% for var in collector.var_notifications %}
   on_stream(channel: "{{ var.channel_name }}", handler: StreamHandler<{{ var.stream_type }}, {{ var.stream_type }}>): void
   {% endfor %}
   {% endif %}
@@ -116,24 +116,24 @@ export interface {{ collector.interface_name }} extends EventCollectorInternal {
 export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
   const blockHandlers = new Set<BlockHandler>()
 
-  {% for var in collector.var_events %}
+  {% for var in collector.var_notifications %}
   const varHandlers_{{ var.method_suffix }} = new Set<VarHandler<{{ var.value_type }}>>()
   const streamHandlers_{{ var.method_suffix }} = new Set<StreamHandler<{{ var.stream_type }}, {{ var.stream_type }}>>()
   {% endfor %}
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -141,7 +141,7 @@ export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -160,15 +160,15 @@ export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
     }
   }
 
-  {% if collector.has_var_events %}
+  {% if collector.has_var_notifications %}
   const varHandlerMap = {
-    {% for var in collector.var_events %}
+    {% for var in collector.var_notifications %}
     "{{ var.channel_name }}": varHandlers_{{ var.method_suffix }}{% if !loop.last %},{% endif %}
     {% endfor %}
   }
 
   const streamHandlerMap = {
-    {% for var in collector.var_events %}
+    {% for var in collector.var_notifications %}
     "{{ var.channel_name }}": streamHandlers_{{ var.method_suffix }}{% if !loop.last %},{% endif %}
     {% endfor %}
   }
@@ -195,8 +195,8 @@ export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
     on_block(handler) {
       blockHandlers.add(handler)
     },
-    {% if collector.has_var_events %}
-    on_var<K extends keyof {{ collector.interface_name }}VarTypes>(channel: K, handler: (event: VarEvent<{{ collector.interface_name }}VarTypes[K]>) => void) {
+    {% if collector.has_var_notifications %}
+    on_var<K extends keyof {{ collector.interface_name }}VarTypes>(channel: K, handler: (notif: VarNotification<{{ collector.interface_name }}VarTypes[K]>) => void) {
       const handlers = varHandlerMap[channel]
       if (handlers) {
         handlers.add(handler as any)
@@ -220,7 +220,7 @@ export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {

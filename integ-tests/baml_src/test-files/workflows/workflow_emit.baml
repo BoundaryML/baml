@@ -1,21 +1,21 @@
-function WorkflowEmit() -> int {
-  let x: int = 10 @emit;
-  let y: bool = true @emit;
-  let once: string = "Hello" @emit;
-  let twice: string[] = ["Takedown", ""] @emit;
+function WorkflowWatch() -> int {
+  let x: int = 10 @watch;
+  let y: bool = true @watch;
+  let once: string = "Hello" @watch;
+  let twice: string[] = ["Takedown", ""] @watch;
   let story = LLMEcho(#"
     Hello world this is a test of a longish string.
     I want it to be long enough to generate a few chunks.
-    "#) @emit;
+    "#) @watch;
 
   y = false;
-  x = WorkflowEmitChild();
+  x = WorkflowWatchChild();
   x = 101;
   x
 }
 
-function WorkflowEmitChild() -> int {
-  let x: string = "Hello" @emit;
+function WorkflowWatchChild() -> int {
+  let x: string = "Hello" @watch;
   100
 }
 
@@ -48,12 +48,12 @@ function CheckWordEquality(word: string, target: string) -> bool {
 }
 
 // Test with LLM-based filter function
-function WorkflowEmitWithFilter() -> int {
+function WorkflowWatchWithFilter() -> int {
   let words: string[] = ["apple", "banana", "cherry", "banana", "date",
                           "elderberry", "banana", "fig", "grape", "honeydew"];
 
-  // This variable will only emit when the word is "banana" (as determined by LLM)
-  let this_word: string = "" @emit(when=IsTargetWord);
+  // This variable will only notify watchers when the word is "banana" (as determined by LLM)
+  let this_word: string = "" @watch(when=IsTargetWord);
 
   let i: int = 0;
   for (let word in words) {
@@ -61,16 +61,16 @@ function WorkflowEmitWithFilter() -> int {
     i += 1;
   }
 
-  // Should have emitted 3 times (for the 3 "banana" occurrences at indices 1, 3, 6)
+  // Should have notified 3 times (for the 3 "banana" occurrences at indices 1, 3, 6)
   i
 }
 
-test TestWorkflowEmit() {
-  functions [WorkflowEmit]
+test TestWorkflowWatch() {
+  functions [WorkflowWatch]
   args {}
 }
 
-test TestWorkflowEmitWithFilter() {
-  functions [WorkflowEmitWithFilter]
+test TestWorkflowWatchWithFilter() {
+  functions [WorkflowWatchWithFilter]
   args {}
 }

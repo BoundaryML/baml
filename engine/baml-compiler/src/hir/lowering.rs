@@ -414,12 +414,12 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
             expr,
             span,
             annotations: _,
-            emit,
+            watch,
         }) => {
             let lifted_expr = Expression::from_ast(expr);
             let annotated_type = annotation.as_ref().map(type_ir_from_ast);
 
-            let emit_spec = emit
+            let watch_spec = watch
                 .as_ref()
                 .map(|e| WatchSpec::from_ast_with_name(e, identifier.to_string()));
 
@@ -428,7 +428,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
                     name: identifier.to_string(),
                     value: lifted_expr,
                     annotated_type,
-                    emit: emit_spec,
+                    watch: watch_spec,
                     span: span.clone(),
                 }
             } else {
@@ -436,7 +436,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
                     name: identifier.to_string(),
                     value: lifted_expr,
                     annotated_type,
-                    emit: emit_spec,
+                    watch: watch_spec,
                     span: span.clone(),
                 }
             }
