@@ -5273,6 +5273,31 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TestRequestTimeout(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestRequestTimeout may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          result = options.call_function_sync(function_name: "TestRequestTimeout", args: {
+              input: input,
+          })
+
+          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          parsed.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
@@ -5375,6 +5400,31 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TestStreamingTimeout(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestStreamingTimeout may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          result = options.call_function_sync(function_name: "TestStreamingTimeout", args: {
+              input: input,
+          })
+
+          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          parsed.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::CustomStory)}
       def TestThinking(
           *varargs,
@@ -5395,6 +5445,56 @@ module BamlClient
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
           parsed.cast_to(BamlClient::Types::CustomStory)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TestTimeoutError(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestTimeoutError may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          result = options.call_function_sync(function_name: "TestTimeoutError", args: {
+              input: input,
+          })
+
+          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          parsed.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TestTimeoutFallback(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestTimeoutFallback may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          result = options.call_function_sync(function_name: "TestTimeoutFallback", args: {
+              input: input,
+          })
+
+          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          parsed.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
@@ -5489,6 +5589,31 @@ module BamlClient
 
           result = options.call_function_sync(function_name: "TestVertexWithSystemInstructions", args: {
 
+          })
+
+          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          parsed.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TestZeroTimeout(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestZeroTimeout may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          result = options.call_function_sync(function_name: "TestZeroTimeout", args: {
+              input: input,
           })
 
           parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
@@ -10959,6 +11084,31 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestRequestTimeout(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestRequestTimeout may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          ctx, result = options.create_sync_stream(function_name: "TestRequestTimeout", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: result,
+              ctx_manager: ctx
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
@@ -11061,6 +11211,31 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestStreamingTimeout(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestStreamingTimeout may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          ctx, result = options.create_sync_stream(function_name: "TestStreamingTimeout", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: result,
+              ctx_manager: ctx
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::CustomStory, BamlClient::Types::CustomStory])}
       def TestThinking(
           *varargs,
@@ -11078,6 +11253,56 @@ module BamlClient
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::CustomStory, BamlClient::Types::CustomStory].new(
+              ffi_stream: result,
+              ctx_manager: ctx
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestTimeoutError(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestTimeoutError may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          ctx, result = options.create_sync_stream(function_name: "TestTimeoutError", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: result,
+              ctx_manager: ctx
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestTimeoutFallback(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestTimeoutFallback may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          ctx, result = options.create_sync_stream(function_name: "TestTimeoutFallback", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -11175,6 +11400,31 @@ module BamlClient
 
           ctx, result = options.create_sync_stream(function_name: "TestVertexWithSystemInstructions", args: {
 
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: result,
+              ctx_manager: ctx
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestZeroTimeout(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestZeroTimeout may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          ctx, result = options.create_sync_stream(function_name: "TestZeroTimeout", args: {
+              input: input,
           })
 
           Baml::BamlStream[String, String].new(

@@ -3017,6 +3017,20 @@ class BamlSyncClient:
                 "pdf": pdf,
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestRequestTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestRequestTimeout(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestRequestTimeout", args={
+                "input": input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestRetryConstant(self, 
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -3073,6 +3087,20 @@ class BamlSyncClient:
                 
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestStreamingTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestStreamingTimeout(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestStreamingTimeout", args={
+                "input": input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestThinking(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.CustomStory:
@@ -3087,6 +3115,34 @@ class BamlSyncClient:
                 "input": input,
             })
             return typing.cast(types.CustomStory, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTimeoutError(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestTimeoutError(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTimeoutError", args={
+                "input": input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTimeoutFallback(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestTimeoutFallback(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTimeoutFallback", args={
+                "input": input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestUniverseQuestion(self, question: types.UniverseQuestionInput,
         baml_options: BamlCallOptions = {},
     ) -> types.UniverseQuestion:
@@ -3141,6 +3197,20 @@ class BamlSyncClient:
             # Original non-streaming code
             result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestVertexWithSystemInstructions", args={
                 
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestZeroTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestZeroTimeout(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestZeroTimeout", args={
+                "input": input,
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def UnionTest_Function(self, input: typing.Union[str, bool],
@@ -6192,6 +6262,18 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def TestRequestTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestRequestTimeout", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def TestRetryConstant(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
@@ -6240,6 +6322,18 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def TestStreamingTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestStreamingTimeout", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def TestThinking(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.CustomStory, types.CustomStory]:
@@ -6250,6 +6344,30 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(stream_types.CustomStory, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.CustomStory, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTimeoutError(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTimeoutError", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTimeoutFallback(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTimeoutFallback", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestUniverseQuestion(self, question: types.UniverseQuestionInput,
@@ -6293,6 +6411,18 @@ class BamlStreamClient:
     ) -> baml_py.BamlSyncStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestVertexWithSystemInstructions", args={
             
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestZeroTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestZeroTimeout", args={
+            "input": input,
         })
         return baml_py.BamlSyncStream[str, str](
           result,
@@ -8227,6 +8357,13 @@ class BamlHttpRequestClient:
             "pdf": pdf,
         }, mode="request")
         return result
+    def TestRequestTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestRequestTimeout", args={
+            "input": input,
+        }, mode="request")
+        return result
     def TestRetryConstant(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -8255,10 +8392,31 @@ class BamlHttpRequestClient:
             
         }, mode="request")
         return result
+    def TestStreamingTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestStreamingTimeout", args={
+            "input": input,
+        }, mode="request")
+        return result
     def TestThinking(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestThinking", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestTimeoutError(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTimeoutError", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestTimeoutFallback(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTimeoutFallback", args={
             "input": input,
         }, mode="request")
         return result
@@ -8288,6 +8446,13 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestVertexWithSystemInstructions", args={
             
+        }, mode="request")
+        return result
+    def TestZeroTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestZeroTimeout", args={
+            "input": input,
         }, mode="request")
         return result
     def UnionTest_Function(self, input: typing.Union[str, bool],
@@ -10027,6 +10192,13 @@ class BamlHttpStreamRequestClient:
             "pdf": pdf,
         }, mode="stream")
         return result
+    def TestRequestTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestRequestTimeout", args={
+            "input": input,
+        }, mode="stream")
+        return result
     def TestRetryConstant(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -10055,10 +10227,31 @@ class BamlHttpStreamRequestClient:
             
         }, mode="stream")
         return result
+    def TestStreamingTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestStreamingTimeout", args={
+            "input": input,
+        }, mode="stream")
+        return result
     def TestThinking(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestThinking", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTimeoutError(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTimeoutError", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTimeoutFallback(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTimeoutFallback", args={
             "input": input,
         }, mode="stream")
         return result
@@ -10088,6 +10281,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestVertexWithSystemInstructions", args={
             
+        }, mode="stream")
+        return result
+    def TestZeroTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestZeroTimeout", args={
+            "input": input,
         }, mode="stream")
         return result
     def UnionTest_Function(self, input: typing.Union[str, bool],

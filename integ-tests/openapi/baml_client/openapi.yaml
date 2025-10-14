@@ -2925,6 +2925,19 @@ paths:
                 title: TestOpenaiResponsesPdfsResponse
                 type: string
       operationId: TestOpenaiResponsesPdfs
+  /call/TestRequestTimeout:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestRequestTimeout'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestRequestTimeoutResponse
+                type: string
+      operationId: TestRequestTimeout
   /call/TestRetryConstant:
     post:
       requestBody:
@@ -2977,6 +2990,19 @@ paths:
                 title: TestSingleFallbackClientResponse
                 type: string
       operationId: TestSingleFallbackClient
+  /call/TestStreamingTimeout:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestStreamingTimeout'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestStreamingTimeoutResponse
+                type: string
+      operationId: TestStreamingTimeout
   /call/TestThinking:
     post:
       requestBody:
@@ -2990,6 +3016,32 @@ paths:
                 title: TestThinkingResponse
                 $ref: '#/components/schemas/CustomStory'
       operationId: TestThinking
+  /call/TestTimeoutError:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestTimeoutError'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestTimeoutErrorResponse
+                type: string
+      operationId: TestTimeoutError
+  /call/TestTimeoutFallback:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestTimeoutFallback'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestTimeoutFallbackResponse
+                type: string
+      operationId: TestTimeoutFallback
   /call/TestUniverseQuestion:
     post:
       requestBody:
@@ -3042,6 +3094,19 @@ paths:
                 title: TestVertexWithSystemInstructionsResponse
                 type: string
       operationId: TestVertexWithSystemInstructions
+  /call/TestZeroTimeout:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestZeroTimeout'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestZeroTimeoutResponse
+                type: string
+      operationId: TestZeroTimeout
   /call/UnionTest_Function:
     post:
       requestBody:
@@ -6636,6 +6701,22 @@ components:
             required:
             - pdf
             additionalProperties: false
+    TestRequestTimeout:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestRequestTimeoutRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestRetryConstant:
       required: true
       content:
@@ -6691,12 +6772,60 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
+    TestStreamingTimeout:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestStreamingTimeoutRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestThinking:
       required: true
       content:
         application/json:
           schema:
             title: TestThinkingRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestTimeoutError:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestTimeoutErrorRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestTimeoutFallback:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestTimeoutFallbackRequest
             type: object
             properties:
               input:
@@ -6767,6 +6896,22 @@ components:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
             required: []
+            additionalProperties: false
+    TestZeroTimeout:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestZeroTimeoutRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     UnionTest_Function:
       required: true

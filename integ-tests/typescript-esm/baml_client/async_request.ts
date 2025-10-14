@@ -5266,6 +5266,31 @@ env?: Record<string, string | undefined>
       }
       }
       
+  async TestRequestTimeout(
+  input: string,
+  __baml_options__?: BamlCallOptions<never>
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "TestRequestTimeout",
+      {
+      "input": input
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
   async TestRetryConstant(
   
   __baml_options__?: BamlCallOptions<never>
@@ -5366,6 +5391,31 @@ env?: Record<string, string | undefined>
       }
       }
       
+  async TestStreamingTimeout(
+  input: string,
+  __baml_options__?: BamlCallOptions<never>
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "TestStreamingTimeout",
+      {
+      "input": input
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
   async TestThinking(
   input: string,
   __baml_options__?: BamlCallOptions<never>
@@ -5377,6 +5427,56 @@ env?: Record<string, string | undefined>
       );
       return await this.runtime.buildRequest(
       "TestThinking",
+      {
+      "input": input
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async TestTimeoutError(
+  input: string,
+  __baml_options__?: BamlCallOptions<never>
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "TestTimeoutError",
+      {
+      "input": input
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async TestTimeoutFallback(
+  input: string,
+  __baml_options__?: BamlCallOptions<never>
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "TestTimeoutFallback",
       {
       "input": input
       },
@@ -5479,6 +5579,31 @@ env?: Record<string, string | undefined>
       "TestVertexWithSystemInstructions",
       {
       
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async TestZeroTimeout(
+  input: string,
+  __baml_options__?: BamlCallOptions<never>
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "TestZeroTimeout",
+      {
+      "input": input
       },
       this.ctxManager.cloneContext(),
       __baml_options__?.tb?.__tb(),
@@ -11672,6 +11797,31 @@ env?: Record<string, string | undefined>
           }
           }
           
+      async TestRequestTimeout(
+      input: string,
+      __baml_options__?: BamlCallOptions<never>
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "TestRequestTimeout",
+          {
+          "input": input
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
       async TestRetryConstant(
       
       __baml_options__?: BamlCallOptions<never>
@@ -11772,6 +11922,31 @@ env?: Record<string, string | undefined>
           }
           }
           
+      async TestStreamingTimeout(
+      input: string,
+      __baml_options__?: BamlCallOptions<never>
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "TestStreamingTimeout",
+          {
+          "input": input
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
       async TestThinking(
       input: string,
       __baml_options__?: BamlCallOptions<never>
@@ -11783,6 +11958,56 @@ env?: Record<string, string | undefined>
           );
           return await this.runtime.buildRequest(
           "TestThinking",
+          {
+          "input": input
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async TestTimeoutError(
+      input: string,
+      __baml_options__?: BamlCallOptions<never>
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "TestTimeoutError",
+          {
+          "input": input
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async TestTimeoutFallback(
+      input: string,
+      __baml_options__?: BamlCallOptions<never>
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "TestTimeoutFallback",
           {
           "input": input
           },
@@ -11885,6 +12110,31 @@ env?: Record<string, string | undefined>
           "TestVertexWithSystemInstructions",
           {
           
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async TestZeroTimeout(
+      input: string,
+      __baml_options__?: BamlCallOptions<never>
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "TestZeroTimeout",
+          {
+          "input": input
           },
           this.ctxManager.cloneContext(),
           __baml_options__?.tb?.__tb(),

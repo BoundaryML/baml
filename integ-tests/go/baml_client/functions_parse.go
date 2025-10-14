@@ -9856,6 +9856,53 @@ func (*parse) TestOpenaiResponsesPdfs(text string, opts ...CallOptionFunc) (stri
 	return casted, nil
 }
 
+// / Parse version of TestRequestTimeout (Takes in string and returns string)
+func (*parse) TestRequestTimeout(text string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestRequestTimeout: %w", err)
+		panic(wrapped_err)
+	}
+
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestRequestTimeout", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	casted := (result).(string)
+
+	return casted, nil
+}
+
 // / Parse version of TestRetryConstant (Takes in string and returns string)
 func (*parse) TestRetryConstant(text string, opts ...CallOptionFunc) (string, error) {
 
@@ -10044,6 +10091,53 @@ func (*parse) TestSingleFallbackClient(text string, opts ...CallOptionFunc) (str
 	return casted, nil
 }
 
+// / Parse version of TestStreamingTimeout (Takes in string and returns string)
+func (*parse) TestStreamingTimeout(text string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestStreamingTimeout: %w", err)
+		panic(wrapped_err)
+	}
+
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestStreamingTimeout", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	casted := (result).(string)
+
+	return casted, nil
+}
+
 // / Parse version of TestThinking (Takes in string and returns types.CustomStory)
 func (*parse) TestThinking(text string, opts ...CallOptionFunc) (types.CustomStory, error) {
 
@@ -10087,6 +10181,100 @@ func (*parse) TestThinking(text string, opts ...CallOptionFunc) (types.CustomSto
 	}
 
 	casted := (result).(types.CustomStory)
+
+	return casted, nil
+}
+
+// / Parse version of TestTimeoutError (Takes in string and returns string)
+func (*parse) TestTimeoutError(text string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTimeoutError: %w", err)
+		panic(wrapped_err)
+	}
+
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestTimeoutError", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	casted := (result).(string)
+
+	return casted, nil
+}
+
+// / Parse version of TestTimeoutFallback (Takes in string and returns string)
+func (*parse) TestTimeoutFallback(text string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestTimeoutFallback: %w", err)
+		panic(wrapped_err)
+	}
+
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestTimeoutFallback", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	casted := (result).(string)
 
 	return casted, nil
 }
@@ -10270,6 +10458,53 @@ func (*parse) TestVertexWithSystemInstructions(text string, opts ...CallOptionFu
 	}
 
 	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestVertexWithSystemInstructions", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	casted := (result).(string)
+
+	return casted, nil
+}
+
+// / Parse version of TestZeroTimeout (Takes in string and returns string)
+func (*parse) TestZeroTimeout(text string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestZeroTimeout: %w", err)
+		panic(wrapped_err)
+	}
+
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestZeroTimeout", encoded)
 	if err != nil {
 		return "", err
 	}

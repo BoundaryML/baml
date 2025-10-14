@@ -3834,6 +3834,24 @@ export const TestOpenaiResponsesPdfs = async (
 };
 
 /**
+ * Executes the "TestRequestTimeout" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestRequestTimeout"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestRequestTimeout = async (
+  input: string,
+): Promise<string> => {
+  return b.TestRequestTimeout(
+    input,
+  );
+};
+
+/**
  * Executes the "TestRetryConstant" BAML action.
  *
  * This server action calls the underlying BAML function "TestRetryConstant"
@@ -3897,6 +3915,24 @@ export const TestSingleFallbackClient = async (
 };
 
 /**
+ * Executes the "TestStreamingTimeout" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestStreamingTimeout"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestStreamingTimeout = async (
+  input: string,
+): Promise<string> => {
+  return b.TestStreamingTimeout(
+    input,
+  );
+};
+
+/**
  * Executes the "TestThinking" BAML action.
  *
  * This server action calls the underlying BAML function "TestThinking"
@@ -3910,6 +3946,42 @@ export const TestThinking = async (
   input: string,
 ): Promise<types.CustomStory> => {
   return b.TestThinking(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestTimeoutError" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestTimeoutError"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestTimeoutError = async (
+  input: string,
+): Promise<string> => {
+  return b.TestTimeoutError(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestTimeoutFallback" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestTimeoutFallback"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestTimeoutFallback = async (
+  input: string,
+): Promise<string> => {
+  return b.TestTimeoutFallback(
     input,
   );
 };
@@ -3980,6 +4052,24 @@ export const TestVertexClaude = async (
 export const TestVertexWithSystemInstructions = async (
 ): Promise<string> => {
   return b.TestVertexWithSystemInstructions(
+  );
+};
+
+/**
+ * Executes the "TestZeroTimeout" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestZeroTimeout"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestZeroTimeout = async (
+  input: string,
+): Promise<string> => {
+  return b.TestZeroTimeout(
+    input,
   );
 };
 
