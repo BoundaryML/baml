@@ -154,6 +154,12 @@ class DummyJsonTodo {
     userId int
 }
 
+enum DummyEnum {
+   POSITIVE
+   NEGATIVE
+   NEUTRAL
+}
+
 function ExecFetchAs(url: string) -> DummyJsonTodo {
     let todo = baml.fetch_as<DummyJsonTodo>(url);
 
@@ -164,4 +170,16 @@ test Fib5() {
   functions [IterativeFibonacci]
   args { n 5 }
   @@assert( {{ this == 5 }} )
+}
+
+function InstanceofWithPrimitives(n: int) -> bool {
+    n instanceof int
+}
+
+function InstanceofWithClasses(dummy: DummyJsonTodo) -> bool {
+    dummy instanceof DummyJsonTodo
+}
+
+function InstanceofWithEnums(e: DummyEnum) -> bool {
+    e instanceof DummyEnum
 }

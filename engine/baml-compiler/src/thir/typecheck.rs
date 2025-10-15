@@ -17,12 +17,13 @@
 ///
 /// However, the current implementation is simple and ad-hoc, likely wrong
 /// in several places. Bidirectional typing is the target.
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, str::FromStr, sync::Arc};
 
 use baml_types::{
     ir_type::{ArrowGeneric, TypeIR},
     BamlMap, BamlMediaType, BamlValueWithMeta, TypeValue,
 };
+use baml_vm::types::Type;
 use internal_baml_ast::ast::WithSpan;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
@@ -1371,6 +1372,7 @@ pub fn typecheck_expression(
                     "image" | "audio" | "video" | "pdf" | "baml" => {}
 
                     cls if context.classes.contains_key(cls) => {}
+                    p if TypeValue::from_str(p).is_ok() => {}
 
                     _ => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
@@ -2487,9 +2489,14 @@ pub fn typecheck_expression(
                     thir::Expr::Var(name, _) => {
                         if context.classes.get(name).is_some() {
                             Some(TypeIR::bool())
+                        } else if context.enums.get(name).is_some() {
+                            Some(TypeIR::bool())
+                        } else if TypeValue::from_str(name).is_ok() {
+                            Some(TypeIR::bool())
                         } else {
+                            // TODO: Check type aliases (may be recursive)
                             diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Class {name} not found"),
+                                &format!("Type {name} not found"),
                                 span.clone(),
                             ));
                             None
@@ -2497,7 +2504,7 @@ pub fn typecheck_expression(
                     }
                     _ => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
-                            "Invalid binary operation (instanceof): right operand must be a class",
+                            "Invalid binary operation (instanceof): right operand must be a type",
                             span.clone(),
                         ));
                         None
