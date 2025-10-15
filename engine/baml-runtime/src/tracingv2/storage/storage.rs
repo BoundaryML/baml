@@ -1344,6 +1344,7 @@ mod tests {
                 "boom".into(),
                 Some("m1".into()),
                 Some("error".into()),
+                vec![],
             );
 
             let ok_req = LoggedLLMRequest {
@@ -1355,10 +1356,11 @@ mod tests {
             };
             let ok_resp = LoggedLLMResponse::new_success(
                 rid_success.clone(),
-                Some("m2".into()),
+                "m2".into(),
                 Some("stop".into()),
                 LLMUsage { input_tokens: Some(1), output_tokens: Some(2), total_tokens: Some(3), cached_input_tokens: Some(0) },
                 "ok".into(),
+                vec![],
             );
 
             let collector = inject_test_events(
@@ -1417,10 +1419,11 @@ mod tests {
             };
             let ok_resp = LoggedLLMResponse::new_success(
                 rid_success.clone(),
-                Some("m2".into()),
+                "m2".into(),
                 Some("stop".into()),
                 LLMUsage { input_tokens: Some(1), output_tokens: Some(2), total_tokens: Some(3), cached_input_tokens: Some(0) },
                 "ok".into(),
+                vec![],
             );
 
             let failed_req = LoggedLLMRequest {
@@ -1435,6 +1438,7 @@ mod tests {
                 "boom".into(),
                 Some("m1".into()),
                 Some("error".into()),
+                vec![],
             );
 
             // Inject in order: success first, failure second (so failure is latest by timestamp)
