@@ -77,6 +77,14 @@
           "endsPattern": "."
         }
       }
+    },
+    {
+      "label": "build baml-cli",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["build", "--bin", "baml-cli"],
+      "options": { "cwd": "${workspaceFolder}/engine" },
+      "problemMatcher": ["$rustc"]
     }
   ],
   "inputs": [

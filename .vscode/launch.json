@@ -66,6 +66,17 @@
       "outFiles": [
         "${workspaceFolder}/typescript/apps/vscode-ext/dist/__test__/**/*.js"
       ]
+    },
+    {
+      "name": "Debug baml-cli --check (direct)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/engine/target/debug/baml-cli",
+      "args": ["check", "--from", "../integ-tests/"],
+      "cwd": "${workspaceFolder}/engine",
+      "env": { "RUST_LOG": "baml_cli=debug" },
+      "preLaunchTask": "build baml-cli",
+      "sourceLanguages": ["rust"]
     }
   ],
   "compounds": [
