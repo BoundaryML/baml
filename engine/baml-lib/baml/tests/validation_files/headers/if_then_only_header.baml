@@ -1,9 +1,9 @@
 function IfThenOnlyHeader() -> int {
     let x = 1;
 
-    # Start
+    //# Start
     let y = if (false) { 1 };
 
-    ## After
+    //## After
     y
 }

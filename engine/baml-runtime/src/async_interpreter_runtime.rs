@@ -4,12 +4,19 @@
 //! this implementation directly calls the THIR interpreter with an LLM handler callback
 //! that can execute LLM functions synchronously or asynchronously as needed.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::Result;
 use baml_compiler::{
     self, hir,
-    thir::{interpret::interpret_thir, typecheck::typecheck},
+    thir::{
+        interpret::{interpret_thir, EmitStreamContext},
+        typecheck::typecheck,
+    },
 };
 use baml_ids::FunctionCallId;
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta, Completion};
@@ -22,7 +29,6 @@ use crate::on_log_event::LogEventCallbackSync;
 use crate::{
     client_registry::ClientRegistry,
     internal::llm_client::{orchestrator::OrchestrationScope, LLMResponse},
-    runtime::InternalBamlRuntime,
     runtime_interface::ExperimentalTracingInterface,
     tracing::TracingCall,
     tracingv2::storage::storage::Collector,
@@ -59,7 +65,7 @@ impl TryFrom<LlmRuntime> for BamlAsyncInterpreterRuntime {
         let async_runtime = Arc::clone(&llm_runtime.async_runtime);
 
         // Stage 1: AST -> HIR
-        let hir_program = hir::Hir::from_ast(&llm_runtime.inner.db.ast);
+        let hir_program = hir::Hir::from_ast(&llm_runtime.db.ast);
 
         // Stage 2: HIR -> THIR (typecheck)
         let mut diagnostics = Diagnostics::new("dummy".into());
@@ -81,8 +87,8 @@ impl TryFrom<LlmRuntime> for BamlAsyncInterpreterRuntime {
 }
 
 impl BamlAsyncInterpreterRuntime {
-    pub fn internal(&self) -> &Arc<InternalBamlRuntime> {
-        &self.llm_runtime.inner
+    pub fn internal(&self) -> &LlmRuntime {
+        &self.llm_runtime
     }
 
     pub fn disassemble(&self, function_name: &str) {
@@ -162,6 +168,7 @@ impl BamlAsyncInterpreterRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<&HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
+        emit_handler: Option<impl FnMut(baml_compiler::emit::EmitEvent) + Send + 'static>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         // Check if this is an expression function
         let expr_fn = self
@@ -217,6 +224,17 @@ impl BamlAsyncInterpreterRuntime {
             })
             .collect::<BamlMap<_, _>>();
 
+        // Wrap emit handler in Arc<Mutex> so it can be shared with llm_handler
+        let emit_handler_shared: Arc<Mutex<Box<dyn FnMut(baml_compiler::emit::EmitEvent) + Send>>> =
+            Arc::new(Mutex::new(if let Some(handler) = emit_handler {
+                Box::new(handler)
+            } else {
+                Box::new(|_event| {})
+            }));
+
+        // Create a cloneable emit handler for llm_handler
+        let emit_handler_for_llm = Arc::clone(&emit_handler_shared);
+
         // Create LLM function handler
         let llm_runtime_clone = Arc::clone(&self.llm_runtime);
         let ctx_clone = ctx.clone();
@@ -224,19 +242,30 @@ impl BamlAsyncInterpreterRuntime {
         let cb_clone = cb.cloned();
         let env_vars_clone = env_vars.clone();
         let cancel_tripwire_clone = cancel_tripwire.clone();
+        let parent_function_name = function_name.clone();
+        let tags_clone = tags.cloned();
+        #[cfg(not(target_arch = "wasm32"))]
+        let tokio_runtime = self.llm_runtime.async_runtime.clone();
 
-        let llm_handler = move |fn_name: String, args: Vec<BamlValue>| {
+        let llm_handler = move |fn_name: String,
+                                args: Vec<BamlValue>,
+                                emit_context: Option<EmitStreamContext>| {
             let llm_runtime = Arc::clone(&llm_runtime_clone);
             let ctx = ctx_clone.clone();
             let tb = tb_clone.clone();
             let cb = cb_clone.clone();
             let env_vars = env_vars_clone.clone();
             let cancel_tripwire = cancel_tripwire_clone.clone();
+            let emit_handler: Arc<Mutex<Box<dyn FnMut(baml_compiler::emit::EmitEvent) + Send>>> =
+                Arc::clone(&emit_handler_for_llm);
+            let parent_fn = parent_function_name.clone();
+            let tags = tags_clone.clone();
+            #[cfg(not(target_arch = "wasm32"))]
+            let tokio_rt = tokio_runtime.clone();
 
             async move {
                 // Find the LLM function to get parameter names
                 let llm_fn = llm_runtime
-                    .inner
                     .ir()
                     .find_function(&fn_name)
                     .map_err(|e| anyhow::anyhow!("LLM function not found: {}: {}", fn_name, e))?;
@@ -248,37 +277,158 @@ impl BamlAsyncInterpreterRuntime {
                     .map(|(arg, param_name)| (param_name, arg))
                     .collect::<BamlMap<_, _>>();
 
-                // Call the LLM function
-                let (result, _call_id) = llm_runtime
-                    .call_function(
-                        fn_name,
-                        &llm_params,
-                        &ctx,
+                // Check if we should use streaming with emit events
+                if let Some(emit_ctx) = emit_context {
+                    // Use streaming with emit events
+                    let tracer = llm_runtime.tracer_wrapper.get_or_create_tracer(&env_vars);
+
+                    // Create RuntimeContext from RuntimeContextManager
+                    let runtime_ctx = ctx.create_ctx(
                         tb.as_ref(),
                         cb.as_ref(),
-                        None, // TODO: collectors not supported yet
-                        tags.cloned(),
-                        env_vars,
-                        cancel_tripwire,
-                    )
-                    .await;
+                        env_vars.clone(),
+                        ctx.call_id_stack(true).unwrap_or_default(),
+                    )?;
 
-                // Convert result to BamlValueWithMeta
-                match result {
-                    Ok(function_result) => {
-                        let baml_value = function_result
-                            .parsed()
-                            .as_ref()
-                            .unwrap()
-                            .as_ref()
-                            .unwrap()
-                            .clone()
-                            .0
-                            .value();
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let mut stream = llm_runtime.stream_function_impl(
+                        fn_name.clone(),
+                        &llm_params,
+                        tracer,
+                        runtime_ctx,
+                        tokio_rt,
+                        vec![], // collectors
+                        tags.clone(),
+                        cancel_tripwire.clone(),
+                    )?;
 
-                        Ok(baml_value_to_baml_value_with_meta(baml_value))
+                    #[cfg(target_arch = "wasm32")]
+                    let mut stream = llm_runtime.stream_function_impl(
+                        fn_name.clone(),
+                        &llm_params,
+                        tracer,
+                        runtime_ctx,
+                        vec![], // collectors
+                        tags.clone(),
+                        cancel_tripwire.clone(),
+                    )?;
+
+                    // Fire stream start event
+                    {
+                        let mut handler = emit_handler.lock().unwrap();
+                        handler(baml_compiler::emit::EmitEvent::new_stream_start(
+                            emit_ctx.variable_name.clone(),
+                            emit_ctx.stream_id.clone(),
+                            parent_fn.clone(),
+                        ));
                     }
-                    Err(e) => Err(e),
+
+                    // Create a callback to fire emit events for each chunk
+                    let variable_name = emit_ctx.variable_name.clone();
+                    let stream_id = emit_ctx.stream_id.clone();
+                    let emit_handler_for_stream: Arc<
+                        Mutex<Box<dyn FnMut(baml_compiler::emit::EmitEvent) + Send>>,
+                    > = Arc::clone(&emit_handler);
+
+                    let parent_fn_for_stream = parent_fn.clone();
+                    let on_event = move |event: crate::FunctionResult| {
+                        if let Some(parsed) = event.parsed().as_ref() {
+                            if let Ok(response_value) = parsed.as_ref() {
+                                // Convert ResponseBamlValue to BamlValueWithMeta<EmitValueMetadata>
+                                let baml_value_with_emit_meta =
+                                    response_value.0.clone().map_meta(|meta| {
+                                        baml_compiler::emit::EmitValueMetadata {
+                                            // Constraints come from the TypeIR, not from the flags
+                                            // Flags only contain ConstraintResults (the evaluation results)
+                                            constraints: vec![],
+                                            response_checks: meta.1.clone(),
+                                            completion: meta.2.clone(),
+                                            r#type: meta.3.clone(),
+                                        }
+                                    });
+
+                                let mut handler = emit_handler_for_stream.lock().unwrap();
+                                handler(baml_compiler::emit::EmitEvent::new_stream_update(
+                                    variable_name.clone(),
+                                    stream_id.clone(),
+                                    baml_value_with_emit_meta,
+                                    parent_fn_for_stream.clone(),
+                                ));
+                            }
+                        }
+                    };
+
+                    // Stream the LLM response with event callback
+                    let (result, _call_id) = stream
+                        .run(
+                            None::<fn()>,
+                            Some(on_event),
+                            &ctx,
+                            tb.as_ref(),
+                            cb.as_ref(),
+                            env_vars,
+                        )
+                        .await;
+
+                    // Fire stream end event
+                    {
+                        let mut handler = emit_handler.lock().unwrap();
+                        handler(baml_compiler::emit::EmitEvent::new_stream_end(
+                            emit_ctx.variable_name.clone(),
+                            emit_ctx.stream_id.clone(),
+                            parent_fn.clone(),
+                        ));
+                    }
+
+                    // Convert result to BamlValueWithMeta
+                    match result {
+                        Ok(function_result) => {
+                            let baml_value = function_result
+                                .parsed()
+                                .as_ref()
+                                .unwrap()
+                                .as_ref()
+                                .unwrap()
+                                .clone()
+                                .0
+                                .value();
+
+                            Ok(baml_value_to_baml_value_with_meta(baml_value))
+                        }
+                        Err(e) => Err(e),
+                    }
+                } else {
+                    // No emit context - use simple call_function (non-streaming)
+                    let (result, _call_id) = llm_runtime
+                        .call_function(
+                            fn_name,
+                            &llm_params,
+                            &ctx,
+                            tb.as_ref(),
+                            cb.as_ref(),
+                            Some(vec![]),
+                            tags.clone(),
+                            env_vars,
+                            cancel_tripwire,
+                        )
+                        .await;
+
+                    match result {
+                        Ok(function_result) => {
+                            let baml_value = function_result
+                                .parsed()
+                                .as_ref()
+                                .unwrap()
+                                .as_ref()
+                                .unwrap()
+                                .clone()
+                                .0
+                                .value();
+
+                            Ok(baml_value_to_baml_value_with_meta(baml_value))
+                        }
+                        Err(e) => Err(e),
+                    }
                 }
             }
         };
@@ -323,11 +473,20 @@ impl BamlAsyncInterpreterRuntime {
                 )))
             };
 
+        // Create emit event handler that reads from the shared handler
+        let emit_handler_for_interp = Arc::clone(&emit_handler_shared);
+        let mut emit_event_handler = move |event: baml_compiler::emit::EmitEvent| {
+            let mut handler = emit_handler_for_interp.lock().unwrap();
+            handler(event);
+        };
+
         // Execute the interpreter
         let result = interpret_thir(
+            function_name.clone(),
             self.thir_program.clone(),
             function_expr,
             llm_handler,
+            emit_event_handler,
             extra_bindings,
             env_vars,
         )
@@ -367,6 +526,7 @@ impl BamlAsyncInterpreterRuntime {
         env_vars: HashMap<String, String>,
         cancel_tripwire: Arc<TripWire>,
         tags: Option<&HashMap<String, String>>,
+        emit_handler: Option<impl FnMut(baml_compiler::emit::EmitEvent) + Send + 'static>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         self.async_runtime.block_on(self.call_function(
             function_name,
@@ -378,6 +538,7 @@ impl BamlAsyncInterpreterRuntime {
             env_vars,
             tags,
             cancel_tripwire,
+            emit_handler,
         ))
     }
 
@@ -596,7 +757,6 @@ impl BamlAsyncInterpreterRuntime {
         test_name: &str,
     ) -> Result<Option<TypeBuilder>> {
         self.llm_runtime
-            .inner
             .get_test_type_builder(function_name, test_name)
     }
 
@@ -759,11 +919,11 @@ fn baml_value_with_meta_to_baml_value(
 
 impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreterRuntime {
     fn features(&self) -> crate::internal::ir_features::IrFeatures {
-        self.llm_runtime.inner.features()
+        self.llm_runtime.features()
     }
 
     fn diagnostics(&self) -> &internal_baml_core::internal_baml_diagnostics::Diagnostics {
-        self.llm_runtime.inner.diagnostics()
+        self.llm_runtime.diagnostics()
     }
 
     fn orchestration_graph(
@@ -771,7 +931,7 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         client_name: &internal_llm_client::ClientSpec,
         ctx: &crate::runtime_context::RuntimeContext,
     ) -> Result<Vec<crate::internal::llm_client::orchestrator::OrchestratorNode>> {
-        self.llm_runtime.inner.orchestration_graph(client_name, ctx)
+        self.llm_runtime.orchestration_graph(client_name, ctx)
     }
 
     fn function_graph(
@@ -779,14 +939,14 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         function_name: &str,
         ctx: &crate::runtime_context::RuntimeContext,
     ) -> Result<String> {
-        self.llm_runtime.inner.function_graph(function_name, ctx)
+        self.llm_runtime.function_graph(function_name, ctx)
     }
 
     fn get_function<'ir>(
         &'ir self,
         function_name: &str,
     ) -> Result<internal_baml_core::ir::FunctionWalker<'ir>> {
-        self.llm_runtime.inner.get_function(function_name)
+        self.llm_runtime.get_function(function_name)
     }
 
     fn get_expr_function<'ir>(
@@ -794,7 +954,7 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         function_name: &str,
         ctx: &crate::runtime_context::RuntimeContext,
     ) -> Result<internal_baml_core::ir::ExprFunctionWalker<'ir>> {
-        self.llm_runtime.inner.get_expr_function(function_name, ctx)
+        self.llm_runtime.get_expr_function(function_name, ctx)
     }
 
     async fn render_prompt(
@@ -809,7 +969,6 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         internal_llm_client::AllowedRoleMetadata,
     )> {
         self.llm_runtime
-            .inner
             .render_prompt(function_name, ctx, params, node_index)
             .await
     }
@@ -823,13 +982,12 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         node_index: Option<usize>,
     ) -> Result<String> {
         self.llm_runtime
-            .inner
             .render_raw_curl(function_name, ctx, prompt, render_settings, node_index)
             .await
     }
 
     fn ir(&self) -> &internal_baml_core::ir::repr::IntermediateRepr {
-        self.llm_runtime.inner.ir()
+        self.llm_runtime.ir()
     }
 
     fn get_test_params(
@@ -840,7 +998,6 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         strict: bool,
     ) -> Result<BamlMap<String, BamlValue>> {
         self.llm_runtime
-            .inner
             .get_test_params(function_name, test_name, ctx, strict)
     }
 
@@ -851,7 +1008,6 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         ctx: &crate::runtime_context::RuntimeContext,
     ) -> Result<Vec<baml_types::Constraint>> {
         self.llm_runtime
-            .inner
             .get_test_constraints(function_name, test_name, ctx)
     }
 
@@ -861,7 +1017,6 @@ impl crate::runtime_interface::InternalRuntimeInterface for BamlAsyncInterpreter
         test_name: &str,
     ) -> Result<Option<TypeBuilder>> {
         self.llm_runtime
-            .inner
             .get_test_type_builder(function_name, test_name)
     }
 }

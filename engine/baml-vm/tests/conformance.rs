@@ -1,7 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
+mod common;
 use anyhow::{anyhow, bail, Context, Result};
-use baml_compiler::{hir, thir};
+use baml_compiler::{emit::EmitEvent, hir, thir};
 use baml_runtime::{async_vm_runtime::BamlAsyncVmRuntime, TripWire};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
 use internal_baml_core::internal_baml_ast;
@@ -166,6 +167,7 @@ impl ConformanceSuite {
                 self.project.env_vars.clone(),
                 None,
                 TripWire::new(None),
+                None::<fn(EmitEvent) -> _>,
             )
             .await;
 
@@ -199,14 +201,19 @@ impl ConformanceSuite {
             meta: fake_meta(),
         };
 
-        let result = interpret_thir(
-            thir,
-            call,
-            |name, _args| async move { bail!("unexpected LLM function call: {name}") },
-            BamlMap::new(),
-            self.project.env_vars.clone(),
-        )
-        .await?;
+        let result =
+            interpret_thir(
+                "test".to_string(),
+                thir,
+                call,
+                |name, _args, _emit_context| async move {
+                    bail!("unexpected LLM function call: {name}")
+                },
+                |_event| {},
+                BamlMap::new(),
+                self.project.env_vars.clone(),
+            )
+            .await?;
 
         Ok(BamlValue::from(result))
     }

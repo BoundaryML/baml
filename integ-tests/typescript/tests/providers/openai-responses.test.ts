@@ -33,7 +33,7 @@ describe("OpenAI Provider", () => {
           role: "user",
         },
       ],
-      model: "gpt-4.1",
+      model: "gpt-5-mini",
     });
   });
 
@@ -51,7 +51,7 @@ describe("OpenAI Provider", () => {
           role: "user",
         },
       ],
-      model: "gpt-4.1",
+      model: "gpt-5-mini",
     });
   });
 

@@ -1,13 +1,20 @@
-error: Statement must end with a semicolon.
+error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
   -->  tests/validation_files/headers/invalid.baml:12
    | 
 11 | function MixedOnSameLine() -> string {
 12 |     let x = "hello" ## Inline Header // Should fail
+13 |     x
+   | 
+error: Error validating Function "MixedOnSameLine": This field declaration is invalid. It is either missing a name or a type.
+  -->  tests/validation_files/headers/invalid.baml:13
+   | 
+12 |     let x = "hello" ## Inline Header // Should fail
+13 |     x
    | 
 error: Statement must end with a semicolon.
   -->  tests/validation_files/headers/invalid.baml:18
    | 
-17 |     #No Space After Hash // Should potentially fail depending on grammar rules
+17 |     //#No Space After Hash // Should potentially fail depending on grammar rules
 18 |     let x = "test"
 19 |     x
    | 
@@ -16,7 +23,7 @@ error: Statement must end with a semicolon.
    | 
 24 |     // Empty header title - this should fail
 25 |     let x = "test"
-26 |     ##
+26 |     //##
    | 
 error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
   -->  tests/validation_files/headers/invalid.baml:33
@@ -54,11 +61,4 @@ error: Statement must end with a semicolon.
 42 |         Should not be parsed
 43 |     "#
 44 |     x + y
-   | 
-error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
-  -->  tests/validation_files/headers/invalid.baml:50
-   | 
-49 |     client GPT4
-50 |     # Section Header
-51 |     // Should fail - only allowed in expression functions
    | 

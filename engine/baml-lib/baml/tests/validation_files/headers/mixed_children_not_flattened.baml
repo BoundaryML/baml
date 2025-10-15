@@ -1,10 +1,10 @@
-# Parent
+//# Parent
 function MixedChildrenNotFlattened() -> string {
-    ## MD Child
+    //## MD Child
     let items = [42];
     for (let item in items) {
-        ### Loop Child
-        ### And stuff
+        //### Loop Child
+        //### And stuff
         item
     }
     "done"

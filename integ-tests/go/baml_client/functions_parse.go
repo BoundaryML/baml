@@ -685,6 +685,53 @@ func (*parse) BuildTree(text string, opts ...CallOptionFunc) (types.Tree, error)
 	return casted, nil
 }
 
+// / Parse version of CheckWordEquality (Takes in string and returns bool)
+func (*parse) CheckWordEquality(text string, opts ...CallOptionFunc) (bool, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: CheckWordEquality: %w", err)
+		panic(wrapped_err)
+	}
+
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "CheckWordEquality", encoded)
+	if err != nil {
+		return false, err
+	}
+
+	casted := (result).(bool)
+
+	return casted, nil
+}
+
 // / Parse version of ChooseTodoTools (Takes in string and returns []types.Union2AddTodoItemOrTodoMessageToUser)
 func (*parse) ChooseTodoTools(text string, opts ...CallOptionFunc) ([]types.Union2AddTodoItemOrTodoMessageToUser, error) {
 
@@ -6369,6 +6416,53 @@ func (*parse) TestAwsInvalidAccessKey(text string, opts ...CallOptionFunc) (stri
 	}
 
 	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestAwsInvalidAccessKey", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	casted := (result).(string)
+
+	return casted, nil
+}
+
+// / Parse version of TestAwsInvalidEndpoint (Takes in string and returns string)
+func (*parse) TestAwsInvalidEndpoint(text string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestAwsInvalidEndpoint: %w", err)
+		panic(wrapped_err)
+	}
+
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestAwsInvalidEndpoint", encoded)
 	if err != nil {
 		return "", err
 	}

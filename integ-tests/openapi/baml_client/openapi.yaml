@@ -217,6 +217,19 @@ paths:
                 title: BuildTreeResponse
                 $ref: '#/components/schemas/Tree'
       operationId: BuildTree
+  /call/CheckWordEquality:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/CheckWordEquality'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: CheckWordEqualityResponse
+                type: boolean
+      operationId: CheckWordEquality
   /call/ChooseTodoTools:
     post:
       requestBody:
@@ -1949,6 +1962,19 @@ paths:
                 title: TestAwsInvalidAccessKeyResponse
                 type: string
       operationId: TestAwsInvalidAccessKey
+  /call/TestAwsInvalidEndpoint:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAwsInvalidEndpoint'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAwsInvalidEndpointResponse
+                type: string
+      operationId: TestAwsInvalidEndpoint
   /call/TestAwsInvalidProfile:
     post:
       requestBody:
@@ -3371,6 +3397,25 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    CheckWordEquality:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: CheckWordEqualityRequest
+            type: object
+            properties:
+              target:
+                type: string
+              word:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - target
+            - word
             additionalProperties: false
     ChooseTodoTools:
       required: true
@@ -5386,6 +5431,22 @@ components:
         application/json:
           schema:
             title: TestAwsInvalidAccessKeyRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAwsInvalidEndpoint:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAwsInvalidEndpointRequest
             type: object
             properties:
               input:

@@ -60,7 +60,7 @@ impl GenerateArgs {
             .context("Failed to build BAML runtime")?;
 
         // Display warnings only if the feature flag is enabled
-        let diagnostics = runtime.inner.diagnostics();
+        let diagnostics = &runtime.diagnostics;
         if feature_flags.should_display_warnings() && diagnostics.has_warnings() {
             eprintln!("{}", diagnostics.warnings_to_pretty_string());
         }

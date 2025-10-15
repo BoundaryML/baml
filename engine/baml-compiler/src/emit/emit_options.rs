@@ -1,4 +1,3 @@
-use baml_types::TypeIR;
 use internal_baml_ast::{
     self,
     ast::{EmitArgument, EmitDecorator, Expression, Identifier},

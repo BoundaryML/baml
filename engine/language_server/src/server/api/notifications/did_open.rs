@@ -75,7 +75,15 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             )
             .internal_error()?;
 
-        // tracing::info!("before get_or_create_project");
+        // session.open_text_document(
+        //    q DocumentKey::from_path(&file_path, &file_path).internal_error()?,
+        //     TextDocument::new(params.text_document.text, params.text_document.version),
+        // );
+
+        session.reload(Some(notifier.clone())).internal_error()?;
+
+        // We do this after the project reload since we may be loading this baml project with files (and creating a new runtime) in the .reload(), and we only want to send the generator version if we've had a runtime created. Ideally we don't depend on the runtime being created (since our version of the LSP may not be able to read all baml files), and it only reads the generator config blocks.
+        tracing::info!("before send_generator_version");
         {
             let locked = project.lock();
             let default_flags = vec!["beta".to_string()];
@@ -87,15 +95,9 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             let client_version = session.baml_settings.get_client_version();
 
             let generator_version = locked.get_common_generator_version();
+            tracing::info!("common generator version {:?}", generator_version);
             send_generator_version(&notifier, &locked, generator_version.as_ref().ok());
         }
-
-        // session.open_text_document(
-        //     DocumentKey::from_path(&file_path, &file_path).internal_error()?,
-        //     TextDocument::new(params.text_document.text, params.text_document.version),
-        // );
-
-        session.reload(Some(notifier.clone())).internal_error()?;
 
         publish_session_lsp_diagnostics(&notifier, session, &url)?;
 

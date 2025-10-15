@@ -180,10 +180,12 @@ export class WebviewPanelHost {
           return source;
       }
     })();
-    this.reporter?.sendTelemetryEvent({
-      event: `baml.webview.${command}`,
-      properties: {},
-    });
+    if (command === 'select_function' || command === 'run_test') {
+      this.reporter?.sendTelemetryEvent({
+        event: `baml.webview.${command}`,
+        properties: {},
+      });
+    }
   }
 
   /**

@@ -21,6 +21,7 @@ inherent_to_string = "allow"
 [dependencies]
 anyhow.workspace = true
 baml-cli.workspace = true
+baml-compiler = { path = "../baml-compiler" }
 baml-ids.workspace = true
 baml-types.workspace = true
 baml-log.workspace = true
@@ -54,6 +55,6 @@ tracing-subscriber = { version = "0.3.18", features = [
 napi-build = "2.2.3"
 
 [features]
-default = []
+default = ["interpreter"]
 # Use the THIR interpreter runtime instead of the VM bytecode runtime
 interpreter = ["baml-runtime/interpreter"]

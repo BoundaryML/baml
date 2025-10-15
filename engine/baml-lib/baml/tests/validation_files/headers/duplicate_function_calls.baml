@@ -1,12 +1,12 @@
-# Pipeline
+//# Pipeline
 function CallsDedup() -> string {
-    ## Step A
+    //## Step A
     let a = Foo();
 
-    ## Step B
+    //## Step B
     let b = Foo();
 
-    ## Step C
+    //## Step C
     let c = Foo();
 
     a + b

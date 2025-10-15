@@ -592,7 +592,7 @@ impl AwsClient {
         let config = loader.load().await;
         let http_client = custom_http_client::client()?;
 
-        let bedrock_config = aws_sdk_bedrockruntime::config::Builder::from(&config)
+        let mut bedrock_config = aws_sdk_bedrockruntime::config::Builder::from(&config)
             // To support HTTPS_PROXY https://github.com/awslabs/aws-sdk-rust/issues/169
             .http_client(http_client)
             // Adding a custom http client (above) breaks the stalled stream protection for some reason. If a bedrock request takes longer than 5s (the default grace period, it makes it error out), so we disable it.
@@ -601,9 +601,14 @@ impl AwsClient {
                 call_stack,
                 http_request_id.clone(),
                 &self.properties,
-            ))
-            .build();
-        Ok(BedrockRuntimeClient::from_conf(bedrock_config))
+            ));
+
+        // Set endpoint_url if specified
+        if let Some(endpoint_url) = self.properties.endpoint_url.as_ref() {
+            bedrock_config = bedrock_config.endpoint_url(endpoint_url);
+        }
+
+        Ok(BedrockRuntimeClient::from_conf(bedrock_config.build()))
     }
 
     async fn chat_anyhow(&self, response: &ConverseOutput) -> Result<String> {

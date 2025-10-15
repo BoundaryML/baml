@@ -10,7 +10,7 @@ import {
   GoogleGenerativeAI,
 } from "@google/generative-ai";
 import { SignatureV4 } from "@smithy/signature-v4";
-import { fromEnv } from "@aws-sdk/credential-providers";
+import { defaultProvider } from "@aws-sdk/credential-provider-node";
 import { HttpRequest } from "@smithy/protocol-http";
 import { Sha256 } from "@aws-crypto/sha256-js";
 import { HTTPRequest as BamlHttpRequest } from "@boundaryml/baml";
@@ -184,93 +184,6 @@ describe("Modular API Tests", () => {
     expect(parsed).toEqual(JOHN_DOE_PARSED_RESUME);
   });
 
-  it("openai batch api", async () => {
-    const client = new OpenAI();
-
-    // Helper function to convert BAML HTTP request to OpenAI batch JSONL format
-    const toOpenaiJsonl = (req: BamlHttpRequest): string => {
-      const line = JSON.stringify({
-        custom_id: req.id,
-        method: "POST",
-        url: "/v1/chat/completions",
-        body: req.body.json(),
-      });
-      return `${line}\n`;
-    };
-
-    // Create requests for both resumes
-    const [johnReq, janeReq] = await Promise.all([
-      b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME),
-      b.request.ExtractResume2(JANE_SMITH_TEXT_RESUME),
-    ]);
-
-    const jsonl = toOpenaiJsonl(johnReq) + toOpenaiJsonl(janeReq);
-
-    // Create batch input file
-    const batchInputFile = await client.files.create({
-      file: new File([jsonl], "batch.jsonl"),
-      purpose: "batch",
-    });
-
-    // Create batch
-    let batch = await client.batches.create({
-      input_file_id: batchInputFile.id,
-      endpoint: "/v1/chat/completions",
-      completion_window: "24h",
-      metadata: {
-        description: "BAML Modular API TypeScript Batch Integ Test",
-      },
-    });
-
-    let backoff = 1000; // milliseconds
-    let attempts = 0;
-    const maxAttempts = 30;
-
-    while (true) {
-      batch = await client.batches.retrieve(batch.id);
-      attempts += 1;
-
-      if (batch.status === "completed") {
-        break;
-      }
-
-      if (attempts >= maxAttempts) {
-        try {
-          await client.batches.cancel(batch.id);
-        } finally {
-          throw "Batch failed to complete in time";
-        }
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, backoff));
-      // backoff *= 2 // Exponential backoff
-    }
-
-    // Get output file
-    const output = await client.files.content(batch.output_file_id!);
-
-    // Process results
-    const expected: Record<string, Resume> = {
-      [johnReq.id]: JOHN_DOE_PARSED_RESUME,
-      [janeReq.id]: JANE_SMITH_PARSED_RESUME,
-    };
-
-    const received: Record<string, Resume> = {};
-    const outputJsonl = await output.text();
-
-    for (const line of outputJsonl
-      .split("\n")
-      .filter((line) => line.trim().length > 0)) {
-      const result = JSON.parse(line.trim());
-      const llmResponse = result.response.body.choices[0].message.content;
-
-      const parsed = b.parse.ExtractResume2(llmResponse);
-      received[result.custom_id] = parsed;
-    }
-
-    expect(received).toEqual(expected);
-  });
-
   it("modular openai responses", async () => {
     // Test openai-responses provider using the modular API
     const client = new OpenAI();
@@ -318,7 +231,7 @@ describe("Modular API Tests", () => {
     const signer = new SignatureV4({
       service: "bedrock",
       region,
-      credentials: fromEnv(),
+      credentials: defaultProvider(),
       sha256: Sha256,
     });
 

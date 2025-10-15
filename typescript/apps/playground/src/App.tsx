@@ -12,9 +12,14 @@ import { EventListener } from '@baml/playground-common/event-listener';
 // import 'jotai-devtools/styles.css'
 import { PromptPreview } from '@baml/playground-common/prompt-preview';
 import { ThemeProvider } from 'next-themes';
+import { useWasmPanicHandler } from '@baml/playground-common/baml-project-panel/atoms';
+import { WasmPanicNotification } from '@baml/playground-common/baml-project-panel/WasmPanicNotification';
 
 function App() {
   useFeedbackWidget();
+  // Wire up WASM panic handler to automatically cancel tests on panic
+  useWasmPanicHandler();
+
   return (
     <CustomErrorBoundary message="Error loading playground">
       {/* <DevTools /> */}
@@ -26,6 +31,9 @@ function App() {
             enableSystem
             disableTransitionOnChange={true}
           >
+            {/* WASM panic notification */}
+            <WasmPanicNotification />
+
             {/* Main content area */}
             <div className="h-full">
               <PromptPreview />

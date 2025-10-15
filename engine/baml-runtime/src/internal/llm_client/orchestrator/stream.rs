@@ -213,6 +213,7 @@ where
                     }
                 };
 
+
                 let (system_start, instant_start) = (web_time::SystemTime::now(), web_time::Instant::now());
                 let ctx = CtxWithHttpRequestId::from(ctx);
                 let stream_res = node.stream(&ctx, &prompt).await;
@@ -247,6 +248,7 @@ where
                                 if let Some(on_tick) = on_tick_cb {
                                     on_tick();
                                 }
+
 
                                 match &stream_part {
                                     LLMResponse::Success(s) => {

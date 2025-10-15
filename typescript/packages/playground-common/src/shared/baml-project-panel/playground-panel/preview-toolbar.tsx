@@ -16,7 +16,7 @@ import { toast } from '@baml/ui/sonner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
 import { TooltipProvider } from '@baml/ui/tooltip';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { Key, Play, Settings } from 'lucide-react';
+import { Key, Play, Settings, Square } from 'lucide-react';
 import type React from 'react';
 import {
   type BamlConfigAtom,
@@ -42,7 +42,7 @@ export const displaySettingsAtom = atom({
 
 // RunButton component
 const RunButton: React.FC<{ className?: string }> = ({ className }) => {
-  const { runTests: runBamlTests } = useRunBamlTests();
+  const { runTests: runBamlTests, cancelTests } = useRunBamlTests();
   const isRunning = useAtomValue(areTestsRunningAtom);
   const selected = useAtomValue(selectedItemAtom);
 
@@ -50,18 +50,35 @@ const RunButton: React.FC<{ className?: string }> = ({ className }) => {
     <Button
       variant="default"
       size="xs"
-      className={cn('cursor-pointer items-center gap-2 flex-shrink-0 min-w-fit bg-purple-600 hover:bg-purple-700 text-white', className)}
-      disabled={isRunning || selected === undefined}
+      className={cn(
+        'cursor-pointer items-center gap-2 flex-shrink-0 min-w-fit',
+        isRunning
+          ? 'bg-red-600 hover:bg-red-700 text-white'
+          : 'bg-purple-600 hover:bg-purple-700 text-white',
+        className
+      )}
+      disabled={!isRunning && selected === undefined}
       onClick={() => {
-        if (selected) {
+        if (isRunning) {
+          cancelTests();
+        } else if (selected) {
           void runBamlTests([
             { functionName: selected[0], testName: selected[1] },
           ]);
         }
       }}
     >
-      <Play className="size-4 flex-shrink-0" />
-      <span className="text-sm whitespace-nowrap">Run</span>
+      {isRunning ? (
+        <>
+          <Square className="size-4 flex-shrink-0 fill-white" />
+          <span className="text-sm whitespace-nowrap">Stop</span>
+        </>
+      ) : (
+        <>
+          <Play className="size-4 flex-shrink-0" />
+          <span className="text-sm whitespace-nowrap">Run</span>
+        </>
+      )}
     </Button>
   );
 };

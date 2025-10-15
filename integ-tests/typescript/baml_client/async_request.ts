@@ -25,14 +25,16 @@ import type { Checked, Check } from "./types"
 import type * as types from "./types"
 import type {AddTodoItem, AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, ClientDetails1559, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, Document1559, DummyJsonTodo, DummyOutput, DynEnumOne, DynEnumThree, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, DynamicSchema, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Haiku, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MaintainFieldOrder, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, Note1599, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, RecursiveUnion, RenderEnumInput, RenderStatusEnum, RenderTestClass, RenderTestEnum, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, TodoMessageToUser, Tree, TwoStoriesOneTitle, TwoStoriesOneTitleCheck, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types"
 import type TypeBuilder from "./type_builder"
+import type * as events from "./events"
 
 type TickReason = "Unknown";
 
-type BamlCallOptions = {
+type BamlCallOptions<EventsT = never> = {
 tb?: TypeBuilder
 clientRegistry?: ClientRegistry
 env?: Record<string, string | undefined>
   onTick?: (reason: TickReason, log: FunctionLog | null) => void
+  events?: EventsT
   }
 
   export class AsyncHttpRequest {
@@ -41,7 +43,7 @@ env?: Record<string, string | undefined>
   
   async AaaSamOutputFormat(
   recipe: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -66,7 +68,7 @@ env?: Record<string, string | undefined>
       
   async AliasThatPointsToRecursiveType(
   data: types.LinkedListAliasNode,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -91,7 +93,7 @@ env?: Record<string, string | undefined>
       
   async AliasWithMultipleAttrs(
   money: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -116,7 +118,7 @@ env?: Record<string, string | undefined>
       
   async AliasedInputClass(
   input: types.InputClass,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -141,7 +143,7 @@ env?: Record<string, string | undefined>
       
   async AliasedInputClass2(
   input: types.InputClass,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -166,7 +168,7 @@ env?: Record<string, string | undefined>
       
   async AliasedInputClassNested(
   input: types.InputClassNested,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -191,7 +193,7 @@ env?: Record<string, string | undefined>
       
   async AliasedInputEnum(
   input: types.AliasedEnum,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -216,7 +218,7 @@ env?: Record<string, string | undefined>
       
   async AliasedInputList(
   input: types.AliasedEnum[],
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -241,7 +243,7 @@ env?: Record<string, string | undefined>
       
   async AllowedOptionals(
   optionals: types.OptionalListAndMap,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -266,7 +268,7 @@ env?: Record<string, string | undefined>
       
   async AssertFn(
   a: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -291,7 +293,7 @@ env?: Record<string, string | undefined>
       
   async AudioInput(
   aud: Audio,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -316,7 +318,7 @@ env?: Record<string, string | undefined>
       
   async AudioInputOpenai(
   aud: Audio,prompt: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -341,7 +343,7 @@ env?: Record<string, string | undefined>
       
   async BuildLinkedList(
   input: number[],
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -366,7 +368,7 @@ env?: Record<string, string | undefined>
       
   async BuildTree(
   input: types.BinaryNode,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -389,9 +391,34 @@ env?: Record<string, string | undefined>
       }
       }
       
+  async CheckWordEquality(
+  word: string,target: string,
+  __baml_options__?: BamlCallOptions<never>
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "CheckWordEquality",
+      {
+      "word": word,"target": target
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
   async ChooseTodoTools(
   query: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -416,7 +443,7 @@ env?: Record<string, string | undefined>
       
   async ClassThatPointsToRecursiveClassThroughAlias(
   cls: types.ClassToRecAlias,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -441,7 +468,7 @@ env?: Record<string, string | undefined>
       
   async ClassifyDynEnumTwo(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -466,7 +493,7 @@ env?: Record<string, string | undefined>
       
   async ClassifyDynamicStatus(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -491,7 +518,7 @@ env?: Record<string, string | undefined>
       
   async ClassifyMessage(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -516,7 +543,7 @@ env?: Record<string, string | undefined>
       
   async ClassifyMessage2(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -541,7 +568,7 @@ env?: Record<string, string | undefined>
       
   async ClassifyMessage3(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -566,7 +593,7 @@ env?: Record<string, string | undefined>
       
   async Completion(
   prefix: string,suffix: string,language: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -591,7 +618,7 @@ env?: Record<string, string | undefined>
       
   async CustomTask(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -616,7 +643,7 @@ env?: Record<string, string | undefined>
       
   async DescribeAudio(
   audio: Audio,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -641,7 +668,7 @@ env?: Record<string, string | undefined>
       
   async DescribeAudio2(
   audio: Audio,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -666,7 +693,7 @@ env?: Record<string, string | undefined>
       
   async DescribeImage(
   img: Image,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -691,7 +718,7 @@ env?: Record<string, string | undefined>
       
   async DescribeImage2(
   classWithImage: types.ClassWithImage,img2: Image,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -716,7 +743,7 @@ env?: Record<string, string | undefined>
       
   async DescribeImage3(
   classWithImage: types.ClassWithImage,img2: Image,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -741,7 +768,7 @@ env?: Record<string, string | undefined>
       
   async DescribeImage4(
   classWithImage: types.ClassWithImage,img2: Image,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -766,7 +793,7 @@ env?: Record<string, string | undefined>
       
   async DescribeMedia1599(
   img: Image,client_sector: string,client_name: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -791,7 +818,7 @@ env?: Record<string, string | undefined>
       
   async DifferentiateUnions(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -816,7 +843,7 @@ env?: Record<string, string | undefined>
       
   async DummyOutputFunction(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -841,7 +868,7 @@ env?: Record<string, string | undefined>
       
   async DynamicFunc(
   input: types.DynamicClassOne,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -866,7 +893,7 @@ env?: Record<string, string | undefined>
       
   async DynamicInputOutput(
   input: types.DynInputOutput,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -891,7 +918,7 @@ env?: Record<string, string | undefined>
       
   async DynamicListInputOutput(
   input: types.DynInputOutput[],
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -916,7 +943,7 @@ env?: Record<string, string | undefined>
       
   async ExpectFailure(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -941,7 +968,7 @@ env?: Record<string, string | undefined>
       
   async ExtractContactInfo(
   document: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -966,7 +993,7 @@ env?: Record<string, string | undefined>
       
   async ExtractDynamicCategories(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -991,7 +1018,7 @@ env?: Record<string, string | undefined>
       
   async ExtractEntities(
   text: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1016,7 +1043,7 @@ env?: Record<string, string | undefined>
       
   async ExtractHobby(
   text: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1041,7 +1068,7 @@ env?: Record<string, string | undefined>
       
   async ExtractName(
   text: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1066,7 +1093,7 @@ env?: Record<string, string | undefined>
       
   async ExtractNames(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1091,7 +1118,7 @@ env?: Record<string, string | undefined>
       
   async ExtractPeople(
   text: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1116,7 +1143,7 @@ env?: Record<string, string | undefined>
       
   async ExtractReceiptInfo(
   email: string,reason: "curiosity" | "personal_finance",
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1141,7 +1168,7 @@ env?: Record<string, string | undefined>
       
   async ExtractResume(
   resume: string,img?: Image | null,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1166,7 +1193,7 @@ env?: Record<string, string | undefined>
       
   async ExtractResume2(
   resume: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1191,7 +1218,7 @@ env?: Record<string, string | undefined>
       
   async FnAlwaysFails(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1216,7 +1243,7 @@ env?: Record<string, string | undefined>
       
   async FnClassOptionalOutput(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1241,7 +1268,7 @@ env?: Record<string, string | undefined>
       
   async FnClassOptionalOutput2(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1266,7 +1293,7 @@ env?: Record<string, string | undefined>
       
   async FnEnumListOutput(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1291,7 +1318,7 @@ env?: Record<string, string | undefined>
       
   async FnEnumOutput(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1316,7 +1343,7 @@ env?: Record<string, string | undefined>
       
   async FnFailRetryConstantDelay(
   retries: number,delay_ms: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1341,7 +1368,7 @@ env?: Record<string, string | undefined>
       
   async FnFailRetryExponentialDelay(
   retries: number,initial_delay_ms: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1366,7 +1393,7 @@ env?: Record<string, string | undefined>
       
   async FnFallbackAlwaysFails(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1391,7 +1418,7 @@ env?: Record<string, string | undefined>
       
   async FnLiteralClassInputOutput(
   input: types.LiteralClassHello,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1416,7 +1443,7 @@ env?: Record<string, string | undefined>
       
   async FnLiteralUnionClassInputOutput(
   input: types.LiteralClassOne | types.LiteralClassTwo,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1441,7 +1468,7 @@ env?: Record<string, string | undefined>
       
   async FnNamedArgsSingleStringOptional(
   myString?: string | null,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1466,7 +1493,7 @@ env?: Record<string, string | undefined>
       
   async FnOutputBool(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1491,7 +1518,7 @@ env?: Record<string, string | undefined>
       
   async FnOutputClass(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1516,7 +1543,7 @@ env?: Record<string, string | undefined>
       
   async FnOutputClassList(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1541,7 +1568,7 @@ env?: Record<string, string | undefined>
       
   async FnOutputClassNested(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1566,7 +1593,7 @@ env?: Record<string, string | undefined>
       
   async FnOutputClassWithEnum(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1591,7 +1618,7 @@ env?: Record<string, string | undefined>
       
   async FnOutputInt(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1616,7 +1643,7 @@ env?: Record<string, string | undefined>
       
   async FnOutputLiteralBool(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1641,7 +1668,7 @@ env?: Record<string, string | undefined>
       
   async FnOutputLiteralInt(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1666,7 +1693,7 @@ env?: Record<string, string | undefined>
       
   async FnOutputLiteralString(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1691,7 +1718,7 @@ env?: Record<string, string | undefined>
       
   async FnOutputStringList(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1716,7 +1743,7 @@ env?: Record<string, string | undefined>
       
   async FnTestAliasedEnumOutput(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1741,7 +1768,7 @@ env?: Record<string, string | undefined>
       
   async FnTestClassAlias(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1766,7 +1793,7 @@ env?: Record<string, string | undefined>
       
   async FnTestNamedArgsSingleEnum(
   myArg: types.NamedArgsSingleEnum,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1791,7 +1818,7 @@ env?: Record<string, string | undefined>
       
   async GetDataType(
   text: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1816,7 +1843,7 @@ env?: Record<string, string | undefined>
       
   async GetOrderInfo(
   email: types.Email,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1841,7 +1868,7 @@ env?: Record<string, string | undefined>
       
   async GetQuery(
   query: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1866,7 +1893,7 @@ env?: Record<string, string | undefined>
       
   async InOutEnumMapKey(
   i1: Partial<Record<types.MapKey, string>>,i2: Partial<Record<types.MapKey, string>>,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1891,7 +1918,7 @@ env?: Record<string, string | undefined>
       
   async InOutLiteralStringUnionMapKey(
   i1: Partial<Record<"one" | "two" | "three" | "four", string>>,i2: Partial<Record<"one" | "two" | "three" | "four", string>>,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1916,7 +1943,7 @@ env?: Record<string, string | undefined>
       
   async InOutSingleLiteralStringMapKey(
   m: Record<"key", string>,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1941,7 +1968,7 @@ env?: Record<string, string | undefined>
       
   async JsonTypeAliasCycle(
   input: types.JsonValue,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1966,7 +1993,7 @@ env?: Record<string, string | undefined>
       
   async LLMEcho(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -1991,7 +2018,7 @@ env?: Record<string, string | undefined>
       
   async LiteralUnionsTest(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2016,7 +2043,7 @@ env?: Record<string, string | undefined>
       
   async LlmReturnNumber(
   n: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2041,7 +2068,7 @@ env?: Record<string, string | undefined>
       
   async MakeBlockConstraint(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2066,7 +2093,7 @@ env?: Record<string, string | undefined>
       
   async MakeClassWithBlockDone(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2091,7 +2118,7 @@ env?: Record<string, string | undefined>
       
   async MakeClassWithExternalDone(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2116,7 +2143,7 @@ env?: Record<string, string | undefined>
       
   async MakeNestedBlockConstraint(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2141,7 +2168,7 @@ env?: Record<string, string | undefined>
       
   async MakeSemanticContainer(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2166,7 +2193,7 @@ env?: Record<string, string | undefined>
       
   async MapAlias(
   m: Record<string, string[]>,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2191,7 +2218,7 @@ env?: Record<string, string | undefined>
       
   async MergeAliasAttributes(
   money: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2216,7 +2243,7 @@ env?: Record<string, string | undefined>
       
   async MyFunc(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2241,7 +2268,7 @@ env?: Record<string, string | undefined>
       
   async NestedAlias(
   c: number | string | boolean | string[] | Record<string, string[]>,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2266,7 +2293,7 @@ env?: Record<string, string | undefined>
       
   async NullLiteralClassHello(
   s: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2291,7 +2318,7 @@ env?: Record<string, string | undefined>
       
   async OpenAIGPT4oMissingBaseUrlEnvVar(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2316,7 +2343,7 @@ env?: Record<string, string | undefined>
       
   async OpenAIWithAnthropicResponseHello(
   s: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2341,7 +2368,7 @@ env?: Record<string, string | undefined>
       
   async OptionalTest_Function(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2366,7 +2393,7 @@ env?: Record<string, string | undefined>
       
   async PdfInput(
   pdf: Pdf,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2391,7 +2418,7 @@ env?: Record<string, string | undefined>
       
   async PdfInputAnthropic(
   pdf: Pdf,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2416,7 +2443,7 @@ env?: Record<string, string | undefined>
       
   async PdfInputOpenai(
   pdf: Pdf,prompt: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2441,7 +2468,7 @@ env?: Record<string, string | undefined>
       
   async PdfInputVertex(
   pdf: Pdf,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2466,7 +2493,7 @@ env?: Record<string, string | undefined>
       
   async PredictAge(
   name: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2491,7 +2518,7 @@ env?: Record<string, string | undefined>
       
   async PredictAgeBare(
   inp: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2516,7 +2543,7 @@ env?: Record<string, string | undefined>
       
   async PrimitiveAlias(
   p: number | string | boolean,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2541,7 +2568,7 @@ env?: Record<string, string | undefined>
       
   async PromptTestClaude(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2566,7 +2593,7 @@ env?: Record<string, string | undefined>
       
   async PromptTestClaudeChat(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2591,7 +2618,7 @@ env?: Record<string, string | undefined>
       
   async PromptTestClaudeChatNoSystem(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2616,7 +2643,7 @@ env?: Record<string, string | undefined>
       
   async PromptTestOpenAI(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2641,7 +2668,7 @@ env?: Record<string, string | undefined>
       
   async PromptTestOpenAIChat(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2666,7 +2693,7 @@ env?: Record<string, string | undefined>
       
   async PromptTestOpenAIChatNoSystem(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2691,7 +2718,7 @@ env?: Record<string, string | undefined>
       
   async PromptTestStreaming(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2716,7 +2743,7 @@ env?: Record<string, string | undefined>
       
   async RecursiveAliasCycle(
   input: types.RecAliasOne,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2741,7 +2768,7 @@ env?: Record<string, string | undefined>
       
   async RecursiveClassWithAliasIndirection(
   cls: types.NodeWithAliasIndirection,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2766,7 +2793,7 @@ env?: Record<string, string | undefined>
       
   async RecursiveUnionTest(
   input: types.RecursiveUnion,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2791,7 +2818,7 @@ env?: Record<string, string | undefined>
       
   async RenderDynamicClass(
   input: types.RenderTestClass,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2816,7 +2843,7 @@ env?: Record<string, string | undefined>
       
   async RenderDynamicEnum(
   bike: (string | types.RenderTestEnum),other: (string | types.RenderTestEnum),
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2841,7 +2868,7 @@ env?: Record<string, string | undefined>
       
   async ReturnAliasWithMergedAttributes(
   money: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2866,7 +2893,7 @@ env?: Record<string, string | undefined>
       
   async ReturnFailingAssert(
   inp: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2891,7 +2918,7 @@ env?: Record<string, string | undefined>
       
   async ReturnJsonEntry(
   s: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2916,7 +2943,7 @@ env?: Record<string, string | undefined>
       
   async ReturnMalformedConstraints(
   a: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2941,7 +2968,7 @@ env?: Record<string, string | undefined>
       
   async SchemaDescriptions(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2966,7 +2993,7 @@ env?: Record<string, string | undefined>
       
   async SimpleRecursiveListAlias(
   input: types.RecursiveListAlias,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -2991,7 +3018,7 @@ env?: Record<string, string | undefined>
       
   async SimpleRecursiveMapAlias(
   input: types.RecursiveMapAlias,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3016,7 +3043,7 @@ env?: Record<string, string | undefined>
       
   async StreamBigNumbers(
   digits: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3041,7 +3068,7 @@ env?: Record<string, string | undefined>
       
   async StreamFailingAssertion(
   theme: string,length: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3066,7 +3093,7 @@ env?: Record<string, string | undefined>
       
   async StreamFailingCheck(
   theme: string,length: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3091,7 +3118,7 @@ env?: Record<string, string | undefined>
       
   async StreamOneBigNumber(
   digits: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3116,7 +3143,7 @@ env?: Record<string, string | undefined>
       
   async StreamUnionIntegers(
   digits: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3141,7 +3168,7 @@ env?: Record<string, string | undefined>
       
   async StreamingCompoundNumbers(
   digits: number,yapping: boolean,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3166,7 +3193,7 @@ env?: Record<string, string | undefined>
       
   async StructureDocument1559(
   document_txt: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3191,7 +3218,7 @@ env?: Record<string, string | undefined>
       
   async TakeRecAliasDep(
   input: types.RecursiveAliasDependency,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3216,7 +3243,7 @@ env?: Record<string, string | undefined>
       
   async TellStory(
   story: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3241,7 +3268,7 @@ env?: Record<string, string | undefined>
       
   async TestAbortFallbackChain(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3266,7 +3293,7 @@ env?: Record<string, string | undefined>
       
   async TestAnthropic(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3291,7 +3318,7 @@ env?: Record<string, string | undefined>
       
   async TestAnthropicShorthand(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3316,7 +3343,7 @@ env?: Record<string, string | undefined>
       
   async TestAws(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3341,7 +3368,7 @@ env?: Record<string, string | undefined>
       
   async TestAwsClaude37(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3366,7 +3393,7 @@ env?: Record<string, string | undefined>
       
   async TestAwsInferenceProfile(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3391,7 +3418,7 @@ env?: Record<string, string | undefined>
       
   async TestAwsInvalidAccessKey(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3414,9 +3441,34 @@ env?: Record<string, string | undefined>
       }
       }
       
+  async TestAwsInvalidEndpoint(
+  input: string,
+  __baml_options__?: BamlCallOptions<never>
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "TestAwsInvalidEndpoint",
+      {
+      "input": input
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
   async TestAwsInvalidProfile(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3441,7 +3493,7 @@ env?: Record<string, string | undefined>
       
   async TestAwsInvalidRegion(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3466,7 +3518,7 @@ env?: Record<string, string | undefined>
       
   async TestAwsInvalidSessionToken(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3491,7 +3543,7 @@ env?: Record<string, string | undefined>
       
   async TestAzure(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3516,7 +3568,7 @@ env?: Record<string, string | undefined>
       
   async TestAzureFailure(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3541,7 +3593,7 @@ env?: Record<string, string | undefined>
       
   async TestAzureO1NoMaxTokens(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3566,7 +3618,7 @@ env?: Record<string, string | undefined>
       
   async TestAzureO1WithMaxCompletionTokens(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3591,7 +3643,7 @@ env?: Record<string, string | undefined>
       
   async TestAzureO1WithMaxTokens(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3616,7 +3668,7 @@ env?: Record<string, string | undefined>
       
   async TestAzureO3NoMaxTokens(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3641,7 +3693,7 @@ env?: Record<string, string | undefined>
       
   async TestAzureO3WithMaxCompletionTokens(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3666,7 +3718,7 @@ env?: Record<string, string | undefined>
       
   async TestAzureWithMaxTokens(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3691,7 +3743,7 @@ env?: Record<string, string | undefined>
       
   async TestCaching(
   input: string,not_cached: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3716,7 +3768,7 @@ env?: Record<string, string | undefined>
       
   async TestFallbackClient(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3741,7 +3793,7 @@ env?: Record<string, string | undefined>
       
   async TestFallbackStrategy(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3766,7 +3818,7 @@ env?: Record<string, string | undefined>
       
   async TestFallbackToShorthand(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3791,7 +3843,7 @@ env?: Record<string, string | undefined>
       
   async TestFnNamedArgsSingleBool(
   myBool: boolean,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3816,7 +3868,7 @@ env?: Record<string, string | undefined>
       
   async TestFnNamedArgsSingleClass(
   myArg: types.NamedArgsSingleClass,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3841,7 +3893,7 @@ env?: Record<string, string | undefined>
       
   async TestFnNamedArgsSingleEnumList(
   myArg: types.NamedArgsSingleEnumList[],
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3866,7 +3918,7 @@ env?: Record<string, string | undefined>
       
   async TestFnNamedArgsSingleFloat(
   myFloat: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3891,7 +3943,7 @@ env?: Record<string, string | undefined>
       
   async TestFnNamedArgsSingleInt(
   myInt: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3916,7 +3968,7 @@ env?: Record<string, string | undefined>
       
   async TestFnNamedArgsSingleMapStringToClass(
   myMap: Record<string, types.StringToClassEntry>,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3941,7 +3993,7 @@ env?: Record<string, string | undefined>
       
   async TestFnNamedArgsSingleMapStringToMap(
   myMap: Record<string, Record<string, string>>,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3966,7 +4018,7 @@ env?: Record<string, string | undefined>
       
   async TestFnNamedArgsSingleMapStringToString(
   myMap: Record<string, string>,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -3991,7 +4043,7 @@ env?: Record<string, string | undefined>
       
   async TestFnNamedArgsSingleString(
   myString: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4016,7 +4068,7 @@ env?: Record<string, string | undefined>
       
   async TestFnNamedArgsSingleStringArray(
   myStringArray: string[],
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4041,7 +4093,7 @@ env?: Record<string, string | undefined>
       
   async TestFnNamedArgsSingleStringList(
   myArg: string[],
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4066,7 +4118,7 @@ env?: Record<string, string | undefined>
       
   async TestGemini(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4091,7 +4143,7 @@ env?: Record<string, string | undefined>
       
   async TestGeminiOpenAiGeneric(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4116,7 +4168,7 @@ env?: Record<string, string | undefined>
       
   async TestGeminiSystem(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4141,7 +4193,7 @@ env?: Record<string, string | undefined>
       
   async TestGeminiSystemAsChat(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4166,7 +4218,7 @@ env?: Record<string, string | undefined>
       
   async TestGeminiThinking(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4191,7 +4243,7 @@ env?: Record<string, string | undefined>
       
   async TestGroq(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4216,7 +4268,7 @@ env?: Record<string, string | undefined>
       
   async TestImageInput(
   img: Image,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4241,7 +4293,7 @@ env?: Record<string, string | undefined>
       
   async TestImageInputAnthropic(
   img: Image,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4266,7 +4318,7 @@ env?: Record<string, string | undefined>
       
   async TestImageListInput(
   imgs: Image[],
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4291,7 +4343,7 @@ env?: Record<string, string | undefined>
       
   async TestMemory(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4316,7 +4368,7 @@ env?: Record<string, string | undefined>
       
   async TestMulticlassNamedArgs(
   myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4341,7 +4393,7 @@ env?: Record<string, string | undefined>
       
   async TestNamedArgsLiteralBool(
   myBool: true,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4366,7 +4418,7 @@ env?: Record<string, string | undefined>
       
   async TestNamedArgsLiteralInt(
   myInt: 1,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4391,7 +4443,7 @@ env?: Record<string, string | undefined>
       
   async TestNamedArgsLiteralString(
   myString: "My String",
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4416,7 +4468,7 @@ env?: Record<string, string | undefined>
       
   async TestOllama(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4441,7 +4493,7 @@ env?: Record<string, string | undefined>
       
   async TestOllamaHaiku(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4466,7 +4518,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAI(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4491,7 +4543,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIDummyClient(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4516,7 +4568,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIGPT4oMini(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4541,7 +4593,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIGPT4oMini2(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4566,7 +4618,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIGPT4oMini3(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4591,7 +4643,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAILegacyProvider(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4616,7 +4668,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIO1NoMaxTokens(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4641,7 +4693,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIO1WithMaxCompletionTokens(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4666,7 +4718,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIO1WithMaxTokens(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4691,7 +4743,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIProviderWithResponsesType(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4716,7 +4768,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIResponses(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4741,7 +4793,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIResponsesAllRoles(
   problem: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4766,7 +4818,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIResponsesAutoType(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4791,7 +4843,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIResponsesConversation(
   topic: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4816,7 +4868,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIResponsesCustomURL(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4841,7 +4893,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIResponsesDifferentModel(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4866,7 +4918,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIResponsesEndpoint(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4891,7 +4943,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIResponsesExplicit(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4916,7 +4968,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIResponsesFunctionCall(
   query: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4941,7 +4993,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIResponsesImageInput(
   image: Image | string | Pdf | Audio,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4966,7 +5018,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIResponsesReasoning(
   problem: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -4991,7 +5043,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIResponsesShorthand(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5016,7 +5068,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIResponsesWebSearch(
   query: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5041,7 +5093,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIResponsesWithOpenAIResponseType(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5066,7 +5118,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIShorthand(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5091,7 +5143,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIWithFinishReasonError(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5116,7 +5168,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIWithMaxTokens(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5141,7 +5193,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenAIWithNullMaxTokens(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5166,7 +5218,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenRouterMistralSmall3_1_24b(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5191,7 +5243,7 @@ env?: Record<string, string | undefined>
       
   async TestOpenaiResponsesPdfs(
   pdf: Pdf,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5216,7 +5268,7 @@ env?: Record<string, string | undefined>
       
   async TestRetryConstant(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5241,7 +5293,7 @@ env?: Record<string, string | undefined>
       
   async TestRetryExponential(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5266,7 +5318,7 @@ env?: Record<string, string | undefined>
       
   async TestRoundRobinStrategy(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5291,7 +5343,7 @@ env?: Record<string, string | undefined>
       
   async TestSingleFallbackClient(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5316,7 +5368,7 @@ env?: Record<string, string | undefined>
       
   async TestThinking(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5341,7 +5393,7 @@ env?: Record<string, string | undefined>
       
   async TestUniverseQuestion(
   question: types.UniverseQuestionInput,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5366,7 +5418,7 @@ env?: Record<string, string | undefined>
       
   async TestVertex(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5391,7 +5443,7 @@ env?: Record<string, string | undefined>
       
   async TestVertexClaude(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5416,7 +5468,7 @@ env?: Record<string, string | undefined>
       
   async TestVertexWithSystemInstructions(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5441,7 +5493,7 @@ env?: Record<string, string | undefined>
       
   async UnionTest_Function(
   input: string | boolean,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5466,7 +5518,7 @@ env?: Record<string, string | undefined>
       
   async UseBlockConstraint(
   inp: types.BlockConstraintForParam,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5491,7 +5543,7 @@ env?: Record<string, string | undefined>
       
   async UseMaintainFieldOrder(
   input: types.MaintainFieldOrder,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5516,7 +5568,7 @@ env?: Record<string, string | undefined>
       
   async UseMalformedConstraints(
   a: types.MalformedConstraints2,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5541,7 +5593,7 @@ env?: Record<string, string | undefined>
       
   async UseNestedBlockConstraint(
   inp: types.NestedBlockConstraintForParam,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5566,7 +5618,7 @@ env?: Record<string, string | undefined>
       
   async ValidateBasicResponses(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5591,7 +5643,7 @@ env?: Record<string, string | undefined>
       
   async ValidateResponseTypes(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5616,7 +5668,7 @@ env?: Record<string, string | undefined>
       
   async VideoInputGemini(
   vid: Video,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5641,7 +5693,7 @@ env?: Record<string, string | undefined>
       
   async VideoInputVertex(
   vid: Video,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5664,9 +5716,34 @@ env?: Record<string, string | undefined>
       }
       }
       
+  async AnotherTakedown(
+  xs: string[],
+  __baml_options__?: BamlCallOptions<events.AnotherTakedownEventCollector>
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "AnotherTakedown",
+      {
+      "xs": xs
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
   async AssignElseIfExpr(
   a: boolean,b: boolean,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.AssignElseIfExprEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5691,7 +5768,7 @@ env?: Record<string, string | undefined>
       
   async BoolToIntWithIfElse(
   b: boolean,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.BoolToIntWithIfElseEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5716,7 +5793,7 @@ env?: Record<string, string | undefined>
       
   async BoolToIntWithIfElseCallingLlm(
   b: boolean,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.BoolToIntWithIfElseCallingLlmEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5741,7 +5818,7 @@ env?: Record<string, string | undefined>
       
   async CallLlmDescribeImage(
   img: Image,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.CallLlmDescribeImageEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5766,7 +5843,7 @@ env?: Record<string, string | undefined>
       
   async CallReturnOne(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.CallReturnOneEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5791,7 +5868,7 @@ env?: Record<string, string | undefined>
       
   async ChainedCalls(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.ChainedCallsEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5816,7 +5893,7 @@ env?: Record<string, string | undefined>
       
   async EchoWorkflow(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.EchoWorkflowEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5841,7 +5918,7 @@ env?: Record<string, string | undefined>
       
   async ExecFetchAs(
   url: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.ExecFetchAsEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5866,7 +5943,7 @@ env?: Record<string, string | undefined>
       
   async HomeEnvVarIsEmpty(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.HomeEnvVarIsEmptyEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5889,9 +5966,59 @@ env?: Record<string, string | undefined>
       }
       }
       
+  async IsTargetWord(
+  prev: string,next: string,
+  __baml_options__?: BamlCallOptions<events.IsTargetWordEventCollector>
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "IsTargetWord",
+      {
+      "prev": prev,"next": next
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async IsTargetWord2(
+  prev: string,next: string,
+  __baml_options__?: BamlCallOptions<events.IsTargetWord2EventCollector>
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "IsTargetWord2",
+      {
+      "prev": prev,"next": next
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
   async IterativeFibonacci(
   n: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.IterativeFibonacciEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5916,7 +6043,7 @@ env?: Record<string, string | undefined>
       
   async NormalElseIfStmt(
   a: boolean,b: boolean,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.NormalElseIfStmtEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5939,9 +6066,34 @@ env?: Record<string, string | undefined>
       }
       }
       
+  async NotEmpty(
+  prev: string,next: string,
+  __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "NotEmpty",
+      {
+      "prev": prev,"next": next
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
   async ReturnCategory(
   category: types.Category,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.ReturnCategoryEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5966,7 +6118,7 @@ env?: Record<string, string | undefined>
       
   async ReturnElseIfExpr(
   a: boolean,b: boolean,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.ReturnElseIfExprEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -5991,7 +6143,7 @@ env?: Record<string, string | undefined>
       
   async ReturnImageFromUrl(
   url: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.ReturnImageFromUrlEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6016,7 +6168,7 @@ env?: Record<string, string | undefined>
       
   async ReturnNumber(
   n: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.ReturnNumberEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6041,7 +6193,7 @@ env?: Record<string, string | undefined>
       
   async ReturnNumberCallingLlm(
   n: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.ReturnNumberCallingLlmEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6066,7 +6218,7 @@ env?: Record<string, string | undefined>
       
   async ReturnOne(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.ReturnOneEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6089,9 +6241,34 @@ env?: Record<string, string | undefined>
       }
       }
       
+  async SimpleEmitWithFilter(
+  
+  __baml_options__?: BamlCallOptions<events.SimpleEmitWithFilterEventCollector>
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "SimpleEmitWithFilter",
+      {
+      
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
   async StoreFnCallInLocalVar(
   n: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.StoreFnCallInLocalVarEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6116,7 +6293,7 @@ env?: Record<string, string | undefined>
       
   async StoreLlmCallInLocalVar(
   n: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.StoreLlmCallInLocalVarEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6141,7 +6318,7 @@ env?: Record<string, string | undefined>
       
   async SumArray(
   arr: number[],
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.SumArrayEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6166,7 +6343,7 @@ env?: Record<string, string | undefined>
       
   async SumFromTo(
   x: number,y: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.SumFromToEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6189,6 +6366,81 @@ env?: Record<string, string | undefined>
       }
       }
       
+  async WorkflowEmit(
+  
+  __baml_options__?: BamlCallOptions<events.WorkflowEmitEventCollector>
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "WorkflowEmit",
+      {
+      
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async WorkflowEmitChild(
+  
+  __baml_options__?: BamlCallOptions<events.WorkflowEmitChildEventCollector>
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "WorkflowEmitChild",
+      {
+      
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
+  async WorkflowEmitWithFilter(
+  
+  __baml_options__?: BamlCallOptions<events.WorkflowEmitWithFilterEventCollector>
+  ): Promise<HTTPRequest> {
+    try {
+    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const env: Record<string, string> = Object.fromEntries(
+      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "WorkflowEmitWithFilter",
+      {
+      
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      env
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
       }
 
       export class AsyncHttpStreamRequest {
@@ -6197,7 +6449,7 @@ env?: Record<string, string | undefined>
       
       async AaaSamOutputFormat(
       recipe: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6222,7 +6474,7 @@ env?: Record<string, string | undefined>
           
       async AliasThatPointsToRecursiveType(
       data: types.LinkedListAliasNode,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6247,7 +6499,7 @@ env?: Record<string, string | undefined>
           
       async AliasWithMultipleAttrs(
       money: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6272,7 +6524,7 @@ env?: Record<string, string | undefined>
           
       async AliasedInputClass(
       input: types.InputClass,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6297,7 +6549,7 @@ env?: Record<string, string | undefined>
           
       async AliasedInputClass2(
       input: types.InputClass,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6322,7 +6574,7 @@ env?: Record<string, string | undefined>
           
       async AliasedInputClassNested(
       input: types.InputClassNested,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6347,7 +6599,7 @@ env?: Record<string, string | undefined>
           
       async AliasedInputEnum(
       input: types.AliasedEnum,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6372,7 +6624,7 @@ env?: Record<string, string | undefined>
           
       async AliasedInputList(
       input: types.AliasedEnum[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6397,7 +6649,7 @@ env?: Record<string, string | undefined>
           
       async AllowedOptionals(
       optionals: types.OptionalListAndMap,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6422,7 +6674,7 @@ env?: Record<string, string | undefined>
           
       async AssertFn(
       a: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6447,7 +6699,7 @@ env?: Record<string, string | undefined>
           
       async AudioInput(
       aud: Audio,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6472,7 +6724,7 @@ env?: Record<string, string | undefined>
           
       async AudioInputOpenai(
       aud: Audio,prompt: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6497,7 +6749,7 @@ env?: Record<string, string | undefined>
           
       async BuildLinkedList(
       input: number[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6522,7 +6774,7 @@ env?: Record<string, string | undefined>
           
       async BuildTree(
       input: types.BinaryNode,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6545,9 +6797,34 @@ env?: Record<string, string | undefined>
           }
           }
           
+      async CheckWordEquality(
+      word: string,target: string,
+      __baml_options__?: BamlCallOptions<never>
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "CheckWordEquality",
+          {
+          "word": word,"target": target
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
       async ChooseTodoTools(
       query: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6572,7 +6849,7 @@ env?: Record<string, string | undefined>
           
       async ClassThatPointsToRecursiveClassThroughAlias(
       cls: types.ClassToRecAlias,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6597,7 +6874,7 @@ env?: Record<string, string | undefined>
           
       async ClassifyDynEnumTwo(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6622,7 +6899,7 @@ env?: Record<string, string | undefined>
           
       async ClassifyDynamicStatus(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6647,7 +6924,7 @@ env?: Record<string, string | undefined>
           
       async ClassifyMessage(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6672,7 +6949,7 @@ env?: Record<string, string | undefined>
           
       async ClassifyMessage2(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6697,7 +6974,7 @@ env?: Record<string, string | undefined>
           
       async ClassifyMessage3(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6722,7 +6999,7 @@ env?: Record<string, string | undefined>
           
       async Completion(
       prefix: string,suffix: string,language: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6747,7 +7024,7 @@ env?: Record<string, string | undefined>
           
       async CustomTask(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6772,7 +7049,7 @@ env?: Record<string, string | undefined>
           
       async DescribeAudio(
       audio: Audio,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6797,7 +7074,7 @@ env?: Record<string, string | undefined>
           
       async DescribeAudio2(
       audio: Audio,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6822,7 +7099,7 @@ env?: Record<string, string | undefined>
           
       async DescribeImage(
       img: Image,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6847,7 +7124,7 @@ env?: Record<string, string | undefined>
           
       async DescribeImage2(
       classWithImage: types.ClassWithImage,img2: Image,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6872,7 +7149,7 @@ env?: Record<string, string | undefined>
           
       async DescribeImage3(
       classWithImage: types.ClassWithImage,img2: Image,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6897,7 +7174,7 @@ env?: Record<string, string | undefined>
           
       async DescribeImage4(
       classWithImage: types.ClassWithImage,img2: Image,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6922,7 +7199,7 @@ env?: Record<string, string | undefined>
           
       async DescribeMedia1599(
       img: Image,client_sector: string,client_name: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6947,7 +7224,7 @@ env?: Record<string, string | undefined>
           
       async DifferentiateUnions(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6972,7 +7249,7 @@ env?: Record<string, string | undefined>
           
       async DummyOutputFunction(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6997,7 +7274,7 @@ env?: Record<string, string | undefined>
           
       async DynamicFunc(
       input: types.DynamicClassOne,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7022,7 +7299,7 @@ env?: Record<string, string | undefined>
           
       async DynamicInputOutput(
       input: types.DynInputOutput,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7047,7 +7324,7 @@ env?: Record<string, string | undefined>
           
       async DynamicListInputOutput(
       input: types.DynInputOutput[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7072,7 +7349,7 @@ env?: Record<string, string | undefined>
           
       async ExpectFailure(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7097,7 +7374,7 @@ env?: Record<string, string | undefined>
           
       async ExtractContactInfo(
       document: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7122,7 +7399,7 @@ env?: Record<string, string | undefined>
           
       async ExtractDynamicCategories(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7147,7 +7424,7 @@ env?: Record<string, string | undefined>
           
       async ExtractEntities(
       text: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7172,7 +7449,7 @@ env?: Record<string, string | undefined>
           
       async ExtractHobby(
       text: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7197,7 +7474,7 @@ env?: Record<string, string | undefined>
           
       async ExtractName(
       text: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7222,7 +7499,7 @@ env?: Record<string, string | undefined>
           
       async ExtractNames(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7247,7 +7524,7 @@ env?: Record<string, string | undefined>
           
       async ExtractPeople(
       text: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7272,7 +7549,7 @@ env?: Record<string, string | undefined>
           
       async ExtractReceiptInfo(
       email: string,reason: "curiosity" | "personal_finance",
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7297,7 +7574,7 @@ env?: Record<string, string | undefined>
           
       async ExtractResume(
       resume: string,img?: Image | null,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7322,7 +7599,7 @@ env?: Record<string, string | undefined>
           
       async ExtractResume2(
       resume: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7347,7 +7624,7 @@ env?: Record<string, string | undefined>
           
       async FnAlwaysFails(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7372,7 +7649,7 @@ env?: Record<string, string | undefined>
           
       async FnClassOptionalOutput(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7397,7 +7674,7 @@ env?: Record<string, string | undefined>
           
       async FnClassOptionalOutput2(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7422,7 +7699,7 @@ env?: Record<string, string | undefined>
           
       async FnEnumListOutput(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7447,7 +7724,7 @@ env?: Record<string, string | undefined>
           
       async FnEnumOutput(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7472,7 +7749,7 @@ env?: Record<string, string | undefined>
           
       async FnFailRetryConstantDelay(
       retries: number,delay_ms: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7497,7 +7774,7 @@ env?: Record<string, string | undefined>
           
       async FnFailRetryExponentialDelay(
       retries: number,initial_delay_ms: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7522,7 +7799,7 @@ env?: Record<string, string | undefined>
           
       async FnFallbackAlwaysFails(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7547,7 +7824,7 @@ env?: Record<string, string | undefined>
           
       async FnLiteralClassInputOutput(
       input: types.LiteralClassHello,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7572,7 +7849,7 @@ env?: Record<string, string | undefined>
           
       async FnLiteralUnionClassInputOutput(
       input: types.LiteralClassOne | types.LiteralClassTwo,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7597,7 +7874,7 @@ env?: Record<string, string | undefined>
           
       async FnNamedArgsSingleStringOptional(
       myString?: string | null,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7622,7 +7899,7 @@ env?: Record<string, string | undefined>
           
       async FnOutputBool(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7647,7 +7924,7 @@ env?: Record<string, string | undefined>
           
       async FnOutputClass(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7672,7 +7949,7 @@ env?: Record<string, string | undefined>
           
       async FnOutputClassList(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7697,7 +7974,7 @@ env?: Record<string, string | undefined>
           
       async FnOutputClassNested(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7722,7 +7999,7 @@ env?: Record<string, string | undefined>
           
       async FnOutputClassWithEnum(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7747,7 +8024,7 @@ env?: Record<string, string | undefined>
           
       async FnOutputInt(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7772,7 +8049,7 @@ env?: Record<string, string | undefined>
           
       async FnOutputLiteralBool(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7797,7 +8074,7 @@ env?: Record<string, string | undefined>
           
       async FnOutputLiteralInt(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7822,7 +8099,7 @@ env?: Record<string, string | undefined>
           
       async FnOutputLiteralString(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7847,7 +8124,7 @@ env?: Record<string, string | undefined>
           
       async FnOutputStringList(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7872,7 +8149,7 @@ env?: Record<string, string | undefined>
           
       async FnTestAliasedEnumOutput(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7897,7 +8174,7 @@ env?: Record<string, string | undefined>
           
       async FnTestClassAlias(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7922,7 +8199,7 @@ env?: Record<string, string | undefined>
           
       async FnTestNamedArgsSingleEnum(
       myArg: types.NamedArgsSingleEnum,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7947,7 +8224,7 @@ env?: Record<string, string | undefined>
           
       async GetDataType(
       text: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7972,7 +8249,7 @@ env?: Record<string, string | undefined>
           
       async GetOrderInfo(
       email: types.Email,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -7997,7 +8274,7 @@ env?: Record<string, string | undefined>
           
       async GetQuery(
       query: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8022,7 +8299,7 @@ env?: Record<string, string | undefined>
           
       async InOutEnumMapKey(
       i1: Partial<Record<types.MapKey, string>>,i2: Partial<Record<types.MapKey, string>>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8047,7 +8324,7 @@ env?: Record<string, string | undefined>
           
       async InOutLiteralStringUnionMapKey(
       i1: Partial<Record<"one" | "two" | "three" | "four", string>>,i2: Partial<Record<"one" | "two" | "three" | "four", string>>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8072,7 +8349,7 @@ env?: Record<string, string | undefined>
           
       async InOutSingleLiteralStringMapKey(
       m: Record<"key", string>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8097,7 +8374,7 @@ env?: Record<string, string | undefined>
           
       async JsonTypeAliasCycle(
       input: types.JsonValue,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8122,7 +8399,7 @@ env?: Record<string, string | undefined>
           
       async LLMEcho(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8147,7 +8424,7 @@ env?: Record<string, string | undefined>
           
       async LiteralUnionsTest(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8172,7 +8449,7 @@ env?: Record<string, string | undefined>
           
       async LlmReturnNumber(
       n: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8197,7 +8474,7 @@ env?: Record<string, string | undefined>
           
       async MakeBlockConstraint(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8222,7 +8499,7 @@ env?: Record<string, string | undefined>
           
       async MakeClassWithBlockDone(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8247,7 +8524,7 @@ env?: Record<string, string | undefined>
           
       async MakeClassWithExternalDone(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8272,7 +8549,7 @@ env?: Record<string, string | undefined>
           
       async MakeNestedBlockConstraint(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8297,7 +8574,7 @@ env?: Record<string, string | undefined>
           
       async MakeSemanticContainer(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8322,7 +8599,7 @@ env?: Record<string, string | undefined>
           
       async MapAlias(
       m: Record<string, string[]>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8347,7 +8624,7 @@ env?: Record<string, string | undefined>
           
       async MergeAliasAttributes(
       money: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8372,7 +8649,7 @@ env?: Record<string, string | undefined>
           
       async MyFunc(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8397,7 +8674,7 @@ env?: Record<string, string | undefined>
           
       async NestedAlias(
       c: number | string | boolean | string[] | Record<string, string[]>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8422,7 +8699,7 @@ env?: Record<string, string | undefined>
           
       async NullLiteralClassHello(
       s: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8447,7 +8724,7 @@ env?: Record<string, string | undefined>
           
       async OpenAIGPT4oMissingBaseUrlEnvVar(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8472,7 +8749,7 @@ env?: Record<string, string | undefined>
           
       async OpenAIWithAnthropicResponseHello(
       s: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8497,7 +8774,7 @@ env?: Record<string, string | undefined>
           
       async OptionalTest_Function(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8522,7 +8799,7 @@ env?: Record<string, string | undefined>
           
       async PdfInput(
       pdf: Pdf,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8547,7 +8824,7 @@ env?: Record<string, string | undefined>
           
       async PdfInputAnthropic(
       pdf: Pdf,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8572,7 +8849,7 @@ env?: Record<string, string | undefined>
           
       async PdfInputOpenai(
       pdf: Pdf,prompt: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8597,7 +8874,7 @@ env?: Record<string, string | undefined>
           
       async PdfInputVertex(
       pdf: Pdf,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8622,7 +8899,7 @@ env?: Record<string, string | undefined>
           
       async PredictAge(
       name: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8647,7 +8924,7 @@ env?: Record<string, string | undefined>
           
       async PredictAgeBare(
       inp: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8672,7 +8949,7 @@ env?: Record<string, string | undefined>
           
       async PrimitiveAlias(
       p: number | string | boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8697,7 +8974,7 @@ env?: Record<string, string | undefined>
           
       async PromptTestClaude(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8722,7 +8999,7 @@ env?: Record<string, string | undefined>
           
       async PromptTestClaudeChat(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8747,7 +9024,7 @@ env?: Record<string, string | undefined>
           
       async PromptTestClaudeChatNoSystem(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8772,7 +9049,7 @@ env?: Record<string, string | undefined>
           
       async PromptTestOpenAI(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8797,7 +9074,7 @@ env?: Record<string, string | undefined>
           
       async PromptTestOpenAIChat(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8822,7 +9099,7 @@ env?: Record<string, string | undefined>
           
       async PromptTestOpenAIChatNoSystem(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8847,7 +9124,7 @@ env?: Record<string, string | undefined>
           
       async PromptTestStreaming(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8872,7 +9149,7 @@ env?: Record<string, string | undefined>
           
       async RecursiveAliasCycle(
       input: types.RecAliasOne,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8897,7 +9174,7 @@ env?: Record<string, string | undefined>
           
       async RecursiveClassWithAliasIndirection(
       cls: types.NodeWithAliasIndirection,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8922,7 +9199,7 @@ env?: Record<string, string | undefined>
           
       async RecursiveUnionTest(
       input: types.RecursiveUnion,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8947,7 +9224,7 @@ env?: Record<string, string | undefined>
           
       async RenderDynamicClass(
       input: types.RenderTestClass,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8972,7 +9249,7 @@ env?: Record<string, string | undefined>
           
       async RenderDynamicEnum(
       bike: (string | types.RenderTestEnum),other: (string | types.RenderTestEnum),
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8997,7 +9274,7 @@ env?: Record<string, string | undefined>
           
       async ReturnAliasWithMergedAttributes(
       money: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9022,7 +9299,7 @@ env?: Record<string, string | undefined>
           
       async ReturnFailingAssert(
       inp: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9047,7 +9324,7 @@ env?: Record<string, string | undefined>
           
       async ReturnJsonEntry(
       s: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9072,7 +9349,7 @@ env?: Record<string, string | undefined>
           
       async ReturnMalformedConstraints(
       a: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9097,7 +9374,7 @@ env?: Record<string, string | undefined>
           
       async SchemaDescriptions(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9122,7 +9399,7 @@ env?: Record<string, string | undefined>
           
       async SimpleRecursiveListAlias(
       input: types.RecursiveListAlias,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9147,7 +9424,7 @@ env?: Record<string, string | undefined>
           
       async SimpleRecursiveMapAlias(
       input: types.RecursiveMapAlias,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9172,7 +9449,7 @@ env?: Record<string, string | undefined>
           
       async StreamBigNumbers(
       digits: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9197,7 +9474,7 @@ env?: Record<string, string | undefined>
           
       async StreamFailingAssertion(
       theme: string,length: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9222,7 +9499,7 @@ env?: Record<string, string | undefined>
           
       async StreamFailingCheck(
       theme: string,length: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9247,7 +9524,7 @@ env?: Record<string, string | undefined>
           
       async StreamOneBigNumber(
       digits: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9272,7 +9549,7 @@ env?: Record<string, string | undefined>
           
       async StreamUnionIntegers(
       digits: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9297,7 +9574,7 @@ env?: Record<string, string | undefined>
           
       async StreamingCompoundNumbers(
       digits: number,yapping: boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9322,7 +9599,7 @@ env?: Record<string, string | undefined>
           
       async StructureDocument1559(
       document_txt: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9347,7 +9624,7 @@ env?: Record<string, string | undefined>
           
       async TakeRecAliasDep(
       input: types.RecursiveAliasDependency,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9372,7 +9649,7 @@ env?: Record<string, string | undefined>
           
       async TellStory(
       story: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9397,7 +9674,7 @@ env?: Record<string, string | undefined>
           
       async TestAbortFallbackChain(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9422,7 +9699,7 @@ env?: Record<string, string | undefined>
           
       async TestAnthropic(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9447,7 +9724,7 @@ env?: Record<string, string | undefined>
           
       async TestAnthropicShorthand(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9472,7 +9749,7 @@ env?: Record<string, string | undefined>
           
       async TestAws(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9497,7 +9774,7 @@ env?: Record<string, string | undefined>
           
       async TestAwsClaude37(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9522,7 +9799,7 @@ env?: Record<string, string | undefined>
           
       async TestAwsInferenceProfile(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9547,7 +9824,7 @@ env?: Record<string, string | undefined>
           
       async TestAwsInvalidAccessKey(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9570,9 +9847,34 @@ env?: Record<string, string | undefined>
           }
           }
           
+      async TestAwsInvalidEndpoint(
+      input: string,
+      __baml_options__?: BamlCallOptions<never>
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "TestAwsInvalidEndpoint",
+          {
+          "input": input
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
       async TestAwsInvalidProfile(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9597,7 +9899,7 @@ env?: Record<string, string | undefined>
           
       async TestAwsInvalidRegion(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9622,7 +9924,7 @@ env?: Record<string, string | undefined>
           
       async TestAwsInvalidSessionToken(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9647,7 +9949,7 @@ env?: Record<string, string | undefined>
           
       async TestAzure(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9672,7 +9974,7 @@ env?: Record<string, string | undefined>
           
       async TestAzureFailure(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9697,7 +9999,7 @@ env?: Record<string, string | undefined>
           
       async TestAzureO1NoMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9722,7 +10024,7 @@ env?: Record<string, string | undefined>
           
       async TestAzureO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9747,7 +10049,7 @@ env?: Record<string, string | undefined>
           
       async TestAzureO1WithMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9772,7 +10074,7 @@ env?: Record<string, string | undefined>
           
       async TestAzureO3NoMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9797,7 +10099,7 @@ env?: Record<string, string | undefined>
           
       async TestAzureO3WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9822,7 +10124,7 @@ env?: Record<string, string | undefined>
           
       async TestAzureWithMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9847,7 +10149,7 @@ env?: Record<string, string | undefined>
           
       async TestCaching(
       input: string,not_cached: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9872,7 +10174,7 @@ env?: Record<string, string | undefined>
           
       async TestFallbackClient(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9897,7 +10199,7 @@ env?: Record<string, string | undefined>
           
       async TestFallbackStrategy(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9922,7 +10224,7 @@ env?: Record<string, string | undefined>
           
       async TestFallbackToShorthand(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9947,7 +10249,7 @@ env?: Record<string, string | undefined>
           
       async TestFnNamedArgsSingleBool(
       myBool: boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9972,7 +10274,7 @@ env?: Record<string, string | undefined>
           
       async TestFnNamedArgsSingleClass(
       myArg: types.NamedArgsSingleClass,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -9997,7 +10299,7 @@ env?: Record<string, string | undefined>
           
       async TestFnNamedArgsSingleEnumList(
       myArg: types.NamedArgsSingleEnumList[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10022,7 +10324,7 @@ env?: Record<string, string | undefined>
           
       async TestFnNamedArgsSingleFloat(
       myFloat: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10047,7 +10349,7 @@ env?: Record<string, string | undefined>
           
       async TestFnNamedArgsSingleInt(
       myInt: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10072,7 +10374,7 @@ env?: Record<string, string | undefined>
           
       async TestFnNamedArgsSingleMapStringToClass(
       myMap: Record<string, types.StringToClassEntry>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10097,7 +10399,7 @@ env?: Record<string, string | undefined>
           
       async TestFnNamedArgsSingleMapStringToMap(
       myMap: Record<string, Record<string, string>>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10122,7 +10424,7 @@ env?: Record<string, string | undefined>
           
       async TestFnNamedArgsSingleMapStringToString(
       myMap: Record<string, string>,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10147,7 +10449,7 @@ env?: Record<string, string | undefined>
           
       async TestFnNamedArgsSingleString(
       myString: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10172,7 +10474,7 @@ env?: Record<string, string | undefined>
           
       async TestFnNamedArgsSingleStringArray(
       myStringArray: string[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10197,7 +10499,7 @@ env?: Record<string, string | undefined>
           
       async TestFnNamedArgsSingleStringList(
       myArg: string[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10222,7 +10524,7 @@ env?: Record<string, string | undefined>
           
       async TestGemini(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10247,7 +10549,7 @@ env?: Record<string, string | undefined>
           
       async TestGeminiOpenAiGeneric(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10272,7 +10574,7 @@ env?: Record<string, string | undefined>
           
       async TestGeminiSystem(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10297,7 +10599,7 @@ env?: Record<string, string | undefined>
           
       async TestGeminiSystemAsChat(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10322,7 +10624,7 @@ env?: Record<string, string | undefined>
           
       async TestGeminiThinking(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10347,7 +10649,7 @@ env?: Record<string, string | undefined>
           
       async TestGroq(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10372,7 +10674,7 @@ env?: Record<string, string | undefined>
           
       async TestImageInput(
       img: Image,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10397,7 +10699,7 @@ env?: Record<string, string | undefined>
           
       async TestImageInputAnthropic(
       img: Image,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10422,7 +10724,7 @@ env?: Record<string, string | undefined>
           
       async TestImageListInput(
       imgs: Image[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10447,7 +10749,7 @@ env?: Record<string, string | undefined>
           
       async TestMemory(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10472,7 +10774,7 @@ env?: Record<string, string | undefined>
           
       async TestMulticlassNamedArgs(
       myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10497,7 +10799,7 @@ env?: Record<string, string | undefined>
           
       async TestNamedArgsLiteralBool(
       myBool: true,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10522,7 +10824,7 @@ env?: Record<string, string | undefined>
           
       async TestNamedArgsLiteralInt(
       myInt: 1,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10547,7 +10849,7 @@ env?: Record<string, string | undefined>
           
       async TestNamedArgsLiteralString(
       myString: "My String",
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10572,7 +10874,7 @@ env?: Record<string, string | undefined>
           
       async TestOllama(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10597,7 +10899,7 @@ env?: Record<string, string | undefined>
           
       async TestOllamaHaiku(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10622,7 +10924,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAI(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10647,7 +10949,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIDummyClient(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10672,7 +10974,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIGPT4oMini(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10697,7 +10999,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIGPT4oMini2(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10722,7 +11024,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIGPT4oMini3(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10747,7 +11049,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAILegacyProvider(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10772,7 +11074,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIO1NoMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10797,7 +11099,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10822,7 +11124,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIO1WithMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10847,7 +11149,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIProviderWithResponsesType(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10872,7 +11174,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIResponses(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10897,7 +11199,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIResponsesAllRoles(
       problem: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10922,7 +11224,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIResponsesAutoType(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10947,7 +11249,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIResponsesConversation(
       topic: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10972,7 +11274,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIResponsesCustomURL(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -10997,7 +11299,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIResponsesDifferentModel(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11022,7 +11324,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIResponsesEndpoint(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11047,7 +11349,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIResponsesExplicit(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11072,7 +11374,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIResponsesFunctionCall(
       query: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11097,7 +11399,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIResponsesImageInput(
       image: Image | string | Pdf | Audio,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11122,7 +11424,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIResponsesReasoning(
       problem: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11147,7 +11449,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIResponsesShorthand(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11172,7 +11474,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIResponsesWebSearch(
       query: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11197,7 +11499,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIResponsesWithOpenAIResponseType(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11222,7 +11524,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIShorthand(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11247,7 +11549,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIWithFinishReasonError(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11272,7 +11574,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIWithMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11297,7 +11599,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenAIWithNullMaxTokens(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11322,7 +11624,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenRouterMistralSmall3_1_24b(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11347,7 +11649,7 @@ env?: Record<string, string | undefined>
           
       async TestOpenaiResponsesPdfs(
       pdf: Pdf,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11372,7 +11674,7 @@ env?: Record<string, string | undefined>
           
       async TestRetryConstant(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11397,7 +11699,7 @@ env?: Record<string, string | undefined>
           
       async TestRetryExponential(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11422,7 +11724,7 @@ env?: Record<string, string | undefined>
           
       async TestRoundRobinStrategy(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11447,7 +11749,7 @@ env?: Record<string, string | undefined>
           
       async TestSingleFallbackClient(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11472,7 +11774,7 @@ env?: Record<string, string | undefined>
           
       async TestThinking(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11497,7 +11799,7 @@ env?: Record<string, string | undefined>
           
       async TestUniverseQuestion(
       question: types.UniverseQuestionInput,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11522,7 +11824,7 @@ env?: Record<string, string | undefined>
           
       async TestVertex(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11547,7 +11849,7 @@ env?: Record<string, string | undefined>
           
       async TestVertexClaude(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11572,7 +11874,7 @@ env?: Record<string, string | undefined>
           
       async TestVertexWithSystemInstructions(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11597,7 +11899,7 @@ env?: Record<string, string | undefined>
           
       async UnionTest_Function(
       input: string | boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11622,7 +11924,7 @@ env?: Record<string, string | undefined>
           
       async UseBlockConstraint(
       inp: types.BlockConstraintForParam,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11647,7 +11949,7 @@ env?: Record<string, string | undefined>
           
       async UseMaintainFieldOrder(
       input: types.MaintainFieldOrder,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11672,7 +11974,7 @@ env?: Record<string, string | undefined>
           
       async UseMalformedConstraints(
       a: types.MalformedConstraints2,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11697,7 +11999,7 @@ env?: Record<string, string | undefined>
           
       async UseNestedBlockConstraint(
       inp: types.NestedBlockConstraintForParam,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11722,7 +12024,7 @@ env?: Record<string, string | undefined>
           
       async ValidateBasicResponses(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11747,7 +12049,7 @@ env?: Record<string, string | undefined>
           
       async ValidateResponseTypes(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11772,7 +12074,7 @@ env?: Record<string, string | undefined>
           
       async VideoInputGemini(
       vid: Video,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11797,7 +12099,7 @@ env?: Record<string, string | undefined>
           
       async VideoInputVertex(
       vid: Video,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11820,9 +12122,34 @@ env?: Record<string, string | undefined>
           }
           }
           
+      async AnotherTakedown(
+      xs: string[],
+      __baml_options__?: BamlCallOptions<events.AnotherTakedownEventCollector>
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "AnotherTakedown",
+          {
+          "xs": xs
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
       async AssignElseIfExpr(
       a: boolean,b: boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.AssignElseIfExprEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11847,7 +12174,7 @@ env?: Record<string, string | undefined>
           
       async BoolToIntWithIfElse(
       b: boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.BoolToIntWithIfElseEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11872,7 +12199,7 @@ env?: Record<string, string | undefined>
           
       async BoolToIntWithIfElseCallingLlm(
       b: boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.BoolToIntWithIfElseCallingLlmEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11897,7 +12224,7 @@ env?: Record<string, string | undefined>
           
       async CallLlmDescribeImage(
       img: Image,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.CallLlmDescribeImageEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11922,7 +12249,7 @@ env?: Record<string, string | undefined>
           
       async CallReturnOne(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.CallReturnOneEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11947,7 +12274,7 @@ env?: Record<string, string | undefined>
           
       async ChainedCalls(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ChainedCallsEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11972,7 +12299,7 @@ env?: Record<string, string | undefined>
           
       async EchoWorkflow(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.EchoWorkflowEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -11997,7 +12324,7 @@ env?: Record<string, string | undefined>
           
       async ExecFetchAs(
       url: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ExecFetchAsEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12022,7 +12349,7 @@ env?: Record<string, string | undefined>
           
       async HomeEnvVarIsEmpty(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.HomeEnvVarIsEmptyEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12045,9 +12372,59 @@ env?: Record<string, string | undefined>
           }
           }
           
+      async IsTargetWord(
+      prev: string,next: string,
+      __baml_options__?: BamlCallOptions<events.IsTargetWordEventCollector>
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "IsTargetWord",
+          {
+          "prev": prev,"next": next
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async IsTargetWord2(
+      prev: string,next: string,
+      __baml_options__?: BamlCallOptions<events.IsTargetWord2EventCollector>
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "IsTargetWord2",
+          {
+          "prev": prev,"next": next
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
       async IterativeFibonacci(
       n: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.IterativeFibonacciEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12072,7 +12449,7 @@ env?: Record<string, string | undefined>
           
       async NormalElseIfStmt(
       a: boolean,b: boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.NormalElseIfStmtEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12095,9 +12472,34 @@ env?: Record<string, string | undefined>
           }
           }
           
+      async NotEmpty(
+      prev: string,next: string,
+      __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "NotEmpty",
+          {
+          "prev": prev,"next": next
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
       async ReturnCategory(
       category: types.Category,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ReturnCategoryEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12122,7 +12524,7 @@ env?: Record<string, string | undefined>
           
       async ReturnElseIfExpr(
       a: boolean,b: boolean,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ReturnElseIfExprEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12147,7 +12549,7 @@ env?: Record<string, string | undefined>
           
       async ReturnImageFromUrl(
       url: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ReturnImageFromUrlEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12172,7 +12574,7 @@ env?: Record<string, string | undefined>
           
       async ReturnNumber(
       n: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ReturnNumberEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12197,7 +12599,7 @@ env?: Record<string, string | undefined>
           
       async ReturnNumberCallingLlm(
       n: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ReturnNumberCallingLlmEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12222,7 +12624,7 @@ env?: Record<string, string | undefined>
           
       async ReturnOne(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ReturnOneEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12245,9 +12647,34 @@ env?: Record<string, string | undefined>
           }
           }
           
+      async SimpleEmitWithFilter(
+      
+      __baml_options__?: BamlCallOptions<events.SimpleEmitWithFilterEventCollector>
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "SimpleEmitWithFilter",
+          {
+          
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
       async StoreFnCallInLocalVar(
       n: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.StoreFnCallInLocalVarEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12272,7 +12699,7 @@ env?: Record<string, string | undefined>
           
       async StoreLlmCallInLocalVar(
       n: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.StoreLlmCallInLocalVarEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12297,7 +12724,7 @@ env?: Record<string, string | undefined>
           
       async SumArray(
       arr: number[],
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.SumArrayEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12322,7 +12749,7 @@ env?: Record<string, string | undefined>
           
       async SumFromTo(
       x: number,y: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.SumFromToEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12333,6 +12760,81 @@ env?: Record<string, string | undefined>
           "SumFromTo",
           {
           "x": x,"y": y
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async WorkflowEmit(
+      
+      __baml_options__?: BamlCallOptions<events.WorkflowEmitEventCollector>
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "WorkflowEmit",
+          {
+          
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async WorkflowEmitChild(
+      
+      __baml_options__?: BamlCallOptions<events.WorkflowEmitChildEventCollector>
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "WorkflowEmitChild",
+          {
+          
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          env
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async WorkflowEmitWithFilter(
+      
+      __baml_options__?: BamlCallOptions<events.WorkflowEmitWithFilterEventCollector>
+      ): Promise<HTTPRequest> {
+        try {
+        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const env: Record<string, string> = Object.fromEntries(
+          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "WorkflowEmitWithFilter",
+          {
+          
           },
           this.ctxManager.cloneContext(),
           __baml_options__?.tb?.__tb(),

@@ -54,7 +54,7 @@ type JsResult<T> = core::result::Result<T, JsError>;
 // but for browser we likely need to do
 //         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 // Node is run using: wasm-pack test --node --features internal,wasm
-
+use std::panic;
 #[wasm_bindgen(start)]
 pub fn on_wasm_init() {
     // TODO: set LOG_LEVEL to ::Debug if you wish to see logs.
@@ -77,7 +77,21 @@ pub fn on_wasm_init() {
         ),
     }
 
-    console_error_panic_hook::set_once();
+    // Set up panic hook that calls both our custom handler AND console_error_panic_hook
+    panic::set_hook(Box::new(|info| {
+        // First, call our custom handler to notify JS
+        let msg = info.to_string();
+        on_wasm_panic(&msg);
+
+        // Then call console_error_panic_hook for nice console formatting
+        console_error_panic_hook::hook(info);
+    }));
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_name = __onWasmPanic)]
+    fn on_wasm_panic(msg: &str);
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -231,7 +245,7 @@ impl WasmProject {
         hm.extend(self.unsaved_files.iter());
 
         WasmDiagnosticError {
-            errors: rt.runtime.internal().diagnostics().clone(),
+            errors: rt.runtime.diagnostics().clone(),
             all_files: hm.keys().map(|s| s.to_string()).collect(),
         }
     }
@@ -944,7 +958,7 @@ impl WasmRuntime {
 impl WasmRuntime {
     #[wasm_bindgen]
     pub fn check_if_in_prompt(&self, cursor_idx: usize) -> bool {
-        self.runtime.internal().ir().walk_functions().any(|f| {
+        self.runtime.ir().walk_functions().any(|f| {
             f.elem().configs().expect("configs").iter().any(|config| {
                 let span = &config.prompt_span;
                 cursor_idx >= span.start && cursor_idx <= span.end
@@ -961,7 +975,6 @@ impl WasmRuntime {
         let ctx = ctx.eval_ctx(false);
 
         self.runtime
-            .internal()
             .ir()
             .walk_functions()
             .map(|f| {
@@ -983,10 +996,7 @@ impl WasmRuntime {
                             .collect::<indexmap::IndexMap<String, _>>();
 
                         // Use the IR's get_dummy_args method
-                        self.runtime
-                            .internal()
-                            .ir()
-                            .get_dummy_args(2, true, &params)
+                        self.runtime.ir().get_dummy_args(2, true, &params)
                     }
                 );
 
@@ -1007,7 +1017,6 @@ impl WasmRuntime {
                                 .collect::<indexmap::IndexMap<String, _>>();
 
                             self.runtime
-                                .internal()
                                 .ir()
                                 .get_dummy_args(2, false, &params)
                                 .split('\n')
@@ -1113,7 +1122,6 @@ impl WasmRuntime {
         let ctx = ctx.eval_ctx(false);
 
         self.runtime
-            .internal()
             .ir()
             .walk_expr_fns()
             .map(|f| {
@@ -1135,10 +1143,7 @@ impl WasmRuntime {
                             .collect::<indexmap::IndexMap<String, _>>();
 
                         // Use the IR's get_dummy_args method
-                        self.runtime
-                            .internal()
-                            .ir()
-                            .get_dummy_args(2, true, &params)
+                        self.runtime.ir().get_dummy_args(2, true, &params)
                     }
                 );
 
@@ -1159,7 +1164,6 @@ impl WasmRuntime {
                                 .collect::<indexmap::IndexMap<String, _>>();
 
                             self.runtime
-                                .internal()
                                 .ir()
                                 .get_dummy_args(2, false, &params)
                                 .split('\n')
@@ -1319,7 +1323,6 @@ impl WasmRuntime {
     #[wasm_bindgen]
     pub fn required_env_vars(&self) -> Vec<String> {
         self.runtime
-            .internal()
             .ir()
             .required_env_vars()
             .into_iter()
@@ -1329,7 +1332,7 @@ impl WasmRuntime {
 
     #[wasm_bindgen]
     pub fn search_for_symbol(&self, symbol: &str) -> Option<SymbolLocation> {
-        let runtime = self.runtime.internal().ir();
+        let runtime = self.runtime.ir();
 
         if let Ok(walker) = runtime.find_enum(symbol) {
             let elem = walker.span().unwrap();
@@ -1431,29 +1434,28 @@ impl WasmRuntime {
 
     #[wasm_bindgen]
     pub fn is_valid_class(&self, symbol: &str) -> bool {
-        self.runtime.internal().ir().find_class(symbol).is_ok()
+        self.runtime.ir().find_class(symbol).is_ok()
     }
 
     #[wasm_bindgen]
     pub fn is_valid_enum(&self, symbol: &str) -> bool {
-        self.runtime.internal().ir().find_enum(symbol).is_ok()
+        self.runtime.ir().find_enum(symbol).is_ok()
     }
 
     #[wasm_bindgen]
     pub fn is_valid_type_alias(&self, symbol: &str) -> bool {
-        self.runtime.internal().ir().find_type_alias(symbol).is_ok()
+        self.runtime.ir().find_type_alias(symbol).is_ok()
     }
 
     #[wasm_bindgen]
     pub fn is_valid_function(&self, symbol: &str) -> bool {
-        let ir = self.runtime.internal().ir();
+        let ir = self.runtime.ir();
         ir.find_function(symbol).is_ok() || ir.find_expr_fn(symbol).is_ok()
     }
 
     #[wasm_bindgen]
     pub fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
         self.runtime
-            .internal()
             .ir()
             .find_class_locations(symbol)
             .into_iter()
@@ -1474,7 +1476,6 @@ impl WasmRuntime {
     #[wasm_bindgen]
     pub fn search_for_enum_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
         self.runtime
-            .internal()
             .ir()
             .find_enum_locations(symbol)
             .into_iter()
@@ -1495,7 +1496,6 @@ impl WasmRuntime {
     #[wasm_bindgen]
     pub fn search_for_type_alias_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
         self.runtime
-            .internal()
             .ir()
             .find_type_alias_locations(symbol)
             .into_iter()
@@ -1577,7 +1577,7 @@ impl WasmRuntime {
         let ctx = ctx.create_ctx_with_default();
         let ctx = ctx.eval_ctx(true);
 
-        let ir = self.runtime.internal().ir();
+        let ir = self.runtime.ir();
 
         // Combine both LLM function test pairs and expr function test pairs
         let llm_tests = ir.walk_function_test_pairs().map(|tc| {
@@ -2048,7 +2048,7 @@ impl WasmFunction {
         let rt = &rt.runtime;
         let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
         let ctx = ctx_manager.create_ctx_with_default();
-        let ir = rt.internal().ir();
+        let ir = rt.ir();
 
         // Try to find as LLM function first, if not found check if it's an expr function
         let walker = match ir.find_function(&self.name) {
@@ -2342,7 +2342,7 @@ impl WasmFunction {
             .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
             .create_ctx_with_default();
 
-        let ir = rt.internal().ir();
+        let ir = rt.ir();
 
         // Try to find as LLM function first, if not found try expr function
         let walker = match ir.find_function(&self.name) {

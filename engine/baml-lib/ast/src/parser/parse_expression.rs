@@ -711,19 +711,19 @@ mod tests {
     }
 
     #[test]
-    fn test_mdx_header_parsing() {
-        println!("\n=== Testing MDX Header Parsing ===");
+    fn test_comment_header_parsing() {
+        println!("\n=== Testing Comment Header Parsing ===");
 
         let input = r#"{
-            # Level 1 Header
+            //# Level 1 Header
             let x = "hello";
 
-            ## Level 2 Header
+            //## Level 2 Header
             let y = "world";
 
-            ########### Level 11 Header
+            //########### Level 11 Header
 
-            ### Level 3 Headers
+            //### Level 3 Headers
             x + y
         }"#;
 
@@ -732,7 +732,7 @@ mod tests {
         let mut diagnostics = Diagnostics::new(root_path.into());
         diagnostics.set_source(&source);
 
-        println!("Parsing expression block with mdx headers...");
+        println!("Parsing expression block with comment headers...");
 
         let pair_result = BAMLParser::parse(Rule::expr_block, input);
         match pair_result {
@@ -762,21 +762,21 @@ mod tests {
     fn test_complex_header_hierarchy() {
         println!("\n=== Testing Complex Header Hierarchy ===");
 
-        let input = r#"# Loop Processing
+        let input = r#"//# Loop Processing
 fn ForLoopWithHeaders() -> int {
     let items = [1, 2, 3, 4, 5];
     let result = 0;
 
-    ## Main Loop
+    //## Main Loop
     for (item in items) {
-        ### Item Processing
+        //### Item Processing
         let processed = item * 2;
 
-        #### Accumulation
+        //#### Accumulation
         result = result + processed;
     }
 
-    ## Final Result
+    //## Final Result
     result
 }"#;
 

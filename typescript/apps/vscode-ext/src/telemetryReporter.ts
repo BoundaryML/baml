@@ -60,6 +60,7 @@ export default class TelemetryReporter {
 
   public sendTelemetryEvent(data: TelemetryEvent) {
     if (this.userOptIn) {
+      console.log('Sending telemetry event', data.event, data.properties);
       client.capture({
         event: data.event,
         distinctId: vscode.env.machineId,

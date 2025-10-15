@@ -12,6 +12,7 @@ import { AsyncHttpRequest, AsyncHttpStreamRequest } from "./async_request"
 import { LlmResponseParser, LlmStreamParser } from "./parser"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX,
 DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
+import type * as events from "./events"
 
 /**
 * @deprecated Use RecursivePartialNull from 'baml_client/types' instead.
@@ -20,7 +21,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
     type TickReason = "Unknown";
 
-    type BamlCallOptions = {
+    type BamlCallOptions<EventsT = never> = {
     tb?: TypeBuilder
     clientRegistry?: ClientRegistry
     collector?: Collector | Collector[]
@@ -28,6 +29,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
       tags?: Record<string, string>
         signal?: AbortSignal
         onTick?: (reason: TickReason, log: FunctionLog | null) => void
+        events?: EventsT
         }
 
         export class BamlAsyncClient {
@@ -80,7 +82,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         {% for (name, arg_type) in func.args -%}
         {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
         {%- endfor %}
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<{{ func.event_type_param() }}>
         ): Promise<{{func.return_type.serialize_type(pkg)}}> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -122,6 +124,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.events,
             )
             return raw.parsed(false) as {{func.return_type.serialize_type(pkg)}}
             } catch (error) {
@@ -147,7 +150,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             {% for (name, arg_type) in func.args -%}
             {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
             {%- endfor %}
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<{{ func.event_type_param() }}>
             ): BamlStream<{{ func.stream_return_type.serialize_type(pkg) }}, {{ func.return_type.serialize_type(pkg) }}>
               {
               try {
