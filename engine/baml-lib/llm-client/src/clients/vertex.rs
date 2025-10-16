@@ -8,8 +8,9 @@ use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 use crate::{
-    AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes,
-    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
+    AllowedRoleMetadata, FinishReasonFilter, MediaUrlHandler, RolesSelection,
+    SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
+    UnresolvedMediaUrlHandler, UnresolvedRolesSelection,
 };
 
 #[derive(Debug, Clone, BamlHash)]
@@ -155,6 +156,7 @@ pub struct UnresolvedVertex<Meta> {
     #[baml_safe_hash]
     properties: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
     anthropic_version: Option<StringOr>,
+    media_url_handler: UnresolvedMediaUrlHandler,
 }
 
 pub enum BaseUrlOrLocation {
@@ -177,6 +179,7 @@ pub struct ResolvedVertex {
     pub proxy_url: Option<String>,
     pub finish_reason_filter: FinishReasonFilter,
     pub anthropic_version: Option<String>,
+    pub media_url_handler: MediaUrlHandler,
 }
 
 impl ResolvedVertex {
@@ -257,6 +260,7 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
                 .collect(),
             finish_reason_filter: self.finish_reason_filter.clone(),
             anthropic_version: self.anthropic_version.clone(),
+            media_url_handler: self.media_url_handler.clone(),
         }
     }
 
@@ -317,6 +321,7 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
                 Some(ref anthropic_version) => Some(anthropic_version.resolve(ctx)?),
                 None => None,
             },
+            media_url_handler: self.media_url_handler.resolve(ctx)?,
         })
     }
 
@@ -402,6 +407,7 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
             .ensure_string("anthropic_version", false)
             .map(|(_, v, _)| v);
 
+        let media_url_handler = properties.ensure_media_url_handler();
         let (properties, errors) = properties.finalize();
         if !errors.is_empty() {
             return Err(errors);
@@ -424,6 +430,7 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
             properties,
             finish_reason_filter,
             anthropic_version,
+            media_url_handler,
         })
     }
 }

@@ -5,7 +5,8 @@ use indexmap::IndexMap;
 
 use crate::{
     SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
-    UnresolvedResponseType, UnresolvedRolesSelection,
+    UnresolvedMediaUrlHandler, UnresolvedResolveMediaUrls, UnresolvedResponseType,
+    UnresolvedRolesSelection,
 };
 
 #[derive(Debug, Clone, Hash)]
@@ -407,6 +408,69 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                     None
                 }
             })
+    }
+
+    pub fn ensure_media_url_handler(&mut self) -> UnresolvedMediaUrlHandler {
+        let mut result = UnresolvedMediaUrlHandler::default();
+
+        if let Some((_span, map, _)) = self.ensure_map("media_url_handler", false) {
+            for (key, (key_span, value)) in map {
+                let resolve_mode = self.parse_resolve_media_urls(&value, &key_span);
+
+                match key.as_str() {
+                    "image" => result.images = resolve_mode,
+                    "audio" => result.audio = resolve_mode,
+                    "pdf" => result.pdf = resolve_mode,
+                    "video" => result.video = resolve_mode,
+                    other => {
+                        self.push_error(
+                            format!("Unknown media type in media_url_handler: {}. Expected one of: image, audio, pdf, video", other),
+                            key_span
+                        );
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    fn parse_resolve_media_urls(
+        &mut self,
+        value: &UnresolvedValue<Meta>,
+        span: &Meta,
+    ) -> Option<UnresolvedResolveMediaUrls> {
+        match value.as_str() {
+            Some(StringOr::Value(s)) => match s.as_str() {
+                "send_base64" => Some(UnresolvedResolveMediaUrls::SendBase64),
+                "send_url" => Some(UnresolvedResolveMediaUrls::SendUrl),
+                "send_url_add_mime_type" => Some(UnresolvedResolveMediaUrls::SendUrlAddMimeType),
+                "send_base64_unless_google_url" => {
+                    Some(UnresolvedResolveMediaUrls::SendBase64UnlessGoogleUrl)
+                }
+                other => {
+                    self.push_error(
+                        format!(
+                            "Invalid media URL handling mode: {}. Expected one of: send_base64, send_url, send_url_add_mime_type, send_base64_unless_google_url",
+                            other
+                        ),
+                        span.clone()
+                    );
+                    None
+                }
+            },
+            Some(StringOr::EnvVar(_)) => {
+                self.push_error(
+                    "media_url_handler values cannot be environment variables",
+                    span.clone(),
+                );
+                None
+            }
+            _ => {
+                self.push_error("media_url_handler values must be strings", span.clone());
+                None
+            }
+        }
     }
 
     pub fn ensure_query_params(&mut self) -> Option<IndexMap<String, StringOr>> {

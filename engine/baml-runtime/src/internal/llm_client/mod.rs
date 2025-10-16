@@ -92,12 +92,27 @@ pub enum ResolveMediaUrls {
     // google: supports b64 w mime, url if its a google file uri (gs://)
     // openai: supports URLs w/o mime (b64 data URLs also work here)
     // vertex: supports URLs w/ mime, b64 w/ mime
-    Always,
-    IfMatchesGoogleFileUri,
-    // EnsureMime: always add the mime type to the request (which means if it's a url, we may need to resolve it to find the mime type)
-    EnsureMime,
-    // Never: don't resolve media urls
-    Never,
+    SendBase64,
+    SendBase64UnlessGoogleUrl,
+    // SendUrlAddMimeType: always add the mime type to the request (which means if it's a url, we may need to resolve it to find the mime type)
+    SendUrlAddMimeType,
+    // SendUrl: don't resolve media urls
+    SendUrl,
+}
+
+impl From<internal_llm_client::ResolveMediaUrls> for ResolveMediaUrls {
+    fn from(value: internal_llm_client::ResolveMediaUrls) -> Self {
+        match value {
+            internal_llm_client::ResolveMediaUrls::SendBase64 => ResolveMediaUrls::SendBase64,
+            internal_llm_client::ResolveMediaUrls::SendBase64UnlessGoogleUrl => {
+                ResolveMediaUrls::SendBase64UnlessGoogleUrl
+            }
+            internal_llm_client::ResolveMediaUrls::SendUrlAddMimeType => {
+                ResolveMediaUrls::SendUrlAddMimeType
+            }
+            internal_llm_client::ResolveMediaUrls::SendUrl => ResolveMediaUrls::SendUrl,
+        }
+    }
 }
 
 #[derive(Clone)]

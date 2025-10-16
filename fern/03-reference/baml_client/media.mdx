@@ -38,3 +38,14 @@ BAML functions can accept image, audio, Pdf, and video inputs for multimedia pro
    Create Video objects from URLs, base64 data, or browser-specific sources like File and Blob objects.
   </Card>
 </Cards>
+
+## URL Resolution
+
+BAML automatically handles URL-to-base64 conversion based on provider requirements. You can control this behavior using the `media_url_handler` configuration option in your client definition.
+
+By default:
+- URLs are converted to base64 for providers that don't support external URLs
+- Google Cloud Storage URLs (gs://) are preserved when using Google providers
+- MIME types are added when required by the provider
+
+See the client configuration documentation for provider-specific defaults and configuration options.

@@ -184,3 +184,15 @@ func stringPtr(s string) *string {
 >
   Convert the audio to a JSON representation. Returns either a URL object or a base64 object with media type.
 </ParamField>
+
+## URL Handling
+
+Audio URLs are processed according to your client's `media_url_handler` configuration:
+
+- **[OpenAI](/ref/llm-client-providers/open-ai#media_url_handler)**: By default converts to base64 (`send_base64`) for compatibility.
+- **[Vertex AI](/ref/llm-client-providers/google-vertex#media_url_handler)**: By default uses `send_url_add_mime_type` to include MIME type.
+- **[Anthropic](/ref/llm-client-providers/anthropic#media_url_handler)**: By default keeps URLs as-is (`send_url`).
+- **[Google AI](/ref/llm-client-providers/google-ai-gemini#media_url_handler)**: By default keeps URLs as-is (`send_url`).
+- **[AWS Bedrock](/ref/llm-client-providers/aws-bedrock#media_url_handler)**: By default converts to base64 (`send_base64`).
+
+Note: OpenAI requires audio to be base64-encoded, which is why the default is `send_base64`.
