@@ -529,8 +529,8 @@ impl BamlAsyncInterpreterRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
-        cancel_tripwire: Arc<TripWire>,
         tags: Option<&HashMap<String, String>>,
+        cancel_tripwire: Arc<TripWire>,
         watch_handler: Option<impl FnMut(baml_compiler::watch::WatchNotification) + Send + 'static>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         self.async_runtime.block_on(self.call_function(

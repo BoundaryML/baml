@@ -364,6 +364,7 @@ impl BamlRuntime {
                                 }
                             }
                         }
+                        _ => todo!("implement stream event handlers"),
                     }
                 });
             }
@@ -586,10 +587,10 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: &Bound<'_, PyList>,
-        env_vars: HashMap<String, String>,
         tags: Option<HashMap<String, String>>,
-        on_tick: Option<PyObject>,
+        env_vars: HashMap<String, String>,
         abort_controller: Option<&crate::abort_controller::AbortController>,
+        on_tick: Option<PyObject>,
     ) -> PyResult<FunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -622,8 +623,8 @@ impl BamlRuntime {
                 cb.map(|cb| cb.inner.clone()).as_ref(),
                 Some(collector_list),
                 env_vars.clone(),
+                tags,
                 tripwire,
-                tags.as_ref(),
             )
             .map_err(BamlError::from_anyhow)?;
 
@@ -684,8 +685,8 @@ impl BamlRuntime {
                 cb.map(|cb| cb.inner.clone()).as_ref(),
                 Some(collector_list),
                 env_vars.clone(),
-                tags,
                 tripwire,
+                tags.as_ref(),
             )
             .map_err(BamlError::from_anyhow)?;
 

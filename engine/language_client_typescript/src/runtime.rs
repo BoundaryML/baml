@@ -521,8 +521,8 @@ impl BamlRuntime {
             cb.as_ref(),
             Some(collector_list),
             env_vars,
-            tripwire,
             Some(&tags),
+            tripwire,
             None::<fn(baml_compiler::watch::WatchNotification)>,
         );
 
