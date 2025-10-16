@@ -1,5 +1,8 @@
 name: Test Go Client Windows Support
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     branches: [ canary, main ]
