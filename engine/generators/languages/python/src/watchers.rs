@@ -3,9 +3,9 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use anyhow::{anyhow, Result};
 use askama::Template;
 use baml_compiler::{
-    emit::{ChannelType, EmitChannels},
     hir::Hir,
     thir::typecheck::typecheck,
+    watch::{ChannelType, WatchChannels},
 };
 use dir_writer::GeneratorArgs;
 use internal_baml_core::{
@@ -158,12 +158,12 @@ pub fn build_event_collectors(
     let mut type_diagnostics = Diagnostics::new(args.baml_src_dir.clone());
     let thir = typecheck(&hir, &mut type_diagnostics);
 
-    let mut emit_diagnostics = Diagnostics::new(args.baml_src_dir.clone());
-    let emit_channels = EmitChannels::analyze_program(&thir, &mut emit_diagnostics);
+    let mut watch_diagnostics = Diagnostics::new(args.baml_src_dir.clone());
+    let watch_channels = WatchChannels::analyze_program(&thir, &mut watch_diagnostics);
 
     let mut builders: HashMap<String, CollectorBuilder> = HashMap::new();
 
-    for (fn_name, channels) in emit_channels.functions_channels.iter() {
+    for (fn_name, channels) in watch_channels.functions_channels.iter() {
         if !function_name_map.contains_key(fn_name.as_str()) {
             continue;
         }

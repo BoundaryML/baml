@@ -395,7 +395,7 @@ impl BamlRuntime {
                         env_vars,
                         tags,
                         tripwire,
-                        None::<fn(baml_compiler::emit::EmitEvent)>,
+                        None::<fn(baml_compiler::watch::WatchNotification)>,
                     )
                     .await;
                 result
@@ -495,7 +495,7 @@ impl BamlRuntime {
                                 let _ = handler.call1(py, (block_event_dict,));
                             }
                         }
-                        baml_compiler::emit::EmitBamlValue::Value(value) => {
+                        baml_compiler::watch::WatchBamlValue::Value(value) => {
                             if let Some(var_name) = &event.variable_name {
                                 // Serialize BamlValue to JSON
                                 let serialized = serde_json::to_value(value.value())
@@ -546,7 +546,6 @@ impl BamlRuntime {
                 env_vars,
                 tags,
                 tripwire,
-                Some(emit_handler),
                 Some(watch_handler), // TODO: Notification handler.
             )
         });
@@ -563,7 +562,7 @@ impl BamlRuntime {
                 env_vars,
                 tags,
                 tripwire,
-                None::<fn(baml_compiler::emit::EmitEvent)>,
+                None::<fn(baml_compiler::watch::WatchNotification)>,
             )
         });
 

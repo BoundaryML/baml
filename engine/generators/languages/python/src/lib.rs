@@ -11,13 +11,13 @@ use crate::{
     },
 };
 
-mod events;
 mod functions;
 mod generated_types;
 mod ir_to_py;
 mod package;
 mod r#type;
 mod utils;
+mod watchers;
 
 #[derive(Default)]
 pub struct PyLanguageFeatures;
@@ -67,8 +67,8 @@ impl LanguageFeatures for PyLanguageFeatures {
         }
 
         // Generate event collectors first to determine has_events
-        let event_collectors = events::build_event_collectors(args, &pkg, &function_name_map)?;
-        collector.add_file("events.py", events::render_events(&event_collectors)?)?;
+        let event_collectors = watchers::build_event_collectors(args, &pkg, &function_name_map)?;
+        collector.add_file("events.py", watchers::render_events(&event_collectors)?)?;
 
         // Generate __init__.py with correct has_events value
         collector.add_file("__init__.py", render_init(&pkg, &args.default_client_mode)?)?;
