@@ -724,7 +724,7 @@ impl ToProviderMessage for OpenAIClient {
                         // note: openai only supports mp3/wav for audio input
                         // but we can still send other formats and allow openai to handle
                         // the conversion
-                        let extension = url_content.url.split('.').last();
+                        let extension = url_content.url.split('.').next_back();
 
                         // use mime type if it exists otherwise use extension, otherwise error.
                         let extension = match media.mime_type.as_deref() {
