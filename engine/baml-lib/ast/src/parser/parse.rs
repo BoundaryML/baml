@@ -7,7 +7,7 @@ use pest::Parser;
 
 use super::{
     parse_assignment::parse_assignment,
-    parse_expr::{parse_expr_fn, parse_header, parse_top_level_assignment},
+    parse_expr::{parse_comment_header_pair, parse_expr_fn, parse_top_level_assignment},
     parse_expression::parse_expression,
     parse_template_string::parse_template_string,
     parse_type_expression_block::parse_type_expression_block,
@@ -167,12 +167,13 @@ pub fn parse(root_path: &Path, source: &SourceFile) -> Result<(Ast, Diagnostics)
                     ));
                         break;
                     }
-                    Rule::mdx_header => {
-                        if let Some(header) = parse_header(current, &mut diagnostics) {
-                            pending_headers.push(header);
-                        }
-                    }
                     Rule::comment_block => {
+                        let headers =
+                            headers_from_comment_block_top_level(current.clone(), &mut diagnostics);
+                        if !headers.is_empty() {
+                            pending_headers.extend(headers);
+                            continue;
+                        }
                         match pairs.peek().map(|b| b.as_rule()) {
                             Some(Rule::empty_lines) => {
                                 // free floating
@@ -224,6 +225,25 @@ pub fn parse(root_path: &Path, source: &SourceFile) -> Result<(Ast, Diagnostics)
             Err(diagnostics)
         }
     }
+}
+
+fn headers_from_comment_block_top_level(
+    token: pest::iterators::Pair<'_, Rule>,
+    diagnostics: &mut Diagnostics,
+) -> Vec<Header> {
+    if token.as_rule() != Rule::comment_block {
+        return Vec::new();
+    }
+
+    let mut headers = Vec::new();
+    for current in token.into_inner() {
+        if current.as_rule() == Rule::comment {
+            if let Some(header) = parse_comment_header_pair(&current, diagnostics) {
+                headers.push(header);
+            }
+        }
+    }
+    headers
 }
 
 fn get_expected_from_error(positives: &[Rule]) -> String {

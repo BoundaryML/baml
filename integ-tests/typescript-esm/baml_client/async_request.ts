@@ -6241,9 +6241,9 @@ env?: Record<string, string | undefined>
       }
       }
       
-  async SimpleEmitWithFilter(
+  async SimpleWatchWithFilter(
   
-  __baml_options__?: BamlCallOptions<events.SimpleEmitWithFilterEventCollector>
+  __baml_options__?: BamlCallOptions<events.SimpleWatchWithFilterEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6251,7 +6251,7 @@ env?: Record<string, string | undefined>
       Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
-      "SimpleEmitWithFilter",
+      "SimpleWatchWithFilter",
       {
       
       },
@@ -6366,9 +6366,9 @@ env?: Record<string, string | undefined>
       }
       }
       
-  async WorkflowEmit(
+  async WorkflowWatch(
   
-  __baml_options__?: BamlCallOptions<events.WorkflowEmitEventCollector>
+  __baml_options__?: BamlCallOptions<events.WorkflowWatchEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6376,7 +6376,7 @@ env?: Record<string, string | undefined>
       Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
-      "WorkflowEmit",
+      "WorkflowWatch",
       {
       
       },
@@ -6391,9 +6391,9 @@ env?: Record<string, string | undefined>
       }
       }
       
-  async WorkflowEmitChild(
+  async WorkflowWatchChild(
   
-  __baml_options__?: BamlCallOptions<events.WorkflowEmitChildEventCollector>
+  __baml_options__?: BamlCallOptions<events.WorkflowWatchChildEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6401,7 +6401,7 @@ env?: Record<string, string | undefined>
       Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
-      "WorkflowEmitChild",
+      "WorkflowWatchChild",
       {
       
       },
@@ -6416,9 +6416,9 @@ env?: Record<string, string | undefined>
       }
       }
       
-  async WorkflowEmitWithFilter(
+  async WorkflowWatchWithFilter(
   
-  __baml_options__?: BamlCallOptions<events.WorkflowEmitWithFilterEventCollector>
+  __baml_options__?: BamlCallOptions<events.WorkflowWatchWithFilterEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6426,7 +6426,7 @@ env?: Record<string, string | undefined>
       Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
-      "WorkflowEmitWithFilter",
+      "WorkflowWatchWithFilter",
       {
       
       },
@@ -12647,9 +12647,9 @@ env?: Record<string, string | undefined>
           }
           }
           
-      async SimpleEmitWithFilter(
+      async SimpleWatchWithFilter(
       
-      __baml_options__?: BamlCallOptions<events.SimpleEmitWithFilterEventCollector>
+      __baml_options__?: BamlCallOptions<events.SimpleWatchWithFilterEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12657,7 +12657,7 @@ env?: Record<string, string | undefined>
           Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
-          "SimpleEmitWithFilter",
+          "SimpleWatchWithFilter",
           {
           
           },
@@ -12772,9 +12772,9 @@ env?: Record<string, string | undefined>
           }
           }
           
-      async WorkflowEmit(
+      async WorkflowWatch(
       
-      __baml_options__?: BamlCallOptions<events.WorkflowEmitEventCollector>
+      __baml_options__?: BamlCallOptions<events.WorkflowWatchEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12782,7 +12782,7 @@ env?: Record<string, string | undefined>
           Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
-          "WorkflowEmit",
+          "WorkflowWatch",
           {
           
           },
@@ -12797,9 +12797,9 @@ env?: Record<string, string | undefined>
           }
           }
           
-      async WorkflowEmitChild(
+      async WorkflowWatchChild(
       
-      __baml_options__?: BamlCallOptions<events.WorkflowEmitChildEventCollector>
+      __baml_options__?: BamlCallOptions<events.WorkflowWatchChildEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12807,7 +12807,7 @@ env?: Record<string, string | undefined>
           Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
-          "WorkflowEmitChild",
+          "WorkflowWatchChild",
           {
           
           },
@@ -12822,9 +12822,9 @@ env?: Record<string, string | undefined>
           }
           }
           
-      async WorkflowEmitWithFilter(
+      async WorkflowWatchWithFilter(
       
-      __baml_options__?: BamlCallOptions<events.WorkflowEmitWithFilterEventCollector>
+      __baml_options__?: BamlCallOptions<events.WorkflowWatchWithFilterEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12832,7 +12832,7 @@ env?: Record<string, string | undefined>
           Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
-          "WorkflowEmitWithFilter",
+          "WorkflowWatchWithFilter",
           {
           
           },

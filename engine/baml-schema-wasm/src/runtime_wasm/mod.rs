@@ -54,7 +54,7 @@ type JsResult<T> = core::result::Result<T, JsError>;
 // but for browser we likely need to do
 //         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 // Node is run using: wasm-pack test --node --features internal,wasm
-
+use std::panic;
 #[wasm_bindgen(start)]
 pub fn on_wasm_init() {
     // TODO: set LOG_LEVEL to ::Debug if you wish to see logs.
@@ -77,7 +77,21 @@ pub fn on_wasm_init() {
         ),
     }
 
-    console_error_panic_hook::set_once();
+    // Set up panic hook that calls both our custom handler AND console_error_panic_hook
+    panic::set_hook(Box::new(|info| {
+        // First, call our custom handler to notify JS
+        let msg = info.to_string();
+        on_wasm_panic(&msg);
+
+        // Then call console_error_panic_hook for nice console formatting
+        console_error_panic_hook::hook(info);
+    }));
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_name = __onWasmPanic)]
+    fn on_wasm_panic(msg: &str);
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]

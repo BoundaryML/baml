@@ -12000,9 +12000,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             }
             }
             
-        async SimpleEmitWithFilter(
+        async SimpleWatchWithFilter(
         
-        __baml_options__?: BamlCallOptions<events.SimpleEmitWithFilterEventCollector>
+        __baml_options__?: BamlCallOptions<events.SimpleWatchWithFilterEventCollector>
         ): Promise<number> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -12014,7 +12014,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           // Check if onTick is provided - route through streaming if so
           if (options.onTick) {
-          const stream = this.stream.SimpleEmitWithFilter(
+          const stream = this.stream.SimpleWatchWithFilter(
           
           __baml_options__
           );
@@ -12029,7 +12029,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
             );
             const raw = await this.runtime.callFunction(
-            "SimpleEmitWithFilter",
+            "SimpleWatchWithFilter",
             {
             
             },
@@ -12240,9 +12240,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             }
             }
             
-        async WorkflowEmit(
+        async WorkflowWatch(
         
-        __baml_options__?: BamlCallOptions<events.WorkflowEmitEventCollector>
+        __baml_options__?: BamlCallOptions<events.WorkflowWatchEventCollector>
         ): Promise<number> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -12254,7 +12254,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           // Check if onTick is provided - route through streaming if so
           if (options.onTick) {
-          const stream = this.stream.WorkflowEmit(
+          const stream = this.stream.WorkflowWatch(
           
           __baml_options__
           );
@@ -12269,7 +12269,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
             );
             const raw = await this.runtime.callFunction(
-            "WorkflowEmit",
+            "WorkflowWatch",
             {
             
             },
@@ -12288,9 +12288,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             }
             }
             
-        async WorkflowEmitChild(
+        async WorkflowWatchChild(
         
-        __baml_options__?: BamlCallOptions<events.WorkflowEmitChildEventCollector>
+        __baml_options__?: BamlCallOptions<events.WorkflowWatchChildEventCollector>
         ): Promise<number> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -12302,7 +12302,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           // Check if onTick is provided - route through streaming if so
           if (options.onTick) {
-          const stream = this.stream.WorkflowEmitChild(
+          const stream = this.stream.WorkflowWatchChild(
           
           __baml_options__
           );
@@ -12317,7 +12317,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
             );
             const raw = await this.runtime.callFunction(
-            "WorkflowEmitChild",
+            "WorkflowWatchChild",
             {
             
             },
@@ -12336,9 +12336,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             }
             }
             
-        async WorkflowEmitWithFilter(
+        async WorkflowWatchWithFilter(
         
-        __baml_options__?: BamlCallOptions<events.WorkflowEmitWithFilterEventCollector>
+        __baml_options__?: BamlCallOptions<events.WorkflowWatchWithFilterEventCollector>
         ): Promise<number> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -12350,7 +12350,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           // Check if onTick is provided - route through streaming if so
           if (options.onTick) {
-          const stream = this.stream.WorkflowEmitWithFilter(
+          const stream = this.stream.WorkflowWatchWithFilter(
           
           __baml_options__
           );
@@ -12365,7 +12365,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
             );
             const raw = await this.runtime.callFunction(
-            "WorkflowEmitWithFilter",
+            "WorkflowWatchWithFilter",
             {
             
             },
@@ -28766,9 +28766,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   }
                   }
                   
-            SimpleEmitWithFilter(
+            SimpleWatchWithFilter(
             
-            __baml_options__?: BamlCallOptions<events.SimpleEmitWithFilterEventCollector>
+            __baml_options__?: BamlCallOptions<events.SimpleWatchWithFilterEventCollector>
             ): BamlStream<number | null, number>
               {
               try {
@@ -28795,7 +28795,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               try {
               options.onTick!("Unknown", log);
               } catch (error) {
-              console.error("Error in onTick callback for SimpleEmitWithFilter", error);
+              console.error("Error in onTick callback for SimpleWatchWithFilter", error);
               }
               }
               };
@@ -28806,7 +28806,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
                 const raw = this.runtime.streamFunction(
-                "SimpleEmitWithFilter",
+                "SimpleWatchWithFilter",
                 {
                 
                 },
@@ -29096,9 +29096,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   }
                   }
                   
-            WorkflowEmit(
+            WorkflowWatch(
             
-            __baml_options__?: BamlCallOptions<events.WorkflowEmitEventCollector>
+            __baml_options__?: BamlCallOptions<events.WorkflowWatchEventCollector>
             ): BamlStream<number | null, number>
               {
               try {
@@ -29125,7 +29125,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               try {
               options.onTick!("Unknown", log);
               } catch (error) {
-              console.error("Error in onTick callback for WorkflowEmit", error);
+              console.error("Error in onTick callback for WorkflowWatch", error);
               }
               }
               };
@@ -29136,7 +29136,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
                 const raw = this.runtime.streamFunction(
-                "WorkflowEmit",
+                "WorkflowWatch",
                 {
                 
                 },
@@ -29162,9 +29162,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   }
                   }
                   
-            WorkflowEmitChild(
+            WorkflowWatchChild(
             
-            __baml_options__?: BamlCallOptions<events.WorkflowEmitChildEventCollector>
+            __baml_options__?: BamlCallOptions<events.WorkflowWatchChildEventCollector>
             ): BamlStream<number | null, number>
               {
               try {
@@ -29191,7 +29191,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               try {
               options.onTick!("Unknown", log);
               } catch (error) {
-              console.error("Error in onTick callback for WorkflowEmitChild", error);
+              console.error("Error in onTick callback for WorkflowWatchChild", error);
               }
               }
               };
@@ -29202,7 +29202,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
                 const raw = this.runtime.streamFunction(
-                "WorkflowEmitChild",
+                "WorkflowWatchChild",
                 {
                 
                 },
@@ -29228,9 +29228,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   }
                   }
                   
-            WorkflowEmitWithFilter(
+            WorkflowWatchWithFilter(
             
-            __baml_options__?: BamlCallOptions<events.WorkflowEmitWithFilterEventCollector>
+            __baml_options__?: BamlCallOptions<events.WorkflowWatchWithFilterEventCollector>
             ): BamlStream<number | null, number>
               {
               try {
@@ -29257,7 +29257,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               try {
               options.onTick!("Unknown", log);
               } catch (error) {
-              console.error("Error in onTick callback for WorkflowEmitWithFilter", error);
+              console.error("Error in onTick callback for WorkflowWatchWithFilter", error);
               }
               }
               };
@@ -29268,7 +29268,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
                 const raw = this.runtime.streamFunction(
-                "WorkflowEmitWithFilter",
+                "WorkflowWatchWithFilter",
                 {
                 
                 },

@@ -1,20 +1,20 @@
 function ForLoopWithHeaders() -> int {
-    # Loop Processing
+    //# Loop Processing
     let items = [1, 2, 3, 4, 5];
     let result = 0;
 
-    ## Main Loop
+    //## Main Loop
     for (let item in items) {
-        ### Item Processing
+        //### Item Processing
         let processed = item * 2;
 
-        #### Accumulation
+        //#### Accumulation
         let result2 = result + processed;
 
         result2
     }
 
-    ## Final Result
+    //## Final Result
     result
 }
 

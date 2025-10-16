@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 mod common;
 use anyhow::{anyhow, bail, Context, Result};
-use baml_compiler::{emit::EmitEvent, hir, thir};
+use baml_compiler::{hir, thir, watch::WatchNotification};
 use baml_runtime::{async_vm_runtime::BamlAsyncVmRuntime, TripWire};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
 use internal_baml_core::internal_baml_ast;
@@ -167,7 +167,7 @@ impl ConformanceSuite {
                 self.project.env_vars.clone(),
                 None,
                 TripWire::new(None),
-                None::<fn(EmitEvent) -> _>,
+                None::<fn(WatchNotification) -> _>,
             )
             .await;
 

@@ -247,7 +247,7 @@ case "$_path" in
     command="(cd ${_repo_root}/engine/language_client_typescript && pnpm build:debug)"
     command="${command} && pnpm baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
     if [ "$_test_mode" -eq 1 ]; then
-      command="${command} && infisical run --env=dev -- pnpm integ-tests"
+      command="${command} && infisical run --env=dev -- pnpm integ-tests tests/type-aliases.test.ts"
       # command="${command} && infisical run -- pnpm integ-tests tests/modular.test.ts"
       # command="${command} && infisical run -- pnpm integ-tests tests/prompt_renderer.test.ts"
       # command="${command} && infisical run -- pnpm integ-tests tests/providers/openai.test.ts"

@@ -1,5 +1,5 @@
 function SimpleTest() -> string {
-    # Main Header
+    //# Main Header
     let x = "hello";
     x
 }

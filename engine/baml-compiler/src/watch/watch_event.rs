@@ -2,22 +2,22 @@ use std::fmt;
 
 use baml_types::{BamlValueWithMeta, Completion, Constraint, ResponseCheck, TypeIR};
 
-/// Unique identifier for a streaming emit event
+/// Unique identifier for a streaming watch notification
 pub type StreamId = String;
 
 #[derive(Debug)]
-pub enum EmitBamlValue {
-    Value(BamlValueWithMeta<EmitValueMetadata>),
+pub enum WatchBamlValue {
+    Value(BamlValueWithMeta<WatchValueMetadata>),
     Block(String),
     StreamStart(StreamId),
-    StreamUpdate(StreamId, BamlValueWithMeta<EmitValueMetadata>),
+    StreamUpdate(StreamId, BamlValueWithMeta<WatchValueMetadata>),
     StreamEnd(StreamId),
 }
 
 /// The BamlValueWithMeta metadata for a
-/// BamlValue in an event.
+/// BamlValue in a notification.
 #[derive(Debug, Clone)]
-pub struct EmitValueMetadata {
+pub struct WatchValueMetadata {
     pub constraints: Vec<Constraint>,
     pub response_checks: Vec<ResponseCheck>,
     pub completion: Completion,
@@ -25,30 +25,30 @@ pub struct EmitValueMetadata {
 }
 
 #[derive(Debug)]
-pub struct EmitEvent {
-    pub value: EmitBamlValue,
+pub struct WatchNotification {
+    pub value: WatchBamlValue,
     pub variable_name: Option<String>,
     pub function_name: String,
     pub is_stream: bool,
 }
 
-impl fmt::Display for EmitEvent {
+impl fmt::Display for WatchNotification {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.value {
-            EmitBamlValue::Value(value) => {
+            WatchBamlValue::Value(value) => {
                 if let Some(var_name) = &self.variable_name {
                     write!(f, "(var) {}: {}", var_name, value.clone().value())
                 } else {
                     write!(f, "{}", value.clone().value())
                 }
             }
-            EmitBamlValue::Block(label) => {
+            WatchBamlValue::Block(label) => {
                 write!(f, "(block) {}", label)
             }
-            EmitBamlValue::StreamStart(stream_id) => {
+            WatchBamlValue::StreamStart(stream_id) => {
                 write!(f, "(stream start) {}", stream_id)
             }
-            EmitBamlValue::StreamUpdate(stream_id, value) => {
+            WatchBamlValue::StreamUpdate(stream_id, value) => {
                 write!(
                     f,
                     "(stream update) {}: {}",
@@ -56,21 +56,21 @@ impl fmt::Display for EmitEvent {
                     value.clone().value()
                 )
             }
-            EmitBamlValue::StreamEnd(stream_id) => {
+            WatchBamlValue::StreamEnd(stream_id) => {
                 write!(f, "(stream end) {}", stream_id)
             }
         }
     }
 }
 
-impl EmitEvent {
+impl WatchNotification {
     pub fn new_var(
         variable_name: String,
-        value: BamlValueWithMeta<EmitValueMetadata>,
+        value: BamlValueWithMeta<WatchValueMetadata>,
         function_name: String,
     ) -> Self {
         Self {
-            value: EmitBamlValue::Value(value),
+            value: WatchBamlValue::Value(value),
             variable_name: Some(variable_name),
             function_name,
             is_stream: false,
@@ -79,11 +79,11 @@ impl EmitEvent {
 
     pub fn new_stream(
         variable_name: String,
-        value: BamlValueWithMeta<EmitValueMetadata>,
+        value: BamlValueWithMeta<WatchValueMetadata>,
         function_name: String,
     ) -> Self {
         Self {
-            value: EmitBamlValue::Value(value),
+            value: WatchBamlValue::Value(value),
             variable_name: Some(variable_name),
             function_name,
             is_stream: true,
@@ -92,7 +92,7 @@ impl EmitEvent {
 
     pub fn new_block(block_label: String, function_name: String) -> Self {
         Self {
-            value: EmitBamlValue::Block(block_label),
+            value: WatchBamlValue::Block(block_label),
             variable_name: None,
             function_name,
             is_stream: false,
@@ -105,7 +105,7 @@ impl EmitEvent {
         function_name: String,
     ) -> Self {
         Self {
-            value: EmitBamlValue::StreamStart(stream_id),
+            value: WatchBamlValue::StreamStart(stream_id),
             variable_name: Some(variable_name),
             function_name,
             is_stream: true,
@@ -115,11 +115,11 @@ impl EmitEvent {
     pub fn new_stream_update(
         variable_name: String,
         stream_id: StreamId,
-        value: BamlValueWithMeta<EmitValueMetadata>,
+        value: BamlValueWithMeta<WatchValueMetadata>,
         function_name: String,
     ) -> Self {
         Self {
-            value: EmitBamlValue::StreamUpdate(stream_id, value),
+            value: WatchBamlValue::StreamUpdate(stream_id, value),
             variable_name: Some(variable_name),
             function_name,
             is_stream: true,
@@ -132,7 +132,7 @@ impl EmitEvent {
         function_name: String,
     ) -> Self {
         Self {
-            value: EmitBamlValue::StreamEnd(stream_id),
+            value: WatchBamlValue::StreamEnd(stream_id),
             variable_name: Some(variable_name),
             function_name,
             is_stream: true,

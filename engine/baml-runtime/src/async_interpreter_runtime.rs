@@ -14,7 +14,7 @@ use anyhow::Result;
 use baml_compiler::{
     self, hir,
     thir::{
-        interpret::{interpret_thir, EmitStreamContext},
+        interpret::{interpret_thir, WatchStreamContext},
         typecheck::typecheck,
     },
 };
@@ -168,7 +168,7 @@ impl BamlAsyncInterpreterRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<&HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
-        emit_handler: Option<impl FnMut(baml_compiler::emit::EmitEvent) + Send + 'static>,
+        watch_handler: Option<impl FnMut(baml_compiler::watch::WatchNotification) + Send + 'static>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         // Check if this is an expression function
         let expr_fn = self
@@ -224,16 +224,17 @@ impl BamlAsyncInterpreterRuntime {
             })
             .collect::<BamlMap<_, _>>();
 
-        // Wrap emit handler in Arc<Mutex> so it can be shared with llm_handler
-        let emit_handler_shared: Arc<Mutex<Box<dyn FnMut(baml_compiler::emit::EmitEvent) + Send>>> =
-            Arc::new(Mutex::new(if let Some(handler) = emit_handler {
-                Box::new(handler)
-            } else {
-                Box::new(|_event| {})
-            }));
+        // Wrap watch handler in Arc<Mutex> so it can be shared with llm_handler
+        let watch_handler_shared: Arc<
+            Mutex<Box<dyn FnMut(baml_compiler::watch::WatchNotification) + Send>>,
+        > = Arc::new(Mutex::new(if let Some(handler) = watch_handler {
+            Box::new(handler)
+        } else {
+            Box::new(|_notification| {})
+        }));
 
-        // Create a cloneable emit handler for llm_handler
-        let emit_handler_for_llm = Arc::clone(&emit_handler_shared);
+        // Create a cloneable watch handler for llm_handler
+        let watch_handler_for_llm = Arc::clone(&watch_handler_shared);
 
         // Create LLM function handler
         let llm_runtime_clone = Arc::clone(&self.llm_runtime);
@@ -247,191 +248,194 @@ impl BamlAsyncInterpreterRuntime {
         #[cfg(not(target_arch = "wasm32"))]
         let tokio_runtime = self.llm_runtime.async_runtime.clone();
 
-        let llm_handler = move |fn_name: String,
-                                args: Vec<BamlValue>,
-                                emit_context: Option<EmitStreamContext>| {
-            let llm_runtime = Arc::clone(&llm_runtime_clone);
-            let ctx = ctx_clone.clone();
-            let tb = tb_clone.clone();
-            let cb = cb_clone.clone();
-            let env_vars = env_vars_clone.clone();
-            let cancel_tripwire = cancel_tripwire_clone.clone();
-            let emit_handler: Arc<Mutex<Box<dyn FnMut(baml_compiler::emit::EmitEvent) + Send>>> =
-                Arc::clone(&emit_handler_for_llm);
-            let parent_fn = parent_function_name.clone();
-            let tags = tags_clone.clone();
-            #[cfg(not(target_arch = "wasm32"))]
-            let tokio_rt = tokio_runtime.clone();
+        let llm_handler =
+            move |fn_name: String,
+                  args: Vec<BamlValue>,
+                  watch_context: Option<WatchStreamContext>| {
+                let llm_runtime = Arc::clone(&llm_runtime_clone);
+                let ctx = ctx_clone.clone();
+                let tb = tb_clone.clone();
+                let cb = cb_clone.clone();
+                let env_vars = env_vars_clone.clone();
+                let cancel_tripwire = cancel_tripwire_clone.clone();
+                let watch_handler: Arc<
+                    Mutex<Box<dyn FnMut(baml_compiler::watch::WatchNotification) + Send>>,
+                > = Arc::clone(&watch_handler_for_llm);
+                let parent_fn = parent_function_name.clone();
+                let tags = tags_clone.clone();
+                #[cfg(not(target_arch = "wasm32"))]
+                let tokio_rt = tokio_runtime.clone();
 
-            async move {
-                // Find the LLM function to get parameter names
-                let llm_fn = llm_runtime
-                    .ir()
-                    .find_function(&fn_name)
-                    .map_err(|e| anyhow::anyhow!("LLM function not found: {}: {}", fn_name, e))?;
+                async move {
+                    // Find the LLM function to get parameter names
+                    let llm_fn = llm_runtime.ir().find_function(&fn_name).map_err(|e| {
+                        anyhow::anyhow!("LLM function not found: {}: {}", fn_name, e)
+                    })?;
 
-                // Convert args to parameter map
-                let llm_params = args
-                    .into_iter()
-                    .zip(llm_fn.inputs().iter().map(|(name, _)| name.clone()))
-                    .map(|(arg, param_name)| (param_name, arg))
-                    .collect::<BamlMap<_, _>>();
+                    // Convert args to parameter map
+                    let llm_params = args
+                        .into_iter()
+                        .zip(llm_fn.inputs().iter().map(|(name, _)| name.clone()))
+                        .map(|(arg, param_name)| (param_name, arg))
+                        .collect::<BamlMap<_, _>>();
 
-                // Check if we should use streaming with emit events
-                if let Some(emit_ctx) = emit_context {
-                    // Use streaming with emit events
-                    let tracer = llm_runtime.tracer_wrapper.get_or_create_tracer(&env_vars);
+                    // Check if we should use streaming with watch notifications
+                    if let Some(watch_ctx) = watch_context {
+                        // Use streaming with watch notifications
+                        let tracer = llm_runtime.tracer_wrapper.get_or_create_tracer(&env_vars);
 
-                    // Create RuntimeContext from RuntimeContextManager
-                    let runtime_ctx = ctx.create_ctx(
-                        tb.as_ref(),
-                        cb.as_ref(),
-                        env_vars.clone(),
-                        ctx.call_id_stack(true).unwrap_or_default(),
-                    )?;
-
-                    #[cfg(not(target_arch = "wasm32"))]
-                    let mut stream = llm_runtime.stream_function_impl(
-                        fn_name.clone(),
-                        &llm_params,
-                        tracer,
-                        runtime_ctx,
-                        tokio_rt,
-                        vec![], // collectors
-                        tags.clone(),
-                        cancel_tripwire.clone(),
-                    )?;
-
-                    #[cfg(target_arch = "wasm32")]
-                    let mut stream = llm_runtime.stream_function_impl(
-                        fn_name.clone(),
-                        &llm_params,
-                        tracer,
-                        runtime_ctx,
-                        vec![], // collectors
-                        tags.clone(),
-                        cancel_tripwire.clone(),
-                    )?;
-
-                    // Fire stream start event
-                    {
-                        let mut handler = emit_handler.lock().unwrap();
-                        handler(baml_compiler::emit::EmitEvent::new_stream_start(
-                            emit_ctx.variable_name.clone(),
-                            emit_ctx.stream_id.clone(),
-                            parent_fn.clone(),
-                        ));
-                    }
-
-                    // Create a callback to fire emit events for each chunk
-                    let variable_name = emit_ctx.variable_name.clone();
-                    let stream_id = emit_ctx.stream_id.clone();
-                    let emit_handler_for_stream: Arc<
-                        Mutex<Box<dyn FnMut(baml_compiler::emit::EmitEvent) + Send>>,
-                    > = Arc::clone(&emit_handler);
-
-                    let parent_fn_for_stream = parent_fn.clone();
-                    let on_event = move |event: crate::FunctionResult| {
-                        if let Some(parsed) = event.parsed().as_ref() {
-                            if let Ok(response_value) = parsed.as_ref() {
-                                // Convert ResponseBamlValue to BamlValueWithMeta<EmitValueMetadata>
-                                let baml_value_with_emit_meta =
-                                    response_value.0.clone().map_meta(|meta| {
-                                        baml_compiler::emit::EmitValueMetadata {
-                                            // Constraints come from the TypeIR, not from the flags
-                                            // Flags only contain ConstraintResults (the evaluation results)
-                                            constraints: vec![],
-                                            response_checks: meta.1.clone(),
-                                            completion: meta.2.clone(),
-                                            r#type: meta.3.clone(),
-                                        }
-                                    });
-
-                                let mut handler = emit_handler_for_stream.lock().unwrap();
-                                handler(baml_compiler::emit::EmitEvent::new_stream_update(
-                                    variable_name.clone(),
-                                    stream_id.clone(),
-                                    baml_value_with_emit_meta,
-                                    parent_fn_for_stream.clone(),
-                                ));
-                            }
-                        }
-                    };
-
-                    // Stream the LLM response with event callback
-                    let (result, _call_id) = stream
-                        .run(
-                            None::<fn()>,
-                            Some(on_event),
-                            &ctx,
+                        // Create RuntimeContext from RuntimeContextManager
+                        let runtime_ctx = ctx.create_ctx(
                             tb.as_ref(),
                             cb.as_ref(),
-                            env_vars,
-                        )
-                        .await;
+                            env_vars.clone(),
+                            ctx.call_id_stack(true).unwrap_or_default(),
+                        )?;
 
-                    // Fire stream end event
-                    {
-                        let mut handler = emit_handler.lock().unwrap();
-                        handler(baml_compiler::emit::EmitEvent::new_stream_end(
-                            emit_ctx.variable_name.clone(),
-                            emit_ctx.stream_id.clone(),
-                            parent_fn.clone(),
-                        ));
-                    }
-
-                    // Convert result to BamlValueWithMeta
-                    match result {
-                        Ok(function_result) => {
-                            let baml_value = function_result
-                                .parsed()
-                                .as_ref()
-                                .unwrap()
-                                .as_ref()
-                                .unwrap()
-                                .clone()
-                                .0
-                                .value();
-
-                            Ok(baml_value_to_baml_value_with_meta(baml_value))
-                        }
-                        Err(e) => Err(e),
-                    }
-                } else {
-                    // No emit context - use simple call_function (non-streaming)
-                    let (result, _call_id) = llm_runtime
-                        .call_function(
-                            fn_name,
+                        #[cfg(not(target_arch = "wasm32"))]
+                        let mut stream = llm_runtime.stream_function_impl(
+                            fn_name.clone(),
                             &llm_params,
-                            &ctx,
-                            tb.as_ref(),
-                            cb.as_ref(),
-                            Some(vec![]),
+                            tracer,
+                            runtime_ctx,
+                            tokio_rt,
+                            vec![], // collectors
                             tags.clone(),
-                            env_vars,
-                            cancel_tripwire,
-                        )
-                        .await;
+                            cancel_tripwire.clone(),
+                        )?;
 
-                    match result {
-                        Ok(function_result) => {
-                            let baml_value = function_result
-                                .parsed()
-                                .as_ref()
-                                .unwrap()
-                                .as_ref()
-                                .unwrap()
-                                .clone()
-                                .0
-                                .value();
+                        #[cfg(target_arch = "wasm32")]
+                        let mut stream = llm_runtime.stream_function_impl(
+                            fn_name.clone(),
+                            &llm_params,
+                            tracer,
+                            runtime_ctx,
+                            vec![], // collectors
+                            tags.clone(),
+                            cancel_tripwire.clone(),
+                        )?;
 
-                            Ok(baml_value_to_baml_value_with_meta(baml_value))
+                        // Fire stream start notification
+                        {
+                            let mut handler = watch_handler.lock().unwrap();
+                            handler(baml_compiler::watch::WatchNotification::new_stream_start(
+                                watch_ctx.variable_name.clone(),
+                                watch_ctx.stream_id.clone(),
+                                parent_fn.clone(),
+                            ));
                         }
-                        Err(e) => Err(e),
+
+                        // Create a callback to fire watch notifications for each chunk
+                        let variable_name = watch_ctx.variable_name.clone();
+                        let stream_id = watch_ctx.stream_id.clone();
+                        let watch_handler_for_stream: Arc<
+                            Mutex<Box<dyn FnMut(baml_compiler::watch::WatchNotification) + Send>>,
+                        > = Arc::clone(&watch_handler);
+
+                        let parent_fn_for_stream = parent_fn.clone();
+                        let on_event = move |event: crate::FunctionResult| {
+                            if let Some(parsed) = event.parsed().as_ref() {
+                                if let Ok(response_value) = parsed.as_ref() {
+                                    // Convert ResponseBamlValue to BamlValueWithMeta<WatchValueMetadata>
+                                    let baml_value_with_watch_meta =
+                                        response_value.0.clone().map_meta(|meta| {
+                                            baml_compiler::watch::WatchValueMetadata {
+                                                // Constraints come from the TypeIR, not from the flags
+                                                // Flags only contain ConstraintResults (the evaluation results)
+                                                constraints: vec![],
+                                                response_checks: meta.1.clone(),
+                                                completion: meta.2.clone(),
+                                                r#type: meta.3.clone(),
+                                            }
+                                        });
+
+                                    let mut handler = watch_handler_for_stream.lock().unwrap();
+                                    handler(
+                                        baml_compiler::watch::WatchNotification::new_stream_update(
+                                            variable_name.clone(),
+                                            stream_id.clone(),
+                                            baml_value_with_watch_meta,
+                                            parent_fn_for_stream.clone(),
+                                        ),
+                                    );
+                                }
+                            }
+                        };
+
+                        // Stream the LLM response with event callback
+                        let (result, _call_id) = stream
+                            .run(
+                                None::<fn()>,
+                                Some(on_event),
+                                &ctx,
+                                tb.as_ref(),
+                                cb.as_ref(),
+                                env_vars,
+                            )
+                            .await;
+
+                        // Fire stream end notification
+                        {
+                            let mut handler = watch_handler.lock().unwrap();
+                            handler(baml_compiler::watch::WatchNotification::new_stream_end(
+                                watch_ctx.variable_name.clone(),
+                                watch_ctx.stream_id.clone(),
+                                parent_fn.clone(),
+                            ));
+                        }
+
+                        // Convert result to BamlValueWithMeta
+                        match result {
+                            Ok(function_result) => {
+                                let baml_value = function_result
+                                    .parsed()
+                                    .as_ref()
+                                    .unwrap()
+                                    .as_ref()
+                                    .unwrap()
+                                    .clone()
+                                    .0
+                                    .value();
+
+                                Ok(baml_value_to_baml_value_with_meta(baml_value))
+                            }
+                            Err(e) => Err(e),
+                        }
+                    } else {
+                        // No emit context - use simple call_function (non-streaming)
+                        let (result, _call_id) = llm_runtime
+                            .call_function(
+                                fn_name,
+                                &llm_params,
+                                &ctx,
+                                tb.as_ref(),
+                                cb.as_ref(),
+                                Some(vec![]),
+                                tags.clone(),
+                                env_vars,
+                                cancel_tripwire,
+                            )
+                            .await;
+
+                        match result {
+                            Ok(function_result) => {
+                                let baml_value = function_result
+                                    .parsed()
+                                    .as_ref()
+                                    .unwrap()
+                                    .as_ref()
+                                    .unwrap()
+                                    .clone()
+                                    .0
+                                    .value();
+
+                                Ok(baml_value_to_baml_value_with_meta(baml_value))
+                            }
+                            Err(e) => Err(e),
+                        }
                     }
                 }
-            }
-        };
+            };
 
         // Choose execution strategy based on function body structure
         let function_expr =
@@ -473,12 +477,13 @@ impl BamlAsyncInterpreterRuntime {
                 )))
             };
 
-        // Create emit event handler that reads from the shared handler
-        let emit_handler_for_interp = Arc::clone(&emit_handler_shared);
-        let mut emit_event_handler = move |event: baml_compiler::emit::EmitEvent| {
-            let mut handler = emit_handler_for_interp.lock().unwrap();
-            handler(event);
-        };
+        // Create watch notification handler that reads from the shared handler
+        let watch_handler_for_interp = Arc::clone(&watch_handler_shared);
+        let mut watch_notification_handler =
+            move |notification: baml_compiler::watch::WatchNotification| {
+                let mut handler = watch_handler_for_interp.lock().unwrap();
+                handler(notification);
+            };
 
         // Execute the interpreter
         let result = interpret_thir(
@@ -486,7 +491,7 @@ impl BamlAsyncInterpreterRuntime {
             self.thir_program.clone(),
             function_expr,
             llm_handler,
-            emit_event_handler,
+            watch_notification_handler,
             extra_bindings,
             env_vars,
         )
@@ -526,7 +531,7 @@ impl BamlAsyncInterpreterRuntime {
         env_vars: HashMap<String, String>,
         cancel_tripwire: Arc<TripWire>,
         tags: Option<&HashMap<String, String>>,
-        emit_handler: Option<impl FnMut(baml_compiler::emit::EmitEvent) + Send + 'static>,
+        watch_handler: Option<impl FnMut(baml_compiler::watch::WatchNotification) + Send + 'static>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         self.async_runtime.block_on(self.call_function(
             function_name,
@@ -538,7 +543,7 @@ impl BamlAsyncInterpreterRuntime {
             env_vars,
             tags,
             cancel_tripwire,
-            emit_handler,
+            watch_handler,
         ))
     }
 
