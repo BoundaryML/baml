@@ -1,4 +1,4 @@
-use baml_vm::{BamlVmProgram, EvalStack, Frame, ObjectIndex, StackIndex, Value, Vm};
+use baml_vm::{watch::Watch, BamlVmProgram, EvalStack, Frame, ObjectIndex, StackIndex, Value, Vm};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 
 struct Program {
@@ -35,6 +35,7 @@ fn bootstrap_vm(input: Program) -> Vm {
         objects,
         globals,
         env_vars: Default::default(),
+        watch: Watch::new(),
     }
 }
 

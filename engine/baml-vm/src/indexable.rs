@@ -32,7 +32,7 @@ pub struct GlobalKind;
 pub struct ObjectKind;
 
 /// Generic index type that forces a subtype during compilation.
-#[derive(Clone, Copy, Debug, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub struct Index<K>(pub(crate) usize, PhantomData<K>);
 
 impl<K> Index<K> {
@@ -81,6 +81,8 @@ impl<K> PartialEq for Index<K> {
         self.0 == other.0
     }
 }
+
+impl<K> Eq for Index<K> {}
 
 impl<K> std::hash::Hash for Index<K> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

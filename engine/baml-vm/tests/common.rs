@@ -3,9 +3,10 @@
 use baml_compiler::test::ast;
 use baml_types::{BamlMap, BamlMedia};
 use baml_vm::{
-    errors::VmError, BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool,
-    Instruction, Object as VmObject, ObjectIndex, ObjectPool, StackIndex, Value as VmValue, Vm,
-    VmExecState,
+    errors::VmError,
+    watch::{self, Watch},
+    BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool, Instruction,
+    Object as VmObject, ObjectIndex, ObjectPool, StackIndex, Value as VmValue, Vm, VmExecState,
 };
 use indexmap::IndexMap;
 
@@ -99,6 +100,13 @@ impl Object {
             _ => anyhow::bail!("Unsupported object type for testing: {:?}", obj),
         }
     }
+
+    pub fn instance(class: &str, fields: IndexMap<&str, Value>) -> Self {
+        Object::Instance(Instance {
+            class: class.to_string(),
+            fields: Instance::fields(fields),
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -119,6 +127,37 @@ pub struct Variant {
     pub variant: String,
 }
 
+/// Test-friendly representation of NodeId that uses variable names and test Objects.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Notification {
+    Channel(String),
+    Object(Object),
+}
+
+impl Notification {
+    pub fn on_channel(name: &str) -> Self {
+        Notification::Channel(name.to_string())
+    }
+}
+
+impl Notification {
+    /// Convert from VM NodeId to test Node by resolving indices to names/objects.
+    pub fn from_node_id(node_id: &watch::NodeId, vm: &Vm) -> anyhow::Result<Self> {
+        match node_id {
+            watch::NodeId::LocalVar(stack_index) => vm
+                .watch
+                .root_state(*node_id)
+                .map(|state| Notification::Channel(state.channel.clone()))
+                .ok_or_else(|| {
+                    anyhow::anyhow!("No root state found for local variable: {:?}", stack_index)
+                }),
+            watch::NodeId::HeapObject(obj_index) => Ok(Notification::Object(
+                Object::from_vm_object(*obj_index, vm)?,
+            )),
+        }
+    }
+}
+
 /// Enhanced test execution state that supports TestValue comparisons.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExecState {
@@ -128,6 +167,8 @@ pub enum ExecState {
     ScheduleFuture(Object),
     /// VM has completed the execution with a test-friendly value.
     Complete(Value),
+
+    Emit(Vec<Notification>),
 }
 
 impl ExecState {
@@ -140,6 +181,13 @@ impl ExecState {
             )),
             VmExecState::Complete(value) => {
                 Value::from_vm_value(&value, vm).map(ExecState::Complete)
+            }
+            VmExecState::Notify(roots) => {
+                let nodes = roots
+                    .iter()
+                    .map(|node_id| Notification::from_node_id(node_id, vm))
+                    .collect::<anyhow::Result<Vec<_>>>()?;
+                Ok(ExecState::Emit(nodes))
             }
         }
     }
@@ -216,6 +264,101 @@ pub fn assert_vm_executes_with_inspection(
     Ok(())
 }
 
+/// Collects all VM execution states by repeatedly calling exec() until completion.
+///
+/// This is useful for testing scenarios where you need to observe all intermediate
+/// states during VM execution, such as Emit states, ScheduleFuture states, etc.
+///
+/// Returns a tuple of (Vm, Vec<ExecState>) where the vector contains all states
+/// encountered during execution, including the final Complete state.
+pub fn collect_vm_exec_states(
+    source: &'static str,
+    function: &str,
+) -> anyhow::Result<(Vm, Vec<ExecState>)> {
+    let ast = ast(source)?;
+    let BamlVmProgram {
+        objects,
+        globals,
+        resolved_function_names,
+        resolved_enums_names: _,
+        resolved_class_names: _,
+    } = baml_compiler::compile(&ast)?;
+    let (target_function_index, _) = resolved_function_names[function];
+    let mut vm = Vm {
+        frames: vec![Frame {
+            function: target_function_index,
+            instruction_ptr: 0,
+            locals_offset: StackIndex::from_raw(0),
+        }],
+        stack: EvalStack::from_vec(vec![VmValue::Object(target_function_index)]),
+        runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
+        objects,
+        globals,
+        env_vars: Default::default(),
+        watch: Watch::new(),
+        watched_vars: Default::default(),
+    };
+
+    let mut states = Vec::new();
+
+    loop {
+        let result = vm.exec()?;
+
+        // Check if this is a Complete state before converting
+        let is_complete = matches!(result, VmExecState::Complete(_));
+
+        let test_state = ExecState::from_vm_exec_state(result, &vm)?;
+        states.push(test_state);
+
+        if is_complete {
+            break;
+        }
+    }
+
+    Ok((vm, states))
+}
+
+/// Helper struct for testing VM execution with expected Emit states.
+pub type EmitProgram = ProgramInput<Vec<Vec<Notification>>>;
+
+/// Assert that a VM program emits the expected sequence of emit states.
+///
+/// This function drives the VM by repeatedly calling exec() and collects all states.
+/// It then filters for Emit states and compares them against the expected sequence.
+#[track_caller]
+pub fn assert_vm_emits(input: EmitProgram) -> anyhow::Result<()> {
+    assert_vm_emits_with_inspection(input, |_vm, _states| Ok(()))
+}
+
+/// Assert that a VM program emits the expected sequence of emit states, with custom inspection.
+#[track_caller]
+pub fn assert_vm_emits_with_inspection(
+    input: EmitProgram,
+    inspect: impl FnOnce(&Vm, &[ExecState]) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let (vm, states) = collect_vm_exec_states(input.source, input.function)?;
+
+    // Extract only the Emit states
+    let emit_states: Vec<Vec<Notification>> = states
+        .iter()
+        .filter_map(|state| match state {
+            ExecState::Emit(roots) => Some(roots.clone()),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        emit_states, input.expected,
+        "VM emit states mismatch for function '{}'",
+        input.function
+    );
+
+    // Run custom inspection
+    inspect(&vm, &states)?;
+
+    Ok(())
+}
+
 fn setup_and_exec_program(
     source: &'static str,
     function: &str,
@@ -240,6 +383,8 @@ fn setup_and_exec_program(
         objects,
         globals,
         env_vars: Default::default(),
+        watch: Watch::new(),
+        watched_vars: Default::default(),
     };
     let result = vm.exec();
     Ok((vm, result))
@@ -298,6 +443,8 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         objects: ObjectPool::from_vec(objects),
         globals: GlobalPool::from_vec(globals),
         env_vars: Default::default(),
+        watch: Watch::new(),
+        watched_vars: Default::default(),
     };
 
     let result = vm.exec()?;
