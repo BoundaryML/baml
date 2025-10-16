@@ -6237,9 +6237,9 @@ export class HttpRequest {
     }
   }
   
-  SimpleEmitWithFilter(
+  SimpleWatchWithFilter(
       
-      __baml_options__?: BamlCallOptions<events.SimpleEmitWithFilterEventCollector>
+      __baml_options__?: BamlCallOptions<events.SimpleWatchWithFilterEventCollector>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6247,7 +6247,7 @@ export class HttpRequest {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
-        "SimpleEmitWithFilter",
+        "SimpleWatchWithFilter",
         {
           
         },
@@ -6362,9 +6362,9 @@ export class HttpRequest {
     }
   }
   
-  WorkflowEmit(
+  WorkflowWatch(
       
-      __baml_options__?: BamlCallOptions<events.WorkflowEmitEventCollector>
+      __baml_options__?: BamlCallOptions<events.WorkflowWatchEventCollector>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6372,7 +6372,7 @@ export class HttpRequest {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
-        "WorkflowEmit",
+        "WorkflowWatch",
         {
           
         },
@@ -6387,9 +6387,9 @@ export class HttpRequest {
     }
   }
   
-  WorkflowEmitChild(
+  WorkflowWatchChild(
       
-      __baml_options__?: BamlCallOptions<events.WorkflowEmitChildEventCollector>
+      __baml_options__?: BamlCallOptions<events.WorkflowWatchChildEventCollector>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6397,7 +6397,7 @@ export class HttpRequest {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
-        "WorkflowEmitChild",
+        "WorkflowWatchChild",
         {
           
         },
@@ -6412,9 +6412,9 @@ export class HttpRequest {
     }
   }
   
-  WorkflowEmitWithFilter(
+  WorkflowWatchWithFilter(
       
-      __baml_options__?: BamlCallOptions<events.WorkflowEmitWithFilterEventCollector>
+      __baml_options__?: BamlCallOptions<events.WorkflowWatchWithFilterEventCollector>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6422,7 +6422,7 @@ export class HttpRequest {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
-        "WorkflowEmitWithFilter",
+        "WorkflowWatchWithFilter",
         {
           
         },
@@ -12643,9 +12643,9 @@ export class HttpStreamRequest {
     }
   }
   
-  SimpleEmitWithFilter(
+  SimpleWatchWithFilter(
       
-      __baml_options__?: BamlCallOptions<events.SimpleEmitWithFilterEventCollector>
+      __baml_options__?: BamlCallOptions<events.SimpleWatchWithFilterEventCollector>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12653,7 +12653,7 @@ export class HttpStreamRequest {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
-        "SimpleEmitWithFilter",
+        "SimpleWatchWithFilter",
         {
           
         },
@@ -12768,9 +12768,9 @@ export class HttpStreamRequest {
     }
   }
   
-  WorkflowEmit(
+  WorkflowWatch(
       
-      __baml_options__?: BamlCallOptions<events.WorkflowEmitEventCollector>
+      __baml_options__?: BamlCallOptions<events.WorkflowWatchEventCollector>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12778,7 +12778,7 @@ export class HttpStreamRequest {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
-        "WorkflowEmit",
+        "WorkflowWatch",
         {
           
         },
@@ -12793,9 +12793,9 @@ export class HttpStreamRequest {
     }
   }
   
-  WorkflowEmitChild(
+  WorkflowWatchChild(
       
-      __baml_options__?: BamlCallOptions<events.WorkflowEmitChildEventCollector>
+      __baml_options__?: BamlCallOptions<events.WorkflowWatchChildEventCollector>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12803,7 +12803,7 @@ export class HttpStreamRequest {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
-        "WorkflowEmitChild",
+        "WorkflowWatchChild",
         {
           
         },
@@ -12818,9 +12818,9 @@ export class HttpStreamRequest {
     }
   }
   
-  WorkflowEmitWithFilter(
+  WorkflowWatchWithFilter(
       
-      __baml_options__?: BamlCallOptions<events.WorkflowEmitWithFilterEventCollector>
+      __baml_options__?: BamlCallOptions<events.WorkflowWatchWithFilterEventCollector>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12828,7 +12828,7 @@ export class HttpStreamRequest {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
-        "WorkflowEmitWithFilter",
+        "WorkflowWatchWithFilter",
         {
           
         },

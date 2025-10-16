@@ -1,27 +1,27 @@
-mod emit_event;
-/// Utilities for analyzing the emit variables and their dependencies.
-pub mod emit_options;
+mod watch_event;
+/// Utilities for analyzing the watch variables and their dependencies.
+pub mod watch_options;
 
 use std::collections::HashSet;
 
 use baml_types::{ir_type::UnionConstructor, BamlMap, TypeIR};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
-pub use crate::emit::{
-    emit_event::{EmitBamlValue, EmitEvent, EmitValueMetadata},
-    emit_options::{EmitSpec, EmitWhen},
-};
 use crate::thir::{self, typecheck::TypeCompatibility, ClassConstructorField, ExprMetadata, THir};
+pub use crate::watch::{
+    watch_event::{WatchBamlValue, WatchNotification, WatchValueMetadata},
+    watch_options::{WatchSpec, WatchWhen},
+};
 
-/// The result of analyzing the emit variables in a BAML program.
-/// See `EmitChannels::analyze_program` for more details.
+/// The result of analyzing the watch variables in a BAML program.
+/// See `WatchChannels::analyze_program` for more details.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EmitChannels {
+pub struct WatchChannels {
     pub functions_channels: BamlMap<String, FunctionChannels>,
 }
 
-impl EmitChannels {
-    /// Walk a BAML program, inferring the emit channels required for each function.
+impl WatchChannels {
+    /// Walk a BAML program, inferring the watch channels required for each function.
     /// Throws diagnostics errors when channel invariants are violated, but makes
     /// a best-effort attempt to continue in the face of errors (the result will be
     /// an incomplete listing of channels).
@@ -54,7 +54,7 @@ impl EmitChannels {
                 )
             })
             .collect();
-        EmitChannels { functions_channels }
+        WatchChannels { functions_channels }
     }
 
     fn convert_function(
@@ -65,7 +65,7 @@ impl EmitChannels {
         let mut channels: HashSet<(ChannelFQN, TypeIR)> = HashSet::new();
 
         let FunctionMetadata {
-            emit_vars,
+            watch_vars,
             markdown_headers,
             ..
         } = &function_metadatas[fn_name];
@@ -81,12 +81,12 @@ impl EmitChannels {
             )
         });
         channels.extend(md_channels);
-        let var_channels = emit_vars.into_iter().map(|(_, (emit_spec, chan_type))| {
+        let var_channels = watch_vars.into_iter().map(|(_, (watch_spec, chan_type))| {
             (
                 ChannelFQN {
                     namespace: None,
                     r#type: ChannelType::Variable,
-                    name: emit_spec.name.clone(),
+                    name: watch_spec.name.clone(),
                 },
                 chan_type.clone(),
             )
@@ -98,7 +98,7 @@ impl EmitChannels {
         for subfunction in dependencies {
             if let Some(FunctionMetadata {
                 markdown_headers,
-                emit_vars,
+                watch_vars,
                 ..
             }) = &function_metadatas.get(&subfunction)
             {
@@ -113,16 +113,17 @@ impl EmitChannels {
                     )
                 });
                 channels.extend(sub_md_channels);
-                let sub_var_channels = emit_vars.into_iter().map(|(_, (emit_spec, chan_type))| {
-                    (
-                        ChannelFQN {
-                            namespace: Some(subfunction.clone()),
-                            r#type: ChannelType::Variable,
-                            name: emit_spec.name.clone(),
-                        },
-                        chan_type.clone(),
-                    )
-                });
+                let sub_var_channels =
+                    watch_vars.into_iter().map(|(_, (watch_spec, chan_type))| {
+                        (
+                            ChannelFQN {
+                                namespace: Some(subfunction.clone()),
+                                r#type: ChannelType::Variable,
+                                name: watch_spec.name.clone(),
+                            },
+                            chan_type.clone(),
+                        )
+                    });
                 channels.extend(sub_var_channels);
             }
         }
@@ -136,7 +137,7 @@ pub struct FunctionChannels {
     pub channels: HashSet<(ChannelFQN, TypeIR)>,
 }
 
-/// Fully qualified name of an emit channel.
+/// Fully qualified name of a watch channel.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ChannelFQN {
     /// The terminal name of the channel, derived directly from the variable,
@@ -144,7 +145,7 @@ pub struct ChannelFQN {
     pub name: String,
 
     /// Whether the channel is used for markdown header events or variable
-    /// emit events.
+    /// watch notifications.
     pub r#type: ChannelType,
 
     /// For blocks and variables of subfunctions, the name of the subfunction.
@@ -158,23 +159,23 @@ pub enum ChannelType {
 }
 
 /// A helper struct. When we analyze a function, we collect this data about the function.
-/// The fields are not transitive - they only include functions, emit vars and headers
+/// The fields are not transitive - they only include functions, watch vars and headers
 /// used **directly** by the function.
 #[derive(Debug)]
 struct FunctionMetadata {
     subfunctions: HashSet<String>,
-    emit_vars: BamlMap<String, (EmitSpec, TypeIR)>,
+    watch_vars: BamlMap<String, (WatchSpec, TypeIR)>,
     markdown_headers: HashSet<String>,
 }
 
 impl FunctionMetadata {
-    /// Add a new emit variable to the function metadata.
+    /// Add a new watch variable to the function metadata.
     /// If a variable with the same name already exists,
     /// use the existing channel and augment its type as
     /// needed (combine the existing and the new types into
     /// a union unless they are already subtypes).
-    pub fn push_emit_var(&mut self, name: String, spec: EmitSpec, ty: TypeIR) {
-        self.emit_vars
+    pub fn push_watch_var(&mut self, name: String, spec: WatchSpec, ty: TypeIR) {
+        self.watch_vars
             .entry(name)
             .and_modify(|(_existing_spec, existing_type)| {
                 if ty.is_subtype(existing_type) {
@@ -198,7 +199,7 @@ impl FunctionMetadata {
     ) -> Self {
         let mut metadata = FunctionMetadata {
             subfunctions: HashSet::new(),
-            emit_vars: BamlMap::new(),
+            watch_vars: BamlMap::new(),
             markdown_headers: HashSet::new(),
         };
 
@@ -218,12 +219,12 @@ impl FunctionMetadata {
     ) {
         match statement {
             thir::Statement::Let {
-                value, emit, name, ..
+                value, watch, name, ..
             } => {
-                if let Some(spec) = emit {
+                if let Some(spec) = watch {
                     match &value.meta().1 {
                         Some(var_type) => {
-                            self.push_emit_var(spec.name.clone(), spec.clone(), var_type.clone());
+                            self.push_watch_var(spec.name.clone(), spec.clone(), var_type.clone());
                         }
                         None => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
@@ -246,12 +247,12 @@ impl FunctionMetadata {
                 self.analyze_expression(value, diagnostics);
             }
             thir::Statement::DeclareAndAssign {
-                value, emit, name, ..
+                value, watch, name, ..
             } => {
-                if let Some(spec) = emit {
+                if let Some(spec) = watch {
                     match &value.meta().1 {
                         Some(var_type) => {
-                            self.push_emit_var(spec.name.clone(), spec.clone(), var_type.clone());
+                            self.push_watch_var(spec.name.clone(), spec.clone(), var_type.clone());
                         }
                         None => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
@@ -467,19 +468,19 @@ mod tests {
     }
 
     #[test]
-    fn test_emit() {
+    fn test_watch() {
         let hir = Hir::from_source(
             r#"
             function A() -> int {
-                let a_1 = 1 @emit();
-                let a_2 = true @emit(name=a_2_renamed);
+                let a_1 = 1 @watch();
+                let a_2 = true @watch(name=a_2_renamed);
                 B();
                 1
             }
             function B() -> int {
                 C();
                 if (true) {
-                  let b_1 = "hey" @emit();
+                  let b_1 = "hey" @watch();
                   A();
                 } else {
                   B();
@@ -494,10 +495,10 @@ mod tests {
         let mut diagnostics = Diagnostics::new(PathBuf::from("test"));
         let thir = typecheck(&hir, &mut diagnostics);
 
-        let emit_channels = EmitChannels::analyze_program(&thir, &mut diagnostics);
-        let a_channels = emit_channels.functions_channels.get("A").unwrap();
-        let b_channels = emit_channels.functions_channels.get("B").unwrap();
-        let c_channels = emit_channels.functions_channels.get("C").unwrap();
+        let watch_channels = WatchChannels::analyze_program(&thir, &mut diagnostics);
+        let a_channels = watch_channels.functions_channels.get("A").unwrap();
+        let b_channels = watch_channels.functions_channels.get("B").unwrap();
+        let c_channels = watch_channels.functions_channels.get("C").unwrap();
 
         // C() has no channels.
         assert_eq!(c_channels.channels.len(), 0);
@@ -545,16 +546,16 @@ mod tests {
     }
 
     #[test]
-    fn test_emit_channel_sharing() {
+    fn test_watch_channel_sharing() {
         let hir = Hir::from_source(
             r#"
                 function A() -> int {
-                    let a_1: int = 1 @emit(name=a);
-                    let a_2: string = "hi" @emit(name=a);
-                    let b_1: int | bool = true @emit(name=b);
-                    let b_2: int = 3 @emit(name=b);
-                    let c_1: int = 1 @emit(name=c);
-                    let c_2: int | bool = 3 @emit(name=c);
+                    let a_1: int = 1 @watch(name=a);
+                    let a_2: string = "hi" @watch(name=a);
+                    let b_1: int | bool = true @watch(name=b);
+                    let b_2: int = 3 @watch(name=b);
+                    let c_1: int = 1 @watch(name=c);
+                    let c_2: int | bool = 3 @watch(name=c);
                     1
                 }
             "#,
@@ -562,8 +563,8 @@ mod tests {
         let mut diagnostics = Diagnostics::new(PathBuf::from("test"));
         let thir = typecheck(&hir, &mut diagnostics);
 
-        let emit_channels = EmitChannels::analyze_program(&thir, &mut diagnostics);
-        let mut a_channels = emit_channels
+        let watch_channels = WatchChannels::analyze_program(&thir, &mut diagnostics);
+        let mut a_channels = watch_channels
             .functions_channels
             .get("A")
             .unwrap()

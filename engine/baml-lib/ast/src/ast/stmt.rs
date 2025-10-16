@@ -11,24 +11,24 @@ pub struct LetStmt {
     pub expr: Expression,
     pub span: Span,
     pub annotations: Vec<std::sync::Arc<Header>>,
-    pub emit: Option<EmitDecorator>,
+    pub watch: Option<WatchDecorator>,
 }
 
 #[derive(Debug, Clone)]
-pub struct EmitDecorator {
-    pub arguments: Vec<EmitArgument>,
+pub struct WatchDecorator {
+    pub arguments: Vec<WatchArgument>,
     pub span: Span,
 }
 
 #[derive(Debug, Clone)]
-pub struct EmitArgument {
+pub struct WatchArgument {
     pub name: Identifier,
     pub value: Expression,
     pub span: Span,
 }
 
-impl EmitDecorator {
-    pub fn assert_eq_up_to_span(&self, other: &EmitDecorator) {
+impl WatchDecorator {
+    pub fn assert_eq_up_to_span(&self, other: &WatchDecorator) {
         assert_eq!(self.arguments.len(), other.arguments.len());
         for (left, right) in self.arguments.iter().zip(&other.arguments) {
             left.assert_eq_up_to_span(right);
@@ -36,14 +36,14 @@ impl EmitDecorator {
     }
 }
 
-impl EmitArgument {
-    pub fn assert_eq_up_to_span(&self, other: &EmitArgument) {
+impl WatchArgument {
+    pub fn assert_eq_up_to_span(&self, other: &WatchArgument) {
         self.name.assert_eq_up_to_span(&other.name);
         self.value.assert_eq_up_to_span(&other.value);
     }
 }
 
-impl fmt::Display for EmitDecorator {
+impl fmt::Display for WatchDecorator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("@emit")?;
         if !self.arguments.is_empty() {
@@ -60,7 +60,7 @@ impl fmt::Display for EmitDecorator {
     }
 }
 
-impl fmt::Display for EmitArgument {
+impl fmt::Display for WatchArgument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} = {}", self.name, self.value)
     }
@@ -204,8 +204,8 @@ impl fmt::Display for Stmt {
                 } else {
                     write!(f, "let {} = {}", stmt.identifier, stmt.expr)?;
                 }
-                if let Some(emit) = &stmt.emit {
-                    write!(f, " {}", emit)?;
+                if let Some(watch) = &stmt.watch {
+                    write!(f, " {}", watch)?;
                 }
                 Ok(())
             }
@@ -276,7 +276,7 @@ impl Stmt {
                     _ => panic!("Let annotations do not match up to span"),
                 }
                 stmt1.expr.assert_eq_up_to_span(&stmt2.expr);
-                assert_opt(&stmt1.emit, &stmt2.emit, |a, b| a.assert_eq_up_to_span(b));
+                assert_opt(&stmt1.watch, &stmt2.watch, |a, b| a.assert_eq_up_to_span(b));
             }
             (Stmt::ForLoop(stmt1), Stmt::ForLoop(stmt2)) => {
                 stmt1.identifier.assert_eq_up_to_span(&stmt2.identifier);

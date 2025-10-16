@@ -3,9 +3,9 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use anyhow::{anyhow, Result};
 use askama::Template;
 use baml_compiler::{
-    emit::{ChannelType, EmitChannels},
     hir::Hir,
     thir::typecheck::typecheck,
+    watch::{ChannelType, WatchChannels},
 };
 use dir_writer::GeneratorArgs;
 use internal_baml_core::{
@@ -21,7 +21,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct VarEventTs {
+pub struct VarNotificationTs {
     pub channel_name: String,
     pub method_suffix: String,
     pub value_type: String,
@@ -38,14 +38,14 @@ pub struct ChildCollectorTs {
 }
 
 #[derive(Debug, Clone)]
-pub struct EventCollectorTs {
+pub struct NotificationCollectorTs {
     pub baml_name: String,
     pub ts_name: String,
     pub interface_name: String,
     pub factory_name: String,
-    pub var_events: Vec<VarEventTs>,
+    pub var_notifications: Vec<VarNotificationTs>,
     pub child_collectors: Vec<ChildCollectorTs>,
-    pub has_var_events: bool,
+    pub has_var_notifications: bool,
     pub has_child_collectors: bool,
 }
 
@@ -66,11 +66,11 @@ impl CollectorBuilder {
         }
     }
 
-    fn into_event_collector(
+    fn into_notification_collector(
         self,
         pkg: &CurrentRenderPackage,
         function_name_map: &HashMap<String, String>,
-    ) -> Result<EventCollectorTs> {
+    ) -> Result<NotificationCollectorTs> {
         let ts_name = function_name_map
             .get(&self.function_name)
             .ok_or_else(|| {
@@ -82,14 +82,14 @@ impl CollectorBuilder {
             .clone();
 
         let mut used_var_suffixes: HashSet<String> = HashSet::new();
-        let mut var_events = Vec::new();
+        let mut var_notifications = Vec::new();
         for (channel_name, ty) in self.var_channels.iter() {
             let base = sanitize_identifier(channel_name);
             let method_suffix = make_unique(base, &mut used_var_suffixes);
             let non_streaming = ty.to_non_streaming_type(pkg.lookup());
             let ts_type = type_to_ts(&non_streaming, pkg.lookup());
             let stream_type = stream_type_to_ts(&ty.to_streaming_type(pkg.lookup()), pkg.lookup());
-            var_events.push(VarEventTs {
+            var_notifications.push(VarNotificationTs {
                 channel_name: channel_name.clone(),
                 method_suffix,
                 value_type: ts_type.serialize_type(pkg),
@@ -112,25 +112,25 @@ impl CollectorBuilder {
                 baml_name: child_name.clone(),
                 ts_name: child_ts_name.clone(),
                 property_name,
-                interface_name: event_interface_name(child_ts_name),
-                factory_name: event_factory_name(child_ts_name),
+                interface_name: notification_interface_name(child_ts_name),
+                factory_name: notification_factory_name(child_ts_name),
             });
         }
 
         child_collectors.sort_by(|a, b| a.ts_name.cmp(&b.ts_name));
-        var_events.sort_by(|a, b| a.channel_name.cmp(&b.channel_name));
+        var_notifications.sort_by(|a, b| a.channel_name.cmp(&b.channel_name));
 
-        let has_var_events = !var_events.is_empty();
+        let has_var_notifications = !var_notifications.is_empty();
         let has_child_collectors = !child_collectors.is_empty();
 
-        Ok(EventCollectorTs {
+        Ok(NotificationCollectorTs {
             baml_name: self.function_name,
             ts_name: ts_name.clone(),
-            interface_name: event_interface_name(&ts_name),
-            factory_name: event_factory_name(&ts_name),
-            var_events,
+            interface_name: notification_interface_name(&ts_name),
+            factory_name: notification_factory_name(&ts_name),
+            var_notifications,
             child_collectors,
-            has_var_events,
+            has_var_notifications,
             has_child_collectors,
         })
     }
@@ -140,7 +140,7 @@ pub fn build_event_collectors(
     args: &GeneratorArgs,
     pkg: &CurrentRenderPackage,
     function_name_map: &HashMap<String, String>,
-) -> Result<Vec<EventCollectorTs>> {
+) -> Result<Vec<NotificationCollectorTs>> {
     if args.inlined_file_map.is_empty() {
         return Ok(Vec::new());
     }
@@ -163,12 +163,12 @@ pub fn build_event_collectors(
     let mut type_diagnostics = Diagnostics::new(args.baml_src_dir.clone());
     let thir = typecheck(&hir, &mut type_diagnostics);
 
-    let mut emit_diagnostics = Diagnostics::new(args.baml_src_dir.clone());
-    let emit_channels = EmitChannels::analyze_program(&thir, &mut emit_diagnostics);
+    let mut watch_diagnostics = Diagnostics::new(args.baml_src_dir.clone());
+    let watch_channels = WatchChannels::analyze_program(&thir, &mut watch_diagnostics);
 
     let mut builders: HashMap<String, CollectorBuilder> = HashMap::new();
 
-    for (fn_name, channels) in emit_channels.functions_channels.iter() {
+    for (fn_name, channels) in watch_channels.functions_channels.iter() {
         if !function_name_map.contains_key(fn_name) {
             continue;
         }
@@ -220,7 +220,7 @@ pub fn build_event_collectors(
     let mut collectors = Vec::with_capacity(names.len());
     for name in names {
         if let Some(builder) = builders.remove(&name) {
-            collectors.push(builder.into_event_collector(pkg, function_name_map)?);
+            collectors.push(builder.into_notification_collector(pkg, function_name_map)?);
         }
     }
 
@@ -229,13 +229,13 @@ pub fn build_event_collectors(
 }
 
 #[derive(Template)]
-#[template(path = "events.ts.j2", escape = "none", ext = "txt")]
-struct EventsTemplate<'a> {
-    collectors: &'a [EventCollectorTs],
+#[template(path = "watchers.ts.j2", escape = "none", ext = "txt")]
+struct WatchersTemplate<'a> {
+    collectors: &'a [NotificationCollectorTs],
 }
 
-pub fn render_events(collectors: &[EventCollectorTs]) -> Result<String> {
-    Ok(EventsTemplate { collectors }.render()?)
+pub fn render_events(collectors: &[NotificationCollectorTs]) -> Result<String> {
+    Ok(WatchersTemplate { collectors }.render()?)
 }
 
 fn sanitize_identifier(input: &str) -> String {
@@ -273,11 +273,11 @@ fn make_unique(base: String, used: &mut HashSet<String>) -> String {
     candidate
 }
 
-fn event_interface_name(ts_name: &str) -> String {
+fn notification_interface_name(ts_name: &str) -> String {
     format!("{}EventCollector", to_pascal_case(ts_name))
 }
 
-fn event_factory_name(ts_name: &str) -> String {
+fn notification_factory_name(ts_name: &str) -> String {
     sanitize_identifier(ts_name)
 }
 

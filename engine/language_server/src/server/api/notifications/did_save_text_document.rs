@@ -164,6 +164,8 @@ pub(crate) fn send_generator_version(
                     "Failed to send baml_src_generator_version notification to IDE: {e}"
                 );
             });
+    } else {
+        tracing::info!("No version map available");
     }
 }
 

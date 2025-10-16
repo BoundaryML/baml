@@ -1,27 +1,27 @@
-# Main Function
+//# Main Function
 function NestedIfStatements() -> string {
-    ## If statement 1
+    //## If statement 1
     let e = if (true) {
 
-        ### If statement 2.1
+        //### If statement 2.1
         let z = if (true) {
-            ### If statement 3.1
+            //### If statement 3.1
             let a = if (true) {
-                ### True
+                //### True
                 12
             } else {
-                ### Third False
+                //### Third False
                 13
             };
 
             242
         } else {
-            ### If statement 3.2
+            //### If statement 3.2
             let a = if (true) {
-                ### True
+                //### True
                 12
             } else {
-                ### Third False
+                //### Third False
                 13
             };
             13
@@ -29,25 +29,25 @@ function NestedIfStatements() -> string {
 
         2
     } else {
-        ### If statement 2.2
+        //### If statement 2.2
         let z = if (true) {
-            ### If statement 3.1
+            //### If statement 3.1
             let a = if (true) {
-                ### True
+                //### True
                 12
             } else {
-                ### Third False
+                //### Third False
                 13
             };
 
             242
         } else {
-            ### If statement 3.2
+            //### If statement 3.2
             let a = if (true) {
-                ### True
+                //### True
                 12
             } else {
-                ### Third False
+                //### Third False
                 13
             };
             13

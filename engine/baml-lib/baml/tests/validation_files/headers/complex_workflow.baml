@@ -1,19 +1,19 @@
 // Complex expression function that calls LLM functions
 function ProcessVideo(transcript: string, title: string?) -> string {
-    # Main Processing Pipeline
+    //# Main Processing Pipeline
 
-    ## Test
+    //## Test
     let computed_title = if (!title) {
-        ## Generate Title
+        //## Generate Title
         GenerateTitle(transcript)
     } else {
         title
     };
 
-    ## Generate Summary
+    //## Generate Summary
     let summary = SummarizeVideo(transcript);
 
-    ## Create Final Output
+    //## Create Final Output
     computed_title + ": " + summary
 }
 

@@ -1,65 +1,65 @@
 
-# Main Function
+//# Main Function
 function ComplexHeaderTest() -> string {
-    # Initialization
+    //# Initialization
     let items = ["a", "b", "c"];
     let result = "";
 
-    ## Processing Loop
+    //## Processing Loop
     for (let item in items) {
 
-        # Markdown Header tester
+        //# Markdown Header tester
         let hello = "Hello";
 
-        ### Item Analysis
+        //### Item Analysis
         let processed = 2;
 
-        ### Validation
+        //### Validation
         let z = if (true) {
 
-            # Markdown Header tester in statement
+            //# Markdown Header tester in statement
             let hello = "Hello";
 
-            ### another header in the statement
+            //### another header in the statement
             let hello = "Hello";
 
-            ### True totally
+            //### True totally
             12
         } else {
-            ### False other branch
+            //### False other branch
             13
         };
 
-        ## very useful header
+        //## very useful header
         let hello2 = "Hello";
 
-        ### Result
+        //### Result
         result
     }
 
-    # Final Processing
+    //# Final Processing
     let final_result = 213;
 
-    # Return Result
+    //# Return Result
     final_result
 }
 
-# Loop Processing
+//# Loop Processing
 function ForLoopWithHeaders() -> int {
     let items = [1, 2, 3, 4, 5];
     let result = 0;
 
-    ## Main Loop
+    //## Main Loop
     for (let item in items) {
-        ### Item Processing
+        //### Item Processing
         let processed = item * 2;
 
-        ### Accumulation
+        //### Accumulation
         let result = result + processed;
 
         processed
     }
 
-    ## Final Result
+    //## Final Result
     result
 }

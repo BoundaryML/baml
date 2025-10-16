@@ -20,27 +20,27 @@ $ pnpm add @boundaryml/baml
 
 import { BamlStream } from "@boundaryml/baml"
 
-export interface BlockEvent {
+export interface BlockNotification {
   block_label: string
-  event_type: "enter" | "exit"
+  notification_type: "enter" | "exit"
 }
 
-export interface VarEvent<T> {
+export interface VarNotification<T> {
   variable_name: string
   value: T
   timestamp: string
   function_name: string
 }
 
-// Internal stream event from Rust FFI
+// Internal stream notification from Rust FFI
 interface InternalStreamEvent {
   streamId: string
-  eventType: "start" | "update" | "end"
+  notificationType: "start" | "update" | "end"
   value?: any
 }
 
-// Simple async iterable stream for emit events
-class EmitStream<PartialT, FinalT> implements BamlStream<PartialT, FinalT> {
+// Simple async iterable stream for watch notifications
+class NotificationStream<PartialT, FinalT> implements BamlStream<PartialT, FinalT> {
   private eventQueue: (PartialT | null)[] = []
   private isComplete = false
 
@@ -88,9 +88,9 @@ class EmitStream<PartialT, FinalT> implements BamlStream<PartialT, FinalT> {
   }
 }
 
-type BlockHandler = (event: BlockEvent) => void
-type VarHandler<T> = (event: VarEvent<T>) => void
-type StreamHandler<PartialT, FinalT> = (event: VarEvent<BamlStream<PartialT, FinalT>>) => void
+type BlockHandler = (event: BlockNotification) => void
+type VarHandler<T> = (event: VarNotification<T>) => void
+type StreamHandler<PartialT, FinalT> = (event: VarNotification<BamlStream<PartialT, FinalT>>) => void
 type InternalStreamHandler = (event: InternalStreamEvent) => void
 
 export interface InternalEventBindings {
@@ -120,18 +120,18 @@ export function AnotherTakedown(): AnotherTakedownEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -139,7 +139,7 @@ export function AnotherTakedown(): AnotherTakedownEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -183,7 +183,7 @@ export function AnotherTakedown(): AnotherTakedownEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -226,18 +226,18 @@ export function AssignElseIfExpr(): AssignElseIfExprEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -245,7 +245,7 @@ export function AssignElseIfExpr(): AssignElseIfExprEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -289,7 +289,7 @@ export function AssignElseIfExpr(): AssignElseIfExprEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -332,18 +332,18 @@ export function BoolToIntWithIfElse(): BoolToIntWithIfElseEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -351,7 +351,7 @@ export function BoolToIntWithIfElse(): BoolToIntWithIfElseEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -395,7 +395,7 @@ export function BoolToIntWithIfElse(): BoolToIntWithIfElseEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -438,18 +438,18 @@ export function BoolToIntWithIfElseCallingLlm(): BoolToIntWithIfElseCallingLlmEv
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -457,7 +457,7 @@ export function BoolToIntWithIfElseCallingLlm(): BoolToIntWithIfElseCallingLlmEv
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -501,7 +501,7 @@ export function BoolToIntWithIfElseCallingLlm(): BoolToIntWithIfElseCallingLlmEv
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -544,18 +544,18 @@ export function CallLlmDescribeImage(): CallLlmDescribeImageEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -563,7 +563,7 @@ export function CallLlmDescribeImage(): CallLlmDescribeImageEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -607,7 +607,7 @@ export function CallLlmDescribeImage(): CallLlmDescribeImageEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -650,18 +650,18 @@ export function CallReturnOne(): CallReturnOneEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -669,7 +669,7 @@ export function CallReturnOne(): CallReturnOneEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -713,7 +713,7 @@ export function CallReturnOne(): CallReturnOneEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -756,18 +756,18 @@ export function ChainedCalls(): ChainedCallsEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -775,7 +775,7 @@ export function ChainedCalls(): ChainedCallsEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -819,7 +819,7 @@ export function ChainedCalls(): ChainedCallsEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -862,18 +862,18 @@ export function EchoWorkflow(): EchoWorkflowEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -881,7 +881,7 @@ export function EchoWorkflow(): EchoWorkflowEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -925,7 +925,7 @@ export function EchoWorkflow(): EchoWorkflowEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -968,18 +968,18 @@ export function ExecFetchAs(): ExecFetchAsEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -987,7 +987,7 @@ export function ExecFetchAs(): ExecFetchAsEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -1031,7 +1031,7 @@ export function ExecFetchAs(): ExecFetchAsEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -1074,18 +1074,18 @@ export function HomeEnvVarIsEmpty(): HomeEnvVarIsEmptyEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -1093,7 +1093,7 @@ export function HomeEnvVarIsEmpty(): HomeEnvVarIsEmptyEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -1137,7 +1137,7 @@ export function HomeEnvVarIsEmpty(): HomeEnvVarIsEmptyEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -1180,18 +1180,18 @@ export function IsTargetWord(): IsTargetWordEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -1199,7 +1199,7 @@ export function IsTargetWord(): IsTargetWordEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -1243,7 +1243,7 @@ export function IsTargetWord(): IsTargetWordEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -1286,18 +1286,18 @@ export function IsTargetWord2(): IsTargetWord2EventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -1305,7 +1305,7 @@ export function IsTargetWord2(): IsTargetWord2EventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -1349,7 +1349,7 @@ export function IsTargetWord2(): IsTargetWord2EventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -1392,18 +1392,18 @@ export function IterativeFibonacci(): IterativeFibonacciEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -1411,7 +1411,7 @@ export function IterativeFibonacci(): IterativeFibonacciEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -1455,7 +1455,7 @@ export function IterativeFibonacci(): IterativeFibonacciEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -1498,18 +1498,18 @@ export function NormalElseIfStmt(): NormalElseIfStmtEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -1517,7 +1517,7 @@ export function NormalElseIfStmt(): NormalElseIfStmtEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -1561,7 +1561,7 @@ export function NormalElseIfStmt(): NormalElseIfStmtEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -1604,18 +1604,18 @@ export function NotEmpty(): NotEmptyEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -1623,7 +1623,7 @@ export function NotEmpty(): NotEmptyEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -1667,7 +1667,7 @@ export function NotEmpty(): NotEmptyEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -1710,18 +1710,18 @@ export function ReturnCategory(): ReturnCategoryEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -1729,7 +1729,7 @@ export function ReturnCategory(): ReturnCategoryEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -1773,7 +1773,7 @@ export function ReturnCategory(): ReturnCategoryEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -1816,18 +1816,18 @@ export function ReturnElseIfExpr(): ReturnElseIfExprEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -1835,7 +1835,7 @@ export function ReturnElseIfExpr(): ReturnElseIfExprEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -1879,7 +1879,7 @@ export function ReturnElseIfExpr(): ReturnElseIfExprEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -1922,18 +1922,18 @@ export function ReturnImageFromUrl(): ReturnImageFromUrlEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -1941,7 +1941,7 @@ export function ReturnImageFromUrl(): ReturnImageFromUrlEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -1985,7 +1985,7 @@ export function ReturnImageFromUrl(): ReturnImageFromUrlEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -2028,18 +2028,18 @@ export function ReturnNumber(): ReturnNumberEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -2047,7 +2047,7 @@ export function ReturnNumber(): ReturnNumberEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -2091,7 +2091,7 @@ export function ReturnNumber(): ReturnNumberEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -2134,18 +2134,18 @@ export function ReturnNumberCallingLlm(): ReturnNumberCallingLlmEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -2153,7 +2153,7 @@ export function ReturnNumberCallingLlm(): ReturnNumberCallingLlmEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -2197,7 +2197,7 @@ export function ReturnNumberCallingLlm(): ReturnNumberCallingLlmEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -2240,18 +2240,18 @@ export function ReturnOne(): ReturnOneEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -2259,7 +2259,7 @@ export function ReturnOne(): ReturnOneEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -2303,7 +2303,7 @@ export function ReturnOne(): ReturnOneEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -2333,23 +2333,23 @@ export function ReturnOne(): ReturnOneEventCollector {
 
 
 
-type SimpleEmitWithFilterEventCollectorVarTypes = {
+type SimpleWatchWithFilterEventCollectorVarTypes = {
   
   "word": string
   
 }
 
-type SimpleEmitWithFilterEventCollectorStreamTypes = {
+type SimpleWatchWithFilterEventCollectorStreamTypes = {
   
   "word": string | null
   
 }
 
 
-export interface SimpleEmitWithFilterEventCollector extends EventCollectorInternal {
+export interface SimpleWatchWithFilterEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
-  on_var<K extends keyof SimpleEmitWithFilterEventCollectorVarTypes>(channel: K, handler: (event: VarEvent<SimpleEmitWithFilterEventCollectorVarTypes[K]>) => void): void
+  on_var<K extends keyof SimpleWatchWithFilterEventCollectorVarTypes>(channel: K, handler: (event: VarNotification<SimpleWatchWithFilterEventCollectorVarTypes[K]>) => void): void
   
   on_stream(channel: "word", handler: StreamHandler<string | null, string | null>): void
   
@@ -2357,7 +2357,7 @@ export interface SimpleEmitWithFilterEventCollector extends EventCollectorIntern
   
 }
 
-export function SimpleEmitWithFilter(): SimpleEmitWithFilterEventCollector {
+export function SimpleWatchWithFilter(): SimpleWatchWithFilterEventCollector {
   const blockHandlers = new Set<BlockHandler>()
 
   
@@ -2366,18 +2366,18 @@ export function SimpleEmitWithFilter(): SimpleEmitWithFilterEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -2385,7 +2385,7 @@ export function SimpleEmitWithFilter(): SimpleEmitWithFilterEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -2429,13 +2429,13 @@ export function SimpleEmitWithFilter(): SimpleEmitWithFilterEventCollector {
       blockHandlers.add(handler)
     },
     
-    on_var<K extends keyof SimpleEmitWithFilterEventCollectorVarTypes>(channel: K, handler: (event: VarEvent<SimpleEmitWithFilterEventCollectorVarTypes[K]>) => void) {
+    on_var<K extends keyof SimpleWatchWithFilterEventCollectorVarTypes>(channel: K, handler: (notif: VarNotification<SimpleWatchWithFilterEventCollectorVarTypes[K]>) => void) {
       const handlers = varHandlerMap[channel]
       if (handlers) {
         handlers.add(handler as any)
       }
     },
-    on_stream<K extends keyof SimpleEmitWithFilterEventCollectorStreamTypes>(channel: K, handler: StreamHandler<SimpleEmitWithFilterEventCollectorStreamTypes[K], SimpleEmitWithFilterEventCollectorStreamTypes[K]>) {
+    on_stream<K extends keyof SimpleWatchWithFilterEventCollectorStreamTypes>(channel: K, handler: StreamHandler<SimpleWatchWithFilterEventCollectorStreamTypes[K], SimpleWatchWithFilterEventCollectorStreamTypes[K]>) {
       const handlers = streamHandlerMap[channel]
       if (handlers) {
         handlers.add(handler as any)
@@ -2451,13 +2451,13 @@ export function SimpleEmitWithFilter(): SimpleEmitWithFilterEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
           // Create a wrapper that processes stream lifecycle events
           const wrapper: InternalStreamHandler = (event: InternalStreamEvent) => {
-            handleInternalStreamEvent(channel, event, "SimpleEmitWithFilter")
+            handleInternalStreamEvent(channel, event, "SimpleWatchWithFilter")
           }
           streams[channel] = [wrapper]
         }
@@ -2469,7 +2469,7 @@ export function SimpleEmitWithFilter(): SimpleEmitWithFilterEventCollector {
       }
 
       return {
-        functionName: "SimpleEmitWithFilter",
+        functionName: "SimpleWatchWithFilter",
         block: Array.from(blockHandlers),
         vars,
         streams,
@@ -2494,18 +2494,18 @@ export function StoreFnCallInLocalVar(): StoreFnCallInLocalVarEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -2513,7 +2513,7 @@ export function StoreFnCallInLocalVar(): StoreFnCallInLocalVarEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -2557,7 +2557,7 @@ export function StoreFnCallInLocalVar(): StoreFnCallInLocalVarEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -2600,18 +2600,18 @@ export function StoreLlmCallInLocalVar(): StoreLlmCallInLocalVarEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -2619,7 +2619,7 @@ export function StoreLlmCallInLocalVar(): StoreLlmCallInLocalVarEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -2663,7 +2663,7 @@ export function StoreLlmCallInLocalVar(): StoreLlmCallInLocalVarEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -2706,18 +2706,18 @@ export function SumArray(): SumArrayEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -2725,7 +2725,7 @@ export function SumArray(): SumArrayEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -2769,7 +2769,7 @@ export function SumArray(): SumArrayEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -2812,18 +2812,18 @@ export function SumFromTo(): SumFromToEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -2831,7 +2831,7 @@ export function SumFromTo(): SumFromToEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -2875,7 +2875,7 @@ export function SumFromTo(): SumFromToEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
@@ -2905,7 +2905,7 @@ export function SumFromTo(): SumFromToEventCollector {
 
 
 
-type WorkflowEmitEventCollectorVarTypes = {
+type WorkflowWatchEventCollectorVarTypes = {
   
   "once": string,
   
@@ -2919,7 +2919,7 @@ type WorkflowEmitEventCollectorVarTypes = {
   
 }
 
-type WorkflowEmitEventCollectorStreamTypes = {
+type WorkflowWatchEventCollectorStreamTypes = {
   
   "once": string | null,
   
@@ -2934,10 +2934,10 @@ type WorkflowEmitEventCollectorStreamTypes = {
 }
 
 
-export interface WorkflowEmitEventCollector extends EventCollectorInternal {
+export interface WorkflowWatchEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
-  on_var<K extends keyof WorkflowEmitEventCollectorVarTypes>(channel: K, handler: (event: VarEvent<WorkflowEmitEventCollectorVarTypes[K]>) => void): void
+  on_var<K extends keyof WorkflowWatchEventCollectorVarTypes>(channel: K, handler: (event: VarNotification<WorkflowWatchEventCollectorVarTypes[K]>) => void): void
   
   on_stream(channel: "once", handler: StreamHandler<string | null, string | null>): void
   
@@ -2951,11 +2951,11 @@ export interface WorkflowEmitEventCollector extends EventCollectorInternal {
   
   
   
-  function_WorkflowEmitChild: WorkflowEmitChildEventCollector
+  function_WorkflowWatchChild: WorkflowWatchChildEventCollector
   
 }
 
-export function WorkflowEmit(): WorkflowEmitEventCollector {
+export function WorkflowWatch(): WorkflowWatchEventCollector {
   const blockHandlers = new Set<BlockHandler>()
 
   
@@ -2976,18 +2976,18 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -2995,7 +2995,7 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -3047,13 +3047,13 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
   
   const functionHandlerMap: Record<string, EventCollectorInternal> = {
     
-    "WorkflowEmitChild": WorkflowEmitChild()
+    "WorkflowWatchChild": WorkflowWatchChild()
     
   }
   
 
   
-  const function_WorkflowEmitChild = functionHandlerMap["WorkflowEmitChild"] as WorkflowEmitChildEventCollector
+  const function_WorkflowWatchChild = functionHandlerMap["WorkflowWatchChild"] as WorkflowWatchChildEventCollector
   
 
   return {
@@ -3061,13 +3061,13 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
       blockHandlers.add(handler)
     },
     
-    on_var<K extends keyof WorkflowEmitEventCollectorVarTypes>(channel: K, handler: (event: VarEvent<WorkflowEmitEventCollectorVarTypes[K]>) => void) {
+    on_var<K extends keyof WorkflowWatchEventCollectorVarTypes>(channel: K, handler: (notif: VarNotification<WorkflowWatchEventCollectorVarTypes[K]>) => void) {
       const handlers = varHandlerMap[channel]
       if (handlers) {
         handlers.add(handler as any)
       }
     },
-    on_stream<K extends keyof WorkflowEmitEventCollectorStreamTypes>(channel: K, handler: StreamHandler<WorkflowEmitEventCollectorStreamTypes[K], WorkflowEmitEventCollectorStreamTypes[K]>) {
+    on_stream<K extends keyof WorkflowWatchEventCollectorStreamTypes>(channel: K, handler: StreamHandler<WorkflowWatchEventCollectorStreamTypes[K], WorkflowWatchEventCollectorStreamTypes[K]>) {
       const handlers = streamHandlerMap[channel]
       if (handlers) {
         handlers.add(handler as any)
@@ -3075,7 +3075,7 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
     },
     
     
-    function_WorkflowEmitChild,
+    function_WorkflowWatchChild,
     
     __handlers() {
       const vars: Record<string, VarHandler<any>[]> = {}
@@ -3085,13 +3085,13 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
           // Create a wrapper that processes stream lifecycle events
           const wrapper: InternalStreamHandler = (event: InternalStreamEvent) => {
-            handleInternalStreamEvent(channel, event, "WorkflowEmit")
+            handleInternalStreamEvent(channel, event, "WorkflowWatch")
           }
           streams[channel] = [wrapper]
         }
@@ -3103,7 +3103,7 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
       }
 
       return {
-        functionName: "WorkflowEmit",
+        functionName: "WorkflowWatch",
         block: Array.from(blockHandlers),
         vars,
         streams,
@@ -3115,23 +3115,23 @@ export function WorkflowEmit(): WorkflowEmitEventCollector {
 
 
 
-type WorkflowEmitChildEventCollectorVarTypes = {
+type WorkflowWatchChildEventCollectorVarTypes = {
   
   "x": string
   
 }
 
-type WorkflowEmitChildEventCollectorStreamTypes = {
+type WorkflowWatchChildEventCollectorStreamTypes = {
   
   "x": string | null
   
 }
 
 
-export interface WorkflowEmitChildEventCollector extends EventCollectorInternal {
+export interface WorkflowWatchChildEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
-  on_var<K extends keyof WorkflowEmitChildEventCollectorVarTypes>(channel: K, handler: (event: VarEvent<WorkflowEmitChildEventCollectorVarTypes[K]>) => void): void
+  on_var<K extends keyof WorkflowWatchChildEventCollectorVarTypes>(channel: K, handler: (event: VarNotification<WorkflowWatchChildEventCollectorVarTypes[K]>) => void): void
   
   on_stream(channel: "x", handler: StreamHandler<string | null, string | null>): void
   
@@ -3139,7 +3139,7 @@ export interface WorkflowEmitChildEventCollector extends EventCollectorInternal 
   
 }
 
-export function WorkflowEmitChild(): WorkflowEmitChildEventCollector {
+export function WorkflowWatchChild(): WorkflowWatchChildEventCollector {
   const blockHandlers = new Set<BlockHandler>()
 
   
@@ -3148,18 +3148,18 @@ export function WorkflowEmitChild(): WorkflowEmitChildEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -3167,7 +3167,7 @@ export function WorkflowEmitChild(): WorkflowEmitChildEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -3211,13 +3211,13 @@ export function WorkflowEmitChild(): WorkflowEmitChildEventCollector {
       blockHandlers.add(handler)
     },
     
-    on_var<K extends keyof WorkflowEmitChildEventCollectorVarTypes>(channel: K, handler: (event: VarEvent<WorkflowEmitChildEventCollectorVarTypes[K]>) => void) {
+    on_var<K extends keyof WorkflowWatchChildEventCollectorVarTypes>(channel: K, handler: (notif: VarNotification<WorkflowWatchChildEventCollectorVarTypes[K]>) => void) {
       const handlers = varHandlerMap[channel]
       if (handlers) {
         handlers.add(handler as any)
       }
     },
-    on_stream<K extends keyof WorkflowEmitChildEventCollectorStreamTypes>(channel: K, handler: StreamHandler<WorkflowEmitChildEventCollectorStreamTypes[K], WorkflowEmitChildEventCollectorStreamTypes[K]>) {
+    on_stream<K extends keyof WorkflowWatchChildEventCollectorStreamTypes>(channel: K, handler: StreamHandler<WorkflowWatchChildEventCollectorStreamTypes[K], WorkflowWatchChildEventCollectorStreamTypes[K]>) {
       const handlers = streamHandlerMap[channel]
       if (handlers) {
         handlers.add(handler as any)
@@ -3233,13 +3233,13 @@ export function WorkflowEmitChild(): WorkflowEmitChildEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
           // Create a wrapper that processes stream lifecycle events
           const wrapper: InternalStreamHandler = (event: InternalStreamEvent) => {
-            handleInternalStreamEvent(channel, event, "WorkflowEmitChild")
+            handleInternalStreamEvent(channel, event, "WorkflowWatchChild")
           }
           streams[channel] = [wrapper]
         }
@@ -3251,7 +3251,7 @@ export function WorkflowEmitChild(): WorkflowEmitChildEventCollector {
       }
 
       return {
-        functionName: "WorkflowEmitChild",
+        functionName: "WorkflowWatchChild",
         block: Array.from(blockHandlers),
         vars,
         streams,
@@ -3263,23 +3263,23 @@ export function WorkflowEmitChild(): WorkflowEmitChildEventCollector {
 
 
 
-type WorkflowEmitWithFilterEventCollectorVarTypes = {
+type WorkflowWatchWithFilterEventCollectorVarTypes = {
   
   "this_word": string
   
 }
 
-type WorkflowEmitWithFilterEventCollectorStreamTypes = {
+type WorkflowWatchWithFilterEventCollectorStreamTypes = {
   
   "this_word": string | null
   
 }
 
 
-export interface WorkflowEmitWithFilterEventCollector extends EventCollectorInternal {
+export interface WorkflowWatchWithFilterEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
-  on_var<K extends keyof WorkflowEmitWithFilterEventCollectorVarTypes>(channel: K, handler: (event: VarEvent<WorkflowEmitWithFilterEventCollectorVarTypes[K]>) => void): void
+  on_var<K extends keyof WorkflowWatchWithFilterEventCollectorVarTypes>(channel: K, handler: (event: VarNotification<WorkflowWatchWithFilterEventCollectorVarTypes[K]>) => void): void
   
   on_stream(channel: "this_word", handler: StreamHandler<string | null, string | null>): void
   
@@ -3287,7 +3287,7 @@ export interface WorkflowEmitWithFilterEventCollector extends EventCollectorInte
   
 }
 
-export function WorkflowEmitWithFilter(): WorkflowEmitWithFilterEventCollector {
+export function WorkflowWatchWithFilter(): WorkflowWatchWithFilterEventCollector {
   const blockHandlers = new Set<BlockHandler>()
 
   
@@ -3296,18 +3296,18 @@ export function WorkflowEmitWithFilter(): WorkflowEmitWithFilterEventCollector {
   
 
   // Track active streams by stream_id
-  const activeStreams = new Map<string, { stream: EmitStream<any, any>, varName: string, functionName: string }>()
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
 
   // Internal handler for stream lifecycle events
   const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
     if (event.eventType === "start") {
       // Create new stream and fire to handlers immediately
-      const stream = new EmitStream<any, any>()
+      const stream = new NotificationStream<any, any>()
       activeStreams.set(event.streamId, { stream, varName, functionName })
 
       const handlers = streamHandlerMap[varName]
       if (handlers) {
-        const varEvent: VarEvent<BamlStream<any, any>> = {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
           variable_name: varName,
           value: stream,
           timestamp: Date.now().toString(),
@@ -3315,7 +3315,7 @@ export function WorkflowEmitWithFilter(): WorkflowEmitWithFilterEventCollector {
         }
 
         for (const handler of handlers) {
-          handler(varEvent)
+          handler(varNotification)
         }
       }
     } else if (event.eventType === "update") {
@@ -3359,13 +3359,13 @@ export function WorkflowEmitWithFilter(): WorkflowEmitWithFilterEventCollector {
       blockHandlers.add(handler)
     },
     
-    on_var<K extends keyof WorkflowEmitWithFilterEventCollectorVarTypes>(channel: K, handler: (event: VarEvent<WorkflowEmitWithFilterEventCollectorVarTypes[K]>) => void) {
+    on_var<K extends keyof WorkflowWatchWithFilterEventCollectorVarTypes>(channel: K, handler: (notif: VarNotification<WorkflowWatchWithFilterEventCollectorVarTypes[K]>) => void) {
       const handlers = varHandlerMap[channel]
       if (handlers) {
         handlers.add(handler as any)
       }
     },
-    on_stream<K extends keyof WorkflowEmitWithFilterEventCollectorStreamTypes>(channel: K, handler: StreamHandler<WorkflowEmitWithFilterEventCollectorStreamTypes[K], WorkflowEmitWithFilterEventCollectorStreamTypes[K]>) {
+    on_stream<K extends keyof WorkflowWatchWithFilterEventCollectorStreamTypes>(channel: K, handler: StreamHandler<WorkflowWatchWithFilterEventCollectorStreamTypes[K], WorkflowWatchWithFilterEventCollectorStreamTypes[K]>) {
       const handlers = streamHandlerMap[channel]
       if (handlers) {
         handlers.add(handler as any)
@@ -3381,13 +3381,13 @@ export function WorkflowEmitWithFilter(): WorkflowEmitWithFilterEventCollector {
         }
       }
 
-      // Create internal stream handlers that convert InternalStreamEvent to VarEvent<BamlStream>
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
       const streams: Record<string, InternalStreamHandler[]> = {}
       for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
         if (handlers.size > 0) {
           // Create a wrapper that processes stream lifecycle events
           const wrapper: InternalStreamHandler = (event: InternalStreamEvent) => {
-            handleInternalStreamEvent(channel, event, "WorkflowEmitWithFilter")
+            handleInternalStreamEvent(channel, event, "WorkflowWatchWithFilter")
           }
           streams[channel] = [wrapper]
         }
@@ -3399,7 +3399,7 @@ export function WorkflowEmitWithFilter(): WorkflowEmitWithFilterEventCollector {
       }
 
       return {
-        functionName: "WorkflowEmitWithFilter",
+        functionName: "WorkflowWatchWithFilter",
         block: Array.from(blockHandlers),
         vars,
         streams,

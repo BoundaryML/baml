@@ -1512,10 +1512,10 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
-    def SimpleEmitWithFilter(
+    def SimpleWatchWithFilter(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="SimpleEmitWithFilter", llm_response=llm_response, mode="request")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="SimpleWatchWithFilter", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
     def StoreFnCallInLocalVar(
@@ -1542,22 +1542,22 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="SumFromTo", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
-    def WorkflowEmit(
+    def WorkflowWatch(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowEmit", llm_response=llm_response, mode="request")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatch", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
-    def WorkflowEmitChild(
+    def WorkflowWatchChild(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowEmitChild", llm_response=llm_response, mode="request")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchChild", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
-    def WorkflowEmitWithFilter(
+    def WorkflowWatchWithFilter(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowEmitWithFilter", llm_response=llm_response, mode="request")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchWithFilter", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
     
@@ -3056,10 +3056,10 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
-    def SimpleEmitWithFilter(
+    def SimpleWatchWithFilter(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="SimpleEmitWithFilter", llm_response=llm_response, mode="stream")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="SimpleWatchWithFilter", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
     def StoreFnCallInLocalVar(
@@ -3086,22 +3086,22 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="SumFromTo", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
-    def WorkflowEmit(
+    def WorkflowWatch(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowEmit", llm_response=llm_response, mode="stream")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatch", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
-    def WorkflowEmitChild(
+    def WorkflowWatchChild(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowEmitChild", llm_response=llm_response, mode="stream")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchChild", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
-    def WorkflowEmitWithFilter(
+    def WorkflowWatchWithFilter(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowEmitWithFilter", llm_response=llm_response, mode="stream")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchWithFilter", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
     

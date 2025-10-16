@@ -4527,17 +4527,17 @@ export const ReturnOne = async (
 };
 
 /**
- * Executes the "SimpleEmitWithFilter" BAML action.
+ * Executes the "SimpleWatchWithFilter" BAML action.
  *
- * This server action calls the underlying BAML function "SimpleEmitWithFilter"
+ * This server action calls the underlying BAML function "SimpleWatchWithFilter"
  * with the specified parameters.
  *
  *
  * @returns {Promise<number>} A promise that resolves with the result of the action.
  */
-export const SimpleEmitWithFilter = async (
+export const SimpleWatchWithFilter = async (
 ): Promise<number> => {
-  return b.SimpleEmitWithFilter(
+  return b.SimpleWatchWithFilter(
   );
 };
 
@@ -4617,46 +4617,46 @@ export const SumFromTo = async (
 };
 
 /**
- * Executes the "WorkflowEmit" BAML action.
+ * Executes the "WorkflowWatch" BAML action.
  *
- * This server action calls the underlying BAML function "WorkflowEmit"
+ * This server action calls the underlying BAML function "WorkflowWatch"
  * with the specified parameters.
  *
  *
  * @returns {Promise<number>} A promise that resolves with the result of the action.
  */
-export const WorkflowEmit = async (
+export const WorkflowWatch = async (
 ): Promise<number> => {
-  return b.WorkflowEmit(
+  return b.WorkflowWatch(
   );
 };
 
 /**
- * Executes the "WorkflowEmitChild" BAML action.
+ * Executes the "WorkflowWatchChild" BAML action.
  *
- * This server action calls the underlying BAML function "WorkflowEmitChild"
+ * This server action calls the underlying BAML function "WorkflowWatchChild"
  * with the specified parameters.
  *
  *
  * @returns {Promise<number>} A promise that resolves with the result of the action.
  */
-export const WorkflowEmitChild = async (
+export const WorkflowWatchChild = async (
 ): Promise<number> => {
-  return b.WorkflowEmitChild(
+  return b.WorkflowWatchChild(
   );
 };
 
 /**
- * Executes the "WorkflowEmitWithFilter" BAML action.
+ * Executes the "WorkflowWatchWithFilter" BAML action.
  *
- * This server action calls the underlying BAML function "WorkflowEmitWithFilter"
+ * This server action calls the underlying BAML function "WorkflowWatchWithFilter"
  * with the specified parameters.
  *
  *
  * @returns {Promise<number>} A promise that resolves with the result of the action.
  */
-export const WorkflowEmitWithFilter = async (
+export const WorkflowWatchWithFilter = async (
 ): Promise<number> => {
-  return b.WorkflowEmitWithFilter(
+  return b.WorkflowWatchWithFilter(
   );
 };

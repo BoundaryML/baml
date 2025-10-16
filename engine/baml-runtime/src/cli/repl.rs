@@ -435,14 +435,14 @@ impl ReplState {
             let expr_str = expr_str.trim();
 
             // Parse and evaluate the BAML expression
-            let (value, emit_events) = self
+            let (value, watch_notifications) = self
                 .parse_and_evaluate_baml_expression_with_status(expr_str, status_tx)
                 .await?;
             self.variables.insert(var_name.clone(), value.clone());
 
             let mut output = String::new();
-            if !emit_events.is_empty() {
-                for event in &emit_events {
+            if !watch_notifications.is_empty() {
+                for event in &watch_notifications {
                     output.push_str(event);
                     output.push('\n');
                 }
@@ -454,13 +454,13 @@ impl ReplState {
             Ok(self.format_value(value).to_string())
         } else {
             // Try to parse as a BAML expression
-            let (value, emit_events) = self
+            let (value, watch_notifications) = self
                 .parse_and_evaluate_baml_expression_with_status(input, status_tx)
                 .await?;
 
             let mut output = String::new();
-            if !emit_events.is_empty() {
-                for event in &emit_events {
+            if !watch_notifications.is_empty() {
+                for event in &watch_notifications {
                     output.push_str(event);
                     output.push('\n');
                 }
@@ -516,8 +516,8 @@ impl ReplState {
         let run_id = self.current_run_id.unwrap_or(0);
         let handle_llm_function = move |function_name: String,
                                         args: Vec<BamlValue>,
-                                        _emit_context: Option<
-            baml_compiler::thir::interpret::EmitStreamContext,
+                                        _watch_context: Option<
+            baml_compiler::thir::interpret::WatchStreamContext,
         >| {
             let fn_params = fn_params.clone();
             let runtime_clone = runtime_clone.clone();
@@ -562,7 +562,7 @@ impl ReplState {
                             )
                             .await;
                         let function_result = res.0?;
-                        // Emit final usage if available
+                        // Notify final usage if available
                         if let Some(tx) = &status_tx {
                             use crate::LLMResponse;
                             if let LLMResponse::Success(resp) = function_result.llm_response() {
@@ -592,11 +592,14 @@ impl ReplState {
                 }
             }
         };
-        // REPL emit handler: collect events
-        let emit_events = Arc::new(Mutex::new(Vec::new()));
-        let emit_events_clone = emit_events.clone();
-        let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
-            emit_events_clone.lock().unwrap().push(format!("{}", event));
+        // REPL watch handler: collect notifications
+        let watch_notifications = Arc::new(Mutex::new(Vec::new()));
+        let watch_notifications_clone = watch_notifications.clone();
+        let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
+            watch_notifications_clone
+                .lock()
+                .unwrap()
+                .push(format!("{}", notification));
         };
 
         let eval_result = interpret_thir(
@@ -604,14 +607,14 @@ impl ReplState {
             thir.clone(),
             input_expr_thir,
             handle_llm_function,
-            emit_handler,
+            watch_handler,
             variables,
             self.env_vars.clone(),
         )
         .await?;
 
-        let events = emit_events.lock().unwrap().clone();
-        Ok((eval_result, events))
+        let notifications = watch_notifications.lock().unwrap().clone();
+        Ok((eval_result, notifications))
     }
 
     async fn parse_and_evaluate_baml_expression(

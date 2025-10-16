@@ -20,14 +20,13 @@ import {
 import { URI } from 'vscode-uri';
 import { z } from 'zod';
 import packageJson from '../../../package.json';
-import { getCurrentOpenedFile } from '../../helpers/get-open-file';
+import { getCurrentOpenedFile, LAST_ACTIVE_BAML_FILE } from '../../helpers/get-open-file';
 import StatusBarPanel from '../../panels/StatusBarPanel';
 import { WebviewPanelHost } from '../../panels/WebviewPanelHost';
 import TelemetryReporter from '../../telemetryReporter';
 import {
   checkForMinimalColorTheme,
   createLanguageServer,
-  isDebugOrTestSession,
 } from '../../util';
 import type { BamlVSCodePlugin } from '../types';
 import {
@@ -544,15 +543,16 @@ export const registerClientEventHandlers = (client: LanguageClient, context: Ext
         }
 
         // Check if this version update is for the currently active baml_src directory
-        const activeEditor =
-          window.activeTextEditor || (window.visibleTextEditors.length > 0 ? window.visibleTextEditors[0] : null);
+        const activeEditor = LAST_ACTIVE_BAML_FILE.uri;
         if (activeEditor) {
           try {
-            const currentFilePath = URI.parse(activeEditor.document.uri.toString()).fsPath;
+
+            const currentFilePath = activeEditor.fsPath;
+
             const rootPathUri = URI.file(payload.root_path).fsPath;
             if (!isPathWithinParent(currentFilePath, rootPathUri)) {
               bamlOutputChannel.appendLine(
-                `baml_src_generator_version ignored: root path does not match active editor ${currentFilePath} ${rootPathUri}`,
+                `baml_src_generator_version ignored: root path does not match active editor ${currentFilePath} root: ${rootPathUri}`,
               );
               return;
             }
@@ -795,7 +795,7 @@ const plugin: BamlVSCodePlugin = {
   name: 'baml-language-server',
   enabled: () => true,
   activate: async (context, _outputChannel) => {
-    const isDebugOrTest = isDebugOrTestSession();
+    const isDebugOrTest = isDebugMode();
     bamlOutputChannel = _outputChannel;
     context.subscriptions.push(bamlOutputChannel);
     bamlOutputChannel.appendLine('Activating BAML Language Server plugin...');
@@ -809,6 +809,8 @@ const plugin: BamlVSCodePlugin = {
 
     let serverAbsolutePath: string | null = null;
     if (isDebugOrTest) {
+      console.log('Using debug cli in debug mode');
+      bamlOutputChannel.append('Using debug cli in debug mode');
       serverAbsolutePath = process.env.VSCODE_DEBUG_BAML_CLI_PATH || null;
     } else {
       try {
@@ -1029,21 +1031,21 @@ const plugin: BamlVSCodePlugin = {
 
     activateClient(context, serverOptions, clientOptions);
 
-    if (!isDebugOrTest) {
-      try {
-        const extensionId = `Boundary.${packageJson.name}`;
-        const extensionVersion: string = packageJson.version;
-        console.log(
-          `Initializing telemetry for ${extensionId} v${extensionVersion}`,
-        );
-        telemetry = new TelemetryReporter(extensionId, extensionVersion);
-        context.subscriptions.push(telemetry);
-        await telemetry.initialize();
-        console.log('Telemetry initialized.');
-      } catch (err) {
-        console.error('Failed to initialize telemetry:', err);
-      }
+
+    try {
+      const extensionId = `Boundary.${packageJson.name}`;
+      const extensionVersion: string = packageJson.version;
+      console.log(
+        `Initializing telemetry for ${extensionId} v${extensionVersion}`,
+      );
+      telemetry = new TelemetryReporter(extensionId, extensionVersion);
+      context.subscriptions.push(telemetry);
+      await telemetry.initialize();
+      console.log('Telemetry initialized.');
+    } catch (err) {
+      console.error('Failed to initialize telemetry:', err);
     }
+
 
     checkForMinimalColorTheme();
     console.log('BAML Language Server plugin activation finished.');
@@ -1061,7 +1063,7 @@ const plugin: BamlVSCodePlugin = {
       console.log('Client not running or already stopped.');
     }
 
-    if (!isDebugOrTestSession() && telemetry) {
+    if (!isDebugMode() && telemetry) {
       console.log('Disposing telemetry.');
       await telemetry.dispose().catch((err) => {
         console.error('Error disposing telemetry:', err);

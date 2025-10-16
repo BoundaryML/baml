@@ -14,7 +14,7 @@ mod types;
 use std::collections::HashSet;
 
 use anyhow::Result;
-use baml_compiler::{emit::EmitChannels, hir::Hir, thir::typecheck::typecheck};
+use baml_compiler::{hir::Hir, thir::typecheck::typecheck, watch::WatchChannels};
 use baml_types::GeneratorOutputType;
 
 use super::context::Context;
@@ -58,7 +58,7 @@ fn hir_typecheck_exprs(ctx: &mut Context<'_>) -> Result<()> {
     // Run HIR-based typechecking using baml-compiler
     let thir = typecheck(&hir, ctx.diagnostics);
 
-    let _ = EmitChannels::analyze_program(&thir, ctx.diagnostics);
+    let _ = WatchChannels::analyze_program(&thir, ctx.diagnostics);
 
     Ok(())
 }

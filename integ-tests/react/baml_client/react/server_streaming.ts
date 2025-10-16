@@ -4775,7 +4775,7 @@ export const ReturnOne = async (
 };
 
 /**
- * Executes the streaming variant of the "SimpleEmitWithFilter" BAML action.
+ * Executes the streaming variant of the "SimpleWatchWithFilter" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
@@ -4783,9 +4783,9 @@ export const ReturnOne = async (
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
-export const SimpleEmitWithFilter = async (
+export const SimpleWatchWithFilter = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.SimpleEmitWithFilter(
+  const stream = b.stream.SimpleWatchWithFilter(
   );
   return Promise.resolve(stream.toStreamable());
 };
@@ -4870,7 +4870,7 @@ export const SumFromTo = async (
 };
 
 /**
- * Executes the streaming variant of the "WorkflowEmit" BAML action.
+ * Executes the streaming variant of the "WorkflowWatch" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
@@ -4878,15 +4878,15 @@ export const SumFromTo = async (
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
-export const WorkflowEmit = async (
+export const WorkflowWatch = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.WorkflowEmit(
+  const stream = b.stream.WorkflowWatch(
   );
   return Promise.resolve(stream.toStreamable());
 };
 
 /**
- * Executes the streaming variant of the "WorkflowEmitChild" BAML action.
+ * Executes the streaming variant of the "WorkflowWatchChild" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
@@ -4894,15 +4894,15 @@ export const WorkflowEmit = async (
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
-export const WorkflowEmitChild = async (
+export const WorkflowWatchChild = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.WorkflowEmitChild(
+  const stream = b.stream.WorkflowWatchChild(
   );
   return Promise.resolve(stream.toStreamable());
 };
 
 /**
- * Executes the streaming variant of the "WorkflowEmitWithFilter" BAML action.
+ * Executes the streaming variant of the "WorkflowWatchWithFilter" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
@@ -4910,9 +4910,9 @@ export const WorkflowEmitChild = async (
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
-export const WorkflowEmitWithFilter = async (
+export const WorkflowWatchWithFilter = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.WorkflowEmitWithFilter(
+  const stream = b.stream.WorkflowWatchWithFilter(
   );
   return Promise.resolve(stream.toStreamable());
 };

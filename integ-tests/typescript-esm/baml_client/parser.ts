@@ -5734,7 +5734,7 @@ export class LlmResponseParser {
     }
   }
   
-  SimpleEmitWithFilter(
+  SimpleWatchWithFilter(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): number {
@@ -5744,7 +5744,7 @@ export class LlmResponseParser {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "SimpleEmitWithFilter",
+        "SimpleWatchWithFilter",
         llmResponse,
         false,
         this.ctxManager.cloneContext(),
@@ -5849,7 +5849,7 @@ export class LlmResponseParser {
     }
   }
   
-  WorkflowEmit(
+  WorkflowWatch(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): number {
@@ -5859,7 +5859,7 @@ export class LlmResponseParser {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "WorkflowEmit",
+        "WorkflowWatch",
         llmResponse,
         false,
         this.ctxManager.cloneContext(),
@@ -5872,7 +5872,7 @@ export class LlmResponseParser {
     }
   }
   
-  WorkflowEmitChild(
+  WorkflowWatchChild(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): number {
@@ -5882,7 +5882,7 @@ export class LlmResponseParser {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "WorkflowEmitChild",
+        "WorkflowWatchChild",
         llmResponse,
         false,
         this.ctxManager.cloneContext(),
@@ -5895,7 +5895,7 @@ export class LlmResponseParser {
     }
   }
   
-  WorkflowEmitWithFilter(
+  WorkflowWatchWithFilter(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): number {
@@ -5905,7 +5905,7 @@ export class LlmResponseParser {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "WorkflowEmitWithFilter",
+        "WorkflowWatchWithFilter",
         llmResponse,
         false,
         this.ctxManager.cloneContext(),
@@ -11628,7 +11628,7 @@ export class LlmStreamParser {
     }
   }
   
-  SimpleEmitWithFilter(
+  SimpleWatchWithFilter(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): number | null {
@@ -11638,7 +11638,7 @@ export class LlmStreamParser {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "SimpleEmitWithFilter",
+        "SimpleWatchWithFilter",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),
@@ -11743,7 +11743,7 @@ export class LlmStreamParser {
     }
   }
   
-  WorkflowEmit(
+  WorkflowWatch(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): number | null {
@@ -11753,7 +11753,7 @@ export class LlmStreamParser {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "WorkflowEmit",
+        "WorkflowWatch",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),
@@ -11766,7 +11766,7 @@ export class LlmStreamParser {
     }
   }
   
-  WorkflowEmitChild(
+  WorkflowWatchChild(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): number | null {
@@ -11776,7 +11776,7 @@ export class LlmStreamParser {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "WorkflowEmitChild",
+        "WorkflowWatchChild",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),
@@ -11789,7 +11789,7 @@ export class LlmStreamParser {
     }
   }
   
-  WorkflowEmitWithFilter(
+  WorkflowWatchWithFilter(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): number | null {
@@ -11799,7 +11799,7 @@ export class LlmStreamParser {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "WorkflowEmitWithFilter",
+        "WorkflowWatchWithFilter",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),

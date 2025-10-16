@@ -218,8 +218,8 @@ impl BamlRuntime {
             .map(|ac| ac.create_tripwire())
             .unwrap_or_else(|| TripWire::new(None));
 
-        let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
-            eprintln!("TODO: Handle event: {:?}", event);
+        let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
+            eprintln!("TODO: Handle notification: {:?}", notification);
         };
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
@@ -234,7 +234,7 @@ impl BamlRuntime {
                     env_vars,
                     tags,
                     tripwire,
-                    Some(emit_handler), // TODO: Event handler.
+                    Some(watch_handler), // TODO: Notification handler.
                 )
                 .await;
 
@@ -286,8 +286,8 @@ impl BamlRuntime {
             .map(|ac| ac.create_tripwire())
             .unwrap_or_else(|| TripWire::new(None));
 
-        let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
-            eprintln!("TODO: Handle event: {:?}", event);
+        let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
+            eprintln!("TODO: Handle notification: {:?}", notification);
         };
 
         let (result, _event_id) = Python::with_gil(|py| {
@@ -302,7 +302,7 @@ impl BamlRuntime {
                     env_vars,
                     tags,
                     tripwire,
-                    Some(emit_handler), // TODO: Event handler.
+                    Some(watch_handler), // TODO: Notification handler.
                 )
             })
         });

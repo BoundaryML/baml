@@ -1,39 +1,39 @@
-import { b, events, b_sync } from "./test-setup";
+import { b, watchers, b_sync } from "./test-setup";
 
-describe("Emit tests", () => {
-  it("should emit basic changes", async () => {
-    const listener = events.WorkflowEmit();
-    const wrong_listener = events.SumFromTo();
+describe("Watch tests", () => {
+  it("should watch basic changes", async () => {
+    const watcher = watchers.WorkflowWatch();
+    const wrong_listener = watchers.SumFromTo();
     let saw_change = false;
-    listener.on_var("x", (ev) => {
+    watcher.on_var("x", (ev) => {
       console.log(ev);
       // ev.value is typed as number (inferred from "x" channel)
       saw_change = true;
     });
-    listener.on_var("once", (ev) => {
+    watcher.on_var("once", (ev) => {
       // ev.value is typed as string (inferred from "once" channel)
     });
-    listener.on_var("twice", (ev) => {
+    watcher.on_var("twice", (ev) => {
       // ev.value is typed as string[] (inferred from "twice" channel)
     });
 
     let snapshots: any[] = [];
-    listener.on_stream("story", async (event) => {
+    watcher.on_stream("story", async (notification) => {
       // event is VarEvent<BamlStream<number | null, number | null>>
       // event.value is BamlStream<number | null, number | null>
-      for await (const chunk of event.value) {
+      for await (const chunk of notification.value) {
         console.log("CHUNK!");
         console.log(chunk);
         snapshots.push(chunk);
       }
     });
 
-    const response = await b.WorkflowEmit({ events: listener });
+    const response = await b.WorkflowWatch({ events: watcher });
     // Sleep for 0.5 seconds to allow events to finish streaming in.
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     expect(saw_change).toBe(true);
     expect(snapshots.length).toBeGreaterThan(1);
-    // const response2 = await b.WorkflowEmit({events: wrong_listener});
+    // const response2 = await b.WorkflowWatch({events: wrong_listener});
   });
 });

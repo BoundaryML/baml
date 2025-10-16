@@ -245,12 +245,19 @@ impl Session {
 
         let project_updates: Vec<HashMap<_, _>> = baml_src_projects
             .iter_mut()
-            .map(|(_project_root, project)| {
+            .map(|(project_root, project)| {
                 let files_map = project
                     .lock()
                     .baml_project
                     .load_files()
                     .map_err(|e| anyhow::anyhow!("Failed to load project files: {}", e))?;
+
+                tracing::info!(
+                    "Loaded {} files for project root: {:?}",
+                    files_map.len(),
+                    project_root
+                );
+
                 {
                     let default_flags = vec!["beta".to_string()];
                     project.lock().update_runtime(
@@ -268,7 +275,13 @@ impl Session {
                 Ok(files_map)
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
-        tracing::info!("Initial reload of {} files", project_updates.len());
+
+        let total_files: usize = project_updates.iter().map(|m| m.len()).sum();
+        tracing::info!(
+            "Initial reload complete: {} projects, {} total files",
+            project_updates.len(),
+            total_files
+        );
 
         // Guard no longer used. We can drop now instead of waiting for the end
         // of scope.
