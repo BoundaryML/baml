@@ -894,7 +894,7 @@ mod tests {
                 proxy_url: None,
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAIResponses,
-                media_url_handler: internal_llm_client::MediaUrlResolver::default(),
+                media_url_handler: internal_llm_client::MediaUrlHandler::default(),
             },
             client: reqwest::Client::new(),
         };
@@ -947,7 +947,7 @@ mod tests {
                 proxy_url: None,
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAI,
-                media_url_handler: internal_llm_client::MediaUrlResolver::default(),
+                media_url_handler: internal_llm_client::MediaUrlHandler::default(),
             },
             client: reqwest::Client::new(),
         };
@@ -1042,7 +1042,7 @@ mod tests {
                 proxy_url: None,
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAIResponses,
-                media_url_handler: internal_llm_client::MediaUrlResolver::default(),
+                media_url_handler: internal_llm_client::MediaUrlHandler::default(),
             },
             client: reqwest::Client::new(),
         };
