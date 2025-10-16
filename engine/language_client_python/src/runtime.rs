@@ -1,17 +1,16 @@
+#[cfg(feature = "interpreter")]
+use std::time::SystemTime;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use baml_runtime::{runtime_interface::ExperimentalTracingInterface, TripWire};
+#[cfg(feature = "interpreter")]
+use pyo3::types::PyDict;
 use pyo3::{
     prelude::{pymethods, PyResult},
     pyclass,
     types::{PyAnyMethods, PyList},
     Bound, IntoPyObjectExt, PyObject, PyRef, Python,
 };
-
-#[cfg(feature = "interpreter")]
-use pyo3::types::PyDict;
-#[cfg(feature = "interpreter")]
-use std::time::SystemTime;
 
 // Type alias for pickle reduce return type
 type PickleReduceResult = PyResult<(

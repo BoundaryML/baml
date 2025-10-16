@@ -38,7 +38,7 @@ describe("Watch tests", () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     expect(saw_sub).toBe(1);
-    expect(saw_change).toBe(4);
+    expect(saw_change).toBe(3);
     expect(snapshots.length).toBeGreaterThan(1);
     // const response2 = await b.WorkflowWatch({watchers: wrong_listener});
   });

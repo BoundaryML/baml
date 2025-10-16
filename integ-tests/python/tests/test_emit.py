@@ -1,6 +1,5 @@
 import pytest
 import asyncio
-import time
 from ..baml_client import b
 from ..baml_client import watchers
 
@@ -9,8 +8,6 @@ from ..baml_client import watchers
 async def test_emit_basic_changes():
     """Test that emit events are fired correctly"""
     listener = watchers.WorkflowWatch()
-
-    sublistener = listener.function_WorkflowWatchChild
 
     # Track if we saw changes
     saw_x_change = False
@@ -89,7 +86,7 @@ async def test_emit_stream_handler():
     listener.on_stream("x", on_x_stream)
 
     # Call the function with the event listener
-    response = await b.WorkflowWatch({"watchers": listener})
+    _ = await b.WorkflowWatch({"watchers": listener})
 
     # Give some time for events to be processed
     await asyncio.sleep(0.5)
@@ -114,7 +111,7 @@ async def test_emit_block_handler():
     listener.on_block(on_block)
 
     # Call the function with the event listener
-    response = await b.WorkflowWatch({"watchers": listener})
+    _ = await b.WorkflowWatch({"watchers": listener})
 
     # Give some time for events to be processed
     await asyncio.sleep(0.5)
@@ -140,7 +137,7 @@ async def test_emit_block_handler():
 #     listener.function_WorkflowWatchChild.on_var("x", on_child_x)
 #
 #     # Call the function with the event listener
-#     response = await b.WorkflowEmit({"watchers": listener})
+#     _ = await b.WorkflowEmit({"watchers": listener})
 #
 #     # Give some time for events to be processed
 #     await asyncio.sleep(0.5)
@@ -172,7 +169,7 @@ async def test_emit_multiple_handlers():
     listener.on_var("x", handler2)
 
     # Call the function with the event listener
-    response = await b.WorkflowWatch({"watchers": listener})
+    _ = await b.WorkflowWatch({"watchers": listener})
 
     # Give some time for events to be processed
     await asyncio.sleep(0.5)
