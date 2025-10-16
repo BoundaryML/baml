@@ -122,10 +122,10 @@ fn extract_notification_callbacks(
 ) -> PyResult<Option<NotificationCallbacks>> {
     // Call __handlers() method to get InternalEventBindings
     let handlers_result = events_obj.call_method0(py, "__handlers__")?;
-    let bindings = handlers_result.downcast_bound::<PyDict>(py)?;
+    let bindings = handlers_result.bind(py);
 
-    // Extract block handlers
-    let block_handlers = if let Ok(block_bound) = bindings.get_item("block") {
+    // Extract block handlers using getattr
+    let block_handlers = if let Ok(block_bound) = bindings.getattr("block") {
         if let Ok(block_list) = block_bound.downcast::<PyList>() {
             block_list
                 .into_iter()
@@ -138,9 +138,9 @@ fn extract_notification_callbacks(
         Vec::new()
     };
 
-    // Extract var handlers
+    // Extract var handlers using getattr
     let mut var_handlers = HashMap::new();
-    if let Ok(vars_bound) = bindings.get_item("vars") {
+    if let Ok(vars_bound) = bindings.getattr("vars") {
         if let Ok(vars_dict) = vars_bound.downcast::<PyDict>() {
             for (key, value) in vars_dict {
                 if let Ok(key_str) = key.extract::<String>() {
@@ -158,9 +158,9 @@ fn extract_notification_callbacks(
         }
     }
 
-    // Extract stream handlers
+    // Extract stream handlers using getattr
     let mut stream_handlers = HashMap::new();
-    if let Ok(streams_bound) = bindings.get_item("streams") {
+    if let Ok(streams_bound) = bindings.getattr("streams") {
         if let Ok(streams_dict) = streams_bound.downcast::<PyDict>() {
             for (key, value) in streams_dict {
                 if let Ok(key_str) = key.extract::<String>() {

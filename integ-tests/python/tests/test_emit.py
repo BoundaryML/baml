@@ -65,7 +65,7 @@ async def test_emit_basic_changes():
 @pytest.mark.asyncio
 async def test_emit_stream_handler():
     """Test that stream handlers work correctly"""
-    listener = events.WorkflowEmit()
+    listener = watchers.WorkflowWatch()
 
     stream_chunks = []
 
