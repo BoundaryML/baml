@@ -107,7 +107,9 @@ impl From<internal_llm_client::ResolveMediaUrls> for ResolveMediaUrls {
             internal_llm_client::ResolveMediaUrls::SendBase64UnlessGoogleUrl => {
                 ResolveMediaUrls::SendBase64UnlessGoogleUrl
             }
-            internal_llm_client::ResolveMediaUrls::SendUrlAddMimeType => ResolveMediaUrls::SendUrlAddMimeType,
+            internal_llm_client::ResolveMediaUrls::SendUrlAddMimeType => {
+                ResolveMediaUrls::SendUrlAddMimeType
+            }
             internal_llm_client::ResolveMediaUrls::SendUrl => ResolveMediaUrls::SendUrl,
         }
     }

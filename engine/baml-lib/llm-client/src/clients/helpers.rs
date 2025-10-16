@@ -445,7 +445,9 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                 "send_base64" => Some(UnresolvedResolveMediaUrls::SendBase64),
                 "send_url" => Some(UnresolvedResolveMediaUrls::SendUrl),
                 "send_url_add_mime_type" => Some(UnresolvedResolveMediaUrls::SendUrlAddMimeType),
-                "send_base64_unless_google_url" => Some(UnresolvedResolveMediaUrls::SendBase64UnlessGoogleUrl),
+                "send_base64_unless_google_url" => {
+                    Some(UnresolvedResolveMediaUrls::SendBase64UnlessGoogleUrl)
+                }
                 other => {
                     self.push_error(
                         format!(

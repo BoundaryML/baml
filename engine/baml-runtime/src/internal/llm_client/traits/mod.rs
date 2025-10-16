@@ -618,8 +618,8 @@ async fn process_media(
             // customer complains.
             match (resolve_mode, part.mime_type.as_deref()) {
                 (ResolveMediaUrls::SendBase64, _) => {}
-                (ResolveMediaUrls::SendUrlAddMimeType, Some("")) | (ResolveMediaUrls::SendUrlAddMimeType, None) => {
-                }
+                (ResolveMediaUrls::SendUrlAddMimeType, Some(""))
+                | (ResolveMediaUrls::SendUrlAddMimeType, None) => {}
                 (ResolveMediaUrls::SendBase64UnlessGoogleUrl, _) => {
                     if media_url.url.starts_with("gs://") {
                         return Ok(part.clone());
