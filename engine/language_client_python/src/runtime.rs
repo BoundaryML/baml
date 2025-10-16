@@ -259,7 +259,7 @@ impl BamlRuntime {
             .into()
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors, env_vars, tags, abort_controller=None, events=None))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors, env_vars, tags, abort_controller=None, watchers=None))]
     fn call_function(
         &self,
         py: Python<'_>,
@@ -272,7 +272,7 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<HashMap<String, String>>,
         abort_controller: Option<&crate::abort_controller::AbortController>,
-        events: Option<PyObject>,
+        watchers: Option<PyObject>,
     ) -> PyResult<PyObject> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -305,15 +305,15 @@ impl BamlRuntime {
 
         // Extract notification callbacks from EventCollector (only for interpreter)
         #[cfg(feature = "interpreter")]
-        let notification_callbacks = if let Some(events_obj) = events {
-            extract_notification_callbacks(py, events_obj)?
+        let notification_callbacks = if let Some(watchers_obj) = watchers {
+            extract_notification_callbacks(py, watchers_obj)?
         } else {
             None
         };
 
         #[cfg(not(feature = "interpreter"))]
         {
-            let _ = events; // Suppress unused variable warning
+            let _ = watchers; // Suppress unused variable warning
             pyo3_async_runtimes::tokio::future_into_py(py, async move {
                 let (result, _) = baml_runtime
                     .call_function(
@@ -464,7 +464,7 @@ impl BamlRuntime {
         .map(pyo3::Bound::into)
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors, env_vars, tags, abort_controller=None, events=None))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors, env_vars, tags, abort_controller=None, watchers=None))]
     fn call_function_sync(
         &self,
         py: Python<'_>,
@@ -477,7 +477,7 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<HashMap<String, String>>,
         abort_controller: Option<&crate::abort_controller::AbortController>,
-        #[allow(unused_variables)] events: Option<PyObject>,
+        #[allow(unused_variables)] watchers: Option<PyObject>,
     ) -> PyResult<FunctionResult> {
         let Some(args) = parse_py_type(args, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -509,8 +509,8 @@ impl BamlRuntime {
 
         // Extract notification callbacks from EventCollector (only for interpreter)
         #[cfg(feature = "interpreter")]
-        let notification_callbacks = if let Some(events_obj) = events {
-            extract_notification_callbacks(py, events_obj)?
+        let notification_callbacks = if let Some(watchers_obj) = watchers {
+            extract_notification_callbacks(py, watchers_obj)?
         } else {
             None
         };

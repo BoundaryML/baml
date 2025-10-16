@@ -28,12 +28,12 @@ describe("Watch tests", () => {
       }
     });
 
-    const response = await b.WorkflowWatch({ events: watcher });
+    const response = await b.WorkflowWatch({ watchers: watcher });
     // Sleep for 0.5 seconds to allow events to finish streaming in.
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     expect(saw_change).toBe(true);
     expect(snapshots.length).toBeGreaterThan(1);
-    // const response2 = await b.WorkflowWatch({events: wrong_listener});
+    // const response2 = await b.WorkflowWatch({watchers: wrong_listener});
   });
 });

@@ -293,8 +293,8 @@ impl BamlRuntime {
         collectors: Vec<&Collector>,
         tags: HashMap<String, String>,
         env_vars: HashMap<String, String>,
-        signal: Option<Object>, // AbortSignal parameter
-        events: Option<Object>, // NEW: EventCollector parameter
+        signal: Option<Object>,   // AbortSignal parameter
+        watchers: Option<Object>, // EventCollector parameter
     ) -> napi::Result<PromiseRaw<'e, FunctionResult>> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -311,8 +311,8 @@ impl BamlRuntime {
 
         // Extract emit callbacks from EventCollector (only for interpreter)
         #[cfg(feature = "interpreter")]
-        let emit_callbacks = if let Some(ref events_obj) = events {
-            extract_emit_callbacks(env, events_obj)?
+        let emit_callbacks = if let Some(ref watchers_obj) = watchers {
+            extract_emit_callbacks(env, watchers_obj)?
         } else {
             None
         };
@@ -493,7 +493,8 @@ impl BamlRuntime {
         collectors: Vec<&Collector>,
         tags: HashMap<String, String>,
         env_vars: HashMap<String, String>,
-        signal: Option<Object>, // NEW: AbortSignal parameter (sync doesn't actually use it)
+        signal: Option<Object>,   // AbortSignal parameter
+        watchers: Option<Object>, // EventCollector parameter
     ) -> napi::Result<FunctionResult> {
         let args = parse_ts_types::js_object_to_baml_value(&env, args)?;
         let tripwire = js_abort_signal_to_rust_tripwire(&env, signal)?;
@@ -506,6 +507,14 @@ impl BamlRuntime {
         }
         let args_map = args.as_map_owned().unwrap();
 
+        // Extract emit callbacks from EventCollector (only for interpreter)
+        #[cfg(feature = "interpreter")]
+        let emit_callbacks = if let Some(ref watchers_obj) = watchers {
+            extract_emit_callbacks(&env, watchers_obj)?
+        } else {
+            None
+        };
+
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
         let cb = cb.map(|cb| cb.inner.clone());
@@ -513,18 +522,129 @@ impl BamlRuntime {
             .into_iter()
             .map(|c| c.inner.clone())
             .collect::<Vec<_>>();
-        let (result, _event_id) = self.inner.call_function_sync(
-            function_name,
-            &args_map,
-            &ctx_mng,
-            tb.as_ref(),
-            cb.as_ref(),
-            Some(collector_list),
-            env_vars,
-            Some(&tags),
-            tripwire,
-            None::<fn(baml_compiler::watch::WatchNotification)>,
-        );
+
+        #[cfg(feature = "interpreter")]
+        let (result, _event_id) = {
+            let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
+                if let Some(ref callbacks) = emit_callbacks {
+                    match notification.value {
+                        baml_compiler::watch::WatchBamlValue::Block(block_label) => {
+                            // Fire block events to all registered block handlers
+                            for handler in &callbacks.block_handlers {
+                                let block_event = BlockEvent {
+                                    block_label: block_label.clone(),
+                                    event_type: "enter".to_string(),
+                                };
+                                let _ = handler.call(
+                                    block_event,
+                                    napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
+                                );
+                            }
+                        }
+                        baml_compiler::watch::WatchBamlValue::Value(value) => {
+                            if let Some(var_name) = &notification.variable_name {
+                                if let Some(handler) = callbacks.var_handlers.get(var_name) {
+                                    let serialized = serde_json::to_value(value.value())
+                                        .unwrap_or(serde_json::Value::Null);
+
+                                    let var_event = VarEvent {
+                                        variable_name: var_name.clone(),
+                                        value: serialized,
+                                        timestamp: SystemTime::now()
+                                            .duration_since(SystemTime::UNIX_EPOCH)
+                                            .unwrap()
+                                            .as_millis()
+                                            .to_string(),
+                                        function_name: notification.function_name.clone(),
+                                    };
+                                    let _ = handler.call(
+                                        var_event,
+                                        napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
+                                    );
+                                }
+                            }
+                        }
+                        baml_compiler::watch::WatchBamlValue::StreamStart(stream_id) => {
+                            if let Some(var_name) = &notification.variable_name {
+                                if let Some(handler) = callbacks.stream_handlers.get(var_name) {
+                                    let stream_event = StreamEvent {
+                                        stream_id: stream_id.clone(),
+                                        event_type: "start".to_string(),
+                                        value: None,
+                                    };
+                                    let _ = handler.call(
+                                        stream_event,
+                                        napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
+                                    );
+                                }
+                            }
+                        }
+                        baml_compiler::watch::WatchBamlValue::StreamUpdate(stream_id, value) => {
+                            if let Some(var_name) = &notification.variable_name {
+                                if let Some(handler) = callbacks.stream_handlers.get(var_name) {
+                                    let serialized = serde_json::to_value(value.value())
+                                        .unwrap_or(serde_json::Value::Null);
+
+                                    let stream_event = StreamEvent {
+                                        stream_id: stream_id.clone(),
+                                        event_type: "update".to_string(),
+                                        value: Some(serialized),
+                                    };
+                                    let _ = handler.call(
+                                        stream_event,
+                                        napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
+                                    );
+                                }
+                            }
+                        }
+                        baml_compiler::watch::WatchBamlValue::StreamEnd(stream_id) => {
+                            if let Some(var_name) = &notification.variable_name {
+                                if let Some(handler) = callbacks.stream_handlers.get(var_name) {
+                                    let stream_event = StreamEvent {
+                                        stream_id: stream_id.clone(),
+                                        event_type: "end".to_string(),
+                                        value: None,
+                                    };
+                                    let _ = handler.call(
+                                        stream_event,
+                                        napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            self.inner.call_function_sync(
+                function_name,
+                &args_map,
+                &ctx_mng,
+                tb.as_ref(),
+                cb.as_ref(),
+                Some(collector_list),
+                env_vars,
+                Some(&tags),
+                tripwire,
+                Some(watch_handler),
+            )
+        };
+
+        #[cfg(not(feature = "interpreter"))]
+        let (result, _event_id) = {
+            let _ = watchers; // Suppress unused variable warning
+            self.inner.call_function_sync(
+                function_name,
+                &args_map,
+                &ctx_mng,
+                tb.as_ref(),
+                cb.as_ref(),
+                Some(collector_list),
+                env_vars,
+                Some(&tags),
+                tripwire,
+            )
+        };
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)
     }

@@ -40,7 +40,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>;
 
 type TickReason = "Unknown";
 
-type BamlCallOptions<EventsT = never> = {
+type BamlCallOptions<WatchersT = never> = {
   tb?: TypeBuilder
   clientRegistry?: ClientRegistry
   collector?: Collector | Collector[]
@@ -48,7 +48,7 @@ type BamlCallOptions<EventsT = never> = {
   tags?: Record<string, string>
   signal?: AbortSignal
   onTick?: (reason: TickReason, log: FunctionLog | null) => void
-  events?: EventsT
+  watchers?: WatchersT
 }
 
 export class BamlSyncClient {
@@ -130,7 +130,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Recipe
     } catch (error: any) {
@@ -172,7 +172,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.LinkedListAliasNode
     } catch (error: any) {
@@ -214,7 +214,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Checked<number,"gt_ten">
     } catch (error: any) {
@@ -256,7 +256,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -298,7 +298,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -340,7 +340,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -382,7 +382,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -424,7 +424,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -466,7 +466,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.OptionalListAndMap
     } catch (error: any) {
@@ -508,7 +508,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -550,7 +550,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -592,7 +592,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -634,7 +634,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.LinkedList
     } catch (error: any) {
@@ -676,7 +676,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Tree
     } catch (error: any) {
@@ -718,7 +718,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as boolean
     } catch (error: any) {
@@ -760,7 +760,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as (types.AddTodoItem | types.TodoMessageToUser)[]
     } catch (error: any) {
@@ -802,7 +802,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.ClassToRecAlias
     } catch (error: any) {
@@ -844,7 +844,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as (string | types.DynEnumTwo)
     } catch (error: any) {
@@ -886,7 +886,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as (string | types.DynEnumOne)
     } catch (error: any) {
@@ -928,7 +928,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Category
     } catch (error: any) {
@@ -970,7 +970,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Category
     } catch (error: any) {
@@ -1012,7 +1012,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Category
     } catch (error: any) {
@@ -1054,7 +1054,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -1096,7 +1096,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.BookOrder | types.FlightConfirmation | types.GroceryReceipt
     } catch (error: any) {
@@ -1138,7 +1138,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -1180,7 +1180,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -1222,7 +1222,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -1264,7 +1264,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -1306,7 +1306,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -1348,7 +1348,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -1390,7 +1390,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -1432,7 +1432,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.OriginalA | types.OriginalB
     } catch (error: any) {
@@ -1474,7 +1474,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.DummyOutput
     } catch (error: any) {
@@ -1516,7 +1516,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.DynamicClassTwo
     } catch (error: any) {
@@ -1558,7 +1558,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.DynInputOutput
     } catch (error: any) {
@@ -1600,7 +1600,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.DynInputOutput[]
     } catch (error: any) {
@@ -1642,7 +1642,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -1684,7 +1684,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.ContactInfo
     } catch (error: any) {
@@ -1726,7 +1726,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as (string | types.DynEnumTwo)[]
     } catch (error: any) {
@@ -1768,7 +1768,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.DynamicSchema
     } catch (error: any) {
@@ -1810,7 +1810,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as (string | types.Hobby)[]
     } catch (error: any) {
@@ -1852,7 +1852,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -1894,7 +1894,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string[]
     } catch (error: any) {
@@ -1936,7 +1936,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Person[]
     } catch (error: any) {
@@ -1978,7 +1978,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.ReceiptInfo
     } catch (error: any) {
@@ -2020,7 +2020,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Resume
     } catch (error: any) {
@@ -2062,7 +2062,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Resume
     } catch (error: any) {
@@ -2104,7 +2104,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -2146,7 +2146,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.ClassOptionalOutput | null
     } catch (error: any) {
@@ -2188,7 +2188,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.ClassOptionalOutput2 | null
     } catch (error: any) {
@@ -2230,7 +2230,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.EnumOutput[]
     } catch (error: any) {
@@ -2272,7 +2272,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.EnumOutput
     } catch (error: any) {
@@ -2314,7 +2314,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -2356,7 +2356,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -2398,7 +2398,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -2440,7 +2440,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.LiteralClassHello
     } catch (error: any) {
@@ -2482,7 +2482,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.LiteralClassOne | types.LiteralClassTwo
     } catch (error: any) {
@@ -2524,7 +2524,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -2566,7 +2566,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as boolean
     } catch (error: any) {
@@ -2608,7 +2608,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.TestOutputClass
     } catch (error: any) {
@@ -2650,7 +2650,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.TestOutputClass[]
     } catch (error: any) {
@@ -2692,7 +2692,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.TestClassNested
     } catch (error: any) {
@@ -2734,7 +2734,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.TestClassWithEnum
     } catch (error: any) {
@@ -2776,7 +2776,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -2818,7 +2818,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as false
     } catch (error: any) {
@@ -2860,7 +2860,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as 5
     } catch (error: any) {
@@ -2902,7 +2902,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as "example output"
     } catch (error: any) {
@@ -2944,7 +2944,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string[]
     } catch (error: any) {
@@ -2986,7 +2986,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.TestEnum
     } catch (error: any) {
@@ -3028,7 +3028,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.TestClassAlias
     } catch (error: any) {
@@ -3070,7 +3070,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -3112,7 +3112,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.RaysData
     } catch (error: any) {
@@ -3154,7 +3154,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.OrderInfo
     } catch (error: any) {
@@ -3196,7 +3196,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.SearchParams
     } catch (error: any) {
@@ -3238,7 +3238,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as Partial<Record<types.MapKey, string>>
     } catch (error: any) {
@@ -3280,7 +3280,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as Partial<Record<"one" | "two" | "three" | "four", string>>
     } catch (error: any) {
@@ -3322,7 +3322,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as Record<"key", string>
     } catch (error: any) {
@@ -3364,7 +3364,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.JsonValue
     } catch (error: any) {
@@ -3406,7 +3406,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -3448,7 +3448,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as 1 | true | "string output"
     } catch (error: any) {
@@ -3490,7 +3490,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -3532,7 +3532,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Checked<types.BlockConstraint,"cross_field">
     } catch (error: any) {
@@ -3574,7 +3574,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.ClassWithBlockDone
     } catch (error: any) {
@@ -3616,7 +3616,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.ClassWithoutDone
     } catch (error: any) {
@@ -3658,7 +3658,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.NestedBlockConstraint
     } catch (error: any) {
@@ -3700,7 +3700,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.SemanticContainer
     } catch (error: any) {
@@ -3742,7 +3742,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as Record<string, string[]>
     } catch (error: any) {
@@ -3784,7 +3784,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.MergeAttrs
     } catch (error: any) {
@@ -3826,7 +3826,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.DynamicOutput
     } catch (error: any) {
@@ -3868,7 +3868,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number | string | boolean | string[] | Record<string, string[]>
     } catch (error: any) {
@@ -3910,7 +3910,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.ClassForNullLiteral
     } catch (error: any) {
@@ -3952,7 +3952,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -3994,7 +3994,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -4036,7 +4036,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as (types.OptionalTest_ReturnType | null)[]
     } catch (error: any) {
@@ -4078,7 +4078,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -4120,7 +4120,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -4162,7 +4162,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -4204,7 +4204,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -4246,7 +4246,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.FooAny
     } catch (error: any) {
@@ -4288,7 +4288,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Checked<number,"too_big">
     } catch (error: any) {
@@ -4330,7 +4330,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number | string | boolean
     } catch (error: any) {
@@ -4372,7 +4372,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -4414,7 +4414,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -4456,7 +4456,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -4498,7 +4498,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -4540,7 +4540,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -4582,7 +4582,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -4624,7 +4624,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -4666,7 +4666,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.RecAliasOne
     } catch (error: any) {
@@ -4708,7 +4708,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.NodeWithAliasIndirection
     } catch (error: any) {
@@ -4750,7 +4750,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.RecursiveUnion
     } catch (error: any) {
@@ -4792,7 +4792,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -4834,7 +4834,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -4876,7 +4876,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Checked<number,"gt_ten">
     } catch (error: any) {
@@ -4918,7 +4918,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -4960,7 +4960,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.JsonTemplate
     } catch (error: any) {
@@ -5002,7 +5002,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.MalformedConstraints
     } catch (error: any) {
@@ -5044,7 +5044,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Schema
     } catch (error: any) {
@@ -5086,7 +5086,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.RecursiveListAlias
     } catch (error: any) {
@@ -5128,7 +5128,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.RecursiveMapAlias
     } catch (error: any) {
@@ -5170,7 +5170,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.BigNumbers
     } catch (error: any) {
@@ -5212,7 +5212,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.TwoStoriesOneTitle
     } catch (error: any) {
@@ -5254,7 +5254,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.TwoStoriesOneTitleCheck
     } catch (error: any) {
@@ -5296,7 +5296,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -5338,7 +5338,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as (number | string)[]
     } catch (error: any) {
@@ -5380,7 +5380,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.CompoundBigNumbers
     } catch (error: any) {
@@ -5422,7 +5422,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Document1559
     } catch (error: any) {
@@ -5464,7 +5464,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.RecursiveAliasDependency
     } catch (error: any) {
@@ -5506,7 +5506,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -5548,7 +5548,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -5590,7 +5590,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -5632,7 +5632,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -5674,7 +5674,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -5716,7 +5716,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -5758,7 +5758,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -5800,7 +5800,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -5842,7 +5842,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -5884,7 +5884,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -5926,7 +5926,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -5968,7 +5968,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6010,7 +6010,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6052,7 +6052,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6094,7 +6094,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6136,7 +6136,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6178,7 +6178,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6220,7 +6220,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6262,7 +6262,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6304,7 +6304,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6346,7 +6346,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6388,7 +6388,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6430,7 +6430,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6472,7 +6472,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6514,7 +6514,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6556,7 +6556,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6598,7 +6598,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6640,7 +6640,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6682,7 +6682,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6724,7 +6724,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as Record<string, types.StringToClassEntry>
     } catch (error: any) {
@@ -6766,7 +6766,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as Record<string, Record<string, string>>
     } catch (error: any) {
@@ -6808,7 +6808,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as Record<string, string>
     } catch (error: any) {
@@ -6850,7 +6850,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6892,7 +6892,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -6934,7 +6934,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string[]
     } catch (error: any) {
@@ -6976,7 +6976,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7018,7 +7018,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7060,7 +7060,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7102,7 +7102,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7144,7 +7144,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7186,7 +7186,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7228,7 +7228,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7270,7 +7270,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7312,7 +7312,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7354,7 +7354,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.TestMemoryOutput
     } catch (error: any) {
@@ -7396,7 +7396,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7438,7 +7438,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7480,7 +7480,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7522,7 +7522,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7564,7 +7564,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string | null
     } catch (error: any) {
@@ -7606,7 +7606,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Haiku
     } catch (error: any) {
@@ -7648,7 +7648,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7690,7 +7690,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7732,7 +7732,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7774,7 +7774,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7816,7 +7816,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7858,7 +7858,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7900,7 +7900,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7942,7 +7942,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -7984,7 +7984,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8026,7 +8026,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8068,7 +8068,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8110,7 +8110,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8152,7 +8152,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8194,7 +8194,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8236,7 +8236,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8278,7 +8278,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8320,7 +8320,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8362,7 +8362,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8404,7 +8404,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8446,7 +8446,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8488,7 +8488,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8530,7 +8530,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8572,7 +8572,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8614,7 +8614,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8656,7 +8656,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8698,7 +8698,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8740,7 +8740,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8782,7 +8782,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8824,7 +8824,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8866,7 +8866,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8908,7 +8908,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8950,7 +8950,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -8992,7 +8992,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -9034,7 +9034,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -9076,7 +9076,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.CustomStory
     } catch (error: any) {
@@ -9118,7 +9118,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.UniverseQuestion
     } catch (error: any) {
@@ -9160,7 +9160,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -9202,7 +9202,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -9244,7 +9244,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -9286,7 +9286,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.UnionTest_ReturnType
     } catch (error: any) {
@@ -9328,7 +9328,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -9370,7 +9370,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.MaintainFieldOrder
     } catch (error: any) {
@@ -9412,7 +9412,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -9454,7 +9454,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -9496,7 +9496,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -9538,7 +9538,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -9580,7 +9580,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -9622,7 +9622,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -9664,7 +9664,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -9706,7 +9706,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -9748,7 +9748,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -9790,7 +9790,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -9832,7 +9832,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -9874,7 +9874,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -9916,7 +9916,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -9958,7 +9958,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -10000,7 +10000,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.DummyJsonTodo
     } catch (error: any) {
@@ -10042,7 +10042,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as boolean
     } catch (error: any) {
@@ -10084,7 +10084,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as boolean
     } catch (error: any) {
@@ -10126,7 +10126,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as boolean
     } catch (error: any) {
@@ -10168,7 +10168,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -10210,7 +10210,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -10252,7 +10252,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as boolean
     } catch (error: any) {
@@ -10294,7 +10294,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as types.Category
     } catch (error: any) {
@@ -10336,7 +10336,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -10378,7 +10378,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as Image
     } catch (error: any) {
@@ -10420,7 +10420,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -10462,7 +10462,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -10504,7 +10504,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -10546,7 +10546,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -10588,7 +10588,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -10630,7 +10630,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -10672,7 +10672,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -10714,7 +10714,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -10756,7 +10756,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -10798,7 +10798,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {
@@ -10840,7 +10840,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as number
     } catch (error: any) {

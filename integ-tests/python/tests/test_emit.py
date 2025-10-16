@@ -42,7 +42,7 @@ async def test_emit_basic_changes():
     listener.on_var("twice", on_twice_change)
 
     # Call the function with the event listener
-    response = await b.WorkflowWatch({"events": listener})
+    response = await b.WorkflowWatch({"watchers": listener})
 
     # Give some time for events to be processed
     await asyncio.sleep(0.5)
@@ -76,7 +76,7 @@ async def test_emit_stream_handler():
     listener.on_stream("x", on_x_stream)
 
     # Call the function with the event listener
-    response = await b.WorkflowWatch({"events": listener})
+    response = await b.WorkflowWatch({"watchers": listener})
 
     # Give some time for events to be processed
     await asyncio.sleep(0.5)
@@ -101,7 +101,7 @@ async def test_emit_block_handler():
     listener.on_block(on_block)
 
     # Call the function with the event listener
-    response = await b.WorkflowWatch({"events": listener})
+    response = await b.WorkflowWatch({"watchers": listener})
 
     # Give some time for events to be processed
     await asyncio.sleep(0.5)
@@ -127,7 +127,7 @@ async def test_emit_block_handler():
 #     listener.function_WorkflowWatchChild.on_var("x", on_child_x)
 #
 #     # Call the function with the event listener
-#     response = await b.WorkflowEmit({"events": listener})
+#     response = await b.WorkflowEmit({"watchers": listener})
 #
 #     # Give some time for events to be processed
 #     await asyncio.sleep(0.5)
@@ -159,7 +159,7 @@ async def test_emit_multiple_handlers():
     listener.on_var("x", handler2)
 
     # Call the function with the event listener
-    response = await b.WorkflowWatch({"events": listener})
+    response = await b.WorkflowWatch({"watchers": listener})
 
     # Give some time for events to be processed
     await asyncio.sleep(0.5)
