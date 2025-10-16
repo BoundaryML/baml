@@ -47,6 +47,7 @@ pub struct EventCollectorPy {
     pub child_collectors: Vec<ChildCollectorPy>,
     pub has_var_events: bool,
     pub has_child_collectors: bool,
+    pub var_channels_literal: String,
 }
 
 struct CollectorBuilder {
@@ -118,6 +119,13 @@ impl CollectorBuilder {
         let has_var_events = !var_events.is_empty();
         let has_child_collectors = !child_collectors.is_empty();
 
+        // Generate the Literal string for all channel names
+        let var_channels_literal = var_events
+            .iter()
+            .map(|v| format!("\"{}\"", v.channel_name))
+            .collect::<Vec<_>>()
+            .join(", ");
+
         Ok(EventCollectorPy {
             baml_name: self.function_name,
             py_name: py_name.clone(),
@@ -127,11 +135,12 @@ impl CollectorBuilder {
             child_collectors,
             has_var_events,
             has_child_collectors,
+            var_channels_literal,
         })
     }
 }
 
-pub fn build_event_collectors(
+pub fn build_notification_collectors(
     args: &GeneratorArgs,
     pkg: &CurrentRenderPackage,
     function_name_map: &HashMap<String, String>,
@@ -195,7 +204,7 @@ pub fn build_event_collectors(
         }
     }
 
-    // Ensure child collectors exist so they can be referenced even if they have no direct events.
+    // Ensure child collectors exist so they can be referenced even if they have no direct watched vars.
     let referenced_children: Vec<String> = builders
         .values()
         .flat_map(|builder| builder.child_functions.iter().cloned())
@@ -209,11 +218,11 @@ pub fn build_event_collectors(
         }
     }
 
-    let has_any_events = builders
+    let has_any_watched_vars = builders
         .values()
         .any(|builder| builder.has_markdown || !builder.var_channels.is_empty());
 
-    if !has_any_events {
+    if !has_any_watched_vars {
         return Ok(Vec::new());
     }
 
@@ -232,7 +241,7 @@ pub fn build_event_collectors(
 }
 
 #[derive(Template)]
-#[template(path = "events.py.j2", escape = "none", ext = "txt")]
+#[template(path = "watchers.py.j2", escape = "none", ext = "txt")]
 struct EventsTemplate<'a> {
     collectors: &'a [EventCollectorPy],
 }

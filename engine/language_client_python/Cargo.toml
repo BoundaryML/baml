@@ -26,9 +26,7 @@ baml-cli.workspace = true
 baml-ids.workspace = true
 baml-log.workspace = true
 baml-compiler = { path = "../baml-compiler" }
-baml-runtime = { path = "../baml-runtime", default-features = false, features = [
-  "internal",
-] }
+baml-runtime = { path = "../baml-runtime" }
 baml-types.workspace = true
 dashmap = "5.5"
 internal-baml-core.workspace = true
@@ -71,6 +69,6 @@ ctrlc = "3.4.5"
 pyo3-build-config = "0.21.2"
 
 [features]
-default = []
+default = ["baml-runtime/interpreter"]
 # Use the THIR interpreter runtime instead of the VM bytecode runtime
 interpreter = ["baml-runtime/interpreter"]

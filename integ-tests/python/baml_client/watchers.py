@@ -10,30 +10,33 @@
 # BAML files and re-generate this code using: baml-cli generate
 # baml-cli is available with the baml package.
 
-from typing import Callable, Any, Optional, Protocol
+from typing import Callable, Any, Optional, Protocol, Generic, TypeVar, overload, Literal
 from datetime import datetime
 import threading
+import typing
+
+T = TypeVar("T")
 
 class BlockEvent:
     def __init__(self, block_label: str, event_type: str):
         self.block_label = block_label
         self.event_type = event_type  # "enter" | "exit"
 
-class VarEvent:
-    def __init__(self, variable_name: str, value: Any, timestamp: str, function_name: str):
+class VarEvent(Generic[T]):
+    def __init__(self, variable_name: str, value: T, timestamp: str, function_name: str):
         self.variable_name = variable_name
         self.value = value
         self.timestamp = timestamp
         self.function_name = function_name
 
 BlockHandler = Callable[[BlockEvent], None]
-VarHandler = Callable[[VarEvent], None]
+VarEventHandler = Callable[[VarEvent[T]], None]
 StreamHandler = Callable[[Any], None]  # Stream will be an async iterator
 
 class InternalEventBindings(Protocol):
     function_name: str
     block: list[BlockHandler]
-    vars: dict[str, list[VarHandler]]
+    vars: dict[str, list[VarEventHandler[Any]]]
     streams: dict[str, list[StreamHandler]]
     functions: dict[str, "InternalEventBindings"]
 
@@ -50,7 +53,7 @@ class AnotherTakedownEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -110,7 +113,7 @@ class AssignElseIfExprEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -170,7 +173,7 @@ class BoolToIntWithIfElseEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -230,7 +233,7 @@ class BoolToIntWithIfElseCallingLlmEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -290,7 +293,7 @@ class CallLlmDescribeImageEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -350,7 +353,7 @@ class CallReturnOneEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -410,7 +413,7 @@ class ChainedCallsEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -470,7 +473,7 @@ class EchoWorkflowEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -530,7 +533,7 @@ class ExecFetchAsEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -590,7 +593,7 @@ class HomeEnvVarIsEmptyEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -650,7 +653,7 @@ class IsTargetWordEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -710,7 +713,7 @@ class IsTargetWord2EventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -770,7 +773,7 @@ class IterativeFibonacciEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -830,7 +833,7 @@ class NormalElseIfStmtEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -890,7 +893,7 @@ class NotEmptyEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -950,7 +953,7 @@ class ReturnCategoryEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -1010,7 +1013,7 @@ class ReturnElseIfExprEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -1070,7 +1073,7 @@ class ReturnImageFromUrlEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -1130,7 +1133,7 @@ class ReturnNumberEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -1190,7 +1193,7 @@ class ReturnNumberCallingLlmEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -1250,7 +1253,7 @@ class ReturnOneEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -1302,18 +1305,18 @@ def ReturnOne() -> ReturnOneEventCollector:
     return ReturnOneEventCollector()
 
 
-class SimpleEmitWithFilterEventCollector:
+class SimpleWatchWithFilterEventCollector:
     def __init__(self):
         self._block_handlers: list[BlockHandler] = []
         self._lock = threading.Lock()
 
         
-        self._var_handlers_word: list[VarHandler] = []
+        self._var_handlers_word: list[VarEventHandler[str]] = []
         self._stream_handlers_word: list[StreamHandler] = []
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {
             
             "word": self._var_handlers_word,
             
@@ -1337,12 +1340,22 @@ class SimpleEmitWithFilterEventCollector:
             self._block_handlers.append(handler)
 
     
-    def on_var(self, channel: str, handler: VarHandler) -> None:
+    
+    @overload
+    def on_var(self, channel: Literal["word"], handler: VarEventHandler[str]) -> None: ...
+    
+
+    def on_var(self, channel: Literal["word"], handler: VarEventHandler[Any]) -> None:
         with self._lock:
             if channel in self._var_handler_map:
                 self._var_handler_map[channel].append(handler)
 
-    def on_stream(self, channel: str, handler: StreamHandler) -> None:
+    
+    @overload
+    def on_stream(self, channel: Literal["word"], handler: StreamHandler) -> None: ...
+    
+
+    def on_stream(self, channel: Literal["word"], handler: StreamHandler) -> None:
         with self._lock:
             if channel in self._stream_handler_map:
                 self._stream_handler_map[channel].append(handler)
@@ -1372,7 +1385,7 @@ class SimpleEmitWithFilterEventCollector:
 
             class Bindings:
                 def __init__(self):
-                    self.function_name = "SimpleEmitWithFilter"
+                    self.function_name = "SimpleWatchWithFilter"
                     self.block = block_handlers
                     self.vars = vars_dict
                     self.streams = streams_dict
@@ -1380,8 +1393,8 @@ class SimpleEmitWithFilterEventCollector:
 
             return Bindings()
 
-def SimpleEmitWithFilter() -> SimpleEmitWithFilterEventCollector:
-    return SimpleEmitWithFilterEventCollector()
+def SimpleWatchWithFilter() -> SimpleWatchWithFilterEventCollector:
+    return SimpleWatchWithFilterEventCollector()
 
 
 class StoreFnCallInLocalVarEventCollector:
@@ -1392,7 +1405,7 @@ class StoreFnCallInLocalVarEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -1452,7 +1465,7 @@ class StoreLlmCallInLocalVarEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -1512,7 +1525,7 @@ class SumArrayEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -1572,7 +1585,7 @@ class SumFromToEventCollector:
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
         self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
@@ -1624,30 +1637,30 @@ def SumFromTo() -> SumFromToEventCollector:
     return SumFromToEventCollector()
 
 
-class WorkflowEmitEventCollector:
+class WorkflowWatchEventCollector:
     def __init__(self):
         self._block_handlers: list[BlockHandler] = []
         self._lock = threading.Lock()
 
         
-        self._var_handlers_once: list[VarHandler] = []
+        self._var_handlers_once: list[VarEventHandler[str]] = []
         self._stream_handlers_once: list[StreamHandler] = []
         
-        self._var_handlers_story: list[VarHandler] = []
+        self._var_handlers_story: list[VarEventHandler[str]] = []
         self._stream_handlers_story: list[StreamHandler] = []
         
-        self._var_handlers_twice: list[VarHandler] = []
+        self._var_handlers_twice: list[VarEventHandler[typing.List[str]]] = []
         self._stream_handlers_twice: list[StreamHandler] = []
         
-        self._var_handlers_x: list[VarHandler] = []
+        self._var_handlers_x: list[VarEventHandler[int]] = []
         self._stream_handlers_x: list[StreamHandler] = []
         
-        self._var_handlers_y: list[VarHandler] = []
+        self._var_handlers_y: list[VarEventHandler[bool]] = []
         self._stream_handlers_y: list[StreamHandler] = []
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {
             
             "once": self._var_handlers_once,
             
@@ -1679,13 +1692,13 @@ class WorkflowEmitEventCollector:
         
         self._function_handler_map: dict[str, EventCollectorInternal] = {
             
-            "WorkflowEmitChild": WorkflowEmitChild(),
+            "WorkflowWatchChild": WorkflowWatchChild(),
             
         }
         
 
         
-        self.function_WorkflowEmitChild = self._function_handler_map["WorkflowEmitChild"]
+        self.function_WorkflowWatchChild = self._function_handler_map["WorkflowWatchChild"]
         
 
     def on_block(self, handler: BlockHandler) -> None:
@@ -1693,12 +1706,46 @@ class WorkflowEmitEventCollector:
             self._block_handlers.append(handler)
 
     
-    def on_var(self, channel: str, handler: VarHandler) -> None:
+    
+    @overload
+    def on_var(self, channel: Literal["once"], handler: VarEventHandler[str]) -> None: ...
+    
+    @overload
+    def on_var(self, channel: Literal["story"], handler: VarEventHandler[str]) -> None: ...
+    
+    @overload
+    def on_var(self, channel: Literal["twice"], handler: VarEventHandler[typing.List[str]]) -> None: ...
+    
+    @overload
+    def on_var(self, channel: Literal["x"], handler: VarEventHandler[int]) -> None: ...
+    
+    @overload
+    def on_var(self, channel: Literal["y"], handler: VarEventHandler[bool]) -> None: ...
+    
+
+    def on_var(self, channel: Literal["once", "story", "twice", "x", "y"], handler: VarEventHandler[Any]) -> None:
         with self._lock:
             if channel in self._var_handler_map:
                 self._var_handler_map[channel].append(handler)
 
-    def on_stream(self, channel: str, handler: StreamHandler) -> None:
+    
+    @overload
+    def on_stream(self, channel: Literal["once"], handler: StreamHandler) -> None: ...
+    
+    @overload
+    def on_stream(self, channel: Literal["story"], handler: StreamHandler) -> None: ...
+    
+    @overload
+    def on_stream(self, channel: Literal["twice"], handler: StreamHandler) -> None: ...
+    
+    @overload
+    def on_stream(self, channel: Literal["x"], handler: StreamHandler) -> None: ...
+    
+    @overload
+    def on_stream(self, channel: Literal["y"], handler: StreamHandler) -> None: ...
+    
+
+    def on_stream(self, channel: Literal["once", "story", "twice", "x", "y"], handler: StreamHandler) -> None:
         with self._lock:
             if channel in self._stream_handler_map:
                 self._stream_handler_map[channel].append(handler)
@@ -1728,7 +1775,7 @@ class WorkflowEmitEventCollector:
 
             class Bindings:
                 def __init__(self):
-                    self.function_name = "WorkflowEmit"
+                    self.function_name = "WorkflowWatch"
                     self.block = block_handlers
                     self.vars = vars_dict
                     self.streams = streams_dict
@@ -1736,22 +1783,22 @@ class WorkflowEmitEventCollector:
 
             return Bindings()
 
-def WorkflowEmit() -> WorkflowEmitEventCollector:
-    return WorkflowEmitEventCollector()
+def WorkflowWatch() -> WorkflowWatchEventCollector:
+    return WorkflowWatchEventCollector()
 
 
-class WorkflowEmitChildEventCollector:
+class WorkflowWatchChildEventCollector:
     def __init__(self):
         self._block_handlers: list[BlockHandler] = []
         self._lock = threading.Lock()
 
         
-        self._var_handlers_x: list[VarHandler] = []
+        self._var_handlers_x: list[VarEventHandler[str]] = []
         self._stream_handlers_x: list[StreamHandler] = []
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {
             
             "x": self._var_handlers_x,
             
@@ -1775,12 +1822,22 @@ class WorkflowEmitChildEventCollector:
             self._block_handlers.append(handler)
 
     
-    def on_var(self, channel: str, handler: VarHandler) -> None:
+    
+    @overload
+    def on_var(self, channel: Literal["x"], handler: VarEventHandler[str]) -> None: ...
+    
+
+    def on_var(self, channel: Literal["x"], handler: VarEventHandler[Any]) -> None:
         with self._lock:
             if channel in self._var_handler_map:
                 self._var_handler_map[channel].append(handler)
 
-    def on_stream(self, channel: str, handler: StreamHandler) -> None:
+    
+    @overload
+    def on_stream(self, channel: Literal["x"], handler: StreamHandler) -> None: ...
+    
+
+    def on_stream(self, channel: Literal["x"], handler: StreamHandler) -> None:
         with self._lock:
             if channel in self._stream_handler_map:
                 self._stream_handler_map[channel].append(handler)
@@ -1810,7 +1867,7 @@ class WorkflowEmitChildEventCollector:
 
             class Bindings:
                 def __init__(self):
-                    self.function_name = "WorkflowEmitChild"
+                    self.function_name = "WorkflowWatchChild"
                     self.block = block_handlers
                     self.vars = vars_dict
                     self.streams = streams_dict
@@ -1818,22 +1875,22 @@ class WorkflowEmitChildEventCollector:
 
             return Bindings()
 
-def WorkflowEmitChild() -> WorkflowEmitChildEventCollector:
-    return WorkflowEmitChildEventCollector()
+def WorkflowWatchChild() -> WorkflowWatchChildEventCollector:
+    return WorkflowWatchChildEventCollector()
 
 
-class WorkflowEmitWithFilterEventCollector:
+class WorkflowWatchWithFilterEventCollector:
     def __init__(self):
         self._block_handlers: list[BlockHandler] = []
         self._lock = threading.Lock()
 
         
-        self._var_handlers_this_word: list[VarHandler] = []
+        self._var_handlers_this_word: list[VarEventHandler[str]] = []
         self._stream_handlers_this_word: list[StreamHandler] = []
         
 
         
-        self._var_handler_map: dict[str, list[VarHandler]] = {
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {
             
             "this_word": self._var_handlers_this_word,
             
@@ -1857,12 +1914,22 @@ class WorkflowEmitWithFilterEventCollector:
             self._block_handlers.append(handler)
 
     
-    def on_var(self, channel: str, handler: VarHandler) -> None:
+    
+    @overload
+    def on_var(self, channel: Literal["this_word"], handler: VarEventHandler[str]) -> None: ...
+    
+
+    def on_var(self, channel: Literal["this_word"], handler: VarEventHandler[Any]) -> None:
         with self._lock:
             if channel in self._var_handler_map:
                 self._var_handler_map[channel].append(handler)
 
-    def on_stream(self, channel: str, handler: StreamHandler) -> None:
+    
+    @overload
+    def on_stream(self, channel: Literal["this_word"], handler: StreamHandler) -> None: ...
+    
+
+    def on_stream(self, channel: Literal["this_word"], handler: StreamHandler) -> None:
         with self._lock:
             if channel in self._stream_handler_map:
                 self._stream_handler_map[channel].append(handler)
@@ -1892,7 +1959,7 @@ class WorkflowEmitWithFilterEventCollector:
 
             class Bindings:
                 def __init__(self):
-                    self.function_name = "WorkflowEmitWithFilter"
+                    self.function_name = "WorkflowWatchWithFilter"
                     self.block = block_handlers
                     self.vars = vars_dict
                     self.streams = streams_dict
@@ -1900,6 +1967,6 @@ class WorkflowEmitWithFilterEventCollector:
 
             return Bindings()
 
-def WorkflowEmitWithFilter() -> WorkflowEmitWithFilterEventCollector:
-    return WorkflowEmitWithFilterEventCollector()
+def WorkflowWatchWithFilter() -> WorkflowWatchWithFilterEventCollector:
+    return WorkflowWatchWithFilterEventCollector()
 

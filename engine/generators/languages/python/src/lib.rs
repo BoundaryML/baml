@@ -67,8 +67,12 @@ impl LanguageFeatures for PyLanguageFeatures {
         }
 
         // Generate event collectors first to determine has_events
-        let event_collectors = watchers::build_event_collectors(args, &pkg, &function_name_map)?;
-        collector.add_file("events.py", watchers::render_events(&event_collectors)?)?;
+        let notification_collectors =
+            watchers::build_notification_collectors(args, &pkg, &function_name_map)?;
+        collector.add_file(
+            "watchers.py",
+            watchers::render_events(&notification_collectors)?,
+        )?;
 
         // Generate __init__.py with correct has_events value
         collector.add_file("__init__.py", render_init(&pkg, &args.default_client_mode)?)?;

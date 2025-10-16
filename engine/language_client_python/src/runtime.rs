@@ -108,7 +108,7 @@ impl BamlLogEvent {
 
 // Helper struct to store event callbacks
 #[cfg(feature = "interpreter")]
-struct EmitCallbacks {
+struct NotificationCallbacks {
     var_handlers: HashMap<String, Vec<Arc<PyObject>>>,
     stream_handlers: HashMap<String, Vec<Arc<PyObject>>>,
     block_handlers: Vec<Arc<PyObject>>,
@@ -116,7 +116,10 @@ struct EmitCallbacks {
 
 // Extract event handlers from the EventCollector.__handlers__() result
 #[cfg(feature = "interpreter")]
-fn extract_emit_callbacks(py: Python, events_obj: PyObject) -> PyResult<Option<EmitCallbacks>> {
+fn extract_notification_callbacks(
+    py: Python,
+    events_obj: PyObject,
+) -> PyResult<Option<NotificationCallbacks>> {
     // Call __handlers() method to get InternalEventBindings
     let handlers_result = events_obj.call_method0(py, "__handlers__")?;
     let bindings = handlers_result.downcast_bound::<PyDict>(py)?;
@@ -179,7 +182,7 @@ fn extract_emit_callbacks(py: Python, events_obj: PyObject) -> PyResult<Option<E
         }
     }
 
-    Ok(Some(EmitCallbacks {
+    Ok(Some(NotificationCallbacks {
         var_handlers,
         stream_handlers,
         block_handlers,
@@ -304,20 +307,20 @@ impl BamlRuntime {
             .map(|ac| ac.create_tripwire())
             .unwrap_or_else(|| TripWire::new(None));
 
-        // Extract emit callbacks from EventCollector (only for interpreter)
+        // Extract notification callbacks from EventCollector (only for interpreter)
         #[cfg(feature = "interpreter")]
-        let emit_callbacks = if let Some(events_obj) = events {
-            extract_emit_callbacks(py, events_obj)?
+        let notification_callbacks = if let Some(events_obj) = events {
+            extract_notification_callbacks(py, events_obj)?
         } else {
             None
         };
 
         #[cfg(feature = "interpreter")]
-        let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
-            if let Some(ref callbacks) = emit_callbacks {
+        let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
+            if let Some(ref callbacks) = notification_callbacks {
                 Python::with_gil(|py| {
-                    match event.value {
-                        baml_compiler::emit::EmitBamlValue::Block(block_label) => {
+                    match notification.value {
+                        baml_compiler::watch::WatchBamlValue::Block(block_label) => {
                             // Fire block events to all registered block handlers
                             for handler in &callbacks.block_handlers {
                                 let block_event_dict = PyDict::new(py);
@@ -327,8 +330,8 @@ impl BamlRuntime {
                                 let _ = handler.call1(py, (block_event_dict,));
                             }
                         }
-                        baml_compiler::emit::EmitBamlValue::Value(value) => {
-                            if let Some(var_name) = &event.variable_name {
+                        baml_compiler::watch::WatchBamlValue::Value(value) => {
+                            if let Some(var_name) = &notification.variable_name {
                                 // Serialize BamlValue to JSON
                                 let serialized = serde_json::to_value(value.value())
                                     .unwrap_or(serde_json::Value::Null);
@@ -345,10 +348,10 @@ impl BamlRuntime {
                                         .to_string(),
                                 );
                                 let _ = var_event_dict
-                                    .set_item("function_name", event.function_name.clone());
+                                    .set_item("function_name", notification.function_name.clone());
 
                                 // Fire to appropriate handler based on stream vs var
-                                let handlers = if event.is_stream {
+                                let handlers = if notification.is_stream {
                                     &callbacks.stream_handlers
                                 } else {
                                     &callbacks.var_handlers
@@ -375,9 +378,9 @@ impl BamlRuntime {
             cb.as_ref(),
             Some(collector_list),
             env_vars,
-            tags,
+            tags.as_ref(),
             tripwire,
-            Some(emit_handler),
+            Some(watch_handler),
         );
 
         #[cfg(not(feature = "interpreter"))]
@@ -416,7 +419,7 @@ impl BamlRuntime {
                     cb.as_ref(),
                     Some(collector_list),
                     env_vars,
-                    tags,
+                    tags.as_ref(),
                     tripwire,
                     Some(watch_handler),
                 )
@@ -472,20 +475,20 @@ impl BamlRuntime {
             .map(|ac| ac.create_tripwire())
             .unwrap_or_else(|| TripWire::new(None));
 
-        // Extract emit callbacks from EventCollector (only for interpreter)
+        // Extract notification callbacks from EventCollector (only for interpreter)
         #[cfg(feature = "interpreter")]
-        let emit_callbacks = if let Some(events_obj) = events {
-            extract_emit_callbacks(py, events_obj)?
+        let notification_callbacks = if let Some(events_obj) = events {
+            extract_notification_callbacks(py, events_obj)?
         } else {
             None
         };
 
         #[cfg(feature = "interpreter")]
-        let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
-            if let Some(ref callbacks) = emit_callbacks {
+        let watch_handler = move |event: baml_compiler::watch::WatchNotification| {
+            if let Some(ref callbacks) = notification_callbacks {
                 Python::with_gil(|py| {
                     match event.value {
-                        baml_compiler::emit::EmitBamlValue::Block(block_label) => {
+                        baml_compiler::watch::WatchBamlValue::Block(block_label) => {
                             // Fire block events to all registered block handlers
                             for handler in &callbacks.block_handlers {
                                 let block_event_dict = PyDict::new(py);
@@ -546,7 +549,8 @@ impl BamlRuntime {
                 env_vars,
                 tags,
                 tripwire,
-                Some(watch_handler), // TODO: Notification handler.
+                Some(watch_handler),
+                None::<fn(baml_compiler::watch::WatchNotification)>,
             )
         });
 
@@ -618,8 +622,8 @@ impl BamlRuntime {
                 cb.map(|cb| cb.inner.clone()).as_ref(),
                 Some(collector_list),
                 env_vars.clone(),
-                tags,
                 tripwire,
+                tags.as_ref(),
             )
             .map_err(BamlError::from_anyhow)?;
 

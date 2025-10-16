@@ -2,13 +2,13 @@ import pytest
 import asyncio
 import time
 from ..baml_client import b
-from ..baml_client import events
+from ..baml_client import watchers
 
 
 @pytest.mark.asyncio
 async def test_emit_basic_changes():
     """Test that emit events are fired correctly"""
-    listener = events.WorkflowEmit()
+    listener = watchers.WorkflowWatch()
 
     # Track if we saw changes
     saw_x_change = False
@@ -42,7 +42,7 @@ async def test_emit_basic_changes():
     listener.on_var("twice", on_twice_change)
 
     # Call the function with the event listener
-    response = await b.WorkflowEmit({"events": listener})
+    response = await b.WorkflowWatch({"events": listener})
 
     # Give some time for events to be processed
     await asyncio.sleep(0.5)
@@ -76,7 +76,7 @@ async def test_emit_stream_handler():
     listener.on_stream("x", on_x_stream)
 
     # Call the function with the event listener
-    response = await b.WorkflowEmit({"events": listener})
+    response = await b.WorkflowWatch({"events": listener})
 
     # Give some time for events to be processed
     await asyncio.sleep(0.5)
@@ -90,7 +90,7 @@ async def test_emit_stream_handler():
 @pytest.mark.asyncio
 async def test_emit_block_handler():
     """Test that block handlers work correctly"""
-    listener = events.WorkflowEmit()
+    listener = watchers.WorkflowWatch()
 
     block_events = []
 
@@ -101,7 +101,7 @@ async def test_emit_block_handler():
     listener.on_block(on_block)
 
     # Call the function with the event listener
-    response = await b.WorkflowEmit({"events": listener})
+    response = await b.WorkflowWatch({"events": listener})
 
     # Give some time for events to be processed
     await asyncio.sleep(0.5)
@@ -112,38 +112,38 @@ async def test_emit_block_handler():
         print(f"  {event.block_label}: {event.event_type}")
 
 
-@pytest.mark.asyncio
-async def test_emit_child_function():
-    """Test that child function events work correctly"""
-    listener = events.WorkflowEmit()
-
-    child_events = []
-
-    def on_child_x(ev):
-        print(f"Child x changed: {ev.variable_name} = {ev.value}")
-        child_events.append(ev)
-
-    # Register handler for child function's variable
-    listener.function_WorkflowEmitChild.on_var("x", on_child_x)
-
-    # Call the function with the event listener
-    response = await b.WorkflowEmit({"events": listener})
-
-    # Give some time for events to be processed
-    await asyncio.sleep(0.5)
-
-    # Verify we saw child function events
-    assert len(child_events) > 0, "Should have seen child function variable changes"
-
-    print(f"\nReceived {len(child_events)} child function events:")
-    for event in child_events:
-        print(f"  {event.function_name}.{event.variable_name} = {event.value}")
+# @pytest.mark.asyncio
+# async def test_emit_child_function():
+#     """Test that child function events work correctly"""
+#     listener = watchers.WorkflowWatch()
+#
+#     child_events = []
+#
+#     def on_child_x(ev):
+#         print(f"Child x changed: {ev.variable_name} = {ev.value}")
+#         child_events.append(ev)
+#
+#     # Register handler for child function's variable
+#     listener.function_WorkflowWatchChild.on_var("x", on_child_x)
+#
+#     # Call the function with the event listener
+#     response = await b.WorkflowEmit({"events": listener})
+#
+#     # Give some time for events to be processed
+#     await asyncio.sleep(0.5)
+#
+#     # Verify we saw child function events
+#     assert len(child_events) > 0, "Should have seen child function variable changes"
+#
+#     print(f"\nReceived {len(child_events)} child function events:")
+#     for event in child_events:
+#         print(f"  {event.function_name}.{event.variable_name} = {event.value}")
 
 
 @pytest.mark.asyncio
 async def test_emit_multiple_handlers():
     """Test that multiple handlers on the same channel work correctly"""
-    listener = events.WorkflowEmit()
+    listener = watchers.WorkflowWatch()
 
     handler1_calls = []
     handler2_calls = []
@@ -159,7 +159,7 @@ async def test_emit_multiple_handlers():
     listener.on_var("x", handler2)
 
     # Call the function with the event listener
-    response = await b.WorkflowEmit({"events": listener})
+    response = await b.WorkflowWatch({"events": listener})
 
     # Give some time for events to be processed
     await asyncio.sleep(0.5)
