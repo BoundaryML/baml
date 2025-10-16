@@ -146,8 +146,19 @@ use crate::{Object, ObjectIndex, ObjectPool, StackIndex, Value};
 /// State associated with an emittable root.
 ///
 /// TODO: Fields (current value, previous assigned value, etc).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RootState;
+#[derive(Clone, Debug, PartialEq)]
+pub struct RootState {
+    /// Current value.
+    pub value: Value,
+    /// Previously assigned value.
+    pub prev_assigned: Option<Value>,
+    /// Last emitted value.
+    pub last_emitted: Option<Value>,
+    /// Channel name.
+    pub channel: String,
+    /// Pointer to filter function.
+    pub filter: Option<ObjectIndex>,
+}
 
 /// Identifies a node in the emit graph.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -218,13 +229,13 @@ impl Emit {
     /// Registers a new emittable root at the given node.
     ///
     /// Triggers a BFS graph traversal starting at `root`.
-    pub fn register_root(&mut self, root: NodeId) {
+    pub fn register_root(&mut self, root: NodeId, state: RootState) {
         // If this root already exists, do nothing
         if self.roots.contains_key(&root) {
             return;
         }
 
-        self.roots.insert(root, RootState);
+        self.roots.insert(root, state);
 
         // Compute initial reachability from this root
         let reachable = self.breadth_first_search_from(root);
@@ -494,12 +505,22 @@ impl Emit {
 mod tests {
     use super::*;
 
+    fn test_root_state() -> RootState {
+        RootState {
+            value: Value::Int(0),
+            prev_assigned: None,
+            last_emitted: None,
+            channel: "Test".to_string(),
+            filter: None,
+        }
+    }
+
     #[test]
     fn test_basic_emit_registration() {
         let mut emit = Emit::new();
 
         let var = NodeId::LocalVar(StackIndex::from_raw(0));
-        emit.register_root(var);
+        emit.register_root(var, test_root_state());
 
         // Root should be registered
         assert!(emit.roots.contains_key(&var));
@@ -517,7 +538,7 @@ mod tests {
         let obj = NodeId::HeapObject(ObjectIndex::from_raw(1));
 
         // Register root at var
-        emit.register_root(var);
+        emit.register_root(var, test_root_state());
 
         // Link var -> obj
         emit.link_edge(var, Path::Binding, obj);
@@ -547,7 +568,7 @@ mod tests {
         emit.link_edge(b, Path::InstanceField(0), a);
 
         // Register root at root_node
-        emit.register_root(root_node);
+        emit.register_root(root_node, test_root_state());
 
         // Link root -> A (brings cycle into reachability)
         emit.link_edge(root_node, Path::Binding, a);
@@ -573,8 +594,8 @@ mod tests {
         let obj = NodeId::HeapObject(ObjectIndex::from_raw(0));
 
         // Register two roots
-        emit.register_root(var1);
-        emit.register_root(var2);
+        emit.register_root(var1, test_root_state());
+        emit.register_root(var2, test_root_state());
 
         // Link both to the same object
         emit.link_edge(var1, Path::Binding, obj);
@@ -606,7 +627,7 @@ mod tests {
         let obj3 = NodeId::HeapObject(ObjectIndex::from_raw(2));
 
         // Create chain: var -> obj1 -> obj2 -> obj3
-        emit.register_root(var);
+        emit.register_root(var, test_root_state());
         emit.link_edge(var, Path::Binding, obj1);
         emit.link_edge(obj1, Path::InstanceField(0), obj2);
         emit.link_edge(obj2, Path::InstanceField(0), obj3);

@@ -4,7 +4,7 @@ use baml_types::{BamlMap, BamlMedia};
 
 use crate::{
     bytecode::{BinOp, CmpOp, Instruction},
-    emit::{self, Emit, NodeId},
+    emit::{self, Emit, NodeId, RootState},
     errors::{ErrorLocation, InternalError, RuntimeError, VmError},
     indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex},
     types::{
@@ -1332,7 +1332,16 @@ impl Vm {
                     let var_node = NodeId::LocalVar(value_index);
 
                     // Register this variable as an emittable root
-                    self.emit.register_root(var_node);
+                    self.emit.register_root(
+                        var_node,
+                        RootState {
+                            channel: "Test".to_string(),
+                            filter: None,
+                            last_emitted: None,
+                            prev_assigned: None,
+                            value,
+                        },
+                    );
 
                     // Track this so we can unregister on scope exit
                     self.emittable_vars.insert(value_index);

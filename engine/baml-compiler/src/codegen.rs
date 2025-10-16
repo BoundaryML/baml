@@ -714,6 +714,9 @@ impl<'g> HirCompiler<'g> {
                 // TODO: Revisit this, track emittable should take channel and
                 // filter, which are given in the spec.
                 if let Some(spec) = emit {
+                    self.emit_string_literal(&spec.name); // This adds LoadConst
+
+                    // TODO: filter
                     self.emit(Instruction::TrackEmittable);
                 }
             }
