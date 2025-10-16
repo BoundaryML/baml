@@ -10,6 +10,8 @@ async def test_emit_basic_changes():
     """Test that emit events are fired correctly"""
     listener = watchers.WorkflowWatch()
 
+    sublistener = listener.function_WorkflowWatchChild
+
     # Track if we saw changes
     saw_x_change = False
     saw_once_change = False
@@ -20,6 +22,7 @@ async def test_emit_basic_changes():
 
     def on_x_change(ev):
         print("SAW X CHANGE!")
+        print(ev)
         nonlocal saw_x_change
         print(f"x changed: {ev.variable_name} = {ev.value}")
         captured_events.append(("x", ev))
@@ -27,6 +30,7 @@ async def test_emit_basic_changes():
 
     def on_once_change(ev):
         print("SAW ONCE CHANGE!")
+        print(ev)
         nonlocal saw_once_change
         print(f"once changed: {ev.variable_name} = {ev.value}")
         captured_events.append(("once", ev))
@@ -39,11 +43,16 @@ async def test_emit_basic_changes():
         captured_events.append(("twice", ev))
         saw_twice_change = True
 
+    def on_sub_x_change(ev):
+        print("SAW SUB_X CHANGE!!!!!!!!!!!!!")
+
     # Register event handlers
     # listener.on_var("x", lambda x: print(x))
     listener.on_var("x", on_x_change)
     listener.on_var("once", on_once_change)
     listener.on_var("twice", on_twice_change)
+
+    listener.function_WorkflowWatchChild.on_var("x", lambda ev: on_sub_x_change(ev))
 
     # Call the function with the event listener
     response = await b.WorkflowWatch({"watchers": listener})

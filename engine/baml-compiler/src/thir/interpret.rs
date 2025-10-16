@@ -1814,27 +1814,31 @@ where
                 }
 
                 // Check if this is an expression function call to get parameter names
-                let param_names = if let Expr::Var(func_name, _) = func.as_ref() {
+                // and the actual function name for watch notifications
+                let (param_names, called_function_name) = if let Expr::Var(func_name, _) =
+                    func.as_ref()
+                {
                     if let Some(expr_func) =
                         thir.expr_functions.iter().find(|f| &f.name == func_name)
                     {
                         // Use actual parameter names from expression function
-                        expr_func
+                        let params = expr_func
                             .parameters
                             .iter()
                             .map(|p| p.name.clone())
-                            .collect::<Vec<_>>()
+                            .collect::<Vec<_>>();
+                        (params, func_name.as_str())
                     } else {
                         // Use fresh names for anonymous functions
                         let body_expr =
                             Expr::Block(Box::new(Arc::unwrap_or_clone(body.clone())), meta.clone());
-                        body_expr.fresh_names(arity)
+                        (body_expr.fresh_names(arity), function_name)
                     }
                 } else {
                     // Use fresh names for complex function expressions
                     let body_expr =
                         Expr::Block(Box::new(Arc::unwrap_or_clone(body.clone())), meta.clone());
-                    body_expr.fresh_names(arity)
+                    (body_expr.fresh_names(arity), function_name)
                 };
 
                 // Create a scope binding parameters to their argument values
@@ -1848,14 +1852,14 @@ where
                     is_filter_context: false,
                 });
 
-                // Execute the function body
+                // Execute the function body with the correct function name for watch notifications
                 let result = evaluate_block(
                     &body,
                     scopes,
                     thir,
                     run_llm_function,
                     watch_handler,
-                    function_name,
+                    called_function_name,
                 )
                 .await?;
                 scopes.pop();
