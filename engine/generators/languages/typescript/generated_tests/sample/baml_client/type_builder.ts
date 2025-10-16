@@ -22,12 +22,14 @@ import { FieldType } from '@boundaryml/baml/native'
 import { TypeBuilder as _TypeBuilder, EnumBuilder, EnumViewer, ClassBuilder, ClassViewer } from '@boundaryml/baml/type_builder'
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
 
+export { FieldType, EnumBuilder, ClassBuilder }
+
 export default class TypeBuilder {
     private tb: _TypeBuilder;
     
-    Example: ClassViewer<'Example', "a" | "b">;
+    Example: ClassViewer<'Example', "type" | "a" | "b">;
     
-    Example2: ClassViewer<'Example2', "item" | "element" | "element2">;
+    Example2: ClassViewer<'Example2', "type" | "item" | "element" | "element2">;
     
     
 
@@ -43,13 +45,25 @@ export default class TypeBuilder {
         });
         
         this.Example = this.tb.classViewer("Example", [
-          "a","b",
+          "type","a","b",
         ]);
         
         this.Example2 = this.tb.classViewer("Example2", [
-          "item","element","element2",
+          "type","item","element","element2",
         ]);
         
+        
+    }
+
+    reset(): void {
+        this.tb.reset();
+        // TODO: This should happen in Rust. Problem is, when we construct the
+        // typebuilder we instantiate class builders once and it seems to make
+        // a JS copy, bypassing the Rust side? In Python however, every time we
+        // access a class builder with @property, we get a new instance that
+        // wraps over the Rust type builder, so we only need to call tb.reset().
+        // In JS it's not possible unless we refactor the way class builders are
+        // accessed.
         
     }
 

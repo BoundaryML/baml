@@ -1,6 +1,7 @@
 use std::{borrow::Cow, collections::HashMap};
 
 use baml_ids::{FunctionCallId, FunctionEventId};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -98,6 +99,13 @@ pub struct EvaluationContext {
     // pub client_registry: Option<ClientRegistryValue>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RpcClientDetails {
+    pub name: String,
+    pub provider: String,
+    pub options: IndexMap<String, serde_json::Value>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum IntermediateData<'a> {
     /// These are all resolved from the client
@@ -108,15 +116,23 @@ pub enum IntermediateData<'a> {
         prompt: Vec<LLMChatMessage<'a>>,
     },
     RawLLMRequest {
+        http_request_id: String,
         url: String,
         method: String,
         headers: HashMap<String, String>,
+        client_details: RpcClientDetails,
         body: HTTPBody<'a>,
     },
     RawLLMResponse {
+        http_request_id: String,
         status: u16,
         headers: Option<HashMap<String, String>>,
         body: HTTPBody<'a>,
+        client_details: RpcClientDetails,
+    },
+    RawLLMResponseStream {
+        http_request_id: String,
+        event: Event<'a>,
     },
     LLMResponse {
         client_stack: Vec<String>,
@@ -135,7 +151,81 @@ pub enum IntermediateData<'a> {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HTTPBody<'a> {
+    #[serde(
+        serialize_with = "serialize_bytes_as_string",
+        deserialize_with = "deserialize_string_as_bytes"
+    )]
     pub raw: Cow<'a, [u8]>,
+}
+
+fn serialize_bytes_as_string<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    // Serialize as text to avoid exploding arrays of bytes; use lossy UTF-8 if needed
+    let s = String::from_utf8_lossy(bytes);
+    serializer.serialize_str(&s)
+}
+
+fn deserialize_string_as_bytes<'de, D>(deserializer: D) -> Result<Cow<'static, [u8]>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct BytesVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for BytesVisitor {
+        type Value = Cow<'static, [u8]>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a string or byte array")
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(Cow::Owned(value.as_bytes().to_vec()))
+        }
+
+        fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(Cow::Owned(value.into_bytes()))
+        }
+
+        fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(Cow::Owned(value.to_vec()))
+        }
+
+        fn visit_byte_buf<E>(self, value: Vec<u8>) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(Cow::Owned(value))
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::SeqAccess<'de>,
+        {
+            let mut bytes = Vec::new();
+            while let Some(byte) = seq.next_element::<u8>()? {
+                bytes.push(byte);
+            }
+            Ok(Cow::Owned(bytes))
+        }
+    }
+
+    deserializer.deserialize_any(BytesVisitor)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Event<'a> {
+    pub raw: Cow<'a, str>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -162,4 +252,5 @@ pub struct LLMUsage {
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
+    pub cached_input_tokens: Option<u64>,
 }

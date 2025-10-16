@@ -4,3 +4,4 @@
 **/baml_client/inlinedbaml.go binary
 **/baml_client/** merge=baml_client
 **/baml_client/** linguist-generated=true
+**/*.lfs.baml filter=lfs diff=lfs merge=lfs -text

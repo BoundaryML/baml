@@ -49,6 +49,14 @@ dependencies {
     }
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    
+    // CLI Downloader dependencies
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.apache.commons:commons-compress:1.24.0")
+    implementation("org.slf4j:slf4j-api:2.0.9")
+    implementation("ch.qos.logback:logback-classic:1.4.11")
+    implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 }
 
 // Configure IntelliJ Platform Gradle Plugin - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-extension.html
@@ -59,17 +67,6 @@ intellijPlatform {
 
         // Extract the <!-- Plugin description --> section from README.md and provide for the plugin's manifest
         description = providers.fileContents(layout.projectDirectory.file("../README.md")).asText.map(::markdownToHTML)
-//        description = providers.fileContents(layout.projectDirectory.file("../README.md")).asText.map {
-//            val start = "<!-- Plugin description -->"
-//            val end = "<!-- Plugin description end -->"
-//
-//            with(it.lines()) {
-//                if (!containsAll(listOf(start, end))) {
-//                    throw GradleException("Plugin description section not found in README.md:\n$start ... $end")
-//                }
-//                subList(indexOf(start) + 1, indexOf(end)).joinToString("\n").let(::markdownToHTML)
-//            }
-//        }
 
         val changelog = project.changelog // local variable for configuration cache compatibility
         // Get the latest available change notes from the changelog file
@@ -138,7 +135,6 @@ tasks {
     // This task is inherited from a dependency, "intellij platform" maybe?
     processResources {
         dependsOn("copyTextmateFiles")
-        dependsOn("copyWebPanelDist")
     }
 
     // This task is inherited from a dependency, "intellij platform" maybe?
@@ -148,7 +144,7 @@ tasks {
 
     register<Copy>("copyTextmateFiles") {
         group = "build"
-        from("../typescript/vscode-ext/packages") {
+        from("../typescript/apps/vscode-ext") {
             include("package.json")
             include("language-configuration.json")
             include("syntaxes/baml.tmLanguage.json")
@@ -156,13 +152,35 @@ tasks {
         }
         into("src/main/resources/textmate")
     }
-
-    register<Copy>("copyWebPanelDist") {
-        group = "build"
-        from("../typescript/vscode-ext/packages/web-panel/") {
-            include("dist")
+    
+    // Configure the runIde task to auto-open integ-tests directory
+    runIde {
+        args = listOf("${layout.projectDirectory}/../integ-tests/baml_src")
+    }
+    
+    // Configure trusted paths to avoid security prompts in development
+    prepareSandbox {
+        val integTestsPath = layout.projectDirectory.dir("../integ-tests").asFile.absolutePath
+        val bamlSrcPath = layout.projectDirectory.dir("../integ-tests/baml_src").asFile.absolutePath
+        
+        doLast {
+            val trustedPathsFile = sandboxConfigDirectory.file("options/trusted-paths.xml").get().asFile
+            trustedPathsFile.parentFile.mkdirs()
+            trustedPathsFile.writeText(
+                """
+                <application>
+                  <component name="Trusted.Paths">
+                    <option name="TRUSTED_PROJECT_PATHS">
+                      <map>
+                        <entry key="$integTestsPath" value="true" />
+                        <entry key="$bamlSrcPath" value="true" />
+                      </map>
+                    </option>
+                  </component>
+                </application>
+                """.trimIndent()
+            )
         }
-        into("src/main/resources/web-panel")
     }
 }
 

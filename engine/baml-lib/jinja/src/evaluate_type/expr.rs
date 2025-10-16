@@ -90,6 +90,231 @@ fn parse_as_function_call(
     }
 }
 
+// Helper function to check if binary operator is a comparison operator
+fn is_comparison_op(op: &ast::BinOpKind) -> bool {
+    matches!(
+        op,
+        ast::BinOpKind::Eq
+            | ast::BinOpKind::Ne
+            | ast::BinOpKind::Lt
+            | ast::BinOpKind::Gt
+            | ast::BinOpKind::Lte
+            | ast::BinOpKind::Gte
+    )
+}
+
+// Helper function to check if union is nullable enum (enum + nullish only)
+fn extract_enum_from_nullable_union(types: &[Type]) -> Option<&str> {
+    let mut enum_name: Option<&str> = None;
+
+    for t in types {
+        match t {
+            Type::EnumValueRef(name) => {
+                if enum_name.is_some() {
+                    // Multiple different enums in union - not a simple nullable enum
+                    return None;
+                }
+                enum_name = Some(name);
+            }
+            Type::None | Type::Undefined => {
+                // Nullish types are allowed in nullable enums
+                continue;
+            }
+            _ => {
+                // Any other type (String, Int, etc.) means this isn't a nullable enum
+                return None;
+            }
+        }
+    }
+
+    enum_name
+}
+
+// Helper function to handle enum binary operations
+fn handle_enum_binary_operation(
+    expr: &ast::Expr,
+    bin_expr: &ast::Spanned<ast::BinOp>,
+    lhs: &Type,
+    rhs: &Type,
+    state: &mut ScopeTracker,
+    types: &PredefinedTypes,
+) -> Option<Type> {
+    // First check for nullable enum patterns before strict enum handling
+    // Handle nullable enum to string literal comparisons
+    if let (Type::Union(union_types), Type::Literal(LiteralValue::String(str_val))) = (lhs, rhs) {
+        if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
+            if is_comparison_op(&bin_expr.op) {
+                state.errors.push(TypeError::new_enum_literal_suggestion(
+                    expr,
+                    enum_name,
+                    str_val,
+                    types,
+                    expr.span(),
+                ));
+                return Some(Type::Bool);
+            }
+        }
+    }
+    if let (Type::Literal(LiteralValue::String(str_val)), Type::Union(union_types)) = (lhs, rhs) {
+        if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
+            if is_comparison_op(&bin_expr.op) {
+                state.errors.push(TypeError::new_enum_literal_suggestion(
+                    expr,
+                    enum_name,
+                    str_val,
+                    types,
+                    expr.span(),
+                ));
+                return Some(Type::Bool);
+            }
+        }
+    }
+
+    // Handle nullable enum vs generic string
+    if let (Type::Union(union_types), Type::String) = (lhs, rhs) {
+        if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
+            if is_comparison_op(&bin_expr.op) {
+                state.errors.push(TypeError::new_enum_string_cmp_deprecated(
+                    expr,
+                    enum_name,
+                    expr.span(),
+                ));
+                return Some(Type::Bool);
+            }
+        }
+    }
+    if let (Type::String, Type::Union(union_types)) = (lhs, rhs) {
+        if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
+            if is_comparison_op(&bin_expr.op) {
+                state.errors.push(TypeError::new_enum_string_cmp_deprecated(
+                    expr,
+                    enum_name,
+                    expr.span(),
+                ));
+                return Some(Type::Bool);
+            }
+        }
+    }
+
+    // Handle nullable-to-nullable enum comparisons
+    if let (Type::Union(left_types), Type::Union(right_types)) = (lhs, rhs) {
+        let left_enum = extract_enum_from_nullable_union(left_types);
+        let right_enum = extract_enum_from_nullable_union(right_types);
+
+        if let (Some(left), Some(right)) = (left_enum, right_enum) {
+            if is_comparison_op(&bin_expr.op) {
+                if left == right {
+                    return Some(Type::Bool);
+                } else {
+                    state.errors.push(TypeError::new_enum_literal_suggestion(
+                        expr,
+                        left,
+                        "different_enum",
+                        types,
+                        expr.span(),
+                    ));
+                    return Some(Type::Bool);
+                }
+            }
+        }
+    }
+
+    // Now check if either operand is an EnumValueRef for strict handling
+    match (lhs, rhs) {
+        // Both are EnumValueRef - only allow comparison ops between same enum
+        (Type::EnumValueRef(e1), Type::EnumValueRef(e2)) => {
+            match &bin_expr.op {
+                op if is_comparison_op(op) => {
+                    if e1 == e2 {
+                        Some(Type::Bool)
+                    } else {
+                        state.errors.push(TypeError::new_enum_literal_suggestion(
+                            expr,
+                            e1,
+                            "different_enum",
+                            types,
+                            expr.span(),
+                        ));
+                        Some(Type::Unknown)
+                    }
+                }
+                _ => {
+                    // Disallow arithmetic/string ops on enums
+                    state.errors.push(TypeError::new_enum_literal_suggestion(
+                        expr,
+                        e1,
+                        "arithmetic_operation",
+                        types,
+                        expr.span(),
+                    ));
+                    Some(Type::Unknown)
+                }
+            }
+        }
+        // EnumValueRef with string literal - suggest proper enum syntax
+        (Type::EnumValueRef(enum_name), Type::Literal(LiteralValue::String(str_val)))
+        | (Type::Literal(LiteralValue::String(str_val)), Type::EnumValueRef(enum_name)) => {
+            match &bin_expr.op {
+                op if is_comparison_op(op) => {
+                    state.errors.push(TypeError::new_enum_literal_suggestion(
+                        expr,
+                        enum_name,
+                        str_val,
+                        types,
+                        expr.span(),
+                    ));
+                    Some(Type::Bool)
+                }
+                _ => {
+                    // Disallow arithmetic/string ops on enums
+                    state.errors.push(TypeError::new_enum_literal_suggestion(
+                        expr,
+                        enum_name,
+                        str_val,
+                        types,
+                        expr.span(),
+                    ));
+                    Some(Type::Unknown)
+                }
+            }
+        }
+        // EnumValueRef with generic string - placeholder message
+        (Type::EnumValueRef(enum_name), Type::String)
+        | (Type::String, Type::EnumValueRef(enum_name)) => {
+            match &bin_expr.op {
+                op if is_comparison_op(op) => {
+                    state.errors.push(TypeError::new_enum_string_cmp_deprecated(
+                        expr,
+                        enum_name,
+                        expr.span(),
+                    ));
+                    Some(Type::Bool)
+                }
+                _ => {
+                    // Disallow arithmetic/string ops on enums
+                    state.errors.push(TypeError::new_enum_string_cmp_deprecated(
+                        expr,
+                        enum_name,
+                        expr.span(),
+                    ));
+                    Some(Type::Unknown)
+                }
+            }
+        }
+        // Any other combination with EnumValueRef is invalid
+        (Type::EnumValueRef(enum_name), _) | (_, Type::EnumValueRef(enum_name)) => {
+            state.errors.push(TypeError::new_enum_string_cmp_deprecated(
+                expr,
+                enum_name,
+                expr.span(),
+            ));
+            Some(Type::Unknown)
+        }
+        // No enums involved - return None to fall through to normal operator handling
+        _ => None,
+    }
+}
+
 fn tracker_visit_expr(
     expr: &ast::Expr<'_>,
     state: &mut ScopeTracker,
@@ -119,12 +344,19 @@ fn tracker_visit_expr(
 
             expected
         }
-        ast::Expr::BinOp(expr) => {
-            let lhs = tracker_visit_expr(&expr.left, state, types);
-            let rhs = tracker_visit_expr(&expr.right, state, types);
-            // TODO: Check for type compatibility
+        ast::Expr::BinOp(bin_expr) => {
+            let lhs = tracker_visit_expr(&bin_expr.left, state, types);
+            let rhs = tracker_visit_expr(&bin_expr.right, state, types);
 
-            match expr.op {
+            // Handle enum operations with the helper function
+            if let Some(result) =
+                handle_enum_binary_operation(expr, bin_expr, &lhs, &rhs, state, types)
+            {
+                return result;
+            }
+
+            // No enums involved - fall through to normal operator handling
+            match bin_expr.op {
                 ast::BinOpKind::Add => {
                     if lhs.is_subtype_of(&Type::String) || rhs.is_subtype_of(&Type::String) {
                         Type::String
@@ -142,9 +374,9 @@ fn tracker_visit_expr(
                 ast::BinOpKind::Ne => Type::Bool,
                 ast::BinOpKind::Lt => Type::Bool,
                 ast::BinOpKind::Gt => Type::Bool,
-                ast::BinOpKind::In => Type::Bool,
                 ast::BinOpKind::Lte => Type::Bool,
                 ast::BinOpKind::Gte => Type::Bool,
+                ast::BinOpKind::In => Type::Bool,
                 ast::BinOpKind::Concat => Type::String,
                 ast::BinOpKind::ScAnd => Type::Bool,
                 ast::BinOpKind::ScOr => Type::Bool,
@@ -329,23 +561,46 @@ fn tracker_visit_expr(
 
             match &parent {
                 Type::ClassRef(c) => {
-                    let (t, err) =
-                        types.check_property(&pretty_print(&expr.expr), c, expr.name, expr.span());
+                    let (t, err) = types.check_class_property(
+                        &pretty_print(&expr.expr),
+                        c,
+                        expr.name,
+                        expr.span(),
+                    );
                     if let Some(e) = err {
                         state.errors.push(e);
                     }
                     t
                 }
-                Type::Unknown => Type::Unknown,
-                t => {
-                    state.errors.push(TypeError::new_invalid_type(
-                        &expr.expr,
-                        t,
-                        "class",
+                Type::EnumTypeRef(e) => {
+                    let (t, err) = types.check_enum_property(
+                        &pretty_print(&expr.expr),
+                        e,
+                        expr.name,
                         expr.span(),
-                    ));
-                    Type::Unknown
+                    );
+                    if let Some(e) = err {
+                        state.errors.push(e);
+                    }
+                    t
                 }
+                Type::EnumValueRef(enum_value) => match expr.name {
+                    "value" => Type::String,
+                    _ => {
+                        state.errors.push(TypeError::new_enum_value_property_error(
+                            &pretty_print(&expr.expr),
+                            enum_value,
+                            expr.name,
+                            expr.span(),
+                        ));
+                        Type::Unknown
+                    }
+                },
+                Type::Union(_) | Type::Alias { .. } => {
+                    typecheck_attr_access_on_union(&parent, expr, types, state)
+                }
+                Type::Unknown => Type::Unknown,
+                other => expected_class_got(other, expr, state),
             }
         }
         ast::Expr::GetItem(_expr) => Type::Unknown,
@@ -440,6 +695,17 @@ fn infer_const_type(v: &minijinja::value::Value) -> Type {
 
 pub fn evaluate_type(expr: &ast::Expr, types: &PredefinedTypes) -> Result<Type, Vec<TypeError>> {
     let mut state = ScopeTracker::new();
+    // Lint: bare function reference without call, e.g. `{{ MyTemplateString }}` vs `{{ MyTemplateString() }}`
+    if let ast::Expr::Var(var) = expr {
+        if let Some((_, _)) = types.as_function(var.id) {
+            state
+                .errors
+                .push(TypeError::new_function_reference_without_call(
+                    var.id,
+                    var.span(),
+                ));
+        }
+    }
     let result = tracker_visit_expr(expr, &mut state, types);
 
     if state.errors.is_empty() {
@@ -447,4 +713,109 @@ pub fn evaluate_type(expr: &ast::Expr, types: &PredefinedTypes) -> Result<Type, 
     } else {
         Err(state.errors)
     }
+}
+
+/// Verifies that an attribute is present in all items of a union.
+///
+/// This is used especially for if statements like `if v.kind == "X"` where v
+/// is a union of types and we need to check that `kind` is present in all of
+/// the types, thus making the attr access valid in every case, therefore not
+/// a type error.
+///
+/// This functions returns the type of the attr if present in all items.
+/// Otherwise, it returns [`Type::Unknown`] and pushes a type error to the
+/// `state` param.
+///
+/// TODO: This function is very similar to `narrow_attr_access_on_union_var` in
+/// `stmt.rs`. Reusing the code is not straightforward though (at least if we
+/// want it to be readable), but we should try something because this is kind of
+/// error prone if we add more types that need to be covered.
+fn typecheck_attr_access_on_union(
+    union_type: &Type,
+    get_attr: &ast::Spanned<ast::GetAttr<'_>>,
+    types: &PredefinedTypes,
+    state: &mut ScopeTracker,
+) -> Type {
+    // Resolve items.
+    let union_items = match union_type {
+        Type::Union(items) => items,
+        Type::Alias { resolved, .. } => match resolved.as_ref() {
+            Type::Union(items) => items,
+            _ => return expected_class_got(union_type, get_attr, state),
+        },
+        _ => {
+            return expected_class_got(union_type, get_attr, state);
+        }
+    };
+
+    // Attribute must be present on all items of the union and also have the
+    // same type.
+    let mut attr_type = None;
+
+    // Search recursively for all types in the union to check
+    // if they all contain the property.
+    let mut stack = Vec::from_iter(union_items.iter());
+
+    while let Some(union_item_type) = stack.pop() {
+        match union_item_type {
+            Type::ClassRef(class_name) => {
+                // Get type of prop
+                let (class_prop_type, err) = types.check_class_property(
+                    &pretty_print(&get_attr.expr),
+                    class_name,
+                    get_attr.name,
+                    get_attr.span(),
+                );
+
+                // Prop not found in one of the types is a type error.
+                if err.is_some() {
+                    return expected_class_got(union_type, get_attr, state);
+                }
+
+                // Check if previous type matches the current one
+                match &attr_type {
+                    None => attr_type = Some(class_prop_type),
+
+                    Some(prev_type) => {
+                        // Found two distinct types for the same prop.
+                        if !class_prop_type.equals_ignoring_literal_values(prev_type) {
+                            return expected_class_got(union_type, get_attr, state);
+                        }
+                    }
+                }
+            }
+
+            // Resolve aliases.
+            Type::Alias { resolved, .. } => stack.push(resolved),
+
+            // Recurse into nested unions
+            Type::Union(nested) => stack.extend(nested.iter()),
+
+            // Found a type that's not a class, stop here.
+            _ => {
+                return expected_class_got(union_type, get_attr, state);
+            }
+        }
+    }
+
+    match attr_type {
+        Some(attr_type) => attr_type,
+        None => expected_class_got(union_type, get_attr, state),
+    }
+}
+
+/// Helper for [`typecheck_attr_access_on_union`].
+fn expected_class_got(
+    got: &Type,
+    get_attr: &ast::Spanned<ast::GetAttr<'_>>,
+    state: &mut ScopeTracker,
+) -> Type {
+    state.errors.push(TypeError::new_invalid_type(
+        &get_attr.expr,
+        got,
+        "class",
+        get_attr.span(),
+    ));
+
+    Type::Unknown
 }

@@ -3,7 +3,10 @@ use std::collections::HashSet;
 use indexmap::IndexSet;
 use itertools::Itertools;
 
-use crate::{baml_value::TypeLookups, BamlMediaType, ConstraintLevel};
+use crate::{
+    baml_value::{TypeLookups, TypeLookupsMeta},
+    BamlMediaType, ConstraintLevel,
+};
 
 mod builder;
 mod converters;
@@ -11,6 +14,7 @@ mod display;
 mod simplify;
 pub mod type_meta;
 mod union_type;
+pub use display::MetaSuffix;
 pub use union_type::UnionConstructor;
 
 // Types, depending on the context, have different metadata attached to them.
@@ -19,6 +23,8 @@ pub use union_type::UnionConstructor;
 /// The building block of IR types in BAML.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, Eq, Hash)]
 pub enum TypeGeneric<T> {
+    // Type that can be casted to any other. Used for generics that accept anything, e.g std::fetch_value.
+    Top(T),
     Primitive(TypeValue, T),
     Enum {
         name: String,
@@ -36,6 +42,7 @@ pub enum TypeGeneric<T> {
     Map(Box<TypeGeneric<T>>, Box<TypeGeneric<T>>, T),
     RecursiveTypeAlias {
         name: String,
+        mode: StreamingMode,
         meta: T,
     },
     Tuple(Vec<TypeGeneric<T>>, T),
@@ -43,7 +50,42 @@ pub enum TypeGeneric<T> {
     Union(UnionTypeGeneric<T>, T),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, strum::Display)]
+impl TypeValue {
+    pub fn basename(&self) -> &'static str {
+        match self {
+            TypeValue::String => "string",
+            TypeValue::Int => "int",
+            TypeValue::Float => "float",
+            TypeValue::Bool => "bool",
+            TypeValue::Null => "null",
+            TypeValue::Media(_) => "media",
+        }
+    }
+}
+
+impl<T> TypeGeneric<T> {
+    pub fn basename(&self) -> &'static str {
+        match self {
+            TypeGeneric::Top(_) => "ANY",
+            TypeGeneric::Primitive(type_value, _) => type_value.basename(),
+            TypeGeneric::Enum { .. } => "enum",
+            TypeGeneric::Literal(lit, _) => match lit {
+                LiteralValue::String(_) => "string",
+                LiteralValue::Int(_) => "int",
+                LiteralValue::Bool(_) => "bool",
+            },
+            TypeGeneric::Class { .. } => "class",
+            TypeGeneric::List(_, _) => "list",
+            TypeGeneric::Map(_, _, _) => "map",
+            TypeGeneric::RecursiveTypeAlias { .. } => "type alias",
+            TypeGeneric::Tuple(_, _) => "tuple",
+            TypeGeneric::Arrow(_, _) => "function",
+            TypeGeneric::Union(_, _) => "union",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, strum::Display)]
 pub enum StreamingMode {
     NonStreaming,
     Streaming,
@@ -59,6 +101,89 @@ pub struct UnionTypeGeneric<T> {
 pub type TypeIR = TypeGeneric<type_meta::IR>;
 pub type TypeNonStreaming = TypeGeneric<type_meta::NonStreaming>;
 pub type TypeStreaming = TypeGeneric<type_meta::Streaming>;
+
+/// Wrapper type that implements Display. Not implementing display directly for TypeIR because
+/// we may want multiple display modes.
+pub struct TypeIRDiagnosticRepr<'a>(&'a TypeIR);
+
+impl TypeIR {
+    pub fn diagnostic_repr(&self) -> TypeIRDiagnosticRepr<'_> {
+        TypeIRDiagnosticRepr(self)
+    }
+}
+
+impl std::fmt::Display for TypeIRDiagnosticRepr<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn repr_list<'a>(
+            f: &mut std::fmt::Formatter<'_>,
+            iter: impl IntoIterator<Item = &'a TypeIR>,
+            sep: &'static str,
+        ) -> std::fmt::Result {
+            let mut iter = iter.into_iter().map(TypeIRDiagnosticRepr);
+
+            if let Some(first) = iter.next() {
+                write!(f, "{first}")?;
+                for next in iter {
+                    write!(f, "{sep}{next}")?;
+                }
+            }
+
+            Ok(())
+        }
+
+        fn repr_tuple<'a>(
+            f: &mut std::fmt::Formatter<'_>,
+            iter: impl IntoIterator<Item = &'a TypeIR>,
+        ) -> std::fmt::Result {
+            f.write_str("(")?;
+
+            repr_list(f, iter, ", ")?;
+
+            f.write_str(")")
+        }
+
+        match self.0 {
+            TypeGeneric::Top(_) => f.write_str("ANY"),
+            TypeGeneric::Primitive(type_value, _) => f.write_str(type_value.basename()),
+            TypeGeneric::Enum { name, dynamic, .. } => write!(
+                f,
+                "enum `{name}`{}",
+                if *dynamic { " (dynamic)" } else { "" }
+            ),
+            TypeGeneric::Literal(literal_value, _) => f.write_str(match literal_value {
+                LiteralValue::String(_) => "string",
+                LiteralValue::Int(_) => "int",
+                LiteralValue::Bool(_) => "bool",
+            }),
+            TypeGeneric::Class { name, dynamic, .. } => {
+                write!(
+                    f,
+                    "class `{name}`{}",
+                    if *dynamic { " (dynamic)" } else { "" }
+                )
+            }
+            TypeGeneric::List(type_generic, _) => {
+                write!(f, "{}[]", type_generic.diagnostic_repr())
+            }
+            TypeGeneric::Map(key, value, _) => write!(
+                f,
+                "map<{}, {}>",
+                key.diagnostic_repr(),
+                value.diagnostic_repr()
+            ),
+            TypeGeneric::RecursiveTypeAlias { name, .. } => f.write_str(name),
+            TypeGeneric::Tuple(type_generics, _) => repr_tuple(f, type_generics),
+            TypeGeneric::Arrow(arrow_generic, _) => {
+                f.write_str("fn")?;
+                repr_tuple(f, &arrow_generic.param_types)?;
+                write!(f, " -> {}", arrow_generic.return_type.diagnostic_repr())
+            }
+            TypeGeneric::Union(union_type_generic, _) => {
+                repr_list(f, &union_type_generic.types, " | ")
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, Eq, Hash)]
 pub enum TypeValue {
@@ -83,6 +208,8 @@ impl std::str::FromStr for TypeValue {
             "null" => TypeValue::Null,
             "image" => TypeValue::Media(BamlMediaType::Image),
             "audio" => TypeValue::Media(BamlMediaType::Audio),
+            "pdf" => TypeValue::Media(BamlMediaType::Pdf),
+            "video" => TypeValue::Media(BamlMediaType::Video),
             _ => return Err(()),
         })
     }
@@ -98,6 +225,8 @@ impl std::fmt::Display for TypeValue {
             TypeValue::Null => write!(f, "null"),
             TypeValue::Media(BamlMediaType::Image) => write!(f, "image"),
             TypeValue::Media(BamlMediaType::Audio) => write!(f, "audio"),
+            TypeValue::Media(BamlMediaType::Pdf) => write!(f, "pdf"),
+            TypeValue::Media(BamlMediaType::Video) => write!(f, "video"),
         }
     }
 }
@@ -303,6 +432,37 @@ impl<T> UnionTypeGeneric<T> {
     }
 }
 
+impl<T: std::cmp::Eq + std::hash::Hash> UnionTypeGeneric<T>
+where
+    TypeGeneric<T>: std::fmt::Display,
+{
+    pub fn selected_type_index(
+        &self,
+        type_to_find: &TypeGeneric<T>,
+        lookup: &impl TypeLookupsMeta<T>,
+    ) -> Result<Option<(usize, Vec<&TypeGeneric<T>>)>, anyhow::Error> {
+        let options = match self.view() {
+            // singles don't apply (only one option)
+            UnionTypeViewGeneric::Null | UnionTypeViewGeneric::Optional(..) => return Ok(None),
+            UnionTypeViewGeneric::OneOf(type_generics) => type_generics,
+            UnionTypeViewGeneric::OneOfOptional(type_generics) => type_generics,
+        };
+
+        for (i, t) in options.iter().enumerate() {
+            if match t {
+                TypeGeneric::RecursiveTypeAlias { name, .. } => {
+                    &TypeLookupsMeta::expand_recursive_type(lookup, name.as_str())? == type_to_find
+                }
+                _ => *t == type_to_find,
+            } {
+                return Ok(Some((i, options)));
+            }
+        }
+
+        Err(anyhow::anyhow!("Failed to find {type_to_find} in union"))
+    }
+}
+
 pub trait HasType<T> {
     fn field_type(&self) -> &TypeGeneric<T>;
 }
@@ -356,38 +516,44 @@ impl<T> TypeGeneric<T> {
     pub fn find_if<'a>(
         &'a self,
         predicate: &impl Fn(&TypeGeneric<T>) -> bool,
+        ignore_map_keys: bool,
     ) -> Vec<&'a TypeGeneric<T>> {
         if predicate(self) {
             return vec![self];
         }
 
         match self {
-            TypeGeneric::Primitive(..)
+            TypeGeneric::Top(_)
+            | TypeGeneric::Primitive(..)
             | TypeGeneric::Enum { .. }
             | TypeGeneric::Literal(..)
             | TypeGeneric::Class { .. }
             | TypeGeneric::RecursiveTypeAlias { .. } => vec![],
-            TypeGeneric::List(inner, _) => inner.find_if(predicate),
-            TypeGeneric::Map(type_generic, type_generic1, _) => {
-                let mut res = type_generic.find_if(predicate);
-                res.extend(type_generic1.find_if(predicate));
+            TypeGeneric::List(inner, _) => inner.find_if(predicate, ignore_map_keys),
+            TypeGeneric::Map(key_type, value_type, _) => {
+                let mut res = value_type.find_if(predicate, ignore_map_keys);
+                if !ignore_map_keys {
+                    res.extend(key_type.find_if(predicate, ignore_map_keys));
+                }
                 res
             }
             TypeGeneric::Tuple(type_generics, _) => type_generics
                 .iter()
-                .flat_map(|t| t.find_if(predicate))
+                .flat_map(|t| t.find_if(predicate, ignore_map_keys))
                 .collect(),
             TypeGeneric::Union(union_type_generic, _) => union_type_generic
                 .iter_skip_null()
                 .iter()
-                .flat_map(|t| t.find_if(predicate))
+                .flat_map(|t| t.find_if(predicate, ignore_map_keys))
                 .collect(),
             TypeGeneric::Arrow(arrow_generic, _) => {
                 let res = arrow_generic
                     .param_types
                     .iter()
-                    .flat_map(|t| t.find_if(predicate));
-                let mut returned = arrow_generic.return_type.find_if(predicate);
+                    .flat_map(|t| t.find_if(predicate, ignore_map_keys));
+                let mut returned = arrow_generic
+                    .return_type
+                    .find_if(predicate, ignore_map_keys);
                 returned.extend(res);
                 returned
             }
@@ -396,6 +562,7 @@ impl<T> TypeGeneric<T> {
 
     pub fn set_meta(&mut self, meta: T) {
         match self {
+            TypeGeneric::Top(m) => *m = meta,
             TypeGeneric::Class { meta: m, .. } => *m = meta,
             TypeGeneric::Arrow(_, type_metadata_ir) => *type_metadata_ir = meta,
             TypeGeneric::Primitive(_, type_metadata_ir) => *type_metadata_ir = meta,
@@ -411,6 +578,7 @@ impl<T> TypeGeneric<T> {
 
     pub fn meta(&self) -> &T {
         match self {
+            TypeGeneric::Top(meta) => meta,
             TypeGeneric::Class { meta, .. } => meta,
             TypeGeneric::Arrow(_, type_metadata_ir) => type_metadata_ir,
             TypeGeneric::Primitive(_, type_metadata_ir) => type_metadata_ir,
@@ -429,6 +597,7 @@ impl<T> TypeGeneric<T> {
         F: Fn(&T) -> U + Copy,
     {
         match self {
+            TypeGeneric::Top(meta) => TypeGeneric::Top(f(meta)),
             TypeGeneric::Class {
                 meta,
                 name,
@@ -438,7 +607,7 @@ impl<T> TypeGeneric<T> {
             } => TypeGeneric::Class {
                 meta: f(meta),
                 name: name.clone(),
-                mode: mode.clone(),
+                mode: *mode,
                 dynamic: *dynamic,
             },
             TypeGeneric::Arrow(arrow, type_metadata_ir) => TypeGeneric::Arrow(
@@ -471,10 +640,13 @@ impl<T> TypeGeneric<T> {
                 Box::new(field_type1.map_meta(f)),
                 f(type_metadata_ir),
             ),
-            TypeGeneric::RecursiveTypeAlias { meta, name } => TypeGeneric::RecursiveTypeAlias {
-                meta: f(meta),
-                name: name.clone(),
-            },
+            TypeGeneric::RecursiveTypeAlias { meta, name, mode } => {
+                TypeGeneric::RecursiveTypeAlias {
+                    meta: f(meta),
+                    mode: *mode,
+                    name: name.clone(),
+                }
+            }
             TypeGeneric::Tuple(inner, type_metadata_ir) => TypeGeneric::Tuple(
                 inner.iter().map(|t| t.map_meta(f)).collect(),
                 f(type_metadata_ir),
@@ -491,16 +663,17 @@ impl<T> TypeGeneric<T> {
 
     pub fn meta_mut(&mut self) -> &mut T {
         match self {
-            TypeGeneric::Class { meta, .. } => meta,
-            TypeGeneric::Arrow(_, type_metadata_ir) => type_metadata_ir,
-            TypeGeneric::Primitive(_, type_metadata_ir) => type_metadata_ir,
-            TypeGeneric::Enum { meta, .. } => meta,
-            TypeGeneric::Literal(_, type_metadata_ir) => type_metadata_ir,
-            TypeGeneric::List(_, type_metadata_ir) => type_metadata_ir,
-            TypeGeneric::Map(_, _, type_metadata_ir) => type_metadata_ir,
-            TypeGeneric::RecursiveTypeAlias { meta, .. } => meta,
-            TypeGeneric::Tuple(_, type_metadata_ir) => type_metadata_ir,
-            TypeGeneric::Union(_, type_metadata_ir) => type_metadata_ir,
+            TypeGeneric::Top(meta)
+            | TypeGeneric::Class { meta, .. }
+            | TypeGeneric::Arrow(_, meta)
+            | TypeGeneric::Primitive(_, meta)
+            | TypeGeneric::Enum { meta, .. }
+            | TypeGeneric::Literal(_, meta)
+            | TypeGeneric::List(_, meta)
+            | TypeGeneric::Map(_, _, meta)
+            | TypeGeneric::RecursiveTypeAlias { meta, .. }
+            | TypeGeneric::Tuple(_, meta)
+            | TypeGeneric::Union(_, meta) => meta,
         }
     }
 
@@ -571,7 +744,8 @@ impl<T> TypeGeneric<T> {
                 TypeGeneric::RecursiveTypeAlias { name, .. } => {
                     deps.insert(name.clone());
                 }
-                TypeGeneric::Primitive(_, _) | TypeGeneric::Literal(_, _) => {}
+                TypeGeneric::Top(_) | TypeGeneric::Primitive(_, _) | TypeGeneric::Literal(_, _) => {
+                }
             }
         }
         deps
@@ -601,6 +775,59 @@ impl TypeIR {
 
     pub fn to_non_streaming_type(&self, lookup: &impl TypeLookups) -> TypeNonStreaming {
         converters::non_streaming::from_type_ir(self, lookup)
+    }
+}
+
+fn merge_modes<Mode: Iterator<Item = anyhow::Result<StreamingMode>>>(
+    modes: Mode,
+) -> anyhow::Result<StreamingMode> {
+    // return first error
+    // if any are streaming, return streaming
+    // else return non-streaming
+    for mode in modes.into_iter() {
+        match mode {
+            Ok(StreamingMode::Streaming) => return Ok(StreamingMode::Streaming),
+            Ok(StreamingMode::NonStreaming) => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(StreamingMode::NonStreaming)
+}
+
+impl<T> TypeGeneric<T> {
+    pub fn mode(
+        &self,
+        mode: &StreamingMode,
+        _lookup: &impl TypeLookups,
+    ) -> anyhow::Result<StreamingMode> {
+        if *mode == StreamingMode::NonStreaming {
+            return Ok(StreamingMode::NonStreaming);
+        }
+
+        match self {
+            TypeGeneric::Class { mode, .. } => Ok(*mode),
+            TypeGeneric::Top(_)
+            | TypeGeneric::Arrow(_, _)
+            | TypeGeneric::Primitive(_, _)
+            | TypeGeneric::Enum { .. }
+            | TypeGeneric::Literal(_, _) => Ok(StreamingMode::NonStreaming),
+            TypeGeneric::List(inner, _) => inner.mode(mode, _lookup),
+            TypeGeneric::Map(key, value, ..) => {
+                let items: Vec<Result<StreamingMode, anyhow::Error>> =
+                    vec![key.mode(mode, _lookup), value.mode(mode, _lookup)];
+                merge_modes(items.into_iter())
+            }
+            TypeGeneric::RecursiveTypeAlias { mode, .. } => Ok(*mode),
+            TypeGeneric::Tuple(inner, _) => {
+                merge_modes(inner.iter().map(|t| t.mode(mode, _lookup)))
+            }
+            TypeGeneric::Union(union_type_generic, _) => merge_modes(
+                union_type_generic
+                    .types
+                    .iter()
+                    .map(|t| t.mode(mode, _lookup)),
+            ),
+        }
     }
 }
 
@@ -634,7 +861,8 @@ impl<Meta: std::hash::Hash + std::cmp::Eq> ToUnionName<Meta> for TypeGeneric<Met
                 set.extend(field_type1.find_union_types());
                 set
             }
-            T::Primitive(_, _)
+            T::Top(_)
+            | T::Primitive(_, _)
             | T::Enum { .. }
             | T::Literal(_, _)
             | T::Class { .. }
@@ -647,6 +875,7 @@ impl<Meta: std::hash::Hash + std::cmp::Eq> ToUnionName<Meta> for TypeGeneric<Met
     fn to_union_name(&self) -> String {
         use TypeGeneric as T;
         match self {
+            T::Top(_) => "ANY".to_string(),
             T::Primitive(type_value, _) => type_value.to_string(),
             T::Enum { name, .. } => name.to_string(),
             T::Literal(literal_value, _) => match literal_value {
@@ -1254,6 +1483,15 @@ mod tests {
     }
 
     #[test]
+    fn streaming_type_roundtrip() {
+        let class = TypeIR::union(vec![TypeIR::literal("ok"), TypeIR::literal("error")]);
+        let streaming_type = class.to_streaming_type(&TestLookup);
+        let again_class = streaming_type.to_ir_type();
+        let again_streaming_type = again_class.to_streaming_type(&TestLookup);
+        assert_eq!(streaming_type, again_streaming_type);
+    }
+
+    #[test]
     // Foo @stream.done => Foo
     fn partialize_class_with_done() {
         let mut class = TypeIR::class("MyClass");
@@ -1399,6 +1637,7 @@ mod tests {
                 UnionTypeGeneric::new_unsafe(vec![
                     TypeStreaming::RecursiveTypeAlias {
                         name: "MyAlias".to_string(),
+                        mode: StreamingMode::Streaming,
                         meta: Default::default(),
                     },
                     TypeStreaming::null(),
@@ -1407,5 +1646,39 @@ mod tests {
             Default::default(),
         );
         assert_eq!(alias.to_streaming_type(&TestLookup), expected);
+    }
+
+    #[test]
+    fn partialize_mixed_done_union() {
+        let mut done_variant = TypeIR::class("FooDone");
+        done_variant.meta_mut().streaming_behavior.done = true;
+
+        let streamable_variant = TypeIR::class("MessageToUser");
+        let union = TypeIR::Union(
+            unsafe { UnionTypeGeneric::new_unsafe(vec![done_variant, streamable_variant]) },
+            Default::default(),
+        );
+        let streaming_type = union.to_streaming_type(&TestLookup);
+        let streaming_type_variants: Vec<TypeStreaming> = match streaming_type {
+            TypeStreaming::Union(union, _) => union.view().flatten(),
+            _ => panic!("Expected union"),
+        };
+        assert_eq!(streaming_type_variants.len(), 3);
+
+        let mut expected_first_variant = TypeStreaming::class("FooDone");
+        expected_first_variant.meta_mut().streaming_behavior.done = true;
+
+        let expected_second_variant = TypeStreaming::Class {
+            name: "MessageToUser".to_string(),
+            mode: StreamingMode::Streaming,
+            dynamic: false,
+            meta: Default::default(),
+        };
+
+        dbg!(&streaming_type_variants[0]);
+        dbg!(&streaming_type_variants[1]);
+        dbg!(&streaming_type_variants[2]);
+        assert_eq!(streaming_type_variants[0], expected_first_variant);
+        assert_eq!(streaming_type_variants[1], expected_second_variant);
     }
 }

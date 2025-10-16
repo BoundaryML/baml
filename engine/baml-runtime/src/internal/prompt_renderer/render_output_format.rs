@@ -391,8 +391,14 @@ fn relevant_data_models<'a>(
                         .chain(new_fields)
                         .map(|field| {
                             let (name, t, desc, needed) = field?;
-                            let t = if partialize && !metadata.streaming_behavior.done {
-                                t.to_streaming_type(ir).to_ir_type()
+                            let t = if partialize {
+                                if metadata.streaming_behavior.done {
+                                    let mut t = t;
+                                    t.meta_mut().streaming_behavior.needed = true;
+                                    t
+                                } else {
+                                    t.to_streaming_type(ir).to_ir_type()
+                                }
                             } else {
                                 t
                             };
@@ -473,6 +479,10 @@ fn relevant_data_models<'a>(
             TypeIR::Literal(_, _) => {}
             TypeIR::Primitive(_, _) => {}
             TypeIR::Arrow(_, _) => {}
+            TypeIR::Top(_) => panic!(
+                "TypeIR::Top should have been resolved by the compiler before code generation. \
+                 This indicates a bug in the type resolution phase."
+            ),
         }
     }
 
@@ -489,6 +499,7 @@ mod tests {
     use std::collections::HashMap;
 
     use baml_ids::FunctionCallId;
+    use internal_baml_core::feature_flags::FeatureFlags;
     use internal_baml_jinja::types::RenderOptions;
 
     use super::*;
@@ -507,7 +518,9 @@ mod tests {
         .into_iter()
         .collect();
         let env_vars = HashMap::new();
-        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars.clone()).unwrap();
+        let baml_runtime =
+            BamlRuntime::from_file_content(".", &files, env_vars.clone(), FeatureFlags::new())
+                .unwrap();
         let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
         let ctx: RuntimeContext = ctx_manager
             .create_ctx(None, None, env_vars.clone(), vec![FunctionCallId::new()])
@@ -515,7 +528,7 @@ mod tests {
 
         let field_type = TypeIR::r#enum("Foo");
         let render_output = render_output_format(
-            baml_runtime.inner.ir.as_ref(),
+            baml_runtime.ir.as_ref(),
             &ctx,
             &field_type,
             StreamingMode::NonStreaming,
@@ -571,7 +584,9 @@ class Resume {
         .into_iter()
         .collect();
         let env_vars = HashMap::new();
-        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars.clone()).unwrap();
+        let baml_runtime =
+            BamlRuntime::from_file_content(".", &files, env_vars.clone(), FeatureFlags::new())
+                .unwrap();
         let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
         let ctx: RuntimeContext = ctx_manager
             .create_ctx(None, None, env_vars.clone(), vec![FunctionCallId::new()])
@@ -579,7 +594,7 @@ class Resume {
 
         let field_type = TypeIR::class("Resume");
         let render_output = render_output_format(
-            baml_runtime.inner.ir.as_ref(),
+            baml_runtime.ir.as_ref(),
             &ctx,
             &field_type,
             StreamingMode::NonStreaming,
@@ -674,7 +689,9 @@ class Resume {
         .into_iter()
         .collect();
         let env_vars = HashMap::new();
-        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars.clone()).unwrap();
+        let baml_runtime =
+            BamlRuntime::from_file_content(".", &files, env_vars.clone(), FeatureFlags::new())
+                .unwrap();
         let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
         let ctx: RuntimeContext = ctx_manager
             .create_ctx(None, None, env_vars.clone(), vec![FunctionCallId::new()])
@@ -682,7 +699,7 @@ class Resume {
 
         let field_type = TypeIR::class("Resume");
         let render_output = render_output_format(
-            baml_runtime.inner.ir.as_ref(),
+            baml_runtime.ir.as_ref(),
             &ctx,
             &field_type,
             StreamingMode::NonStreaming,
@@ -750,7 +767,9 @@ Answer in JSON using this schema:
         .into_iter()
         .collect();
         let env_vars = HashMap::new();
-        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars.clone()).unwrap();
+        let baml_runtime =
+            BamlRuntime::from_file_content(".", &files, env_vars.clone(), FeatureFlags::new())
+                .unwrap();
         let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
         let ctx: RuntimeContext = ctx_manager
             .create_ctx(None, None, env_vars.clone(), vec![FunctionCallId::new()])
@@ -758,7 +777,7 @@ Answer in JSON using this schema:
 
         let field_type = TypeIR::class("Foo");
         let render_output = render_output_format(
-            baml_runtime.inner.ir.as_ref(),
+            baml_runtime.ir.as_ref(),
             &ctx,
             &field_type,
             StreamingMode::NonStreaming,

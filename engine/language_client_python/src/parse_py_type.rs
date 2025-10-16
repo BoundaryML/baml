@@ -10,7 +10,7 @@ use pyo3::{
     IntoPyObjectExt, PyErr, PyObject, PyResult, Python,
 };
 
-use crate::types::{BamlAudioPy, BamlImagePy};
+use crate::types::{BamlAudioPy, BamlImagePy, BamlPdfPy, BamlVideoPy};
 
 struct SerializationError {
     position: Vec<String>,
@@ -310,6 +310,12 @@ pub fn parse_py_type(
                 let b = b.borrow();
                 Ok(MappedPyType::BamlMedia(b.inner.clone()))
             } else if let Ok(b) = any.downcast_bound::<BamlAudioPy>(py) {
+                let b = b.borrow();
+                Ok(MappedPyType::BamlMedia(b.inner.clone()))
+            } else if let Ok(b) = any.downcast_bound::<BamlPdfPy>(py) {
+                let b = b.borrow();
+                Ok(MappedPyType::BamlMedia(b.inner.clone()))
+            } else if let Ok(b) = any.downcast_bound::<BamlVideoPy>(py) {
                 let b = b.borrow();
                 Ok(MappedPyType::BamlMedia(b.inner.clone()))
             } else if matches!(unknown_type_handler, UnknownTypeHandler::SerializeAsStr) {

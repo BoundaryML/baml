@@ -8,6 +8,7 @@ use super::{BAMLPromptParser, Rule};
 use crate::{assert_correct_parser, ast::*, unreachable_rule};
 
 #[cfg(feature = "debug_parser")]
+#[allow(dead_code)]
 fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) {
     // Indentation for the current level
     let indent = "  ".repeat(indent_level);

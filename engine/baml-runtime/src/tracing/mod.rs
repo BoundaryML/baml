@@ -307,25 +307,25 @@ impl BamlEventLoggable<'_> {
                         parsed_response: None,
                         error: None,
                     },
-                    LLMResponse::UserFailure(msg) | LLMResponse::InternalFailure(msg) => {
-                        BamlEventJson {
-                            function_name: self.function_name.to_string(),
-                            start_time,
-                            num_tries,
-                            total_tries,
-                            client: "unknown".to_string(),
-                            model: "unknown".to_string(),
-                            latency_ms: 0,
-                            stop_reason: None,
-                            prompt: None,
-                            llm_reply: None,
-                            request_options_json: None,
-                            tokens: None,
-                            parsed_response_type: None,
-                            parsed_response: None,
-                            error: Some(msg.clone()),
-                        }
-                    }
+                    LLMResponse::UserFailure(msg)
+                    | LLMResponse::InternalFailure(msg)
+                    | LLMResponse::Cancelled(msg) => BamlEventJson {
+                        function_name: self.function_name.to_string(),
+                        start_time,
+                        num_tries,
+                        total_tries,
+                        client: "unknown".to_string(),
+                        model: "unknown".to_string(),
+                        latency_ms: 0,
+                        stop_reason: None,
+                        prompt: None,
+                        llm_reply: None,
+                        request_options_json: None,
+                        tokens: None,
+                        parsed_response_type: None,
+                        parsed_response: None,
+                        error: Some(msg.clone()),
+                    },
                 }
             }
             Err(error) => BamlEventJson {
@@ -408,9 +408,23 @@ impl BamlTracer {
         is_stream: bool,
         // baml_src_hash: Option<String>,
         collectors: Option<Vec<Arc<Collector>>>,
+        tags: Option<&HashMap<String, String>>,
     ) -> TracingCall {
         self.trace_stats.guard().start();
-        let (call_id, call_stack, last_tags, global_tags) = ctx.enter(function_name);
+        let (call_id, call_stack, mut ctx_tags, global_tags) = ctx.enter(function_name);
+
+        if let Some(tag_map) = tags {
+            if !tag_map.is_empty() {
+                log::debug!("start_call: incoming tags: {:#?}", tag_map);
+                let tag_values: HashMap<String, BamlValue> = tag_map
+                    .iter()
+                    .map(|(k, v)| (k.clone(), BamlValue::String(v.clone())))
+                    .collect();
+                ctx.upsert_tags(tag_values.clone());
+                ctx_tags.extend(tag_values);
+                log::debug!("start_call: ctx_tags after extend: {:#?}", ctx_tags);
+            }
+        }
 
         log::trace!(
             "\n{}------------------- Entering {:?}, ctx chain {:#?}",
@@ -427,7 +441,7 @@ impl BamlTracer {
             start_time: web_time::SystemTime::now(),
             // Note these tags are the ones currently on the stack. While the function runs we may register
             // more tags with set_tags(). Those are picked up via a diff event (SetTags)
-            tags: last_tags.clone(),
+            tags: ctx_tags.clone(),
         };
         // println!("---- {} ctx {:#?}", function_name, ctx);
         // baml_log::info!("---- {} ctx {:#?}", function_name, ctx);
@@ -460,7 +474,7 @@ impl BamlTracer {
             EvaluationContext {
                 tags: global_tags
                     .into_iter()
-                    .chain(last_tags)
+                    .chain(ctx_tags)
                     .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
                     .collect(),
             },
@@ -552,38 +566,59 @@ impl BamlTracer {
         }
 
         // Tracerv2 event publishing here
-        let field_type_for_meta = match &response {
-            Some(val) => infer_type(val).unwrap_or_else(|| {
-                log::warn!(
-                    "Failed to infer FieldType for BamlValue in tracing. Defaulting to Null."
-                );
-                baml_types::ir_type::TypeNonStreaming::Primitive(
+        // Check if this is a Python exception (marked with special __PythonException__ class)
+        let is_python_exception =
+            matches!(&response, Some(BamlValue::Class(name, _)) if name == "__PythonException__");
+
+        let event = if is_python_exception {
+            // Extract error message from the exception
+            let error_message = match &response {
+                Some(BamlValue::Class(_, fields)) => {
+                    let msg = fields
+                        .get("message")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Unknown Python exception");
+                    let exc_type = fields
+                        .get("type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Exception");
+                    format!("{}: {}", exc_type, msg)
+                }
+                _ => "Unknown Python exception".to_string(),
+            };
+
+            TraceEvent::new_function_end(
+                call.new_call_id_stack.clone(),
+                Err(baml_types::tracing::events::BamlError::External {
+                    message: std::borrow::Cow::Owned(error_message),
+                }),
+            )
+        } else {
+            // Normal success case
+            let field_type_for_meta = match &response {
+                Some(val) => infer_type(val).unwrap_or_else(|| {
+                    log::warn!(
+                        "Failed to infer FieldType for BamlValue in tracing. Defaulting to Null."
+                    );
+                    baml_types::ir_type::TypeNonStreaming::Primitive(
+                        baml_types::TypeValue::Null,
+                        Default::default(),
+                    )
+                }),
+                None => baml_types::ir_type::TypeNonStreaming::Primitive(
                     baml_types::TypeValue::Null,
                     Default::default(),
-                )
-            }),
-            None => baml_types::ir_type::TypeNonStreaming::Primitive(
-                baml_types::TypeValue::Null,
-                Default::default(),
-            ),
+                ),
+            };
+            let baml_value_with_meta: BamlValueWithMeta<baml_types::ir_type::TypeNonStreaming> =
+                BamlValueWithMeta::with_const_meta(
+                    response.as_ref().unwrap_or(&baml_types::BamlValue::Null),
+                    field_type_for_meta,
+                );
+
+            TraceEvent::new_function_end(call.new_call_id_stack.clone(), Ok(baml_value_with_meta))
         };
-        let baml_value_with_meta: BamlValueWithMeta<baml_types::ir_type::TypeNonStreaming> =
-            BamlValueWithMeta::with_const_meta(
-                response.as_ref().unwrap_or(&baml_types::BamlValue::Null),
-                field_type_for_meta,
-            );
 
-        // let tags = global_and_user_tags
-        //     .clone()
-        //     .into_iter()
-        //     .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
-        //     .collect();
-        let event_chain = call.new_call_id_stack.clone();
-        // let tag_event = TraceEvent::new_set_tags(event_chain, tags);
-        // BAML_TRACER.lock().unwrap().put(Arc::new(tag_event));
-
-        let event =
-            TraceEvent::new_function_end(call.new_call_id_stack.clone(), Ok(baml_value_with_meta));
         BAML_TRACER.lock().unwrap().put(Arc::new(event));
 
         Ok(call_id)
@@ -885,6 +920,12 @@ fn error_from_result(result: &FunctionResult) -> Option<api_wrapper::core_types:
                 traceback: None,
                 r#override: None,
             }),
+            LLMResponse::Cancelled(s) => Some(api_wrapper::core_types::Error {
+                code: 2,
+                message: format!("Cancelled: {s}"),
+                traceback: None,
+                r#override: None,
+            }),
         },
     }
 }
@@ -973,8 +1014,41 @@ impl ToLogSchema for TestResponse {
         tags: HashMap<String, BamlValue>,
         call: TracingCall,
     ) -> LogSchema {
-        self.function_response
-            .to_log_schema(api, event_chain, tags, call)
+        if let Some(func_response) = &self.function_response {
+            func_response.to_log_schema(api, event_chain, tags, call)
+        } else {
+            // For expr functions, create a simpler log schema
+            LogSchema {
+                project_id: api.project_id().map(str::to_string),
+                event_type: api_wrapper::core_types::EventType::FuncCode,
+                root_event_id: event_chain.first().map(|s| s.call_id).unwrap().to_string(),
+                event_id: event_chain.last().map(|s| s.call_id).unwrap().to_string(),
+                parent_event_id: None,
+                context: (api, event_chain, tags, &call).into(),
+                io: IO {
+                    input: Some((&call.params).into()),
+                    output: self
+                        .expr_function_response
+                        .as_ref()
+                        .and_then(|r| r.as_ref().ok())
+                        .map(|r| {
+                            let v: BamlValue = r.0.clone().into();
+                            IOValue::from(&v)
+                        }),
+                },
+                error: self
+                    .expr_function_response
+                    .as_ref()
+                    .and_then(|r| r.as_ref().err())
+                    .map(|e| api_wrapper::core_types::Error {
+                        code: 2,
+                        message: e.to_string(),
+                        traceback: None,
+                        r#override: None,
+                    }),
+                metadata: None,
+            }
+        }
     }
 }
 
@@ -1098,6 +1172,20 @@ impl From<&LLMResponse> for LLMEventSchema {
                 output: None,
                 error: Some(s.message.clone()),
             },
+            LLMResponse::Cancelled(s) => LLMEventSchema {
+                model_name: "<unknown>".into(),
+                provider: "<unknown>".into(),
+                input: LLMEventInput {
+                    prompt: LLMEventInputPrompt {
+                        template: Template::Single("<cancelled>".into()),
+                        template_args: Default::default(),
+                        r#override: None,
+                    },
+                    request_options: Default::default(),
+                },
+                output: None,
+                error: Some(format!("Cancelled: {s}")),
+            },
         }
     }
 }
@@ -1108,6 +1196,7 @@ impl From<&internal_baml_jinja::ChatMessagePart> for ContentPart {
             internal_baml_jinja::ChatMessagePart::Text(t) => ContentPart::Text(t.clone()),
             internal_baml_jinja::ChatMessagePart::Media(media) => {
                 match (media.media_type, &media.content) {
+                    // File
                     (BamlMediaType::Image, baml_types::BamlMediaContent::File(data)) => {
                         ContentPart::FileImage(
                             data.span_path.to_string_lossy().into_owned(),
@@ -1120,17 +1209,45 @@ impl From<&internal_baml_jinja::ChatMessagePart> for ContentPart {
                             data.relpath.to_string_lossy().into_owned(),
                         )
                     }
+                    (BamlMediaType::Pdf, baml_types::BamlMediaContent::File(data)) => {
+                        ContentPart::FilePdf(
+                            data.span_path.to_string_lossy().into_owned(),
+                            data.relpath.to_string_lossy().into_owned(),
+                        )
+                    }
+                    (BamlMediaType::Video, baml_types::BamlMediaContent::File(data)) => {
+                        ContentPart::FileVideo(
+                            data.span_path.to_string_lossy().into_owned(),
+                            data.relpath.to_string_lossy().into_owned(),
+                        )
+                    }
+
+                    // Base64
                     (BamlMediaType::Image, baml_types::BamlMediaContent::Base64(data)) => {
                         ContentPart::B64Image(data.base64.clone())
                     }
                     (BamlMediaType::Audio, baml_types::BamlMediaContent::Base64(data)) => {
                         ContentPart::B64Audio(data.base64.clone())
                     }
+                    (BamlMediaType::Pdf, baml_types::BamlMediaContent::Base64(data)) => {
+                        ContentPart::B64Pdf(data.base64.clone())
+                    }
+                    (BamlMediaType::Video, baml_types::BamlMediaContent::Base64(data)) => {
+                        ContentPart::B64Video(data.base64.clone())
+                    }
+
+                    // Url
                     (BamlMediaType::Image, baml_types::BamlMediaContent::Url(data)) => {
                         ContentPart::UrlImage(data.url.clone())
                     }
                     (BamlMediaType::Audio, baml_types::BamlMediaContent::Url(data)) => {
                         ContentPart::UrlAudio(data.url.clone())
+                    }
+                    (BamlMediaType::Pdf, baml_types::BamlMediaContent::Url(data)) => {
+                        ContentPart::UrlPdf(data.url.clone())
+                    }
+                    (BamlMediaType::Video, baml_types::BamlMediaContent::Url(data)) => {
+                        ContentPart::UrlVideo(data.url.clone())
                     }
                 }
             }

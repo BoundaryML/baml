@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ThrowIfVersionMismatch = void 0;
+exports.ThrowIfVersionMismatch = ThrowIfVersionMismatch;
 const native_1 = require("./native");
 function ensureVersionCompatibility(generatedVersion, runtimeVersion) {
     try {
@@ -32,4 +32,3 @@ https://boundaryml.com/discord`;
         throw new Error(errorMessage.trim());
     }
 }
-exports.ThrowIfVersionMismatch = ThrowIfVersionMismatch;

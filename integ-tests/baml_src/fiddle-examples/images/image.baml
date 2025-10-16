@@ -1,10 +1,8 @@
 function DescribeImage(img: image) -> string {
   client GPT4o
   prompt #"
-    {{ _.role("user") }}
-
-
     Describe the image below in 20 words:
+    {{ _.role("user") }}
     {{ img }}
   "#
 
@@ -21,7 +19,7 @@ class ClassWithImage {
 }
 
 // chat role user present
-function DescribeImage2(classWithImage: ClassWithImage, img2: image) -> string { 
+function DescribeImage2(classWithImage: ClassWithImage, img2: image) -> string {
   client GPT4Turbo
   prompt #"
     {{ _.role("user") }}
@@ -66,5 +64,12 @@ test TestName {
   functions [DescribeImage]
   args {
     img { url "https://imgs.xkcd.com/comics/standards.png"}
+  }
+}
+
+test Test {
+  functions [DescribeImage]
+  args {
+    img { file "xkcd-standards.png" }
   }
 }

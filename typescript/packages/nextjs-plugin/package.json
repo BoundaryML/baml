@@ -1,0 +1,47 @@
+{
+  "name": "@boundaryml/baml-nextjs-plugin",
+  "version": "0.1.0",
+  "description": "BAML Next.js integration",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BoundaryML/baml.git",
+    "directory": "typescript/nextjs-plugin"
+  },
+  "license": "MIT",
+  "files": ["dist/**/*"],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">= 18"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc",
+    "release": "tsc",
+    "clean": "git clean -xdf .turbo node_modules dist",
+    "typecheck": "tsc"
+  },
+  "peerDependencies": {
+    "next": "*"
+  },
+  "devDependencies": {
+    "@types/node": "24.0.3",
+    "@types/webpack": "5.28.5",
+    "next": "15.3.3",
+    "typescript": "5.8.3"
+  },
+  "bugs": {
+    "url": "https://github.com/BoundaryML/baml/issues"
+  },
+  "homepage": "https://github.com/BoundaryML/baml#readme"
+}

@@ -4,14 +4,14 @@ slug: /guide/baml-basics/multi-modal
 
 ## Multi-modal input
 
-You can use `audio` or `image` input types in BAML prompts. Just create an input argument of that type and render it in the prompt.
+You can use `audio`, `image`, `pdf`, or `video` input types in BAML prompts. Just create an input argument of that type and render it in the prompt.
 
-Check the "raw curl" checkbox in the playground to see how BAML translates multi-modal input into the LLM Request body.
+Switch from "Prompt Review" to "Raw cURL" in the playground to see how BAML translates multi-modal input into the LLM Request body.
 
 ```baml
 // "image" is a reserved keyword so we name the arg "img"
 function DescribeMedia(img: image) -> string {
-  client openai/gpt-4o
+  client "openai-responses/gpt-5"  // GPT-5 has excellent multimodal support
   // Most LLM providers require images or audio to be sent as "user" messages.
   prompt #"
     {{_.role("user")}}
@@ -90,6 +90,53 @@ import { Image } from "@boundaryml/baml"
   
 ```
 
+```go Go
+package main
+
+import (
+    "context"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func testImageInput() error {
+    ctx := context.Background()
+    
+    // From URL
+    img, err := b.NewImageFromUrl(
+        "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png",
+        nil,
+    )
+    if err != nil {
+        return err
+    }
+    
+    result, err := b.TestImageInput(ctx, img)
+    if err != nil {
+        return err
+    }
+
+    // Base64 image
+    imageB64 := "iVBORw0K...."
+    img2, err := b.NewImageFromBase64(imageB64, stringPtr("image/png"))
+    if err != nil {
+        return err
+    }
+    
+    result2, err := b.TestImageInput(ctx, img2)
+    if err != nil {
+        return err
+    }
+    
+    return nil
+}
+
+// Helper function for string pointer
+func stringPtr(s string) *string {
+    return &s
+}
+```
+
 ```ruby Ruby (beta)
 we're working on it!
 ```
@@ -135,6 +182,199 @@ import { Audio } from "@boundaryml/baml"
     Audio.fromBase64('audio/ogg', audio_base64),
   )
   
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func testAudioInput() error {
+    ctx := context.Background()
+    
+    // From URL
+    aud, err := b.NewAudioFromUrl(
+        "https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg",
+        nil,
+    )
+    if err != nil {
+        return err
+    }
+    
+    result, err := b.TestAudioInput(ctx, aud)
+    if err != nil {
+        return err
+    }
+
+    // Base64 audio
+    audioB64 := "iVBORw0K...."
+    aud2, err := b.NewAudioFromBase64(audioB64, stringPtr("audio/ogg"))
+    if err != nil {
+        return err
+    }
+    
+    result2, err := b.TestAudioInput(ctx, aud2)
+    if err != nil {
+        return err
+    }
+    
+    return nil
+}
+```
+
+```ruby Ruby (beta)
+we're working on it!
+```
+</CodeBlocks>
+
+### Pdf
+Calling functions that have `pdf` types. See [pdf types](/ref/baml/types#pdf)
+
+> **⚠️ Warning** Pdf inputs must be provided as Base64 data (e.g. `Pdf.from_base64`). URL-based Pdf inputs are not currently supported. Additionally, Pdf inputs are only supported by models that explicitly allow document (Pdf) modalities, such as Gemini 2.x Flash/Pro or VertexAI Gemini. Make sure the `client` you select advertises Pdf support, otherwise your request will fail.
+
+<CodeBlocks>
+```python Python
+from baml_py import Pdf
+from baml_client import b
+
+async def run():
+  # Base64 data
+  b64 = "JVBERi0K...."
+  res = await b.TestPdfInput(
+    pdf=Pdf.from_base64("application/pdf", b64)
+  )
+```
+
+```typescript TypeScript
+import { b } from '../baml_client'
+import { Pdf } from "@boundaryml/baml"
+...
+
+  // Base64
+  const pdf_base64 = ".."
+  let res = await b.TestPdfInput(
+    Pdf.fromBase64('application/pdf', pdf_base64),
+  )
+  
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func testPdfInput() error {
+    ctx := context.Background()
+    
+    // Base64 PDF data
+    pdfB64 := "JVBERi0K...."
+    pdf, err := b.NewPDFFromBase64(pdfB64, nil)
+    if err != nil {
+        return err
+    }
+    
+    result, err := b.TestPdfInput(ctx, pdf)
+    if err != nil {
+        return err
+    }
+    
+    return nil
+}
+```
+
+```ruby Ruby (beta)
+we're working on it!
+```
+</CodeBlocks>
+
+### Video
+Calling functions that have `video` types. See [video types](/ref/baml/types#video)
+
+> **⚠️ Warning** Video inputs require a model that supports video understanding (for example Gemini 2.x Flash/Pro). If your chosen model does not list video support your function call will return an error. *When you supply a Video as a URL the URL is forwarded unchanged to the model; if the model cannot fetch remote content you must instead pass the bytes via `Video.from_base64`.*
+
+<CodeBlocks>
+```python Python
+from baml_py import Video
+from baml_client import b
+
+async def run():
+  # from URL
+  res = await b.TestVideoInput(
+      video=Video.from_url(
+          "https://example.com/sample.mp4"
+      )
+  )
+
+  # Base64
+  b64 = "AAAAGGZ0eXBpc29t...."
+  res = await b.TestVideoInput(
+    video=Video.from_base64("video/mp4", b64)
+  )
+```
+
+```typescript TypeScript
+import { b } from '../baml_client'
+import { Video } from "@boundaryml/baml"
+...
+
+  // URL
+  let res = await b.TestVideoInput(
+    Video.fromUrl('https://example.com/sample.mp4'),
+  )
+
+  // Base64
+  const video_base64 = ".."
+  let res = await b.TestVideoInput(
+    Video.fromBase64('video/mp4', video_base64),
+  )
+  
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func testVideoInput() error {
+    ctx := context.Background()
+    
+    // From URL
+    vid, err := b.NewVideoFromUrl("https://example.com/sample.mp4", nil)
+    if err != nil {
+        return err
+    }
+    
+    result, err := b.TestVideoInput(ctx, vid)
+    if err != nil {
+        return err
+    }
+
+    // Base64 video
+    videoB64 := "AAAAGGZ0eXBpc29t...."
+    vid2, err := b.NewVideoFromBase64(videoB64, stringPtr("video/mp4"))
+    if err != nil {
+        return err
+    }
+    
+    result2, err := b.TestVideoInput(ctx, vid2)
+    if err != nil {
+        return err
+    }
+    
+    return nil
+}
 ```
 
 ```ruby Ruby (beta)

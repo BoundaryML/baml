@@ -6,7 +6,7 @@ If you need to modify the model / parameters for an LLM client at runtime, you c
 
 <Tabs>
 
-<Tab title="Python">
+<Tab title="Python" language="python">
 
 ```python
 import os
@@ -16,10 +16,17 @@ async def run():
     cr = ClientRegistry()
     # Creates a new client
     cr.add_llm_client(name='MyAmazingClient', provider='openai', options={
-        "model": "gpt-4o",
+        "model": "gpt-5-mini",
         "temperature": 0.7,
         "api_key": os.environ.get('OPENAI_API_KEY')
     })
+    
+    # Creates a client using the OpenAI Responses API
+    cr.add_llm_client(name='MyResponsesClient', provider='openai-responses', options={
+        "model": "gpt-4.1",
+        "api_key": os.environ.get('OPENAI_API_KEY')
+    })
+    
     # Sets MyAmazingClient as the primary client
     cr.set_primary('MyAmazingClient')
 
@@ -29,7 +36,7 @@ async def run():
 
 </Tab>
 
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 ```typescript
 import { ClientRegistry } from '@boundaryml/baml'
 
@@ -37,10 +44,17 @@ async function run() {
     const cr = new ClientRegistry()
     // Creates a new client
     cr.addLlmClient('MyAmazingClient', 'openai', {
-        model: "gpt-4o",
+        model: "gpt-5-mini",
         temperature: 0.7,
         api_key: process.env.OPENAI_API_KEY
     })
+    
+    // Creates a client using the OpenAI Responses API
+    cr.addLlmClient('MyResponsesClient', 'openai-responses', {
+        model: "gpt-4.1",
+        api_key: process.env.OPENAI_API_KEY
+    })
+    
     // Sets MyAmazingClient as the primary client
     cr.setPrimary('MyAmazingClient')
 
@@ -50,7 +64,7 @@ async function run() {
 ```
 </Tab>
 
-<Tab title="Ruby">
+<Tab title="Ruby" language="ruby">
 
 ```ruby
 require_relative "baml_client/client"
@@ -63,8 +77,18 @@ def run
     'MyAmazingClient',
     'openai',
     {
-      model: 'gpt-4o',
+      model: 'gpt-5-mini',
       temperature: 0.7,
+      api_key: ENV['OPENAI_API_KEY']
+    }
+  )
+
+  # Creates a client using the OpenAI Responses API
+  cr.add_llm_client(
+    'MyResponsesClient',
+    'openai-responses',
+    {
+      model: 'gpt-4.1',
       api_key: ENV['OPENAI_API_KEY']
     }
   )
@@ -81,7 +105,59 @@ run
 ```
 </Tab>
 
-<Tab title="OpenAPI">
+<Tab title="Go" language="go">
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    
+    "github.com/boundaryml/baml"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    // Create a client registry
+    cr := baml.NewClientRegistry()
+    
+    // Creates a new client
+    err := cr.AddLLMClient("MyAmazingClient", "openai", map[string]interface{}{
+        "model":       "gpt-5-mini",
+        "temperature": 0.7,
+        "api_key":     os.Getenv("OPENAI_API_KEY"),
+    })
+    if err != nil {
+        panic(fmt.Sprintf("Failed to add client: %v", err))
+    }
+    
+    // Creates a client using the OpenAI Responses API
+    err = cr.AddLLMClient("MyResponsesClient", "openai-responses", map[string]interface{}{
+        "model":   "gpt-4.1",
+        "api_key": os.Getenv("OPENAI_API_KEY"),
+    })
+    if err != nil {
+        panic(fmt.Sprintf("Failed to add responses client: %v", err))
+    }
+    
+    // Sets MyAmazingClient as the primary client
+    cr.SetPrimary("MyAmazingClient")
+    
+    // ExtractResume will now use MyAmazingClient as the calling client
+    res, err := baml.ExtractResume(ctx, "...", b.WithClientRegistry(cr))
+    if err != nil {
+        panic(fmt.Sprintf("Failed to extract resume: %v", err))
+    }
+    
+    fmt.Printf("Result: %+v\n", res)
+}
+```
+</Tab>
+
+<Tab title="OpenAPI" language="openapi">
 
 The API supports passing client registry as a field on `__baml_options__` in the request body.
 
@@ -98,7 +174,16 @@ Example request body:
                     "provider": "openai",
                     "retry_policy": null,
                     "options": {
-                        "model": "gpt-4o-mini",
+                        "model": "gpt-5-mini",
+                        "api_key": "sk-..."
+                    }
+                },
+                {
+                    "name": "OpenAIResponses",
+                    "provider": "openai-responses",
+                    "retry_policy": null,
+                    "options": {
+                        "model": "gpt-4.1",
                         "api_key": "sk-..."
                     }
                 }

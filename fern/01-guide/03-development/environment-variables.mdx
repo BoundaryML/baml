@@ -14,11 +14,22 @@ Sometimes you'll see environment variables used in BAML, like in clients:
 client<llm> GPT4o {
   provider baml-openai-chat
   options {
-    model gpt-4o
+    model gpt-5-mini
     api_key env.OPENAI_API_KEY
   }
 }
 ```
+
+<Markdown src="/snippets/setting-env-vars.mdx" />
+
+## Boundary Studio Integration
+
+When you use BAML in your application, logs and traces are automatically sent to Boundary Studio for monitoring and debugging. To enable this integration, you need to set the `BOUNDARY_API_KEY` environment variable with an API key from your Boundary Studio dashboard.
+
+The API key is used to:
+- Authenticate your application with Boundary Studio
+- Associate logs and traces with your specific project and environment
+- Control access permissions for different operations
 
 <Markdown src="/snippets/setting-env-vars.mdx" />
 

@@ -11,7 +11,7 @@ use super::{
 use crate::{
     assert_correct_parser,
     ast::{TypeExpressionBlock, *},
-    parser::parse_field::parse_type_expr,
+    parser::{parse_expr::parse_expr_fn, parse_field::parse_type_expr},
 }; // Add this line to import DatamodelParser
 
 pub(crate) fn parse_type_expression_block(
@@ -25,6 +25,7 @@ pub(crate) fn parse_type_expression_block(
     let mut name: Option<Identifier> = None;
     let mut attributes: Vec<Attribute> = Vec::new();
     let mut fields: Vec<Field<FieldType>> = Vec::new();
+    let mut methods: Vec<ExprFn> = Vec::new();
     let mut sub_type: Option<_> = None;
     let mut input = None;
 
@@ -111,6 +112,17 @@ pub(crate) fn parse_type_expression_block(
                             }
                         }
                         Rule::comment_block => pending_field_comment = Some(item),
+                        Rule::expr_fn => {
+                            let item_span = item.as_span();
+
+                            match parse_expr_fn(item, diagnostics) {
+                                Some(expr_fn) => methods.push(expr_fn),
+                                None => diagnostics.push_error(DatamodelError::new_validation_error(
+                                    "Invalid method definition",
+                                    diagnostics.span(item_span),
+                                )),
+                            }
+                        },
                         Rule::BLOCK_LEVEL_CATCH_ALL => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
                                 match sub_type {
@@ -132,10 +144,21 @@ pub(crate) fn parse_type_expression_block(
     let sub_type = sub_type.unwrap_or((SubType::Other("Subtype not found".to_string()), pair_span));
     let is_dynamic_type_def = matches!(sub_type.0, SubType::Dynamic(_));
 
+    // Some nasty type inference is required here.
+    for m in &mut methods {
+        if let Some(self_param) = m.args.args.get_mut(0) {
+            if self_param.0.name() == "self" {
+                self_param.1.field_type =
+                    FieldType::Symbol(FieldArity::Required, name.clone().unwrap(), None);
+            }
+        }
+    }
+
     match name {
         Some(name) => TypeExpressionBlock {
             name,
             fields,
+            methods,
             input,
             attributes,
             documentation: doc_comment.and_then(parse_comment_block),

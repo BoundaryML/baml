@@ -35,11 +35,11 @@ console_log = { version = "1", features = ["color"] }
 futures.workspace = true
 getrandom = { version = "0.2.15", features = ["js"] }
 indexmap.workspace = true
-internal-baml-codegen.workspace = true
 internal-baml-core.workspace = true
+generators-lib = { path = "../generators/utils/generators_lib" }
 jsonish = { path = "../baml-lib/jsonish" }
 internal-llm-client = { path = "../baml-lib/llm-client" }
-js-sys = "=0.3.69"
+js-sys.workspace = true
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -47,37 +47,32 @@ serde-wasm-bindgen = "0.6.5"
 time.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 url.workspace = true
-uuid = { version = "1.8", features = ["v4", "js"] }
-wasm-bindgen = "=0.2.92"
-wasm-bindgen-futures = "0.4.42"
+uuid = { workspace = true, features = ["v4", "js"] }
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
 wasm-logger = { version = "0.2.0" }
+web-sys.workspace = true
 web-time.workspace = true
 either = "1.8.1"
 itertools = "0.13.0"
 once_cell.workspace = true
-[dependencies.web-sys]
-version = "0.3.69"
-features = [
-  'console',
-  'Headers',
-  'Request',
-  'RequestInit',
-  'RequestMode',
-  'Response',
-  'Window',
-]
+stream-cancel = "0.8"
 
 [dev-dependencies]
 dissimilar = "1.0.4"
 expect-test = "1.1.0"
 indoc.workspace = true
 either = "1.8.1"
-wasm-bindgen-test = "0.3.42"
+wasm-bindgen-test = "0.3.43"
 walkdir = "2.5.0"
 wasm-logger = "0.2.0"
 wasmtimer = "0.4.1"
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
 
+[features]
+default = []
+# Use the THIR interpreter runtime instead of the VM bytecode runtime
+interpreter = ["baml-runtime/interpreter"]
 
 # [profile.release]
 # debug = true

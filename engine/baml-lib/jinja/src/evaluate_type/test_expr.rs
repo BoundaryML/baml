@@ -126,6 +126,59 @@ fn test_ifexpr() {
 }
 
 #[test]
+fn test_enum() {
+    let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+    types.add_enum("MyEnum", vec!["VALUE_A".into(), "VALUE_B".into()]);
+    types.add_variable("enum_arg", Type::EnumValueRef("VALUE_A".into()));
+
+    assert_eq!(
+        assert_evaluates_to!("enum_arg", &types),
+        Type::EnumValueRef("VALUE_A".into())
+    );
+    assert_eq!(
+        assert_evaluates_to!("MyEnum.VALUE_A", &types),
+        Type::EnumValueRef("VALUE_A".into())
+    );
+    assert_eq!(
+        assert_evaluates_to!("MyEnum.VALUE_B", &types),
+        Type::EnumValueRef("VALUE_B".into())
+    );
+    assert_eq!(
+        assert_fails_to!("enum_arg == \"VALUE_A\"", &types),
+        vec!["Comparing enum VALUE_A to string variable - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339."]
+    );
+}
+
+#[test]
+fn test_enum_value_property_access() {
+    let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+    types.add_enum("MyEnum", vec!["VALUE_A".into(), "VALUE_B".into()]);
+    types.add_variable("enum_arg", Type::EnumValueRef("VALUE_A".into()));
+
+    // Test accessing .value property on enum value - should return String
+    assert_eq!(assert_evaluates_to!("enum_arg.value", &types), Type::String);
+
+    // Test accessing .value on enum accessed from enum type
+    assert_eq!(
+        assert_evaluates_to!("MyEnum.VALUE_A.value", &types),
+        Type::String
+    );
+
+    // Test accessing invalid property on enum value - should fail
+    assert_eq!(
+        assert_fails_to!("enum_arg.invalid_property", &types),
+        vec!["enum value VALUE_A (enum_arg) does not have a property 'invalid_property'"]
+    );
+
+    // Test accessing property on non-enum type - should fail with existing error
+    types.add_variable("string_var", Type::String);
+    assert_eq!(
+        assert_fails_to!("string_var.value", &types),
+        vec!["'string_var' is a string, expected class"]
+    );
+}
+
+#[test]
 fn test_eval() {
     let types = PredefinedTypes::default(JinjaContext::Prompt);
     assert_eq!(assert_evaluates_to!("1 + 1", &types), Type::Number);
@@ -306,5 +359,28 @@ fn sum_filter() {
     assert_eq!(
         assert_fails_to!(r#"["hi", 1]|sum"#, types),
         vec![r#"'[hi,1]' is a list[(literal["hi"] | literal[1])], expected (int|float)[]"#]
+    );
+}
+
+#[test]
+fn test_function_reference_without_call_expr() {
+    let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+    types.add_function("SomeFunc", Type::Float, vec![]);
+
+    let parsed = parse_expr("SomeFunc").unwrap();
+    let result = evaluate_type(&parsed, &types);
+    assert!(result.is_err());
+    let msgs: Vec<_> = result
+        .err()
+        .unwrap()
+        .into_iter()
+        .map(|e| e.message)
+        .collect();
+    assert_eq!(
+        msgs,
+        vec![
+            "Function 'SomeFunc' referenced without parentheses. Did you mean 'SomeFunc()'?"
+                .to_string()
+        ]
     );
 }

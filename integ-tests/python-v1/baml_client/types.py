@@ -38,7 +38,7 @@ def get_checks(checks: typing.Dict[CheckName, Check]) -> typing.List[Check]:
 def all_succeeded(checks: typing.Dict[CheckName, Check]) -> bool:
     return all(check.status == "succeeded" for check in get_checks(checks))
 # #########################################################################
-# Generated enums (18)
+# Generated enums (21)
 # #########################################################################
 
 class AliasedEnum(str, Enum):
@@ -80,6 +80,10 @@ class DataType(str, Enum):
 
 class DynEnumOne(str, Enum):
     pass
+
+class DynEnumThree(str, Enum):
+    TRICYCLE = "TRICYCLE"
+    TRIANGLE = "TRIANGLE"
 
 class DynEnumTwo(str, Enum):
     pass
@@ -127,6 +131,14 @@ class OrderStatus(str, Enum):
     DELIVERED = "DELIVERED"
     CANCELLED = "CANCELLED"
 
+class RenderStatusEnum(str, Enum):
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+
+class RenderTestEnum(str, Enum):
+    BIKE = "BIKE"
+    SCOOTER = "SCOOTER"
+
 class Tag(str, Enum):
     Security = "Security"
     AI = "AI"
@@ -142,8 +154,16 @@ class TestEnum(str, Enum):
     G = "G"
 
 # #########################################################################
-# Generated classes (99)
+# Generated classes (104)
 # #########################################################################
+
+class AddTodoItem(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    type: typing_extensions.Literal['add_todo_item']
+    item: str
+    time: str
+    description: str
 
 class AnotherObject(BaseModel):
     class Config:
@@ -283,6 +303,14 @@ class Document1559(BaseModel):
         arbitrary_types_allowed = True
     client_details: "ClientDetails1559"
     notes: typing.List["Note1599"]
+
+class DummyJsonTodo(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    id: int
+    todo: str
+    completed: bool
+    userId: int
 
 class DummyOutput(BaseModel):
     class Config:
@@ -646,6 +674,19 @@ class RecursiveAliasDependency(BaseModel):
         arbitrary_types_allowed = True
     value: "JsonValue"
 
+class RenderEnumInput(BaseModel):
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
+    testKey: str
+
+class RenderTestClass(BaseModel):
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
+    name: str
+    status: typing.Union[RenderStatusEnum, str]
+
 class Resume(BaseModel):
     class Config:
         arbitrary_types_allowed = True
@@ -744,6 +785,12 @@ class TestOutputClass(BaseModel):
     prop1: str
     prop2: int
 
+class TodoMessageToUser(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    type: typing_extensions.Literal['todo_message_to_user']
+    message: str
+
 class Tree(BaseModel):
     class Config:
         arbitrary_types_allowed = True
@@ -790,7 +837,7 @@ class WithReasoning(BaseModel):
     reasoning: str
 
 # #########################################################################
-# Generated type aliases (20)
+# Generated type aliases (21)
 # #########################################################################
 
 
@@ -852,3 +899,6 @@ RecursiveMapAlias: typing_extensions.TypeAlias = typing.Dict[str, "RecursiveMapA
 
 
 RecursiveUnion: typing_extensions.TypeAlias = typing.Union[str, typing.Dict[str, "RecursiveUnion"]]
+
+
+TodoTool: typing_extensions.TypeAlias = typing.Union["AddTodoItem", "TodoMessageToUser"]

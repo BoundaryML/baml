@@ -1,0 +1,7 @@
+{
+  "name": "@baml/integ-tests-ruby",
+  "version": "1.0.0",
+  "dependencies": {
+    "@boundaryml/baml": "workspace:*"
+  }
+}

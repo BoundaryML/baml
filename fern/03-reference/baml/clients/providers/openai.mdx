@@ -20,7 +20,7 @@ client<llm> MyClient {
   provider "openai"
   options {
     api_key env.MY_OPENAI_KEY
-    model "gpt-3.5-turbo"
+    model "gpt-5-mini"
     temperature 0.1
   }
 }
@@ -54,7 +54,7 @@ client<llm> MyClient {
   provider openai
   options {
     api_key env.MY_OPENAI_KEY
-    model "gpt-3.5-turbo"
+    model "gpt-5-mini"
     headers {
       "X-My-Header" "my-value"
     }
@@ -117,12 +117,17 @@ Consult the specific provider's documentation for more information.
 >
   The model to use.
 
-| Model           | Description                    |
-| --------------- | ------------------------------ |
-| `gpt-3.5-turbo` | Fastest                        |
-| `gpt-4o`        | Fast + text + image            |
-| `gpt-4-turbo`   | Smartest + text + image + code |
-| `gpt-4o-mini`   | Cheapest + text + image        |
+| Model | Use Case | Context | Key Features |
+|-------|----------|---------|--------------|
+| **gpt-5** | Coding, agentic tasks, expert reasoning | 400K total | Built-in reasoning, 45% fewer errors |
+| **gpt-5-mini** | Well-defined tasks, cost-efficient | 400K total | Faster alternative to GPT-5 |
+| **gpt-5-nano** | Lightweight tasks, maximum efficiency | 400K total | Most cost-effective GPT-5 variant |
+| **gpt-4.1** | Large-scale technical work | 1M | Enhanced coding, instruction following |
+| **gpt-4.1-mini** | Balanced performance and cost | 1M | Replaces GPT-4o mini |
+| **gpt-4.1-nano** | Lightweight variant | 1M | Budget-friendly option |
+| **gpt-4o** | General purpose, multimodal | 200K | Updated knowledge cutoff June 2024 |
+
+Note: While GPT-5 is available through this provider, we recommend using the `openai-responses` provider for GPT-5 models to access enhanced response formatting features.
 
 See openai docs for the list of openai models. You can pass any model name you wish, we will not check if it exists.
 

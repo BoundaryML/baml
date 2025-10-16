@@ -1,0 +1,378 @@
+---
+title: "BamlAbortError"
+description: "Error thrown when a BAML operation is cancelled"
+---
+
+## Overview
+
+`BamlAbortError` is thrown when a BAML function call is cancelled via an abort controller. This error indicates that the operation was intentionally stopped rather than failing due to an actual error condition.
+
+## Class Definition
+
+<Tabs>
+  <Tab title="TypeScript" language="typescript">
+    ```typescript
+    export class BamlAbortError extends Error {
+      public readonly name: string = 'BamlAbortError'
+      public readonly reason?: any
+      public readonly detailed_message: string
+      
+      constructor(message: string, reason?: any, detailed_message: string = '') {
+        super(message)
+        this.reason = reason
+        this.detailed_message = detailed_message
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Python" language="python">
+    ```python
+    class BamlAbortError(Exception):
+        """Error raised when a BAML operation is aborted"""
+        
+        def __init__(self, message: str, reason: Any = None, detailed_message: str = ''):
+            super().__init__(message)
+            self.reason = reason
+            self.detailed_message = detailed_message
+            self.name = 'BamlAbortError'
+    ```
+  </Tab>
+  
+  <Tab title="Go" language="go">
+    ```go
+    // In Go, cancellation is handled via context errors
+    import (
+        "context"
+        "errors"
+    )
+    
+    // Check for cancellation
+    if errors.Is(err, context.Canceled) {
+        // Operation was cancelled
+    }
+    if errors.Is(err, context.DeadlineExceeded) {
+        // Operation timed out
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Ruby" language="ruby">
+    ```ruby
+    module Baml
+      class AbortError < StandardError
+        attr_reader :reason, :detailed_message
+        
+        def initialize(message, reason = nil, detailed_message = '')
+          super(message)
+          @reason = reason
+          @detailed_message = detailed_message
+        end
+      end
+    end
+    ```
+  </Tab>
+</Tabs>
+
+## Properties
+
+### `message`
+**Type**: `string`
+
+Description of why the operation was aborted. This is typically a generic message like "Operation aborted" unless a specific message was provided during cancellation.
+
+### `reason`
+**Type**: `any` (TypeScript/Python) / `interface{}` (Go) / `Object` (Ruby)
+
+Optional additional context about the cancellation. This can be any value provided when calling the `abort()` method.
+
+### `name`
+**Type**: `string`
+
+Always returns `"BamlAbortError"` for easy error type identification.
+
+### `detailed_message`
+**Type**: `string`
+
+Comprehensive error information that includes the complete history of all failed attempts when using fallback clients or retry policies. For abort errors, this typically contains the same information as `message` but may include additional debugging details about the cancellation context.
+
+## Error Detection
+
+### TypeScript
+
+```typescript
+import { BamlAbortError } from '@/baml_client'
+
+try {
+  const result = await b.FunctionName(input, {
+    abortController: controller
+  })
+} catch (error) {
+  // Method 1: instanceof check (recommended)
+  if (error instanceof BamlAbortError) {
+    console.log('Operation was cancelled')
+  }
+  
+  // Method 2: name check (works with minification)
+  if (error.name === 'BamlAbortError') {
+    console.log('Operation was cancelled')
+  }
+}
+```
+
+### Python
+
+```python
+from baml_py import BamlAbortError
+
+try:
+    result = await b.FunctionName(
+        input,
+        baml_options={"abort_controller": controller}
+    )
+except BamlAbortError as e:
+    print(f"Operation was cancelled: {e}")
+    if e.reason:
+        print(f"Reason: {e.reason}")
+except Exception as e:
+    # Handle other errors
+    raise
+```
+
+### Go
+
+```go
+import (
+    "context"
+    "errors"
+)
+
+result, err := b.FunctionName(ctx, input)
+if err != nil {
+    if errors.Is(err, context.Canceled) {
+        // Direct cancellation
+        fmt.Println("Operation was cancelled")
+    } else if errors.Is(err, context.DeadlineExceeded) {
+        // Timeout-based cancellation
+        fmt.Println("Operation timed out")
+    } else {
+        // Other error
+        return err
+    }
+}
+```
+
+### Ruby
+
+```ruby
+begin
+  result = b.function_name(
+    input,
+    baml_options: { abort_controller: controller }
+  )
+rescue Baml::AbortError => e
+  puts "Operation was cancelled: #{e.message}"
+  puts "Reason: #{e.reason}" if e.reason
+rescue => e
+  # Handle other errors
+  raise
+end
+```
+
+## Common Patterns
+
+### Distinguishing Cancellation Types
+
+```typescript
+try {
+  const result = await b.FunctionName(input, {
+    abortController: controller
+  })
+} catch (error) {
+  if (error instanceof BamlAbortError) {
+    if (error.reason === 'user_cancelled') {
+      // User explicitly cancelled
+      showMessage('You cancelled the operation')
+    } else if (error.reason === 'timeout') {
+      // Timeout occurred
+      showMessage('Operation timed out. Please try again.')
+    } else {
+      // Generic cancellation
+      showMessage('Operation was cancelled')
+    }
+  } else {
+    // Handle other errors
+    throw error
+  }
+}
+```
+
+### Cleanup After Cancellation
+
+```typescript
+const controller = new AbortController()
+let cleanup = null
+
+try {
+  // Set up resources
+  cleanup = await setupResources()
+  
+  const result = await b.FunctionName(input, {
+    abortController: controller
+  })
+  
+  return result
+} catch (error) {
+  if (error instanceof BamlAbortError) {
+    console.log('Operation cancelled, cleaning up...')
+  }
+  throw error
+} finally {
+  // Always cleanup, whether cancelled or not
+  if (cleanup) {
+    await cleanup()
+  }
+}
+```
+
+### Retry Logic with Abort Errors
+
+```typescript
+async function retryableOperation(input: any, maxRetries: number = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController()
+    
+    try {
+      // Set timeout for each attempt
+      setTimeout(() => controller.abort('timeout'), 30000)
+      
+      return await b.FunctionName(input, {
+        abortController: controller
+      })
+    } catch (error) {
+      if (error instanceof BamlAbortError) {
+        if (error.reason === 'timeout' && attempt < maxRetries) {
+          console.log(`Attempt ${attempt} timed out, retrying...`)
+          continue
+        }
+        // Don't retry for user cancellations
+        throw error
+      }
+      // Don't retry for other errors
+      throw error
+    }
+  }
+}
+```
+
+## Integration with Streaming
+
+When streaming operations are cancelled, the error behavior differs slightly:
+
+<Tabs>
+  <Tab title="TypeScript" language="typescript">
+    ```typescript
+    const controller = new AbortController()
+    const stream = b.stream.FunctionName(input, {
+      abortController: controller
+    })
+    
+    try {
+      for await (const chunk of stream) {
+        // Process chunk
+        if (shouldCancel) {
+          controller.abort('user_request')
+        }
+      }
+    } catch (error) {
+      if (error instanceof BamlAbortError) {
+        // Stream was cancelled
+        console.log('Stream cancelled:', error.reason)
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Python" language="python">
+    ```python
+    controller = AbortController()
+    stream = b.stream.FunctionName(
+        input,
+        baml_options={"abort_controller": controller}
+    )
+    
+    try:
+        async for chunk in stream:
+            # Process chunk
+            if should_cancel:
+                controller.abort('user_request')
+    except BamlAbortError as e:
+        # Stream was cancelled
+        print(f"Stream cancelled: {e.reason}")
+    ```
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+### 1. Always Handle Abort Errors Explicitly
+
+```typescript
+// Good: Explicit handling
+try {
+  await operation()
+} catch (error) {
+  if (error instanceof BamlAbortError) {
+    // Handle cancellation specifically
+    return { cancelled: true }
+  }
+  // Re-throw unexpected errors
+  throw error
+}
+
+// Bad: Generic error handling
+try {
+  await operation()
+} catch (error) {
+  // All errors treated the same
+  console.error('Failed:', error)
+}
+```
+
+### 2. Provide Meaningful Cancellation Reasons
+
+```typescript
+// Good: Clear reason
+controller.abort('user_clicked_cancel')
+controller.abort({ type: 'timeout', duration: 30000 })
+
+// Bad: No reason
+controller.abort()
+```
+
+### 3. Don't Retry Cancelled Operations
+
+```typescript
+// Good: Check error type before retry
+if (error instanceof BamlAbortError) {
+  // Don't retry - it was intentionally cancelled
+  return
+}
+
+// Bad: Retry everything
+for (let i = 0; i < 3; i++) {
+  try {
+    return await operation()
+  } catch (error) {
+    // This might retry a cancelled operation!
+    continue
+  }
+}
+```
+
+## Related Documentation
+
+- [AbortController](/ref/baml_client/abort-signal) - API reference for abort controllers
+- [Error Overview](/ref/baml_client/errors/overview) - Complete error hierarchy
+- [User Guide: Abort Controllers](/guide/baml-basics/abort-signal) - Learn how to use abort controllers
+- [Error Handling Guide](/guide/baml-basics/error-handling) - General error handling patterns

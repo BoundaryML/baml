@@ -13,19 +13,11 @@
 
 package types
 
-import (
-	"encoding/json"
-	"fmt"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
-)
-
 type Amount = int64
 
 type Combination = Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 
-type Currency = int64
+type Currency = Checked[int64]
 
 type Graph = map[string][]string
 
@@ -43,7 +35,7 @@ type LinkedListAlias = LinkedListAliasNode
 
 type List = []string
 
-type MultipleAttrs = int64
+type MultipleAttrs = Checked[int64]
 
 type NodeIndirection = NodeWithAliasIndirection
 
@@ -51,12 +43,14 @@ type Primitive = Union4BoolOrFloatOrIntOrString
 
 type RecAliasOne = RecAliasTwo
 
-type RecAliasThree = []RecAliasOne
+type RecAliasThree = []any
 
 type RecAliasTwo = RecAliasThree
 
-type RecursiveListAlias = []RecursiveListAlias
+type RecursiveListAlias = []any
 
-type RecursiveMapAlias = map[string]RecursiveMapAlias
+type RecursiveMapAlias = map[string]any
 
 type RecursiveUnion = Union2MapStringKeyRecursiveUnionValueOrString
+
+type TodoTool = Union2AddTodoItemOrTodoMessageToUser

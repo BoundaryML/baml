@@ -54,7 +54,7 @@ impl IrFeatures {
 pub trait WithInternal {
     fn features(&self) -> IrFeatures;
 
-    fn walk_functions(&self) -> impl ExactSizeIterator<Item = FunctionWalker>;
+    fn walk_functions(&self) -> impl ExactSizeIterator<Item = FunctionWalker<'_>>;
 
-    fn walk_tests(&self) -> impl Iterator<Item = TestCaseWalker>;
+    fn walk_tests(&self) -> impl Iterator<Item = TestCaseWalker<'_>>;
 }

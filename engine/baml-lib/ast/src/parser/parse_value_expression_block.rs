@@ -43,7 +43,7 @@ pub(crate) fn parse_value_expression_block(
                 input = Some(parse_named_argument_list(current, diagnostics))
             }
             Rule::field_type | Rule::field_type_chain => {
-                match parse_function_arg(current, diagnostics) {
+                match parse_function_arg(current, false, diagnostics) {
                     Ok(arg) => output = Some(arg),
                     Err(err) => diagnostics.push_error(err),
                 }
@@ -100,6 +100,8 @@ pub(crate) fn parse_value_expression_block(
                         }
 
                         Rule::comment_block => pending_field_comment = Some(item),
+                        // Ignore markdown headers inside value expression blocks.
+                        // Top-level headers are handled in parse.rs and bound as annotations.
                         Rule::block_attribute => {
                             let span = item.as_span();
                             let attribute = parse_attribute(item, false, diagnostics);
@@ -172,6 +174,7 @@ pub(crate) fn parse_value_expression_block(
             span: diagnostics.span(pair_span),
             type_builder,
             block_type: sub_type.unwrap_or(ValueExprBlockType::Function),
+            annotations: vec![],
         });
     }
 

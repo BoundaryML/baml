@@ -12,6 +12,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 	"google.golang.org/protobuf/proto"
 )
@@ -43,17 +44,42 @@ type ResultCallback struct {
 type CallbackData struct {
 	channel chan ResultCallback
 	ctx     context.Context
+	onTick  OnTickCallbackData
+}
+
+type OnTickCallbackData interface {
+	Collector() Collector
+	OnTick() TickCallback
 }
 
 // Map to store callbacks by ID
 var (
 	dynamicCallbacks = make(map[uint32]CallbackData)
 	callbackMutex    sync.RWMutex
-	typeMap          TypeMap
+	typeMap          serde.TypeMap
 )
 
-func SetTypeMap(t TypeMap) {
+func SetTypeMap(t serde.TypeMap) {
 	typeMap = t
+}
+
+//export on_tick_callback
+func on_tick_callback(id C.uint32_t) {
+	callbackMutex.RLock()
+	id_uint := uint32(id)
+	callback, exists := dynamicCallbacks[id_uint]
+	callbackMutex.RUnlock()
+
+	if exists {
+		data := callback.onTick
+		if data != nil {
+			last, err := data.Collector().Last()
+			if err != nil {
+				return
+			}
+			data.OnTick()(callback.ctx, TickReason_Unknown, last)
+		}
+	}
 }
 
 //export error_callback
@@ -69,11 +95,16 @@ func error_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.int
 		// Parse the content as a string
 		content_str := string(content_bytes)
 
-		// TODO: cast to the right error type
-		err := BamlError{Message: content_str}
-
 		// Send the error to the callback
-		callback.channel <- ResultCallback{Error: err}
+		if content_str == "AbortError" {
+			// Special handling for AbortError
+			callback.channel <- ResultCallback{Error: callback.ctx.Err()}
+		} else {
+			// TODO: cast to the right error type
+			err := BamlError{Message: content_str}
+			callback.channel <- ResultCallback{Error: err}
+		}
+
 
 		close(callback.channel)
 		callbackMutex.Lock()
@@ -103,7 +134,7 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 			return
 		}
 
-		decoded_data := Decode(&content_holder)
+		decoded_data := serde.Decode(&content_holder, typeMap).Interface()
 
 		var res ResultCallback
 		if isDone == 1 {
@@ -112,18 +143,8 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 			res = ResultCallback{HasStreamData: true, StreamData: decoded_data}
 		}
 
-		force_close := false
-
-		select {
-		case <-callback.ctx.Done():
-			force_close = true
-			// TODO: Somehow tell rust to die
-			break
-		case callback.channel <- res:
-			break
-		}
-
-		if isDone == 1 || force_close {
+		callback.channel <- res
+		if isDone == 1 {
 			close(callback.channel)
 			callbackMutex.Lock()
 			defer callbackMutex.Unlock()
@@ -132,13 +153,13 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 	}
 }
 
-func create_unique_id(ctx context.Context) (uint32, chan ResultCallback) {
+func create_unique_id(ctx context.Context, onTick OnTickCallbackData) (uint32, chan ResultCallback) {
 	callbackMutex.Lock()
 	defer callbackMutex.Unlock()
 	id := uint32(rand.Intn(1000000))
 	for _, exists := dynamicCallbacks[id]; exists; {
 		id = uint32(rand.Intn(1000000))
 	}
-	dynamicCallbacks[id] = CallbackData{channel: make(chan ResultCallback), ctx: ctx}
+	dynamicCallbacks[id] = CallbackData{channel: make(chan ResultCallback), ctx: ctx, onTick: onTick}
 	return id, dynamicCallbacks[id].channel
 }

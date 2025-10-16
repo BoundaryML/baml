@@ -33,6 +33,7 @@ pub fn load_test_ir(file_content: &str) -> IntermediateRepr {
             PathBuf::from("./baml_src/example.baml"),
             file_content.to_string(),
         ))],
+        internal_baml_core::FeatureFlags::new(),
     );
     match schema.diagnostics.to_result() {
         Ok(_) => {}
@@ -236,13 +237,19 @@ fn relevant_data_models<'a>(
                         .flatten()
                         .map(|field| find_existing_class_field(name, &field, &walker, env_values))
                         .map(|field| {
-                            let (name, t, prop1, prop2) = field?;
-                            let t = if partialize && !metadata.streaming_behavior.done {
-                                t.to_streaming_type(ir).to_ir_type()
+                            let (name, t, prop1, needed) = field?;
+                            let t = if partialize {
+                                if metadata.streaming_behavior.done {
+                                    let mut t = t;
+                                    t.meta_mut().streaming_behavior.needed = true;
+                                    t
+                                } else {
+                                    t.to_streaming_type(ir).to_ir_type()
+                                }
                             } else {
                                 t
                             };
-                            Ok((name, t, prop1, prop2))
+                            Ok((name, t, prop1, needed))
                         });
 
                     let fields = fields.collect::<Result<Vec<_>>>()?;
@@ -271,7 +278,7 @@ fn relevant_data_models<'a>(
 
                     classes.push(Class {
                         name: Name::new_with_alias(name.to_string(), walker?.alias(env_values)?),
-                        namespace: mode.clone(),
+                        namespace: *mode,
                         fields,
                         constraints: metadata.constraints.clone(),
                         streaming_behavior: metadata.streaming_behavior.clone(),
@@ -291,6 +298,10 @@ fn relevant_data_models<'a>(
             TypeIR::Literal(_, _) => {}
             TypeIR::Primitive(_, _) => {}
             TypeIR::Arrow(_, _) => {}
+            TypeIR::Top(_) => panic!(
+                "TypeIR::Top should have been resolved by the compiler before code generation. \
+                 This indicates a bug in the type resolution phase."
+            ),
         }
     }
 

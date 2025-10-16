@@ -53,9 +53,13 @@ impl DeployArgs {
     /// Implementation notes:
     ///
     ///   - selected dialoguer / indicatif based on https://fadeevab.com/comparison-of-rust-cli-prompts/
-    pub async fn run_async(&self) -> Result<()> {
-        let runtime = BamlRuntime::from_directory(&self.from, std::env::vars().collect())
-            .context("Failed to build BAML runtime")?;
+    pub async fn run_async(
+        &self,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
+    ) -> Result<()> {
+        let runtime =
+            BamlRuntime::from_directory(&self.from, std::env::vars().collect(), feature_flags)
+                .context("Failed to build BAML runtime")?;
 
         let d = Deployer {
             from: self.from.clone(),
@@ -83,11 +87,11 @@ impl Deployer {
         let version_check_errors = cloud_projects
             .iter()
             .filter_map(|cloud_project| {
-                internal_baml_codegen::version_check::check_version(
+                generators_lib::version_check::check_version(
                     &cloud_project.version,
                     env!("CARGO_PKG_VERSION"),
-                    internal_baml_codegen::version_check::GeneratorType::CLI,
-                    internal_baml_codegen::version_check::VersionCheckMode::Strict,
+                    generators_lib::version_check::GeneratorType::CLI,
+                    generators_lib::version_check::VersionCheckMode::Strict,
                     baml_types::GeneratorOutputType::OpenApi,
                     false,
                 )

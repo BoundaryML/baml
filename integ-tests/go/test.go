@@ -5,19 +5,18 @@ import (
 	"fmt"
 
 	b "example.com/integ-tests/baml_client"
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
 func main() {
 	ctx := context.Background()
 
-	collector := baml.NewCollector()
+	collector, err := b.NewCollector("test-collector")
 
 	v2, err := b.AaaSamOutputFormat(ctx, "oranges", b.WithCollector(collector))
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(*v2)
+	fmt.Println(v2)
 
 	usage, err := collector.Usage()
 	if err != nil {
@@ -38,9 +37,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(*v2)
+	fmt.Println(v2)
 
-	stream := b.Stream.AaaSamOutputFormat(ctx, "pineapple")
+	stream, err := b.Stream.AaaSamOutputFormat(ctx, "pineapple")
+	if err != nil {
+		panic(err)
+	}
 	for chunk := range stream {
 		fmt.Println(chunk)
 	}

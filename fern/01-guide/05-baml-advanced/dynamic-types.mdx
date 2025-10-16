@@ -42,7 +42,7 @@ read from when building the output schema in the prompt.
 
 <Tabs>
 
-<Tab title="Python">
+<Tab title="Python" language="python">
 ```python
 from baml_client.type_builder import TypeBuilder
 from baml_client import b
@@ -59,7 +59,7 @@ async def run():
 ```
 </Tab>
 
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 ```typescript
 import TypeBuilder from '../baml_client/type_builder'
 import {
@@ -77,7 +77,7 @@ async function run() {
 ```
 </Tab>
 
-<Tab title="Ruby">
+<Tab title="Ruby" language="ruby">
 ```ruby
 require_relative '../baml_client'
 
@@ -92,7 +92,44 @@ end
 ```
 </Tab>
 
-<Tab title="OpenAPI">
+<Tab title="Go" language="go">
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/baml_client"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    tb := b.NewTypeBuilder()
+    _, err := tb.Category.AddValue("VALUE3")
+    if err != nil {
+        panic(fmt.Sprintf("Failed to add value: %v", err))
+    }
+    _, err = tb.Category.AddValue("VALUE4")
+    if err != nil {
+        panic(fmt.Sprintf("Failed to add value: %v", err))
+    }
+    
+    // Pass the typebuilder
+    res, err := b.DynamicCategorizer(ctx, "some input", b.WithTypeBuilder(tb))
+    if err != nil {
+        panic(fmt.Sprintf("Failed to categorize: %v", err))
+    }
+    
+    // Now res can be VALUE1, VALUE2, VALUE3, or VALUE4
+    fmt.Printf("Result: %v\n", res)
+}
+```
+</Tab>
+
+<Tab title="OpenAPI" language="openapi">
 Dynamic types are not yet supported when used via OpenAPI.
 
 Please let us know if you want this feature, either via [Discord] or [GitHub][openapi-feedback-github-issue].
@@ -129,9 +166,9 @@ function DynamicUserCreator(user_info: string) -> User {
 
 We can then modify the `User` schema at runtime. Since we marked `User` with `@@dynamic`, it'll be available as a property of `TypeBuilder`.
 
-<CodeBlocks>
-
-```python Python
+<Tabs>
+<Tab title="Python" language="python">
+```python
 from baml_client.type_builder import TypeBuilder
 from baml_client import b
 
@@ -142,10 +179,11 @@ async def run():
   res = await b.DynamicUserCreator("some user info", { "tb": tb })
   # Now res can have email and address fields
   print(res)
-
 ```
+</Tab>
 
-```typescript TypeScript
+<Tab title="TypeScript" language="typescript">
+```typescript
 import TypeBuilder from '../baml_client/type_builder'
 import {
   b
@@ -160,8 +198,10 @@ async function run() {
   console.log(res)
 }
 ```
+</Tab>
 
-```ruby Ruby
+<Tab title="Ruby" language="ruby">
+```ruby
 require_relative 'baml_client/client'
 
 def run
@@ -169,12 +209,53 @@ def run
   tb.User.add_property('email', tb.string)
   tb.User.add_property('address', tb.string).description("The user's address")
 
-  res = Baml.Client.dynamic_user_creator(input: "some user info", baml_options: {tb: tb})
+  res = Baml::Client.dynamic_user_creator(input: "some user info", baml_options: { tb: tb })
   # Now res can have email and address fields
   puts res
 end
 ```
-</CodeBlocks>
+</Tab>
+
+<Tab title="Go" language="go">
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/baml_client"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    tb := b.NewTypeBuilder()
+    _, err := tb.User.AddProperty("email", tb.String())
+    if err != nil {
+        panic(fmt.Sprintf("Failed to add property: %v", err))
+    }
+    address, err := tb.User.AddProperty("address", tb.String())
+    if err != nil {
+        panic(fmt.Sprintf("Failed to add property: %v", err))
+    }
+    err = address.SetDescription("The user's address")
+    if err != nil {
+        panic(fmt.Sprintf("Failed to set description: %v", err))
+    }
+    
+    res, err := b.DynamicUserCreator(ctx, "some user info", b.WithTypeBuilder(tb))
+    if err != nil {
+        panic(fmt.Sprintf("Failed to create user: %v", err))
+    }
+    
+    // Now res can have email and address fields
+    fmt.Printf("Result: %+v\n", res)
+}
+```
+</Tab>
+</Tabs>
 
 
 ### Add existing BAML types to a property (e.g. you want to add a subset of tools)
@@ -218,7 +299,7 @@ You can modify the set of tools that can be used in the `ChatResponse` type at r
 
 <Tabs>
 
-<Tab title="Python">
+<Tab title="Python" language="python">
 ```python
 tb = TypeBuilder()
 tb.ChatResponse.add_property(
@@ -232,7 +313,7 @@ tb.ChatResponse.add_property(
 ```
 </Tab>
 
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 ```typescript
 const tb = new TypeBuilder()
 tb.ChatResponse.addProperty("tools", 
@@ -244,10 +325,51 @@ tb.ChatResponse.addProperty("tools",
 ```
 </Tab>
 
-<Tab title="Ruby">
+<Tab title="Ruby" language="ruby">
 ```ruby
 tb = Baml::TypeBuilder.new
 tb.ChatResponse.add_property("tools", tb.union([tb.GetWeather.type(), tb.GetNews.type()]).list).description("The tool calls in the response")
+```
+</Tab>
+
+<Tab title="Go" language="go">
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/baml_client"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    tb := b.NewTypeBuilder()
+    toolsField, err := tb.Union([]baml.FieldType{
+        // we could comment one of these if we wanted!
+        tb.GetWeather.Type(), 
+        tb.GetNews.Type()
+    }).List()
+    
+    toolsField, err := tb.ChatResponse.AddProperty("tools", toolsField)
+    if err != nil {
+        panic(fmt.Sprintf("Failed to add property: %v", err))
+    }
+    err = toolsField.SetDescription("The tool calls in the response")
+    if err != nil {
+        panic(fmt.Sprintf("Failed to set description: %v", err))
+    }
+    
+    // Example usage would depend on having a Chat function defined
+    // res, err := b.Chat(ctx, messages, b.WithTypeBuilder(tb))
+    // if err != nil {
+    //     panic(fmt.Sprintf("Failed to chat: %v", err))
+    // }
+    // fmt.Printf("Result: %+v\n", res)
+}
 ```
 </Tab>
 
@@ -258,73 +380,134 @@ The previous examples showed how to modify existing types. Here we create a new 
 
 Note that you must attach the new types to the existing Return Type of your BAML function(in this case it's `User`).
 
-<CodeBlocks>
+<Tabs>
+  <Tab title="Python" language="python">
+    ```python Python
+    from baml_client.type_builder import TypeBuilder
+    from baml_client.async_client import b
 
-```python Python
-from baml_client.type_builder import TypeBuilder
-from baml_client.async_client import b
+    async def run():
+      tb = TypeBuilder()
+      hobbies_enum = tb.add_enum("Hobbies")
+      hobbies_enum.add_value("Soccer")
+      hobbies_enum.add_value("Reading")
 
-async def run():
-  tb = TypeBuilder()
-  hobbies_enum = tb.add_enum("Hobbies")
-  hobbies_enum.add_value("Soccer")
-  hobbies_enum.add_value("Reading")
+      address_class = tb.add_class("Address")
+      address_class.add_property("street", tb.string()).description("The user's street address")
 
-  address_class = tb.add_class("Address")
-  address_class.add_property("street", tb.string()).description("The user's street address")
+      tb.User.add_property("hobby", hobbies_enum.type().optional())
+      tb.User.add_property("address", address_class.type().optional())
+      res = await b.DynamicUserCreator("some user info", {"tb": tb})
+      # Now res might have the hobby property, which can be Soccer or Reading
+      print(res)
 
-  tb.User.add_property("hobby", hobbies_enum.type().optional())
-  tb.User.add_property("address", address_class.type().optional())
-  res = await b.DynamicUserCreator("some user info", {"tb": tb})
-  # Now res might have the hobby property, which can be Soccer or Reading
-  print(res)
+    ```
+  </Tab>
 
-```
+  <Tab title="TypeScript" language="typescript">
+    ```typescript TypeScript
+    import TypeBuilder from '../baml_client/type_builder'
+    import { b } from '../baml_client'
 
-```typescript TypeScript
-import TypeBuilder from '../baml_client/type_builder'
-import { b } from '../baml_client'
+    async function run() {
+      const tb = new TypeBuilder()
+      const hobbiesEnum = tb.addEnum('Hobbies')
+      hobbiesEnum.addValue('Soccer')
+      hobbiesEnum.addValue('Reading')
 
-async function run() {
-  const tb = new TypeBuilder()
-  const hobbiesEnum = tb.addEnum('Hobbies')
-  hobbiesEnum.addValue('Soccer')
-  hobbiesEnum.addValue('Reading')
-
-  const addressClass = tb.addClass('Address')
-  addressClass.addProperty('street', tb.string()).description("The user's street address")
+      const addressClass = tb.addClass('Address')
+      addressClass.addProperty('street', tb.string()).description("The user's street address")
 
 
-  tb.User.addProperty('hobby', hobbiesEnum.type().optional())
-  tb.User.addProperty('address', addressClass.type())
-  const res = await b.DynamicUserCreator("some user info", { tb: tb })
-  // Now res might have the hobby property, which can be Soccer or Reading
-  console.log(res)
-}
-```
+      tb.User.addProperty('hobby', hobbiesEnum.type().optional())
+      tb.User.addProperty('address', addressClass.type())
+      const res = await b.DynamicUserCreator("some user info", { tb: tb })
+      # Now res might have the hobby property, which can be Soccer or Reading
+      console.log(res)
+    }
+    ```
+  </Tab>
 
-```ruby Ruby
-require_relative 'baml_client/client'
+  <Tab title="Ruby" language="ruby">
+    ```ruby Ruby
+    require_relative 'baml_client/client'
 
-def run
-  tb = Baml::TypeBuilder.new
-  hobbies_enum = tb.add_enum('Hobbies')
-  hobbies_enum.add_value('Soccer')
-  hobbies_enum.add_value('Reading')
+    def run
+      tb = Baml::TypeBuilder.new
+      hobbies_enum = tb.add_enum('Hobbies')
+      hobbies_enum.add_value('Soccer')
+      hobbies_enum.add_value('Reading')
 
-  address_class = tb.add_class('Address')
-  address_class.add_property('street', tb.string)
+      address_class = tb.add_class('Address')
+      address_class.add_property('street', tb.string)
 
-  tb.User.add_property('hobby', hobbies_enum.type.optional)
-  tb.User.add_property('address', address_class.type.optional)
+      tb.User.add_property('hobby', hobbies_enum.type.optional)
+      tb.User.add_property('address', address_class.type.optional)
 
-  res = Baml::Client.dynamic_user_creator(input: "some user info", baml_options: { tb: tb })
-  # Now res might have the hobby property, which can be Soccer or Reading
-  puts res
-end
-```
-</CodeBlocks>
+      res = Baml::Client.dynamic_user_creator(input: "some user info", baml_options: { tb: tb })
+      # Now res might have the hobby property, which can be Soccer or Reading
+      puts res
+    end
+    ```
+  </Tab>
 
+  <Tab title="Go" language="go">
+    ```go Go
+    package main
+
+    import (
+        "context"
+        "fmt"
+        
+        b "example.com/baml_client"
+    )
+
+    func main() {
+        ctx := context.Background()
+        
+        tb := b.NewTypeBuilder()
+        hobbiesEnum, err := tb.AddEnum("Hobbies")
+        if err != nil {
+            panic(fmt.Sprintf("Failed to add enum: %v", err))
+        }
+        _, err = hobbiesEnum.AddValue("Soccer")
+        if err != nil {
+            panic(fmt.Sprintf("Failed to add value: %v", err))
+        }
+        _, err = hobbiesEnum.AddValue("Reading")
+        if err != nil {
+            panic(fmt.Sprintf("Failed to add value: %v", err))
+        }
+
+        addressClass, err := tb.AddClass("Address")
+        if err != nil {
+            panic(fmt.Sprintf("Failed to add class: %v", err))
+        }
+        addressClass.AddProperty("street", tb.String()).Description("The user's street address")
+        if err != nil {
+            panic(fmt.Sprintf("Failed to add property: %v", err))
+        }
+
+        _, err = tb.User.AddProperty("hobby", hobbiesEnum.Type().Optional())
+        if err != nil {
+            panic(fmt.Sprintf("Failed to add property: %v", err))
+        }
+        _, err = tb.User.AddProperty("address", addressClass.Type().Optional())
+        if err != nil {
+            panic(fmt.Sprintf("Failed to add property: %v", err))
+        }
+        
+        res, err := b.DynamicUserCreator(ctx, "some user info", b.WithTypeBuilder(tb))
+        if err != nil {
+            panic(fmt.Sprintf("Failed to create user: %v", err))
+        }
+        
+        // Now res might have the hobby property, which can be Soccer or Reading
+        fmt.Printf("Result: %+v\n", res)
+    }
+    ```
+  </Tab>
+</Tabs>
 
 
 TypeBuilder provides methods for building different kinds of types:
@@ -348,24 +531,42 @@ TypeBuilder provides methods for building different kinds of types:
 
 ### Adding descriptions to dynamic types
 
-<CodeBlocks>
-
-```python Python
+<Tabs>
+<Tab title="Python" language="python">
+```python
 tb = TypeBuilder()
 tb.User.add_property("email", tb.string()).description("The user's email")
 ```
+</Tab>
 
-```typescript TypeScript
+<Tab title="TypeScript" language="typescript">
+```typescript
 const tb = new TypeBuilder()
 tb.User.addProperty("email", tb.string()).description("The user's email")
 ```
+</Tab>
 
-```ruby Ruby
+<Tab title="Ruby" language="ruby">
+```ruby
 tb = Baml::TypeBuilder.new
 tb.User.add_property("email", tb.string).description("The user's email")
 ```
+</Tab>
 
-</CodeBlocks>
+<Tab title="Go" language="go">
+```go
+tb := b.NewTypeBuilder()
+email, err := tb.User.AddProperty("email", tb.String())
+if err != nil {
+    panic(fmt.Sprintf("Failed to get property: %v", err))
+}
+err = email.SetDescription("The user's email")
+if err != nil {
+    panic(fmt.Sprintf("Failed to set description: %v", err))
+}
+```
+</Tab>
+</Tabs>
 
 
 ### Creating dynamic classes and enums at runtime with BAML syntax
@@ -375,7 +576,7 @@ The `TypeBuilder` has a higher level API `add_baml` to do this:
 
 <Tabs>
 
-<Tab title="Python">
+<Tab title="Python" language="python">
 ```python Python
 tb = TypeBuilder()
 tb.add_baml("""
@@ -399,7 +600,7 @@ tb.add_baml("""
 ```
 </Tab>
 
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 ```typescript TypeScript
 const tb = new TypeBuilder()
 tb.addBaml(`
@@ -423,7 +624,7 @@ tb.addBaml(`
 ```
 </Tab>
 
-<Tab title="Ruby">
+<Tab title="Ruby" language="ruby">
 ```ruby Ruby
 tb = Baml::TypeBuilder.new
 tb.add_baml("
@@ -444,6 +645,30 @@ tb.add_baml("
     VALUE5
   }
 ")
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go Go
+tb := b.NewTypeBuilder()
+tb.AddBaml(`
+  // Creates a new class Address that does not exist in the BAML source.
+  class Address {
+    street string
+    city string
+    state string
+  }
+
+  // Modifies the existing @@dynamic User class to add the new address property.
+  dynamic class User {
+    address Address
+  }
+
+  // Modifies the existing @@dynamic Category enum to add a new variant.
+  dynamic enum Category {
+    VALUE5
+  }
+`)
 ```
 </Tab>
 

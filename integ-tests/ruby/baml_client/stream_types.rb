@@ -26,8 +26,17 @@ module BamlClient
       const :state, Symbol
   end
   # #########################################################################
-  # Generated classes (99)
+  # Generated classes (104)
   # #########################################################################
+
+
+  class AddTodoItem < T::Struct
+      include Baml::Sorbet::Struct
+      const :type, String
+      const :item, T.nilable(String)
+      const :time, T.nilable(String)
+      const :description, T.nilable(String)
+  end
 
 
   class AnotherObject < T::Struct
@@ -187,6 +196,15 @@ module BamlClient
       include Baml::Sorbet::Struct
       const :client_details, T.nilable(ClientDetails1559)
       const :notes, T::Array[Note1599]
+  end
+
+
+  class DummyJsonTodo < T::Struct
+      include Baml::Sorbet::Struct
+      const :id, T.nilable(Integer)
+      const :todo, T.nilable(String)
+      const :completed, T.nilable(T::Boolean)
+      const :userId, T.nilable(Integer)
   end
 
 
@@ -602,6 +620,19 @@ module BamlClient
   end
 
 
+  class RenderEnumInput < T::Struct
+      include Baml::Sorbet::Struct
+      const :testKey, T.nilable(String)
+  end
+
+
+  class RenderTestClass < T::Struct
+      include Baml::Sorbet::Struct
+      const :name, T.nilable(String)
+      const :status, T.nilable(T.any(BamlClient::Types::RenderStatusEnum, String))
+  end
+
+
   class Resume < T::Struct
       include Baml::Sorbet::Struct
       const :name, T.nilable(String)
@@ -619,7 +650,7 @@ module BamlClient
       const :prop2, T.nilable(T.any(Nested, String))
       const :prop5, T::Array[T.nilable(String)]
       const :prop6, T.nilable(T.any(String, T::Array[Nested]))
-      const :nested_attrs, T::Array[T.any(String, Nested)]
+      const :nested_attrs, T::Array[T.nilable(T.any(String, Nested))]
       const :parens, T.nilable(String)
       const :other_group, T.nilable(T.any(String, Integer))
   end
@@ -712,6 +743,13 @@ module BamlClient
   end
 
 
+  class TodoMessageToUser < T::Struct
+      include Baml::Sorbet::Struct
+      const :type, String
+      const :message, T.nilable(String)
+  end
+
+
   class Tree < T::Struct
       include Baml::Sorbet::Struct
       const :data, T.nilable(Integer)
@@ -764,7 +802,7 @@ module BamlClient
   end
 
   # #########################################################################
-  # Generated type aliases (20)
+  # Generated type aliases (21)
   # #########################################################################
 
 
@@ -777,19 +815,19 @@ module BamlClient
   Currency = T.type_alias{ T.nilable(BamlClient::Types::Checked[Integer]) }
 
 
-  Graph = T.type_alias{ T.nilable(T::Hash[String, T::Array[String]]) }
+  Graph = T.type_alias{ T::Hash[String, T::Array[String]] }
 
 
-  JsonArray = T.type_alias{ T.nilable(T::Array[JsonValue]) }
+  JsonArray = T.type_alias{ T::Array[JsonValue] }
 
 
   JsonEntry = T.type_alias{ T.nilable(T.any(SimpleTag, JsonTemplate)) }
 
 
-  JsonObject = T.type_alias{ T.nilable(T::Hash[String, JsonValue]) }
+  JsonObject = T.type_alias{ T::Hash[String, JsonValue] }
 
 
-  JsonTemplate = T.type_alias{ T.nilable(T::Hash[String, JsonEntry]) }
+  JsonTemplate = T.type_alias{ T::Hash[String, JsonEntry] }
 
 
   JsonValue = T.type_alias{ T.nilable(T.any(Integer, String, T::Boolean, Float, JsonObject, JsonArray)) }
@@ -798,7 +836,7 @@ module BamlClient
   LinkedListAlias = T.type_alias{ T.nilable(LinkedListAliasNode) }
 
 
-  List = T.type_alias{ T.nilable(T::Array[String]) }
+  List = T.type_alias{ T::Array[String] }
 
 
   MultipleAttrs = T.type_alias{ T.nilable(BamlClient::Types::Checked[Integer]) }
@@ -813,19 +851,22 @@ module BamlClient
   RecAliasOne = T.type_alias{ T.nilable(RecAliasTwo) }
 
 
-  RecAliasThree = T.type_alias{ T.nilable(T::Array[RecAliasOne]) }
+  RecAliasThree = T.type_alias{ T::Array[RecAliasOne] }
 
 
   RecAliasTwo = T.type_alias{ T.nilable(RecAliasThree) }
 
 
-  RecursiveListAlias = T.type_alias{ T.nilable(T::Array[T.anything]) }
+  RecursiveListAlias = T.type_alias{ T::Array[T.anything] }
 
 
-  RecursiveMapAlias = T.type_alias{ T.nilable(T::Hash[String, T.anything]) }
+  RecursiveMapAlias = T.type_alias{ T::Hash[String, T.anything] }
 
 
   RecursiveUnion = T.type_alias{ T.nilable(T.any(String, T::Hash[String, T.anything])) }
+
+
+  TodoTool = T.type_alias{ T.nilable(T.any(AddTodoItem, TodoMessageToUser)) }
 
 
   end

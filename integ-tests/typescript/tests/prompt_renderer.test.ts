@@ -24,19 +24,17 @@ describe("Prompt Renderer Tests", () => {
     expect(res2).toContain("interesting-key");
   });
 
-  // TODO: Enum aliases are not supported
   it("should use aliases when serializing input objects - enums", async () => {
     const res = await b.AliasedInputEnum(AliasedEnum.KEY_ONE);
-    expect(res.toLowerCase()).not.toContain("tiger");
+    expect(res.toLowerCase()).toContain("tiger");
   });
 
-  // TODO: enum aliases are not supported
   it("should use aliases when serializing input objects - lists", async () => {
     const res = await b.AliasedInputList([
       AliasedEnum.KEY_ONE,
       AliasedEnum.KEY_TWO,
     ]);
-    expect(res.toLowerCase()).not.toContain("tiger");
+    expect(res.toLowerCase()).toContain("tiger");
   });
 
   it("maintain field order", async () => {

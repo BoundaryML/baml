@@ -1,24 +1,24 @@
 mod context;
 pub mod validations;
 
-use enumflags2::BitFlags;
 use internal_baml_parser_database::ParserDatabase;
 
-use crate::{internal_baml_diagnostics::Diagnostics, PreviewFeature};
+use crate::{configuration::Configuration, internal_baml_diagnostics::Diagnostics};
 
 /// Validate a Prisma schema.
 pub(crate) fn validate(
     db: &ParserDatabase,
-    preview_features: BitFlags<PreviewFeature>,
+    configuration: &Configuration,
     diagnostics: &mut Diagnostics,
 ) {
     // Early return so that the validator does not have to deal with invalid schemas
 
-    let mut context = context::Context {
+    let mut context = context::Context::new(
         db,
-        preview_features,
+        configuration.preview_features(),
+        configuration,
         diagnostics,
-    };
+    );
 
     validations::validate(&mut context);
 }

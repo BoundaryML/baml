@@ -12,7 +12,7 @@ describe("AWS Provider", () => {
     await expect(async () => {
       await b.TestAwsInvalidRegion("Write a nice short story about Dr. Pepper");
     }).rejects.toMatchObject({
-      code: "GenericFailure",
+      name: "BamlClientHttpError",
     });
   });
 
@@ -279,7 +279,7 @@ describe("AWS Provider", () => {
       await expect(async () => {
         await b.TestAws("Dr. Pepper", { clientRegistry: cr });
       }).rejects.toMatchObject({
-        code: "GenericFailure",
+        name: "BamlClientHttpError",
       });
     });
 

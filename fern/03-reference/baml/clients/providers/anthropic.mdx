@@ -10,7 +10,7 @@ Example:
 client<llm> MyClient {
   provider anthropic
   options {
-    model "claude-3-5-sonnet-20240620"
+    model "claude-sonnet-4-20250514"
     temperature 0
   }
 }
@@ -51,7 +51,7 @@ client<llm> MyClient {
   provider anthropic
   options {
     api_key env.MY_ANTHROPIC_KEY
-    model "claude-3-5-sonnet-20240620"
+    model "claude-sonnet-4-20250514"
     headers {
       "X-My-Header" "my-value"
     }
@@ -100,12 +100,11 @@ Consult the specific provider's documentation for more information.
 >
   The model to use.
 
-| Model |
-| --- |
-| `claude-3-5-sonnet-20240620` |  
-| `claude-3-opus-20240229` |  
-| `claude-3-sonnet-20240229` |  
-| `claude-3-haiku-20240307` |  
+| Model | Use Case | Release | Context | Features |
+|-------|----------|---------|---------|----------|
+| **claude-opus-4-1-20250805** | Complex coding, AI agents | Aug 2025 | 200K | Most powerful reasoning |
+| **claude-sonnet-4-20250514** | Default choice, versatile | May 2025 | 200K-1M | Hybrid reasoning modes |
+| **claude-3-5-haiku-20241022** | Fast, cost-efficient | Oct 2024 | 200K | Speed optimized |  
 
 <img src="https://mintlify.s3-us-west-1.amazonaws.com/anthropic/images/3-5-sonnet-curve.png" />
 

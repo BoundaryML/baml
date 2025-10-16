@@ -111,7 +111,7 @@ pub fn ir_type_alias_to_ts_interface_stream<'a>(
         TypeGeneric::Union(union_type, _) => {
             // Check if this union contains a map that we can extract as an interface
             for variant in union_type.iter_skip_null() {
-                if let TypeGeneric::Map(_, value_type, _) = variant {
+                if let TypeGeneric::Map(_, _value_type, _) = variant {
                     // Found a map in the union - create an interface that extends the union but as an index signature
                     return Some(TypeAliasInterfaceTS {
                         name: alias.elem.name.clone(),

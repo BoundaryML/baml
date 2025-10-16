@@ -39,7 +39,7 @@ impl ApiKeyEnvironment {
             Self::DEVELOPMENT => "dev",
             Self::STAGING => "stg",
             Self::PRODUCTION => "prod",
-            _ => &self.value[..3.min(self.value.len())],
+            _ => &self.value[..self.value.len().min(4)],
         }
     }
 }

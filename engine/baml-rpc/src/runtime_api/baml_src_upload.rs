@@ -7,6 +7,8 @@ use crate::{ast::tops::AST, rpc::ApiEndpoint, s3::S3UploadMetadata};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CheckBamlSrcUploadRequest {
     pub baml_src_hash: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub baml_runtime: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -20,6 +20,12 @@ impl Token {
 }
 
 impl VertexAuth {
+    pub async fn get_or_create(auth_strategy: &ResolvedGcpAuthStrategy) -> Result<Arc<VertexAuth>> {
+        // For WASM, just create new instances without caching
+        let auth = Arc::new(Self::new(auth_strategy).await?);
+        Ok(auth)
+    }
+
     pub async fn new(auth_strategy: &ResolvedGcpAuthStrategy) -> Result<Self> {
         Ok(match auth_strategy {
             ResolvedGcpAuthStrategy::MaybeFilePath(str)
@@ -54,28 +60,32 @@ impl VertexAuth {
     pub async fn token(&self, scopes: &[&str]) -> Result<Arc<Token>> {
         match &self.0 {
             Some(service_account) => {
-                let token = service_account.get_oauth2_token().await?;
+                let token = service_account.get_oauth2_token().await.context(
+                    "Failed to get OAuth2 token from provided service account credentials",
+                )?;
                 Ok(Arc::new(token))
             }
             None => {
                 let cred_provider = get_js_callback_provider()?;
                 let gcp_creds = cred_provider.gcp_req().await.context(
-                    "Failed to load GCP creds: try running `gcloud auth application-default login`",
+                    "Failed to load GCP creds token: try running `gcloud auth application-default login`",
                 )?;
                 Ok(Arc::new(Token(gcp_creds.access_token)))
             }
         }
     }
 
-    pub async fn project_id(&self) -> Result<String> {
+    pub async fn project_id(&self) -> Result<Arc<str>> {
         match &self.0 {
-            Some(service_account) => Ok(service_account.project_id.clone()),
+            Some(service_account) => Ok(service_account.project_id.clone().into()),
             None => {
                 let cred_provider = get_js_callback_provider()?;
                 let gcp_creds = cred_provider.gcp_req().await.context(
-                    "Failed to load GCP creds: try running `gcloud auth application-default login`",
+                    "Failed to load GCP creds project ID (load failed): try running `gcloud auth application-default login`",
                 )?;
-                Ok(gcp_creds.project_id)
+                Ok(gcp_creds.project_id.ok_or(anyhow::anyhow!(
+                    "Failed to load GCP creds project ID (failed to resolve): try running `gcloud auth application-default login`",
+                ))?.into())
             }
         }
     }

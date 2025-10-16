@@ -20,22 +20,22 @@ $ pnpm add @boundaryml/baml
 
 /**
  * If this import fails, you may need to upgrade @boundaryml/baml.
- * 
- * Please upgrade @boundaryml/baml to 0.90.1.
- * 
- * $ npm install @boundaryml/baml@0.90.1
- * $ yarn add @boundaryml/baml@0.90.1
- * $ pnpm add @boundaryml/baml@0.90.1
- * 
+ *
+ * Please upgrade @boundaryml/baml to 0.211.2.
+ *
+ * $ npm install @boundaryml/baml@0.211.2
+ * $ yarn add @boundaryml/baml@0.211.2
+ * $ pnpm add @boundaryml/baml@0.211.2
+ *
  * If nothing else works, please ask for help:
- * 
+ *
  * https://github.com/boundaryml/baml/issues
  * https://boundaryml.com/discord
- * 
+ *
  **/
 import { ThrowIfVersionMismatch } from "@boundaryml/baml";
 
-export const version = "0.90.1";
+export const version = "0.211.2";
 
 ThrowIfVersionMismatch(version);
 
@@ -46,5 +46,6 @@ export { b } from "./async_client.js"
 export * from "./types.js"
 export type { partial_types } from "./partial_types.js"
 export * from "./tracing.js"
+export * as watchers from "./watchers.js"
 export { resetBamlEnvVars } from "./globals.js"
 export { BamlClientHttpError, BamlValidationError, BamlClientFinishReasonError } from "@boundaryml/baml"

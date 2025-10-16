@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
 use baml_derive::BamlHash;
@@ -87,6 +87,19 @@ impl ResolvedGoogleAI {
             }
         })
     }
+
+    pub fn remap_role(&self) -> HashMap<String, String> {
+        self.role_selection.remap().unwrap_or_else(|| {
+            let allowed_roles = self.allowed_roles();
+            if allowed_roles.contains(&"assistant".to_string())
+                && !allowed_roles.contains(&"model".to_string())
+            {
+                HashMap::from([("assistant".to_string(), "model".to_string())])
+            } else {
+                HashMap::new()
+            }
+        })
+    }
 }
 
 impl<Meta: Clone> UnresolvedGoogleAI<Meta> {
@@ -118,7 +131,7 @@ impl<Meta: Clone> UnresolvedGoogleAI<Meta> {
             .as_ref()
             .map(|m| m.resolve(ctx))
             .transpose()?
-            .unwrap_or_else(|| "gemini-1.5-flash".to_string());
+            .ok_or_else(|| anyhow::anyhow!("model must be provided"))?;
 
         let base_url = self.base_url.resolve(ctx)?;
 

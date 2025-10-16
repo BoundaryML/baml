@@ -11,12 +11,13 @@
 # baml-cli is available with the baml package.
 
 import typing
+import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
 from .parser import LlmResponseParser, LlmStreamParser
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
-
+from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME as __runtime__
 
 class BamlSyncClient:
     __options: DoNotUseDirectlyCallManager
@@ -52,6 +53,8 @@ class BamlSyncClient:
         client_registry: typing.Optional[baml_py.baml_py.ClientRegistry] = None,
         collector: typing.Optional[typing.Union[baml_py.baml_py.Collector, typing.List[baml_py.baml_py.Collector]]] = None,
         env: typing.Optional[typing.Dict[str, typing.Optional[str]]] = None,
+        tags: typing.Optional[typing.Dict[str, str]] = None,
+        on_tick: typing.Optional[typing.Callable[[str, baml_py.baml_py.FunctionLog], None]] = None,
     ) -> "BamlSyncClient":
         options: BamlCallOptions = {}
         if tb is not None:
@@ -62,6 +65,10 @@ class BamlSyncClient:
             options["collector"] = collector
         if env is not None:
             options["env"] = env
+        if tags is not None:
+            options["tags"] = tags
+        if on_tick is not None:
+            options["on_tick"] = on_tick
         return BamlSyncClient(self.__options.merge_options(options))
 
     @property
@@ -87,24 +94,45 @@ class BamlSyncClient:
     def MakeClassWithBlockDone(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.ClassWithBlockDone:
-        result = self.__options.merge_options(baml_options).call_function_sync(function_name="MakeClassWithBlockDone", args={
-            
-        })
-        return typing.cast(types.ClassWithBlockDone, result.cast_to(types, types, stream_types, False))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.MakeClassWithBlockDone(
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="MakeClassWithBlockDone", args={
+                
+            })
+            return typing.cast(types.ClassWithBlockDone, result.cast_to(types, types, stream_types, False, __runtime__))
     def MakeClassWithExternalDone(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.ClassWithoutDone:
-        result = self.__options.merge_options(baml_options).call_function_sync(function_name="MakeClassWithExternalDone", args={
-            
-        })
-        return typing.cast(types.ClassWithoutDone, result.cast_to(types, types, stream_types, False))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.MakeClassWithExternalDone(
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="MakeClassWithExternalDone", args={
+                
+            })
+            return typing.cast(types.ClassWithoutDone, result.cast_to(types, types, stream_types, False, __runtime__))
     def MakeSemanticContainer(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.SemanticContainer:
-        result = self.__options.merge_options(baml_options).call_function_sync(function_name="MakeSemanticContainer", args={
-            
-        })
-        return typing.cast(types.SemanticContainer, result.cast_to(types, types, stream_types, False))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.MakeSemanticContainer(
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="MakeSemanticContainer", args={
+                
+            })
+            return typing.cast(types.SemanticContainer, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -122,8 +150,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[types.ClassWithBlockDone, types.ClassWithBlockDone](
           result,
-          lambda x: typing.cast(types.ClassWithBlockDone, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.ClassWithBlockDone, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(types.ClassWithBlockDone, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.ClassWithBlockDone, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def MakeClassWithExternalDone(self, 
@@ -134,8 +162,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[types.ClassWithoutDone, types.ClassWithoutDone](
           result,
-          lambda x: typing.cast(types.ClassWithoutDone, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.ClassWithoutDone, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(types.ClassWithoutDone, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.ClassWithoutDone, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def MakeSemanticContainer(self, 
@@ -146,8 +174,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.SemanticContainer, types.SemanticContainer](
           result,
-          lambda x: typing.cast(stream_types.SemanticContainer, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.SemanticContainer, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.SemanticContainer, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.SemanticContainer, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     

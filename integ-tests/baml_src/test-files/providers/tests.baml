@@ -16,7 +16,7 @@ test TestAWS {
 
 test TestProvider {
   functions [
-    TestAnthropic, TestVertex, PromptTestOpenAI, TestAzure, TestOllama, TestGemini, TestAws,
+    TestAnthropic, TestVertex, PromptTestOpenAI, TestAzure, TestOllama, TestGemini, TestGeminiThinking, TestAws,
     TestAwsInvalidRegion,
     TestOpenAIShorthand,
     TestAnthropicShorthand,

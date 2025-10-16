@@ -324,7 +324,7 @@ impl<'db> crate::ParserDatabase {
                 let mut t = match self.find_type(idn) {
                     None => Type::Undefined,
                     Some(TypeWalker::Class(_)) => Type::ClassRef(idn.to_string()),
-                    Some(TypeWalker::Enum(_)) => Type::String,
+                    Some(TypeWalker::Enum(_)) => Type::EnumValueRef(idn.to_string()),
                     Some(TypeWalker::TypeAlias(alias)) => {
                         if self.is_recursive_type_alias(&alias.id) {
                             Type::RecursiveTypeAlias(alias.name().to_string())

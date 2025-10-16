@@ -1,0 +1,17 @@
+{
+  "name": "@baml/cli",
+  "version": "0.1.0",
+  "private": true,
+  "files": ["dist"],
+  "bin": {
+    "baml-cli": "./dist/baml-cli"
+  },
+  "scripts": {
+    "dev": "pnpm build && pnpm run copy:debug",
+    "clean": "git clean -xdf .turbo node_modules target",
+    "copy:debug": "mkdir -p dist && cp ../target/debug/baml-cli dist/baml-cli",
+    "copy:release": "mkdir -p dist && cp ../target/release/baml-cli dist/baml-cli",
+    "build": "cargo build --bin baml-cli && pnpm run copy:debug",
+    "release": "cargo build --release --bin baml-cli && pnpm run copy:release"
+  }
+}

@@ -1,7 +1,7 @@
 type JSON = string | null | int | float | map<string, JSON> | JSON[]
 
 function Foo(x: int) -> JSON {
-    client "ollama/phi4:latest"
+    client "openai/gpt-4o-mini"
     prompt #"
         print out a json object with the following fields:
         - a: {{ x }}
@@ -11,14 +11,18 @@ function Foo(x: int) -> JSON {
         - f: null
         - g: 1.0
         - h: { a: 1, b: null, c: [1, 2, 3] }
+        
+        {{ ctx.output_format }}
     "#
 }
 
 function JsonInput(x: JSON) -> JSON {
-    client "ollama/phi4:latest"
+    client "openai/gpt-4o-mini"
     prompt #"
         repeat back to me:
         {{ x }}
+        
+        {{ ctx.output_format }}
     "#
 }
 

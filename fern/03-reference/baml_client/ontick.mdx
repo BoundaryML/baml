@@ -1,0 +1,629 @@
+---
+title: OnTick
+---
+
+The `onTick` feature allows you to receive real-time callbacks during BAML function execution, providing access to internal state, streaming responses, and progress updates. This is particularly useful for monitoring function progress, debugging, and accessing intermediate data like "thinking" content from streaming LLM responses.
+
+## Quick Start
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_py import baml_py
+
+def on_tick(reason: str, log: baml_py.FunctionLog):
+    print(f"Tick received: {reason}")
+    print(f"Function calls: {len(log.calls) if log else 0}")
+
+# Use with async function
+result = await b.TestFunction("Hello world", baml_options={"on_tick": on_tick})
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import { b } from 'baml_client'
+import type { FunctionLog } from '@boundaryml/baml'
+
+type TickReason = "Unknown"
+
+const onTick = (reason: TickReason, log: FunctionLog | null) => {
+    console.log(`Tick received: ${reason}`)
+    console.log(`Function calls: ${log?.calls?.length || 0}`)
+}
+
+// Use with async function
+const result = await b.TestFunction("Hello world", { onTick })
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+import (
+    "fmt"
+	b "my_project/baml_client"
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+)
+
+func onTick(reason string, log *baml.FunctionLog) {
+    fmt.Printf("Tick received: %s\n", reason)
+    if log != nil {
+        fmt.Printf("Function calls: %d\n", len(log.Calls))
+    }
+}
+
+// Use with function call
+result, err := b.TestFunction(ctx, "Hello world", b.WithOnTick(onTick))
+```
+</Tab>
+</Tabs>
+
+## Common Use Cases
+
+### Progress Monitoring
+
+Track the progress of long-running BAML function calls:
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_py import baml_py
+
+def progress_monitor(reason: str, log: baml_py.FunctionLog):
+    tick_count = getattr(progress_monitor, 'count', 0)
+    progress_monitor.count = tick_count + 1
+    
+    print(f"Progress tick #{progress_monitor.count}: {reason}")
+    
+    if log and log.calls:
+        latest_call = log.calls[-1]
+        print(f"Latest call to: {latest_call.client_name}")
+
+result = await b.ExtractResume(
+    resume_text, 
+    baml_options={"on_tick": progress_monitor}
+)
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import { b } from 'baml_client'
+import type { FunctionLog } from '@boundaryml/baml'
+
+let tickCount = 0
+
+const progressMonitor = (reason: string, log: FunctionLog | null) => {
+    tickCount++
+    console.log(`Progress tick #${tickCount}: ${reason}`)
+    
+    if (log?.calls?.length) {
+        const latestCall = log.calls[log.calls.length - 1]
+        console.log(`Latest call to: ${latestCall.clientName}`)
+    }
+}
+
+const result = await b.ExtractResume(resumeText, { onTick: progressMonitor })
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+var tickCount int
+
+func progressMonitor(reason string, log *baml.FunctionLog) {
+    tickCount++
+    fmt.Printf("Progress tick #%d: %s\n", tickCount, reason)
+    
+    if log != nil && len(log.Calls) > 0 {
+        latestCall := log.Calls[len(log.Calls)-1]
+        fmt.Printf("Latest call to: %s\n", latestCall.ClientName)
+    }
+}
+
+result, err := b.ExtractResume(ctx, resumeText, baml.WithOnTick(progressMonitor))
+```
+</Tab>
+</Tabs>
+
+### Accessing Streaming "Thinking" Content
+
+Extract intermediate "thinking" content from streaming LLM responses:
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+import json
+from baml_client import b
+from baml_py import baml_py
+
+def extract_thinking(reason: str, log: baml_py.FunctionLog):
+    thinking_content = ""
+    
+    if log and log.calls:
+        last_call = log.calls[-1]
+        
+        # Check if it's a streaming call
+        if hasattr(last_call, "sse_responses"):
+            sse_responses = last_call.sse_responses()
+            if sse_responses:
+                for response in sse_responses:
+                    try:
+                        data = json.loads(response.text)
+                        if "delta" in data and "thinking" in data["delta"]:
+                            thinking_content += data["delta"]["thinking"]
+                    except (json.JSONDecodeError, AttributeError):
+                        pass
+    
+    if thinking_content:
+        print(f"Thinking content: {thinking_content}")
+
+# Use with streaming function
+stream = b.stream.TestThinking(
+    "Write a story about AI", 
+    baml_options={"on_tick": extract_thinking}
+)
+
+async for msg in stream:
+    pass
+
+result = await stream.get_final_response()
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import { b } from 'baml_client'
+import type { FunctionLog, LlmStreamCall } from '@boundaryml/baml'
+
+const extractThinking = (reason: string, log: FunctionLog | null) => {
+    let thinkingContent = ""
+    
+    if (log?.calls?.length) {
+        const lastCall = log.calls[log.calls.length - 1]
+        
+        // Check if it's a stream call
+        if ('sseResponses' in lastCall) {
+            const streamCall = lastCall as LlmStreamCall
+            const responses = streamCall.sseResponses()
+            if (responses) {
+                for (const response of responses) {
+                    try {
+                        const data = JSON.parse(response.text)
+                        if (data.delta?.thinking) {
+                            thinkingContent += data.delta.thinking
+                        }
+                    } catch {
+                        // Ignore parse errors
+                    }
+                }
+            }
+        }
+    }
+    
+    if (thinkingContent) {
+        console.log(`Thinking content: ${thinkingContent}`)
+    }
+}
+
+// Use with streaming function
+const stream = b.stream.TestThinking("Write a story about AI", { onTick: extractThinking })
+
+for await (const msg of stream) {
+    // Process streaming messages
+}
+
+const result = await stream.getFinalResponse()
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+import (
+    "encoding/json"
+    "fmt"
+    "github.com/BoundaryML/baml/baml-go"
+)
+
+func extractThinking(reason string, log *baml.FunctionLog) {
+    thinkingContent := ""
+    
+    if log != nil && len(log.Calls) > 0 {
+        lastCall := log.Calls[len(log.Calls)-1]
+        
+        // Check if it's a streaming call
+        if streamCall, ok := lastCall.(*baml.LLMStreamCall); ok {
+            responses := streamCall.SSEResponses()
+            for _, response := range responses {
+                var data map[string]interface{}
+                if err := json.Unmarshal([]byte(response.Text), &data); err == nil {
+                    if delta, ok := data["delta"].(map[string]interface{}); ok {
+                        if thinking, ok := delta["thinking"].(string); ok {
+                            thinkingContent += thinking
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if thinkingContent != "" {
+        fmt.Printf("Thinking content: %s\n", thinkingContent)
+    }
+}
+
+// Use with streaming function
+stream, err := b.StreamTestThinking(ctx, "Write a story about AI", baml.WithOnTick(extractThinking))
+if err != nil {
+    return err
+}
+
+for msg := range stream.Channel() {
+    // Process streaming messages
+}
+
+result := stream.FinalResponse()
+```
+</Tab>
+</Tabs>
+
+### Debugging and Logging
+
+Use onTick for comprehensive debugging and logging:
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_py import baml_py
+
+def debug_logger(reason: str, log: baml_py.FunctionLog):
+    print(f"=== DEBUG TICK: {reason} ===")
+    
+    if log:
+        print(f"Function: {log.function_name}")
+        print(f"Log type: {log.log_type}")
+        print(f"Number of calls: {len(log.calls)}")
+        
+        if log.usage:
+            print(f"Input tokens: {log.usage.input_tokens}")
+            print(f"Output tokens: {log.usage.output_tokens}")
+        
+        if log.calls:
+            latest_call = log.calls[-1]
+            print(f"Latest provider: {latest_call.provider}")
+            print(f"Latest client: {latest_call.client_name}")
+            
+            if latest_call.usage:
+                print(f"Call usage - Input: {latest_call.usage.input_tokens}, Output: {latest_call.usage.output_tokens}")
+    
+    print("=== END DEBUG ===\n")
+
+result = await b.TestFunction("Debug this call", baml_options={"on_tick": debug_logger})
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import { b } from 'baml_client'
+import type { FunctionLog } from '@boundaryml/baml'
+
+const debugLogger = (reason: string, log: FunctionLog | null) => {
+    console.log(`=== DEBUG TICK: ${reason} ===`)
+    
+    if (log) {
+        console.log(`Function: ${log.functionName}`)
+        console.log(`Log type: ${log.logType}`)
+        console.log(`Number of calls: ${log.calls?.length || 0}`)
+        
+        if (log.usage) {
+            console.log(`Input tokens: ${log.usage.inputTokens}`)
+            console.log(`Output tokens: ${log.usage.outputTokens}`)
+        }
+        
+        if (log.calls?.length) {
+            const latestCall = log.calls[log.calls.length - 1]
+            console.log(`Latest provider: ${latestCall.provider}`)
+            console.log(`Latest client: ${latestCall.clientName}`)
+            
+            if (latestCall.usage) {
+                console.log(`Call usage - Input: ${latestCall.usage.inputTokens}, Output: ${latestCall.usage.outputTokens}`)
+            }
+        }
+    }
+    
+    console.log("=== END DEBUG ===\n")
+}
+
+const result = await b.TestFunction("Debug this call", { onTick: debugLogger })
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+func debugLogger(reason string, log *baml.FunctionLog) {
+    fmt.Printf("=== DEBUG TICK: %s ===\n", reason)
+    
+    if log != nil {
+        fmt.Printf("Function: %s\n", log.FunctionName)
+        fmt.Printf("Log type: %s\n", log.LogType)
+        fmt.Printf("Number of calls: %d\n", len(log.Calls))
+        
+        if log.Usage != nil {
+            fmt.Printf("Input tokens: %d\n", log.Usage.InputTokens)
+            fmt.Printf("Output tokens: %d\n", log.Usage.OutputTokens)
+        }
+        
+        if len(log.Calls) > 0 {
+            latestCall := log.Calls[len(log.Calls)-1]
+            fmt.Printf("Latest provider: %s\n", latestCall.Provider)
+            fmt.Printf("Latest client: %s\n", latestCall.ClientName)
+            
+            if latestCall.Usage != nil {
+                fmt.Printf("Call usage - Input: %d, Output: %d\n", 
+                    latestCall.Usage.InputTokens, 
+                    latestCall.Usage.OutputTokens)
+            }
+        }
+    }
+    
+    fmt.Println("=== END DEBUG ===\n")
+}
+
+result, err := b.TestFunction(ctx, "Debug this call", baml.WithOnTick(debugLogger))
+```
+</Tab>
+</Tabs>
+
+## Using with Collectors
+
+OnTick can be used alongside [Collectors](/ref/baml_client/collector) for comprehensive logging:
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_py import baml_py, Collector
+
+def on_tick_with_collector(reason: str, log: baml_py.FunctionLog):
+    print(f"OnTick fired: {reason}")
+
+# Create a collector alongside onTick
+collector = Collector("my-collector")
+
+result = await b.TestFunction(
+    "Hello world", 
+    baml_options={
+        "on_tick": on_tick_with_collector,
+        "collector": collector
+    }
+)
+
+# Access data through both mechanisms
+print(f"Collector usage: {collector.last.usage}")
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import { b } from 'baml_client'
+import { Collector } from '@boundaryml/baml'
+import type { FunctionLog } from '@boundaryml/baml'
+
+const onTickWithCollector = (reason: string, log: FunctionLog | null) => {
+    console.log(`OnTick fired: ${reason}`)
+}
+
+// Create a collector alongside onTick
+const collector = new Collector("my-collector")
+
+const result = await b.TestFunction("Hello world", {
+    onTick: onTickWithCollector,
+    collector
+})
+
+// Access data through both mechanisms
+console.log(`Collector usage: ${collector.last?.usage}`)
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+func onTickWithCollector(reason string, log *baml.FunctionLog) {
+    fmt.Printf("OnTick fired: %s\n", reason)
+}
+
+// Create a collector alongside onTick
+collector, err := baml.NewCollector("my-collector")
+if err != nil {
+    return err
+}
+
+result, err := b.TestFunction(ctx, "Hello world", 
+    baml.WithOnTick(onTickWithCollector),
+    baml.WithCollector(collector),
+)
+
+// Access data through both mechanisms
+fmt.Printf("Collector usage: %v\n", collector.Last().Usage)
+```
+</Tab>
+</Tabs>
+
+## Error Handling
+
+OnTick callbacks should handle errors gracefully. If an onTick callback throws an error, the function execution will continue:
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_py import baml_py
+
+def error_prone_tick(reason: str, log: baml_py.FunctionLog):
+    # Simulate an error condition
+    if hasattr(error_prone_tick, 'count'):
+        error_prone_tick.count += 1
+    else:
+        error_prone_tick.count = 1
+    
+    if error_prone_tick.count == 5:
+        raise ValueError("Intentional error in onTick")
+    
+    print(f"Tick #{error_prone_tick.count}: {reason}")
+
+# Function will complete despite callback errors
+result = await b.TestFunction("Hello world", baml_options={"on_tick": error_prone_tick})
+print("Function completed successfully despite onTick error")
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import { b } from 'baml_client'
+import type { FunctionLog } from '@boundaryml/baml'
+
+let tickCount = 0
+
+const errorProneTick = (reason: string, log: FunctionLog | null) => {
+    tickCount++
+    
+    if (tickCount === 5) {
+        throw new Error("Intentional error in onTick")
+    }
+    
+    console.log(`Tick #${tickCount}: ${reason}`)
+}
+
+// Function will complete despite callback errors
+const result = await b.TestFunction("Hello world", { onTick: errorProneTick })
+console.log("Function completed successfully despite onTick error")
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+var tickCount int
+
+func errorProneTick(reason string, log *baml.FunctionLog) {
+    tickCount++
+    
+    if tickCount == 5 {
+        panic("Intentional error in onTick") // In Go, you might handle this differently
+    }
+    
+    fmt.Printf("Tick #%d: %s\n", tickCount, reason)
+}
+
+// Function will complete despite callback errors
+result, err := b.TestFunction(ctx, "Hello world", baml.WithOnTick(errorProneTick))
+if err == nil {
+    fmt.Println("Function completed successfully despite onTick error")
+}
+```
+</Tab>
+</Tabs>
+
+## Limitations
+
+<Warning>
+Keep these limitations in mind when using onTick:
+</Warning>
+
+1. **Synchronous Functions**: OnTick is **not supported** for synchronous function calls. Attempting to use onTick with sync functions will throw an error.
+
+2. **Error Isolation**: Errors in onTick callbacks do not stop function execution, but they may not be explicitly surfaced.
+
+## API Reference
+
+### OnTick Callback Signature
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+def on_tick(reason: str, log: baml_py.FunctionLog | None) -> None:
+    """
+    OnTick callback function
+    
+    Args:
+        reason: The reason for the tick (currently always "Unknown")
+        log: The current function log with call information
+    """
+    pass
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+type TickCallback = (reason: TickReason, log: FunctionLog | null) => void
+
+type TickReason = "Unknown" // Currently only one reason type
+
+interface BamlCallOptions {
+    onTick?: TickCallback
+    // ... other options
+}
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+type TickCallback func(reason string, log *FunctionLog)
+
+func WithOnTick(onTick TickCallback) CallOptionFunc
+func WithExperimentalOnTick(onTick TickCallback) CallOptionFunc // Deprecated
+```
+</Tab>
+</Tabs>
+
+### Integration with Function Calls
+
+OnTick is passed via the `baml_options` parameter (Python) or options object (TypeScript/Go):
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+# Async function call
+result = await b.FunctionName(input, baml_options={"on_tick": callback})
+
+# Streaming function call  
+stream = b.stream.FunctionName(input, baml_options={"on_tick": callback})
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+// Async function call
+const result = await b.FunctionName(input, { onTick: callback })
+
+// Streaming function call
+const stream = b.stream.FunctionName(input, { onTick: callback })
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+// Function call
+result, err := b.FunctionName(ctx, input, baml.WithOnTick(callback))
+
+// Streaming function call
+stream, err := b.StreamFunctionName(ctx, input, baml.WithOnTick(callback))
+```
+</Tab>
+</Tabs>
+
+## Related Topics
+
+- [Collector](/ref/baml_client/collector) - Learn about comprehensive logging with Collectors
+- [Using with_options](/ref/baml_client/with-options) - Configure global options for BAML functions
+- [Streaming](/docs/calling-baml/streaming) - Understand streaming function calls
+
+## Best Practices
+
+1. **Keep Callbacks Light**: OnTick callbacks should be fast and non-blocking
+2. **Handle Errors Gracefully**: Always include error handling in your callbacks
+3. **Use with Collectors**: Combine onTick with Collectors for comprehensive logging
+4. **Monitor Performance**: Test the performance impact for your specific use case
+5. **Async Only**: Remember that onTick only works with async function calls, not sync calls

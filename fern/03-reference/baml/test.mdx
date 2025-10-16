@@ -199,6 +199,76 @@ test AudioBase64Test {
         audio {
             base64 "..."
             media_type "audio/mp3"
+            }
+  }
+}
+```
+
+### Pdfs
+
+Unlike images and audio, **Pdfs cannot be supplied via URL**. They must be provided either as a local file reference or as Base64 data.
+
+1. **File Reference**
+```baml
+test PdfFileTest {
+    functions [AnalyzePdf]
+    args {
+        pdf {
+            file "../documents/report.pdf"
+        }
+    }
+}
+```
+
+2. **Base64 Data**
+```baml
+test PdfBase64Test {
+    functions [AnalyzePdf]
+    args {
+        pdf {
+            base64 "JVBERi0K..."
+            media_type "application/pdf"
+        }
+    }
+}
+```
+
+### Videos
+
+Similar to other media types, videos can be specified in three ways:
+
+1. **File Reference**
+```baml
+test VideoFileTest {
+    functions [AnalyzeVideo]
+    args {
+        video {
+            file "../videos/sample.mp4"
+        }
+    }
+}
+```
+
+2. **URL Reference**
+```baml
+test VideoUrlTest {
+    functions [AnalyzeVideo]
+    args {
+        video {
+            url "https://example.com/video.mp4"
+        }
+    }
+}
+```
+
+3. **Base64 Data**
+```baml
+test VideoBase64Test {
+    functions [AnalyzeVideo]
+    args {
+        video {
+            base64 "AAAAGGZ0eXBpc29t..."
+            media_type "video/mp4"
         }
     }
 }

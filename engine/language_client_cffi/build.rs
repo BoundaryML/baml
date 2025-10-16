@@ -323,11 +323,15 @@ mod protoc_lang_out {
 }
 
 fn main() -> std::io::Result<()> {
+    println!("running build for baml_cffi");
     // Re-run build.rs if these files change.
-    println!("cargo:rerun-if-changed=types/cffi.fbs");
     println!("cargo:rerun-if-changed=types/cffi.proto");
     println!("cargo:rerun-if-changed=cbindgen.toml");
     println!("cargo:rerun-if-changed=src/lib.rs");
+    println!("cargo:rerun-if-changed=src/ctypes/baml_type_encode.rs");
+    println!("cargo:rerun-if-changed=src/ctypes/baml_value_encode.rs");
+    println!("cargo:rerun-if-changed=src/ctypes/baml_type_decode.rs");
+    println!("cargo:rerun-if-changed=build.rs");
 
     std::env::set_var(
         "PROTOC",
@@ -348,10 +352,39 @@ fn main() -> std::io::Result<()> {
         //     ..Default::default()
         // };
 
-        protoc_lang_out::ProtocLangOut::new()
+        let mut protoc = protoc_lang_out::ProtocLangOut::new();
+        protoc
             .lang(lang)
             .input("types/cffi.proto")
-            .out_dir(lang_dir)
+            .out_dir(lang_dir);
+
+        // Allow overriding the protoc-gen-go plugin path
+        if let Ok(path) = std::env::var("PROTOC_GEN_GO_PATH") {
+            protoc.plugin(&path);
+        } else {
+            // Try to find protoc-gen-go using mise
+            match std::process::Command::new("mise")
+                .args(["which", "protoc-gen-go"])
+                .output()
+            {
+                Ok(output) if output.status.success() => {
+                    let path = String::from_utf8_lossy(&output.stdout);
+                    let path = path.trim();
+                    eprintln!("Using protoc-gen-go from mise: {path:?}");
+                    protoc.plugin(path);
+                }
+                Ok(_) => {
+                    eprintln!(
+                        "protoc-gen-go fallback: mise which protoc-gen-go failed, relying on PATH"
+                    );
+                }
+                Err(e) => {
+                    eprintln!("protoc-gen-go fallback: mise command failed ({e}), relying on PATH");
+                }
+            }
+        }
+
+        protoc
             .run()
             .unwrap_or_else(|_| panic!("Failed to generate {lang} bindings"));
     }
@@ -360,8 +393,9 @@ fn main() -> std::io::Result<()> {
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
 
     {
+        // Generate header to pkg/cffi directory for better vendoring support
         let out_path =
-            Path::new(&crate_dir).join("../language_client_go/include/baml_cffi_generated.h");
+            Path::new(&crate_dir).join("../language_client_go/pkg/cffi/baml_cffi_generated.h");
         let outpath_content =
             std::fs::read_to_string(&out_path).unwrap_or_else(|_| String::from(""));
         let res = cbindgen::Builder::new()

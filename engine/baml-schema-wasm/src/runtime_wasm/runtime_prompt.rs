@@ -124,6 +124,22 @@ impl WasmChatMessagePart {
     }
 
     #[wasm_bindgen]
+    pub fn is_pdf(&self) -> bool {
+        matches!(
+            self.part.as_media().map(|s| s.media_type),
+            Some(BamlMediaType::Pdf)
+        )
+    }
+
+    #[wasm_bindgen]
+    pub fn is_video(&self) -> bool {
+        matches!(
+            self.part.as_media().map(|s| s.media_type),
+            Some(BamlMediaType::Video)
+        )
+    }
+
+    #[wasm_bindgen]
     pub fn as_text(&self) -> Option<String> {
         self.part.as_text().cloned()
     }

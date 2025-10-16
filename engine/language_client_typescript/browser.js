@@ -12,12 +12,14 @@
  * ```
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Audio = exports.Image = void 0;
-const audio_1 = require("./audio");
+exports.Video = exports.Pdf = exports.Audio = exports.Image = void 0;
 // Import actual implementations
+const audio_1 = require("./audio");
 const image_1 = require("./image");
+const video_1 = require("./video");
+const pdf_1 = require("./pdf");
 // Detect if we're in server-side rendering environment
-const isSSR = typeof window === 'undefined';
+const isSSR = typeof window === "undefined";
 // Create a proxy handler that logs warnings in SSR environment
 function createSSRProxyHandler(name) {
     return {
@@ -30,7 +32,11 @@ function createSSRProxyHandler(name) {
     };
 }
 // Create proxied versions that will work in both environments but warn in SSR
-const ImageImpl = new Proxy(image_1.BamlImage, createSSRProxyHandler('Image'));
+const ImageImpl = new Proxy(image_1.BamlImage, createSSRProxyHandler("Image"));
 exports.Image = ImageImpl;
-const AudioImpl = new Proxy(audio_1.BamlAudio, createSSRProxyHandler('Audio'));
+const AudioImpl = new Proxy(audio_1.BamlAudio, createSSRProxyHandler("Audio"));
 exports.Audio = AudioImpl;
+const PdfImpl = new Proxy(pdf_1.BamlPdf, createSSRProxyHandler("Pdf"));
+exports.Pdf = PdfImpl;
+const VideoImpl = new Proxy(video_1.BamlVideo, createSSRProxyHandler("Video"));
+exports.Video = VideoImpl;

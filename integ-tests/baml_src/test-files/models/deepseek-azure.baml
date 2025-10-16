@@ -8,7 +8,7 @@ client<llm> DeepSeekAzure {
 }
 
 function TellStory(story: string) -> string {
-  client DeepSeekAzure
+  client "openai/gpt-4o-mini"
   prompt #"
     You are a storyteller. Tell a story about the following:
     {{ _.role("user") }} {{ story }}

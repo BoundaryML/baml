@@ -1,7 +1,7 @@
 use crate::{
     baml_value::TypeLookups,
     ir_type::{ArrowGeneric, TypeNonStreaming, UnionTypeGeneric},
-    type_meta, BamlMediaType, StreamingMode, TypeIR, TypeValue,
+    type_meta, StreamingMode, TypeIR, TypeValue,
 };
 
 pub fn from_type_ir(r#type: &TypeIR, _lookup: &impl TypeLookups) -> TypeNonStreaming {
@@ -15,14 +15,15 @@ pub fn from_type_ir(r#type: &TypeIR, _lookup: &impl TypeLookups) -> TypeNonStrea
     };
 
     match r#type {
+        TypeIR::Top(_) => TypeNonStreaming::Top(meta),
         TypeIR::Primitive(type_value, _) => match type_value {
             TypeValue::Null => TypeNonStreaming::Primitive(TypeValue::Null, meta),
             TypeValue::Int => TypeNonStreaming::Primitive(TypeValue::Int, meta),
             TypeValue::Float => TypeNonStreaming::Primitive(TypeValue::Float, meta),
             TypeValue::Bool => TypeNonStreaming::Primitive(TypeValue::Bool, meta),
             TypeValue::String => TypeNonStreaming::Primitive(TypeValue::String, meta),
-            TypeValue::Media(_) => {
-                TypeNonStreaming::Primitive(TypeValue::Media(BamlMediaType::Image), meta)
+            TypeValue::Media(media_type) => {
+                TypeNonStreaming::Primitive(TypeValue::Media(*media_type), meta)
             }
         },
         TypeIR::Enum { name, dynamic, .. } => TypeNonStreaming::Enum {
@@ -52,6 +53,7 @@ pub fn from_type_ir(r#type: &TypeIR, _lookup: &impl TypeLookups) -> TypeNonStrea
         ),
         TypeIR::RecursiveTypeAlias { name, .. } => TypeNonStreaming::RecursiveTypeAlias {
             name: name.clone(),
+            mode: StreamingMode::NonStreaming,
             meta: meta.clone(),
         },
         TypeIR::Tuple(field_types, _) => TypeNonStreaming::Tuple(

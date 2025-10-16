@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use indexmap::IndexMap;
+use pretty::RcDoc;
 use serde::{de::Visitor, ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
@@ -28,6 +29,14 @@ pub enum BamlValue {
     Enum(String, String),
     Class(String, BamlMap<String, BamlValue>),
     Null,
+}
+
+impl TryFrom<serde_json::Value> for BamlValue {
+    type Error = anyhow::Error;
+
+    fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
+        Ok(serde_json::from_value(value)?)
+    }
 }
 
 impl serde::Serialize for BamlValue {
@@ -85,11 +94,87 @@ impl BamlValue {
             BamlValue::Media(m) => match m.media_type {
                 BamlMediaType::Image => "image",
                 BamlMediaType::Audio => "audio",
+                BamlMediaType::Pdf => "pdf",
+                BamlMediaType::Video => "video",
             }
             .into(),
             BamlValue::Enum(e, _) => format!("enum {e}"),
             BamlValue::Class(c, _) => format!("class {c}"),
             BamlValue::Null => "null".into(),
+        }
+    }
+
+    /// Convert this BamlValue to a pretty printing document
+    pub fn to_doc(&self) -> RcDoc<'static, ()> {
+        match self {
+            BamlValue::Null => RcDoc::text("null"),
+            BamlValue::Bool(b) => RcDoc::text(b.to_string()),
+            BamlValue::Int(i) => RcDoc::text(i.to_string()),
+            BamlValue::Float(f) => RcDoc::text(f.to_string()),
+            BamlValue::String(s) => RcDoc::text(format!("\"{}\"", escape_string(s))),
+            BamlValue::List(items) => {
+                if items.is_empty() {
+                    RcDoc::text("[]")
+                } else {
+                    RcDoc::text("[")
+                        .append(RcDoc::softline())
+                        .append(
+                            RcDoc::intersperse(
+                                items.iter().map(|item| item.to_doc()),
+                                RcDoc::text(",").append(RcDoc::line()),
+                            )
+                            .nest(2),
+                        )
+                        .append(RcDoc::softline())
+                        .append(RcDoc::text("]"))
+                }
+            }
+            BamlValue::Map(map) => {
+                if map.is_empty() {
+                    RcDoc::text("{}")
+                } else {
+                    RcDoc::text("{")
+                        .append(RcDoc::softline())
+                        .append(
+                            RcDoc::intersperse(
+                                map.iter().map(|(k, v)| {
+                                    RcDoc::text(format!("\"{}\"", escape_string(k)))
+                                        .append(RcDoc::text(":"))
+                                        .append(RcDoc::space())
+                                        .append(v.to_doc())
+                                }),
+                                RcDoc::text(",").append(RcDoc::line()),
+                            )
+                            .nest(2),
+                        )
+                        .append(RcDoc::softline())
+                        .append(RcDoc::text("}"))
+                }
+            }
+            BamlValue::Media(media) => format_media(media),
+            BamlValue::Enum(enum_name, variant) => RcDoc::text(format!("{enum_name}::{variant}")),
+            BamlValue::Class(class_name, fields) => {
+                if fields.is_empty() {
+                    RcDoc::text(format!("{class_name} {{}}"))
+                } else {
+                    RcDoc::text(format!("{class_name} {{"))
+                        .append(RcDoc::softline())
+                        .append(
+                            RcDoc::intersperse(
+                                fields.iter().map(|(k, v)| {
+                                    RcDoc::text(k.to_string())
+                                        .append(RcDoc::text(":"))
+                                        .append(RcDoc::space())
+                                        .append(v.to_doc())
+                                }),
+                                RcDoc::text(",").append(RcDoc::line()),
+                            )
+                            .nest(2),
+                        )
+                        .append(RcDoc::softline())
+                        .append(RcDoc::text("}"))
+                }
+            }
         }
     }
 
@@ -360,6 +445,33 @@ pub trait TypeLookupsMeta<T>: TypeLookups {
     fn expand_recursive_type(&self, type_alias: &str) -> anyhow::Result<TypeGeneric<T>>;
 }
 
+impl<Base: TypeLookups> TypeLookupsMeta<type_meta::IR> for Base {
+    fn expand_recursive_type(&self, type_alias: &str) -> anyhow::Result<TypeIR> {
+        match self.expand_recursive_type(type_alias) {
+            Ok(t) => Ok(t.clone()),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl<Base: TypeLookups> TypeLookupsMeta<type_meta::NonStreaming> for Base {
+    fn expand_recursive_type(&self, type_alias: &str) -> anyhow::Result<TypeNonStreaming> {
+        match self.expand_recursive_type(type_alias) {
+            Ok(t) => Ok(t.to_non_streaming_type(self)),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl<Base: TypeLookups> TypeLookupsMeta<type_meta::Streaming> for Base {
+    fn expand_recursive_type(&self, type_alias: &str) -> anyhow::Result<TypeStreaming> {
+        match self.expand_recursive_type(type_alias) {
+            Ok(t) => Ok(t.to_streaming_type(self)),
+            Err(e) => Err(e),
+        }
+    }
+}
+
 pub trait TypeQuery<T> {
     fn real_type(&self, lookup: &impl TypeLookups) -> TypeGeneric<T>;
     fn is_type(&self, field_type: &TypeGeneric<T>, lookup: &impl TypeLookups) -> bool;
@@ -376,15 +488,16 @@ impl<T: HasType<type_meta::IR>> TypeQuery<type_meta::IR> for BamlValueWithMeta<T
     fn real_type(&self, lookup: &impl TypeLookups) -> TypeGeneric<type_meta::IR> {
         let field_type = self.field_type();
 
-        let field_type = match field_type {
-            TypeGeneric::RecursiveTypeAlias { name, .. } => lookup
+        let mut field_type = field_type;
+        while let TypeGeneric::RecursiveTypeAlias { name, .. } = field_type {
+            field_type = lookup
                 .expand_recursive_type(name)
-                .expect("Recursive type alias not found"),
-            _ => field_type,
-        };
+                .expect("Recursive type alias not found");
+        }
+        let field_type = field_type;
 
         if let TypeIR::Union(options, _) = field_type {
-            return match options.view() {
+            let field_type = match options.view() {
                 UnionTypeViewGeneric::Null => TypeGeneric::null(),
                 UnionTypeViewGeneric::Optional(field_type) => {
                     if self.is_type(field_type, lookup) {
@@ -403,6 +516,16 @@ impl<T: HasType<type_meta::IR>> TypeQuery<type_meta::IR> for BamlValueWithMeta<T
                     .find(|t| self.is_type(t, lookup))
                     .map_or_else(TypeIR::null, |t| t.clone()),
             };
+            if &field_type == self.field_type() {
+                return field_type.clone();
+            }
+            if let TypeGeneric::RecursiveTypeAlias { name, .. } = field_type {
+                let expanded_type = lookup
+                    .expand_recursive_type(name.as_str())
+                    .expect("Recursive type alias not found");
+                return expanded_type.clone();
+            }
+            return field_type;
         }
         field_type.clone()
     }
@@ -501,16 +624,17 @@ impl<T: HasType<type_meta::NonStreaming>> TypeQuery<type_meta::NonStreaming>
     fn real_type(&self, lookup: &impl TypeLookups) -> TypeNonStreaming {
         let field_type = self.field_type();
 
-        let field_type = match field_type {
-            TypeGeneric::RecursiveTypeAlias { name, .. } => &lookup
-                .expand_recursive_type(name)
+        let mut field_type = field_type.clone();
+        while let TypeGeneric::RecursiveTypeAlias { name, .. } = field_type {
+            field_type = lookup
+                .expand_recursive_type(name.as_str())
                 .expect("Recursive type alias not found")
-                .to_non_streaming_type(lookup),
-            _ => field_type,
-        };
+                .to_non_streaming_type(lookup);
+        }
+        let field_type = field_type;
 
         if let TypeGeneric::Union(options, _) = field_type {
-            return match options.view() {
+            let field_type = match options.view() {
                 UnionTypeViewGeneric::Null => TypeGeneric::null(),
                 UnionTypeViewGeneric::Optional(field_type) => {
                     if self.is_type(field_type, lookup) {
@@ -529,6 +653,16 @@ impl<T: HasType<type_meta::NonStreaming>> TypeQuery<type_meta::NonStreaming>
                     .find(|t| self.is_type(t, lookup))
                     .map_or_else(TypeGeneric::null, |t| t.clone()),
             };
+            if &field_type == self.field_type() {
+                return field_type.clone();
+            }
+            if let TypeGeneric::RecursiveTypeAlias { name, .. } = field_type {
+                let expanded_type = lookup
+                    .expand_recursive_type(name.as_str())
+                    .expect("Recursive type alias not found");
+                return expanded_type.to_non_streaming_type(lookup);
+            }
+            return field_type;
         }
         field_type.clone()
     }
@@ -627,16 +761,17 @@ impl<T: HasType<type_meta::Streaming>> TypeQuery<type_meta::Streaming> for BamlV
     fn real_type(&self, lookup: &impl TypeLookups) -> TypeStreaming {
         let field_type = self.field_type();
 
-        let field_type = match field_type {
-            TypeGeneric::RecursiveTypeAlias { name, .. } => &lookup
-                .expand_recursive_type(name)
+        let mut field_type = field_type.clone();
+        while let TypeGeneric::RecursiveTypeAlias { name, .. } = field_type {
+            field_type = lookup
+                .expand_recursive_type(name.as_str())
                 .expect("Recursive type alias not found")
-                .to_streaming_type(lookup),
-            _ => field_type,
-        };
+                .to_streaming_type(lookup);
+        }
+        let field_type = field_type;
 
         if let TypeGeneric::Union(options, _) = field_type {
-            return match options.view() {
+            let field_type = match options.view() {
                 UnionTypeViewGeneric::Null => TypeGeneric::null(),
                 UnionTypeViewGeneric::Optional(field_type) => {
                     if self.is_type(field_type, lookup) {
@@ -655,6 +790,16 @@ impl<T: HasType<type_meta::Streaming>> TypeQuery<type_meta::Streaming> for BamlV
                     .find(|t| self.is_type(t, lookup))
                     .map_or_else(TypeGeneric::null, |t| t.clone()),
             };
+            if &field_type == self.field_type() {
+                return field_type.clone();
+            }
+            if let TypeGeneric::RecursiveTypeAlias { name, .. } = field_type {
+                let expanded_type = lookup
+                    .expand_recursive_type(name.as_str())
+                    .expect("Recursive type alias not found");
+                return expanded_type.to_streaming_type(lookup);
+            }
+            return field_type;
         }
         field_type.clone()
     }
@@ -756,9 +901,85 @@ impl<T> BamlValueWithMeta<T> {
         plain_value.r#type()
     }
 
+    /// Convert this BamlValueWithMeta to a pretty printing document
+    pub fn to_doc(&self) -> RcDoc<'static, ()> {
+        match self {
+            BamlValueWithMeta::Null(_) => RcDoc::text("null"),
+            BamlValueWithMeta::Bool(b, _) => RcDoc::text(b.to_string()),
+            BamlValueWithMeta::Int(i, _) => RcDoc::text(i.to_string()),
+            BamlValueWithMeta::Float(f, _) => RcDoc::text(f.to_string()),
+            BamlValueWithMeta::String(s, _) => RcDoc::text(format!("\"{}\"", escape_string(s))),
+            BamlValueWithMeta::List(items, _) => {
+                if items.is_empty() {
+                    RcDoc::text("[]")
+                } else {
+                    RcDoc::text("[")
+                        .append(RcDoc::softline())
+                        .append(
+                            RcDoc::intersperse(
+                                items.iter().map(|item| item.to_doc()),
+                                RcDoc::text(",").append(RcDoc::line()),
+                            )
+                            .nest(2),
+                        )
+                        .append(RcDoc::softline())
+                        .append(RcDoc::text("]"))
+                }
+            }
+            BamlValueWithMeta::Map(map, _) => {
+                if map.is_empty() {
+                    RcDoc::text("{}")
+                } else {
+                    RcDoc::text("{")
+                        .append(RcDoc::softline())
+                        .append(
+                            RcDoc::intersperse(
+                                map.iter().map(|(k, v)| {
+                                    RcDoc::text(format!("\"{}\"", escape_string(k)))
+                                        .append(RcDoc::text(":"))
+                                        .append(RcDoc::space())
+                                        .append(v.to_doc())
+                                }),
+                                RcDoc::text(",").append(RcDoc::line()),
+                            )
+                            .nest(2),
+                        )
+                        .append(RcDoc::softline())
+                        .append(RcDoc::text("}"))
+                }
+            }
+            BamlValueWithMeta::Media(media, _) => format_media(media),
+            BamlValueWithMeta::Enum(enum_name, variant, _) => {
+                RcDoc::text(format!("{enum_name}::{variant}"))
+            }
+            BamlValueWithMeta::Class(class_name, fields, _) => {
+                if fields.is_empty() {
+                    RcDoc::text(format!("{class_name} {{}}"))
+                } else {
+                    RcDoc::text(format!("{class_name} {{"))
+                        .append(RcDoc::softline())
+                        .append(
+                            RcDoc::intersperse(
+                                fields.iter().map(|(k, v)| {
+                                    RcDoc::text(k.to_string())
+                                        .append(RcDoc::text(":"))
+                                        .append(RcDoc::space())
+                                        .append(v.to_doc())
+                                }),
+                                RcDoc::text(",").append(RcDoc::line()),
+                            )
+                            .nest(2),
+                        )
+                        .append(RcDoc::softline())
+                        .append(RcDoc::text("}"))
+                }
+            }
+        }
+    }
+
     /// Iterating over a `BamlValueWithMeta` produces a depth-first traversal
     /// of the value and all its children.
-    pub fn iter(&self) -> BamlValueWithMetaIterator<T> {
+    pub fn iter(&self) -> BamlValueWithMetaIterator<'_, T> {
         BamlValueWithMetaIterator::new(self)
     }
 
@@ -847,6 +1068,8 @@ impl<T> BamlValueWithMeta<T> {
                 T::from(match m.media_type {
                     BamlMediaType::Image => TypeIR::image(),
                     BamlMediaType::Audio => TypeIR::audio(),
+                    BamlMediaType::Pdf => TypeIR::pdf(),
+                    BamlMediaType::Video => TypeIR::video(),
                 }),
             ),
             BamlValue::Enum(n, v) => Enum(n.clone(), v.clone(), T::from(TypeIR::r#enum(n))),
@@ -1231,6 +1454,48 @@ fn add_checks<'a, S: SerializeMap>(
         map.serialize_entry("checks", &checks_map)?;
     }
     Ok(())
+}
+
+fn format_media(media: &BamlMedia) -> RcDoc<'static, ()> {
+    match &media.content {
+        crate::BamlMediaContent::Url(url) => {
+            RcDoc::text(format!("<media url {}: {}>", media.media_type, url.url))
+        }
+        crate::BamlMediaContent::Base64(base64) => {
+            let preview = if base64.base64.len() > 50 {
+                format!("{}...", &base64.base64[..50])
+            } else {
+                base64.base64.clone()
+            };
+            RcDoc::text(format!("<media base64 {}: {}>", media.media_type, preview))
+        }
+        crate::BamlMediaContent::File(file) => match file.path() {
+            Ok(path) => RcDoc::text(format!(
+                "<media file {}: {}>",
+                media.media_type,
+                path.display()
+            )),
+            Err(_) => RcDoc::text(format!(
+                "<media file {}: {}>",
+                media.media_type,
+                file.relpath.display()
+            )),
+        },
+    }
+}
+
+fn escape_string(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            '"' => "\\\"".to_string(),
+            '\\' => "\\\\".to_string(),
+            '\n' => "\\n".to_string(),
+            '\r' => "\\r".to_string(),
+            '\t' => "\\t".to_string(),
+            c if c.is_control() => format!("\\u{:04x}", c as u32),
+            c => c.to_string(),
+        })
+        .collect()
 }
 
 /// This type is used in `BamlResponseValue` to summarize data about the

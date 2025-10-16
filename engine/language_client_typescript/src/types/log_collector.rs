@@ -5,13 +5,16 @@ use std::{
 
 use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
 use napi::{
-    bindgen_prelude::*, Env, JsBoolean, JsNull, JsNumber, JsObject, JsString, JsUndefined,
-    JsUnknown, Result,
+    bindgen_prelude::{JavaScriptClassExt, *},
+    Env, JsNumber, JsString, Result, Unknown,
 };
 use napi_derive::napi;
 use serde_json::Value as JsonValue;
 
-use super::{request::HTTPRequest, response::HTTPResponse};
+use super::{
+    request::HTTPRequest,
+    response::{HTTPResponse, SSEResponse},
+};
 
 crate::lang_wrapper!(
     Collector,
@@ -27,6 +30,11 @@ impl Collector {
         Self {
             inner: Arc::new(collector),
         }
+    }
+
+    #[napi]
+    pub fn clear(&self) {
+        self.inner.clear();
     }
 
     #[napi(getter)]
@@ -165,7 +173,7 @@ impl FunctionLog {
     }
 
     #[napi(getter, ts_return_type = "(LLMCall | LLMStreamCall)[]")]
-    pub fn calls(&self, env: Env) -> Result<Array> {
+    pub fn calls<'e>(&self, env: &'e Env) -> Result<Array<'e>> {
         let calls = self.inner.lock().unwrap().calls();
         let mut js_array = env.create_array(calls.len() as u32)?;
 
@@ -198,7 +206,20 @@ impl FunctionLog {
     }
 
     #[napi(getter)]
-    pub fn selected_call(&self, env: Env) -> Result<JsUnknown> {
+    pub fn tags<'e>(&self, env: &'e Env) -> Result<Unknown<'e>> {
+        let mut inner = self.inner.lock().unwrap();
+        let tags = inner.tags();
+        // Convert serde_json::Value map into JS object
+        let mut js_obj = Object::new(env)?;
+        for (k, v) in tags.iter() {
+            let js_value = serde_value_to_js(env, v)?;
+            js_obj.set_named_property(k, js_value)?;
+        }
+        js_obj.into_unknown(env)
+    }
+
+    #[napi(getter)]
+    pub fn selected_call<'e>(&self, env: &'e Env) -> Result<Unknown<'e>> {
         let calls = self.inner.lock().unwrap().calls();
         let found = calls.into_iter().find_map(|call| match call {
             baml_runtime::tracingv2::storage::storage::LLMCallKind::Basic(inner) => {
@@ -213,7 +234,7 @@ impl FunctionLog {
                 }
             }
             baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(inner) => {
-                if inner.selected {
+                if inner.llm_call.selected {
                     Some(
                         baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(
                             inner.clone(),
@@ -229,14 +250,15 @@ impl FunctionLog {
             Some(call) => match call {
                 baml_runtime::tracingv2::storage::storage::LLMCallKind::Basic(inner) => {
                     let llm_call = LLMCall { inner };
-                    Ok(env.create_external(llm_call, None)?.into_unknown())
+                    External::new(llm_call).into_unknown(env)
                 }
                 baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(inner) => {
                     let stream_call = LLMStreamCall { inner };
-                    Ok(env.create_external(stream_call, None)?.into_unknown())
+                    External::new(stream_call).into_unknown(env)
                 }
             },
-            None => Ok(env.get_null()?.into_unknown()),
+            // v2: env.get_null()?.into_unknown()
+            None => env.to_js_value(&Option::<()>::None),
         }
     }
 }
@@ -248,14 +270,11 @@ impl Timing {
     #[napi]
     pub fn to_string(&self) -> String {
         format!(
-            "Timing(start_time_utc_ms={}, duration_ms={}, time_to_first_parsed_ms={})",
+            "Timing(start_time_utc_ms={}, duration_ms={})",
             self.inner.start_time_utc_ms,
             self.inner
                 .duration_ms
                 .map_or("null".to_string(), |v| v.to_string()),
-            self.inner
-                .time_to_first_parsed_ms
-                .map_or("null".to_string(), |v| v.to_string())
         )
     }
 
@@ -267,11 +286,6 @@ impl Timing {
     #[napi(getter)]
     pub fn duration_ms(&self) -> Option<i64> {
         self.inner.duration_ms
-    }
-
-    #[napi(getter)]
-    pub fn time_to_first_parsed_ms(&self) -> Option<i64> {
-        self.inner.time_to_first_parsed_ms
     }
 }
 
@@ -285,16 +299,10 @@ impl StreamTiming {
     #[napi]
     pub fn to_string(&self) -> String {
         format!(
-            "StreamTiming(start_time_utc_ms={}, duration_ms={}, time_to_first_parsed_ms={}, time_to_first_token_ms={})",
+            "StreamTiming(start_time_utc_ms={}, duration_ms={})",
             self.inner.start_time_utc_ms,
             self.inner
                 .duration_ms
-                .map_or("null".to_string(), |v| v.to_string()),
-            self.inner
-                .time_to_first_parsed_ms
-                .map_or("null".to_string(), |v| v.to_string()),
-            self.inner
-                .time_to_first_token_ms
                 .map_or("null".to_string(), |v| v.to_string())
         )
     }
@@ -308,16 +316,6 @@ impl StreamTiming {
     pub fn duration_ms(&self) -> Option<i64> {
         self.inner.duration_ms
     }
-
-    #[napi(getter)]
-    pub fn time_to_first_parsed_ms(&self) -> Option<i64> {
-        self.inner.time_to_first_parsed_ms
-    }
-
-    #[napi(getter)]
-    pub fn time_to_first_token_ms(&self) -> Option<i64> {
-        self.inner.time_to_first_token_ms
-    }
 }
 
 crate::lang_wrapper!(Usage, baml_runtime::tracingv2::storage::storage::Usage);
@@ -327,12 +325,15 @@ impl Usage {
     #[napi]
     pub fn to_string(&self) -> String {
         format!(
-            "Usage(input_tokens={}, output_tokens={})",
+            "Usage(input_tokens={}, output_tokens={}, cached_input_tokens={})",
             self.inner
                 .input_tokens
                 .map_or_else(|| "null".to_string(), |v| v.to_string()),
             self.inner
                 .output_tokens
+                .map_or_else(|| "null".to_string(), |v| v.to_string()),
+            self.inner
+                .cached_input_tokens
                 .map_or_else(|| "null".to_string(), |v| v.to_string())
         )
     }
@@ -345,6 +346,11 @@ impl Usage {
     #[napi(getter)]
     pub fn output_tokens(&self) -> Option<i64> {
         self.inner.output_tokens
+    }
+
+    #[napi(getter)]
+    pub fn cached_input_tokens(&self) -> Option<i64> {
+        self.inner.cached_input_tokens
     }
 }
 
@@ -439,6 +445,7 @@ impl LLMStreamCall {
     #[napi(getter)]
     pub fn http_request(&self) -> Option<HTTPRequest> {
         self.inner
+            .llm_call
             .request
             .clone()
             .map(|req| HTTPRequest { inner: req })
@@ -447,6 +454,7 @@ impl LLMStreamCall {
     #[napi(getter)]
     pub fn http_response(&self) -> Option<HTTPResponse> {
         self.inner
+            .llm_call
             .response
             .clone()
             .map(|resp| HTTPResponse { inner: resp })
@@ -454,22 +462,26 @@ impl LLMStreamCall {
 
     #[napi(getter)]
     pub fn provider(&self) -> String {
-        self.inner.provider.clone()
+        self.inner.llm_call.provider.clone()
     }
 
     #[napi(getter)]
     pub fn client_name(&self) -> String {
-        self.inner.client_name.clone()
+        self.inner.llm_call.client_name.clone()
     }
 
     #[napi(getter)]
     pub fn selected(&self) -> bool {
-        self.inner.selected
+        self.inner.llm_call.selected
     }
 
     #[napi(getter)]
     pub fn usage(&self) -> Option<Usage> {
-        self.inner.usage.clone().map(|u| Usage { inner: u })
+        self.inner
+            .llm_call
+            .usage
+            .clone()
+            .map(|u| Usage { inner: u })
     }
 
     #[napi(getter)]
@@ -479,41 +491,55 @@ impl LLMStreamCall {
         }
     }
 
+    #[napi]
+    pub fn sse_responses(&self) -> Option<Vec<SSEResponse>> {
+        self.inner.sse_chunks.as_ref().map(|sse_chunks| {
+            sse_chunks
+                .event
+                .iter()
+                .map(|event| SSEResponse {
+                    inner: event.clone(),
+                })
+                .collect()
+        })
+    }
+
     #[napi(js_name = "toString")]
     pub fn js_to_string(&self) -> String {
         self.to_string()
     }
 }
 
-pub fn serde_value_to_js(env: Env, value: &JsonValue) -> Result<JsUnknown> {
+pub fn serde_value_to_js<'e>(env: &'e Env, value: &JsonValue) -> Result<Unknown<'e>> {
     match value {
-        JsonValue::Null => Ok(env.get_null()?.into_unknown()),
-        JsonValue::Bool(b) => Ok(env.get_boolean(*b)?.into_unknown()),
+        // v2: env.get_null()?.into_unknown()
+        JsonValue::Null => env.to_js_value(&Option::<()>::None),
+        JsonValue::Bool(b) => env.to_js_value(b),
         JsonValue::Number(num) => {
             if let Some(i) = num.as_i64() {
-                Ok(env.create_int64(i)?.into_unknown())
+                env.to_js_value(&i)
             } else if let Some(f) = num.as_f64() {
-                Ok(env.create_double(f)?.into_unknown())
+                env.to_js_value(&f)
             } else {
                 Err(Error::from_reason("Could not convert number to i64 or f64"))
             }
         }
-        JsonValue::String(s) => Ok(env.create_string(s)?.into_unknown()),
+        JsonValue::String(s) => env.to_js_value(s),
         JsonValue::Array(arr) => {
-            let mut js_array = env.create_array_with_length(arr.len())?;
+            let mut js_array = env.create_array(arr.len() as u32)?;
             for (i, elem) in arr.iter().enumerate() {
                 let js_value = serde_value_to_js(env, elem)?;
                 js_array.set_element(i as u32, js_value)?;
             }
-            Ok(js_array.into_unknown())
+            js_array.into_unknown(env)
         }
         JsonValue::Object(obj) => {
-            let mut js_obj = env.create_object()?;
+            let mut js_obj = Object::new(env)?;
             for (k, v) in obj {
                 let js_value = serde_value_to_js(env, v)?;
                 js_obj.set_named_property(k, js_value)?;
             }
-            Ok(js_obj.into_unknown())
+            js_obj.into_unknown(env)
         }
     }
 }

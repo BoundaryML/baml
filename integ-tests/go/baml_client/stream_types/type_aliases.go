@@ -14,32 +14,27 @@
 package stream_types
 
 import (
-	"encoding/json"
-	"fmt"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
-
 	"example.com/integ-tests/baml_client/types"
 )
 
 type Amount = *int64
-type Combination = *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
+type Combination = *types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 type Currency = *types.Checked[int64]
-type Graph = *map[string][]string
-type JsonArray = *[]JsonValue
+type Graph = map[string][]string
+type JsonArray = []JsonValue
 type JsonEntry = *Union2JsonTemplateOrSimpleTag
-type JsonObject = *map[string]JsonValue
-type JsonTemplate = *map[string]JsonEntry
+type JsonObject = map[string]JsonValue
+type JsonTemplate = map[string]JsonEntry
 type JsonValue = *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString
 type LinkedListAlias = *LinkedListAliasNode
-type List = *[]string
+type List = []string
 type MultipleAttrs = *types.Checked[int64]
 type NodeIndirection = *NodeWithAliasIndirection
-type Primitive = *Union4BoolOrFloatOrIntOrString
+type Primitive = *types.Union4BoolOrFloatOrIntOrString
 type RecAliasOne = *RecAliasTwo
-type RecAliasThree = *[]RecAliasOne
+type RecAliasThree = []any
 type RecAliasTwo = *RecAliasThree
-type RecursiveListAlias = *[]RecursiveListAlias
-type RecursiveMapAlias = *map[string]RecursiveMapAlias
+type RecursiveListAlias = []any
+type RecursiveMapAlias = map[string]any
 type RecursiveUnion = *Union2MapStringKeyRecursiveUnionValueOrString
+type TodoTool = *Union2AddTodoItemOrTodoMessageToUser

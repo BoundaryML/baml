@@ -6,6 +6,7 @@ use baml_types::{
     BamlMap, BamlValue, Constraint, EvaluationContext,
 };
 use internal_baml_core::{
+    ast::BamlVisDiagramGenerator,
     internal_baml_diagnostics::SourceFile,
     ir::{
         repr::{IntermediateRepr, Node, TypeBuilderEntry},
@@ -14,7 +15,7 @@ use internal_baml_core::{
     validate,
 };
 use internal_baml_jinja::RenderedPrompt;
-use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
+use internal_llm_client::{AllowedRoleMetadata, ClientProvider, ClientSpec};
 
 use crate::{
     client_registry::ClientProperty,
@@ -104,17 +105,52 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                     .context(format!("Could not find client with name: {client_name}"))?;
                 // Get required env vars from the client walker
                 let new_client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
-                // Only store the required env vars
-                let filtered_env_vars = ctx
-                    .env_vars()
-                    .iter()
-                    .filter(|(k, _)| walker.required_env_vars().contains(*k))
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect();
+
+                // Collect required environment variables.
+                let mut required_env_vars = HashMap::new();
+
+                let uses_proxy_server = ctx.proxy_url().is_some();
+
+                // If the client is Vertex or AWS Bedrock, we don't fail on
+                // missing required environment variables because we run a bunch
+                // of additional logic to resolve required values (i.e for
+                // Vertex if GOOGLE_CLOUD_PROJECT is not provided it can be
+                // found on the credentials property).
+                //
+                // If called with modular API, we don't fail either. User might
+                // want to insert the values later.
+                //
+                // When a proxy server is used, don't fail on missing required
+                // env vars because the proxy server is likely to provide them.
+                let fail_on_missing_required_env_vars = !ctx.is_modular_api()
+                    && !uses_proxy_server
+                    && !matches!(
+                        walker.item.elem.provider,
+                        ClientProvider::AwsBedrock | ClientProvider::Vertex
+                    );
+
+                for key in walker.required_env_vars() {
+                    if let Some(value) = ctx.env_vars().get(&key) {
+                        // Exists but is empty
+                        if fail_on_missing_required_env_vars && value.trim().is_empty() {
+                            baml_log::warn!(
+                                "Required environment variable '{key}' for client '{client_name}' is set but is empty: {key}='{value}'"
+                            );
+                        }
+                        required_env_vars.insert(key, value.to_owned());
+                    } else if fail_on_missing_required_env_vars {
+                        // It's not set and we have to fail, bail
+                        anyhow::bail!(
+                            "LLM client '{client_name}' requires environment variable '{key}' to be set but it is not"
+                        );
+                    }
+                }
+
                 clients.insert(
                     client_name.into(),
-                    CachedClient::new(new_client.clone(), filtered_env_vars),
+                    CachedClient::new(new_client.clone(), required_env_vars),
                 );
+
                 Ok(new_client)
             }
         }
@@ -168,6 +204,13 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
     ) -> Result<Vec<OrchestratorNode>> {
         let client = self.get_llm_provider(client_spec, ctx)?;
         client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self)
+    }
+
+    fn function_graph(&self, _function_name: &str, _ctx: &RuntimeContext) -> Result<String> {
+        // Use baml-vis to generate a Mermaid diagram for the current AST
+        let ast = self.db.ast();
+        let graph = BamlVisDiagramGenerator::generate_headers_flowchart(ast);
+        Ok(graph)
     }
 
     fn features(&self) -> IrFeatures {
@@ -280,6 +323,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         ctx: &RuntimeContext,
         strict: bool,
     ) -> Result<BamlMap<String, BamlValue>> {
+        log::info!("get_test_params: {function_name} {test_name}");
         let maybe_test_and_params = self.get_function(function_name).and_then(|func| {
             let test = self.ir().find_test(&func, test_name)?;
             let test_case_params = test.test_case_params(&ctx.eval_ctx(strict))?;
@@ -343,9 +387,16 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         test_name: &str,
         ctx: &RuntimeContext,
     ) -> Result<Vec<Constraint>> {
-        let func = self.get_function(function_name)?;
-        let walker = self.ir().find_test(&func, test_name)?;
-        Ok(walker.item.1.elem.constraints.clone())
+        // Try LLM function first
+        if let Ok(func) = self.get_function(function_name) {
+            let walker = self.ir().find_test(&func, test_name)?;
+            return Ok(walker.item.1.elem.constraints.clone());
+        }
+
+        // Try expr function
+        let expr_fn = self.get_expr_function(function_name, ctx)?;
+        let test = self.ir().find_expr_fn_test(&expr_fn, test_name)?;
+        Ok(test.item.1.elem.constraints.clone())
     }
 
     fn get_test_type_builder(
@@ -353,28 +404,74 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         function_name: &str,
         test_name: &str,
     ) -> Result<Option<TypeBuilder>> {
-        let func = self.get_function(function_name)?;
-        let test = self.ir().find_test(&func, test_name)?;
+        // Try to find as LLM function first
+        if let Ok(func) = self.get_function(function_name) {
+            let test = self.ir().find_test(&func, test_name)?;
 
-        if test.type_builder_contents().is_empty() {
+            if test.type_builder_contents().is_empty() {
+                return Ok(None);
+            }
+
+            let type_builder = TypeBuilder::new();
+
+            type_builder.add_entries(test.type_builder_contents());
+
+            type_builder
+                .recursive_type_aliases()
+                .lock()
+                .unwrap()
+                .extend(test.type_builder_recursive_aliases().iter().cloned());
+
+            type_builder
+                .recursive_classes()
+                .lock()
+                .unwrap()
+                .extend(test.type_builder_recursive_classes().iter().cloned());
+
+            return Ok(Some(type_builder));
+        }
+
+        // Try to find as expr function
+        let expr_fn = self.ir().find_expr_fn(function_name)?;
+        let test = expr_fn.find_test(test_name).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Test '{}' not found for expr function '{}'",
+                test_name,
+                function_name
+            )
+        })?;
+
+        if test.item.1.elem.type_builder.entries.is_empty() {
             return Ok(None);
         }
 
         let type_builder = TypeBuilder::new();
 
-        type_builder.add_entries(test.type_builder_contents());
+        type_builder.add_entries(&test.item.1.elem.type_builder.entries);
 
         type_builder
             .recursive_type_aliases()
             .lock()
             .unwrap()
-            .extend(test.type_builder_recursive_aliases().iter().cloned());
+            .extend(
+                test.item
+                    .1
+                    .elem
+                    .type_builder
+                    .recursive_aliases
+                    .iter()
+                    .cloned(),
+            );
 
-        type_builder
-            .recursive_classes()
-            .lock()
-            .unwrap()
-            .extend(test.type_builder_recursive_classes().iter().cloned());
+        type_builder.recursive_classes().lock().unwrap().extend(
+            test.item
+                .1
+                .elem
+                .type_builder
+                .recursive_classes
+                .iter()
+                .cloned(),
+        );
 
         Ok(Some(type_builder))
     }
@@ -384,6 +481,7 @@ impl RuntimeConstructor for InternalBamlRuntime {
     fn from_file_content<T: AsRef<str>>(
         root_path: &str,
         files: &HashMap<T, T>,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
     ) -> Result<InternalBamlRuntime> {
         let contents = files
             .iter()
@@ -395,7 +493,7 @@ impl RuntimeConstructor for InternalBamlRuntime {
             })
             .collect::<Result<Vec<_>>>()?;
         let directory = PathBuf::from(root_path);
-        let mut schema = validate(&directory, contents.clone());
+        let mut schema = validate(&directory, contents.clone(), feature_flags);
         schema.diagnostics.to_result()?;
 
         let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
@@ -413,7 +511,14 @@ impl RuntimeConstructor for InternalBamlRuntime {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn from_directory(dir: &std::path::Path) -> Result<InternalBamlRuntime> {
-        InternalBamlRuntime::from_files(dir, crate::baml_src_files(&dir.to_path_buf())?)
+    fn from_directory(
+        dir: &std::path::Path,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
+    ) -> Result<InternalBamlRuntime> {
+        InternalBamlRuntime::from_files(
+            dir,
+            crate::baml_src_files(&dir.to_path_buf())?,
+            feature_flags,
+        )
     }
 }

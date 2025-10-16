@@ -1,7 +1,4 @@
-use std::{
-    borrow::Cow,
-    sync::{Arc, Mutex},
-};
+use std::{borrow::Cow, sync::Arc};
 
 use lsp_types::{
     request::DocumentDiagnosticRequest, DocumentDiagnosticParams, DocumentDiagnosticReport,
@@ -9,6 +6,7 @@ use lsp_types::{
     RelatedFullDocumentDiagnosticReport, RelatedUnchangedDocumentDiagnosticReport,
     UnchangedDocumentDiagnosticReport, Url,
 };
+use parking_lot::Mutex;
 
 use crate::{
     baml_project::Project,
@@ -33,7 +31,7 @@ impl RequestHandler for DocumentDiagnosticRequestHandler {
 
 // // Consider fixing snapshots and running this on a background thread.
 impl BackgroundDocumentRequestHandler for DocumentDiagnosticRequestHandler {
-    fn document_url(params: &DocumentDiagnosticParams) -> std::borrow::Cow<Url> {
+    fn document_url(params: &DocumentDiagnosticParams) -> std::borrow::Cow<'_, Url> {
         Cow::Borrowed(&params.text_document.uri)
     }
 
@@ -55,7 +53,11 @@ impl SyncRequestHandler for DocumentDiagnosticRequestHandler {
         params: DocumentDiagnosticParams,
     ) -> Result<DocumentDiagnosticReportResult> {
         let url = params.text_document.uri.clone();
-        if !url.to_string().contains("baml_src") {
+        let path = url
+            .to_file_path()
+            .internal_error_msg("Could not convert URL to path")?;
+
+        let Ok(project) = session.get_or_create_project(&path) else {
             return Ok(DocumentDiagnosticReportResult::Report(
                 DocumentDiagnosticReport::Unchanged(RelatedUnchangedDocumentDiagnosticReport {
                     related_documents: None,
@@ -64,17 +66,24 @@ impl SyncRequestHandler for DocumentDiagnosticRequestHandler {
                     },
                 }),
             ));
-        }
+        };
 
-        let path = url
-            .to_file_path()
-            .internal_error_msg("Could not convert URL to path")?;
-
-        let project = session
-            .get_or_create_project(&path)
-            .expect("Project should exist");
-
-        let diagnostics = file_diagnostics(project, &url);
+        let default_flags = vec!["beta".to_string()];
+        let effective_flags = session
+            .baml_settings
+            .feature_flags
+            .as_ref()
+            .unwrap_or(&default_flags);
+        tracing::info!(
+            "diagnostic_request: session feature_flags: {:?}, effective_flags: {:?}",
+            session
+                .baml_settings
+                .feature_flags
+                .as_ref()
+                .unwrap_or(&default_flags),
+            &effective_flags
+        );
+        let diagnostics = file_diagnostics(project, &url, effective_flags);
         // diagnostics
 
         Ok(DocumentDiagnosticReportResult::Report(
@@ -93,7 +102,7 @@ fn diagnostics_report(
     project: Arc<Mutex<Project>>,
     url: &Url,
 ) -> Result<DocumentDiagnosticReportResult> {
-    let diagnostics = file_diagnostics(project, url);
+    let diagnostics = file_diagnostics(project, url, &[]);
     Ok(DocumentDiagnosticReportResult::Report(
         DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
             related_documents: None,

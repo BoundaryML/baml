@@ -3,12 +3,15 @@
 
 # Re-export the pyo3 API
 from .baml_py import (
+    AbortController,
     BamlRuntime,
     FunctionResult,
     FunctionResultStream,
     BamlImagePy as Image,
     BamlAudioPy as Audio,
     invoke_runtime_cli,
+    BamlPdfPy as Pdf,
+    BamlVideoPy as Video,
     ClientRegistry,
     # Collector utilities
     Collector,
@@ -22,6 +25,7 @@ from .stream import BamlStream, BamlSyncStream
 from .ctx_manager import CtxManager as BamlCtxManager
 
 __all__ = [
+    "AbortController",
     "BamlRuntime",
     "ClientRegistry",
     "BamlStream",
@@ -31,6 +35,8 @@ __all__ = [
     "FunctionResultStream",
     "Image",
     "Audio",
+    "Pdf",
+    "Video",
     "invoke_runtime_cli",
     # Collector types
     "Collector",

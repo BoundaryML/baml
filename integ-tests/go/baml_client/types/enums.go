@@ -69,7 +69,7 @@ func (e *AliasedEnum) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *AliasedEnum) Decode(holder *cffi.CFFIValueEnum) {
+func (e *AliasedEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "AliasedEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.AliasedEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -147,7 +147,7 @@ func (e *Category) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Category) Decode(holder *cffi.CFFIValueEnum) {
+func (e *Category) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "Category" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.Category, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -225,7 +225,7 @@ func (e *Category2) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Category2) Decode(holder *cffi.CFFIValueEnum) {
+func (e *Category2) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "Category2" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.Category2, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -303,7 +303,7 @@ func (e *Category3) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Category3) Decode(holder *cffi.CFFIValueEnum) {
+func (e *Category3) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "Category3" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.Category3, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -379,7 +379,7 @@ func (e *Color) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Color) Decode(holder *cffi.CFFIValueEnum) {
+func (e *Color) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "Color" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.Color, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -451,7 +451,7 @@ func (e *DataType) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *DataType) Decode(holder *cffi.CFFIValueEnum) {
+func (e *DataType) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "DataType" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.DataType, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -516,7 +516,7 @@ func (e *DynEnumOne) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *DynEnumOne) Decode(holder *cffi.CFFIValueEnum) {
+func (e *DynEnumOne) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "DynEnumOne" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.DynEnumOne, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -536,6 +536,74 @@ func (e DynEnumOne) BamlTypeName() string {
 func (u DynEnumOne) BamlEncodeName() *cffi.CFFITypeName {
 	return &cffi.CFFITypeName{
 		Name:      "DynEnumOne",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
+}
+
+type DynEnumThree string
+
+const (
+	DynEnumThreeTRICYCLE DynEnumThree = "TRICYCLE"
+	DynEnumThreeTRIANGLE DynEnumThree = "TRIANGLE"
+)
+
+// Values returns all allowed values for the DynEnumThree type.
+func (DynEnumThree) Values() []DynEnumThree {
+	return []DynEnumThree{
+		DynEnumThreeTRICYCLE,
+		DynEnumThreeTRIANGLE,
+	}
+}
+
+// IsValid checks whether the given DynEnumThree value is valid.
+func (e DynEnumThree) IsValid() bool {
+
+	// dynamic enums are always valid
+	return true
+
+}
+
+// MarshalJSON customizes JSON marshaling for DynEnumThree.
+func (e DynEnumThree) MarshalJSON() ([]byte, error) {
+	if !e.IsValid() {
+		return nil, fmt.Errorf("invalid DynEnumThree: %q", e)
+	}
+	return json.Marshal(string(e))
+}
+
+// UnmarshalJSON customizes JSON unmarshaling for DynEnumThree.
+func (e *DynEnumThree) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*e = DynEnumThree(s)
+	if !e.IsValid() {
+		return fmt.Errorf("invalid DynEnumThree: %q", s)
+	}
+	return nil
+}
+
+func (e *DynEnumThree) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
+	name := holder.Name
+	if name.Name != "DynEnumThree" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.DynEnumThree, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+	}
+	value := holder.Value
+	*e = DynEnumThree(value)
+}
+
+func (e DynEnumThree) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+}
+
+func (e DynEnumThree) BamlTypeName() string {
+	return "DynEnumThree"
+}
+
+func (u DynEnumThree) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "DynEnumThree",
 		Namespace: cffi.CFFITypeNamespace_TYPES,
 	}
 }
@@ -581,7 +649,7 @@ func (e *DynEnumTwo) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *DynEnumTwo) Decode(holder *cffi.CFFIValueEnum) {
+func (e *DynEnumTwo) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "DynEnumTwo" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.DynEnumTwo, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -653,7 +721,7 @@ func (e *EnumInClass) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *EnumInClass) Decode(holder *cffi.CFFIValueEnum) {
+func (e *EnumInClass) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "EnumInClass" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.EnumInClass, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -732,7 +800,7 @@ func (e *EnumOutput) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *EnumOutput) Decode(holder *cffi.CFFIValueEnum) {
+func (e *EnumOutput) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "EnumOutput" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.EnumOutput, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -802,7 +870,7 @@ func (e *Hobby) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Hobby) Decode(holder *cffi.CFFIValueEnum) {
+func (e *Hobby) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "Hobby" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.Hobby, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -876,7 +944,7 @@ func (e *MapKey) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *MapKey) Decode(holder *cffi.CFFIValueEnum) {
+func (e *MapKey) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "MapKey" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.MapKey, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -948,7 +1016,7 @@ func (e *NamedArgsSingleEnum) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *NamedArgsSingleEnum) Decode(holder *cffi.CFFIValueEnum) {
+func (e *NamedArgsSingleEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "NamedArgsSingleEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.NamedArgsSingleEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -1020,7 +1088,7 @@ func (e *NamedArgsSingleEnumList) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *NamedArgsSingleEnumList) Decode(holder *cffi.CFFIValueEnum) {
+func (e *NamedArgsSingleEnumList) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "NamedArgsSingleEnumList" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.NamedArgsSingleEnumList, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -1094,7 +1162,7 @@ func (e *OptionalTest_CategoryType) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *OptionalTest_CategoryType) Decode(holder *cffi.CFFIValueEnum) {
+func (e *OptionalTest_CategoryType) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "OptionalTest_CategoryType" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.OptionalTest_CategoryType, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -1170,7 +1238,7 @@ func (e *OrderStatus) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *OrderStatus) Decode(holder *cffi.CFFIValueEnum) {
+func (e *OrderStatus) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "OrderStatus" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.OrderStatus, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -1190,6 +1258,142 @@ func (e OrderStatus) BamlTypeName() string {
 func (u OrderStatus) BamlEncodeName() *cffi.CFFITypeName {
 	return &cffi.CFFITypeName{
 		Name:      "OrderStatus",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
+}
+
+type RenderStatusEnum string
+
+const (
+	RenderStatusEnumACTIVE   RenderStatusEnum = "ACTIVE"
+	RenderStatusEnumINACTIVE RenderStatusEnum = "INACTIVE"
+)
+
+// Values returns all allowed values for the RenderStatusEnum type.
+func (RenderStatusEnum) Values() []RenderStatusEnum {
+	return []RenderStatusEnum{
+		RenderStatusEnumACTIVE,
+		RenderStatusEnumINACTIVE,
+	}
+}
+
+// IsValid checks whether the given RenderStatusEnum value is valid.
+func (e RenderStatusEnum) IsValid() bool {
+
+	// dynamic enums are always valid
+	return true
+
+}
+
+// MarshalJSON customizes JSON marshaling for RenderStatusEnum.
+func (e RenderStatusEnum) MarshalJSON() ([]byte, error) {
+	if !e.IsValid() {
+		return nil, fmt.Errorf("invalid RenderStatusEnum: %q", e)
+	}
+	return json.Marshal(string(e))
+}
+
+// UnmarshalJSON customizes JSON unmarshaling for RenderStatusEnum.
+func (e *RenderStatusEnum) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*e = RenderStatusEnum(s)
+	if !e.IsValid() {
+		return fmt.Errorf("invalid RenderStatusEnum: %q", s)
+	}
+	return nil
+}
+
+func (e *RenderStatusEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
+	name := holder.Name
+	if name.Name != "RenderStatusEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.RenderStatusEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+	}
+	value := holder.Value
+	*e = RenderStatusEnum(value)
+}
+
+func (e RenderStatusEnum) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+}
+
+func (e RenderStatusEnum) BamlTypeName() string {
+	return "RenderStatusEnum"
+}
+
+func (u RenderStatusEnum) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "RenderStatusEnum",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
+}
+
+type RenderTestEnum string
+
+const (
+	RenderTestEnumBIKE    RenderTestEnum = "BIKE"
+	RenderTestEnumSCOOTER RenderTestEnum = "SCOOTER"
+)
+
+// Values returns all allowed values for the RenderTestEnum type.
+func (RenderTestEnum) Values() []RenderTestEnum {
+	return []RenderTestEnum{
+		RenderTestEnumBIKE,
+		RenderTestEnumSCOOTER,
+	}
+}
+
+// IsValid checks whether the given RenderTestEnum value is valid.
+func (e RenderTestEnum) IsValid() bool {
+
+	// dynamic enums are always valid
+	return true
+
+}
+
+// MarshalJSON customizes JSON marshaling for RenderTestEnum.
+func (e RenderTestEnum) MarshalJSON() ([]byte, error) {
+	if !e.IsValid() {
+		return nil, fmt.Errorf("invalid RenderTestEnum: %q", e)
+	}
+	return json.Marshal(string(e))
+}
+
+// UnmarshalJSON customizes JSON unmarshaling for RenderTestEnum.
+func (e *RenderTestEnum) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*e = RenderTestEnum(s)
+	if !e.IsValid() {
+		return fmt.Errorf("invalid RenderTestEnum: %q", s)
+	}
+	return nil
+}
+
+func (e *RenderTestEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
+	name := holder.Name
+	if name.Name != "RenderTestEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.RenderTestEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+	}
+	value := holder.Value
+	*e = RenderTestEnum(value)
+}
+
+func (e RenderTestEnum) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+}
+
+func (e RenderTestEnum) BamlTypeName() string {
+	return "RenderTestEnum"
+}
+
+func (u RenderTestEnum) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "RenderTestEnum",
 		Namespace: cffi.CFFITypeNamespace_TYPES,
 	}
 }
@@ -1244,7 +1448,7 @@ func (e *Tag) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Tag) Decode(holder *cffi.CFFIValueEnum) {
+func (e *Tag) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "Tag" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.Tag, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -1326,7 +1530,7 @@ func (e *TestEnum) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *TestEnum) Decode(holder *cffi.CFFIValueEnum) {
+func (e *TestEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "TestEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.TestEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))

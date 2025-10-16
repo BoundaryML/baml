@@ -12,9 +12,11 @@
 
 import typing
 import typing_extensions
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
+import baml_py
 
+from . import types
 
 StreamStateValueT = typing.TypeVar('StreamStateValueT')
 class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
@@ -25,10 +27,12 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
 # #########################################################################
 
 class Example(BaseModel):
-    a: typing.Optional[int] = None
+    type: str
+    a: typing.Optional[types.Checked[int, typing_extensions.Literal['a_is_positive']]] = None
     b: typing.Optional[str] = None
 
 class Example2(BaseModel):
+    type: str
     item: typing.Optional["Example"] = None
     element: typing.Optional[str] = None
     element2: typing.Optional[str] = None

@@ -1,0 +1,7 @@
+{
+  "name": "@baml/integ-tests-go",
+  "version": "1.0.0",
+  "dependencies": {
+    "@boundaryml/baml": "workspace:*"
+  }
+}

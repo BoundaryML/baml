@@ -23,6 +23,8 @@ impl RequestHandler for CodeActionHandler {
     type RequestType = request::CodeActionRequest;
 }
 
+pub(crate) const OPEN_IN_BROWSER_COMMAND: &str = "baml.openBamlPanelInBrowser";
+
 impl SyncRequestHandler for CodeActionHandler {
     fn run(
         session: &mut Session,
@@ -30,41 +32,32 @@ impl SyncRequestHandler for CodeActionHandler {
         _requester: &mut Requester,
         params: CodeActionParams,
     ) -> Result<Option<Vec<CodeActionOrCommand>>> {
-        let mut actions = vec![];
-
         let uri = params.text_document.uri.clone();
-        if !uri.to_string().contains("baml_src") {
-            return Ok(None);
-        }
-
         let path = uri
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
-        let project = session
-            .get_or_create_project(&path)
-            .expect("Ensured that a project db exists");
+        let Ok(project) = session.get_or_create_project(&path) else {
+            return Ok(None);
+        };
+
         let document_key =
-            DocumentKey::from_url(project.lock().unwrap().root_path(), &uri).internal_error()?;
+            DocumentKey::from_url(project.lock().root_path(), &uri).internal_error()?;
 
         // Get the first function from the current file if available
         let function_name = project
             .lock()
-            .unwrap()
             .list_functions()
             .unwrap_or_default()
             .into_iter()
             .find(|f| f.span.file_path == document_key.path().to_string_lossy())
             .map(|f| f.name);
 
-        // Get the playground port from session settings
-        let port = session.baml_settings.playground_port.unwrap_or(3030);
-
         let action = CodeActionOrCommand::CodeAction(CodeAction {
             title: "Open Playground".to_string(),
             kind: Some(CodeActionKind::EMPTY),
             command: Some(Command {
                 title: "Open Playground".to_string(),
-                command: "openPlayground".to_string(),
+                command: OPEN_IN_BROWSER_COMMAND.to_string(),
                 arguments: function_name.map(|name| vec![Value::String(name)]),
             }),
             edit: None,
@@ -73,8 +66,7 @@ impl SyncRequestHandler for CodeActionHandler {
             disabled: None,
             data: None,
         });
-        actions.push(action);
 
-        Ok(Some(actions))
+        Ok(Some(vec![action]))
     }
 }

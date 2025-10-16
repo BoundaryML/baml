@@ -14,7 +14,7 @@ Using `openai/model-name` or `anthropic/model-name` will assume you have the ANT
 
 ```rust BAML
 function MakeHaiku(topic: string) -> string {
-  client "openai/gpt-4o" // or anthropic/claude-3-5-sonnet-20240620
+  client "openai-responses/gpt-5-mini" // or anthropic/claude-sonnet-4-20250514
   prompt #"
     Write a haiku about {{ topic }}.
   "#
@@ -29,7 +29,7 @@ The longer form uses a named client, and supports adding any parameters supporte
 client<llm> MyClient {
   provider "openai"
   options {
-    model "gpt-4o"
+    model "gpt-5-mini"
     api_key env.OPENAI_API_KEY
     // other params like temperature, top_p, etc.
     temperature 0.0

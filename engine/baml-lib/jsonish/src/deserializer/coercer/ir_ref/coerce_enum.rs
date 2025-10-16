@@ -31,6 +31,48 @@ fn enum_match_candidates(enm: &Enum) -> Vec<(&str, Vec<String>)> {
 }
 
 impl TypeCoercer for Enum {
+    fn try_cast(
+        &self,
+        ctx: &ParsingContext,
+        target: &TypeIR,
+        value: Option<&crate::jsonish::Value>,
+    ) -> Option<BamlValueWithFlags> {
+        // Enums can only be cast from string values
+        let Some(crate::jsonish::Value::String(s, _)) = value else {
+            return None;
+        };
+
+        // Check if the string exactly matches any enum variant
+        let mut result = None;
+        for (variant_name, _) in &self.values {
+            if variant_name.rendered_name() == s {
+                result = Some(BamlValueWithFlags::Enum(
+                    self.name.real_name().to_string(),
+                    target.clone(),
+                    (variant_name.real_name().to_string(), target).into(),
+                ));
+                break;
+            }
+        }
+
+        // Check completion state
+        if let Some(v) = value {
+            if let Some(ref mut res) = result {
+                match v.completion_state() {
+                    baml_types::CompletionState::Complete => {}
+                    baml_types::CompletionState::Incomplete => {
+                        res.add_flag(crate::deserializer::deserialize_flags::Flag::Incomplete);
+                    }
+                    baml_types::CompletionState::Pending => {
+                        unreachable!("jsonish::Value may never be in a Pending state.")
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
     fn coerce(
         &self,
         ctx: &ParsingContext,
@@ -49,7 +91,7 @@ impl TypeCoercer for Enum {
             .find_enum(self.name.real_name())
             .map_or(vec![], |class| class.constraints.clone());
 
-        let variant_match = match_string(ctx, target, value, &enum_match_candidates(self))?;
+        let variant_match = match_string(ctx, target, value, &enum_match_candidates(self), true)?;
         let enum_match = apply_constraints(
             target,
             vec![],

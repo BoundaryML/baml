@@ -11,26 +11,30 @@
  * ```
  */
 
-import { BamlAudio } from './audio';
 // Import actual implementations
-import { BamlImage } from './image';
+import { BamlAudio } from "./audio";
+import { BamlImage } from "./image";
+import { BamlVideo } from "./video";
+import { BamlPdf } from "./pdf";
 
-import type { BamlAudio as BamlAudioType } from './audio';
 // Re-export the original types
-import type { BamlImage as BamlImageType } from './image';
+import type { BamlAudio as BamlAudioType } from "./audio";
+import type { BamlImage as BamlImageType } from "./image";
+import type { BamlPdf as BamlPdfType } from "./pdf";
+import type { BamlVideo as BamlVideoType } from "./video";
 
 // Detect if we're in server-side rendering environment
-const isSSR = typeof window === 'undefined';
+const isSSR = typeof window === "undefined";
 
 // Create a proxy handler that logs warnings in SSR environment
 function createSSRProxyHandler<T extends object>(
-  name: string,
+  name: string
 ): ProxyHandler<T> {
   return {
     get: (target, prop) => {
       if (isSSR) {
         console.warn(
-          `Using ${name} from '@boundaryml/baml/browser' in a server-side environment. This will not function properly in SSR.`,
+          `Using ${name} from '@boundaryml/baml/browser' in a server-side environment. This will not function properly in SSR.`
         );
       }
       return (target as Record<string | symbol, unknown>)[prop];
@@ -41,17 +45,32 @@ function createSSRProxyHandler<T extends object>(
 // Create proxied versions that will work in both environments but warn in SSR
 const ImageImpl = new Proxy(
   BamlImage,
-  createSSRProxyHandler<typeof BamlImage>('Image'),
+  createSSRProxyHandler<typeof BamlImage>("Image")
 );
 const AudioImpl = new Proxy(
   BamlAudio,
-  createSSRProxyHandler<typeof BamlAudio>('Audio'),
+  createSSRProxyHandler<typeof BamlAudio>("Audio")
+);
+const PdfImpl = new Proxy(
+  BamlPdf,
+  createSSRProxyHandler<typeof BamlPdf>("Pdf")
+);
+const VideoImpl = new Proxy(
+  BamlVideo,
+  createSSRProxyHandler<typeof BamlVideo>("Video")
 );
 
 // Now export everything properly
 // First, define the type alias
 export type Image = BamlImageType;
 export type Audio = BamlAudioType;
+export type Pdf = BamlPdfType;
+export type Video = BamlVideoType;
 
 // Then export the implementations
-export { ImageImpl as Image, AudioImpl as Audio };
+export {
+  ImageImpl as Image,
+  AudioImpl as Audio,
+  PdfImpl as Pdf,
+  VideoImpl as Video,
+};

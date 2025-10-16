@@ -1,7 +1,7 @@
 use baml_types::{
     baml_value::TypeLookups,
     ir_type::{TypeNonStreaming, TypeStreaming},
-    type_meta::{self, base::TypeMeta, stream::TypeMetaStreaming},
+    type_meta::{self, stream::TypeMetaStreaming},
     BamlMediaType, ConstraintLevel, TypeValue,
 };
 
@@ -121,6 +121,10 @@ pub(crate) fn stream_type_to_ts(field: &TypeStreaming, _lookup: &impl TypeLookup
                 }
             }
         },
+        T::Top(_) => panic!(
+            "TypeGeneric::Top should have been resolved by the compiler before code generation. \
+             This indicates a bug in the type resolution phase."
+        ),
     };
 
     type_ts
@@ -220,6 +224,10 @@ pub(crate) fn type_to_ts(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
                 }
             }
         },
+        T::Top(_) => panic!(
+            "TypeGeneric::Top should have been resolved by the compiler before code generation. \
+             This indicates a bug in the type resolution phase."
+        ),
     };
 
     type_ts
@@ -297,6 +305,8 @@ impl From<&BamlMediaType> for MediaTypeTS {
         match baml_media_type {
             BamlMediaType::Image => MediaTypeTS::Image,
             BamlMediaType::Audio => MediaTypeTS::Audio,
+            BamlMediaType::Pdf => MediaTypeTS::Pdf,
+            BamlMediaType::Video => MediaTypeTS::Video,
         }
     }
 }

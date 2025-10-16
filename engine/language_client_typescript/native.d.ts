@@ -18,15 +18,25 @@ export declare class BamlImage {
   toJSON(): any
 }
 
+export declare class BamlPdf {
+  static fromUrl(url: string): BamlPdf
+  static fromBase64(base64: string): BamlPdf
+  get url(): string | null
+  asUrl(): string
+  isUrl(): boolean
+  asBase64(): [string, string]
+  toJSON(): any
+}
+
 export declare class BamlRuntime {
   static fromDirectory(directory: string, envVars: Record<string, string>): BamlRuntime
   static fromFiles(rootPath: string, files: Record<string, string>, envVars: Record<string, string | undefined | null>): BamlRuntime
   reset(rootPath: string, files: Record<string, string>, envVars: Record<string, string>): void
   createContextManager(): RuntimeContextManager
-  callFunction(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, collectors: Array<Collector>, envVars: Record<string, string>): Promise<FunctionResult>
-  callFunctionSync(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, collectors: Array<Collector>, envVars: Record<string, string>): FunctionResult
-  streamFunction(functionName: string, args: { [name: string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, clientRegistry: ClientRegistry | undefined | null, collectors: Array<Collector>, envVars: Record<string, string>): FunctionResultStream
-  streamFunctionSync(functionName: string, args: { [name: string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, clientRegistry: ClientRegistry | undefined | null, collectors: Array<Collector>, envVars: Record<string, string>): FunctionResultStream
+  callFunction(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, collectors: Array<Collector>, tags: Record<string, string>, envVars: Record<string, string>, signal?: object | undefined | null, events?: object | undefined | null): Promise<FunctionResult>
+  callFunctionSync(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, collectors: Array<Collector>, tags: Record<string, string>, envVars: Record<string, string>, signal?: object | undefined | null): FunctionResult
+  streamFunction(functionName: string, args: { [name: string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, clientRegistry: ClientRegistry | undefined | null, collectors: Array<Collector>, tags: Record<string, string>, envVars: Record<string, string>, signal?: object | undefined | null, onTick?: (() => void) | undefined): FunctionResultStream
+  streamFunctionSync(functionName: string, args: { [name: string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, clientRegistry: ClientRegistry | undefined | null, collectors: Array<Collector>, tags: Record<string, string>, envVars: Record<string, string>, signal?: object | undefined | null, onTick?: (() => void) | undefined): FunctionResultStream
   buildRequest(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, stream: boolean, envVars: Record<string, string>): Promise<HTTPRequest>
   buildRequestSync(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, stream: boolean, envVars: Record<string, string>): HTTPRequest
   parseLlmResponse(functionName: string, llmResponse: string, allowPartials: boolean, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, envVars: Record<string, string>): any
@@ -40,13 +50,27 @@ export declare class BamlSpan {
   finish(result: any, ctx: RuntimeContextManager, envVars: any): any
 }
 
+export declare class BamlVideo {
+  static fromUrl(url: string, mediaType?: string | undefined | null): BamlVideo
+  static fromBase64(mediaType: string, base64: string): BamlVideo
+  get url(): string | null
+  asUrl(): string
+  isUrl(): boolean
+  asBase64(): [string, string]
+  toJSON(): any
+}
+
 export declare class ClassBuilder {
+  listProperties(): unknown[]
+  removeProperty(name: string): void
+  reset(): void
   field(): FieldType
   property(name: string): ClassPropertyBuilder
 }
 
 export declare class ClassPropertyBuilder {
   setType(fieldType: FieldType): ClassPropertyBuilder
+  getType(): FieldType
   alias(alias?: string | undefined | null): ClassPropertyBuilder
   description(description?: string | undefined | null): ClassPropertyBuilder
 }
@@ -59,6 +83,7 @@ export declare class ClientRegistry {
 
 export declare class Collector {
   constructor(name?: string | undefined | null)
+  clear(): void
   get logs(): Array<FunctionLog>
   get last(): FunctionLog | null
   id(functionLogId: string): FunctionLog | null
@@ -83,6 +108,7 @@ export declare class EnumValueBuilder {
 export declare class FieldType {
   list(): FieldType
   optional(): FieldType
+  equals(other: FieldType): boolean
 }
 
 export declare class FunctionLog {
@@ -94,6 +120,7 @@ export declare class FunctionLog {
   get usage(): Usage
   get calls(): (LLMCall | LLMStreamCall)[]
   get rawLlmResponse(): string | null
+  get tags(): unknown
   get selectedCall(): unknown
 }
 
@@ -154,6 +181,7 @@ export declare class LlmStreamCall {
   get selected(): boolean
   get usage(): Usage | null
   get timing(): StreamTiming
+  sseResponses(): Array<SSEResponse> | null
   toString(): string
 }
 export type LLMStreamCall = LlmStreamCall
@@ -164,19 +192,22 @@ export declare class RuntimeContextManager {
   contextDepth(): number
 }
 
+export declare class SseResponse {
+  get text(): string
+  json(): any | null
+}
+export type SSEResponse = SseResponse
+
 export declare class StreamTiming {
   toString(): string
   get startTimeUtcMs(): number
   get durationMs(): number | null
-  get timeToFirstParsedMs(): number | null
-  get timeToFirstTokenMs(): number | null
 }
 
 export declare class Timing {
   toString(): string
   get startTimeUtcMs(): number
   get durationMs(): number | null
-  get timeToFirstParsedMs(): number | null
 }
 
 export declare class TraceStats {
@@ -191,6 +222,7 @@ export declare class TraceStats {
 
 export declare class TypeBuilder {
   constructor()
+  reset(): void
   getEnum(name: string): EnumBuilder
   getClass(name: string): ClassBuilder
   list(inner: FieldType): FieldType
@@ -213,6 +245,7 @@ export declare class Usage {
   toString(): string
   get inputTokens(): number | null
   get outputTokens(): number | null
+  get cachedInputTokens(): number | null
 }
 
 export interface BamlLogEvent {
@@ -223,11 +256,16 @@ export interface BamlLogEvent {
   startTime: string
 }
 
-export declare export declare function get_version(): string
+export interface BlockEvent {
+  blockLabel: string
+  eventType: string
+}
 
-export declare export declare function getLogLevel(): string
+export declare function get_version(): string
 
-export declare export declare function invoke_runtime_cli(params: Array<string>): number
+export declare function getLogLevel(): string
+
+export declare function invoke_runtime_cli(params: Array<string>): number
 
 export interface LogEventMetadata {
   eventId: string
@@ -235,9 +273,21 @@ export interface LogEventMetadata {
   rootEventId: string
 }
 
-export declare export declare function setLogJsonMode(useJson: boolean): void
+export declare function setLogJsonMode(useJson: boolean): void
 
-export declare export declare function setLogLevel(level: string): void
+export declare function setLogLevel(level: string): void
 
-export declare export declare function setLogMaxChunkLength(length: number): void
+export declare function setLogMaxChunkLength(length: number): void
 
+export interface StreamEvent {
+  streamId: string
+  eventType: string
+  value?: any
+}
+
+export interface VarEvent {
+  variableName: string
+  value: any
+  timestamp: string
+  functionName: string
+}

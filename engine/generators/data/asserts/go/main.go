@@ -1,30 +1,14 @@
 package main
 
 import (
-	b "asserts/baml_client"
-	"context"
 	"fmt"
 )
 
 func main() {
-
-	result, err := b.PersonTest(context.Background())
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(result)
-
-	channel, err := b.Stream.PersonTest(context.Background())
-	if err != nil {
-		panic(err)
-	}
-	for result := range channel {
-		if result.IsFinal {
-			fmt.Println("final-----")
-			fmt.Println(result.Final())
-		} else {
-			fmt.Println("stream-----")
-			fmt.Println(result.Stream())
-		}
-	}
+	fmt.Println("Asserts tests are now available as Go tests.")
+	fmt.Println("Run 'go test' to run all tests, or 'go test -run TestPersonTest' to run a specific test.")
+	fmt.Println("")
+	fmt.Println("Available tests:")
+	fmt.Println("  TestPersonTest")
+	fmt.Println("  TestPersonTestStream")
 }

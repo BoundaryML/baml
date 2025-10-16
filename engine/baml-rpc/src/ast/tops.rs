@@ -54,7 +54,7 @@ pub struct AST {
 }
 
 impl AST {
-    pub fn id(&self) -> ASTId {
+    pub fn id(&self) -> ASTId<'_> {
         // Get all top level ids
         let top_ids = self
             .functions

@@ -2,7 +2,7 @@
 
 import { b } from '../index';
 import type { Check, Checked  } from "../types";
-import type { Image, Audio } from "@boundaryml/baml";
+import type { Image, Audio, Pdf, Video } from "@boundaryml/baml";
 
 import type { {% for t in types %} {{ t }}{% if !loop.last %}, {% endif %}{% endfor %} } from "../types"
 

@@ -34,7 +34,7 @@ module BamlClient
       const :checks, T::Hash[Symbol, Check]
   end
   # #########################################################################
-  # Generated enums (18)
+  # Generated enums (21)
   # #########################################################################
 
   class AliasedEnum < T::Enum
@@ -93,6 +93,13 @@ module BamlClient
   end
 
   class DynEnumOne < T::Enum
+  end
+
+  class DynEnumThree < T::Enum
+      enums do
+          TRICYCLE = new("TRICYCLE")
+          TRIANGLE = new("TRIANGLE")
+      end
   end
 
   class DynEnumTwo < T::Enum
@@ -165,6 +172,20 @@ module BamlClient
       end
   end
 
+  class RenderStatusEnum < T::Enum
+      enums do
+          ACTIVE = new("ACTIVE")
+          INACTIVE = new("INACTIVE")
+      end
+  end
+
+  class RenderTestEnum < T::Enum
+      enums do
+          BIKE = new("BIKE")
+          SCOOTER = new("SCOOTER")
+      end
+  end
+
   class Tag < T::Enum
       enums do
           Security = new("Security")
@@ -186,8 +207,17 @@ module BamlClient
   end
 
   # #########################################################################
-  # Generated classes (99)
+  # Generated classes (104)
   # #########################################################################
+
+
+  class AddTodoItem < T::Struct
+      include Baml::Sorbet::Struct
+      const :type, String
+      const :item, String
+      const :time, String
+      const :description, String
+  end
 
 
   class AnotherObject < T::Struct
@@ -347,6 +377,15 @@ module BamlClient
       include Baml::Sorbet::Struct
       const :client_details, ClientDetails1559
       const :notes, T::Array[Note1599]
+  end
+
+
+  class DummyJsonTodo < T::Struct
+      include Baml::Sorbet::Struct
+      const :id, Integer
+      const :todo, String
+      const :completed, T::Boolean
+      const :userId, Integer
   end
 
 
@@ -762,6 +801,19 @@ module BamlClient
   end
 
 
+  class RenderEnumInput < T::Struct
+      include Baml::Sorbet::Struct
+      const :testKey, String
+  end
+
+
+  class RenderTestClass < T::Struct
+      include Baml::Sorbet::Struct
+      const :name, String
+      const :status, T.any(RenderStatusEnum, String)
+  end
+
+
   class Resume < T::Struct
       include Baml::Sorbet::Struct
       const :name, String
@@ -872,6 +924,13 @@ module BamlClient
   end
 
 
+  class TodoMessageToUser < T::Struct
+      include Baml::Sorbet::Struct
+      const :type, String
+      const :message, String
+  end
+
+
   class Tree < T::Struct
       include Baml::Sorbet::Struct
       const :data, Integer
@@ -924,7 +983,7 @@ module BamlClient
   end
 
   # #########################################################################
-  # Generated type aliases (20)
+  # Generated type aliases (21)
   # #########################################################################
 
 
@@ -986,6 +1045,9 @@ module BamlClient
 
 
   RecursiveUnion = T.type_alias{ T.any(String, T::Hash[String, T.anything]) }
+
+
+  TodoTool = T.type_alias{ T.any(AddTodoItem, TodoMessageToUser) }
 
 
   end

@@ -1,7 +1,10 @@
 {
+  "name": "@baml/fern",
+  "version": "0.0.1",
+  "private": true,
   "scripts": {
-    "dev": "npx fern docs dev",
-    "preview": "npx fern generate --preview --docs"
+    "dev": "fern docs dev --port 3096 --backend-port 3097",
+    "preview": "fern generate --preview --docs"
   },
   "devDependencies": {
     "fern-api": "^0.31.24"

@@ -1,0 +1,12 @@
+[package]
+name = "llm-response-parser"
+edition = "2024"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true

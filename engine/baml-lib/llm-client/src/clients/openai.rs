@@ -61,9 +61,9 @@ impl<Meta> UnresolvedOpenAI<Meta> {
 pub struct ResolvedOpenAI {
     pub base_url: String,
     pub api_key: Option<ApiKeyWithProvenance>,
-    role_selection: RolesSelection,
+    pub role_selection: RolesSelection,
     pub allowed_metadata: AllowedRoleMetadata,
-    supported_request_modes: SupportedRequestModes,
+    pub supported_request_modes: SupportedRequestModes,
     pub headers: IndexMap<String, String>,
     pub properties: IndexMap<String, serde_json::Value>,
     pub query_params: IndexMap<String, String>,
@@ -109,6 +109,10 @@ impl ResolvedOpenAI {
             // The compiler should already guarantee that this is non-empty
             self.allowed_roles().remove(0)
         })
+    }
+
+    pub fn remap_role(&self) -> std::collections::HashMap<String, String> {
+        self.role_selection.remap().unwrap_or_default()
     }
 }
 
@@ -345,6 +349,24 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         if instance.role_selection.default.is_none() {
             instance.role_selection.default = Some(StringOr::Value("user".to_string()));
         }
+
+        Ok(instance)
+    }
+
+    pub fn create_responses(
+        mut properties: PropertyHandler<Meta>,
+    ) -> Result<Self, Vec<Error<Meta>>> {
+        let base_url = properties
+            .ensure_base_url_with_default(UnresolvedUrl::new_static("https://api.openai.com/v1"));
+
+        let api_key = Some(
+            properties
+                .ensure_api_key()
+                .unwrap_or_else(|| StringOr::EnvVar("OPENAI_API_KEY".to_string())),
+        );
+
+        let instance =
+            Self::create_common(properties, Some(either::Either::Left(base_url)), api_key)?;
 
         Ok(instance)
     }

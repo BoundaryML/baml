@@ -14,6 +14,18 @@ use minijinja::machinery::{
 
 use super::TypeError;
 
+#[derive(Debug, Clone)]
+pub struct EnumDefinition {
+    pub name: String,
+    pub values: Vec<EnumValueDefinition>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnumValueDefinition {
+    pub name: String,
+    pub alias: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Type {
     Unknown,
@@ -33,6 +45,8 @@ pub enum Type {
     // It is simultaneously two types, whichever fits best
     Both(Box<Type>, Box<Type>),
     ClassRef(String),
+    EnumTypeRef(String),
+    EnumValueRef(String),
     FunctionRef(String),
     /// TODO: This should be `AliasRef(String)` but functions like
     /// [`Self::is_subtype_of`] or [`Self::bitor`] don't have access to the
@@ -107,6 +121,8 @@ impl Type {
             (Type::Tuple(_), _) => false,
 
             (Type::ClassRef(_), _) => false,
+            (Type::EnumTypeRef(_), _) => false,
+            (Type::EnumValueRef(_), _) => false,
             (Type::FunctionRef(_), _) => false,
             (Type::Alias { resolved, .. }, _) => resolved.is_subtype_of(other),
             (Type::RecursiveTypeAlias(_), _) => false,
@@ -114,6 +130,41 @@ impl Type {
             (Type::Audio, _) => false,
             (Type::String, _) => false,
             (Type::Bool, _) => false,
+        }
+    }
+
+    /// Used for type narrowing.
+    ///
+    /// Basic example:
+    ///
+    /// ```ignore
+    /// class UserMessage {
+    ///     kind "user_message"
+    ///     user_message String
+    /// }
+    ///
+    /// class AssistantMessage {
+    ///     kind "assistant_message"
+    ///     assistant_message String
+    /// }
+    /// ```
+    ///
+    /// Now on narrowing:
+    ///
+    /// ```ignore
+    /// {% if message.kind == "user_message" %}
+    /// ```
+    pub fn equals_ignoring_literal_values(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Type::Literal(left), Type::Literal(right)) => matches!(
+                (left, right),
+                (LiteralValue::Int(_), LiteralValue::Int(_))
+                    | (LiteralValue::Bool(_), LiteralValue::Bool(_))
+                    | (LiteralValue::String(_), LiteralValue::String(_))
+            ),
+
+            // Fallback to PartialEq
+            _ => self == other,
         }
     }
 
@@ -164,6 +215,8 @@ impl Type {
             ),
             Type::Both(l, r) => format!("{} & {}", l.name(), r.name()),
             Type::ClassRef(name) => format!("class {name}"),
+            Type::EnumTypeRef(name) => format!("enum definition {name}"),
+            Type::EnumValueRef(name) => format!("enum {name}"),
             Type::FunctionRef(name) => format!("function {name}"),
             Type::Alias { name, resolved, .. } => {
                 format!("type alias {name} (resolves to {})", resolved.name())
@@ -241,6 +294,7 @@ enum Scope {
 pub struct PredefinedTypes {
     functions: IndexMap<String, (Type, Vec<(String, Type)>)>,
     classes: HashMap<String, IndexMap<String, Type>>,
+    enum_definitions: IndexMap<String, EnumDefinition>,
     /// TODO: See the comment for [`Type::AliasRef`].
     ///
     /// We should use this but we can't without a significant refactor.
@@ -280,7 +334,19 @@ impl PredefinedTypes {
             functions: IndexMap::from([
                 (
                     "baml::Chat".into(),
-                    (Type::String, vec![("role".into(), Type::String)]),
+                    (
+                        Type::String,
+                        vec![
+                            ("role".into(), Type::String),
+                            (
+                                "cache_control".into(),
+                                Type::merge(vec![
+                                    Type::Map(Box::new(Type::String), Box::new(Type::Unknown)),
+                                    Type::None,
+                                ]),
+                            ),
+                        ],
+                    ),
                 ),
                 (
                     "baml::OutputFormat".into(),
@@ -364,6 +430,7 @@ impl PredefinedTypes {
                     ]),
                 ),
             ]),
+            enum_definitions: Default::default(),
             variables: match context {
                 JinjaContext::Prompt => IndexMap::from([
                     ("ctx".into(), Type::ClassRef("baml::Context".into())),
@@ -449,6 +516,9 @@ impl PredefinedTypes {
         if self.as_class(name).is_some() {
             return Some(Type::ClassRef(name.to_string()));
         }
+        if self.as_enum(name).is_some() {
+            return Some(Type::EnumTypeRef(name.to_string()));
+        }
         None
     }
 
@@ -473,6 +543,16 @@ impl PredefinedTypes {
         self.classes.get(name)
     }
 
+    pub fn as_enum(&self, name: &str) -> Option<&EnumDefinition> {
+        self.enum_definitions.get(name)
+    }
+
+    pub fn as_enum_values(&self, name: &str) -> Option<Vec<String>> {
+        self.enum_definitions
+            .get(name)
+            .map(|def| def.values.iter().map(|v| v.name.clone()).collect())
+    }
+
     pub fn as_function(&self, name: &str) -> Option<&(Type, Vec<(String, Type)>)> {
         self.functions.get(name)
     }
@@ -483,6 +563,29 @@ impl PredefinedTypes {
 
     pub fn add_class(&mut self, name: &str, fields: IndexMap<String, Type>) {
         self.classes.insert(name.to_string(), fields);
+    }
+
+    pub fn add_enum(&mut self, name: &str, values: Vec<String>) {
+        self.add_enum_with_metadata(
+            name,
+            values
+                .into_iter()
+                .map(|v| EnumValueDefinition {
+                    name: v,
+                    alias: None,
+                })
+                .collect(),
+        );
+    }
+
+    pub fn add_enum_with_metadata(&mut self, name: &str, values: Vec<EnumValueDefinition>) {
+        self.enum_definitions.insert(
+            name.to_string(),
+            EnumDefinition {
+                name: name.to_string(),
+                values,
+            },
+        );
     }
 
     pub fn add_alias(&mut self, name: &str, target: Type) {
@@ -507,7 +610,7 @@ impl PredefinedTypes {
         }
     }
 
-    pub fn check_property(
+    pub fn check_class_property(
         &self,
         variable_name: &str,
         class: &str,
@@ -530,6 +633,34 @@ impl PredefinedTypes {
             }
         }
         (Type::Unknown, Some(TypeError::new_class_not_defined(class)))
+    }
+
+    pub fn check_enum_property(
+        &self,
+        variable_name: &str,
+        enum_name: &str,
+        enum_value: &str,
+        span: Span,
+    ) -> (Type, Option<TypeError>) {
+        if let Some(enum_def) = self.as_enum(enum_name) {
+            if enum_def.values.iter().any(|v| v.name == enum_value) {
+                return (Type::EnumValueRef(enum_value.to_string()), None);
+            } else {
+                return (
+                    Type::Unknown,
+                    Some(TypeError::new_property_not_defined(
+                        variable_name,
+                        enum_name,
+                        enum_value,
+                        span,
+                    )),
+                );
+            }
+        }
+        (
+            Type::Unknown,
+            Some(TypeError::new_enum_not_defined(enum_name)),
+        )
     }
 
     pub fn check_function_args(

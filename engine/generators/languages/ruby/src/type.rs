@@ -84,6 +84,8 @@ impl WrapType for TypeMetaRb {
 pub enum MediaTypeRb {
     Image,
     Audio,
+    Pdf,
+    Video,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -275,6 +277,8 @@ impl SerializeType for MediaTypeRb {
         match self {
             MediaTypeRb::Image => format!("{}Image", Package::imported_base().relative_from(pkg)),
             MediaTypeRb::Audio => format!("{}Audio", Package::imported_base().relative_from(pkg)),
+            MediaTypeRb::Pdf => format!("{}Pdf", Package::imported_base().relative_from(pkg)),
+            MediaTypeRb::Video => format!("{}Video", Package::imported_base().relative_from(pkg)),
         }
     }
 }

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use baml_types::GeneratorOutputType;
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
 use functions::{
@@ -15,6 +17,7 @@ mod ir_to_ts;
 mod package;
 mod r#type;
 mod utils;
+mod watchers;
 
 #[derive(Default, Debug)]
 pub struct TsLanguageFeatures;
@@ -61,11 +64,36 @@ $ pnpm add @boundaryml/baml
             .chain(ir.walk_alias_cycles().map(|a| a.item.0.clone()))
             .collect();
         types.sort();
-        let functions = ir
-            .functions
-            .iter()
-            .map(|f| ir_to_ts::functions::ir_function_to_ts(f, &pkg))
-            .collect::<Vec<_>>();
+        let expr_fn_wrappers = ir.expr_fns_as_functions();
+        let mut function_name_map: HashMap<String, String> = HashMap::new();
+        let mut functions = Vec::new();
+
+        for func in ir.functions.iter() {
+            let ts_fn = ir_to_ts::functions::ir_function_to_ts(func, &pkg);
+            function_name_map.insert(func.elem.name().to_string(), ts_fn.name.clone());
+            functions.push(ts_fn);
+        }
+
+        for func in expr_fn_wrappers.iter() {
+            let ts_fn = ir_to_ts::functions::ir_function_to_ts(func, &pkg);
+            function_name_map.insert(func.elem.name().to_string(), ts_fn.name.clone());
+            functions.push(ts_fn);
+        }
+
+        let event_collectors = watchers::build_event_collectors(args, &pkg, &function_name_map)?;
+
+        // Build a map of function names to their event collector types
+        let mut event_collector_map: HashMap<String, String> = HashMap::new();
+        for collector in &event_collectors {
+            event_collector_map.insert(collector.ts_name.clone(), collector.interface_name.clone());
+        }
+
+        // Update functions with their event collector types
+        for func in &mut functions {
+            if let Some(collector_type) = event_collector_map.get(&func.name) {
+                func.event_collector_type = Some(collector_type.clone());
+            }
+        }
 
         // Generate base TypeScript files (always generated)
         collector.add_file("inlinedbaml.ts", render_inlinedbaml(&pkg, file_map)?)?;
@@ -90,6 +118,8 @@ $ pnpm add @boundaryml/baml
             "sync_request.ts",
             &render_sync_request(&functions, &types, &pkg)?,
         )?;
+
+        collector.add_file("watchers.ts", watchers::render_events(&event_collectors)?)?;
 
         // Generate type files
         let classes = ir.walk_classes().collect::<Vec<_>>();

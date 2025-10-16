@@ -33,7 +33,7 @@ client<llm> MyClient {
 AWS Bedrock uses standard AWS authentication methods. We recommend using AWS profiles in development and AWS services' IAM roles in production, but all of the following are supported:
 
 <Tabs>
-<Tab title="AWS Profile">
+<Tab title="AWS Profile" language="ini">
 
 When developing locally, you can use the AWS CLI in combination with profiles to manage your credentials.
 
@@ -80,7 +80,7 @@ client<llm> MyClient {
 
 </Tab>
 
-<Tab title="AWS Services (Lambda/ECS/EC2)">
+<Tab title="AWS Services (Lambda/ECS/EC2)" language="baml">
 
 In AWS Lambda, EC2, ECS, etc., BAML will automatically use the service's IAM role, by reading the relevant environment variables. To override this behavior, see the section on [Explicit Credentials](#explicit-credentials).```
 
@@ -103,7 +103,7 @@ client<llm> MyClient {
 
 </Tab>
 
-<Tab title="Environment Variables">
+<Tab title="Environment Variables" language="bash">
 
 The simplest way to authenticate. Set these environment variables:
 
@@ -125,7 +125,7 @@ client<llm> MyClient {
 
 </Tab>
 
-<Tab title="Explicit Credentials">
+<Tab title="Explicit Credentials" language="baml">
 
 You can specify credentials directly in your BAML configuration:
 
@@ -250,7 +250,7 @@ BAML follows a specific order when resolving AWS credentials:
 You can map your own environment variable names:
 
 <Tabs>
-<Tab title="BAML">
+<Tab title="BAML" language="baml">
 
 ```baml BAML
 client<llm> MyClient {
@@ -266,7 +266,7 @@ client<llm> MyClient {
 ```
 
 </Tab>
-<Tab title="Environment">
+<Tab title="Environment" language="bash">
 
 ```bash
 # Your custom environment variables
@@ -308,7 +308,7 @@ To use Bedrock from a different AWS account:
 2. **Configure the source account** (where your application runs):
 
 <Tabs>
-<Tab title="AWS Profile">
+<Tab title="AWS Profile" language="ini">
 
 ```ini
 # ~/.aws/config
@@ -329,7 +329,7 @@ client<llm> MyClient {
 ```
 
 </Tab>
-<Tab title="Environment Variables">
+<Tab title="Environment Variables" language="bash">
 
 ```bash
 # Assume role and export credentials
@@ -344,7 +344,7 @@ export AWS_SESSION_TOKEN="from-sts-output"
 ```
 
 </Tab>
-<Tab title="ClientRegistry">
+<Tab title="ClientRegistry" language="typescript">
 
 ```typescript
 import { ClientRegistry } from '@baml/core';
@@ -395,11 +395,11 @@ The following IAM permissions are required for basic Bedrock access:
 Depending on your setup, you might need additional permissions:
 
 <Tabs>
-<Tab title="Cross-Account Access">
+<Tab title="Cross-Account Access" language="json">
 See [Cross-Account Access](#cross-account-access) section for the required trust relationships and permissions.
 </Tab>
 
-<Tab title="VPC Endpoints">
+<Tab title="VPC Endpoints" language="json">
 If using VPC endpoints:
 ```json
 {
@@ -423,7 +423,7 @@ If using VPC endpoints:
 ```
 </Tab>
 
-<Tab title="Resource-Based">
+<Tab title="Resource-Based" language="json">
 To restrict access to specific models:
 ```json
 {
@@ -479,10 +479,114 @@ You can use this to modify the `region`, `access_key_id`, `secret_access_key`, a
   AWS profile name from credentials file. **Default: `AWS_PROFILE` environment variable**
 </ParamField>
 
+<ParamField path="endpoint_url" type="string">
+  AWS endpoint URL. Useful for using a VPC endpoint.
+</ParamField>
+
 <Markdown src="/snippets/role-selection.mdx" />
 <Markdown src="/snippets/allowed-role-metadata-basic.mdx" />
 <Markdown src="/snippets/supports-streaming.mdx" />
 <Markdown src="/snippets/finish-reason.mdx" />
+
+## Modular API
+
+- `b.request` returns a fully signed SigV4 `HTTPRequest` pointing at the
+  Converse API.
+- Forward the request as-is. Do not mutate the headers; they already include
+  `Authorization`, `X-Amz-Date`, and (if needed) `X-Amz-Security-Token`.
+- Send the request immediately after building it. The signature is computed at
+  request time, so rebuilding gives you a fresh signature.
+- Streaming modular calls are not yet supported for Bedrock.
+
+```typescript TypeScript
+import { SignatureV4 } from "@aws-sdk/signature-v4"
+import { defaultProvider } from "@aws-sdk/credential-provider-node"
+import { HttpRequest } from "@aws-sdk/protocol-http"
+import { b } from 'baml_client'
+
+async function callBedrock() {
+  const req = await b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  const body = req.body.json() as any
+  const bodyString = JSON.stringify(body)
+  const url = new URL(req.url)
+  const region = (req.client_details.options?.region as string) ?? process.env.AWS_REGION ?? "us-east-1"
+
+  const signer = new SignatureV4({
+    service: "bedrock",
+    region,
+    credentials: defaultProvider(),
+  })
+
+  const unsigned = new HttpRequest({
+    protocol: url.protocol,
+    hostname: url.hostname,
+    path: url.pathname,
+    method: req.method,
+    headers: {
+      ...req.headers,
+      host: url.host,
+      "content-type": "application/json",
+    },
+    body: bodyString,
+  })
+
+  const signed = await signer.sign(unsigned)
+
+  const res = await fetch(req.url, {
+    method: req.method,
+    headers: signed.headers as Record<string, string>,
+    body: bodyString,
+  })
+
+  if (!res.ok) {
+    throw new Error(`Bedrock request failed: ${res.status}`)
+  }
+
+  const payload = await res.json()
+  const message = payload.output.message.content.find((block: any) => block.text)?.text ?? ''
+
+  return b.parse.ExtractResume(message)
+}
+```
+
+```python Python
+import json
+import requests
+from botocore.auth import SigV4Auth
+from botocore.awsrequest import AWSRequest
+import boto3
+from baml_client import b
+
+def call_bedrock():
+  req = b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  body = req.body.json()
+  body_bytes = json.dumps(body).encode("utf-8")
+
+  session = boto3.Session()
+  credentials = session.get_credentials().get_frozen_credentials()
+  region = req.client_details.options.get("region") or session.region_name or "us-east-1"
+
+  aws_request = AWSRequest(
+    method=req.method,
+    url=req.url,
+    data=body_bytes,
+    headers=dict(req.headers),
+  )
+  SigV4Auth(credentials, "bedrock", region).add_auth(aws_request)
+
+  response = requests.post(
+    req.url,
+    headers=dict(aws_request.headers.items()),
+    data=body_bytes,
+  )
+  response.raise_for_status()
+
+  payload = response.json()
+  message = payload["output"]["message"]["content"][0]["text"]
+  return b.parse.ExtractResume(message)
+```
 
 ## Provider request parameters
 These are other `options` that are passed through to the provider, without modification by BAML. For example if the request has a `temperature` field, you can define it in the client here so every call has that set.
@@ -494,12 +598,14 @@ Consult the specific provider's documentation for more information.
 
 | Model | Description |
 | --- | --- |
-| `anthropic.claude-3-5-sonnet-20240620-v1:0` | Smartest |
-| `anthropic.claude-3-haiku-20240307-v1:0` | Fastest + Cheapest |
-| `meta.llama3-8b-instruct-v1:0` | |
-| `meta.llama3-70b-instruct-v1:0` | |
-| `mistral.mistral-7b-instruct-v0:2` | |
-| `mistral.mixtral-8x7b-instruct-v0:1` | |
+#### Anthropic Claude (Latest Generation)
+- `anthropic.claude-opus-4-1-20250805-v1:0` - Most powerful coding
+- `anthropic.claude-sonnet-4-20250514-v1:0` - Best default, 1M context available
+- `anthropic.claude-3-5-haiku-20241022-v1:0` - Fast and efficient
+
+#### Meta Llama (Latest Generation)  
+- `meta.llama4-maverick-17b-instruct-v1:0` - Latest Llama 4
+- `meta.llama3-3-70b-instruct-v1:0` - Enhanced Llama 3.3
 
 Run `aws bedrock list-foundation-models | jq '.modelSummaries.[].modelId'` to see available models.
 
@@ -598,4 +704,3 @@ client<llm> MyClient {
 - Use `AWS_PROFILE` to manage multiple profiles
 - Run `aws configure list` to verify configuration
 </Accordion>
-

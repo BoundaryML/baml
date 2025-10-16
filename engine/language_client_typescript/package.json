@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml",
-  "version": "0.90.1",
+  "version": "0.211.2",
   "description": "BAML typescript bindings (package.json)",
   "repository": {
     "type": "git",
@@ -17,7 +17,8 @@
     "node-addon-api"
   ],
   "bin": {
-    "baml-cli": "cli.js"
+    "baml-cli": "cli.js",
+    "baml": "cli.js"
   },
   "files": [
     "./cli.js",
@@ -42,6 +43,14 @@
   ],
   "main": "./index.js",
   "types": "./index.d.ts",
+  "exports": {
+    ".": "./index.js",
+    "./native": "./native.js",
+    "./type_builder": "./type_builder.js",
+    "./errors": "./errors.js",
+    "./browser": "./browser.js",
+    "./logging": "./logging.js"
+  },
   "napi": {
     "binaryName": "baml",
     "targets": [
@@ -62,8 +71,9 @@
     "access": "public"
   },
   "scripts": {
-    "artifacts": "napi artifacts",
-    "build": "pnpm build:napi-release && pnpm build:ts_build",
+    "artifacts": "mkdir -p artifacts && napi artifacts",
+    "build": "pnpm build:napi-debug && pnpm build:ts_build && pnpm napi create-npm-dirs && pnpm artifacts",
+    "release": "pnpm build:napi-release && pnpm build:ts_build",
     "build:debug": "pnpm build:napi-debug && pnpm build:ts_build",
     "build:napi-release": "pnpm build:napi-debug --release",
     "build:napi-debug": "napi build --js ./native.js --dts ./native.d.ts --platform",
@@ -71,16 +81,16 @@
     "build:local": "pnpm build:debug && pnpm napi create-npm-dirs && pnpm artifacts",
     "build:napi-debug-local": "napi build -o ./artifacts --js ./native.js --dts ./native.d.ts --platform",
     "build:ts_build_local": "tsc ./typescript_src/*.ts --outDir ./artifacts --module nodenext --module nodenext --allowJs --declaration true --declarationMap true || true",
-    "format": "run-p format:biome format:rs format:toml",
-    "format:biome": "biome --write .",
-    "format:rs": "cargo fmt",
-    "prepublishOnly": "napi prepublish --no-gh-release",
+    "prepublishOnly": "napi create-npm-dirs && pnpm artifacts && napi prepublish --no-gh-release",
     "test": "jest --config jest.config.js",
-    "version": "napi version"
+    "version": "napi version",
+    "clean": "git clean -xdf .turbo node_modules target artifacts npm *.node",
+    "dev.skip": "cargo watch -x 'build' -s 'pnpm build:napi-debug && pnpm build:ts_build'",
+    "dev": "pnpm run build"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.7.3",
-    "@napi-rs/cli": "3.0.0-alpha.62",
+    "@napi-rs/cli": "3.0.4",
     "@types/jest": "^29.5.14",
     "@types/node": "^20.12.11",
     "jest": "^29.7.0",
@@ -101,10 +111,15 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
-    "moduleFileExtensions": ["ts", "js"],
+    "moduleFileExtensions": [
+      "ts",
+      "js"
+    ],
     "transform": {
       "^.+\\.ts$": "ts-jest"
     },
-    "testMatch": ["**/__test__/**/*.test.ts"]
+    "testMatch": [
+      "**/__test__/**/*.test.ts"
+    ]
   }
 }

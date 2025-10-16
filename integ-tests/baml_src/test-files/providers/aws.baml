@@ -30,9 +30,15 @@ function TestUniverseQuestion(question: UniverseQuestionInput) -> UniverseQuesti
   "#
 }
 
-
 function TestAwsInvalidRegion(input: string) -> string {
   client AwsBedrockInvalidRegion
+  prompt #"
+    Write a nice short story about {{ input }}. Keep it to 15 words or less.
+  "#
+}
+
+function TestAwsInvalidEndpoint(input: string) -> string {
+  client AwsBedrockInvalidEndpoint
   prompt #"
     Write a nice short story about {{ input }}. Keep it to 15 words or less.
   "#
@@ -82,6 +88,7 @@ test TestName {
     "#
   }
 }
+
 
 client<llm> AwsBedrockClaude37Client {
   provider "aws-bedrock"

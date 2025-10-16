@@ -21,11 +21,12 @@ import (
 )
 
 type Example struct {
-	A int64  `json:"a"`
-	B string `json:"b"`
+	Type string         `json:"type"`
+	A    Checked[int64] `json:"a"`
+	B    string         `json:"b"`
 }
 
-func (c *Example) Decode(holder *cffi.CFFIValueClass) {
+func (c *Example) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -39,14 +40,21 @@ func (c *Example) Decode(holder *cffi.CFFIValueClass) {
 		valueHolder := field.Value
 		switch key {
 
+		case "type":
+			c.Type = baml.Decode(valueHolder).Interface().(string)
+
 		case "a":
-			c.A = *baml.Decode(valueHolder).(*int64)
+			c.A = baml.DecodeChecked(valueHolder, func(inner *cffi.CFFIValueHolder) int64 {
+				return baml.Decode(inner).Interface().(int64)
+			})
 
 		case "b":
-			c.B = *baml.Decode(valueHolder).(*string)
+			c.B = baml.Decode(valueHolder).Interface().(string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Example", key))
+
 		}
 	}
 
@@ -54,6 +62,8 @@ func (c *Example) Decode(holder *cffi.CFFIValueClass) {
 
 func (c Example) Encode() (*cffi.CFFIValueHolder, error) {
 	fields := map[string]any{}
+
+	fields["type"] = c.Type
 
 	fields["a"] = c.A
 
@@ -74,12 +84,13 @@ func (u Example) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Example2 struct {
+	Type     string  `json:"type"`
 	Item     Example `json:"item"`
 	Element  string  `json:"element"`
 	Element2 string  `json:"element2"`
 }
 
-func (c *Example2) Decode(holder *cffi.CFFIValueClass) {
+func (c *Example2) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -93,17 +104,22 @@ func (c *Example2) Decode(holder *cffi.CFFIValueClass) {
 		valueHolder := field.Value
 		switch key {
 
+		case "type":
+			c.Type = baml.Decode(valueHolder).Interface().(string)
+
 		case "item":
-			c.Item = *baml.Decode(valueHolder).(*Example)
+			c.Item = baml.Decode(valueHolder).Interface().(Example)
 
 		case "element":
-			c.Element = *baml.Decode(valueHolder).(*string)
+			c.Element = baml.Decode(valueHolder).Interface().(string)
 
 		case "element2":
-			c.Element2 = *baml.Decode(valueHolder).(*string)
+			c.Element2 = baml.Decode(valueHolder).Interface().(string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Example2", key))
+
 		}
 	}
 
@@ -111,6 +127,8 @@ func (c *Example2) Decode(holder *cffi.CFFIValueClass) {
 
 func (c Example2) Encode() (*cffi.CFFIValueHolder, error) {
 	fields := map[string]any{}
+
+	fields["type"] = c.Type
 
 	fields["item"] = c.Item
 

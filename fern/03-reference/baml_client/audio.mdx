@@ -66,6 +66,50 @@ export function TestAudioInput() {
 }
 ```
 
+```go
+package main
+
+import (
+    "context"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func testAudioInput() error {
+    ctx := context.Background()
+    
+    // Create an Audio from a URL
+    aud, err := b.NewAudioFromUrl("https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg", nil)
+    if err != nil {
+        return err
+    }
+    
+    result, err := b.TestAudioInput(ctx, aud)
+    if err != nil {
+        return err
+    }
+
+    // Create an Audio from Base64 data
+    audioB64 := "SUQzAwAAAAABAAAAAAAAAAAAAAA..."
+    aud2, err := b.NewAudioFromBase64(audioB64, stringPtr("audio/mp3"))
+    if err != nil {
+        return err
+    }
+    
+    result2, err := b.TestAudioInput(ctx, aud2)
+    if err != nil {
+        return err
+    }
+    
+    return nil
+}
+
+// Helper function for string pointer
+func stringPtr(s string) *string {
+    return &s
+}
+```
+
 ```ruby
 # Ruby implementation is in development.
 ```

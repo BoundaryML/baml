@@ -16,6 +16,55 @@ use crate::{
 };
 
 impl TypeCoercer for LiteralValue {
+    fn try_cast(
+        &self,
+        ctx: &ParsingContext,
+        target: &TypeIR,
+        value: Option<&jsonish::Value>,
+    ) -> Option<BamlValueWithFlags> {
+        let mut result = match self {
+            LiteralValue::Int(literal_int) => match value {
+                Some(crate::jsonish::Value::Number(number, _))
+                    if number.as_i64().map(|n| n == *literal_int).unwrap_or(false) =>
+                {
+                    Some(BamlValueWithFlags::Int(
+                        (number.as_i64().unwrap(), target).into(),
+                    ))
+                }
+                _ => None,
+            },
+            LiteralValue::Bool(literal_bool) => match value {
+                Some(crate::jsonish::Value::Boolean(b)) if b == literal_bool => {
+                    Some(BamlValueWithFlags::Bool((*b, target).into()))
+                }
+                _ => None,
+            },
+            LiteralValue::String(literal_str) => match value {
+                Some(crate::jsonish::Value::String(s, _)) if s == literal_str => {
+                    Some(BamlValueWithFlags::String((s.to_string(), target).into()))
+                }
+                _ => None,
+            },
+        };
+
+        // Check completion state exactly like coerce methods do
+        if let Some(v) = value {
+            match v.completion_state() {
+                baml_types::CompletionState::Complete => {}
+                baml_types::CompletionState::Incomplete => {
+                    result
+                        .iter_mut()
+                        .for_each(|baml_value| baml_value.add_flag(Flag::Incomplete));
+                }
+                baml_types::CompletionState::Pending => {
+                    unreachable!("jsonish::Value may never be in a Pending state.")
+                }
+            }
+        }
+
+        result
+    }
+
     fn coerce(
         &self,
         ctx: &ParsingContext,
@@ -89,7 +138,7 @@ impl TypeCoercer for LiteralValue {
                 // second element is the list of aliases.
                 let candidates = vec![(literal_str.as_str(), vec![literal_str.clone()])];
 
-                let literal_match = match_string(ctx, target, Some(value), &candidates)?;
+                let literal_match = match_string(ctx, target, Some(value), &candidates, true)?;
 
                 Ok(BamlValueWithFlags::String(literal_match))
             }

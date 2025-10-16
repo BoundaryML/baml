@@ -44,7 +44,7 @@ client<llm> Claude2 {
 }
 
 function ExtractResume(resume: string, img: image?) -> Resume {
-    client Claude2
+    client GPT4o
     prompt #"
         {{ AddRole("Software Engineer") }}
 

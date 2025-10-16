@@ -66,7 +66,7 @@ https://boundaryml.com/discord
             raise ImportError(f"""
 {msg}
 
-Please upgrade baml-py to version "{target_version}".
+Please set baml-py to version "{target_version}".
 
 $ pip install {self._target_package_name()}
 $ uv add {self._target_package_name()}

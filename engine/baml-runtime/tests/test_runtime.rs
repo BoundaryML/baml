@@ -12,11 +12,12 @@ mod internal_tests {
 
     use baml_ids::FunctionCallId;
     // use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
-    use baml_runtime::InternalRuntimeInterface;
     use baml_runtime::{
         internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
     };
+    use baml_runtime::{InternalRuntimeInterface, TripWire};
     use baml_types::BamlValue;
+    use internal_baml_core::FeatureFlags;
     use wasm_bindgen_test::*;
 
     #[tokio::test]
@@ -88,6 +89,7 @@ mod internal_tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+            FeatureFlags::new(),
         )?;
         log::info!("Runtime:");
 
@@ -107,13 +109,15 @@ mod internal_tests {
                 None,
                 None,
                 None,
+                None,
                 HashMap::new(),
+                TripWire::new(None),
             )
             .await;
 
         // runtime.get_test_params(function_name, test_name, ctx);
 
-        // runtime.internal().render_prompt(function_name, ctx, params, node_index)
+        // runtime.render_prompt(function_name, ctx, params, node_index)
 
         assert!(res.is_ok(), "Result: {:#?}", res.err());
 
@@ -171,10 +175,11 @@ mod internal_tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+            FeatureFlags::new(),
         )?;
         log::info!("Runtime:");
 
-        let missing_env_vars = runtime.internal().ir().required_env_vars();
+        let missing_env_vars = runtime.ir.required_env_vars();
 
         let ctx = runtime
             .create_ctx_manager(BamlValue::String("test".to_string()), None)
@@ -182,10 +187,7 @@ mod internal_tests {
 
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
 
-        let render_prompt_future =
-            runtime
-                .internal()
-                .render_prompt(function_name, &ctx, &params, Some(0));
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, Some(0));
 
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
@@ -248,6 +250,7 @@ mod internal_tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+            FeatureFlags::new(),
         )?;
         log::info!("Runtime:");
 
@@ -257,10 +260,7 @@ mod internal_tests {
 
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
 
-        let render_prompt_future =
-            runtime
-                .internal()
-                .render_prompt(function_name, &ctx, &params, Some(0));
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, Some(0));
 
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
@@ -288,6 +288,7 @@ mod internal_tests {
                 "OPENAI_API_KEY",
             )]
             .into(),
+            FeatureFlags::new(),
         )
     }
 
@@ -343,10 +344,7 @@ test ImageReceiptTest {
         let function_name = "ExtractReceipt";
         let test_name = "ImageReceiptTest";
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
-        let render_prompt_future =
-            runtime
-                .internal()
-                .render_prompt(function_name, &ctx, &params, None);
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, None);
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
@@ -424,10 +422,7 @@ test TestName {
         let function_name = "Bot";
         let test_name = "TestName";
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
-        let render_prompt_future =
-            runtime
-                .internal()
-                .render_prompt(function_name, &ctx, &params, None);
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, None);
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
@@ -492,10 +487,7 @@ test TestTree {
         let function_name = "BuildTree";
         let test_name = "TestTree";
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
-        let render_prompt_future =
-            runtime
-                .internal()
-                .render_prompt(function_name, &ctx, &params, None);
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, None);
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
@@ -546,10 +538,7 @@ test RunFoo2Test {
         let function_name = "RunFoo2";
         let test_name = "RunFoo2Test";
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
-        let render_prompt_future =
-            runtime
-                .internal()
-                .render_prompt(function_name, &ctx, &params, None);
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, None);
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
@@ -594,10 +583,7 @@ test RecursiveAliasCycle {
         let function_name = "RecursiveAliasCycle";
         let test_name = "RecursiveAliasCycle";
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
-        let render_prompt_future =
-            runtime
-                .internal()
-                .render_prompt(function_name, &ctx, &params, None);
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, None);
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
@@ -623,13 +609,18 @@ test RecursiveAliasCycle {
 
         let ctx = runtime.create_ctx_manager(BamlValue::String("test".to_string()), None);
 
+        let on_event = if false { Some(|_| {}) } else { None };
+        let on_tick = if false { Some(|| {}) } else { None };
         let run_test_future = runtime.run_test(
             function_name,
             test_name,
             &ctx,
-            Some(|r| {}),
+            on_event,
             None,
             HashMap::new(),
+            None,
+            TripWire::new(None),
+            on_tick,
         );
         let (res, call) = runtime.async_runtime.block_on(run_test_future);
 
@@ -1065,13 +1056,18 @@ test RecursiveAliasCycle {
         let ctx = runtime.create_ctx_manager(BamlValue::String("test".to_string()), None);
 
         // First call with initial env var
+        let on_event = if false { Some(|_| {}) } else { None };
+        let on_tick = if false { Some(|| {}) } else { None };
         let run_test_future = runtime.run_test(
             "Test",
             "TestEnvVars",
             &ctx,
-            Some(|r| {}),
+            on_event,
             None,
             HashMap::new(),
+            None,
+            TripWire::new(None),
+            on_tick,
         );
         let (res1, _) = runtime.async_runtime.block_on(run_test_future);
         // Get the first client instance
@@ -1084,9 +1080,12 @@ test RecursiveAliasCycle {
             "Test",
             "TestEnvVars",
             &ctx,
-            Some(|r| {}),
+            on_event,
             None,
             env_vars2.clone(),
+            None,
+            TripWire::new(None),
+            on_tick,
         );
         let (res2, _) = runtime.async_runtime.block_on(run_test_future);
         let client2 = runtime.llm_provider_from_function(

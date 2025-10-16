@@ -158,3 +158,15 @@ test_deserializer!(
     ),
     [1234]
 );
+
+test_deserializer!(
+    test_list_streaming_inside_json_block,
+    "",
+    r#"```json
+["a","#,
+    TypeIR::List(
+        TypeIR::Primitive(TypeValue::String, TypeMeta::default()).into(),
+        TypeMeta::default()
+    ),
+    ["a"]
+);

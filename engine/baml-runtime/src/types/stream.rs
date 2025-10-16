@@ -8,6 +8,7 @@ use baml_types::{
 };
 use internal_baml_core::ir::repr::IntermediateRepr;
 use serde_json::json;
+use stream_cancel::Tripwire;
 
 use crate::{
     client_registry::ClientRegistry,
@@ -18,7 +19,7 @@ use crate::{
     tracing::BamlTracer,
     tracingv2::storage::storage::{Collector, BAML_TRACER},
     type_builder::TypeBuilder,
-    FunctionResult, IntoBamlError, PreparedFunctionArgs, RuntimeContextManager,
+    FunctionResult, IntoBamlError, PreparedFunctionArgs, RuntimeContextManager, TripWire,
 };
 
 /// Wrapper that holds a stream of responses from a BAML function call.
@@ -36,6 +37,8 @@ pub struct FunctionResultStream {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) tokio_runtime: Arc<tokio::runtime::Runtime>,
     pub(crate) collectors: Vec<Arc<Collector>>,
+    pub(crate) tags: Option<HashMap<String, String>>,
+    pub(crate) cancel_tripwire: Arc<TripWire>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -63,8 +66,9 @@ first.scope.clone();
 
 impl FunctionResultStream {
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn run_sync<F>(
+    pub fn run_sync<F, G>(
         &mut self,
+        on_tick: Option<G>,
         on_event: Option<F>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
@@ -73,14 +77,16 @@ impl FunctionResultStream {
     ) -> (Result<FunctionResult>, baml_ids::FunctionCallId)
     where
         F: Fn(FunctionResult),
+        G: Fn(),
     {
         let rt = self.tokio_runtime.clone();
-        let fut = self.run(on_event, ctx, tb, cb, env_vars);
+        let fut = self.run(on_tick, on_event, ctx, tb, cb, env_vars);
         rt.block_on(fut)
     }
 
-    pub async fn run<F>(
+    pub async fn run<F, G>(
         &mut self,
+        on_tick: Option<G>,
         on_event: Option<F>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
@@ -89,6 +95,7 @@ impl FunctionResultStream {
     ) -> (Result<FunctionResult>, baml_ids::FunctionCallId)
     where
         F: Fn(FunctionResult),
+        G: Fn(),
     {
         let mut local_orchestrator = Vec::new();
         std::mem::swap(&mut local_orchestrator, &mut self.orchestrator);
@@ -103,6 +110,7 @@ impl FunctionResultStream {
             true,
             true,
             (!self.collectors.is_empty()).then(|| self.collectors.clone()),
+            self.tags.as_ref(),
         );
         let rctx = ctx.create_ctx(tb, cb, env_vars, call.new_call_id_stack.clone());
         let res = match rctx {
@@ -114,9 +122,11 @@ impl FunctionResultStream {
                         &rctx,
                         &self.renderer,
                         &baml_types::BamlValue::Map(self.prepared_func.value.clone()),
+                        on_tick,
                         |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, true),
                         |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, false),
                         on_event,
+                        self.cancel_tripwire.trip_wire(),
                     )
                     .await;
 
@@ -143,9 +153,12 @@ impl FunctionResultStream {
         let trace_event = TraceEvent::new_function_end(
             call_stack,
             match &res {
-                Ok(result) => Ok(baml_types::BamlValueWithMeta::<TypeNonStreaming>::Null(
-                    TypeNonStreaming::null(),
-                )),
+                Ok(result) => match result.result_with_constraints_content() {
+                    Ok(value) => Ok(value
+                        .0
+                        .map_meta(|f| f.3.to_non_streaming_type(self.ir.as_ref()))),
+                    Err(e) => Err((&e).to_baml_error()),
+                },
                 Err(e) => Err(e.to_baml_error()),
             },
         );

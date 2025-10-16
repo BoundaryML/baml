@@ -52,53 +52,28 @@ impl Decode for BamlValue {
 
                     BamlValue::Enum(enum_name, enum_value)
                 }
-                Value::MediaValue(cffi_value_media) => {
-                    let media_type = cffi_value_media
-                        .media_type
-                        .ok_or(anyhow::anyhow!("Media value missing media_type"))?;
-
-                    let media_value = cffi_value_media
-                        .media_value
-                        .ok_or(anyhow::anyhow!("Media value missing media_value"))?;
-
-                    let baml_media_type = match media_type.media() {
-                        crate::baml::cffi::MediaTypeEnum::Image => baml_types::BamlMediaType::Image,
-                        crate::baml::cffi::MediaTypeEnum::Audio => baml_types::BamlMediaType::Audio,
-                    };
-
-                    let mime_type = media_value.mime_type;
-
-                    let baml_media = match media_value.content {
-                        Some(crate::baml::cffi::cffi_media_value::Content::UrlContent(
-                            url_content,
-                        )) => {
-                            let url = url_content.url;
-                            baml_types::BamlMedia::url(baml_media_type, url, mime_type)
+                Value::ObjectValue(cffi_value_object) => {
+                    let inner = cffi_value_object.object.unwrap();
+                    match inner {
+                        crate::baml::cffi::cffi_value_raw_object::Object::Media(
+                            cffi_raw_object,
+                        ) => {
+                            let media_object =
+                                crate::raw_ptr_wrapper::RawPtrType::decode(cffi_raw_object)?;
+                            let baml_media = match media_object {
+                                crate::raw_ptr_wrapper::RawPtrType::Media(media) => {
+                                    media.as_ref().clone()
+                                }
+                                other => {
+                                    anyhow::bail!("Expected media object, got: {:?}", other.name());
+                                }
+                            };
+                            BamlValue::Media(baml_media)
                         }
-                        Some(crate::baml::cffi::cffi_media_value::Content::Base64Content(
-                            base64_content,
-                        )) => {
-                            let data = base64_content.data;
-                            baml_types::BamlMedia::base64(baml_media_type, data, mime_type)
+                        other => {
+                            anyhow::bail!("Unexpected object type: {:?}", other)
                         }
-                        Some(crate::baml::cffi::cffi_media_value::Content::FileContent(
-                            file_content,
-                        )) => {
-                            let relpath = file_content.path;
-                            let baml_path = std::path::PathBuf::from(&relpath);
-                            baml_types::BamlMedia::file(
-                                baml_media_type,
-                                baml_path,
-                                relpath,
-                                mime_type,
-                            )
-                        }
-                        None => {
-                            return Err(anyhow::anyhow!("Media value missing content"));
-                        }
-                    };
-
-                    BamlValue::Media(baml_media)
+                    }
                 }
                 Value::TupleValue(cffi_value_tuple) => {
                     let values = cffi_value_tuple

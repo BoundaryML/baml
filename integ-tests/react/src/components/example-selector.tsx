@@ -6,12 +6,12 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@baml/ui/select';
 import {
   exampleParser,
   getExampleDisplayName,
   hookConfigMap,
-} from '@/lib/store';
+} from '~/lib/store';
 import { useQueryState } from 'nuqs';
 import { useCallback } from 'react';
 import type { FunctionNames } from '../../baml_client/react/hooks';

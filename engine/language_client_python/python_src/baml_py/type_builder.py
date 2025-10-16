@@ -19,6 +19,9 @@ class TypeBuilder:
         self.__tb = _TypeBuilder()
         self.__runtime = runtime
 
+    def reset(self):
+        self.__tb.reset()
+
     def __str__(self) -> str:
         """
         returns a comprehensive string representation of the typebuilder.
@@ -111,28 +114,21 @@ class TypeBuilder:
 class NewClassBuilder:
     def __init__(self, tb: _TypeBuilder, name: str):
         self.__bldr = tb.class_(name)
-        self.__properties: typing.Set[str] = set()
-        self.__props = NewClassProperties(self.__bldr, self.__properties)
 
     def type(self) -> FieldType:
         return self.__bldr.field()
 
     def list_properties(self) -> typing.List[typing.Tuple[str, "ClassPropertyBuilder"]]:
-        return [
-            (name, ClassPropertyBuilder(self.__bldr.property(name)))
-            for name in self.__properties
-        ]
+        return self.__bldr.list_properties()
+
+    def reset(self):
+        self.__bldr.reset()
+
+    def remove_property(self, name: str):
+        self.__bldr.remove_property(name)
 
     def add_property(self, name: str, type: FieldType) -> "ClassPropertyBuilder":
-        if name in self.__properties:
-            raise ValueError(f"Property {name} already exists.")
-        # BUG: we don't add to self.__properties here
-        # correct fix is to implement this logic in rust, not python
         return ClassPropertyBuilder(self.__bldr.property(name).type(type))
-
-    @property
-    def props(self) -> "NewClassProperties":
-        return self.__props
 
 
 class ClassPropertyBuilder:
@@ -151,17 +147,6 @@ class ClassPropertyBuilder:
 class ClassPropertyViewer:
     def __init__(self, bldr: _ClassPropertyBuilder):
         self.__bldr = bldr
-
-
-class NewClassProperties:
-    def __init__(self, cls_bldr: ClassBuilder, properties: typing.Set[str]):
-        self.__bldr = cls_bldr
-        self.__properties = properties
-
-    def __getattr__(self, name: str) -> "ClassPropertyBuilder":
-        if name not in self.__properties:
-            raise AttributeError(f"Property {name} not found.")
-        return ClassPropertyBuilder(self.__bldr.property(name))
 
 
 class NewEnumBuilder:

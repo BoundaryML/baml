@@ -16,9 +16,9 @@ pub mod functions;
 pub mod type_aliases;
 pub mod unions;
 
-pub(crate) fn stream_type_to_go(field: &TypeStreaming, _lookup: &impl TypeLookups) -> TypeGo {
+pub(crate) fn stream_type_to_go(field: &TypeStreaming, lookup: &impl TypeLookups) -> TypeGo {
     use TypeStreaming as T;
-    let recursive_fn = |field| stream_type_to_go(field, _lookup);
+    let recursive_fn = |field| stream_type_to_go(field, lookup);
     let meta = stream_meta_to_go(field.meta());
 
     let types_pkg: Package = Package::types();
@@ -64,14 +64,23 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, _lookup: &impl TypeLookup
             name,
             meta: alias_meta,
             ..
-        } => TypeGo::TypeAlias {
-            package: match alias_meta.streaming_behavior.done {
-                true => types_pkg.clone(),
-                false => stream_pkg.clone(),
-            },
-            name: name.clone(),
-            meta,
-        },
+        } => {
+            if lookup.expand_recursive_type(name).is_err() {
+                TypeGo::Any {
+                    reason: format!("Recursive type alias {name} is not supported in Go"),
+                    meta,
+                }
+            } else {
+                TypeGo::TypeAlias {
+                    package: match alias_meta.streaming_behavior.done {
+                        true => types_pkg.clone(),
+                        false => stream_pkg.clone(),
+                    },
+                    name: name.clone(),
+                    meta,
+                }
+            }
+        }
         T::Tuple(..) => TypeGo::Any {
             reason: "tuples are not supported in Go".to_string(),
             meta,
@@ -110,7 +119,16 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, _lookup: &impl TypeLookup
                 name.sort();
                 let name = name.join("Or");
                 TypeGo::Union {
-                    package: stream_pkg.clone(),
+                    package: match field.mode(&baml_types::StreamingMode::Streaming, lookup) {
+                        Ok(baml_types::StreamingMode::NonStreaming) => types_pkg.clone(),
+                        Ok(baml_types::StreamingMode::Streaming) => stream_pkg.clone(),
+                        Err(e) => {
+                            return TypeGo::Any {
+                                reason: format!("Failed to get mode for field type: {e}"),
+                                meta,
+                            }
+                        }
+                    },
                     name: format!("Union{num_options}{name}"),
                     meta,
                 }
@@ -127,15 +145,25 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, _lookup: &impl TypeLookup
                 let mut meta = meta;
                 meta.make_optional();
                 TypeGo::Union {
-                    package: match union_meta.streaming_behavior.done {
-                        true => types_pkg.clone(),
-                        false => stream_pkg.clone(),
+                    package: match field.mode(&baml_types::StreamingMode::Streaming, lookup) {
+                        Ok(baml_types::StreamingMode::NonStreaming) => types_pkg.clone(),
+                        Ok(baml_types::StreamingMode::Streaming) => stream_pkg.clone(),
+                        Err(e) => {
+                            return TypeGo::Any {
+                                reason: format!("Failed to get mode for field type: {e}"),
+                                meta,
+                            }
+                        }
                     },
                     name: format!("Union{num_options}{name}"),
                     meta,
                 }
             }
         },
+        T::Top(_) => panic!(
+            "TypeGeneric::Top should have been resolved by the compiler before code generation. \
+             This indicates a bug in the type resolution phase."
+        ),
     };
 
     type_go
@@ -149,7 +177,10 @@ pub(crate) fn type_to_go(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
     let type_pkg = Package::types();
 
     let type_go = match field {
-        T::Primitive(type_value, _) => type_value.into(),
+        T::Primitive(type_value, _) => {
+            let t: TypeGo = type_value.into();
+            t.with_meta(meta)
+        }
         T::Enum { name, dynamic, .. } => TypeGo::Enum {
             package: type_pkg.clone(),
             name: name.clone(),
@@ -181,11 +212,20 @@ pub(crate) fn type_to_go(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
             reason: "arrow types are not supported in Go".to_string(),
             meta,
         },
-        T::RecursiveTypeAlias { name, .. } => TypeGo::TypeAlias {
-            package: type_pkg.clone(),
-            name: name.clone(),
-            meta,
-        },
+        T::RecursiveTypeAlias { name, .. } => {
+            if _lookup.expand_recursive_type(name).is_err() {
+                TypeGo::Any {
+                    reason: format!("Recursive type alias {name} is not supported in Go"),
+                    meta,
+                }
+            } else {
+                TypeGo::TypeAlias {
+                    package: type_pkg.clone(),
+                    name: name.clone(),
+                    meta,
+                }
+            }
+        }
         T::Union(union_type_generic, union_meta) => match union_type_generic.view() {
             baml_types::ir_type::UnionTypeViewGeneric::Null => TypeGo::Any {
                 reason: "Null types are not supported in Go".to_string(),
@@ -238,6 +278,10 @@ pub(crate) fn type_to_go(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
                 }
             }
         },
+        T::Top(_) => panic!(
+            "TypeGeneric::Top should have been resolved by the compiler before code generation. \
+             This indicates a bug in the type resolution phase."
+        ),
     };
 
     type_go
@@ -293,7 +337,11 @@ impl From<&TypeValue> for TypeGo {
             TypeValue::Bool => TypeGo::Bool(None, meta),
             TypeValue::Null => TypeGo::Any {
                 reason: "Null types are not supported in Go".to_string(),
-                meta,
+                meta: {
+                    let mut meta = meta;
+                    meta.make_optional();
+                    meta
+                },
             },
             TypeValue::Media(baml_media_type) => TypeGo::Media(baml_media_type.into(), meta),
         }
@@ -305,6 +353,8 @@ impl From<&BamlMediaType> for MediaTypeGo {
         match baml_media_type {
             BamlMediaType::Image => MediaTypeGo::Image,
             BamlMediaType::Audio => MediaTypeGo::Audio,
+            BamlMediaType::Pdf => MediaTypeGo::Pdf,
+            BamlMediaType::Video => MediaTypeGo::Video,
         }
     }
 }

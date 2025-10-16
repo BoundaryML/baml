@@ -63,6 +63,11 @@ impl LanguageFeatures for PyLanguageFeatures {
             .functions
             .iter()
             .map(|f| ir_to_py::functions::ir_function_to_py(f, &pkg))
+            .chain(
+                ir.expr_fns
+                    .iter()
+                    .map(|f| ir_to_py::functions::ir_expr_fn_to_py(f, &pkg)),
+            )
             .collect::<Vec<_>>();
         collector.add_file("async_client.py", render_async_client(&functions, &pkg)?)?;
 

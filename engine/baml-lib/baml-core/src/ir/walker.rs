@@ -26,6 +26,14 @@ impl<'a> Walker<'a, &'a ExprFunctionNode> {
         self.elem().inputs()
     }
 
+    pub fn output(&self) -> &'a baml_types::TypeIR {
+        &self.elem().output
+    }
+
+    pub fn span(&self) -> Option<&crate::Span> {
+        self.item.attributes.span.as_ref()
+    }
+
     pub fn walk_tests(
         &'a self,
     ) -> impl Iterator<Item = Walker<'a, (&'a ExprFunctionNode, &'a TestCase)>> {
@@ -44,6 +52,18 @@ impl<'a> Walker<'a, &'a ExprFunctionNode> {
         test_name: &str,
     ) -> Option<Walker<'a, (&'a ExprFunctionNode, &'a TestCase)>> {
         self.walk_tests().find(|t| t.item.1.elem.name == test_name)
+    }
+
+    pub fn graph(&self) -> String {
+        // example mermaid graph
+        r#"
+        graph TD
+            A[Function] --> B[Function]
+            B --> C[Function]
+            C --> D[Function]
+            D --> E[Function]
+        "#
+        .to_string()
     }
 }
 
@@ -153,6 +173,14 @@ impl<'a> Walker<'a, &'a Enum> {
             .transpose()
     }
 
+    pub fn description(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
+        self.item
+            .attributes
+            .description()
+            .map(|v| v.resolve(ctx))
+            .transpose()
+    }
+
     pub fn walk_values(&'a self) -> impl Iterator<Item = Walker<'a, &'a EnumValue>> {
         self.item.elem.values.iter().map(|v| Walker {
             ir: self.ir,
@@ -251,6 +279,13 @@ impl<'a> Walker<'a, (&'a ExprFunctionNode, &'a TestCase)> {
             .map(|(k, v)| Ok((k.clone(), v.resolve_serde::<BamlValue>(ctx))))
             .collect()
     }
+
+    pub fn function(&'a self) -> Walker<'a, &'a ExprFunctionNode> {
+        Walker {
+            ir: self.ir,
+            item: self.item.0,
+        }
+    }
 }
 
 impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {
@@ -316,6 +351,14 @@ impl<'a> Walker<'a, &'a Class> {
         self.item
             .attributes
             .alias()
+            .map(|v| v.resolve(ctx))
+            .transpose()
+    }
+
+    pub fn description(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
+        self.item
+            .attributes
+            .description()
             .map(|v| v.resolve(ctx))
             .transpose()
     }

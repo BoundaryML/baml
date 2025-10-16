@@ -6,7 +6,7 @@ use pyo3::{
     Bound, IntoPyObject, IntoPyObjectExt, Py, PyAny, PyErr, PyObject, Python,
 };
 
-use super::{BamlAudioPy, BamlImagePy};
+use super::{BamlAudioPy, BamlImagePy, BamlPdfPy, BamlVideoPy};
 use crate::{errors::BamlError, runtime::BamlRuntime};
 
 crate::lang_wrapper!(FunctionResult, baml_runtime::FunctionResult);
@@ -173,6 +173,10 @@ pub(crate) fn pythonize_strict(
             }
             baml_types::BamlMediaType::Audio => {
                 BamlAudioPy::from(baml_media.clone()).into_py_any(py)
+            }
+            baml_types::BamlMediaType::Pdf => BamlPdfPy::from(baml_media.clone()).into_py_any(py),
+            baml_types::BamlMediaType::Video => {
+                BamlVideoPy::from(baml_media.clone()).into_py_any(py)
             }
         },
         BamlValueWithMeta::Enum(enum_name, ref value, _) => {

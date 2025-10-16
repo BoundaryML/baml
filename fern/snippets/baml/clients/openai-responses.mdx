@@ -1,0 +1,12 @@
+```baml title="baml_src/clients.baml"
+client<llm> OpenAIResponses {
+  provider openai-responses
+  options {
+    model gpt-4.1
+    api_key env.OPENAI_API_KEY
+    reasoning {
+      effort medium
+    }
+  }
+}
+```

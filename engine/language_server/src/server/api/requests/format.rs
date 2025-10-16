@@ -29,9 +29,6 @@ impl SyncRequestHandler for DocumentFormatting {
         params: DocumentFormattingParams,
     ) -> Result<Option<Vec<lsp_types::TextEdit>>> {
         let url = params.text_document.uri;
-        if !url.to_string().contains("baml_src") {
-            return Ok(None);
-        }
 
         // let url = &params.text_document.uri;
         // let path = url
@@ -44,7 +41,7 @@ impl SyncRequestHandler for DocumentFormatting {
         //     .project_db_for_path_mut(path)
         //     .expect("Ensured that a project db exists");
         // let document_key = DocumentKey::from_url(
-        //     &PathBuf::from(project.lock().unwrap().baml_project.root_dir_name.clone()),
+        //     &PathBuf::from(project.lock().baml_project.root_dir_name.clone()),
         //     &url,
         // )
         // .internal_error()?;

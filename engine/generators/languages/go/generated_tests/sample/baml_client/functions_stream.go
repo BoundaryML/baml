@@ -28,17 +28,19 @@ type stream struct{}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
+	IsError   bool
+	Error     error
 	IsFinal   bool
 	as_final  *TFinal
 	as_stream *TStream
 }
 
-func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-	return *s.as_final
+func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+	return s.as_final
 }
 
-func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-	return *s.as_stream
+func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+	return s.as_stream
 }
 
 // / Streaming version of Bar
@@ -62,7 +64,15 @@ func (*stream) Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -70,46 +80,39 @@ func (*stream) Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "Bar", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "Bar", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.Union2ExampleOrExample2)
+				channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := *(result.Data).(*types.Union2ExampleOrExample2)
-					channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := *(result.StreamData).(*stream_types.Union2ExampleOrExample2)
-					channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.Union2ExampleOrExample2)
+				channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }
@@ -135,7 +138,15 @@ func (*stream) Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -143,46 +154,39 @@ func (*stream) Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 		panic(wrapped_err)
 	}
 
-	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "Foo", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "Foo", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
 
 	channel := make(chan StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2])
 	go func() {
-		defer func() {
-			internal_ctx.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					IsError: true,
+					Error:   result.Error,
+				}
 				close(channel)
 				return
-			case result, ok := <-internal_channel:
-				if !ok {
-					close(channel)
-					return
+			}
+			if result.HasData {
+				data := (result.Data).(types.Union2ExampleOrExample2)
+				channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					IsFinal:  true,
+					as_final: &data,
 				}
-				if result.Error != nil {
-					close(channel)
-					return
-				}
-				if result.HasData {
-					data := *(result.Data).(*types.Union2ExampleOrExample2)
-					channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
-						IsFinal:  true,
-						as_final: &data,
-					}
-				} else {
-					data := *(result.StreamData).(*stream_types.Union2ExampleOrExample2)
-					channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
-						IsFinal:   false,
-						as_stream: &data,
-					}
+			} else {
+				data := (result.StreamData).(stream_types.Union2ExampleOrExample2)
+				channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					IsFinal:   false,
+					as_stream: &data,
 				}
 			}
 		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
 	}()
 	return channel, nil
 }

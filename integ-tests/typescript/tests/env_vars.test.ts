@@ -1,3 +1,4 @@
+import { getLogLevel } from "@boundaryml/baml";
 import { resetBamlEnvVars, traceAsync, traceSync } from "../baml_client";
 import { b } from "./test-setup";
 
@@ -51,5 +52,11 @@ describe("Env Vars Tests", () => {
     );
     const secondHeaders = secondResult.headers as Record<string, string>;
     expect(secondHeaders["authorization"]).toBe("Bearer sk-new-key");
+  });
+
+  it("should reflect BAML_LOG changes in log level", async () => {
+    process.env.BAML_LOG = "WARN";
+    const result = await b.request.ExtractPeople("My name is John. I am 30 years old.");
+    expect(getLogLevel()).toBe("WARN");
   });
 });

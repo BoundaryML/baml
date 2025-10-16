@@ -14,8 +14,9 @@ use cowstr::CowStr;
 use internal_baml_core::ir::ir_hasher;
 use serde::Serialize;
 
-use super::InternalBamlRuntime;
-use crate::{internal::ir_features::WithInternal, tracingv2::publisher::TypeLookup};
+use crate::{
+    internal::ir_features::WithInternal, tracingv2::publisher::rpc_converters::TypeLookup,
+};
 
 /// Type alias for a value with its dependencies
 pub type WithDependency<T> = (Arc<T>, Arc<Vec<Arc<BamlTypeId>>>);
@@ -82,13 +83,13 @@ impl TypeLookup for AstSignatureWrapper {
     }
 }
 
-impl TryFrom<(Arc<InternalBamlRuntime>, HashMap<String, String>)> for AstSignatureWrapper {
+impl TryFrom<(Arc<crate::BamlRuntime>, HashMap<String, String>)> for AstSignatureWrapper {
     type Error = anyhow::Error;
 
     fn try_from(
-        (ir_runtime, env_vars): (Arc<InternalBamlRuntime>, HashMap<String, String>),
+        (runtime, env_vars): (Arc<crate::BamlRuntime>, HashMap<String, String>),
     ) -> Result<Self, Self::Error> {
-        let ir_signature = ir_hasher::IRSignature::new_from_ir(&ir_runtime.ir)?;
+        let ir_signature = ir_hasher::IRSignature::new_from_ir(runtime.ir())?;
 
         let name_to_baml_type_id_map: HashMap<String, Arc<BamlTypeId>> = ir_signature
             .classes
@@ -224,7 +225,7 @@ impl TryFrom<(Arc<InternalBamlRuntime>, HashMap<String, String>)> for AstSignatu
             )
             .collect();
 
-        let source_code = ir_runtime
+        let source_code = runtime
             .source_files
             .iter()
             .map(|file| (file.path_buf().clone(), CowStr::from(file.as_str())))

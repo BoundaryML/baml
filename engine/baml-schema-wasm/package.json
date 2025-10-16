@@ -1,0 +1,9 @@
+{
+  "name": "@gloo-ai/baml-schema-wasm",
+  "version": "0.86.1",
+  "description": "The WASM package for baml-fmt",
+  "main": "./src/baml_schema_build.js",
+  "scripts": {
+    "clean": "git clean -xdf .turbo node_modules"
+  }
+}

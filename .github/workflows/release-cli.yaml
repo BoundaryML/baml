@@ -2,7 +2,7 @@ name: Release BAML CLI
 
 on:
   release:
-    types: [published, unpublished, created, edited, prereleased, drafted]
+    types: [published, unpublished, created, edited, prereleased]
 
 jobs:
   build-cli:

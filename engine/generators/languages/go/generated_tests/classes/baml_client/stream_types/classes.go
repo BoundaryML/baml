@@ -25,7 +25,7 @@ type SimpleClass struct {
 	Words  baml.StreamState[*string] `json:"words"`
 }
 
-func (c *SimpleClass) Decode(holder *cffi.CFFIValueClass) {
+func (c *SimpleClass) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -40,37 +40,17 @@ func (c *SimpleClass) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "digits":
-			c.Digits = func(param *cffi.CFFIValueHolder) *int64 {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *int64\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					return (result).(*int64)
-				}(decoded)
-			}(valueHolder)
+			c.Digits = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "words":
 			c.Words = baml.DecodeStreamingState(valueHolder, func(inner *cffi.CFFIValueHolder) *string {
-				return func(param *cffi.CFFIValueHolder) *string {
-					fmt.Printf("\n=== FIELD DECODE ===\n")
-					fmt.Printf("Expecting type: *string\n")
-					fmt.Printf("===================\n")
-					decoded := baml.Decode(param)
-					return func(result any) *string {
-						if result == nil {
-							return nil
-						}
-						return (result).(*string)
-					}(decoded)
-				}(inner)
+				return baml.Decode(inner).Interface().(*string)
 			})
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class SimpleClass", key))
+
 		}
 	}
 

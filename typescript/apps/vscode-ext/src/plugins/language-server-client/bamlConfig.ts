@@ -1,0 +1,46 @@
+// COPIED FROM ./vscode-ext/packages/language-server/src/bamlConfig.ts
+
+import { workspace } from 'vscode';
+import { z } from 'zod';
+export const bamlConfigSchema = z
+  .object({
+    cliPath: z.optional(z.string().nullable()).default(null),
+    generateCodeOnSave: z.enum(['never', 'always']).default('always'),
+    restartTSServerOnSave: z.boolean().default(false),
+    enablePlaygroundProxy: z.boolean().default(true),
+    envCommand: z.string().default('env'),
+    fileWatcher: z.boolean().default(false),
+    trace: z.object({
+      server: z.enum(['off', 'messages', 'verbose']).default('off'),
+    }),
+    bamlPanelOpen: z.boolean().default(false),
+    syncExtensionToGeneratorVersion: z
+      .enum(['auto', 'never', 'always'])
+      .default('auto'),
+    featureFlags: z.array(z.enum(['beta', 'display_all_warnings'])).default([]),
+  })
+  .partial();
+type BamlConfig = z.infer<typeof bamlConfigSchema>;
+
+export type BamlConfigAtom = {
+  config: BamlConfig | null;
+  cliVersion: string | null;
+};
+export const BAML_CONFIG_SINGLETON: BamlConfigAtom = {
+  config: null,
+  cliVersion: null,
+};
+
+export const refreshBamlConfigSingleton = () => {
+  try {
+    const configResponse = workspace.getConfiguration('baml');
+    BAML_CONFIG_SINGLETON.config = bamlConfigSchema.parse(configResponse);
+    return BAML_CONFIG_SINGLETON;
+  } catch (e: any) {
+    if (e instanceof Error) {
+      console.log('Error getting config' + e.message + ' ' + e.stack);
+    } else {
+      console.log('Error getting config' + e);
+    }
+  }
+};

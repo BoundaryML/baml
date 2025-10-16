@@ -6,6 +6,7 @@ package baml
 
 extern void trigger_callback(uint32_t id, int is_done, const int8_t *content, int length);
 extern void error_callback(uint32_t id, int is_done, const int8_t *content, int length);
+extern void on_tick_callback(uint32_t id);
 */
 import "C"
 
@@ -14,7 +15,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
 	"unsafe"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go"
@@ -24,46 +24,9 @@ type BamlRuntime struct {
 	runtime unsafe.Pointer
 }
 
-type BamlFunctionArguments struct {
-	Kwargs         map[string]any
-	ClientRegistry *ClientRegistry
-	Env            map[string]string
-	Collectors     []Collector
-}
-
-type ClientRegistry struct {
-	primary *string
-	clients clientRegistryMap
-}
-
-type clientProperty struct {
-	provider    string
-	retryPolicy *string
-	options     map[string]any
-}
-
-type clientRegistryMap map[string]clientProperty
-
 func NewClientRegistry() *ClientRegistry {
-	return &ClientRegistry{
-		primary: nil,
-		clients: clientRegistryMap{},
-	}
+	return &ClientRegistry{}
 }
-
-func (c *ClientRegistry) AddLlmClient(name string, provider string, options map[string]any) {
-	c.clients[name] = clientProperty{
-		provider: provider,
-		options:  options,
-	}
-}
-
-func (c *ClientRegistry) SetPrimaryClient(name string) {
-	c.primary = &name
-}
-
-var instance *BamlRuntime
-var once sync.Once
 
 func InvokeRuntimeCli(args []string) int {
 
@@ -76,7 +39,7 @@ func InvokeRuntimeCli(args []string) int {
 }
 
 func init() {
-	if err := baml_go.RegisterCallbacks(C.trigger_callback, C.error_callback); err != nil {
+	if err := baml_go.RegisterCallbacks(C.trigger_callback, C.error_callback, C.on_tick_callback); err != nil {
 		panic(err)
 	}
 }
@@ -109,45 +72,42 @@ func CreateRuntime(
 	return BamlRuntime{runtime: runtime}, nil
 }
 
-func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, encoded_args []byte) (*ResultCallback, error) {
-	callback_id, callback := create_unique_id(ctx)
-	return_channel := make(chan ResultCallback)
+func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, encoded_args []byte, onTick OnTickCallbackData) (*ResultCallback, error) {
+	callback_id, callback := create_unique_id(ctx, onTick)
+	
+	// Monitor context for early cancellation
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				close(return_channel)
-				return
-			case result := <-callback:
-				// TODO: Handle the result
-				// error handling, type checking, etc.
-				return_channel <- result
-			}
-		}
+		<-ctx.Done()
+		// Send cancellation to Rust immediately when context is done
+		// This will trigger callback to send an error message
+		baml_go.CancelFunctionCall(callback_id)
 	}()
 
 	result, err := baml_go.CallFunctionFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
-		close(return_channel)
+		close(callback)
 		return nil, err
 	}
 
 	if result != nil {
 		result_str := (*string)(result)
-		close(return_channel)
+		close(callback)
 		return nil, errors.New(*result_str)
 	}
 
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case result := <-return_channel:
-		return &result, nil
-	}
+	cb_result := <-callback
+	return &cb_result, nil
 }
 
-func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName string, encoded_args []byte) (<-chan ResultCallback, error) {
-	callback_id, callback := create_unique_id(ctx)
+func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName string, encoded_args []byte, onTick OnTickCallbackData) (<-chan ResultCallback, error) {
+	callback_id, callback := create_unique_id(ctx, onTick)
+	
+	// Monitor context for early cancellation
+	go func() {
+		<-ctx.Done()
+		// Send cancellation to Rust immediately when context is done
+		baml_go.CancelFunctionCall(callback_id)
+	}()
 
 	result, err := baml_go.CallFunctionStreamFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
@@ -160,4 +120,40 @@ func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName strin
 	}
 
 	return callback, nil
+}
+
+func (r *BamlRuntime) CallFunctionParse(ctx context.Context, functionName string, encoded_args []byte) (any, error) {
+	callback_id, callback := create_unique_id(ctx, nil)
+	
+	// Monitor context for early cancellation
+	go func() {
+		<-ctx.Done()
+		// Send cancellation to Rust immediately when context is done
+		baml_go.CancelFunctionCall(callback_id)
+	}()
+
+	result, err := baml_go.CallFunctionParseFromC(r.runtime, functionName, encoded_args, callback_id)
+	if err != nil {
+		return nil, err
+	}
+
+	if result != nil {
+		result_str := (*string)(result)
+		return nil, errors.New(*result_str)
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case result := <-callback:
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		if result.HasData {
+			return result.Data, nil
+		} else {
+			return result.StreamData, nil
+		}
+	}
 }

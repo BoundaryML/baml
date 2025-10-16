@@ -14,10 +14,9 @@ baml-types.workspace = true
 internal-baml-core.workspace = true
 indexmap.workspace = true
 regex.workspace = true
+baml-compiler = { path = "../../../baml-compiler" }
 
 
 [dev-dependencies]
 prettydiff = "0.8.0"
 test-harness = { path = "../../utils/test_harness" }
-# for running tests
-baml_cffi = { path = "../../../language_client_cffi" }

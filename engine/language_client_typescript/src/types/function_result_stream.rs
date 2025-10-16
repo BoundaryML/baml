@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
 use napi::{
-    bindgen_prelude::ObjectFinalize,
+    bindgen_prelude::{
+        Error, FnArgs, Function, FunctionRef, Object, ObjectFinalize, PromiseRaw, Undefined,
+    },
     threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode},
-    Env, JsFunction, JsObject, JsUndefined,
+    Env,
 };
 use napi_derive::napi;
 
@@ -15,8 +17,9 @@ crate::lang_wrapper!(
     baml_runtime::FunctionResultStream,
     custom_finalize,
     no_from,
-    thread_safe,
-    callback: Option<napi::Ref<()>>,
+    optional,
+    callback: Option<FunctionRef<FnArgs<(Error, FunctionResult)>, ()>>,
+    on_tick: Option<FunctionRef<(), ()>>,
     tb: Option<baml_runtime::type_builder::TypeBuilder>,
     cb: Option<baml_runtime::client_registry::ClientRegistry>,
     env_vars: HashMap<String, String>
@@ -25,13 +28,15 @@ crate::lang_wrapper!(
 impl FunctionResultStream {
     pub(crate) fn new(
         inner: baml_runtime::FunctionResultStream,
-        event: Option<napi::Ref<()>>,
+        event: Option<FunctionRef<FnArgs<(Error, FunctionResult)>, ()>>,
+        on_tick: Option<FunctionRef<(), ()>>,
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
     ) -> Self {
         Self {
-            inner: std::sync::Arc::new(tokio::sync::Mutex::new(inner)),
+            inner: Some(inner),
             callback: event,
+            on_tick,
             tb,
             cb,
             env_vars: HashMap::new(),
@@ -46,41 +51,81 @@ impl FunctionResultStream {
         &mut self,
         env: Env,
         #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")]
-        func: Option<JsFunction>,
-    ) -> napi::Result<JsUndefined> {
+        func: Option<Function<FnArgs<(Error, FunctionResult)>, ()>>,
+    ) -> napi::Result<Undefined> {
         if let Some(func) = func {
-            let cb = env.create_reference(func)?;
-            let prev = self.callback.take();
-            if let Some(mut old_cb) = prev {
-                old_cb.unref(env)?;
-            }
-            self.callback = Some(cb);
-        } else if let Some(mut cb) = self.callback.take() {
-            cb.unref(env)?;
+            let new_ref = func.create_ref()?;
+            self.callback = Some(new_ref);
+        } else {
+            self.callback = None;
         }
 
-        env.get_undefined()
+        Ok(())
     }
 
     #[napi(ts_return_type = "Promise<FunctionResult>")]
-    pub fn done(&self, env: Env, rctx: &RuntimeContextManager) -> napi::Result<JsObject> {
-        let inner = self.inner.clone();
+    pub fn done<'e>(
+        &mut self,
+        env: &'e Env,
+        rctx: &RuntimeContextManager,
+    ) -> napi::Result<PromiseRaw<'e, FunctionResult>> {
+        let Some(inner) = self.inner.take() else {
+            return Err(napi::Error::from_reason("Stream already finished"));
+        };
 
         let on_event = match &self.callback {
-            Some(cb) => {
-                let cb = env.get_reference_value::<JsFunction>(cb)?;
-                let tsfn = env.create_threadsafe_function(
-                    &cb,
-                    0,
-                    |ctx: ThreadSafeCallContext<baml_runtime::FunctionResult>| {
-                        Ok(vec![FunctionResult::from(ctx.value)])
+            Some(cb_ref) => {
+                let cb = cb_ref.borrow_back(env)?;
+                // Prepare for some confusing control flow here:
+                // This thing is Rust wrapper over a JS function that essentially
+                // maps Rust objects to JS objects before the JS function is called.
+                let thread_safe_fn = cb.build_threadsafe_function().build_callback(
+                    |ctx: ThreadSafeCallContext<
+                        FnArgs<(Option<Error>, Option<baml_runtime::FunctionResult>)>,
+                    >| {
+                        // TODO: These parameters are annoying, figure out if we can do Result<FunctionResult>.
+                        match ctx.value.data {
+                            (None, Some(event)) => {
+                                Ok(FnArgs::from((None, Some(FunctionResult::from(event)))))
+                            }
+                            (Some(error), None) => Ok(FnArgs::from((Some(error), None))),
+                            (Some(error), Some(event)) => Ok(FnArgs::from((
+                                Some(error),
+                                Some(FunctionResult::from(event)),
+                            ))),
+                            (None, None) => Ok(FnArgs::from((None, None))),
+                        }
                     },
                 )?;
 
+                // Now this thing is the actual call to the Rust wrapper. We call
+                // this with objects coming from pure Rust. For some reason we
+                // have to match the JS expected types so that's why I'm using
+                // FnArgs.
                 Some(move |event: baml_runtime::FunctionResult| {
-                    let res = tsfn.call(Ok(event), ThreadsafeFunctionCallMode::Blocking);
+                    let status = thread_safe_fn.call(
+                        FnArgs::from((None, Some(event))),
+                        ThreadsafeFunctionCallMode::Blocking,
+                    );
+                    if status != napi::Status::Ok {
+                        log::error!("Error calling on_event callback: {status:?}");
+                    }
+                })
+            }
+            None => None,
+        };
+
+        let on_tick_callback = match &self.on_tick {
+            Some(tick_cb_ref) => {
+                let tick_cb = tick_cb_ref.borrow_back(env)?;
+                let thread_safe_fn = tick_cb
+                    .build_threadsafe_function()
+                    .build_callback(|_ctx: ThreadSafeCallContext<()>| Ok(()))?;
+
+                Some(move || {
+                    let res = thread_safe_fn.call((), ThreadsafeFunctionCallMode::Blocking);
                     if res != napi::Status::Ok {
-                        log::error!("Error calling on_event callback: {res:?}");
+                        log::error!("Error calling on_tick callback: {res:?}");
                     }
                 })
             }
@@ -94,23 +139,28 @@ impl FunctionResultStream {
 
         let fut = async move {
             let ctx_mng = ctx_mng;
+            let mut inner = inner;
             let res = inner
-                .lock()
-                .await
-                .run(on_event, &ctx_mng, tb.as_ref(), cb.as_ref(), env_vars)
+                .run(
+                    on_tick_callback,
+                    on_event,
+                    &ctx_mng,
+                    tb.as_ref(),
+                    cb.as_ref(),
+                    env_vars,
+                )
                 .await;
             res.0.map(FunctionResult::from).map_err(from_anyhow_error)
         };
 
-        env.execute_tokio_future(fut, |&mut _, data| Ok(data))
+        env.spawn_future(fut)
     }
 }
 
+// TODO: Probably no longer needed because of the FunctionRef Drop impl.
 impl ObjectFinalize for FunctionResultStream {
-    fn finalize(mut self, env: Env) -> napi::Result<()> {
-        if let Some(mut cb) = self.callback.take() {
-            cb.unref(env)?;
-        }
+    fn finalize(self, env: Env) -> napi::Result<()> {
+        // dropping the FunctionRef automatically unrefs Node callback
         Ok(())
     }
 }

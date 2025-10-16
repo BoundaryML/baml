@@ -1,0 +1,7 @@
+{
+  "name": "@baml/integ-tests-python-v1",
+  "version": "1.0.0",
+  "dependencies": {
+    "@boundaryml/baml": "workspace:*"
+  }
+}

@@ -17,6 +17,7 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::{
     ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
 };
+use serde_json::Value as JsonValue;
 use shell_escape::escape;
 
 pub use self::{
@@ -170,6 +171,8 @@ where
             RenderedPrompt::Chat(chat) => match process_media_urls(
                 self.model_features().resolve_audio_urls,
                 self.model_features().resolve_image_urls,
+                self.model_features().resolve_pdf_urls,
+                self.model_features().resolve_video_urls,
                 true,
                 None,
                 ctx.runtime_context(),
@@ -195,19 +198,30 @@ fn to_curl_command(
     method: &str,
     headers: &reqwest::header::HeaderMap,
     body: Vec<u8>,
+    env_vars: &std::collections::HashMap<String, String>,
+    expose_secrets: bool,
 ) -> String {
     let mut curl_command = format!("curl -X {method} '{url}'");
 
+    // Prepare headers, scrubbing if secrets should not be exposed
     for (key, value) in headers.iter() {
-        let header = format!(" -H \"{}: {}\"", key.as_str(), value.to_str().unwrap());
+        let key_str = key.as_str();
+        let value_str = value.to_str().unwrap_or("");
+        let value_str =
+            crate::redaction::scrub_header_value(key_str, value_str, env_vars, expose_secrets);
+        let header = format!(" -H \"{key_str}: {value_str}\"");
         curl_command.push_str(&header);
     }
 
-    let body_json = String::from_utf8_lossy(&body).to_string(); // Convert body to string
-    let pretty_body_json = match serde_json::from_str::<serde_json::Value>(&body_json) {
+    // Body: pretty print JSON if possible, then scrub if secrets shouldn't be exposed
+    let body_json = String::from_utf8_lossy(&body).to_string();
+    let mut pretty_body_json = match serde_json::from_str::<serde_json::Value>(&body_json) {
         Ok(json_value) => serde_json::to_string_pretty(&json_value).unwrap_or(body_json),
         Err(_) => body_json,
     };
+
+    pretty_body_json =
+        crate::redaction::scrub_body_string(&pretty_body_json, env_vars, expose_secrets);
     let fully_escaped_body_json = escape_single_quotes(&pretty_body_json);
     let body_part = format!(" -d {fully_escaped_body_json}");
     curl_command.push_str(&body_part);
@@ -238,6 +252,8 @@ where
                 let chat = process_media_urls(
                     features.resolve_audio_urls,
                     features.resolve_image_urls,
+                    features.resolve_pdf_urls,
+                    features.resolve_video_urls,
                     true,
                     None,
                     ctx,
@@ -296,6 +312,8 @@ where
         let chat_messages: Vec<RenderedChatMessage> = process_media_urls(
             self.model_features().resolve_audio_urls,
             self.model_features().resolve_image_urls,
+            self.model_features().resolve_pdf_urls,
+            self.model_features().resolve_video_urls,
             true,
             Some(render_settings),
             ctx,
@@ -328,7 +346,14 @@ where
             .body()
             .map(|b| b.as_bytes().unwrap_or_default().to_vec())
             .unwrap_or_default(); // Add this line to handle the Option
-        let request_str = to_curl_command(&url_str, "POST", request.headers(), body);
+        let request_str = to_curl_command(
+            &url_str,
+            "POST",
+            request.headers(),
+            body,
+            ctx.env_vars(),
+            render_settings.expose_secrets,
+        );
 
         Ok(request_str)
     }
@@ -374,6 +399,8 @@ where
                 match process_media_urls(
                     self.model_features().resolve_audio_urls,
                     self.model_features().resolve_image_urls,
+                    self.model_features().resolve_pdf_urls,
+                    self.model_features().resolve_video_urls,
                     true,
                     None,
                     ctx.runtime_context(),
@@ -420,6 +447,8 @@ where
 async fn process_media_urls(
     resolve_audio_urls: ResolveMediaUrls,
     resolve_image_urls: ResolveMediaUrls,
+    resolve_pdf_urls: ResolveMediaUrls,
+    resolve_video_urls: ResolveMediaUrls,
     resolve_files: bool,
     render_settings: Option<RenderCurlSettings>,
     ctx: &RuntimeContext,
@@ -442,6 +471,8 @@ async fn process_media_urls(
                 let resolve_mode = match part.media_type {
                     BamlMediaType::Audio => resolve_audio_urls,
                     BamlMediaType::Image => resolve_image_urls,
+                    BamlMediaType::Pdf => resolve_pdf_urls,
+                    BamlMediaType::Video => resolve_video_urls,
                 };
                 let media = process_media(resolve_mode, resolve_files, render_settings, ctx, part)
                     .await
@@ -530,6 +561,24 @@ async fn process_media(
                 }
             }
 
+            // ENFORCEMENT: For PDF, the mime type must be application/pdf
+            if part.media_type == BamlMediaType::Pdf {
+                match &mime_type {
+                    Some(mt) if mt != "application/pdf" => {
+                        anyhow::bail!(
+                            "File provided for PDF input is not a PDF. Detected mime type: '{}'. Only application/pdf is allowed.",
+                            mt
+                        );
+                    }
+                    None => {
+                        anyhow::bail!(
+                            "Could not determine mime type for PDF input. Only application/pdf is allowed."
+                        );
+                    }
+                    _ => {}
+                }
+            }
+
             Ok(BamlMedia::base64(
                 part.media_type,
                 if render_settings.as_shell_commands {
@@ -583,6 +632,41 @@ async fn process_media(
 
             let (base64, inferred_mime_type) =
                 to_base64_with_inferred_mime_type(ctx, media_url).await?;
+
+            // Validate MIME type – if the user has explicitly set one, or if the
+            // media type implies a canonical MIME (e.g. PDFs), ensure the fetched
+            // content matches what was requested.
+
+            let expected_mime_type: Option<String> = if let Some(mt) = &part.mime_type {
+                if !mt.is_empty() {
+                    Some(mt.clone())
+                } else {
+                    None
+                }
+            } else {
+                match part.media_type {
+                    BamlMediaType::Pdf => Some("application/pdf".to_string()),
+                    _ => None,
+                }
+            };
+
+            if let Some(expected) = &expected_mime_type {
+                // we accept subtype matches (e.g. image/jpeg starts_with image/)
+                let mismatch = if expected.contains('/') {
+                    &inferred_mime_type != expected
+                } else {
+                    !inferred_mime_type.starts_with(expected)
+                };
+
+                if mismatch {
+                    anyhow::bail!(
+                        "Requested media of MIME type '{}' but fetched '{}' from URL {}. Please ensure the URL points to the correct file or update the mime_type in BAML.",
+                        expected,
+                        inferred_mime_type,
+                        media_url.url
+                    );
+                }
+            }
 
             Ok(BamlMedia::base64(
                 part.media_type,
@@ -707,4 +791,88 @@ async fn fetch_with_proxy(
 
     let response = request.send().await?;
     Ok(response)
+}
+
+#[cfg(test)]
+mod tests_scrub {
+    use std::collections::HashMap;
+
+    use baml_types::BamlMap;
+    use serde_json::json;
+
+    use crate::redaction::scrub_baml_options;
+
+    #[test]
+    fn test_scrub_exact_match_and_bearer() {
+        let mut opts: BamlMap<String, serde_json::Value> = BamlMap::new();
+        opts.insert("api_key".to_string(), json!("secret-xyz"));
+        opts.insert(
+            "headers".to_string(),
+            json!({
+                "x-api-key": "sek-parallel",
+                "authorization": "Bearer sek-openai",
+                "other": "ok"
+            }),
+        );
+        opts.insert("model".to_string(), json!("gpt-5-2025-08-07"));
+
+        let mut envs = HashMap::new();
+        envs.insert("OPENAI_API_KEY".to_string(), "sek-openai".to_string());
+        envs.insert("PARALLEL_API_KEY".to_string(), "sek-parallel".to_string());
+        envs.insert("SOME_OTHER".to_string(), "secret-xyz".to_string());
+
+        let scrubbed = scrub_baml_options(&opts, &envs, false);
+
+        // api_key matches SOME_OTHER
+        assert_eq!(
+            scrubbed.get("api_key").and_then(|v| v.as_str()),
+            Some("$SOME_OTHER")
+        );
+
+        // headers.x-api-key matches PARALLEL_API_KEY
+        assert_eq!(
+            scrubbed
+                .get("headers")
+                .and_then(|h| h.get("x-api-key"))
+                .and_then(|v| v.as_str()),
+            Some("$PARALLEL_API_KEY")
+        );
+
+        // headers.authorization matches OPENAI_API_KEY with Bearer prefix
+        assert_eq!(
+            scrubbed
+                .get("headers")
+                .and_then(|h| h.get("authorization"))
+                .and_then(|v| v.as_str()),
+            Some("Bearer $OPENAI_API_KEY")
+        );
+
+        // Non-sensitive key remains unchanged
+        assert_eq!(
+            scrubbed.get("model").and_then(|v| v.as_str()),
+            Some("gpt-5-2025-08-07")
+        );
+
+        // headers.other remains unchanged
+        assert_eq!(
+            scrubbed
+                .get("headers")
+                .and_then(|h| h.get("other"))
+                .and_then(|v| v.as_str()),
+            Some("ok")
+        );
+    }
+
+    #[test]
+    fn test_scrub_sensitive_no_match() {
+        let mut opts: BamlMap<String, serde_json::Value> = BamlMap::new();
+        opts.insert("api_key".to_string(), json!("plain-secret"));
+        let envs: HashMap<String, String> = HashMap::new();
+
+        let scrubbed = scrub_baml_options(&opts, &envs, false);
+        assert_eq!(
+            scrubbed.get("api_key").and_then(|v| v.as_str()),
+            Some("$REDACTED")
+        );
+    }
 }

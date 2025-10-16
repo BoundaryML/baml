@@ -19,7 +19,11 @@ pub struct DevArgs {
 }
 
 impl DevArgs {
-    pub fn run(&self, defaults: crate::RuntimeCliDefaults) -> Result<()> {
+    pub fn run(
+        &self,
+        defaults: crate::RuntimeCliDefaults,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
+    ) -> Result<()> {
         baml_log::info!("Starting BAML development server on port {}", self.port);
 
         let t = BamlRuntime::get_tokio_singleton()?;
@@ -35,13 +39,17 @@ impl DevArgs {
             .watcher()
             .watch(self.from.as_path(), RecursiveMode::Recursive)?;
 
-        let (server, tcp_listener) = t.block_on(Server::new(self.from.clone(), self.port))?;
+        let (server, tcp_listener) = t.block_on(Server::new(
+            self.from.clone(),
+            self.port,
+            feature_flags.clone(),
+        ))?;
 
         let _ = GenerateArgs {
             from: self.from.clone(),
             no_version_check: false,
         }
-        .run(defaults);
+        .run(defaults, feature_flags.clone());
         t.spawn(server.clone().serve(tcp_listener));
 
         // print all events and errors
@@ -57,14 +65,18 @@ impl DevArgs {
                             }
                         );
                         let start = Instant::now();
-                        match BamlRuntime::from_directory(&self.from, std::env::vars().collect()) {
+                        match BamlRuntime::from_directory(
+                            &self.from,
+                            std::env::vars().collect(),
+                            feature_flags.clone(),
+                        ) {
                             Ok(mut new_runtime) => {
                                 let elapsed = start.elapsed();
                                 let _ = GenerateArgs {
                                     from: self.from.clone(),
                                     no_version_check: false,
                                 }
-                                .run(defaults);
+                                .run(defaults, feature_flags.clone());
 
                                 std::mem::swap(
                                     server.b.write().await.deref_mut(),

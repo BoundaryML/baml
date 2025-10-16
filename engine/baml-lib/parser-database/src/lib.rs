@@ -36,12 +36,15 @@ mod names;
 mod tarjan;
 mod types;
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    path::PathBuf,
+};
 
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
 pub use internal_baml_ast::ast;
 use internal_baml_ast::ast::{Ast, FieldType, ValExpId, WithName};
-use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
 use names::Names;
 pub use tarjan::Tarjan;
 pub use types::{
@@ -346,8 +349,41 @@ impl std::ops::Index<StringId> for ParserDatabase {
     }
 }
 
+/// Testing utility for parsing a raw string as BAML source.
+pub fn parse(baml: &'static str) -> Result<ParserDatabase, Diagnostics> {
+    let mut db = ParserDatabase::new();
+    let source = SourceFile::new_static(PathBuf::from("test.baml"), baml);
+    let (ast, mut diag) = internal_baml_ast::parse(source.path_buf(), &source)?;
+
+    db.add_ast(ast);
+    db.validate(&mut diag)?;
+    db.finalize(&mut diag);
+
+    diag.to_result()?;
+
+    Ok(db)
+}
+
+/// Testing utility for parsing a raw string as BAML source.
+pub fn parse_and_diagnostics(
+    baml: &'static str,
+) -> Result<(ParserDatabase, Diagnostics), Diagnostics> {
+    let mut db = ParserDatabase::new();
+    let source = SourceFile::new_static(PathBuf::from("test.baml"), baml);
+    let (ast, mut diag) = internal_baml_ast::parse(source.path_buf(), &source)?;
+
+    db.add_ast(ast);
+    db.validate(&mut diag)?;
+    db.finalize(&mut diag);
+
+    diag.to_result()?;
+
+    Ok((db, diag))
+}
+
+/// Testing utilities and tests.
 #[cfg(test)]
-mod test {
+pub mod test {
     use std::path::PathBuf;
 
     use ast::FieldArity;
@@ -356,20 +392,7 @@ mod test {
 
     use super::*;
 
-    fn parse(baml: &'static str) -> Result<ParserDatabase, Diagnostics> {
-        let mut db = ParserDatabase::new();
-        let source = SourceFile::new_static(PathBuf::from("test.baml"), baml);
-        let (ast, mut diag) = internal_baml_ast::parse(source.path_buf(), &source)?;
-
-        db.add_ast(ast);
-        db.validate(&mut diag)?;
-        db.finalize(&mut diag);
-
-        diag.to_result()?;
-
-        Ok(db)
-    }
-
+    /// Testing utility for asserting that a BAML source contains no cycles.
     fn assert_finite_cycles(baml: &'static str, expected: &[&[&str]]) -> Result<(), Diagnostics> {
         let db = parse(baml)?;
 
@@ -387,6 +410,7 @@ mod test {
         Ok(())
     }
 
+    /// Testing utility for asserting that a BAML source contains no structural alias cycles.
     fn assert_structural_alias_cycles(
         baml: &'static str,
         expected: &[&[&str]],

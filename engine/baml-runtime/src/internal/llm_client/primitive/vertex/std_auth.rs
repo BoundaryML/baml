@@ -1,8 +1,18 @@
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{
+    collections::HashMap,
+    future::Future,
+    pin::Pin,
+    sync::{Arc, RwLock},
+};
 
 use anyhow::{Context, Result};
 use gcp_auth::{Error, Token, TokenProvider};
 use internal_llm_client::vertex::ResolvedGcpAuthStrategy;
+use once_cell::sync::Lazy;
+
+// Global cache for auth instances
+static AUTH_CACHE: Lazy<RwLock<HashMap<String, Arc<VertexAuth>>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
 pub enum VertexAuth {
     CustomServiceAccount(gcp_auth::CustomServiceAccount),
@@ -12,6 +22,56 @@ pub enum VertexAuth {
 }
 
 impl VertexAuth {
+    fn cache_key(auth_strategy: &ResolvedGcpAuthStrategy) -> String {
+        match auth_strategy {
+            ResolvedGcpAuthStrategy::MaybeFilePath(path) => format!("file:{path}"),
+            ResolvedGcpAuthStrategy::StringContainingJson(json) => {
+                // Hash the JSON to avoid storing sensitive data in cache key
+                use std::{
+                    collections::hash_map::DefaultHasher,
+                    hash::{Hash, Hasher},
+                };
+                let mut hasher = DefaultHasher::new();
+                json.hash(&mut hasher);
+                format!("json_hash:{}", hasher.finish())
+            }
+            ResolvedGcpAuthStrategy::JsonObject(obj) => {
+                // Hash the object to avoid storing sensitive data in cache key
+                use std::{
+                    collections::hash_map::DefaultHasher,
+                    hash::{Hash, Hasher},
+                };
+                let mut hasher = DefaultHasher::new();
+                serde_json::to_string(obj)
+                    .unwrap_or_default()
+                    .hash(&mut hasher);
+                format!("obj_hash:{}", hasher.finish())
+            }
+            ResolvedGcpAuthStrategy::SystemDefault => "system_default".to_string(),
+        }
+    }
+
+    pub async fn get_or_create(auth_strategy: &ResolvedGcpAuthStrategy) -> Result<Arc<VertexAuth>> {
+        let cache_key = Self::cache_key(auth_strategy);
+
+        // Try to get from cache first
+        if let Ok(cache) = AUTH_CACHE.read() {
+            if let Some(cached) = cache.get(&cache_key) {
+                return Ok(cached.clone());
+            }
+        }
+
+        // Create new auth instance
+        let auth = Arc::new(Self::new(auth_strategy).await?);
+
+        // Cache it
+        if let Ok(mut cache) = AUTH_CACHE.write() {
+            cache.insert(cache_key, auth.clone());
+        }
+
+        Ok(auth)
+    }
+
     pub async fn new(auth_strategy: &ResolvedGcpAuthStrategy) -> Result<VertexAuth> {
         match auth_strategy {
             ResolvedGcpAuthStrategy::MaybeFilePath(path) => {

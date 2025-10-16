@@ -20,7 +20,7 @@ impl<'db> TopLevelAssignmentWalker<'db> {
 
     /// Returns the expression of the top level assignment.
     pub fn expr(&self) -> &ast::Expression {
-        &self.db.ast[self.id].stmt.body
+        &self.db.ast[self.id].stmt.expr
     }
 }
 

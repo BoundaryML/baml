@@ -4,13 +4,15 @@ use baml_runtime::client_registry::{ClientProperty, ClientProvider, ClientRegist
 use baml_types::BamlValue;
 
 use super::utils::Decode;
-use crate::raw_ptr_wrapper::CollectorWrapper;
+use crate::raw_ptr_wrapper::{CollectorWrapper, RawPtrType, TypeBuilderWrapper};
 
 pub struct BamlFunctionArguments {
     pub kwargs: baml_types::BamlMap<String, BamlValue>,
     pub client_registry: Option<ClientRegistry>,
     pub env_vars: HashMap<String, String>,
     pub collectors: Option<Vec<CollectorWrapper>>,
+    pub type_builder: Option<TypeBuilderWrapper>,
+    pub tags: HashMap<String, String>,
 }
 
 impl Decode for BamlFunctionArguments {
@@ -35,7 +37,12 @@ impl Decode for BamlFunctionArguments {
             let collectors = from
                 .collectors
                 .into_iter()
-                .map(CollectorWrapper::decode)
+                .map(RawPtrType::decode)
+                .map(|r| match r {
+                    Ok(RawPtrType::Collector(c)) => Ok(c),
+                    Err(e) => Err(e),
+                    Ok(other) => Err(anyhow::anyhow!("Expected Collector, got {}", other.name())),
+                })
                 .collect::<Result<Vec<_>, _>>()?;
             if collectors.is_empty() {
                 None
@@ -43,25 +50,47 @@ impl Decode for BamlFunctionArguments {
                 Some(collectors)
             }
         };
+        let type_builder = from
+            .type_builder
+            .map(RawPtrType::decode)
+            .transpose()?
+            .map(|r| match r {
+                RawPtrType::TypeBuilder(t) => Ok(t),
+                other => Err(anyhow::anyhow!(
+                    "Expected TypeBuilder, got {}",
+                    other.name()
+                )),
+            })
+            .transpose()?;
 
-        println!("collectors: {collectors:?}");
+        let tags = from
+            .tags
+            .into_iter()
+            .map(|t| {
+                (
+                    t.key,
+                    t.value
+                        .and_then(|v| v.value)
+                        .and_then(|v| {
+                            if let crate::baml::cffi::cffi_value_holder::Value::StringValue(s) = v {
+                                Some(s)
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or_default(),
+                )
+            })
+            .collect::<HashMap<String, String>>();
+
         Ok(BamlFunctionArguments {
             kwargs,
             client_registry,
             env_vars,
             collectors,
+            type_builder,
+            tags,
         })
-    }
-}
-
-impl Decode for CollectorWrapper {
-    type From = crate::baml::cffi::CffiCollector;
-
-    fn decode(from: Self::From) -> Result<Self, anyhow::Error> {
-        match from.pointer {
-            0 => Err(anyhow::anyhow!("Collector pointer is 0")),
-            ptr => Ok(CollectorWrapper::from_raw(ptr as *const libc::c_void, true)),
-        }
     }
 }
 

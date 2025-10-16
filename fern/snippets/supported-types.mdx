@@ -1,0 +1,107 @@
+# BAML to Go Type Mappings
+
+This table shows how BAML types map to Go types when using the Go generator (version 0.205.0).
+
+## Primitive Types
+
+| BAML Type | Go Type | Example | Notes |
+|-----------|---------|---------|--------|
+| `string` | `string` | `"hello"` | Direct mapping |
+| `int` | `int` | `42` | 32 or 64-bit depending on architecture |
+| `float` | `float64` | `3.14` | Always 64-bit precision |
+| `bool` | `bool` | `true` | Direct mapping |
+| `null` | N/A | N/A | Not supported as standalone type |
+
+## Collection Types
+
+| BAML Type | Go Type | Example | Notes |
+|-----------|---------|---------|--------|
+| `string[]` | `[]string` | `[]string{"a", "b"}` | Slice of strings |
+| `int[]` | `[]int` | `[]int{1, 2, 3}` | Slice of integers |
+| `float[]` | `[]float64` | `[]float64{1.0, 2.0}` | Slice of floats |
+| `bool[]` | `[]bool` | `[]bool{true, false}` | Slice of booleans |
+| `map<string, T>` | `map[string]T` | `map[string]int{"a": 1}` | String-keyed maps |
+| `map<EnumType, T>` | `map[EnumType]T` | `map[Color]string{RED: "red"}` | Enum-keyed maps |
+
+## Optional Types
+
+| BAML Type | Go Type | Example | Notes |
+|-----------|---------|---------|--------|
+| `string?` | `*string` | `stringPtr("hello")` | Pointer to string |
+| `int?` | `*int` | `intPtr(42)` | Pointer to int |
+| `float?` | `*float64` | `float64Ptr(3.14)` | Pointer to float64 |
+| `bool?` | `*bool` | `boolPtr(true)` | Pointer to bool |
+| `MyClass?` | `*MyClass` | `&MyClass{}` | Pointer to struct |
+
+## Multimodal Types
+
+| BAML Type | Go Type | Constructor Methods | Notes |
+|-----------|---------|-------------------|--------|
+| `image` | `baml.Image` | `NewImageFromUrl()`, `NewImageFromBase64()` | Supports URL and base64 |
+| `audio` | `baml.Audio` | `NewAudioFromUrl()`, `NewAudioFromBase64()` | Supports URL and base64 |
+| `pdf` | `baml.PDF` | `NewPDFFromBase64()` | Only supports base64 |
+| `video` | `baml.Video` | `NewVideoFromUrl()`, `NewVideoFromBase64()` | Supports URL and base64 |
+
+## Custom Types
+
+| BAML Type | Go Type | Example | Notes |
+|-----------|---------|---------|--------|
+| `enum Color { RED, BLUE }` | `type Color string` | `const ColorRED Color = "RED"` | String-based constants |
+| `class Person { name string }` | `type Person struct` | `type Person struct { Name string }` | Struct with JSON tags |
+
+## Union Types
+
+| BAML Type | Go Type | Example | Notes |
+|-----------|---------|---------|--------|
+| `string \| int` | `Union2StringOrInt` | Generated union struct | Custom union type with variant tracking |
+| `MyClass \| YourClass` | `Union2MyClassOrYourClass` | Generated union struct | Type-safe union handling |
+
+## Literal Types
+
+| BAML Type | Go Type | Example | Notes |
+|-----------|---------|---------|--------|
+| `"success" \| "failure"` | `string` | Validated enum constants | Runtime validation |
+| `1 \| 2 \| 3` | `int` | Validated numeric constants | Runtime validation |
+| `true \| false` | `bool` | Standard boolean | Direct mapping |
+
+## Complex Examples
+
+| BAML Type | Go Type | Notes |
+|-----------|---------|--------|
+| `(string \| int)[]` | `[]Union2StringOrInt` | Array of unions |
+| `map<string, Person?>` | `map[string]*Person` | Map with optional values |
+| `Person[]?` | `*[]Person` | Optional array |
+| `image[]` | `[]baml.Image` | Array of images |
+
+## Type Aliases
+
+Type aliases in BAML are expanded to their underlying Go types:
+
+```baml
+type UserId = int
+type UserMap = map<string, User>
+```
+
+Becomes:
+
+```go
+// UserId becomes int
+// UserMap becomes map[string]User
+```
+
+## Helper Functions
+
+The BAML Go client provides helper functions for creating pointer types:
+
+```go
+func stringPtr(s string) *string { return &s }
+func intPtr(i int) *int { return &i }
+func float64Ptr(f float64) *float64 { return &f }
+func boolPtr(b bool) *bool { return &b }
+```
+
+## Version Compatibility
+
+- This mapping is for BAML Go client version **0.205.0**
+- Earlier versions may have different type mappings
+- Always use the same version in your generator configuration

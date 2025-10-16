@@ -11,11 +11,13 @@
 # baml-cli is available with the baml package.
 
 import typing
+import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
 from .parser import LlmResponseParser, LlmStreamParser
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
+from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME as __runtime__
 
 
 class BamlAsyncClient:
@@ -39,6 +41,8 @@ class BamlAsyncClient:
         client_registry: typing.Optional[baml_py.baml_py.ClientRegistry] = None,
         collector: typing.Optional[typing.Union[baml_py.baml_py.Collector, typing.List[baml_py.baml_py.Collector]]] = None,
         env: typing.Optional[typing.Dict[str, typing.Optional[str]]] = None,
+        tags: typing.Optional[typing.Dict[str, str]] = None,
+        on_tick: typing.Optional[typing.Callable[[str, baml_py.baml_py.FunctionLog], None]] = None,
     ) -> "BamlAsyncClient":
         options: BamlCallOptions = {}
         if tb is not None:
@@ -49,6 +53,10 @@ class BamlAsyncClient:
             options["collector"] = collector
         if env is not None:
             options["env"] = env
+        if tags is not None:
+            options["tags"] = tags
+        if on_tick is not None:
+            options["on_tick"] = on_tick
         return BamlAsyncClient(self.__options.merge_options(options))
 
     @property
@@ -74,17 +82,33 @@ class BamlAsyncClient:
     async def Bar(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> typing.Union["types.Example", "types.Example2"]:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="Bar", args={
-            "x": x,
-        })
-        return typing.cast(typing.Union["types.Example", "types.Example2"], result.cast_to(types, types, stream_types, False))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.Bar(x=x,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="Bar", args={
+                "x": x,
+            })
+            return typing.cast(typing.Union["types.Example", "types.Example2"], result.cast_to(types, types, stream_types, False, __runtime__))
     async def Foo(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> typing.Union["types.Example2", "types.Example"]:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="Foo", args={
-            "x": x,
-        })
-        return typing.cast(typing.Union["types.Example2", "types.Example"], result.cast_to(types, types, stream_types, False))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.Foo(x=x,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="Foo", args={
+                "x": x,
+            })
+            return typing.cast(typing.Union["types.Example2", "types.Example"], result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -102,8 +126,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlStream[typing.Union["stream_types.Example", "stream_types.Example2"], typing.Union["types.Example", "types.Example2"]](
           result,
-          lambda x: typing.cast(typing.Union["stream_types.Example", "stream_types.Example2"], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Union["types.Example", "types.Example2"], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Union["stream_types.Example", "stream_types.Example2"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Union["types.Example", "types.Example2"], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def Foo(self, x: int,
@@ -114,8 +138,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlStream[typing.Union["stream_types.Example2", "stream_types.Example"], typing.Union["types.Example2", "types.Example"]](
           result,
-          lambda x: typing.cast(typing.Union["stream_types.Example2", "stream_types.Example"], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Union["types.Example2", "types.Example"], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Union["stream_types.Example2", "stream_types.Example"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Union["types.Example2", "types.Example"], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     

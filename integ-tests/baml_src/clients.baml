@@ -30,6 +30,16 @@ client<llm> GPT4o {
   }
 }
 
+// For integ tests
+client<llm> GPT4oBaseUrlNotSet {
+  provider openai
+  options {
+    model gpt-4o
+    api_key env.OPENAI_API_KEY
+    base_url env.OPEN_API_BASE_DO_NOT_SET_THIS
+  }
+}
+
 
 client<llm> GPT4Turbo {
   retry_policy Bar
@@ -139,7 +149,7 @@ client<llm> GPT35AzureFailed {
     api_key env.AZURE_OPENAI_API_KEY
   }
 }
-  
+
 client<llm> Gemini {
   provider google-ai
   options {
@@ -148,6 +158,21 @@ client<llm> Gemini {
     safetySettings {
       category HARM_CATEGORY_HATE_SPEECH
       threshold BLOCK_LOW_AND_ABOVE
+    }
+  }
+}
+
+client<llm> Gemini25ProThinking {
+  provider google-ai
+  retry_policy Constant
+  options {
+    model "gemini-2.5-pro"
+    api_key env.GOOGLE_API_KEY
+    generationConfig {
+      thinkingConfig {
+          thinkingBudget 1024
+          includeThoughts true
+      }
     }
   }
 }
@@ -170,6 +195,19 @@ client<llm> Vertex {
   }
 }
 
+
+client<llm> VertexWithQueryParams {
+  provider vertex-ai
+  options {
+    model gemini-2.5-flash
+    location us-central1
+    project_id gloo-ai
+    query_params {
+      key env.VERTEX_API_KEY
+    }
+  }
+}
+
 client<llm> VertexClaude {
   provider vertex-ai
   options {
@@ -189,9 +227,11 @@ client<llm> AwsBedrock {
     }
     // max_tokens 100000
     // max_completion_tokens 100000
+    model "us.anthropic.claude-3-5-haiku-20241022-v1:0"
     // model "anthropic.claude-3-5-sonnet-20240620-v1:0"
     // model_id "anthropic.claude-3-haiku-20240307-v1:0"
-    model "meta.llama3-8b-instruct-v1:0"
+    //model "arn:aws:bedrock:us-east-1:404337120808:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+    // endpoint_url "https://bedrock-runtime.us-east-1.amazonaws.com/"
     // region "us-east-1"
     // access_key_id env.AWS_ACCESS_KEY_ID
     // secret_access_key env.AWS_SECRET_ACCESS_KEY
@@ -215,6 +255,14 @@ client<llm> AwsBedrockInvalidRegion {
   }
 }
 
+client<llm> AwsBedrockInvalidEndpoint {
+  provider aws-bedrock
+  options {
+    model "anthropic.claude-3-5-sonnet-20240620-v1:0"
+    endpoint_url "https://bedrock-runtime.us-doenotexist-3.amazonaws.com"
+  }
+}
+
 client<llm> AwsBedrockInvalidAccessKey {
   provider aws-bedrock
   options {
@@ -231,7 +279,7 @@ client<llm> AwsBedrockInvalidProfile {
   provider aws-bedrock
   options {
     model_id "meta.llama3-8b-instruct-v1:0"
-    profile "boundaryml-dev"
+    profile "boundaryml-dev-invalid"
     inference_configuration {
       max_tokens 100
     }

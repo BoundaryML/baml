@@ -1,8 +1,9 @@
 use std::{
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
+use anyhow::Context;
 use diagnostics::{file_diagnostics, project_diagnostics};
 use log::info;
 use lsp_server;
@@ -10,6 +11,7 @@ use lsp_types::{
     DidChangeTextDocumentParams, DocumentDiagnosticReport, DocumentDiagnosticReportResult,
     FullDocumentDiagnosticReport, RelatedFullDocumentDiagnosticReport,
 };
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -21,6 +23,7 @@ mod requests;
 mod traits;
 
 use notifications as notification;
+pub(crate) use request::code_action::OPEN_IN_BROWSER_COMMAND;
 use requests as request;
 
 use self::traits::{
@@ -71,23 +74,28 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
         request::GotoDefinition::METHOD => local_request_task::<request::GotoDefinition>(req),
         request::Rename::METHOD => local_request_task::<request::Rename>(req),
         request::DocumentDiagnosticRequestHandler::METHOD => {
-            tracing::info!("diagnostic notif");
+            // tracing::info!("diagnostic notif");
             local_request_task::<request::DocumentDiagnosticRequestHandler>(req)
             // note background request task here sometimes results in inconsistent baml project state...
         }
         "getBAMLFunctions" => {
-            tracing::info!("getBAMLFunctions");
+            // tracing::info!("getBAMLFunctions");
             return Task::local(move |session, _notifier, requester, responder| {
                 let result: anyhow::Result<(serde_json::Value,)> = {
                     let mut all_functions = Vec::new();
-                    let projects = session.baml_src_projects.lock().unwrap();
+                    let projects = session.baml_src_projects.lock();
+                    let default_flags = vec!["beta".to_string()];
+                    let effective_flags = session
+                        .baml_settings
+                        .feature_flags
+                        .as_ref()
+                        .unwrap_or(&default_flags);
 
                     for (_, project) in projects.iter() {
                         let functions = project
                             .lock()
-                            .unwrap()
                             .baml_project
-                            .list_functions()
+                            .list_functions(effective_flags)
                             .iter()
                             .map(|f| BamlFunctionResult {
                                 name: f.name.clone(),
@@ -121,27 +129,46 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
             });
         }
         "requestDiagnostics" => {
-            tracing::info!("---- requestDiagnostics");
+            // tracing::info!("---- requestDiagnostics");
             return Task::local(move |session, notifier, _requester, responder| {
                 let result: anyhow::Result<()> = (|| {
                     // tracing::info!("requestDiagnostics: {:?}", req.params);
 
                     let params = serde_json::from_value::<DiagnosticRequestParams>(req.params)
                         .map_err(|e| anyhow::anyhow!("Failed to parse JSON: {e}"))?;
-                    let url = Url::parse(&params.project_id)
-                        .map_err(|e| anyhow::anyhow!("Failed to parse URL: {e}"))?;
-                    if !url.to_string().contains("baml_src") {
-                        return Ok(());
-                    }
+                    let url = Url::parse(&params.project_id).context("Failed to parse URL")?;
 
+                    let Ok(project) = session.get_or_create_project(url.to_file_path().unwrap())
+                    else {
+                        return Ok(());
+                    };
                     let project = session
                         .get_or_create_project(url.to_file_path().unwrap())
                         .expect("Already checked for project's existence");
-                    project.lock().unwrap().update_runtime(Some(notifier))?;
+                    {
+                        let default_flags = vec!["beta".to_string()];
+                        project.lock().update_runtime(
+                            Some(notifier),
+                            session
+                                .baml_settings
+                                .feature_flags
+                                .as_ref()
+                                .unwrap_or(&default_flags),
+                        )?
+                    };
 
                     // TODO: I think we need to send ALL diagnostics for the project. Not sure how this report is different vs sending a signle diagnostic param message
-                    let diagnostics = file_diagnostics(project.clone(), &url);
-                    tracing::info!("---- diagnostics Returned: ");
+                    let default_flags = vec!["beta".to_string()];
+                    let diagnostics = file_diagnostics(
+                        project.clone(),
+                        &url,
+                        session
+                            .baml_settings
+                            .feature_flags
+                            .as_ref()
+                            .unwrap_or(&default_flags),
+                    );
+                    // tracing::info!("---- diagnostics Returned: ");
                     let report = Ok(DocumentDiagnosticReportResult::Report(
                         DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
                             related_documents: None,
@@ -233,7 +260,7 @@ pub(super) fn notification<'a>(notif: lsp_server::Notification) -> Vec<Task<'a>>
         }
         // --- DidSaveTextDocument now uses the simple local task helper ---
         notification::DidSaveTextDocument::METHOD => {
-            tracing::info!("Did save text document---------");
+            // tracing::info!("Did save text document---------");
             handle_notification_result_error::<notification::DidSaveTextDocument>(
                 // Do not use background notifs yet, as baml_client may not have an updated view of the project files
                 // See the did_save_text_document.rs file for more details
@@ -273,22 +300,19 @@ fn background_request_task<'a, R: traits::BackgroundDocumentRequestHandler>(
         .to_file_path()
         .internal_error_msg("Could not convert URL to path")?;
     Ok(Task::background(schedule, move |session: &Session| {
-        let Some(_snapshot) = session.take_snapshot(url) else {
+        let Some(snapshot) = session.take_snapshot(url) else {
             return Box::new(|_, _| {});
         };
-        info!(
-            "session.projects.len(): {:?}",
-            session.baml_src_projects.lock().unwrap().len()
-        );
-        let _db = session.get_or_create_project(&path).clone();
-        if _db.is_none() {
-            tracing::error!("Could not find project for path");
+        // info!(
+        //     "session.projects.len(): {:?}",
+        //     session.baml_src_projects.lock().len()
+        // );
+        let Ok(project) = session.get_or_create_project(&path) else {
             return Box::new(|_, _| {});
-        }
-        let _db = _db.unwrap();
+        };
 
-        Box::new(move |_notifier, _responder| {
-            let _ = R::run_with_snapshot(_snapshot, _db, _notifier, params);
+        Box::new(move |notifier, _responder| {
+            let _ = R::run_with_snapshot(snapshot, project, notifier, params);
         })
     }))
 }

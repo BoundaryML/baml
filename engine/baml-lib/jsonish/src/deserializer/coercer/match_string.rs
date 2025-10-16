@@ -17,6 +17,24 @@ use crate::{
     jsonish,
 };
 
+pub(super) fn matches_string_to_string(
+    parsing_context: &ParsingContext,
+    raw_value: &str,
+    parse_into: &str,
+) -> bool {
+    match_string(
+        parsing_context,
+        &TypeIR::string(),
+        Some(&crate::jsonish::Value::String(
+            raw_value.to_string(),
+            baml_types::CompletionState::Complete,
+        )),
+        &[(parse_into, vec![parse_into.to_string()])],
+        false,
+    )
+    .is_ok()
+}
+
 /// Heuristic match of different possible values against an input string.
 pub(super) fn match_string(
     parsing_context: &ParsingContext,
@@ -24,6 +42,7 @@ pub(super) fn match_string(
     value: Option<&jsonish::Value>,
     // List of (name, [aliases]) tuples.
     candidates: &[(&str, Vec<String>)],
+    allow_substring_match: bool,
 ) -> Result<ValueWithFlags<String>, ParsingError> {
     // Get rid of nulls.
     let value = match value {
@@ -52,7 +71,9 @@ pub(super) fn match_string(
     let match_context = jsonish_string.trim();
 
     // First attempt, case sensitive match ignoring possible pucntuation.
-    if let Some(string_match) = string_match_strategy(match_context, candidates, &mut flags) {
+    if let Some(string_match) =
+        string_match_strategy(match_context, candidates, &mut flags, allow_substring_match)
+    {
         return try_match_only_once(parsing_context, target, string_match, flags);
     }
 
@@ -69,7 +90,22 @@ pub(super) fn match_string(
     }));
 
     // Second attempt, case sensitive match without punctuation.
-    if let Some(string_match) = string_match_strategy(&match_context, &candidates, &mut flags) {
+    if let Some(string_match) = string_match_strategy(
+        &match_context,
+        &candidates,
+        &mut flags,
+        allow_substring_match,
+    ) {
+        return try_match_only_once(parsing_context, target, string_match, flags);
+    }
+
+    // Third attempt, case sensitive match without punctuation.
+    if let Some(string_match) = string_match_strategy(
+        &match_context,
+        &candidates,
+        &mut flags,
+        allow_substring_match,
+    ) {
         return try_match_only_once(parsing_context, target, string_match, flags);
     }
 
@@ -84,7 +120,12 @@ pub(super) fn match_string(
     });
 
     // There goes our last hope :)
-    if let Some(string_match) = string_match_strategy(&match_context, &candidates, &mut flags) {
+    if let Some(string_match) = string_match_strategy(
+        &match_context,
+        &candidates,
+        &mut flags,
+        allow_substring_match,
+    ) {
         return try_match_only_once(parsing_context, target, string_match, flags);
     }
 
@@ -95,6 +136,26 @@ fn strip_punctuation(s: &str) -> String {
     s.chars()
         .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
         .collect::<String>()
+}
+
+/// Remove accents from characters to enable fuzzy matching of unaccented input
+/// against accented aliases/candidates.
+fn remove_accents(s: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+
+    // Handle ligatures separately since they're not combining marks
+    let s = s
+        .replace('ß', "ss")
+        .replace('æ', "ae")
+        .replace('Æ', "AE")
+        .replace('ø', "o")
+        .replace('Ø', "O")
+        .replace('œ', "oe")
+        .replace('Œ', "OE");
+
+    s.nfkd()
+        .filter(|c| !unicode_normalization::char::is_combining_mark(*c))
+        .collect()
 }
 
 /// Helper function to return a single string match result.
@@ -132,13 +193,45 @@ fn string_match_strategy<'c>(
     value_str: &str,
     candidates: &'c [(&'c str, Vec<String>)],
     flags: &mut DeserializerConditions,
+    allow_substring_match: bool,
 ) -> Option<&'c str> {
-    // Try and look for an exact match against valid values.
+    log::debug!("string_match_strategy: {value_str}");
+    log::debug!(
+        "candidates:\n{}",
+        candidates
+            .iter()
+            .map(|(c, v)| format!(
+                "{c} -> {}",
+                v.iter()
+                    .map(|v| format!("\"{v}\""))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    // Strategy 1: Try exact case-sensitive match
     for (candidate, valid_values) in candidates {
         if valid_values.iter().any(|v| v == value_str) {
-            // We did nothing fancy, so no extra flags.
+            // No flags since we found an exact match.
             return Some(candidate);
         }
+    }
+
+    // Strategy 2: Try unaccented case-sensitive match
+    let unaccented_value_str = remove_accents(value_str);
+    for (candidate, valid_values) in candidates {
+        if valid_values
+            .iter()
+            .any(|v| remove_accents(v) == unaccented_value_str)
+        {
+            // No flags since we found an exact match.
+            return Some(candidate);
+        }
+    }
+
+    if !allow_substring_match {
+        return None;
     }
 
     // (start_index, end_index, valid_name, variant)
@@ -151,6 +244,21 @@ fn string_match_strategy<'c>(
             for (start_idx, _) in value_str.match_indices(valid_name) {
                 let end_idx = start_idx + valid_name.len();
                 all_matches.push((start_idx, end_idx, valid_name, variant));
+            }
+        }
+    }
+
+    // No substring match at all for any variant, early return.
+    if all_matches.is_empty() {
+        // Try to see if we can find any substring matches in the unaccented
+        // value string.
+        for (variant, valid_names) in candidates {
+            for valid_name in valid_names {
+                let unaccented_valid_name = remove_accents(valid_name);
+                for (start_idx, _) in unaccented_value_str.match_indices(&unaccented_valid_name) {
+                    let end_idx = start_idx + valid_name.len();
+                    all_matches.push((start_idx, end_idx, valid_name, variant));
+                }
             }
         }
     }
@@ -217,4 +325,100 @@ fn string_match_strategy<'c>(
 
     // No match found.
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_remove_accents_etude() {
+        assert_eq!(remove_accents("étude"), "etude");
+    }
+
+    #[test]
+    fn test_remove_accents_francais() {
+        assert_eq!(remove_accents("français"), "francais");
+    }
+
+    #[test]
+    fn test_remove_accents_espanol() {
+        assert_eq!(remove_accents("Español"), "Espanol");
+    }
+
+    #[test]
+    fn test_remove_accents_portugues() {
+        assert_eq!(remove_accents("português"), "portugues");
+    }
+
+    #[test]
+    fn test_remove_accents_medium() {
+        assert_eq!(remove_accents("médium"), "medium");
+    }
+
+    #[test]
+    fn test_remove_accents_grun() {
+        assert_eq!(remove_accents("Grün"), "Grun");
+    }
+
+    #[test]
+    fn test_remove_accents_uber() {
+        assert_eq!(remove_accents("Über"), "Uber");
+    }
+
+    #[test]
+    fn test_remove_accents_strasse() {
+        assert_eq!(remove_accents("Straße"), "Strasse");
+    }
+
+    #[test]
+    fn test_remove_accents_stadt() {
+        assert_eq!(remove_accents("Stadt"), "Stadt");
+    }
+
+    #[test]
+    fn test_remove_accents_ae_ligature() {
+        assert_eq!(remove_accents("æ"), "ae");
+        assert_eq!(remove_accents("Æ"), "AE");
+    }
+
+    #[test]
+    fn test_remove_accents_o_ligature() {
+        assert_eq!(remove_accents("ø"), "o");
+        assert_eq!(remove_accents("Ø"), "O");
+    }
+
+    #[test]
+    fn test_remove_accents_oe_ligature() {
+        assert_eq!(remove_accents("œ"), "oe");
+        assert_eq!(remove_accents("Œ"), "OE");
+    }
+
+    #[test]
+    fn test_remove_accents_danish_word() {
+        assert_eq!(remove_accents("København"), "Kobenhavn");
+    }
+
+    #[test]
+    fn test_remove_accents_french_word() {
+        assert_eq!(remove_accents("cœur"), "coeur");
+        assert_eq!(remove_accents("œuvre"), "oeuvre");
+    }
+
+    #[test]
+    fn test_remove_accents_mixed_ligatures() {
+        assert_eq!(
+            remove_accents("Straße ældre øl œuvre"),
+            "Strasse aeldre ol oeuvre"
+        );
+    }
+
+    #[test]
+    fn test_remove_accents_non_alphanumeric() {
+        // It correctly leaves non-alphanumeric ASCII and other scripts alone, but converts ligatures
+        assert_eq!(
+            remove_accents("ß, æ, ø, œ, こんにちは, 🦄"),
+            "ss, ae, o, oe, こんにちは, 🦄"
+        );
+    }
 }

@@ -31,6 +31,10 @@ export class TypeBuilder {
     this.runtime = runtime
   }
 
+  reset(): void {
+    this.tb.reset()
+  }
+
   _tb(): _TypeBuilder {
     return this.tb
   }
@@ -139,6 +143,10 @@ export class ClassAst<ClassName extends string, Properties extends string = stri
     this.bldr = tb.getClass(name)
   }
 
+  listProperties(): Record<string, FieldType | null> {
+    return this.bldr.listProperties()
+  }
+
   type(): FieldType {
     return this.bldr.field()
   }
@@ -181,7 +189,16 @@ export class ClassBuilder<ClassName extends string, Properties extends string = 
   }
 
   listProperties(): Array<[string, ClassPropertyBuilder]> {
-    return Array.from(this.properties).map((name) => [name, new ClassPropertyBuilder(this.bldr.property(name))])
+    return this.bldr.listProperties()
+  }
+
+  removeProperty(name: string): void {
+    this.properties.delete(name)
+    this.bldr.removeProperty(name)
+  }
+
+  reset(): void {
+    this.bldr.reset()
   }
 
   property(name: string): ClassPropertyBuilder {
@@ -201,6 +218,15 @@ class ClassPropertyBuilder {
 
   constructor(bldr: _ClassPropertyBuilder) {
     this.bldr = bldr
+  }
+
+  getType(): FieldType {
+    return this.bldr.getType()
+  }
+
+  setType(type: FieldType): ClassPropertyBuilder {
+    this.bldr.setType(type)
+    return this
   }
 
   alias(alias: string | null): ClassPropertyBuilder {

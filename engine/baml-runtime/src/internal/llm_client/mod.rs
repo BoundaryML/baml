@@ -109,6 +109,10 @@ pub struct ModelFeatures {
     pub resolve_audio_urls: ResolveMediaUrls,
     /// Controls how image URLs are resolved for this model/provider
     pub resolve_image_urls: ResolveMediaUrls,
+    /// Controls how Pdf URLs are resolved for this model/provider
+    pub resolve_pdf_urls: ResolveMediaUrls,
+    /// Controls how video URLs are resolved for this model/provider
+    pub resolve_video_urls: ResolveMediaUrls,
     pub allowed_metadata: AllowedRoleMetadata,
 }
 
@@ -133,6 +137,8 @@ pub enum LLMResponse {
     /// BAML failed to make an HTTP request to a model, because of some internal
     /// error after the user's args passed validation
     InternalFailure(String),
+    /// The operation was cancelled by the user
+    Cancelled(String),
 }
 
 impl Error for LLMResponse {}
@@ -151,6 +157,9 @@ impl crate::tracing::Visualize for LLMResponse {
             Self::InternalFailure(message) => {
                 format!("{}", format!("Failed before LLM call: {message}").red())
             }
+            Self::Cancelled(message) => {
+                format!("{}", format!("Operation cancelled: {message}").yellow())
+            }
         }
     }
 }
@@ -164,6 +173,7 @@ impl std::fmt::Display for LLMResponse {
                 write!(f, "Failed before LLM call (user error): {message}")
             }
             Self::InternalFailure(message) => write!(f, "Failed before LLM call: {message}"),
+            Self::Cancelled(message) => write!(f, "Operation cancelled: {message}"),
         }
     }
 }
@@ -179,6 +189,7 @@ impl LLMResponse {
             Self::InternalFailure(message) => {
                 Err(anyhow::anyhow!("Failed before LLM call: {message}"))
             }
+            Self::Cancelled(message) => Err(anyhow::anyhow!("Operation cancelled: {message}")),
         }
     }
 }
@@ -283,6 +294,7 @@ pub struct LLMCompleteResponseMetadata {
     pub prompt_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
+    pub cached_input_tokens: Option<u64>,
 }
 
 // This is how the response gets logged if you print the result to the console.

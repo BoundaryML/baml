@@ -1,12 +1,13 @@
 [project]
 name = "baml-py"
-version = "0.90.1"
+version = "0.211.2"
 description = "BAML python bindings (pyproject.toml)"
 readme = "README.md"
 authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]
-
-[project.license]
-file = "LICENSE"
+# This is what controls the Python license file, see
+# https://github.com/PyO3/maturin/issues/2718 and
+# https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license
+license = "Apache-2.0"
 
 [build-system]
 requires = ["maturin>=1.0,<2.0"]
@@ -20,6 +21,7 @@ features = ["pyo3/extension-module", "pyo3/generate-import-lib"]
 
 [project.scripts]
 baml-cli = "baml_py:invoke_runtime_cli"
+baml = "baml_py:invoke_runtime_cli"
 
 # NOTE: dependencies is _deliberately_ empty so that different flavors of BAML
 # don't have to share dependencies, e.g. we currently generate python/pydantic

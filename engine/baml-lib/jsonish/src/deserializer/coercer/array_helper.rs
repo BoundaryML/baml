@@ -93,6 +93,28 @@ pub(super) fn pick_best(
                             BamlValueWithFlags::List(_, _, items_b),
                         ) = (a_val, b_val)
                         {
+                            // Prefer lists with properly parsed content over lists containing raw markdown strings
+                            let a_has_markdown_string = items_a.first().is_some_and(|item| {
+                                item.conditions()
+                                    .flags
+                                    .iter()
+                                    .any(|f| matches!(f, Flag::ObjectFromMarkdown(_)))
+                            });
+                            let b_has_markdown_string = items_b.first().is_some_and(|item| {
+                                item.conditions()
+                                    .flags
+                                    .iter()
+                                    .any(|f| matches!(f, Flag::ObjectFromMarkdown(_)))
+                            });
+
+                            match (a_has_markdown_string, b_has_markdown_string) {
+                                // If a has markdown string but b doesn't, prefer b
+                                (true, false) => return std::cmp::Ordering::Greater,
+                                // If b has markdown string but a doesn't, prefer a
+                                (false, true) => return std::cmp::Ordering::Less,
+                                _ => {}
+                            }
+
                             let unparseables_a = a_val
                                 .conditions()
                                 .flags

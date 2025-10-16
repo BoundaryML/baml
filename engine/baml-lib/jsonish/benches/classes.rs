@@ -1,8 +1,13 @@
+#[cfg(not(target_arch = "wasm32"))]
 use baml_types::TypeIR;
+#[cfg(not(target_arch = "wasm32"))]
 use criterion::Criterion;
+#[cfg(not(target_arch = "wasm32"))]
 use internal_baml_jinja::types::Builder;
+#[cfg(not(target_arch = "wasm32"))]
 use jsonish::from_str;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn bench_complex_classes(c: &mut Criterion) {
     let mut group = c.benchmark_group("complex_classes");
 
@@ -24,6 +29,7 @@ pub fn bench_complex_classes(c: &mut Criterion) {
                 {"score": 4, "reviewer": "Bob", "date": "2024-01-02"}
             ]
         }"#,
+                true,
             )
         })
     });
@@ -34,6 +40,7 @@ pub fn bench_complex_classes(c: &mut Criterion) {
                 &of,
                 &target,
                 r#"{"title": "The Book", "author": "John Doe"}"#,
+                true,
             )
         })
     });

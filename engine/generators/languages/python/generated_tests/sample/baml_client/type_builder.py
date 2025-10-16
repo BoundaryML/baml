@@ -13,6 +13,8 @@
 import typing
 from baml_py import type_builder
 from baml_py import baml_py
+# These are exports, not used here, hence the linter is disabled
+from baml_py.baml_py import FieldType, EnumValueBuilder, EnumBuilder, ClassBuilder # noqa: F401 # pylint: disable=unused-import
 from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
 
 class TypeBuilder(type_builder.TypeBuilder):
@@ -55,7 +57,7 @@ class ExampleAst:
     def __init__(self, tb: type_builder.TypeBuilder):
         _tb = tb._tb # type: ignore (we know how to use this private attribute)
         self._bldr = _tb.class_("Example")
-        self._properties: typing.Set[str] = set([  "a",  "b",  ])
+        self._properties: typing.Set[str] = set([  "type",  "a",  "b",  ])
         self._props = ExampleProperties(self._bldr, self._properties)
 
     def type(self) -> baml_py.FieldType:
@@ -84,6 +86,10 @@ class ExampleProperties:
     
     
     @property
+    def type(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("type"))
+    
+    @property
     def a(self) -> type_builder.ClassPropertyViewer:
         return type_builder.ClassPropertyViewer(self.__bldr.property("a"))
     
@@ -98,7 +104,7 @@ class Example2Ast:
     def __init__(self, tb: type_builder.TypeBuilder):
         _tb = tb._tb # type: ignore (we know how to use this private attribute)
         self._bldr = _tb.class_("Example2")
-        self._properties: typing.Set[str] = set([  "item",  "element",  "element2",  ])
+        self._properties: typing.Set[str] = set([  "type",  "item",  "element",  "element2",  ])
         self._props = Example2Properties(self._bldr, self._properties)
 
     def type(self) -> baml_py.FieldType:
@@ -125,6 +131,10 @@ class Example2Properties:
         self.__properties = properties # type: ignore (we know how to use this private attribute) # noqa: F821
 
     
+    
+    @property
+    def type(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("type"))
     
     @property
     def item(self) -> type_builder.ClassPropertyViewer:

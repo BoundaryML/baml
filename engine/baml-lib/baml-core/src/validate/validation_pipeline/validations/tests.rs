@@ -1,4 +1,5 @@
 use baml_types::{Constraint, ConstraintLevel};
+use internal_baml_ast::ast::WithName;
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 use internal_baml_jinja_types::{validate_expression, JinjaContext, PredefinedTypes, Type};
 
@@ -7,6 +8,23 @@ use crate::validate::validation_pipeline::context::Context;
 pub(super) fn validate(ctx: &mut Context<'_>) {
     let tests = ctx.db.walk_test_cases().collect::<Vec<_>>();
     tests.iter().for_each(|walker| {
+        // Validate that test fields don't have @assert or @check attributes
+        let test_ast = walker.ast_node();
+        for (_field_id, field) in test_ast.iter_fields() {
+            for attr in &field.attributes {
+                if attr.name.name() == "assert" || attr.name.name() == "check" {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        &format!(
+                            "@{} is not allowed on test fields. Use @@{} at the test block level instead.",
+                            attr.name.name(),
+                            attr.name.name()
+                        ),
+                        attr.span.clone(),
+                    ));
+                }
+            }
+        }
+
         let constraints = &walker.test_case().constraints;
         let args = &walker.test_case().args;
         let mut check_names: Vec<String> = Vec::new();

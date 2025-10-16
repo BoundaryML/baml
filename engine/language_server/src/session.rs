@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::Instant,
 };
 
@@ -12,6 +12,8 @@ use anyhow::{anyhow, Context};
 use index::DocumentController;
 use itertools::any;
 use lsp_types::{ClientCapabilities, TextDocumentContentChangeEvent, Url};
+use parking_lot::Mutex;
+use playground_server::{WebviewCommand, WebviewRouterMessage};
 use serde_json::Value;
 
 pub(crate) use self::{capabilities::ResolvedClientCapabilities, settings::AllSettings};
@@ -29,11 +31,9 @@ use crate::{PositionEncoding, TextDocument};
 
 mod capabilities;
 pub mod index;
-mod settings;
+pub mod settings;
 
 use tokio::sync::{broadcast, RwLock};
-
-use crate::playground::{broadcast_project_update, PlaygroundState};
 
 /// The global state for the LSP
 #[derive(Debug)]
@@ -51,19 +51,8 @@ pub struct Session {
 
     pub baml_settings: BamlSettings,
 
-    pub playground_state: Option<Arc<RwLock<PlaygroundState>>>,
-
-    /// Runtime for the playground server
-    pub playground_runtime: Option<tokio::runtime::Runtime>,
-}
-
-impl Drop for Session {
-    fn drop(&mut self) {
-        // Shutdown the playground runtime if it exists
-        if let Some(runtime) = self.playground_runtime.take() {
-            runtime.shutdown_timeout(std::time::Duration::from_secs(1));
-        }
-    }
+    pub playground_port: u16,
+    pub to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
 }
 
 impl Clone for Session {
@@ -74,8 +63,8 @@ impl Clone for Session {
             position_encoding: self.position_encoding,
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
             baml_settings: self.baml_settings.clone(),
-            playground_state: self.playground_state.clone(),
-            playground_runtime: None, // Don't clone the runtime
+            playground_port: self.playground_port,
+            to_webview_router_tx: self.to_webview_router_tx.clone(),
         }
     }
 }
@@ -86,7 +75,9 @@ impl Session {
         position_encoding: PositionEncoding,
         global_settings: ClientSettings,
         workspace_folders: &[(Url, ClientSettings)],
-        runtime_handle: tokio::runtime::Handle,
+        playground_port: u16,
+        to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
+        client_version: Option<String>,
     ) -> anyhow::Result<Self> {
         let mut projects = HashMap::new();
         let index = index::Index::new(global_settings.clone());
@@ -116,6 +107,8 @@ impl Session {
             }
         }
 
+        let baml_settings = BamlSettings::default().with_client_version(client_version);
+
         Ok(Self {
             position_encoding,
             baml_src_projects: Arc::new(Mutex::new(projects)),
@@ -123,23 +116,60 @@ impl Session {
             resolved_client_capabilities: Arc::new(ResolvedClientCapabilities::new(
                 client_capabilities,
             )),
-            baml_settings: BamlSettings::default(),
-            playground_state: None,
-            playground_runtime: None,
+            baml_settings: {
+                tracing::info!(
+                    "--- Session::new global_settings.baml: {:?}",
+                    global_settings.baml
+                );
+                let baml_settings = global_settings.baml.clone().unwrap_or_default();
+                tracing::info!("--- Session::new final baml_settings: {:#?}", baml_settings);
+                baml_settings
+            },
+            playground_port,
+            to_webview_router_tx,
         })
     }
 
-    pub fn update_baml_settings(&mut self, settings: Value) {
-        match serde_json::from_value(settings) {
+    pub fn update_baml_settings(&mut self, settings: Value) -> bool {
+        tracing::info!("update_baml_settings called with: {:?}", settings);
+        match serde_json::from_value::<BamlSettings>(settings) {
             Ok(parsed_settings) => {
+                tracing::info!("Successfully parsed BAML settings: {:?}", parsed_settings);
+                tracing::info!(
+                    "Previous feature_flags: {:?}",
+                    self.baml_settings.feature_flags
+                );
+
+                // Check if feature flags actually changed
+                let feature_flags_changed =
+                    self.baml_settings.feature_flags != parsed_settings.feature_flags;
+
                 self.baml_settings = parsed_settings;
+                tracing::info!("New feature_flags: {:?}", self.baml_settings.feature_flags);
+
+                if feature_flags_changed {
+                    tracing::info!("Feature flags changed, diagnostics should be republished");
+                }
+
+                feature_flags_changed
             }
             Err(err) => {
                 tracing::error!("Failed to parse BAML settings: {}", err);
+                false
             }
         }
     }
+}
+#[derive(Debug, Clone)]
+pub struct NotInBamlSrc;
 
+impl std::fmt::Display for NotInBamlSrc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Cannot resolve baml project")
+    }
+}
+
+impl Session {
     /// Gets or creates a project for the given path.
     ///
     /// This is the primary method for working with projects, replacing the multiple
@@ -151,44 +181,41 @@ impl Session {
     pub fn get_or_create_project(
         &self,
         path: impl AsRef<Path> + std::fmt::Debug,
-    ) -> Option<Arc<Mutex<Project>>> {
+    ) -> Result<Arc<Mutex<Project>>, NotInBamlSrc> {
         // Try to find the baml_src directory
-        let baml_src = find_top_level_parent(path.as_ref())?;
+        let baml_src_root_path = find_top_level_parent(path.as_ref()).ok_or(NotInBamlSrc)?;
 
         // Lock once and perform all operations within this scope
-        let mut projects = self.baml_src_projects.lock().unwrap();
+        let mut projects = self.baml_src_projects.lock();
 
         // If project exists, return it
-        if let Some(project) = projects.get(&baml_src) {
-            return Some(project.clone());
+        if let Some(project) = projects.get(&baml_src_root_path) {
+            return Ok(project.clone());
         }
 
         // Create a new project if needed
-        tracing::info!("Creating new project for baml_src path: {:?}", baml_src);
+        tracing::info!(
+            "Creating new project for baml_src: {:?}",
+            baml_src_root_path
+        );
         let new_project = Arc::new(Mutex::new(Project::new(BamlProject {
-            root_dir_name: baml_src.clone(),
+            root_dir_name: baml_src_root_path.clone(),
             files: HashMap::new(),
             unsaved_files: HashMap::new(),
             cached_runtime: None,
         })));
 
         // Insert and return the new project
-        projects.insert(baml_src, new_project.clone());
-        Some(new_project)
+        projects.insert(baml_src_root_path, new_project.clone());
+        Ok(new_project)
     }
 
     pub fn print_baml_projects(&self) {
-        let projects = self.baml_src_projects.lock().unwrap();
+        let projects = self.baml_src_projects.lock();
 
         let info_string = projects
             .iter()
-            .map(|(key, project)| {
-                format!(
-                    "{}: {:?}",
-                    key.display(),
-                    project.lock().unwrap().root_path()
-                )
-            })
+            .map(|(key, project)| format!("{}: {:?}", key.display(), project.lock().root_path()))
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -200,31 +227,65 @@ impl Session {
     }
 
     pub fn reload(&mut self, notifier: Option<Notifier>) -> anyhow::Result<()> {
+        // tracing::info!("skipping session reload");
+        // return Ok(());
         tracing::info!("Reloading session");
-        let project_updates: Vec<HashMap<_, _>> = self
-            .baml_src_projects
-            .lock()
-            .unwrap()
+        let mut baml_src_projects = self.baml_src_projects.lock();
+
+        // Drop moved "baml_src" directories, otherwise the project_updates
+        // code below will fail trying to read directories that no longer exist.
+        let removed_baml_src_dirs = baml_src_projects
+            .keys()
+            .filter(|project_root| !project_root.exists())
+            .cloned()
+            .collect::<Vec<_>>();
+        for baml_src_dir in &removed_baml_src_dirs {
+            baml_src_projects.remove(baml_src_dir);
+        }
+
+        let project_updates: Vec<HashMap<_, _>> = baml_src_projects
             .iter_mut()
-            .map(|(_project_root, project)| {
+            .map(|(project_root, project)| {
                 let files_map = project
                     .lock()
-                    .unwrap()
                     .baml_project
                     .load_files()
                     .map_err(|e| anyhow::anyhow!("Failed to load project files: {}", e))?;
-                project
-                    .lock()
-                    .unwrap()
-                    .update_runtime(notifier.clone())
-                    .map_err(|e| {
-                        tracing::error!("Failed to update runtime after reloading files: {e}");
-                        anyhow::anyhow!("Failed to update runtime after reloading files: {e}")
-                    })?;
+
+                tracing::info!(
+                    "Loaded {} files for project root: {:?}",
+                    files_map.len(),
+                    project_root
+                );
+
+                {
+                    let default_flags = vec!["beta".to_string()];
+                    project.lock().update_runtime(
+                        notifier.clone(),
+                        self.baml_settings
+                            .feature_flags
+                            .as_ref()
+                            .unwrap_or(&default_flags),
+                    )
+                }
+                .map_err(|e| {
+                    tracing::error!("Failed to update runtime after reloading files: {e}");
+                    anyhow::anyhow!("Failed to update runtime after reloading files: {e}")
+                })?;
                 Ok(files_map)
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
-        tracing::info!("Initial reload of {} files", project_updates.len());
+
+        let total_files: usize = project_updates.iter().map(|m| m.len()).sum();
+        tracing::info!(
+            "Initial reload complete: {} projects, {} total files",
+            project_updates.len(),
+            total_files
+        );
+
+        // Guard no longer used. We can drop now instead of waiting for the end
+        // of scope.
+        drop(baml_src_projects);
 
         let files: Vec<(DocumentKey, String)> = project_updates
             .into_iter()
@@ -239,17 +300,13 @@ impl Session {
         // Index all the files, except for the ones with unsaved changes.
         files.iter().for_each(|(file_url, file_contents)| {
             let text_document = TextDocument::new(file_contents.clone(), 0);
-            let document_is_unsaved = any(
-                self.baml_src_projects.lock().unwrap().iter(),
-                |(_, project)| {
-                    project
-                        .lock()
-                        .unwrap()
-                        .baml_project
-                        .unsaved_files
-                        .contains_key(file_url)
-                },
-            );
+            let document_is_unsaved = any(self.baml_src_projects.lock().iter(), |(_, project)| {
+                project
+                    .lock()
+                    .baml_project
+                    .unsaved_files
+                    .contains_key(file_url)
+            });
             if !document_is_unsaved {
                 self.open_text_document(file_url.clone(), text_document);
             }
@@ -261,23 +318,22 @@ impl Session {
 
     pub fn clear_unsaved_files(&mut self) {
         tracing::info!("Clearing unsaved files");
-        for (_folder, project) in self.baml_src_projects.lock().unwrap().iter_mut() {
-            project.lock().unwrap().baml_project.unsaved_files.clear();
+        for (_folder, project) in self.baml_src_projects.lock().iter_mut() {
+            project.lock().baml_project.unsaved_files.clear();
         }
     }
 
     /// Creates a document snapshot with the URL referencing the document to snapshot.
     pub fn take_snapshot(&self, url: Url) -> Option<DocumentSnapshot> {
         let file_path = url.to_file_path().ok()?;
-        let project = self.get_or_create_project(&file_path)?;
+        let project = self.get_or_create_project(&file_path).ok()?;
 
         let document_key =
-            DocumentKey::from_url(&project.lock().unwrap().baml_project.root_dir_name, &url)
-                .ok()?;
+            DocumentKey::from_url(&project.lock().baml_project.root_dir_name, &url).ok()?;
 
         Some(DocumentSnapshot {
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
-            document_ref: self.index.lock().unwrap().make_document_ref(document_key)?,
+            document_ref: self.index.lock().make_document_ref(document_key)?,
             position_encoding: self.position_encoding,
             session: Arc::new((*self).clone()),
         })
@@ -286,8 +342,7 @@ impl Session {
     /// Registers a text document at the provided `url`.
     /// If a document is already open here, it will be overwritten.
     pub(crate) fn open_text_document(&self, document_key: DocumentKey, document: TextDocument) {
-        let mut index = self.index.lock().unwrap();
-        index.open_text_document(document_key, document);
+        self.index.lock().open_text_document(document_key, document);
     }
 
     pub(crate) fn set_unsaved_file(
@@ -303,11 +358,10 @@ impl Session {
                 )
             }
         };
-        for (_folder, project) in self.baml_src_projects.lock().unwrap().iter_mut() {
+        for (_folder, project) in self.baml_src_projects.lock().iter_mut() {
             let text_document = TextDocument::new(new_contents.clone(), 0);
             project
                 .lock()
-                .unwrap()
                 .baml_project
                 .unsaved_files
                 .insert(document_key.clone(), text_document);
@@ -329,7 +383,7 @@ impl Session {
         let doc_key = key;
         let start_time = Instant::now();
         let doc_contents = {
-            let mut index = self.index.lock().unwrap();
+            let mut index = self.index.lock();
             index.update_text_document(key, content_changes, new_version, position_encoding)?;
 
             let doc_controller = index
@@ -346,30 +400,28 @@ impl Session {
         let start_time = Instant::now();
         self.baml_src_projects
             .lock()
-            .unwrap()
             .iter_mut()
             .try_for_each(|(_folder, project)| {
                 let text_document = TextDocument::new(doc_contents.clone(), 0);
-                if project
-                    .lock()
-                    .unwrap()
-                    .baml_project
-                    .files
-                    .contains_key(doc_key)
-                {
+                if project.lock().baml_project.files.contains_key(doc_key) {
                     project
                         .lock()
-                        .unwrap()
                         .baml_project
                         .unsaved_files
                         .insert(doc_key.clone(), text_document);
                     let _elapsed = start_time.elapsed();
 
-                    project
-                        .lock()
-                        .unwrap()
-                        .update_runtime(notifier.clone())
-                        .map_err(|e| anyhow::anyhow!("Could not update runtime: {e}"))?;
+                    {
+                        let default_flags = vec!["beta".to_string()];
+                        project.lock().update_runtime(
+                            notifier.clone(),
+                            self.baml_settings
+                                .feature_flags
+                                .as_ref()
+                                .unwrap_or(&default_flags),
+                        )
+                    }
+                    .map_err(|e| anyhow::anyhow!("Could not update runtime: {e}"))?;
                     let _elapsed = start_time.elapsed();
                 }
                 Ok::<(), anyhow::Error>(())
@@ -380,7 +432,7 @@ impl Session {
     /// De-registers a document, specified by its key.
     /// Calling this multiple times for the same document is a logic error.
     pub(crate) fn close_document(&self, key: &DocumentKey) -> anyhow::Result<()> {
-        let mut index = self.index.lock().unwrap();
+        let mut index = self.index.lock();
         index.close_document(key)?;
         Ok(())
     }
@@ -414,9 +466,17 @@ impl DocumentSnapshot {
         self.position_encoding
     }
 
-    pub(crate) fn project(&self) -> Option<Arc<Mutex<Project>>> {
-        let file_path = self.document_ref.file_url().to_file_path().ok()?;
+    pub(crate) fn project(&self) -> Result<Arc<Mutex<Project>>, NotInBamlSrc> {
+        let file_path = self
+            .document_ref
+            .file_url()
+            .to_file_path()
+            .expect("Failed to convert URL to path");
         self.session.get_or_create_project(&file_path)
+    }
+
+    pub(crate) fn session_baml_settings(&self) -> &BamlSettings {
+        &self.session.baml_settings
     }
 }
 
@@ -446,14 +506,16 @@ mod tests {
         let global_settings = ClientSettings::default();
         let workspace_folders = vec![]; // Start with empty workspace
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (to_webview_router_tx, _) = broadcast::channel(1);
 
         Session::new(
             &client_capabilities,
             position_encoding,
             global_settings,
             &workspace_folders,
-            rt.handle().clone(),
+            0,
+            to_webview_router_tx,
+            None, // No client_version for this test
         )
         .unwrap()
     }
@@ -473,28 +535,28 @@ mod tests {
 
         // Create a project for key1
         let project1 = session.get_or_create_project(&key1);
-        assert!(project1.is_some(), "Project should be created for key1");
+        assert!(project1.is_ok(), "Project should be created for key1");
 
         // Verify that get_or_create_project returns the same project when called again
         let project1_again = session.get_or_create_project(&key1);
-        assert!(project1_again.is_some(), "Project should be found for key1");
+        assert!(project1_again.is_ok(), "Project should be found for key1");
 
         // Create a project for key2
         let project2 = session.get_or_create_project(&key2);
-        assert!(project2.is_some(), "Project should be created for key2");
+        assert!(project2.is_ok(), "Project should be created for key2");
 
         // Test with a file path inside key2
         let file_path_in_key2 = key2.join("chat.baml");
         let found_project = session.get_or_create_project(&file_path_in_key2);
         assert!(
-            found_project.is_some(),
+            found_project.is_ok(),
             "Project should be found for file path within key2"
         );
 
         // Verify it's the same project
         {
             let unwrapped_project = found_project.unwrap();
-            let project_guard = unwrapped_project.lock().unwrap();
+            let project_guard = unwrapped_project.lock();
             let found_root = project_guard.root_path();
             assert_eq!(
                 found_root, key2,

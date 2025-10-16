@@ -1,7 +1,7 @@
 use baml_types::{
     baml_value::TypeLookups,
     ir_type::{TypeNonStreaming, TypeStreaming},
-    type_meta::{self, base::TypeMeta, stream::TypeMetaStreaming},
+    type_meta::{self, stream::TypeMetaStreaming},
     BamlMediaType, ConstraintLevel, TypeValue,
 };
 
@@ -126,6 +126,10 @@ pub(crate) fn stream_type_to_py(field: &TypeStreaming, _lookup: &impl TypeLookup
                 }
             }
         }
+        T::Top(_) => panic!(
+            "TypeGeneric::Top should have been resolved by the compiler before code generation. \
+             This indicates a bug in the type resolution phase."
+        ),
     };
 
     type_py
@@ -224,6 +228,10 @@ pub(crate) fn type_to_py(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
                 }
             }
         },
+        T::Top(_) => panic!(
+            "TypeGeneric::Top should have been resolved by the compiler before code generation. \
+             This indicates a bug in the type resolution phase."
+        ),
     };
 
     type_py
@@ -304,6 +312,8 @@ impl From<&BamlMediaType> for MediaTypePy {
         match baml_media_type {
             BamlMediaType::Image => MediaTypePy::Image,
             BamlMediaType::Audio => MediaTypePy::Audio,
+            BamlMediaType::Pdf => MediaTypePy::Pdf,
+            BamlMediaType::Video => MediaTypePy::Video,
         }
     }
 }

@@ -15,6 +15,15 @@ macro_rules! lang_wrapper {
                 }
             }
         }
+
+        impl From<std::sync::Arc<$type>> for $name {
+            fn from(inner: std::sync::Arc<$type>) -> Self {
+                Self {
+                    inner,
+                    $($attr_name: $default),*
+                }
+            }
+        }
     };
 
     ($name:ident, $type:ty, clone_safe, custom_finalize $(, $attr_name:ident : $attr_type:ty = $default:expr)*) => {
@@ -69,10 +78,10 @@ macro_rules! lang_wrapper {
         }
     };
 
-    ($name:ident, $type:ty, custom_finalize, no_from, thread_safe $(, $attr_name:ident : $attr_type:ty)*) => {
+    ($name:ident, $type:ty, custom_finalize, no_from, optional $(, $attr_name:ident : $attr_type:ty)*) => {
         #[napi_derive::napi(custom_finalize)]
         pub struct $name {
-            pub(crate) inner: std::sync::Arc<tokio::sync::Mutex<$type>>,
+            pub(crate) inner: Option<$type>,
             $($attr_name: $attr_type),*
         }
     };

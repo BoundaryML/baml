@@ -9,7 +9,7 @@ use baml_types::{
     expr::{self, Builtin, Expr, ExprMetadata, Name, VarIndex},
     ir_type::{ArrowGeneric, TypeNonStreaming, TypeStreaming, UnionConstructor},
     type_meta, Arrow, BamlMap, BamlValueWithMeta, Constraint, ConstraintLevel, JinjaExpression,
-    Resolvable, StringOr, TypeIR, TypeValue, UnionType, UnresolvedValue,
+    Resolvable, StreamingMode, StringOr, TypeIR, TypeValue, UnionType, UnresolvedValue,
 };
 use either::Either;
 use indexmap::{IndexMap, IndexSet};
@@ -17,7 +17,7 @@ use internal_baml_ast::ast::{
     self, Attribute, FieldArity, SubType, ValExpId, WithAttributes, WithIdentifier, WithName,
     WithSpan,
 };
-use internal_baml_diagnostics::{Diagnostics, Span};
+use internal_baml_diagnostics::{DatamodelWarning, Diagnostics, Span};
 use internal_baml_parser_database::{
     walkers::{
         ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, ExprFnWalker,
@@ -30,10 +30,7 @@ use internal_llm_client::{ClientProvider, ClientSpec, UnresolvedClientProperty};
 use serde::Serialize;
 
 use super::builtin::{builtin_classes, builtin_generic_fn, builtin_ir, is_builtin_identifier};
-use crate::{
-    validate::validation_pipeline::validations::expr_typecheck::infer_types_in_context,
-    Configuration,
-};
+use crate::Configuration;
 
 /// This class represents the intermediate representation of the BAML AST.
 /// It is a representation of the BAML AST that is easier to work with than the
@@ -109,7 +106,8 @@ impl Pass2Repr {
             | TypeGeneric::Literal(.., meta) => {
                 meta.streaming_behavior.done = true;
             }
-            TypeGeneric::Primitive(
+            TypeGeneric::Top(_)
+            | TypeGeneric::Primitive(
                 TypeValue::String | TypeValue::Media(..) | TypeValue::Null,
                 ..,
             )
@@ -180,7 +178,7 @@ impl WithRepr<TopLevelAssignment> for TopLevelAssignmentWalker<'_> {
             .identifier
             .name()
             .to_string();
-        let expr = self.top_level_assignment().stmt.body.repr(db)?;
+        let expr = self.top_level_assignment().stmt.expr.repr(db)?;
         Ok(TopLevelAssignment {
             name: Node {
                 elem: name,
@@ -310,22 +308,31 @@ fn convert_function_body(
     function_body: ast::ExpressionBlock,
     db: &ParserDatabase,
 ) -> Result<Expr<ExprMetadata>> {
-    function_body.expr.repr(db).map(|fn_body| {
-        let mut stmts = function_body.stmts.clone();
-        stmts.reverse();
-        let expr = stmts
-            .iter()
-            .fold(fn_body, |acc, stmt| match stmt.body.repr(db) {
-                Ok(stmt_expr) => Expr::Let(
-                    stmt.identifier.name().to_string(),
-                    Arc::new(stmt_expr),
-                    Arc::new(acc),
-                    (stmt.body.span().clone(), None),
-                ),
-                Err(e) => acc,
-            });
-        expr
-    })
+    function_body
+        .expr
+        .map(|e| e.repr(db))
+        .unwrap_or_else(|| {
+            // eprintln!("TODO @greg: convert blocks with no return types to lambda terms");
+            // Placeholder just to allow compilation.
+            Ok(Expr::Atom(BamlValueWithMeta::Null((Span::fake(), None))))
+        })
+        .map(|fn_body| {
+            let mut stmts = function_body.stmts.clone();
+            stmts.reverse();
+            let expr = stmts
+                .iter()
+                .filter(|stmt| matches!(stmt, ast::Stmt::Let(_))) // TODO: @greg
+                .fold(fn_body, |acc, stmt| match stmt.body().repr(db) {
+                    Ok(stmt_expr) => Expr::Let(
+                        stmt.identifier().name().to_string(),
+                        Arc::new(stmt_expr),
+                        Arc::new(acc),
+                        (stmt.span().clone(), None),
+                    ),
+                    Err(e) => acc,
+                });
+            expr
+        })
 }
 
 impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
@@ -335,15 +342,22 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                 *val,
                 (span.clone(), Some(TypeIR::bool())),
             ))),
-            ast::Expression::NumericValue(val, span) => val
-                .parse::<i64>()
-                .map(|v| {
-                    Expr::Atom(BamlValueWithMeta::Int(
+            ast::Expression::NumericValue(val, span) => {
+                // Prefer int when it parses cleanly; otherwise fall back to float.
+                if let Ok(v) = val.parse::<i64>() {
+                    Ok(Expr::Atom(BamlValueWithMeta::Int(
                         v,
                         (span.clone(), Some(TypeIR::int())),
-                    ))
-                })
-                .map_err(|_| anyhow!("Invalid numeric value: {}", val)),
+                    )))
+                } else if let Ok(f) = val.parse::<f64>() {
+                    Ok(Expr::Atom(BamlValueWithMeta::Float(
+                        f,
+                        (span.clone(), Some(TypeIR::float())),
+                    )))
+                } else {
+                    Err(anyhow!("Invalid numeric value: {}", val))
+                }
+            }
             ast::Expression::StringValue(val, span) => Ok(Expr::Atom(BamlValueWithMeta::String(
                 val.to_string(),
                 (span.clone(), Some(TypeIR::string())),
@@ -494,21 +508,79 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     (span.clone(), None),
                 ))
             }
-            ast::Expression::ForLoop {
-                identifier,
-                iterator,
-                body,
+            ast::Expression::ArrayAccess(base, index, span) => {
+                let base_ir = base.repr(db)?;
+                let index_ir = index.repr(db)?;
+                Ok(Expr::ArrayAccess {
+                    base: Arc::new(base_ir),
+                    index: Arc::new(index_ir),
+                    meta: (span.clone(), None), // Type will be inferred later
+                })
+            }
+            ast::Expression::FieldAccess(base, field, span) => {
+                let base_ir = base.repr(db)?;
+                Ok(Expr::FieldAccess {
+                    base: Arc::new(base_ir),
+                    field: field.name().to_string(),
+                    meta: (span.clone(), None), // Type will be inferred later
+                })
+            }
+            // TODO: impl this (needs to compile, can't panic).
+            ast::Expression::MethodCall { span, .. } => {
+                Ok(Expr::Atom(BamlValueWithMeta::Null((span.clone(), None))))
+            }
+            ast::Expression::BinaryOperation {
+                left,
+                operator,
+                right,
                 span,
             } => {
-                let iterator = iterator.repr(db)?;
-                let body = convert_function_body(body.clone(), db)?;
-                Ok(Expr::ForLoop {
-                    item: identifier.to_string(),
-                    iterable: Arc::new(iterator),
-                    body: Arc::new(body),
+                let left_ir = left.repr(db)?;
+                let right_ir = right.repr(db)?;
+                Ok(Expr::BinaryOperation {
+                    left: Arc::new(left_ir),
+                    operator: match operator {
+                        ast::BinaryOperator::Eq => expr::BinaryOperator::Eq,
+                        ast::BinaryOperator::Neq => expr::BinaryOperator::Neq,
+                        ast::BinaryOperator::Lt => expr::BinaryOperator::Lt,
+                        ast::BinaryOperator::LtEq => expr::BinaryOperator::LtEq,
+                        ast::BinaryOperator::Gt => expr::BinaryOperator::Gt,
+                        ast::BinaryOperator::GtEq => expr::BinaryOperator::GtEq,
+                        ast::BinaryOperator::Add => expr::BinaryOperator::Add,
+                        ast::BinaryOperator::Sub => expr::BinaryOperator::Sub,
+                        ast::BinaryOperator::Mul => expr::BinaryOperator::Mul,
+                        ast::BinaryOperator::Div => expr::BinaryOperator::Div,
+                        ast::BinaryOperator::Mod => expr::BinaryOperator::Mod,
+                        ast::BinaryOperator::BitAnd => expr::BinaryOperator::BitAnd,
+                        ast::BinaryOperator::BitOr => expr::BinaryOperator::BitOr,
+                        ast::BinaryOperator::BitXor => expr::BinaryOperator::BitXor,
+                        ast::BinaryOperator::Shl => expr::BinaryOperator::Shl,
+                        ast::BinaryOperator::Shr => expr::BinaryOperator::Shr,
+                        ast::BinaryOperator::And => expr::BinaryOperator::And,
+                        ast::BinaryOperator::Or => expr::BinaryOperator::Or,
+                        ast::BinaryOperator::InstanceOf => expr::BinaryOperator::InstanceOf,
+                    },
+                    right: Arc::new(right_ir),
                     meta: (span.clone(), None),
                 })
             }
+            ast::Expression::UnaryOperation {
+                expr,
+                operator,
+                span,
+            } => {
+                let expr_ir = expr.repr(db)?;
+                Ok(Expr::UnaryOperation {
+                    expr: Arc::new(expr_ir),
+                    operator: match operator {
+                        ast::UnaryOperator::Not => expr::UnaryOperator::Not,
+                        ast::UnaryOperator::Neg => expr::UnaryOperator::Neg,
+                    },
+                    meta: (span.clone(), None),
+                })
+            }
+            // Don't care.
+            ast::Expression::Paren(expr, span) => expr.repr(db),
         }
     }
 }
@@ -642,7 +714,7 @@ impl IntermediateRepr {
         let mut res = vec![];
         all_types.for_each(|t| {
             let found = t.to_non_streaming_type(self);
-            res.extend(found.find_if(&is_union).into_iter().cloned());
+            res.extend(found.find_if(&is_union, false).into_iter().cloned());
         });
 
         res.into_iter()
@@ -677,7 +749,7 @@ impl IntermediateRepr {
         let mut res = vec![];
         all_types.for_each(|t| {
             let found = t.to_streaming_type(self);
-            res.extend(found.find_if(&is_union).into_iter().cloned());
+            res.extend(found.find_if(&is_union, false).into_iter().cloned());
         });
 
         res.into_iter()
@@ -708,11 +780,22 @@ impl IntermediateRepr {
         self.expr_fns.iter().map(|e| Walker { ir: self, item: e })
     }
 
-    pub fn walk_tests(
+    pub fn walk_function_test_pairs(
         &self,
     ) -> impl Iterator<Item = Walker<'_, (&Node<Function>, &Node<TestCase>)>> {
         self.functions.iter().flat_map(move |f| {
             f.elem.tests().iter().map(move |t| Walker {
+                ir: self,
+                item: (f, t),
+            })
+        })
+    }
+
+    pub fn walk_expr_fn_test_pairs(
+        &self,
+    ) -> impl Iterator<Item = Walker<'_, (&Node<ExprFunction>, &Node<TestCase>)>> {
+        self.expr_fns.iter().flat_map(move |f| {
+            f.elem.tests.iter().map(move |t| Walker {
                 ir: self,
                 item: (f, t),
             })
@@ -814,16 +897,10 @@ impl IntermediateRepr {
         repr.classes.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
         repr.functions
             .sort_by(|a, b| a.elem.name().cmp(b.elem.name()));
+        repr.expr_fns.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
         repr.clients.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
         repr.retry_policies
             .sort_by(|a, b| a.elem.name.0.cmp(&b.elem.name.0));
-
-        let mut typing_context = initial_typing_context(&repr);
-        for expr_fn in repr.expr_fns.iter_mut() {
-            let expr = expr_fn.elem.expr.clone();
-            let inferred_expr = infer_types_in_context(&mut typing_context, Arc::new(expr));
-            expr_fn.elem.expr = Arc::unwrap_or_clone(inferred_expr);
-        }
 
         // Strip out builtin classes.
         repr.classes
@@ -883,6 +960,120 @@ impl IntermediateRepr {
     /// Modifies the type to inject any block level attributes that are present on the class or enum.
     pub fn finalize_type(&self, type_generic: &mut TypeIR) {
         self.pass2_repr.update_type(type_generic);
+    }
+
+    // For each test, check that its arguments are valid - that they
+    // have the correct name and type for the function under test.
+    // If there are required args but the test has an empty args block,
+    // Produce an error message with a fully example of an args block with
+    // dummy args.
+    // If there are some args in the test block, give examples of all the
+    // missing args.
+    pub fn validate_test_args(&self, diagnostics: &mut Diagnostics) {
+        use std::collections::HashSet;
+
+        use crate::ir::ir_helpers::IRHelper;
+
+        // Validate LLM function tests
+        for function in &self.functions {
+            for test in &function.elem.tests {
+                if let Some(span) = test.attributes.span.as_ref() {
+                    self.validate_single_test_args(&function.elem, &test.elem, span, diagnostics);
+                }
+            }
+        }
+
+        // Validate expression function tests
+        for expr_function in &self.expr_fns {
+            for test in &expr_function.elem.tests {
+                let pseudo_function = Function {
+                    name: expr_function.elem.name.clone(),
+                    inputs: expr_function.elem.inputs.clone(),
+                    output: expr_function.elem.output.clone(),
+                    tests: vec![],                 // Not used in validation
+                    configs: vec![],               // Not used in validation
+                    default_config: String::new(), // Not used in validation
+                };
+                if let Some(span) = test.attributes.span.as_ref() {
+                    self.validate_single_test_args(&pseudo_function, &test.elem, span, diagnostics);
+                }
+            }
+        }
+    }
+
+    fn validate_single_test_args(
+        &self,
+        function: &Function,
+        test: &TestCase,
+        test_span: &Span,
+        diagnostics: &mut Diagnostics,
+    ) {
+        use std::collections::HashSet;
+
+        use baml_types::BamlMap;
+        use internal_baml_diagnostics::DatamodelError;
+
+        use crate::ir::ir_helpers::IRHelper;
+
+        let function_inputs: HashSet<&String> =
+            function.inputs.iter().map(|(name, _)| name).collect();
+        let test_args: HashSet<&String> = test.args.keys().collect();
+
+        // Find missing required arguments (filter out optional/nullable types)
+        let missing_args: Vec<&String> = function_inputs
+            .difference(&test_args)
+            .filter(|name| {
+                function
+                    .inputs
+                    .iter()
+                    .find(|(input_name, _)| *input_name == name.to_string())
+                    .map(|(_, type_ir)| !type_ir.is_optional())
+                    .unwrap_or(false)
+            })
+            .copied()
+            .collect();
+
+        // Handle missing arguments
+        if !missing_args.is_empty() {
+            if test.args.is_empty() && !function.inputs.is_empty() {
+                // Test has empty args block but function has required args - provide full example
+                let params_map: BamlMap<String, TypeIR> = function
+                    .inputs
+                    .iter()
+                    .map(|(name, type_ir)| (name.clone(), type_ir.clone()))
+                    .collect();
+                let example_args = self.get_dummy_args(1, true, &params_map);
+
+                diagnostics.push_warning(DatamodelWarning::new(
+                    format!("Test '{}' is missing required arguments for function '{}'. Add an args block like:\n\nargs {{\n{}\n}}",
+                             test.name, function.name, example_args),
+                    test_span.clone(),
+                ));
+            } else if !missing_args.is_empty() {
+                // Test has some args but is missing others - show missing ones with dummy values
+                let missing_params_map: BamlMap<String, TypeIR> = missing_args
+                    .iter()
+                    .filter_map(|name| {
+                        function
+                            .inputs
+                            .iter()
+                            .find(|(input_name, _)| input_name == *name)
+                            .map(|(name, type_ir)| (name.clone(), type_ir.clone()))
+                    })
+                    .collect();
+                let missing_examples = self.get_dummy_args(0, false, &missing_params_map);
+
+                diagnostics.push_warning(DatamodelWarning::new(
+                    format!(
+                        "Test '{}' is missing required arguments for function '{}': {}",
+                        test.name,
+                        function.name,
+                        missing_examples.replace('\n', ", ")
+                    ),
+                    test_span.clone(),
+                ));
+            }
+        }
     }
 
     /// Some block_types like enums and classes may have attributes on them.
@@ -1603,6 +1794,7 @@ impl WithRepr<TypeIR> for ast::FieldType {
                             // TODO: use resolved in some way
                             TypeIR::RecursiveTypeAlias {
                                 name: alias_walker.name().to_string(),
+                                mode: StreamingMode::Streaming,
                                 meta: Default::default(),
                             }
                         } else {
@@ -2263,6 +2455,74 @@ pub fn annotate_variable(
                 meta: meta.clone(),
             }
         }
+        Expr::ArrayAccess { base, index, meta } => {
+            let new_base = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(base.clone()),
+            );
+            let new_index = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(index.clone()),
+            );
+            Expr::ArrayAccess {
+                base: Arc::new(new_base),
+                index: Arc::new(new_index),
+                meta: meta.clone(),
+            }
+        }
+        Expr::FieldAccess { base, field, meta } => {
+            let new_base = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(base.clone()),
+            );
+            Expr::FieldAccess {
+                base: Arc::new(new_base),
+                field: field.clone(),
+                meta: meta.clone(),
+            }
+        }
+        Expr::BinaryOperation {
+            left,
+            right,
+            operator,
+            meta,
+        } => {
+            let new_left = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(left.clone()),
+            );
+            let new_right = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(right.clone()),
+            );
+            Expr::BinaryOperation {
+                left: Arc::new(new_left),
+                operator: operator.clone(),
+                right: Arc::new(new_right),
+                meta: meta.clone(),
+            }
+        }
+        Expr::UnaryOperation {
+            expr,
+            operator,
+            meta,
+        } => {
+            let new_expr = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(expr.clone()),
+            );
+            Expr::UnaryOperation {
+                expr: Arc::new(new_expr),
+                operator: operator.clone(),
+                meta: meta.clone(),
+            }
+        }
     }
 }
 
@@ -2663,7 +2923,8 @@ pub fn make_test_ir_and_diagnostics(
 
     let path: PathBuf = "fake_file.baml".into();
     let source_file: SourceFile = (path.clone(), source_code).into();
-    let validated_schema: ValidatedSchema = validate(&path, vec![source_file]);
+    let validated_schema: ValidatedSchema =
+        validate(&path, vec![source_file], crate::FeatureFlags::new());
     let diagnostics = validated_schema.diagnostics;
     let ir = IntermediateRepr::from_parser_database(
         &validated_schema.db,
@@ -2685,7 +2946,8 @@ fn make_test_ir_and_diagnostics_from_dir(
 
     use crate::{validate, ValidatedSchema};
 
-    let validated_schema: ValidatedSchema = validate(root_dir, source_code);
+    let validated_schema: ValidatedSchema =
+        validate(root_dir, source_code, crate::FeatureFlags::new());
     let diagnostics = validated_schema.diagnostics;
     let ir = IntermediateRepr::from_parser_database(
         &validated_schema.db,
@@ -2768,6 +3030,25 @@ fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<E
         Expr::ForLoop { iterable, body, .. } => {
             specialize_generics(iterable, ctx);
             specialize_generics(body, ctx);
+        }
+        Expr::ArrayAccess { base, index, .. } => {
+            specialize_generics(base, ctx);
+            specialize_generics(index, ctx);
+        }
+        Expr::FieldAccess { base, .. } => {
+            specialize_generics(base, ctx);
+        }
+        Expr::BinaryOperation {
+            left,
+            operator,
+            right,
+            ..
+        } => {
+            specialize_generics(left, ctx);
+            specialize_generics(right, ctx);
+        }
+        Expr::UnaryOperation { expr, .. } => {
+            specialize_generics(expr, ctx);
         }
     }
 }
@@ -3065,12 +3346,12 @@ mod tests {
             // Both fields should have consistent type resolution for Recursive1
             assert_eq!(
                 field1_type.to_string(),
-                "(Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
+                "(Streaming.Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
                 "field1 type resolution is inconsistent"
             );
             assert_eq!(
                 field2_type.to_string(),
-                "(Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
+                "(Streaming.Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
                 "field2 type resolution is inconsistent"
             );
         }
@@ -3104,12 +3385,12 @@ mod tests {
             // Both fields should have consistent type resolution for Recursive1
             assert_eq!(
                 field1_type.to_string(),
-                "(int @stream.done | Recursive1 @stream.not_null[] @stream.not_null | string | null)", // Union3IntOrRecursive1OrString
+                "(int @stream.done | Streaming.Recursive1 @stream.not_null[] @stream.not_null | string | null)", // Union3IntOrRecursive1OrString
                 "field1 type resolution is inconsistent"
             );
             assert_eq!(
                 field2_type.to_string(),
-                "(Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
+                "(Streaming.Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
                 "field2 type resolution is inconsistent"
             );
         }
@@ -3119,7 +3400,7 @@ mod tests {
     fn test_expr_fn_tests() {
         let ir = make_test_ir(
             r##"
-            fn Foo(x: int) -> int {
+            function Foo(x: int) -> int {
                 x
             }
 

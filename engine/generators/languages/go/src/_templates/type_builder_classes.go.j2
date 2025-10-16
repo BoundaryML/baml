@@ -1,0 +1,45 @@
+package type_builder
+
+import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+
+{% for cls in classes %}
+type {{cls.name}}Class{{cls.builder()}} struct {
+    inner baml.ClassBuilder
+}
+
+func (t *{{cls.name}}Class{{cls.builder()}}) ListProperties() ([]ClassProperty{{cls.builder()}}, error) {
+    result, err := t.inner.ListProperties()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]ClassProperty{{cls.builder()}}, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+{% if cls.dynamic %}
+func (t *{{cls.name}}Class{{cls.builder()}}) AddProperty(name string, propertyType Type) (ClassProperty{{cls.builder()}}, error) {
+	return t.inner.AddProperty(name, propertyType)
+}
+{% endif %}
+
+{% for prop in cls.fields %}
+func (t *{{cls.name}}Class{{cls.builder()}}) Property{{prop.name|exported_name}}() (ClassProperty{{cls.builder()}}, error) {
+    return t.inner.Property("{{prop.name}}")
+}
+{% endfor %}
+
+func (t *TypeBuilder) {{cls.name}}() (*{{cls.name}}Class{{cls.builder()}}, error) {
+	bld, err := t.inner.Class("{{cls.name}}")
+	if err != nil {
+		return nil, err
+	}
+	return &{{cls.name}}Class{{cls.builder()}}{inner: bld}, nil
+}
+
+func (t *{{cls.name}}Class{{cls.builder()}}) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+{% endfor %}

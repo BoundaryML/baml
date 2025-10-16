@@ -1,0 +1,9 @@
+{
+  "name": "@baml/language-client-python",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "uv run maturin develop --uv --manifest-path Cargo.toml",
+    "dev.skip": "cargo watch -x 'build' -s 'uv run maturin develop --uv --manifest-path Cargo.toml'",
+    "dev": "pnpm run build"
+  }
+}

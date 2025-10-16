@@ -8,6 +8,72 @@ use crate::deserializer::{
     types::BamlValueWithFlags,
 };
 
+pub(super) fn try_cast_array(
+    ctx: &ParsingContext,
+    array_target: &TypeIR,
+    value: Option<&crate::jsonish::Value>,
+) -> Option<BamlValueWithFlags> {
+    let TypeIR::List(element_type, _) = array_target else {
+        unreachable!("try_cast_array");
+    };
+
+    // Only handle array values
+    let Some(crate::jsonish::Value::Array(arr, _)) = value else {
+        return None;
+    };
+
+    // For empty arrays, we can return immediately
+    if arr.is_empty() {
+        let mut result = BamlValueWithFlags::List(
+            DeserializerConditions::new(),
+            array_target.clone(),
+            Vec::new(),
+        );
+
+        // Check completion state
+        if let Some(v) = value {
+            match v.completion_state() {
+                CompletionState::Complete => {}
+                CompletionState::Incomplete => {
+                    result.add_flag(Flag::Incomplete);
+                }
+                CompletionState::Pending => {
+                    unreachable!("jsonish::Value may never be in a Pending state.")
+                }
+            }
+        }
+
+        return Some(result);
+    }
+
+    // Try to cast all elements
+    let mut items = Vec::with_capacity(arr.len());
+    for (i, item) in arr.iter().enumerate() {
+        match element_type.try_cast(ctx, element_type, Some(item)) {
+            Some(v) => items.push(v),
+            None => return None, // Fail fast on first error
+        }
+    }
+
+    let mut result =
+        BamlValueWithFlags::List(DeserializerConditions::new(), array_target.clone(), items);
+
+    // Check completion state
+    if let Some(v) = value {
+        match v.completion_state() {
+            CompletionState::Complete => {}
+            CompletionState::Incomplete => {
+                result.add_flag(Flag::Incomplete);
+            }
+            CompletionState::Pending => {
+                unreachable!("jsonish::Value may never be in a Pending state.")
+            }
+        }
+    }
+
+    Some(result)
+}
+
 pub(super) fn coerce_array(
     ctx: &ParsingContext,
     list_target: &TypeIR,

@@ -65,6 +65,50 @@ export function TestImageInput() {
 }
 ```
 
+```go
+package main
+
+import (
+    "context"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func testImageInput() error {
+    ctx := context.Background()
+    
+    // Create an Image from a URL
+    img, err := b.NewImageFromUrl("https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png", nil)
+    if err != nil {
+        return err
+    }
+    
+    result, err := b.TestImageInput(ctx, img)
+    if err != nil {
+        return err
+    }
+
+    // Create an Image from Base64 data
+    imageB64 := "iVB0xyz..."
+    img2, err := b.NewImageFromBase64(imageB64, stringPtr("image/png"))
+    if err != nil {
+        return err
+    }
+    
+    result2, err := b.TestImageInput(ctx, img2)
+    if err != nil {
+        return err
+    }
+    
+    return nil
+}
+
+// Helper function for string pointer
+func stringPtr(s string) *string {
+    return &s
+}
+```
+
 ```ruby
 # Ruby implementation is in development.
 ```

@@ -1,4 +1,4 @@
-import type { InputFieldConfig } from '@/lib/store';
+import type { InputFieldConfig } from '~/lib/store';
 import { Image as BamlImage } from '@boundaryml/baml/browser';
 import { useEffect, useState } from 'react';
 
@@ -91,11 +91,11 @@ export function useFormSubmission({
     try {
       // Extract the parameters in the correct order based on inputConfigs
       // and pass them as individual arguments to mutate
-      if (inputConfigs.length === 1 && inputConfigs[0].type !== 'image') {
+      if (inputConfigs.length === 1 && inputConfigs[0]?.type !== 'image') {
         // Simple case with single non-image parameter
         if (typeof mutate === 'function') {
           await (mutate as (arg: unknown) => Promise<void>)(
-            formValues[inputConfigs[0].key],
+            formValues[inputConfigs[0]?.key ?? ''],
           );
         }
       } else {

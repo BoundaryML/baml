@@ -1,5 +1,7 @@
 import pytest
 from ..baml_client.sync_client import b as sync_b
+from ..baml_client.async_client import b as async_b
+from baml_py.baml_py import get_log_level
 
 
 @pytest.mark.parametrize("test_input,expected_key", [
@@ -40,3 +42,10 @@ def test_env_var_changes_are_reflected(monkeypatch):
     
     # Verify headers are different
     assert request1.headers != request2.headers, "Headers should be different after API key change"
+
+@pytest.mark.asyncio
+async def test_env_var_changes_are_reflected_in_log_level(monkeypatch):
+    """Test that changing environment variables between requests updates the log level."""
+    monkeypatch.setenv("BAML_LOG", "WARN")
+    await async_b.request.ExtractReceiptInfo("test@email.com", "curiosity")
+    assert get_log_level() == "WARN"

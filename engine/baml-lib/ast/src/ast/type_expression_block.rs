@@ -2,6 +2,7 @@ use super::{
     traits::WithAttributes, Attribute, BlockArgs, Comment, Field, FieldType, Identifier, Span,
     WithDocumentation, WithIdentifier, WithSpan,
 };
+use crate::ast::ExprFn;
 
 /// An opaque identifier for a value in an AST enum. Use the
 /// `r#enum[enum_value_id]` syntax to resolve the id to an `ast::EnumValue`.
@@ -55,7 +56,14 @@ pub struct TypeExpressionBlock {
     /// ```
     pub(crate) input: Option<BlockArgs>,
 
-    pub fields: Vec<Field<FieldType>>, // needs to support field as well
+    pub fields: Vec<Field<FieldType>>, // needs to support field as well,
+
+    /// Methods of the class.
+    ///
+    /// Only relevant if [`Self::sub_type`] is [`SubType::Class`]. Otherwise
+    /// this is empty.
+    /// TODO: Allow LLM functions here.
+    pub methods: Vec<ExprFn>,
 
     /// The attributes of this enum.
     ///

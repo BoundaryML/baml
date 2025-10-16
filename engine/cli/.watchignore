@@ -1,0 +1,16 @@
+# Ignore the bin directory where we copy the output
+bin/
+
+# Ignore node_modules
+node_modules/
+
+# Ignore target directory (cargo's output)
+target/
+
+# Ignore other non-Rust files
+*.json
+*.md
+*.yml
+*.yaml
+.git/
+.gitignore

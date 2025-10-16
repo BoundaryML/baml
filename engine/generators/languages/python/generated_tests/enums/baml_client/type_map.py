@@ -11,6 +11,7 @@
 # baml-cli is available with the baml package.
 
 from . import types
+from . import stream_types
 
 
 type_map = {

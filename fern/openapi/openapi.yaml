@@ -11,7 +11,7 @@ paths:
       description: |
         Upload one or more files along with a prompt to extract data. The API processes the files based on the prompt and returns the extracted information.
 
-        A PDF may generate an array of many extracted JSON blobs, 1 per page for example.
+        A Pdf may generate an array of many extracted JSON blobs, 1 per page for example.
 
       operationId: extractData
       security:

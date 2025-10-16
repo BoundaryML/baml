@@ -53,6 +53,24 @@ function Foo6(arg: int) -> float {
 // 28 |   client
 // 29 |   prompt
 //    | 
+// error: Error validating: Missing `prompt` field in function. Add to the block:
+// ```
+// prompt #"..."#
+// ```
+//   -->  functions_v2/invalid2.baml:1
+//    | 
+//    | 
+//  1 | function Foo1(arg: int) -> float {
+//    | 
+// error: Error validating: Missing `client` field in function. Add to the block:
+// ```
+// client GPT4
+// ```
+//   -->  functions_v2/invalid2.baml:5
+//    | 
+//  4 | 
+//  5 | function Foo2(arg: int) -> float {
+//    | 
 // error: Expected a template_string value, but received string value `"..."`.
 //   -->  functions_v2/invalid2.baml:11
 //    | 

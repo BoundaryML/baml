@@ -1,0 +1,64 @@
+name: 'Setup Node.js and pnpm'
+description: 'Setup Node.js with pnpm package manager'
+
+inputs:
+  node-version:
+    description: 'Node.js version to install'
+    required: false
+    default: '20'
+  pnpm-version:
+    description: 'pnpm version to install'
+    required: false
+    default: '9.12.0'
+  install-dependencies:
+    description: 'Whether to install dependencies with pnpm'
+    required: false
+    default: 'true'
+  frozen-lockfile:
+    description: 'Use frozen lockfile for installation'
+    required: false
+    default: 'true'
+  enable-turbo-cache:
+    description: 'Enable Turbo build cache using GitHub Actions cache'
+    required: false
+    default: 'true'
+  turbo-cache-path:
+    description: 'Path for Turbo cache directory'
+    required: false
+    default: '.turbo'
+  npm-token:
+    description: 'NPM authentication token'
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache Turbo build setup
+      if: inputs.enable-turbo-cache == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.turbo-cache-path }}
+        key: ${{ runner.os }}-turbo-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-turbo-
+
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: ${{ inputs.pnpm-version }}
+        run_install: false
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: pnpm
+        cache-dependency-path: pnpm-lock.yaml
+        registry-url: "https://registry.npmjs.org"
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.npm-token }}
+
+    - name: Install Node dependencies
+      if: inputs.install-dependencies == 'true'
+      run: pnpm install ${{ inputs.frozen-lockfile == 'true' && '--frozen-lockfile' || '' }}
+      shell: bash

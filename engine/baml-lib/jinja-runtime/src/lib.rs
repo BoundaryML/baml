@@ -3,6 +3,13 @@ use colored::*;
 mod chat_message_part;
 
 mod output_format;
+#[cfg(test)]
+mod test_enum_comparison;
+#[cfg(test)]
+mod test_enum_template;
+#[cfg(test)]
+mod test_media;
+use indexmap::IndexMap;
 use internal_baml_core::ir::{jinja_helpers::get_env, repr::IntermediateRepr};
 pub use output_format::types;
 mod baml_value_to_jinja_value;
@@ -15,7 +22,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 pub use crate::chat_message_part::ChatMessagePart;
-use crate::{baml_value_to_jinja_value::IntoMiniJinjaValue, output_format::OutputFormat};
+use crate::{
+    baml_value_to_jinja_value::{
+        IntoMiniJinjaValue, MinijinjaBamlEnumType, MinijinjaBamlEnumValue,
+    },
+    output_format::OutputFormat,
+};
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Serialize)]
@@ -26,6 +38,12 @@ pub struct RenderContext_Client {
     pub provider: String,
     pub default_role: String,
     pub allowed_roles: Vec<String>,
+    // how to remap allowed roles to the ones the client expects
+    // this is done last, if not present, we use use role as is
+    pub remap_role: HashMap<String, String>,
+
+    // properties of the client
+    pub options: IndexMap<String, serde_json::Value>,
 }
 
 #[derive(Debug)]
@@ -44,14 +62,28 @@ pub struct TemplateStringMacro {
 const MAGIC_CHAT_ROLE_DELIMITER: &str = "BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER";
 const MAGIC_MEDIA_DELIMITER: &str = "BAML_MEDIA_MAGIC_STRING_DELIMITER";
 
-fn render_minijinja(
-    template: &str,
-    args: &minijinja::Value,
-    mut ctx: RenderContext,
-    template_string_macros: &[TemplateStringMacro],
+struct MinijinjaRenderParams<'a> {
+    template: &'a str,
+    args: &'a minijinja::Value,
+    ctx: RenderContext,
+    template_string_macros: &'a [TemplateStringMacro],
     default_role: String,
     allowed_roles: Vec<String>,
-) -> Result<RenderedPrompt, minijinja::Error> {
+    remap_role: HashMap<String, String>,
+    enum_values_by_name: IndexMap<String, Vec<MinijinjaBamlEnumValue>>,
+}
+
+fn render_minijinja(params: MinijinjaRenderParams) -> Result<RenderedPrompt, minijinja::Error> {
+    let MinijinjaRenderParams {
+        template,
+        args,
+        ctx,
+        template_string_macros,
+        default_role,
+        allowed_roles,
+        remap_role,
+        enum_values_by_name,
+    } = params;
     let mut env = get_env();
 
     // dedent
@@ -94,7 +126,7 @@ fn render_minijinja(
 
     env.add_template("prompt", &template)?;
     let client = ctx.client.clone();
-    let tags = std::mem::take(&mut ctx.tags);
+    let tags = ctx.tags.clone();
     let formatter = OutputFormat::new(ctx);
     env.add_global(
         "ctx",
@@ -104,6 +136,18 @@ fn render_minijinja(
             output_format => minijinja::value::Value::from_object(formatter),
         },
     );
+    for (enum_name, enum_values) in enum_values_by_name {
+        env.add_global(
+            enum_name.clone(),
+            minijinja::value::Value::from_object(MinijinjaBamlEnumType {
+                enum_name,
+                enum_values: enum_values
+                    .into_iter()
+                    .map(|v| (v.value.clone(), v))
+                    .collect(),
+            }),
+        );
+    }
 
     let role_fn = minijinja::Value::from_function(
         |role: Option<String>, kwargs: Kwargs| -> Result<String, minijinja::Error> {
@@ -254,6 +298,11 @@ fn render_minijinja(
         }
     }
 
+    chat_messages.iter_mut().for_each(|m| {
+        if let Some(remap) = remap_role.get(&m.role) {
+            m.role = remap.clone();
+        }
+    });
     Ok(RenderedPrompt::Chat(chat_messages))
 }
 
@@ -416,14 +465,33 @@ pub fn render_prompt(
     let minijinja_args: minijinja::Value = args.clone().to_minijinja_value(ir, &eval_ctx);
     let default_role = ctx.client.default_role.clone();
     let allowed_roles = ctx.client.allowed_roles.clone();
-    let rendered = render_minijinja(
+    let remap_role = ctx.client.remap_role.clone();
+    let enum_values_by_name = ir
+        .walk_enums()
+        .map(|e| {
+            let enum_name = e.name().to_string();
+            let enum_values = e
+                .walk_values()
+                .map(|v| MinijinjaBamlEnumValue {
+                    value: v.name().to_string(),
+                    alias: v.alias(&eval_ctx).unwrap_or(None),
+                    enum_name: enum_name.clone(),
+                })
+                .collect::<Vec<_>>();
+            (enum_name, enum_values)
+        })
+        .collect::<IndexMap<_, _>>();
+
+    let rendered = render_minijinja(MinijinjaRenderParams {
         template,
-        &minijinja_args,
+        args: &minijinja_args,
         ctx,
         template_string_macros,
         default_role,
         allowed_roles,
-    );
+        remap_role,
+        enum_values_by_name,
+    });
 
     match rendered {
         Ok(r) => Ok(r),
@@ -463,11 +531,12 @@ mod render_tests {
     pub fn make_test_ir(source_code: &str) -> anyhow::Result<IntermediateRepr> {
         use std::path::PathBuf;
 
-        use internal_baml_core::{validate, ValidatedSchema};
+        use internal_baml_core::{validate, FeatureFlags, ValidatedSchema};
         use internal_baml_diagnostics::SourceFile;
         let path: PathBuf = "fake_file.baml".into();
         let source_file: SourceFile = (path.clone(), source_code).into();
-        let validated_schema: ValidatedSchema = validate(&path, vec![source_file]);
+        let validated_schema: ValidatedSchema =
+            validate(&path, vec![source_file], FeatureFlags::new());
         let diagnostics = &validated_schema.diagnostics;
         if diagnostics.has_errors() {
             return Err(anyhow::anyhow!(
@@ -513,6 +582,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -574,6 +645,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -633,6 +706,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -701,6 +776,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string(), "john doe".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -779,6 +856,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -830,6 +909,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -870,6 +951,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -910,6 +993,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -950,6 +1035,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -1012,6 +1099,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -1072,6 +1161,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string(), "john doe".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -1156,6 +1247,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string(), "user".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -1234,6 +1327,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -1289,6 +1384,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),
@@ -1340,6 +1437,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),
@@ -1387,6 +1486,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),
@@ -1407,6 +1508,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),
@@ -1450,6 +1553,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),
@@ -1470,6 +1575,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),
@@ -1513,6 +1620,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),
@@ -1587,6 +1696,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),
@@ -1681,6 +1792,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),
@@ -1787,6 +1900,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),
@@ -1864,6 +1979,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),
@@ -1924,6 +2041,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),
@@ -1957,49 +2076,100 @@ mod render_tests {
 
     // See the note in baml_value_to_jinja_value.rs for Enum for why we don't support aliases.
     // tl;dr we don't havea  way to override the equality operator for enum comparisons to NOT use the alias.
-    // #[test]
-    // fn test_render_prompt_with_enum() -> anyhow::Result<()> {
-    //     setup_logging();
+    #[test]
+    fn test_render_prompt_with_enum() -> anyhow::Result<()> {
+        setup_logging();
 
-    //     let args = BamlValue::Map(BamlMap::from([(
-    //         "enum_arg".to_string(),
-    //         BamlValue::Enum("MyEnum".to_string(), "VALUE_B".to_string()),
-    //     )]));
+        let args = BamlValue::Map(BamlMap::from([(
+            "enum_arg".to_string(),
+            BamlValue::Enum("MyEnum".to_string(), "VALUE_B".to_string()),
+        )]));
 
-    //     let ir = make_test_ir(
-    //         r#"
-    //         enum MyEnum {
-    //             VALUE_A
-    //             VALUE_B @alias("ALIAS_B")
-    //             VALUE_C
-    //         }
-    //         "#,
-    //     )?;
+        let ir = make_test_ir(
+            r#"
+            enum MyEnum {
+                VALUE_A @alias("alpha")
+                VALUE_B @alias("ALIAS_B")
+                VALUE_C
+            }
+            "#,
+        )?;
 
-    //     let rendered = render_prompt(
-    //         "Enum value: {{ enum_arg }}",
-    //         &args,
-    //         RenderContext {
-    //             client: RenderContext_Client {
-    //                 name: "gpt4".to_string(),
-    //                 provider: "openai".to_string(),
-    //                 default_role: "system".to_string(),
-    //             },
-    //             output_format: OutputFormatContent::new_string(),
-    //             tags: HashMap::new(),
-    //         },
-    //         &vec![],
-    //         &ir,
-    //         &HashMap::new(),
-    //     )?;
+        let rendered = render_prompt(
+            r#"
+Enum value: {{ enum_arg }}
 
-    //     assert_eq!(
-    //         rendered,
-    //         RenderedPrompt::Completion("Enum value: ALIAS_B".to_string())
-    //     );
+handwritten enum values:
+  - first: {{ MyEnum.VALUE_A }}
+  - second: {{ MyEnum.VALUE_B }}
+  - third: {{ MyEnum.VALUE_C }}
 
-    //     Ok(())
-    // }
+{% if enum_arg == MyEnum.VALUE_B %}
+Enum value is equal to MyEnum.VALUE_B, as expected
+{% else %}
+Enum value should equal MyEnum.VALUE_B, but it does not
+{% endif %}
+
+{% if enum_arg != MyEnum.VALUE_A %}
+Enum value is not equal to MyEnum.VALUE_A, as expected
+{% else %}
+Enum value should not equal MyEnum.VALUE_A, but it does
+{% endif %}
+
+{% if enum_arg == "VALUE_B" %}
+Enum value is equal to the "VALUE_B" string, as expected
+{% else %}
+Enum value should equal the "VALUE_B" string, but it does not
+{% endif %}
+
+{% if enum_arg != "ALIAS_B" %}
+Enum value is not equal to the "ALIAS_B" string, as expected
+{% else %}
+Enum value should not equal the "ALIAS_B" string, but it does
+{% endif %}
+"#,
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion(
+                r#"Enum value: ALIAS_B
+
+handwritten enum values:
+  - first: alpha
+  - second: ALIAS_B
+  - third: VALUE_C
+
+Enum value is equal to MyEnum.VALUE_B, as expected
+
+Enum value is not equal to MyEnum.VALUE_A, as expected
+
+Enum value is equal to the "VALUE_B" string, as expected
+
+Enum value is not equal to the "ALIAS_B" string, as expected
+"#
+                .to_string()
+            )
+        );
+
+        Ok(())
+    }
 
     #[test]
     fn test_render_prompt_with_enum_no_alias() -> anyhow::Result<()> {
@@ -2029,6 +2199,8 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),
@@ -2094,30 +2266,34 @@ mod render_tests {
 
     #[test]
     fn render_with_truthy_test() {
-        let result = render_minijinja(
-            r#"
+        let result = render_minijinja(MinijinjaRenderParams {
+            template: r#"
             {% if inp %}
             {{ inp.name }}
             {% endif %}
             "#,
-            &minijinja::Value::from_serialize(HashMap::from([(
+            args: &minijinja::Value::from_serialize(HashMap::from([(
                 "inp",
                 HashMap::from([("name", "Greg")]),
             )])),
-            RenderContext {
+            ctx: RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("system".into()))]),
             },
-            &[],
-            "user".to_string(),
-            vec!["user".to_string(), "system".to_string()],
-        )
+            template_string_macros: &[],
+            default_role: "user".to_string(),
+            allowed_roles: vec!["user".to_string(), "system".to_string()],
+            remap_role: HashMap::new(),
+            enum_values_by_name: IndexMap::new(),
+        })
         .expect("Rendering should succeed");
         match result {
             RenderedPrompt::Completion(msg) => assert_eq!(msg, "Greg\n"),
@@ -2159,6 +2335,8 @@ mod render_tests {
                 provider: "openai".to_string(),
                 default_role: "system".to_string(),
                 allowed_roles: vec!["system".to_string()],
+                remap_role: HashMap::new(),
+                options: IndexMap::new(),
             },
             output_format: OutputFormatContent::new_string(),
             tags: HashMap::from([("ROLE".to_string(), BamlValue::String("system".into()))]),
@@ -2176,30 +2354,34 @@ mod render_tests {
 
     #[test]
     fn render_with_ne_none() {
-        let result = render_minijinja(
-            r#"
+        let result = render_minijinja(MinijinjaRenderParams {
+            template: r#"
             {% if inp != None %}
             {{ inp.name }}
             {% endif %}
             "#,
-            &minijinja::Value::from_serialize(HashMap::from([(
+            args: &minijinja::Value::from_serialize(HashMap::from([(
                 "inp",
                 HashMap::from([("name", "Greg")]),
             )])),
-            RenderContext {
+            ctx: RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("system".into()))]),
             },
-            &[],
-            "user".to_string(),
-            vec!["user".to_string(), "system".to_string()],
-        )
+            template_string_macros: &[],
+            default_role: "user".to_string(),
+            allowed_roles: vec!["user".to_string(), "system".to_string()],
+            remap_role: HashMap::new(),
+            enum_values_by_name: IndexMap::new(),
+        })
         .expect("Rendering should succeed");
         match result {
             RenderedPrompt::Completion(msg) => assert_eq!(msg, "Greg\n"),
@@ -2209,27 +2391,31 @@ mod render_tests {
 
     #[test]
     fn render_none_as_null() {
-        let result = render_minijinja(
-            r#"
+        let result = render_minijinja(MinijinjaRenderParams {
+            template: r#"
             {% if inp is none %}
             {{ inp }}
             {% endif %}
             "#,
-            &minijinja::Value::from_serialize(HashMap::from([("inp", ())])),
-            RenderContext {
+            args: &minijinja::Value::from_serialize(HashMap::from([("inp", ())])),
+            ctx: RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("system".into()))]),
             },
-            &[],
-            "user".to_string(),
-            vec!["user".to_string(), "system".to_string()],
-        )
+            template_string_macros: &[],
+            default_role: "user".to_string(),
+            allowed_roles: vec!["user".to_string(), "system".to_string()],
+            remap_role: HashMap::new(),
+            enum_values_by_name: IndexMap::new(),
+        })
         .expect("Rendering should succeed");
         match result {
             RenderedPrompt::Completion(msg) => assert_eq!(msg, "null\n"),
@@ -2269,6 +2455,8 @@ mod render_tests {
                 provider: "openai".to_string(),
                 default_role: "system".to_string(),
                 allowed_roles: vec!["system".to_string()],
+                remap_role: HashMap::new(),
+                options: IndexMap::new(),
             },
             output_format: OutputFormatContent::new_string(),
             tags: HashMap::from([("ROLE".to_string(), BamlValue::String("system".into()))]),
@@ -2356,6 +2544,8 @@ mod render_tests {
                 provider: "openai".to_string(),
                 default_role: "system".to_string(),
                 allowed_roles: vec!["system".to_string()],
+                remap_role: HashMap::new(),
+                options: IndexMap::new(),
             },
             output_format: OutputFormatContent::new_string(),
             tags: HashMap::from([("ROLE".to_string(), BamlValue::String("system".into()))]),
@@ -2403,6 +2593,8 @@ mod render_tests {
                 provider: "openai".to_string(),
                 default_role: "system".to_string(),
                 allowed_roles: vec!["system".to_string()],
+                remap_role: HashMap::new(),
+                options: IndexMap::new(),
             },
             output_format: OutputFormatContent::new_string(),
             tags: HashMap::from([("ROLE".to_string(), BamlValue::String("system".into()))]),
@@ -2478,6 +2670,8 @@ mod render_tests {
                 provider: "openai".to_string(),
                 default_role: "system".to_string(),
                 allowed_roles: vec!["system".to_string()],
+                remap_role: HashMap::new(),
+                options: IndexMap::new(),
             },
             output_format: OutputFormatContent::new_string(),
             tags: HashMap::from([("ROLE".to_string(), BamlValue::String("system".into()))]),
@@ -2506,5 +2700,286 @@ mod render_tests {
             }
             _ => panic!("Expected Completion"),
         }
+    }
+
+    #[test]
+    fn test_remap_role_basic() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "subject".to_string(),
+            BamlValue::String("test".to_string()),
+        )]));
+
+        let ir = make_test_ir("class C {}")?;
+
+        let mut remap_role = HashMap::new();
+        remap_role.insert("user".to_string(), "human".to_string());
+        remap_role.insert("assistant".to_string(), "ai".to_string());
+
+        let rendered = render_prompt(
+            r#"
+                {{ _.chat("user") }}
+                Hello there!
+                
+                {{ _.chat("assistant") }}
+                Hi back!
+                
+                {{ _.chat("system") }}
+                System message here.
+            "#,
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "claude".to_string(),
+                    provider: "anthropic".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec![
+                        "user".to_string(),
+                        "assistant".to_string(),
+                        "system".to_string(),
+                    ],
+                    remap_role,
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Chat(messages) => {
+                assert_eq!(messages.len(), 3);
+                assert_eq!(messages[0].role, "human"); // user -> human
+                assert_eq!(messages[1].role, "ai"); // assistant -> ai
+                assert_eq!(messages[2].role, "system"); // system unchanged (not in remap)
+            }
+            _ => panic!("Expected Chat prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_remap_role_with_default_role() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "subject".to_string(),
+            BamlValue::String("test".to_string()),
+        )]));
+
+        let ir = make_test_ir("class C {}")?;
+
+        let mut remap_role = HashMap::new();
+        remap_role.insert("system".to_string(), "instructions".to_string());
+
+        let rendered = render_prompt(
+            r#"
+                {{ _.chat("unknown_role") }}
+                This role is not in allowed_roles, so it should use default_role
+            "#,
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "claude".to_string(),
+                    provider: "anthropic".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["user".to_string(), "system".to_string()], // unknown_role not in allowed_roles
+                    remap_role,
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Chat(messages) => {
+                assert_eq!(messages.len(), 1);
+                // Should fall back to default_role (system) and then be remapped to "instructions"
+                assert_eq!(messages[0].role, "instructions");
+            }
+            _ => panic!("Expected Chat prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_remap_role_with_complex_template() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([
+            (
+                "user_name".to_string(),
+                BamlValue::String("Alice".to_string()),
+            ),
+            (
+                "topic".to_string(),
+                BamlValue::String("weather".to_string()),
+            ),
+        ]));
+
+        let ir = make_test_ir("class C {}")?;
+
+        let mut remap_role = HashMap::new();
+        remap_role.insert("user".to_string(), "customer".to_string());
+        remap_role.insert("assistant".to_string(), "support_agent".to_string());
+        remap_role.insert("system".to_string(), "context".to_string());
+
+        let rendered = render_prompt(
+            r#"
+                {{ _.chat("system") }}
+                You are a helpful assistant discussing {{ topic }}.
+                
+                {{ _.chat("user") }}
+                Hi, I'm {{ user_name }}. Can you tell me about {{ topic }}?
+                
+                {{ _.chat("assistant") }}
+                Hello {{ user_name }}! I'd be happy to discuss {{ topic }} with you.
+            "#,
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "claude".to_string(),
+                    provider: "anthropic".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec![
+                        "system".to_string(),
+                        "user".to_string(),
+                        "assistant".to_string(),
+                    ],
+                    remap_role,
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Chat(messages) => {
+                assert_eq!(messages.len(), 3);
+                assert_eq!(messages[0].role, "context"); // system -> context
+                assert_eq!(messages[1].role, "customer"); // user -> customer
+                assert_eq!(messages[2].role, "support_agent"); // assistant -> support_agent
+
+                // Check that content is properly rendered too
+                assert!(messages[0].parts[0].to_string().contains("weather"));
+                assert!(messages[1].parts[0].to_string().contains("Alice"));
+                assert!(messages[2].parts[0].to_string().contains("Alice"));
+            }
+            _ => panic!("Expected Chat prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_remap_role_with_duplicate_role() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "subject".to_string(),
+            BamlValue::String("test".to_string()),
+        )]));
+
+        let ir = make_test_ir("class C {}")?;
+
+        let mut remap_role = HashMap::new();
+        remap_role.insert("user".to_string(), "participant".to_string());
+
+        let rendered = render_prompt(
+            r#"
+                {{ _.chat("user") }}
+                First message
+                
+                {{ _.chat("user", __baml_allow_dupe_role__=true) }}
+                Second message from same role
+            "#,
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "claude".to_string(),
+                    provider: "anthropic".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["user".to_string()],
+                    remap_role,
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Chat(messages) => {
+                assert_eq!(messages.len(), 2);
+                assert_eq!(messages[0].role, "participant"); // user -> participant
+                assert_eq!(messages[1].role, "participant"); // user -> participant
+                assert!(!messages[0].allow_duplicate_role);
+                assert!(messages[1].allow_duplicate_role);
+            }
+            _ => panic!("Expected Chat prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_remap_role_completion_prompt_unchanged() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "subject".to_string(),
+            BamlValue::String("test".to_string()),
+        )]));
+
+        let ir = make_test_ir("class C {}")?;
+
+        let mut remap_role = HashMap::new();
+        remap_role.insert("user".to_string(), "human".to_string());
+
+        let rendered = render_prompt(
+            "This is a completion prompt about {{ subject }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "claude".to_string(),
+                    provider: "anthropic".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["user".to_string()],
+                    remap_role,
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Completion(content) => {
+                assert_eq!(content, "This is a completion prompt about test");
+            }
+            _ => panic!("Expected Completion prompt"),
+        }
+
+        Ok(())
     }
 }

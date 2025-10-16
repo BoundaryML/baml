@@ -22,8 +22,12 @@ import { FieldType } from '@boundaryml/baml/native'
 import { TypeBuilder as _TypeBuilder, EnumBuilder, EnumViewer, ClassBuilder, ClassViewer } from '@boundaryml/baml/type_builder'
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals.js"
 
+export { FieldType, EnumBuilder, ClassBuilder }
+
 export default class TypeBuilder {
     private tb: _TypeBuilder;
+    
+    AddTodoItem: ClassViewer<'AddTodoItem', "type" | "item" | "time" | "description">;
     
     AnotherObject: ClassViewer<'AnotherObject', "id" | "thingy2" | "thingy3">;
     
@@ -66,6 +70,8 @@ export default class TypeBuilder {
     CustomTaskResult: ClassViewer<'CustomTaskResult', "bookOrder" | "flightConfirmation" | "groceryReceipt">;
     
     Document1559: ClassViewer<'Document1559', "client_details" | "notes">;
+    
+    DummyJsonTodo: ClassViewer<'DummyJsonTodo', "id" | "todo" | "completed" | "userId">;
     
     DummyOutput: ClassBuilder<'DummyOutput', "nonce" | "nonce2">;
     
@@ -183,6 +189,10 @@ export default class TypeBuilder {
     
     RecursiveAliasDependency: ClassViewer<'RecursiveAliasDependency', "value">;
     
+    RenderEnumInput: ClassBuilder<'RenderEnumInput', "testKey">;
+    
+    RenderTestClass: ClassBuilder<'RenderTestClass', "name" | "status">;
+    
     Resume: ClassViewer<'Resume', "name" | "email" | "phone" | "experience" | "education" | "skills">;
     
     Schema: ClassViewer<'Schema', "prop1" | "prop2" | "prop5" | "prop6" | "nested_attrs" | "parens" | "other_group">;
@@ -208,6 +218,8 @@ export default class TypeBuilder {
     TestMemoryOutput: ClassViewer<'TestMemoryOutput', "items" | "more_items">;
     
     TestOutputClass: ClassViewer<'TestOutputClass', "prop1" | "prop2">;
+    
+    TodoMessageToUser: ClassViewer<'TodoMessageToUser', "type" | "message">;
     
     Tree: ClassViewer<'Tree', "data" | "children">;
     
@@ -238,6 +250,8 @@ export default class TypeBuilder {
     
     DynEnumOne: EnumBuilder<'DynEnumOne'>;
     
+    DynEnumThree: EnumBuilder<'DynEnumThree', "TRICYCLE" | "TRIANGLE">;
+    
     DynEnumTwo: EnumBuilder<'DynEnumTwo'>;
     
     EnumInClass: EnumViewer<'EnumInClass', "ONE" | "TWO">;
@@ -256,6 +270,10 @@ export default class TypeBuilder {
     
     OrderStatus: EnumViewer<'OrderStatus', "ORDERED" | "SHIPPED" | "DELIVERED" | "CANCELLED">;
     
+    RenderStatusEnum: EnumBuilder<'RenderStatusEnum', "ACTIVE" | "INACTIVE">;
+    
+    RenderTestEnum: EnumBuilder<'RenderTestEnum', "BIKE" | "SCOOTER">;
+    
     Tag: EnumViewer<'Tag', "Security" | "AI" | "Blockchain">;
     
     TestEnum: EnumViewer<'TestEnum', "A" | "B" | "C" | "D" | "E" | "F" | "G">;
@@ -264,13 +282,17 @@ export default class TypeBuilder {
     constructor() {
         this.tb = new _TypeBuilder({
           classes: new Set([
-            "AnotherObject","BigNumbers","BinaryNode","Blah","BlockConstraint","BlockConstraintForParam","BookOrder","ClassForNullLiteral","ClassOptionalOutput","ClassOptionalOutput2","ClassToRecAlias","ClassWithBlockDone","ClassWithImage","ClassWithoutDone","ClientDetails1559","ComplexMemoryObject","CompoundBigNumbers","ContactInfo","CustomStory","CustomTaskResult","Document1559","DummyOutput","DynInputOutput","DynamicClassOne","DynamicClassTwo","DynamicOutput","DynamicSchema","Earthling","Education","Email","EmailAddress","Event","FakeImage","FlightConfirmation","FooAny","Forest","FormatterTest0","FormatterTest1","FormatterTest2","FormatterTest3","GroceryReceipt","Haiku","InnerClass","InnerClass2","InputClass","InputClassNested","LinkedList","LinkedListAliasNode","LiteralClassHello","LiteralClassOne","LiteralClassTwo","MaintainFieldOrder","MalformedConstraints","MalformedConstraints2","Martian","MemoryObject","MergeAttrs","NamedArgsSingleClass","Nested","Nested2","NestedBlockConstraint","NestedBlockConstraintForParam","Node","NodeWithAliasIndirection","Note1599","OptionalListAndMap","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","OriginalA","OriginalB","Person","PhoneNumber","Quantity","RaysData","ReceiptInfo","ReceiptItem","Recipe","RecursiveAliasDependency","Resume","Schema","SearchParams","SemanticContainer","SimpleTag","SmallThing","SomeClassNestedDynamic","StringToClassEntry","TestClassAlias","TestClassNested","TestClassWithEnum","TestMemoryOutput","TestOutputClass","Tree","TwoStoriesOneTitle","TwoStoriesOneTitleCheck","UnionTest_ReturnType","UniverseQuestion","UniverseQuestionInput","WithReasoning",
+            "AddTodoItem","AnotherObject","BigNumbers","BinaryNode","Blah","BlockConstraint","BlockConstraintForParam","BookOrder","ClassForNullLiteral","ClassOptionalOutput","ClassOptionalOutput2","ClassToRecAlias","ClassWithBlockDone","ClassWithImage","ClassWithoutDone","ClientDetails1559","ComplexMemoryObject","CompoundBigNumbers","ContactInfo","CustomStory","CustomTaskResult","Document1559","DummyJsonTodo","DummyOutput","DynInputOutput","DynamicClassOne","DynamicClassTwo","DynamicOutput","DynamicSchema","Earthling","Education","Email","EmailAddress","Event","FakeImage","FlightConfirmation","FooAny","Forest","FormatterTest0","FormatterTest1","FormatterTest2","FormatterTest3","GroceryReceipt","Haiku","InnerClass","InnerClass2","InputClass","InputClassNested","LinkedList","LinkedListAliasNode","LiteralClassHello","LiteralClassOne","LiteralClassTwo","MaintainFieldOrder","MalformedConstraints","MalformedConstraints2","Martian","MemoryObject","MergeAttrs","NamedArgsSingleClass","Nested","Nested2","NestedBlockConstraint","NestedBlockConstraintForParam","Node","NodeWithAliasIndirection","Note1599","OptionalListAndMap","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","OriginalA","OriginalB","Person","PhoneNumber","Quantity","RaysData","ReceiptInfo","ReceiptItem","Recipe","RecursiveAliasDependency","RenderEnumInput","RenderTestClass","Resume","Schema","SearchParams","SemanticContainer","SimpleTag","SmallThing","SomeClassNestedDynamic","StringToClassEntry","TestClassAlias","TestClassNested","TestClassWithEnum","TestMemoryOutput","TestOutputClass","TodoMessageToUser","Tree","TwoStoriesOneTitle","TwoStoriesOneTitleCheck","UnionTest_ReturnType","UniverseQuestion","UniverseQuestionInput","WithReasoning",
           ]),
           enums: new Set([
-            "AliasedEnum","Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumTwo","EnumInClass","EnumOutput","Hobby","MapKey","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",
+            "AliasedEnum","Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumThree","DynEnumTwo","EnumInClass","EnumOutput","Hobby","MapKey","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","RenderStatusEnum","RenderTestEnum","Tag","TestEnum",
           ]),
           runtime: DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
         });
+        
+        this.AddTodoItem = this.tb.classViewer("AddTodoItem", [
+          "type","item","time","description",
+        ]);
         
         this.AnotherObject = this.tb.classViewer("AnotherObject", [
           "id","thingy2","thingy3",
@@ -354,6 +376,10 @@ export default class TypeBuilder {
         
         this.Document1559 = this.tb.classViewer("Document1559", [
           "client_details","notes",
+        ]);
+        
+        this.DummyJsonTodo = this.tb.classViewer("DummyJsonTodo", [
+          "id","todo","completed","userId",
         ]);
         
         this.DummyOutput = this.tb.classBuilder("DummyOutput", [
@@ -588,6 +614,14 @@ export default class TypeBuilder {
           "value",
         ]);
         
+        this.RenderEnumInput = this.tb.classBuilder("RenderEnumInput", [
+          "testKey",
+        ]);
+        
+        this.RenderTestClass = this.tb.classBuilder("RenderTestClass", [
+          "name","status",
+        ]);
+        
         this.Resume = this.tb.classViewer("Resume", [
           "name","email","phone","experience","education","skills",
         ]);
@@ -638,6 +672,10 @@ export default class TypeBuilder {
         
         this.TestOutputClass = this.tb.classViewer("TestOutputClass", [
           "prop1","prop2",
+        ]);
+        
+        this.TodoMessageToUser = this.tb.classViewer("TodoMessageToUser", [
+          "type","message",
         ]);
         
         this.Tree = this.tb.classViewer("Tree", [
@@ -697,6 +735,10 @@ export default class TypeBuilder {
           
         ]);
         
+        this.DynEnumThree = this.tb.enumBuilder("DynEnumThree", [
+          "TRICYCLE","TRIANGLE",
+        ]);
+        
         this.DynEnumTwo = this.tb.enumBuilder("DynEnumTwo", [
           
         ]);
@@ -733,6 +775,14 @@ export default class TypeBuilder {
           "ORDERED","SHIPPED","DELIVERED","CANCELLED",
         ]);
         
+        this.RenderStatusEnum = this.tb.enumBuilder("RenderStatusEnum", [
+          "ACTIVE","INACTIVE",
+        ]);
+        
+        this.RenderTestEnum = this.tb.enumBuilder("RenderTestEnum", [
+          "BIKE","SCOOTER",
+        ]);
+        
         this.Tag = this.tb.enumViewer("Tag", [
           "Security","AI","Blockchain",
         ]);
@@ -741,6 +791,18 @@ export default class TypeBuilder {
           "A","B","C","D","E","F","G",
         ]);
         
+    }
+
+    reset(): void {
+        this.tb.reset();
+        // TODO: This should happen in Rust. Problem is, when we construct the
+        // typebuilder we instantiate class builders once and it seems to make
+        // a JS copy, bypassing the Rust side? In Python however, every time we
+        // access a class builder with @property, we get a new instance that
+        // wraps over the Rust type builder, so we only need to call tb.reset().
+        // In JS it's not possible unless we refactor the way class builders are
+        // accessed.
+         this.DummyOutput.reset();  this.DynInputOutput.reset();  this.DynamicClassOne.reset();  this.DynamicClassTwo.reset();  this.DynamicOutput.reset();  this.DynamicSchema.reset();  this.OriginalB.reset();  this.Person.reset();  this.RenderEnumInput.reset();  this.RenderTestClass.reset();  this.SomeClassNestedDynamic.reset(); 
     }
 
     __tb() {

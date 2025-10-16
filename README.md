@@ -12,7 +12,6 @@
 
 [![BAML Version](https://img.shields.io/pypi/v/baml-py?color=006dad&label=BAML%20Version)](https://pypi.org/project/baml-py/)
 
-
 ## BAML: Basically a Made-up Language
 <h4>
 
@@ -30,7 +29,7 @@ BAML is a simple prompting language for building reliable **AI workflows and age
 BAML makes prompt engineering easy by turning it into _schema engineering_ -- where you mostly focus on the models of your prompt -- to get more reliable outputs. 
 You don't need to write your whole app in BAML, only the prompts! You can wire-up your LLM Functions in any language of your choice! See our quickstarts for [Python](https://docs.boundaryml.com/guide/installation-language/python), [TypeScript](https://docs.boundaryml.com/guide/installation-language/typescript), [Ruby](https://docs.boundaryml.com/guide/installation-language/ruby) and [Go, and more](https://docs.boundaryml.com/guide/installation-language/rest-api-other-languages).
 
-BAML comes with all batteries included -- with full typesafety, streaming, retries, wide model support, even when they don't support native [tool-calling APIs](#enable-reliable-tool-calling-with-any-model-even-when-they-dont-support-it)
+BAML comes with all batteries included -- with full typesafety, streaming, retries, wide model support, even when they don't support native [tool-calling APIs](#enable-reliable-tool-calling-with-any-model)
 
 **Try BAML**: [Prompt Fiddle](https://www.promptfiddle.com) • [Interactive App Examples](https://baml-examples.vercel.app/)
 
@@ -224,7 +223,7 @@ Checkout our [guide on getting started](/CONTRIBUTING.md)
 You can cite the BAML repo as follows:
 ```bibtex
 @software{baml,
-  author = {Vaibhav Gupta, Aaron Villalpando and Boundary ML team},
+  author = {Boundary ML},
   title = {BAML},
   url = {https://github.com/boundaryml/baml},
   year = {2024}
@@ -237,7 +236,7 @@ Made with ❤️ by Boundary
 
 HQ in Seattle, WA
 
-P.S. We're hiring for software engineers that love rust. [Email us](founders@boundaryml.com) or reach out on [discord](https://discord.gg/ENtBB6kkXH)!
+P.S. We're hiring for software engineers that love rust. [Email us](mailto:founders@boundaryml.com) or reach out on [discord](https://discord.gg/ENtBB6kkXH)!
 
 <div align="left" style="align-items: left;">
         <a href="#top">

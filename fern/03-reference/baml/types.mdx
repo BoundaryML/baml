@@ -40,12 +40,12 @@ and [testing image inputs](/guide/baml-basics/testing-functions#test-image-input
 
 <Accordion title="Implementation details: runtime and security considerations">
   BAML's multimodal types are designed for ease of use: we have deliberately made it
-  easy for you to construct a `image` or `audio` instance from a URL. Under the
-  hood, depending on the model you're using, BAML may need to download the image
+  easy for you to construct an `image`, `audio`, `pdf`, or `video` instance from a URL. Under the
+  hood, depending on the model you're using, BAML may need to download the file
   and transcode it (usually as base64) for the model to consume.
 
   This ease-of-use does come with some tradeoffs; namely, if you construct
-  an `image` or `audio` instance using untrusted user input, you may be exposing
+  a multimodal instance using untrusted user input, you may be exposing
   yourself to [server-side request forgery (SSRF) attacks][ssrf]. Attackers may be
   able to fetch files on your internal network, on external networks using your
   application's identity, or simply excessively drive up your cloud network
@@ -128,6 +128,47 @@ def test_image_input
     img: Image.from_base64("image/png", image_b64)
   )
 end
+```
+
+```go Go
+package main
+
+import (
+	"context"
+	"log"
+
+	b "example.com/myproject/baml_client"
+)
+
+func main() {
+	ctx := context.Background()
+	
+	// From URL
+	img, err := b.NewImageFromUrl("https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	res, err := b.TestImageInput(ctx, img)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	// Base64 image  
+	imageB64 := "iVBORw0K...."
+	img2, err := b.NewImageFromBase64(imageB64, stringPtr("image/png"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	res2, err := b.TestImageInput(ctx, img2)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Helper function for creating string pointers
+func stringPtr(s string) *string { return &s }
 ```
 </CodeBlocks>
 
@@ -234,6 +275,254 @@ def test_audio_input
     audio: Audio.from_base64("audio/mp3", audio_b64)
   )
 end
+```
+
+```go Go
+package main
+
+import (
+	"context"
+	"log"
+
+	b "example.com/myproject/baml_client"
+)
+
+func main() {
+	ctx := context.Background()
+	
+	// From URL
+	aud, err := b.NewAudioFromUrl("https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	res, err := b.TestAudioInput(ctx, aud)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	// Base64 audio
+	audioB64 := "iVBORw0K...."
+	aud2, err := b.NewAudioFromBase64(audioB64, stringPtr("audio/mp3"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	res2, err := b.TestAudioInput(ctx, aud2)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Helper function for creating string pointers
+func stringPtr(s string) *string { return &s }
+```
+</CodeBlocks>
+
+### `pdf`
+
+Example
+```rust
+function AnalyzePdf(myPdf: pdf) -> string {
+  client GPT4Turbo
+  prompt #"
+    {{ _.role("user")}}
+    Summarize the main points of this Pdf:
+    {{ myPdf }}
+  "#
+}
+```
+> **Note** Pdf inputs must be provided as Base64 data using `Pdf.from_base64`. URL-based inputs are not currently supported.
+
+<CodeBlocks>
+```python Python
+from baml_py import Pdf
+from baml_client import b
+
+async def run():
+  # Base64 data
+  b64 = "JVBERi0K...."
+  res = await b.TestPdfInput(
+    pdf=Pdf.from_base64("application/pdf", b64)
+  )
+```
+
+```typescript TypeScript
+import { b } from '../baml_client'
+import { Pdf } from "@boundaryml/baml"
+...
+
+  // Base64
+  const pdf_base64 = ".."
+  let res = await b.TestPdfInput(
+    Pdf.fromBase64('application/pdf', pdf_base64),
+  )
+  
+```
+
+```ruby Ruby
+# Pdf inputs must be provided as Base64. URL support is currently unavailable.
+require_relative "baml_client/client"
+
+b = Baml.Client
+Pdf = Baml::Pdf
+
+def test_pdf_input
+  # Base64 Pdf
+  pdf_b64 = "JVBERi0K...."
+  res = b.TestPdfInput(
+    pdf: Pdf.from_base64("application/pdf", pdf_b64)
+  )
+end
+```
+
+```go Go
+package main
+
+import (
+	"context"
+	"log"
+
+	b "example.com/myproject/baml_client"
+)
+
+func main() {
+	ctx := context.Background()
+	
+	// Base64 PDF (URL support is not currently available)
+	pdfB64 := "JVBERi0K...."
+	pdf, err := b.NewPDFFromBase64(pdfB64, stringPtr("application/pdf"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	res, err := b.TestPdfInput(ctx, pdf)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Helper function for creating string pointers
+func stringPtr(s string) *string { return &s }
+```
+</CodeBlocks>
+
+### `video`
+
+Example
+```rust
+function DescribeVideo(myVideo: video) -> string {
+  client GPT4Turbo
+  prompt #"
+    {{ _.role("user")}}
+    Describe what happens in this video:
+    {{ myVideo }}
+  "#
+}
+```
+Calling functions that have `video` types.
+
+> **Note** When you provide a `Video` via URL the URL is passed directly to the model. Some models cannot download external media; in that case convert the video to Base64 first.
+
+<CodeBlocks>
+```python Python
+from baml_py import Video
+from baml_client import b
+
+async def run():
+  # from URL
+  res = await b.TestVideoInput(
+      video=Video.from_url(
+          "https://example.com/sample.mp4"
+      )
+  )
+
+  # Base64
+  b64 = "AAAAGGZ0eXBpc29t...."
+  res = await b.TestVideoInput(
+    video=Video.from_base64("video/mp4", b64)
+  )
+```
+
+```typescript TypeScript
+import { b } from '../baml_client'
+import { Video } from "@boundaryml/baml"
+...
+
+  // URL
+  let res = await b.TestVideoInput(
+    Video.fromUrl('https://example.com/sample.mp4'),
+  )
+
+  // Base64
+  const video_base64 = ".."
+  let res = await b.TestVideoInput(
+    Video.fromBase64('video/mp4', video_base64),
+  )
+  
+```
+
+```ruby Ruby
+require_relative "baml_client/client"
+
+b = Baml.Client
+Video = Baml::Video
+
+def test_video_input
+  # from URL
+  res = b.TestVideoInput(
+      video: Video.from_url(
+          "https://example.com/sample.mp4"
+      )
+  )
+
+  # Base64 video
+  video_b64 = "AAAAGGZ0eXBpc29t...."
+  res = b.TestVideoInput(
+    video: Video.from_base64("video/mp4", video_b64)
+  )
+end
+```
+
+```go Go
+package main
+
+import (
+	"context"
+	"log"
+
+	b "example.com/myproject/baml_client"
+)
+
+func main() {
+	ctx := context.Background()
+	
+	// From URL
+	vid, err := b.NewVideoFromUrl("https://example.com/sample.mp4", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	res, err := b.TestVideoInput(ctx, vid)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	// Base64 video
+	videoB64 := "AAAAGGZ0eXBpc29t...."
+	vid2, err := b.NewVideoFromBase64(videoB64, stringPtr("video/mp4"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	res2, err := b.TestVideoInput(ctx, vid2)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Helper function for creating string pointers
+func stringPtr(s string) *string { return &s }
 ```
 </CodeBlocks>
 
@@ -417,6 +706,10 @@ Union[Optional[int], List[str], MyClass]
 (number | null) | string[] | MyClass
 ```
 
+```go Go Equivalent
+Union3IntOrStringArrayOrMyClass // Generated union type
+```
+
 </CodeBlocks>
 
 ### Example 2
@@ -434,6 +727,10 @@ List[str]
 string[]
 ```
 
+```go Go Equivalent
+[]string
+```
+
 </CodeBlocks>
 
 ### Example 3
@@ -448,6 +745,10 @@ List[Union[int, float]]
 
 ```typescript TypeScript Equivalent
 number[]
+```
+
+```go Go Equivalent
+[]Union2IntOrFloat // Generated union type slice
 ```
 
 </CodeBlocks>
@@ -467,6 +768,10 @@ Optional[List[Union[Optional[int], List[str], MyClass]]]
 ((number | null) | string[] | MyClass)[]
 ```
 
+```go Go Equivalent
+[]Union3IntOrStringArrayOrMyClass // Generated union type slice
+```
+
 </CodeBlocks>
 
 ### Example 5
@@ -482,6 +787,10 @@ Union[Literal["str"], Literal[1], Literal[False]]
 
 ```typescript TypeScript Equivalent
 "str" | 1 | false
+```
+
+```go Go Equivalent
+Union3StringOrIntOrBool // Generated union type with literal validation
 ```
 
 </CodeBlocks>

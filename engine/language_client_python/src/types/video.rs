@@ -1,0 +1,110 @@
+use pyo3::{
+    prelude::{pymethods, PyResult},
+    types::{PyTuple, PyType},
+    Bound, PyAny, PyObject, Python,
+};
+use pythonize::{depythonize, pythonize};
+
+use super::media_repr::{self, UserFacingBamlMedia};
+use crate::errors::{BamlError, BamlInvalidArgumentError};
+crate::lang_wrapper!(BamlVideoPy, baml_types::BamlMedia);
+
+#[pymethods]
+impl BamlVideoPy {
+    #[staticmethod]
+    #[pyo3(signature = (url, media_type = None))]
+    fn from_url(url: String, media_type: Option<String>) -> Self {
+        BamlVideoPy {
+            inner: baml_types::BamlMedia::url(baml_types::BamlMediaType::Video, url, media_type),
+        }
+    }
+
+    #[staticmethod]
+    fn from_base64(media_type: String, base64: String) -> Self {
+        BamlVideoPy {
+            inner: baml_types::BamlMedia::base64(
+                baml_types::BamlMediaType::Video,
+                base64,
+                Some(media_type),
+            ),
+        }
+    }
+
+    pub fn is_url(&self) -> bool {
+        matches!(&self.inner.content, baml_types::BamlMediaContent::Url(_))
+    }
+
+    pub fn as_url(&self) -> PyResult<String> {
+        match &self.inner.content {
+            baml_types::BamlMediaContent::Url(url) => Ok(url.url.clone()),
+            _ => Err(BamlInvalidArgumentError::new_err("Video is not a URL")),
+        }
+    }
+
+    pub fn as_base64(&self) -> PyResult<Vec<String>> {
+        match &self.inner.content {
+            baml_types::BamlMediaContent::Base64(base64) => Ok(vec![
+                base64.base64.clone(),
+                self.inner.mime_type.clone().unwrap_or("".to_string()),
+            ]),
+            _ => Err(BamlInvalidArgumentError::new_err("Video is not base64")),
+        }
+    }
+
+    /// Defines the default constructor: https://pyo3.rs/v0.23.3/class#constructor
+    ///
+    /// Used for `pickle.load`: https://docs.python.org/3/library/pickle.html#object.__getnewargs__
+    #[new]
+    pub fn py_new(data: Bound<'_, PyAny>) -> PyResult<Self> {
+        Self::baml_deserialize(data)
+    }
+
+    /// Used for `pickle.dump`: https://docs.python.org/3/library/pickle.html#object.__getnewargs__
+    pub fn __getnewargs__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        let o = self.baml_serialize(py)?;
+        PyTuple::new(py, vec![o])
+    }
+
+    pub fn __repr__(&self) -> String {
+        match &self.inner.content {
+            baml_types::BamlMediaContent::Url(url) => {
+                format!("BamlVideoPy(url={})", url.url)
+            }
+            baml_types::BamlMediaContent::Base64(base64) => {
+                format!(
+                    "BamlVideoPy(base64={}, media_type={})",
+                    base64.base64,
+                    self.inner.mime_type.clone().unwrap_or("".to_string())
+                )
+            }
+            _ => "Unknown BamlVideoPy variant".to_string(),
+        }
+    }
+
+    #[classmethod]
+    pub fn __get_pydantic_core_schema__(
+        _cls: Bound<'_, PyType>,
+        _source_type: Bound<'_, PyAny>,
+        _handler: Bound<'_, PyAny>,
+    ) -> PyResult<PyObject> {
+        media_repr::__get_pydantic_core_schema__(_cls, _source_type, _handler)
+    }
+
+    #[staticmethod]
+    fn baml_deserialize(data: Bound<'_, PyAny>) -> PyResult<Self> {
+        let data: UserFacingBamlMedia = depythonize(&data)?;
+        Ok(Self {
+            inner: data.into_baml_media(baml_types::BamlMediaType::Video),
+        })
+    }
+
+    pub fn baml_serialize(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let s: UserFacingBamlMedia = (&self.inner).try_into().map_err(BamlError::from_anyhow)?;
+        let s = serde_json::to_value(&s).map_err(BamlError::from_anyhow)?;
+        Ok(pythonize(py, &s)?.into())
+    }
+
+    pub fn __eq__(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}

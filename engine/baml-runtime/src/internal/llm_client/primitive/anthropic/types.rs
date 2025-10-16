@@ -1,3 +1,5 @@
+use std::string;
+
 use serde::{Deserialize, Serialize};
 
 // https://docs.anthropic.com/claude/reference/messages_post
@@ -32,6 +34,8 @@ pub enum AnthropicMessageContent {
 pub struct AnthropicUsage {
     pub input_tokens: u64,
     pub output_tokens: u64,
+    pub cache_creation_input_tokens: Option<u64>,
+    pub cache_read_input_tokens: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -86,7 +90,8 @@ pub struct AnthropicErrorResponse {
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct AnthropicErrorInner {
     pub r#type: String,
-    pub message: String,
+    pub message: Option<String>,
+    pub details: Option<serde_json::Value>,
 }
 
 /// The stream chunk of messages.
@@ -107,7 +112,9 @@ pub enum MessageChunk {
     MessageDelta(MessageDeltaChunk),
     /// Message stop chunk.
     MessageStop,
-    Error(AnthropicErrorInner),
+    Error {
+        error: AnthropicErrorInner,
+    },
     /// Fallback for unknown types
     #[serde(other)]
     Other,
@@ -141,9 +148,44 @@ pub struct ContentBlockDeltaChunk {
 #[derive(Debug, Deserialize, Clone, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentBlockDelta {
-    TextDelta { text: String },
-    SignatureDelta { signature: String },
-    ThinkingDelta { thinking: String },
+    TextDelta {
+        text: String,
+    },
+    SignatureDelta {
+        signature: String,
+    },
+    ThinkingDelta {
+        thinking: String,
+    },
+    ToolUse {
+        id: String,
+        input: serde_json::Value,
+        name: String,
+    },
+    ServerToolUse {
+        id: String,
+        input: serde_json::Value,
+        name: String,
+    },
+    WebSearchToolResult {
+        content: String,
+        tool_use_id: String,
+    },
+    CodeExecutionResult {
+        content: serde_json::Value,
+        tool_use_id: String,
+    },
+    MCPToolUse {
+        id: String,
+        input: serde_json::Value,
+        name: String,
+        server_name: String,
+    },
+    MCPToolResult {
+        content: String,
+        is_error: bool,
+        tool_use_id: String,
+    },
     Other,
 }
 
@@ -160,7 +202,7 @@ pub struct MessageDeltaChunk {
     /// The result of this stream.
     pub delta: StreamStop,
     /// The billing and rate-limit usage of this stream.
-    pub usage: DeltaUsage,
+    pub usage: AnthropicUsage,
 }
 
 /// The text delta content block.
@@ -180,13 +222,6 @@ pub struct StreamStop {
     pub stop_reason: Option<String>,
     /// The stop sequence of this stream.
     pub stop_sequence: Option<StopSequence>,
-}
-
-/// The delta usage of the stream.
-#[derive(Debug, Deserialize, Clone, PartialEq, Serialize)]
-pub struct DeltaUsage {
-    /// The number of output tokens which were used.
-    pub output_tokens: u64,
 }
 
 #[cfg(test)]

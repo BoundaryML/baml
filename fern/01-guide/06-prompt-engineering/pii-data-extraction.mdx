@@ -34,7 +34,7 @@ Next, let's create the function that uses GPT-4 to extract PII. Add this to your
 
 ```baml pii_extractor.baml
 function ExtractPII(document: string) -> PIIExtraction {
-  client "openai/gpt-4o-mini"
+  client "openai/gpt-5-mini"
   prompt #"
     Extract all personally identifiable information (PII) from the given document. Look for items like:
     - Names
@@ -56,7 +56,7 @@ function ExtractPII(document: string) -> PIIExtraction {
 
 Let's break down what this function does:
 - Takes a `document` input as a string
-- Uses the `gpt-4o-mini` model
+- Uses the `gpt-5-mini` model
 - Provides clear guidelines for PII extraction in the prompt
 - Returns a `PIIExtraction` object containing all found PII data
 

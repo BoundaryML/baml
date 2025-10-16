@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use baml_runtime::client_registry;
 use client_registry::ClientProvider;
-use napi::{Env, JsObject};
+use napi::{bindgen_prelude::Object, Env};
 use napi_derive::napi;
 
 use crate::{errors::invalid_argument_error, parse_ts_types};
@@ -30,10 +30,10 @@ impl ClientRegistry {
         env: Env,
         name: String,
         provider: String,
-        #[napi(ts_arg_type = "{ [key: string]: any }")] options: JsObject,
+        #[napi(ts_arg_type = "{ [key: string]: any }")] options: Object,
         retry_policy: Option<String>,
     ) -> napi::Result<()> {
-        let args = parse_ts_types::js_object_to_baml_value(env, options)?;
+        let args = parse_ts_types::js_object_to_baml_value(&env, options)?;
         if !args.is_map() {
             return Err(invalid_argument_error(&format!(
                 "Invalid options: Expected a map of arguments, got: {}",

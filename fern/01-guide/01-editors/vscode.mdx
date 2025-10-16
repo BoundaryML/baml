@@ -26,7 +26,7 @@ Or type `BAML Playground` in the VSCode Command Bar (`CMD + Shift + P` or `CTRL 
 
 Click on the `Settings` button in top right of the playground and set the environment variables.
 
-It should have an indicator saying how many unset variables are there.
+It should have an indicator if any unset variables are there.
 
 <img src="/assets/vscode/playground-preview.png" />
 
@@ -40,13 +40,25 @@ The playground should persist the environment variables between closing and open
   Environment Variables are stored in VSCode's local storage! We don't save any additional data to disk, or send them across the network.
 </Info>
 
-
 ## Running Tests
 
-- Click on the `Run All Tests` button in the playground.
+- Click on `Run tests below` in the right pane of the playground to run all tests.
+
+<img src="/assets/vscode/run-all-tests.png" />
 
 - Press the `▶️` button next to an individual test case to run that just that test case.
 
+## Reviewing Tests
+
+- Click the numbers on the left to switch between test results.
+
+- Press the `▶️` button next to the drop-down to re-run your tests.
+
+<img src="/assets/vscode/test-results.png" />
+
+<Tip>
+- Toggle the `🚀` to enable running the tests in parallel.
+</Tip>
 
 ## Switching Functions
 
@@ -56,10 +68,10 @@ To manually change it, click on the current function name in the playground (nex
 
 ## Switching Test Cases
 
-The test case with the highlighted background is the currently rendered test case. Clicking on a different test case will render that test case.
+You can switch between test cases by selecting it in the results pane or the test selection pane on the right.
 
 <img src="/assets/vscode/test-cases.png" />
 
-You can toggle between seeing the results of all test cases or all test cases for the current function.
+You can customize what you see in the Table View, or switch to the Detailed view:
 
-<img src="/assets/vscode/test-case-buttons.png" />
+<img src="/assets/vscode/test-cases-detailed.png" />

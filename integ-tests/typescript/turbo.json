@@ -1,0 +1,9 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "generate": {
+        "dependsOn": [ "@baml/cli#build", "@boundaryml/baml#build" ]
+    }
+  }
+}

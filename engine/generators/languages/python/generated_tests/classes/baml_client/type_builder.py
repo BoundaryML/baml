@@ -13,6 +13,8 @@
 import typing
 from baml_py import type_builder
 from baml_py import baml_py
+# These are exports, not used here, hence the linter is disabled
+from baml_py.baml_py import FieldType, EnumValueBuilder, EnumBuilder, ClassBuilder # noqa: F401 # pylint: disable=unused-import
 from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
 
 class TypeBuilder(type_builder.TypeBuilder):

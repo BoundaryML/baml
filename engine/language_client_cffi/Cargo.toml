@@ -8,20 +8,20 @@ license-file.workspace = true
 
 [lib]
 # If you only wanted dynamic library, you'd use only "cdylib".
-# If you only wanted static library, you'd use only "staticlib".
 # This demo shows both. See https://doc.rust-lang.org/reference/linkage.html
 # for more information.
-crate-type = ["cdylib", "staticlib"]
+crate-type = ["cdylib"]
 
 [dependencies]
 libc = "0.2.2"
 baml-cli.workspace = true
+baml-ids.workspace = true
 baml-log.workspace = true
 baml-types.workspace = true
 baml-runtime = { path = "../baml-runtime", default-features = false, features = [
   "internal",
 ] }
-internal-baml-codegen.workspace = true
+internal-baml-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio = { version = "1", features = ["full"] }
@@ -30,6 +30,10 @@ once_cell.workspace = true
 anyhow.workspace = true
 env_logger.workspace = true
 prost = "0.14"
+baml_cffi_macros = { path = "../baml_cffi_macros" }
+indexmap.workspace = true
+dashmap = "6.1"
+stream-cancel = "0.8"
 
 [build-dependencies]
 cbindgen = "0.28.0"

@@ -14,6 +14,7 @@ export declare class TypeBuilder {
         enums: Set<string>;
         runtime: BamlRuntime;
     });
+    reset(): void;
     _tb(): _TypeBuilder;
     null(): FieldType;
     string(): FieldType;
@@ -38,6 +39,7 @@ export declare class ClassAst<ClassName extends string, Properties extends strin
     protected properties: Set<Properties | string>;
     protected bldr: _ClassBuilder;
     constructor(tb: _TypeBuilder, name: ClassName, properties?: Set<Properties | string>);
+    listProperties(): Record<string, FieldType | null>;
     type(): FieldType;
 }
 export declare class ClassViewer<ClassName extends string, Properties extends string = string> extends ClassAst<ClassName, Properties> {
@@ -49,6 +51,8 @@ export declare class ClassBuilder<ClassName extends string, Properties extends s
     constructor(tb: _TypeBuilder, name: ClassName, properties?: Set<Properties | string>);
     addProperty<S extends string>(name: RestrictNot<ClassName, S, Properties>, type: FieldType): ClassPropertyBuilder;
     listProperties(): Array<[string, ClassPropertyBuilder]>;
+    removeProperty(name: string): void;
+    reset(): void;
     property(name: string): ClassPropertyBuilder;
 }
 declare class ClassPropertyViewer {
@@ -57,6 +61,8 @@ declare class ClassPropertyViewer {
 declare class ClassPropertyBuilder {
     private bldr;
     constructor(bldr: _ClassPropertyBuilder);
+    getType(): FieldType;
+    setType(type: FieldType): ClassPropertyBuilder;
     alias(alias: string | null): ClassPropertyBuilder;
     description(description: string | null): ClassPropertyBuilder;
 }

@@ -1,0 +1,77 @@
+flowchart TD
+  n0["Main Function"]
+  subgraph sg0["If statement 1"]
+    direction LR
+    n1{"If statement 1"}
+    class n1 decisionNode;
+    subgraph sg1["If statement 2.1"]
+      direction LR
+      n2{"If statement 2.1"}
+      class n2 decisionNode;
+      subgraph sg2["If statement 3.1"]
+        direction LR
+        n3{"If statement 3.1"}
+        class n3 decisionNode;
+        n4["True"]
+        n5["Third False"]
+      end
+      subgraph sg3["If statement 3.2"]
+        direction LR
+        n6{"If statement 3.2"}
+        class n6 decisionNode;
+        n7["True"]
+        n8["Third False"]
+      end
+    end
+    subgraph sg4["If statement 2.2"]
+      direction LR
+      n9{"If statement 2.2"}
+      class n9 decisionNode;
+      subgraph sg5["If statement 3.1"]
+        direction LR
+        n10{"If statement 3.1"}
+        class n10 decisionNode;
+        n11["True"]
+        n12["Third False"]
+      end
+      subgraph sg6["If statement 3.2"]
+        direction LR
+        n13{"If statement 3.2"}
+        class n13 decisionNode;
+        n14["True"]
+        n15["Third False"]
+      end
+    end
+  end
+  n3 --> n4
+  n3 --> n5
+  n2 --> n3
+  n6 --> n7
+  n6 --> n8
+  n2 --> n6
+  n1 --> n2
+  n10 --> n11
+  n10 --> n12
+  n9 --> n10
+  n13 --> n14
+  n13 --> n15
+  n9 --> n13
+  n1 --> n9
+  n0 --> n1
+%%__BAML_SPANMAP__={"n0":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":0,"start":0,"end_line":0,"end":17},"n1":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":2,"start":4,"end_line":2,"end":23},"n2":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":5,"start":8,"end_line":5,"end":30},"n3":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":7,"start":12,"end_line":7,"end":34},"n4":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":9,"start":16,"end_line":9,"end":26},"n5":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":12,"start":16,"end_line":12,"end":33},"n6":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":18,"start":12,"end_line":18,"end":34},"n7":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":20,"start":16,"end_line":20,"end":26},"n8":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":23,"start":16,"end_line":23,"end":33},"n9":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":31,"start":8,"end_line":31,"end":30},"n10":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":33,"start":12,"end_line":33,"end":34},"n11":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":35,"start":16,"end_line":35,"end":26},"n12":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":38,"start":16,"end_line":38,"end":33},"n13":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":44,"start":12,"end_line":44,"end":34},"n14":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":46,"start":16,"end_line":46,"end":26},"n15":{"file_path":"tests/validation_files/headers/nested_if_statements.baml","start_line":49,"start":16,"end_line":49,"end":33}}
+  click n0 call bamlMermaidNodeClick() "Go to source"
+  click n1 call bamlMermaidNodeClick() "Go to source"
+  click n2 call bamlMermaidNodeClick() "Go to source"
+  click n3 call bamlMermaidNodeClick() "Go to source"
+  click n4 call bamlMermaidNodeClick() "Go to source"
+  click n5 call bamlMermaidNodeClick() "Go to source"
+  click n6 call bamlMermaidNodeClick() "Go to source"
+  click n7 call bamlMermaidNodeClick() "Go to source"
+  click n8 call bamlMermaidNodeClick() "Go to source"
+  click n9 call bamlMermaidNodeClick() "Go to source"
+  click n10 call bamlMermaidNodeClick() "Go to source"
+  click n11 call bamlMermaidNodeClick() "Go to source"
+  click n12 call bamlMermaidNodeClick() "Go to source"
+  click n13 call bamlMermaidNodeClick() "Go to source"
+  click n14 call bamlMermaidNodeClick() "Go to source"
+  click n15 call bamlMermaidNodeClick() "Go to source"

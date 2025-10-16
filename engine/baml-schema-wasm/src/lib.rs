@@ -4,8 +4,21 @@ pub(crate) mod js_callback_bridge;
 #[cfg(target_arch = "wasm32")]
 pub mod runtime_wasm;
 
+#[cfg(target_arch = "wasm32")]
+pub(crate) mod abort_controller;
+
 use internal_baml_core::internal_baml_ast::{format_schema, FormatOptions};
 use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+pub fn enable_logs() {
+    // Initialize console logging for wasm
+    #[cfg(target_arch = "wasm32")]
+    {
+        console_error_panic_hook::set_once();
+        wasm_logger::init(wasm_logger::Config::default());
+    }
+}
 
 #[wasm_bindgen]
 pub fn version() -> String {

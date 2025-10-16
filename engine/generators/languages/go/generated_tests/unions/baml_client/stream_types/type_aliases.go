@@ -13,8 +13,12 @@
 
 package stream_types
 
+import (
+	"unions/baml_client/types"
+)
+
 type MyUnion = *Union3IntOrRecursive1OrString
 type Nonrecursive1 = *int64
 type Nonrecursive2 = *string
 type Recursive1 = *Union2IntOrListRecursive1
-type SystemComponentCategory = *Union2KresourceOrKservice
+type SystemComponentCategory = *types.Union2KresourceOrKservice

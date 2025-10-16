@@ -47,7 +47,9 @@ script = "cd ../../integ-tests/go && go build"
 dependencies = ["integ-tests-generate"]
 
 [tasks.integ-tests-run-spec]
-script = "cd ../../integ-tests/go && go test -v -run ${@} ./..."
+script = "cd ../../integ-tests/go && BAML_LIBRARY_PATH=$(pwd)/../../engine/target/debug/libbaml_cffi.dylib go test -v -run ${@} ./..."
+dependencies = ["integ-tests-build"]
+
 #-----------------------------------------------------------------------------
 # Main tasks
 #-----------------------------------------------------------------------------

@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 use baml_ids::{FunctionCallId, FunctionEventId, HttpRequestId};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 pub use super::errors::BamlError;
@@ -117,6 +118,14 @@ impl<'a, T: HasType<type_meta::NonStreaming>> TraceEvent<'a, T> {
         Self::from_existing_call(call_stack, TraceData::RawLLMResponse(response))
             .expect("Failed to create raw LLM response event")
     }
+
+    pub fn new_raw_llm_response_stream(
+        call_stack: Vec<FunctionCallId>,
+        response: Arc<HTTPResponseStream>,
+    ) -> Self {
+        Self::from_existing_call(call_stack, TraceData::RawLLMResponseStream(response))
+            .expect("Failed to create raw LLM response stream event")
+    }
 }
 
 // DO NOT CLONE!
@@ -140,6 +149,10 @@ pub enum TraceData<'a, T: HasType<type_meta::NonStreaming>> {
     // ----
     // Raw HTTP response from the LLM
     RawLLMResponse(Arc<HTTPResponse>),
+
+    // Raw HTTP response stream from the LLM
+    RawLLMResponseStream(Arc<HTTPResponseStream>),
+
     /// LLM response now a plain struct, so we don't wrap it in `Result`.
     LLMResponse(Arc<LoggedLLMResponse>),
     // ----
@@ -155,6 +168,7 @@ impl<T: HasType<type_meta::NonStreaming>> TraceData<'_, T> {
             Self::LLMRequest(_) => "LLMRequest",
             Self::RawLLMRequest(_) => "RawLLMRequest",
             Self::RawLLMResponse(_) => "RawLLMResponse",
+            Self::RawLLMResponseStream(_) => "RawLLMResponseStream",
             Self::LLMResponse(_) => "LLMResponse",
             Self::SetTags(_) => "SetTags",
         }
@@ -225,7 +239,7 @@ pub struct LoggedLLMRequest {
     pub prompt: Vec<LLMChatMessage>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone)]
 pub struct HTTPBody {
     raw: Vec<u8>,
 }
@@ -283,6 +297,28 @@ impl HTTPBody {
                         .collect(),
                 )
             })
+    }
+}
+
+// Custom serialization: always serialize as text; if invalid UTF-8, serialize as base64
+impl serde::Serialize for HTTPBody {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Serialize as text to avoid exploding arrays of bytes; use lossy UTF-8 if needed
+        let s = String::from_utf8_lossy(&self.raw);
+        serializer.serialize_str(&s)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for HTTPBody {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(HTTPBody::new(s.into_bytes()))
     }
 }
 
@@ -365,7 +401,7 @@ where
     Option::<HashMap<String, String>>::deserialize(deserializer)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct HTTPRequest {
     // since LLM requests could be made in parallel, we need to match the response to the request
     pub id: HttpRequestId,
@@ -375,6 +411,7 @@ pub struct HTTPRequest {
     #[serde(deserialize_with = "deserialize_headers")]
     headers: HashMap<String, String>,
     pub body: HTTPBody,
+    pub client_details: std::sync::Arc<ClientDetails>,
 }
 
 impl HTTPRequest {
@@ -384,6 +421,7 @@ impl HTTPRequest {
         method: String,
         headers: HashMap<String, String>,
         body: HTTPBody,
+        client_details: ClientDetails,
     ) -> Self {
         Self {
             id,
@@ -391,6 +429,7 @@ impl HTTPRequest {
             method,
             headers,
             body,
+            client_details: std::sync::Arc::new(client_details),
         }
     }
 
@@ -415,7 +454,17 @@ impl HTTPRequest {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ClientDetails {
+    /// e.g. for `client<llm> MyOpenaiClient` this is "MyOpenaiClient"
+    pub name: String,
+    /// e.g. for `client<llm> MyOpenaiClient` this is "openai"
+    pub provider: String,
+    /// e.g. for `client<llm> MyOpenaiClient` this is the options passed to the client
+    pub options: IndexMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HTTPResponse {
     // since LLM requests could be made in parallel, we need to match the response to the request
     pub request_id: HttpRequestId,
@@ -423,7 +472,15 @@ pub struct HTTPResponse {
     #[serde(serialize_with = "serialize_redacted_optional_headers")]
     #[serde(deserialize_with = "deserialize_optional_headers")]
     headers: Option<HashMap<String, String>>,
-    pub body: HTTPBody,
+    pub body: Arc<HTTPBody>,
+
+    pub client_details: Arc<ClientDetails>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HTTPResponseStream {
+    pub request_id: HttpRequestId,
+    pub event: Arc<SSEEvent>,
 }
 
 impl HTTPResponse {
@@ -432,17 +489,54 @@ impl HTTPResponse {
         status: u16,
         headers: Option<HashMap<String, String>>,
         body: HTTPBody,
+        client_details: ClientDetails,
     ) -> Self {
         Self {
             request_id,
             status,
             headers,
-            body,
+            body: Arc::new(body),
+            client_details: Arc::new(client_details),
         }
+    }
+
+    pub fn id(&self) -> &HttpRequestId {
+        &self.request_id
     }
 
     pub fn headers(&self) -> Option<&HashMap<String, String>> {
         self.headers.as_ref()
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SSEEvent {
+    pub timestamp_utc_ms: i64,
+    pub event: String,
+    pub data: String,
+    pub id: String,
+}
+
+impl HTTPResponseStream {
+    pub fn new(request_id: HttpRequestId, event: SSEEvent) -> Self {
+        Self {
+            request_id,
+            event: Arc::new(event),
+        }
+    }
+}
+
+impl SSEEvent {
+    pub fn new(event: String, data: String, id: String) -> Self {
+        Self {
+            event,
+            data,
+            id,
+            timestamp_utc_ms: web_time::SystemTime::now()
+                .duration_since(web_time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64,
+        }
     }
 }
 
@@ -521,6 +615,7 @@ pub struct LLMUsage {
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
+    pub cached_input_tokens: Option<u64>,
 }
 
 #[cfg(test)]
@@ -545,6 +640,11 @@ mod tests {
             "POST".to_string(),
             headers.clone(),
             HTTPBody::new(b"test body".to_vec()),
+            ClientDetails {
+                name: "test-client".to_string(),
+                provider: "test-provider".to_string(),
+                options: IndexMap::new(),
+            },
         );
 
         // Test that .headers() returns original headers
@@ -598,6 +698,11 @@ mod tests {
             200,
             Some(headers.clone()),
             HTTPBody::new(b"response body".to_vec()),
+            ClientDetails {
+                name: "test-client".to_string(),
+                provider: "test-provider".to_string(),
+                options: IndexMap::new(),
+            },
         );
 
         // Test that .headers() returns original headers

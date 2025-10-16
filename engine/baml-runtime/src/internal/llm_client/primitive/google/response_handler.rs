@@ -97,15 +97,23 @@ pub fn parse_google_response<C: WithClient + RequestBuilder>(
             prompt_tokens: response.usage_metadata.prompt_token_count,
             output_tokens: response.usage_metadata.candidates_token_count,
             total_tokens: response.usage_metadata.total_token_count,
+            cached_input_tokens: response.usage_metadata.cached_content_token_count,
         },
     })
 }
 
 fn text_content_part(parts: &[Part]) -> Option<String> {
-    parts
+    let non_thought_parts: Vec<&str> = parts
         .iter()
-        .position(|part| !part.text.is_empty() && !part.thought.unwrap_or(false))
-        .map(|index| parts[index].text.clone())
+        .filter(|part| !part.thought.unwrap_or(false))
+        .map(|part| part.text.as_str())
+        .collect();
+
+    if non_thought_parts.is_empty() {
+        None
+    } else {
+        Some(non_thought_parts.join(""))
+    }
 }
 
 pub fn scan_google_response_stream(
@@ -161,6 +169,11 @@ pub fn scan_google_response_stream(
         }
     }
 
+    inner.metadata.prompt_tokens = event.usage_metadata.prompt_token_count;
+    inner.metadata.output_tokens = event.usage_metadata.candidates_token_count;
+    inner.metadata.total_tokens = event.usage_metadata.total_token_count;
+    inner.metadata.cached_input_tokens = event.usage_metadata.cached_content_token_count;
+
     inner.latency = instant_now.elapsed();
     Ok(())
 }
@@ -213,6 +226,39 @@ mod tests {
 }
         "#;
 
+    const FLASH_25_RESPONSE_STREAMING_RESPONSE: &str = r#"
+  {
+    "candidates": [
+      {
+        "content": {
+          "parts": [
+            {
+              "text": "I need the grounding documents to summarize them. Please provide the documents related to the query \"why not?\"."
+            }
+          ],
+          "role": "model"
+        },
+        "finishReason": "STOP",
+        "index": 0
+      }
+    ],
+    "usageMetadata": {
+      "promptTokenCount": 135,
+      "candidatesTokenCount": 21,
+      "totalTokenCount": 404,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 135
+        }
+      ],
+      "thoughtsTokenCount": 248
+    },
+    "modelVersion": "gemini-2.5-flash",
+    "responseId": "THqbaJaMOuCajMcP54G4qAE"
+    }
+    "#;
+
     #[test]
     fn test_json_deserialization() {
         let response: GoogleResponse = serde_json::from_str(RESPONSE).unwrap();
@@ -241,12 +287,19 @@ mod tests {
                 prompt_token_count: Some(166),
                 candidates_token_count: Some(39),
                 total_token_count: Some(205),
+                cached_content_token_count: None,
             },
         };
 
         let response_json = serde_json::to_string(&response).unwrap();
         let expected_json = serde_json::to_string(&expected).unwrap();
         assert_eq!(response_json, expected_json);
+    }
+
+    #[test]
+
+    fn test_flash25_streaming_deserialization() {
+        let _: GoogleResponse = serde_json::from_str(FLASH_25_RESPONSE_STREAMING_RESPONSE).unwrap();
     }
 
     #[test]
@@ -281,12 +334,142 @@ mod tests {
                 prompt_tokens: Some(166),
                 output_tokens: Some(39),
                 total_tokens: Some(205),
+                cached_input_tokens: None,
             },
         };
 
         if let LLMResponse::Success(mut actual_result) = result {
             actual_result.latency = Duration::ZERO;
             assert_eq!(actual_result, expected);
+        } else {
+            panic!("Expected LLMResponse::Success, got {result:?}");
+        }
+    }
+
+    #[test]
+    fn test_parse_google_response_with_thinking() {
+        // Test case that reproduces the bug with thinking responses
+        let response_json = r#"
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "Analyzing the image to determine what type of product this is. It appears to be some kind of car accessory. Looking at the shape and structure...",
+            "thought": true
+          },
+          {
+            "text": "Based on the mesh pattern and the mounting points, this looks like it's designed to fit in a vehicle's cargo area.",
+            "thought": true
+          },
+          {
+            "text": "This product is a \"dog cargo guard\" or a barrier designed to separate the trunk/boot from the passenger area of a car. Its main purpose is to safely contain a pet or cargo."
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP"
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 100,
+    "candidatesTokenCount": 50,
+    "totalTokenCount": 150
+  }
+}
+        "#;
+
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body: serde_json::Value = serde_json::from_str(response_json.trim()).unwrap();
+        let system_now = web_time::SystemTime::now();
+        let instant_now = web_time::Instant::now();
+        let model_name = Some("gemini-2.5-pro".to_string());
+
+        let result = parse_google_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            system_now,
+            instant_now,
+            model_name,
+        );
+
+        if let LLMResponse::Success(actual_result) = result {
+            // Should contain only the non-thought content
+            assert_eq!(
+                actual_result.content,
+                "This product is a \"dog cargo guard\" or a barrier designed to separate the trunk/boot from the passenger area of a car. Its main purpose is to safely contain a pet or cargo."
+            );
+        } else {
+            panic!("Expected LLMResponse::Success, got {result:?}");
+        }
+    }
+
+    #[test]
+    fn test_parse_google_response_with_multiple_non_thought_parts() {
+        // Test case showing the bug: when there are multiple non-thought parts
+        let response_json = r#"
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "Let me analyze this image...",
+            "thought": true
+          },
+          {
+            "text": "I can see it's related to vehicles.",
+            "thought": true
+          },
+          {
+            "text": "This product is a "
+          },
+          {
+            "text": "\"dog cargo guard\""
+          },
+          {
+            "text": " or a barrier designed to separate the trunk/boot from the passenger area of a car."
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP"
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 100,
+    "candidatesTokenCount": 50,
+    "totalTokenCount": 150
+  }
+}
+        "#;
+
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body: serde_json::Value = serde_json::from_str(response_json.trim()).unwrap();
+        let system_now = web_time::SystemTime::now();
+        let instant_now = web_time::Instant::now();
+        let model_name = Some("gemini-2.5-pro".to_string());
+
+        let result = parse_google_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            system_now,
+            instant_now,
+            model_name,
+        );
+
+        if let LLMResponse::Success(actual_result) = result {
+            // Currently this will only return "This product is a " (the first non-thought part)
+            // But it should concatenate all non-thought parts
+            assert_eq!(
+                actual_result.content,
+                "This product is a \"dog cargo guard\" or a barrier designed to separate the trunk/boot from the passenger area of a car."
+            );
         } else {
             panic!("Expected LLMResponse::Success, got {result:?}");
         }

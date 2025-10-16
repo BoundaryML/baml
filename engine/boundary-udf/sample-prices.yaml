@@ -1,0 +1,76 @@
+
+# Global metadata
+version: "1.0"
+name: "LLM Usage Cost Configuration"
+description: "Define cost calculations for LLM API calls"
+
+
+# Global constants (can be overridden)
+constants:
+  DEFAULT_INPUT_COST: 0.001
+  DEFAULT_OUTPUT_COST: 0.002
+
+functions:
+  - match: >
+        client.provider == 'openai' or
+        client.base_url | regex_match('^https://api\\.openai\\.com')
+
+    constants:
+      INPUT_TOKEN_COST: 0.00001
+      OUTPUT_TOKEN_COST: 0.00003
+
+    returns:
+      total_cost: >
+        (response.body.usage.input_tokens | int - response.body.usage.input_tokens_details.cached_tokens | int) * INPUT_TOKEN_COST +
+        response.body.usage.output_tokens | int * OUTPUT_TOKEN_COST
+
+      completion_cost: >
+        response.body.usage.completion_tokens | int * OUTPUT_TOKEN_COST
+
+    # Time-based overrides
+    overrides:
+      # first thing that matches
+      - match: >
+          headers.date | date_between('2025-01-01', '2025-06-30') and
+          response.model == 'gpt-4-turbo'
+
+        # override constants
+        constants:
+          INPUT_TOKEN_COST: 0.00002
+          OUTPUT_TOKEN_COST: 0.00006
+
+
+      # Complex matching with AND/OR logic
+      - match: >
+          response.model | regex_match('^gpt-4') and
+          response.status == '200'
+
+        returns:
+          # override outputs
+          total_cost: >
+            response.body.usage.total_tokens | int * 0.00005 * (1.1 if client.options.stream else 1.0)
+
+  - match: >
+      client.provider == 'anthropic'
+
+    constants:
+        INPUT_TOKEN_COST: 0.00002
+        OUTPUT_TOKEN_COST: 0.00006
+
+    returns:
+      total_cost: >
+        (response.body.usage.input_tokens - response.body.usage.cached_tokens) * INPUT_TOKEN_COST +
+        response.body.usage.output_tokens * OUTPUT_TOKEN_COST
+
+  - match: >
+        client.provider == 'gemini'
+
+    constants:
+        INPUT_TOKEN_COST: 0.00002
+        OUTPUT_TOKEN_COST: 0.00006
+
+    returns:
+      total_cost: >
+        (response.body.usageMetadata.promptTokenCount - response.body.usageMetadata.cachedTokenCount) * INPUT_TOKEN_COST +
+        response.body.usageMetadata.candidatesTokenCount * OUTPUT_TOKEN_COST
+

@@ -9,12 +9,16 @@ where
     M: MetaSuffix,
 {
     match ty {
+        TypeGeneric::Top(_) => f.write_str("ANY"),
         TypeGeneric::Enum { name, .. } => write!(f, "{name}"),
         TypeGeneric::Class { name, mode, .. } => match mode {
             crate::StreamingMode::NonStreaming => write!(f, "{name}"),
             crate::StreamingMode::Streaming => write!(f, "Streaming.{name}"),
         },
-        TypeGeneric::RecursiveTypeAlias { name, .. } => write!(f, "{name}"),
+        TypeGeneric::RecursiveTypeAlias { name, mode, .. } => match mode {
+            crate::StreamingMode::NonStreaming => write!(f, "{name}"),
+            crate::StreamingMode::Streaming => write!(f, "Streaming.{name}"),
+        },
         TypeGeneric::Primitive(t, _) => write!(f, "{t}"),
         TypeGeneric::Literal(v, _) => write!(f, "{v}"),
         TypeGeneric::Union(choices, _) => {
@@ -64,7 +68,7 @@ where
 }
 
 /// ---------- 2. A tiny trait that says “add my meta-specific tags” ----------
-trait MetaSuffix {
+pub trait MetaSuffix {
     /// Pushes *only* the extra suffixes this meta type needs.
     fn push_suffix(&self, buf: &mut String);
     fn constraints(&self) -> &[crate::Constraint];

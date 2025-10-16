@@ -29,7 +29,7 @@ fn parse_single_word(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identifie
     Identifier::from((pair.as_str(), span))
 }
 
-fn parse_path_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identifier {
+pub fn parse_path_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identifier {
     assert_correct_parser!(pair, Rule::path_identifier);
 
     let span = diagnostics.span(pair.as_span());

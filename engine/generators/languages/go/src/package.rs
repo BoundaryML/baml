@@ -43,6 +43,10 @@ impl Package {
         Package::new("baml_client.stream_types")
     }
 
+    pub fn types_builder() -> Package {
+        Package::new("baml_client.types_builder")
+    }
+
     pub fn checked() -> Package {
         Package::types()
     }

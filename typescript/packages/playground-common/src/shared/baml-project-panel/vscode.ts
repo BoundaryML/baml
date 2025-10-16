@@ -1,0 +1,535 @@
+import { WasmSpan } from '@gloo-ai/baml-schema-wasm-web';
+import {
+  type GetPlaygroundPortRequest,
+  type GetPlaygroundPortResponse,
+  type GetVSCodeSettingsRequest,
+  type GetVSCodeSettingsResponse,
+  type GetWebviewUriRequest,
+  type GetWebviewUriResponse,
+  type InitializedRequest,
+  type InitializedResponse,
+  type LoadAwsCredsRequest,
+  type LoadAwsCredsResponse,
+  type LoadGcpCredsRequest,
+  type LoadGcpCredsResponse,
+  type OpenPlaygroundRequest,
+  type OpenPlaygroundResponse,
+  type SendLspNotificationToIdeRequest,
+  type SendLspNotificationToIdeResponse,
+  type JumpToFileRequest,
+  type JumpToFileResponse,
+  type SetFlashingRegionsRequest,
+  type SetFlashingRegionsResponse,
+  decodeBuffer,
+  UpdateSettingsRequest,
+} from './webview-to-vscode-rpc';
+
+// Declare the global acquireVsCodeApi function provided by VSCode webviews
+declare global {
+  function acquireVsCodeApi(): any
+}
+
+const RPC_TIMEOUT_MS = 5000;
+
+interface RpcResponse {
+  rpcMethod: string;
+  rpcId: number;
+  data: unknown;
+}
+
+const isRpcResponse = (eventData: unknown): eventData is RpcResponse => {
+  return (
+    typeof eventData === 'object' &&
+    eventData !== null &&
+    'rpcId' in eventData &&
+    typeof (eventData as RpcResponse).rpcMethod === 'string' &&
+    typeof (eventData as RpcResponse).rpcId === 'number'
+  );
+};
+
+/**
+ * A utility wrapper around the acquireVsCodeApi() function, which enables
+ * message passing and state management between the webview and extension
+ * contexts.
+ *
+ * This utility also enables webview code to be run in a web browser-based
+ * dev server by using native web browser features that mock the functionality
+ * enabled by acquireVsCodeApi.
+ * 
+ * File loading is handled via the loadMediaFile() method which automatically
+ * detects the platform (VSCode vs JetBrains/Zed) and uses the appropriate
+ * access method internally.
+ */
+class VSCodeAPIWrapper {
+  private readonly vsCodeApi: any | undefined
+
+  private rpcTable: Map<number, { resolve: (resp: unknown) => void }>;
+  private rpcId: number;
+  private wsRpc: WebSocket | null = null;
+  private wsConnecting: Promise<WebSocket> | null = null;
+  public isConnected: boolean = false;
+  public onOpen?: () => void;
+
+  constructor() {
+    // Check if the acquireVsCodeApi function exists in the current development
+    // context (i.e. VS Code development window or web browser)
+    if (typeof acquireVsCodeApi === 'function' && typeof window !== 'undefined') {
+      this.vsCodeApi = acquireVsCodeApi()
+      window.addEventListener('message', this.listenForRpcResponses.bind(this))
+    }
+
+    this.rpcTable = new Map();
+    this.rpcId = 0;
+  }
+
+  private async ensureWebSocketRpcConnection(): Promise<WebSocket> {
+    if (this.wsRpc && this.wsRpc.readyState === WebSocket.OPEN) {
+      return this.wsRpc;
+    }
+
+    // If already connecting, wait for that connection
+    if (this.wsConnecting) {
+      return this.wsConnecting;
+    }
+
+    this.wsConnecting = new Promise((resolve, reject) => {
+      const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${scheme}://${window.location.host}/rpc`);
+
+      ws.onopen = () => {
+        console.log('RPC WebSocket Opened');
+        this.wsRpc = ws;
+        this.isConnected = true;
+        this.wsConnecting = null;
+        if (this.onOpen) this.onOpen();
+        resolve(ws);
+      };
+
+      ws.onerror = (error) => {
+        console.error('RPC WebSocket error', error);
+        this.isConnected = false;
+        this.wsConnecting = null;
+        reject(new Error('Failed to connect to language server RPC WebSocket'));
+      };
+
+      ws.onclose = () => {
+        console.log('RPC WebSocket Closed');
+        this.isConnected = false;
+        this.wsRpc = null;
+        this.wsConnecting = null;
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const response = JSON.parse(event.data);
+          if (response.rpcId && this.rpcTable.has(response.rpcId)) {
+            const entry = this.rpcTable.get(response.rpcId);
+            if (entry) {
+              entry.resolve(response.data);
+              this.rpcTable.delete(response.rpcId);
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing WebSocket RPC response:', e);
+        }
+      };
+
+      // Timeout for connection
+      setTimeout(() => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          ws.close();
+          this.wsConnecting = null;
+          reject(new Error('WebSocket RPC connection timeout'));
+        }
+      }, 5000);
+    });
+
+    return this.wsConnecting;
+  }
+
+  public isVscode() {
+    return this.vsCodeApi !== undefined
+  }
+
+  public async jumpToFile(span: WasmSpan) {
+    if (this.isVscode()) {
+      await this.rpc<JumpToFileRequest, JumpToFileResponse>({
+        vscodeCommand: 'JUMP_TO_FILE',
+        span: {
+          file_path: span.file_path,
+          start_line: span.start_line,
+          start_column: span.start_column,
+        },
+      });
+    } else {
+      await this.sendLspNotificationToIde({
+        method: 'window/showDocument',
+        params: {
+          uri: `file://${span.file_path}`,
+          takeFocus: true,
+          selection: {
+            start: {
+              line: span.start_line,
+              character: span.start_column,
+            },
+            end: {
+              line: span.start_line,
+              character: span.start_column,
+            }
+          },
+        }
+      });
+    }
+  }
+
+  // Ask the language server to send an LSP notification to the IDE.  In
+  // non-VSCode environments (Jetbrains and Zed), the webview has no way of
+  // directly asking the IDE to do something, so instead we ask the language
+  // server to forward our notification to the IDE.
+  private async sendLspNotificationToIde({ method, params }: { method: string, params: Record<string, any> }) {
+    await this.rpc<SendLspNotificationToIdeRequest, SendLspNotificationToIdeResponse>({
+      vscodeCommand: 'SEND_LSP_NOTIFICATION_TO_IDE',
+      notification: {
+        method,
+        params,
+      },
+    });
+  }
+
+  public async readFile(path: string): Promise<Uint8Array> {
+    const uri = await this.readLocalFile('', path);
+
+    // Debug logging to understand the response structure
+    console.log('readFile response for path:', path, 'response:', uri);
+
+    if (uri.readError) {
+      throw new Error(`Failed to read file: ${path}\n${uri.readError}`);
+    }
+    if (uri.contents) {
+      const contents = uri.contents;
+      return decodeBuffer(contents);
+    }
+
+    // Handle malformed response - if we have a uri but no contents or readError,
+    // it likely means the file doesn't exist or couldn't be read
+    if (uri.uri) {
+      throw new Error(`File not found or unable to read: '${path}'`);
+    }
+
+    // More detailed error message with response info for completely malformed responses
+    throw new Error(`Malformed response for file: '${path}'. Response received: ${JSON.stringify(uri)}`);
+  }
+
+  async readLocalFile(
+    bamlSrc: string,
+    path: string,
+  ): Promise<GetWebviewUriResponse> {
+    const resp = await this.rpc<GetWebviewUriRequest, GetWebviewUriResponse>({
+      vscodeCommand: 'GET_WEBVIEW_URI',
+      bamlSrc,
+      path,
+      contents: true,
+    });
+
+    return resp;
+  }
+
+  public async asWebviewUri(bamlSrc: string, path: string): Promise<string> {
+    const resp = await this.rpc<GetWebviewUriRequest, GetWebviewUriResponse>({
+      vscodeCommand: 'GET_WEBVIEW_URI',
+      bamlSrc,
+      path,
+    });
+
+    return resp.uri;
+  }
+
+  public async getPlaygroundPort() {
+    const resp = await this.rpc<
+      GetPlaygroundPortRequest,
+      GetPlaygroundPortResponse
+    >({
+      vscodeCommand: 'GET_PLAYGROUND_PORT',
+    });
+    return resp.port;
+  }
+
+  public async getVSCodeSettings() {
+    if (this.isVscode()) {
+      const resp = await this.rpc<
+        GetVSCodeSettingsRequest,
+        GetVSCodeSettingsResponse
+      >({
+        vscodeCommand: 'GET_VSCODE_SETTINGS',
+      });
+      return resp;
+    } else {
+      // TODO: this is hardcoded because setting toggles are broken in vscode right now
+      // If we fix these in vscode, we should also fix them in jetbrains and zed
+      return {
+        enablePlaygroundProxy: true,
+        featureFlags: ["beta"],
+      };
+    }
+  }
+
+  public async setProxySettings(proxyEnabled: boolean) {
+    await this.rpc<UpdateSettingsRequest, void>({
+      vscodeCommand: 'UPDATE_SETTINGS',
+      settings: {
+        enablePlaygroundProxy: proxyEnabled,
+      },
+    });
+  }
+
+  public loadAwsCreds = async (profile: string | null) => {
+    console.log('calling loadAwsCreds', profile);
+    const resp = await this.rpc<LoadAwsCredsRequest, LoadAwsCredsResponse>({
+      vscodeCommand: 'LOAD_AWS_CREDS',
+      profile,
+    });
+    return resp;
+  };
+
+  public loadGcpCreds = async () => {
+    console.log('calling loadGcpCreds');
+    const resp = await this.rpc<LoadGcpCredsRequest, LoadGcpCredsResponse>({
+      vscodeCommand: 'LOAD_GCP_CREDS',
+    });
+    return resp;
+  };
+
+  public async markInitialized() {
+    try {
+      await this.rpc<InitializedRequest, InitializedResponse>({
+        vscodeCommand: 'INITIALIZED',
+      });
+    } catch (e) {
+      console.error('Error marking initialized', e);
+    }
+  }
+
+  public async openPlayground() {
+    const resp = await this.rpc<
+      OpenPlaygroundRequest,
+      OpenPlaygroundResponse
+    >({
+      vscodeCommand: 'OPEN_PLAYGROUND',
+    });
+    return resp;
+  }
+
+  public async setFeatureFlags(featureFlags: string[]) {
+    await this.rpc<UpdateSettingsRequest, void>({
+      vscodeCommand: 'UPDATE_SETTINGS',
+      settings: {
+        featureFlags,
+      },
+    });
+  }
+
+  public async setFlashingRegions(spans: {
+    file_path: string;
+    start_line: number;
+    start: number;
+    end_line: number;
+    end: number;
+  }[]) {
+    const resp = await this.rpc<SetFlashingRegionsRequest, SetFlashingRegionsResponse>({
+      vscodeCommand: 'SET_FLASHING_REGIONS',
+      spans,
+    });
+    return resp;
+  }
+
+  /**
+   * Load a media file as binary data, handling platform differences automatically.
+   * 
+   * @param path File path to load (relative to workspace or absolute)
+   * @returns Promise<Uint8Array> Binary file contents
+   * @throws Error if file cannot be read or loaded
+   */
+  public loadMediaFile = async (path: string): Promise<Uint8Array> => {
+    try {
+      if (this.isVscode()) {
+        // VSCode: Request file contents directly via workspace API
+        const response = await this.rpc<GetWebviewUriRequest, GetWebviewUriResponse>({
+          vscodeCommand: 'GET_WEBVIEW_URI',
+          bamlSrc: '', // Keep for API compatibility but always empty
+          path,
+          contents: true, // Request file contents along with URI
+        });
+
+        if (response.readError) {
+          throw new Error(`Failed to read file: ${path}\n${response.readError}`);
+        }
+
+        if (response.contents) {
+          return decodeBuffer(response.contents);
+        }
+
+        // Handle case where no contents or error returned
+        throw new Error(`File not found or unable to read: '${path}'`);
+      } else {
+        // Non-VSCode (JetBrains/Zed): Get URI and fetch via HTTP
+        const response = await this.rpc<GetWebviewUriRequest, GetWebviewUriResponse>({
+          vscodeCommand: 'GET_WEBVIEW_URI',
+          bamlSrc: '', // Keep for API compatibility
+          path,
+          // Don't request contents - server will return data URL automatically
+        });
+
+        // Server returns data URL for media files, fetch it
+        const httpResponse = await fetch(response.uri);
+        if (!httpResponse.ok) {
+          throw new Error(`HTTP ${httpResponse.status}: ${httpResponse.statusText}`);
+        }
+
+        const arrayBuffer = await httpResponse.arrayBuffer();
+        return new Uint8Array(arrayBuffer);
+      }
+    } catch (error) {
+      // Wrap all errors with context
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to load media file '${path}': ${message}`);
+    }
+  }
+
+  public rpc<TRequest, TResponse>(data: TRequest): Promise<TResponse> {
+    if (!this.isVscode()) {
+      return this.httpPostRpc(data);
+    }
+
+    return new Promise(async (resolve, reject) => {
+      const rpcId = this.rpcId++;
+      this.rpcTable.set(rpcId, { resolve: resolve as (resp: unknown) => void });
+
+      const message = {
+        rpcMethod: (data as unknown as { vscodeCommand: string }).vscodeCommand,
+        rpcId,
+        data,
+      };
+
+      try {
+        if (this.isVscode()) {
+          // Use VSCode webview messaging
+          this.postMessageToHost(message);
+        } else {
+          // Use WebSocket RPC for other editors (like Zed)
+          const ws = await this.ensureWebSocketRpcConnection();
+          ws.send(JSON.stringify(message));
+        }
+      } catch (error) {
+        this.rpcTable.delete(rpcId);
+        reject(error);
+        return;
+      }
+
+      // Timeout to prevent hanging requests
+      setTimeout(() => {
+        if (this.rpcTable.has(rpcId)) {
+          this.rpcTable.delete(rpcId);
+          reject(
+            new Error(
+              `${this.isVscode() ? 'VSCode' : 'WebSocket'} RPC request timed out after ${RPC_TIMEOUT_MS}ms: ${(data as any).vscodeCommand}`,
+            ),
+          );
+        }
+      }, RPC_TIMEOUT_MS);
+    });
+  }
+
+  private listenForRpcResponses(event: any) {
+    if (isRpcResponse(event.data)) {
+      const rpcData = event.data as RpcResponse;
+      const entry = this.rpcTable.get(rpcData.rpcId);
+      if (entry) {
+        entry.resolve(rpcData.data);
+        this.rpcTable.delete(rpcData.rpcId);
+      }
+    }
+  }
+
+  public sendTelemetry(meta: unknown) {
+    this.postMessageToHost({
+      command: 'telemetry',
+      meta,
+    });
+  }
+
+  /**
+   * Post a message (i.e. send arbitrary data) to the owner of the webview.
+   *
+   * @remarks When running webview code inside a web browser, postMessage will instead
+   * log the given message to the console.
+   *
+   * @param message Abitrary data (must be JSON serializable) to send to the extension context.
+   */
+  private postMessageToHost(message: unknown) {
+    if (this.vsCodeApi) {
+      this.vsCodeApi.postMessage(message)
+    } else {
+      window.postMessage(message)
+    }
+  }
+
+  private async httpPostRpc<TRequest, TResponse>(data: TRequest): Promise<TResponse> {
+    const command = (data as unknown as { vscodeCommand: string }).vscodeCommand;
+
+    const response = await fetch(`/webview/${command}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP RPC failed for ${command}: ${response.status} ${errorText}`);
+    }
+
+    const result = await response.json();
+    return result as TResponse;
+  }
+
+  /**
+   * Get the persistent state stored for this webview.
+   *
+   * @remarks When running webview source code inside a web browser, getState will retrieve state
+   * from local storage (https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage).
+   *
+   * @return The current state or `undefined` if no state has been set.
+   */
+  public getState(): unknown | undefined {
+    if (this.vsCodeApi) {
+      return this.vsCodeApi.getState()
+    } else {
+      const state = localStorage.getItem('vscodeState')
+      return state ? JSON.parse(state) : undefined
+    }
+  }
+
+  /**
+   * Set the persistent state stored for this webview.
+   *
+   * @remarks When running webview source code inside a web browser, setState will set the given
+   * state using local storage (https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage).
+   *
+   * @param newState New persisted state. This must be a JSON serializable object. Can be retrieved
+   * using {@link getState}.
+   *
+   * @return The new state.
+   */
+  public setState<T extends unknown | undefined>(newState: T): T {
+    if (this.vsCodeApi) {
+      return this.vsCodeApi.setState(newState)
+    } else {
+      localStorage.setItem('vscodeState', JSON.stringify(newState))
+      return newState
+    }
+  }
+}
+
+// Create a singleton instance of the wrapper class and export it for use across the webview
+export const vscode = new VSCodeAPIWrapper()

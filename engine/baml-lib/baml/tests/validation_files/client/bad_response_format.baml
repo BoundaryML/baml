@@ -22,7 +22,7 @@ client<llm> MyClient3 {
   }
 }
 
-// error: client_response_type must be one of "openai", "anthropic", "google", or "vertex". Got: invalid
+// error: client_response_type must be one of "openai", "openai-responses", "anthropic", "google", or "vertex". Got: invalid
 //   -->  client/bad_response_format.baml:5
 //    | 
 //  4 |     model "gpt-4o"

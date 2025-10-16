@@ -89,6 +89,10 @@ impl ResolvedAnthropic {
         })
     }
 
+    pub fn remap_role(&self) -> std::collections::HashMap<String, String> {
+        self.role_selection.remap().unwrap_or_default()
+    }
+
     /// When using Vertex with Anthropic, we need to use a synthetic client that mimics the Anthropic API.
     /// This allows us to construct an Anthropic HTTP client from a baml client for vertex-ai.
     pub fn synthetic_for_vertex_anthropic(role_selection: RolesSelection) -> Self {

@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use BAML in your research or project, please cite it using the metadata from this file."
+type: software
+title: "BAML - A new programming language for building agents"
+abstract: "BAML is a simple prompting language for building reliable AI workflows and agents. BAML makes prompt engineering easy by turning it into schema engineering -- where you mostly focus on the models of your prompt -- to get more reliable outputs."
+authors:
+  - name: "Boundary"
+    email: "contact@boundaryml.com"
+    website: "https://www.boundaryml.com"
+repository-code: "https://github.com/BoundaryML/baml"
+url: "https://www.boundaryml.com"
+license: Apache-2.0
+version: 0.210.0
+date-released: "2025-10-06"
+keywords:
+  - artificial-intelligence
+  - llm
+  - prompt-engineering
+  - language
+  - ai-agents
+  - machine-learning
+  - schema
+  - prompting
+  - openai
+  - anthropic
+  - structured-outputs
+references:
+  - type: software
+    title: "BAML Documentation"
+    url: "https://docs.boundaryml.com"
+  - type: software
+    title: "BAML Prompt Fiddle"
+    url: "https://www.promptfiddle.com"

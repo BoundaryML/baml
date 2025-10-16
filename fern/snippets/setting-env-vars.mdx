@@ -8,6 +8,37 @@ Once you open a `.baml` file in VSCode, you should see a small button over every
 
 Or type `BAML Playground` in the VSCode Command Bar (`CMD + Shift + P` or `CTRL + Shift + P`) to open the playground.
 
+### For Boundary Studio Integration
+
+To send logs and traces to Boundary Studio, you need to set the `BOUNDARY_API_KEY` environment variable. This key is provided when you create an API key in your Boundary Studio dashboard.
+
+<Tabs>
+  <Tab title="Next.js" language="typescript">
+    ```bash
+    # .env.local
+    BOUNDARY_API_KEY=your_api_key_here
+    ```
+  </Tab>
+  <Tab title="Express.js" language="typescript">
+    ```bash
+    # .env
+    BOUNDARY_API_KEY=your_api_key_here
+    ```
+  </Tab>
+  <Tab title="Flask" language="python">
+    ```bash
+    # .env
+    BOUNDARY_API_KEY=your_api_key_here
+    ```
+  </Tab>
+  <Tab title="Rails" language="ruby">
+    ```yaml
+    # config/application.yml
+    BOUNDARY_API_KEY: your_api_key_here
+    ```
+  </Tab>
+</Tabs>
+
 ### For Your App (Default)
 
 BAML will do its best to load environment variables from your program. Any of the following strategies for setting env vars are compatible with BAML:
@@ -28,7 +59,7 @@ python my_program_using_baml.py
 ```
 
 <Tabs>
-  <Tab title="python">
+  <Tab title="python" language="python">
 
     ```python
     from dotenv import load_dotenv
@@ -37,8 +68,8 @@ python my_program_using_baml.py
     load_dotenv()
     ```
   </Tab>
-  <Tab title="typescript">
-    
+  <Tab title="typescript" language="typescript">
+
     ```typescript
     import dotenv from 'dotenv'
     import { b } from './baml_client'
@@ -46,7 +77,7 @@ python my_program_using_baml.py
     dotenv.config()
     ```
   </Tab>
-  <Tab title="ruby">
+  <Tab title="ruby" language="ruby">
     ```ruby
     require 'dotenv/load'
     require 'baml_client'

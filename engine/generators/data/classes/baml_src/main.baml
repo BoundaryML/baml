@@ -4,14 +4,14 @@ class SimpleClass {
 }
 
 function MakeSimpleClass() -> SimpleClass {
-    client "ollama/phi4:latest"
+    client "openai/gpt-4o-mini"
     prompt #"
         {{ ctx.output_format }}
     "#
 }
 
 function ConsumeSimpleClass(item: SimpleClass) -> SimpleClass {
-    client "ollama/phi4:latest"
+    client "openai/gpt-4o-mini"
     prompt #"
         Return back to me verbatim:
 
@@ -21,9 +21,5 @@ function ConsumeSimpleClass(item: SimpleClass) -> SimpleClass {
 
 test MakeSimpleClassTest {
     functions [MakeSimpleClass]
-    args {
-        class_1:
-            digits: 123
-            words: "hello"
-    }
+    args {}
 }

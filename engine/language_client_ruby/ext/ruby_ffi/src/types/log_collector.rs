@@ -85,6 +85,10 @@ impl Collector {
         })
     }
 
+    pub fn clear(&self) {
+        let _ = self.inner.clear();
+    }
+
     pub fn logs(&self) -> RArray {
         let function_logs = self.inner.function_logs();
         function_logs
@@ -145,6 +149,7 @@ impl Collector {
         cls.define_method("last", method!(Collector::last, 0))?;
         cls.define_method("id", method!(Collector::id, 1))?;
         cls.define_method("usage", method!(Collector::usage, 0))?;
+        cls.define_method("clear", method!(Collector::clear, 0))?;
         cls.define_method("to_s", method!(Collector::to_s, 0))?;
         cls.define_singleton_method(
             "__function_call_count",
@@ -263,6 +268,21 @@ impl FunctionLog {
         self.inner.lock().unwrap().raw_llm_response()
     }
 
+    pub fn tags(&self) -> std::collections::HashMap<String, String> {
+        let mut guard = self.inner.lock().unwrap();
+        guard
+            .tags()
+            .into_iter()
+            .map(|(k, v)| {
+                let string_value = match v {
+                    serde_json::Value::String(s) => s,
+                    _ => v.to_string(),
+                };
+                (k, string_value)
+            })
+            .collect()
+    }
+
     pub fn selected_call(ruby: &Ruby, rb_self: &Self) -> Option<Value> {
         let calls = rb_self.inner.lock().unwrap().calls();
         calls.into_iter().find_map(|call| match call {
@@ -280,7 +300,7 @@ impl FunctionLog {
                 }
             }
             baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(inner) => {
-                if inner.selected {
+                if inner.llm_call.selected {
                     let stream_call = LLMStreamCall {
                         inner: Arc::new(inner.clone()),
                     };
@@ -307,6 +327,7 @@ impl FunctionLog {
             method!(FunctionLog::raw_llm_response, 0),
         )?;
         cls.define_method("selected_call", method!(FunctionLog::selected_call, 0))?;
+        cls.define_method("tags", method!(FunctionLog::tags, 0))?;
 
         Ok(())
     }
@@ -315,13 +336,10 @@ impl FunctionLog {
 impl Timing {
     pub fn to_s(&self) -> String {
         format!(
-            "Timing(start_time_utc_ms={}, duration_ms={}, time_to_first_parsed_ms={})",
+            "Timing(start_time_utc_ms={}, duration_ms={})",
             self.inner.start_time_utc_ms,
             self.inner
                 .duration_ms
-                .map_or("null".to_string(), |v| v.to_string()),
-            self.inner
-                .time_to_first_parsed_ms
                 .map_or("null".to_string(), |v| v.to_string())
         )
     }
@@ -334,20 +352,12 @@ impl Timing {
         self.inner.duration_ms
     }
 
-    pub fn time_to_first_parsed_ms(&self) -> Option<i64> {
-        self.inner.time_to_first_parsed_ms
-    }
-
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
         let cls = module.define_class("Timing", class::object())?;
 
         cls.define_method("to_s", method!(Timing::to_s, 0))?;
         cls.define_method("start_time_utc_ms", method!(Timing::start_time_utc_ms, 0))?;
         cls.define_method("duration_ms", method!(Timing::duration_ms, 0))?;
-        cls.define_method(
-            "time_to_first_parsed_ms",
-            method!(Timing::time_to_first_parsed_ms, 0),
-        )?;
 
         Ok(())
     }
@@ -361,16 +371,10 @@ impl Timing {
 impl StreamTiming {
     pub fn to_s(&self) -> String {
         format!(
-            "StreamTiming(start_time_utc_ms={}, duration_ms={}, time_to_first_parsed_ms={}, time_to_first_token_ms={})",
+            "StreamTiming(start_time_utc_ms={}, duration_ms={})",
             self.inner.start_time_utc_ms,
             self.inner
                 .duration_ms
-                .map_or("null".to_string(), |v| v.to_string()),
-            self.inner
-                .time_to_first_parsed_ms
-                .map_or("null".to_string(), |v| v.to_string()),
-            self.inner
-                .time_to_first_token_ms
                 .map_or("null".to_string(), |v| v.to_string())
         )
     }
@@ -383,14 +387,6 @@ impl StreamTiming {
         self.inner.duration_ms
     }
 
-    pub fn time_to_first_parsed_ms(&self) -> Option<i64> {
-        self.inner.time_to_first_parsed_ms
-    }
-
-    pub fn time_to_first_token_ms(&self) -> Option<i64> {
-        self.inner.time_to_first_token_ms
-    }
-
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
         let cls = module.define_class("StreamTiming", class::object())?;
 
@@ -400,14 +396,6 @@ impl StreamTiming {
             method!(StreamTiming::start_time_utc_ms, 0),
         )?;
         cls.define_method("duration_ms", method!(StreamTiming::duration_ms, 0))?;
-        cls.define_method(
-            "time_to_first_parsed_ms",
-            method!(StreamTiming::time_to_first_parsed_ms, 0),
-        )?;
-        cls.define_method(
-            "time_to_first_token_ms",
-            method!(StreamTiming::time_to_first_token_ms, 0),
-        )?;
 
         Ok(())
     }
@@ -416,12 +404,15 @@ impl StreamTiming {
 impl Usage {
     pub fn to_s(&self) -> String {
         format!(
-            "Usage(input_tokens={}, output_tokens={})",
+            "Usage(input_tokens={}, output_tokens={}, cached_input_tokens={})",
             self.inner
                 .input_tokens
                 .map_or_else(|| "null".to_string(), |v| v.to_string()),
             self.inner
                 .output_tokens
+                .map_or_else(|| "null".to_string(), |v| v.to_string()),
+            self.inner
+                .cached_input_tokens
                 .map_or_else(|| "null".to_string(), |v| v.to_string())
         )
     }
@@ -434,12 +425,20 @@ impl Usage {
         self.inner.output_tokens
     }
 
+    pub fn cached_input_tokens(&self) -> Option<i64> {
+        self.inner.cached_input_tokens
+    }
+
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
         let cls = module.define_class("Usage", class::object())?;
 
         cls.define_method("to_s", method!(Usage::to_s, 0))?;
         cls.define_method("input_tokens", method!(Usage::input_tokens, 0))?;
         cls.define_method("output_tokens", method!(Usage::output_tokens, 0))?;
+        cls.define_method(
+            "cached_input_tokens",
+            method!(Usage::cached_input_tokens, 0),
+        )?;
 
         Ok(())
     }
@@ -530,43 +529,52 @@ impl LLMStreamCall {
     pub fn to_s(&self) -> String {
         format!(
             "LLMStreamCall(provider={}, client_name={}, selected={}, usage={}, timing={:?}, http_request={}, http_response={})",
-            self.inner.provider,
-            self.inner.client_name,
-            self.inner.selected,
-            self.inner.usage.as_ref().map_or("null".to_string(), |u| format!("{u:?}")),
+            self.inner.llm_call.provider,
+            self.inner.llm_call.client_name,
+            self.inner.llm_call.selected,
+            self.inner.llm_call.usage.as_ref().map_or("null".to_string(), |u| format!("{u:?}")),
             self.inner.timing,
-            self.inner.request.as_ref().map_or("null".to_string(), |req| format!("{req:?}")),
-            self.inner.response.as_ref().map_or("null".to_string(), |resp| format!("{resp:?}"))
+            self.inner.llm_call.request.as_ref().map_or("null".to_string(), |req| format!("{req:?}")),
+            self.inner.llm_call.response.as_ref().map_or("null".to_string(), |resp| format!("{resp:?}"))
         )
     }
 
     pub fn http_request(&self) -> Option<HTTPRequest> {
         self.inner
+            .llm_call
             .request
             .clone()
             .map(|req| HTTPRequest { inner: req })
     }
 
     pub fn http_response(&self) -> Option<HTTPResponse> {
-        self.inner.response.clone().map(|resp| HTTPResponse {
-            inner: resp.clone(),
-        })
+        self.inner
+            .llm_call
+            .response
+            .clone()
+            .map(|resp| HTTPResponse {
+                inner: resp.clone(),
+            })
     }
 
     pub fn provider(&self) -> String {
-        self.inner.provider.clone()
+        self.inner.llm_call.provider.clone()
     }
 
     pub fn client_name(&self) -> String {
-        self.inner.client_name.clone()
+        self.inner.llm_call.client_name.clone()
     }
 
     pub fn selected(&self) -> bool {
-        self.inner.selected
+        self.inner.llm_call.selected
     }
 
     pub fn usage(&self) -> Option<Usage> {
-        self.inner.usage.clone().map(|u| Usage { inner: u.into() })
+        self.inner
+            .llm_call
+            .usage
+            .clone()
+            .map(|u| Usage { inner: u.into() })
     }
 
     pub fn timing(&self) -> StreamTiming {

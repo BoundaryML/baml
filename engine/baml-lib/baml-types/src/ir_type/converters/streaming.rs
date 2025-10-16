@@ -11,7 +11,7 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
     fn partialize_helper(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming {
         let type_meta::base::StreamingBehavior {
             done,
-            needed,
+            mut needed,
             state,
         } = r#type
             .streaming_behavior()
@@ -26,6 +26,7 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
         // Streaming behavior of the type, without regard to the `@stream` annotations.
         // (That annotation will be handled later in this function).
         let mut base_type_streaming = match r#type {
+            TypeIR::Top(_) => TypeStreaming::Top(meta),
             TypeIR::Primitive(type_value, _) => match type_value {
                 TypeValue::Null => TypeStreaming::Primitive(TypeValue::Null, meta),
                 TypeValue::Int => TypeStreaming::Primitive(TypeValue::Int, meta),
@@ -55,12 +56,14 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
                 meta: meta.clone(),
             },
             TypeIR::List(item_type, _) => {
+                needed = true;
                 // items inside of arrays don't need to nullable.
                 let mut item_type = item_type.clone();
                 item_type.meta_mut().streaming_behavior.needed = true;
                 TypeStreaming::List(Box::new(from_type_ir(&item_type, lookup)), meta)
             }
             TypeIR::Map(key_type, item_type, _) => {
+                needed = true;
                 TypeStreaming::Map(
                     {
                         // Keys cannot be null in maps
@@ -79,6 +82,11 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
             }
             TypeIR::RecursiveTypeAlias { name, .. } => TypeStreaming::RecursiveTypeAlias {
                 name: name.clone(),
+                mode: if done {
+                    StreamingMode::NonStreaming
+                } else {
+                    StreamingMode::Streaming
+                },
                 meta: meta.clone(),
             },
             TypeIR::Tuple(field_types, _) => TypeStreaming::Tuple(
@@ -100,13 +108,14 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
                 meta,
             ),
             TypeIR::Union(union_type, _) => {
+                let is_optional = union_type.is_optional();
                 let variants = union_type.iter_skip_null();
                 let variants = variants.into_iter().cloned().map(|mut t| {
                     t.meta_mut().streaming_behavior.needed = true;
                     from_type_ir(&t, lookup)
                 });
 
-                let variants = if !needed {
+                let variants = if !needed || is_optional {
                     variants
                         .chain(std::iter::once(TypeStreaming::null()))
                         .collect()
@@ -153,6 +162,7 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
     ) -> type_meta::base::StreamingBehavior {
         type StreamingBehavior = type_meta::base::StreamingBehavior;
         match field_type {
+            TypeIR::Top(_) => Default::default(),
             TypeIR::Primitive(type_value, _) => match type_value {
                 TypeValue::Bool | TypeValue::Float | TypeValue::Int => StreamingBehavior {
                     done: true,
@@ -192,7 +202,8 @@ pub fn to_type_ir(r#type: &TypeStreaming) -> TypeIR {
                 streaming_behavior: type_meta::base::StreamingBehavior {
                     done: streaming_behavior.done,
                     state: streaming_behavior.state,
-                    ..Default::default()
+                    // stream types already include nulls, so we don't need to add them again
+                    needed: true,
                 },
                 constraints: constraints.clone(),
             }

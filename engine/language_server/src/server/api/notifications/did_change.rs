@@ -3,12 +3,12 @@ use std::{collections::HashMap, time::Instant};
 use lsp_types::{
     notification::DidChangeTextDocument, DidChangeTextDocumentParams, PublishDiagnosticsParams,
 };
+use playground_server::WebviewRouterMessage;
 
 use crate::{
-    playground::broadcast_project_update,
     server::{
         api::{
-            diagnostics::publish_diagnostics,
+            diagnostics::{not_in_baml_src_diagnostic, publish_diagnostics},
             traits::{NotificationHandler, SyncNotificationHandler},
             ResultExt,
         },
@@ -36,24 +36,21 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
         let start_time_total = Instant::now();
 
         let url = params.text_document.uri;
-        if !url.to_string().contains("baml_src") {
-            return Ok(());
-        }
-
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
 
         // Get or create the project using the unified method
-        let project = session.get_or_create_project(&path);
-        if project.is_none() {
-            tracing::error!("Failed to get or create project for path: {:?}", path);
-            show_err_msg!("Failed to get or create project for path: {:?}", path);
-        }
-
-        let project = project.unwrap();
+        let Ok(project) = session.get_or_create_project(&path) else {
+            notifier
+                .notify::<lsp_types::notification::PublishDiagnostics>(not_in_baml_src_diagnostic(
+                    &url,
+                ))
+                .internal_error()?;
+            return Ok(());
+        };
         let document_key =
-            DocumentKey::from_url(project.lock().unwrap().root_path(), &url).internal_error()?;
+            DocumentKey::from_url(project.lock().root_path(), &url).internal_error()?;
 
         session
             .update_text_document(
@@ -64,39 +61,30 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
             )
             .internal_error()?;
 
-        // Broadcast update to playground clients
-        if let Some(state) = &session.playground_state {
-            let project = project.lock().unwrap();
-            let files_map: std::collections::HashMap<String, String> = project
-                .baml_project
-                .files
-                .iter()
-                .map(|(path, doc)| {
-                    let key = path.path().to_string_lossy().to_string();
-                    // If there's an unsaved version, use it
-                    let contents = project
-                        .baml_project
-                        .unsaved_files
-                        .get(path)
-                        .map(|unsaved| unsaved.contents.clone())
-                        .unwrap_or_else(|| doc.contents.clone());
-                    (key, contents)
-                })
-                .collect();
-            let root_path = project.root_path().to_string_lossy().to_string();
-            let state = state.clone();
-            if let Some(runtime) = &session.playground_runtime {
-                runtime.spawn(async move {
-                    let _ =
-                        crate::playground::broadcast_project_update(&state, &root_path, files_map)
-                            .await;
-                });
-            }
-        }
-
         tracing::info!("publishing diagnostics");
 
-        publish_diagnostics(&notifier, project, Some(params.text_document.version))?;
+        let default_flags = vec!["beta".to_string()];
+        let effective_flags = session
+            .baml_settings
+            .feature_flags
+            .as_ref()
+            .unwrap_or(&default_flags);
+        tracing::info!(
+            "did_change: session feature_flags: {:?}, effective_flags: {:?}",
+            session
+                .baml_settings
+                .feature_flags
+                .as_ref()
+                .unwrap_or(&default_flags),
+            &effective_flags
+        );
+        publish_diagnostics(
+            &notifier,
+            project,
+            Some(params.text_document.version),
+            effective_flags,
+            session,
+        )?;
 
         let elapsed = start_time_total.elapsed();
         tracing::info!("didchange total took {:?}ms", elapsed.as_millis());

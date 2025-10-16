@@ -1,0 +1,13 @@
+# Generated Lezer grammar files
+src/syntax.grammar.js
+src/syntax.grammar.terms.js
+
+# Build output
+dist/
+
+# Dependencies
+node_modules/
+
+# Cache
+.turbo/
+.rollup.cache/

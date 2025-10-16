@@ -1,5 +1,5 @@
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button } from '@baml/ui/button';
+import { Input } from '@baml/ui/input';
 import { Link, Upload } from 'lucide-react';
 import type React from 'react';
 import type { ImageSourceType } from '../utils/imageUtils';

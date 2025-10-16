@@ -20,7 +20,7 @@ impl Harness {
             anyhow::bail!(indoc! {"
                 Integration tests using tests/harness.rs require OPENAI_API_KEY and ANTHROPIC_API_KEY.
                 
-                You can skip these using 'cargo test --lib', or run these specifically using 'cargo test --test test_cli'.
+                You can skip these using 'cargo test --features skip-integ-tests', or run these specifically using 'cargo test --test test_cli'.
             "});
         }
 

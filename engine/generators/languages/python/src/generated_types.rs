@@ -180,7 +180,13 @@ mod type_builder {
     ///         return self._bldr.property(name).type(type)
     ///
     ///     def list_properties(self) -> typing.List[typing.Tuple[str, {{ class.class_property_type() }}]]:
-    ///         return [(name, self._bldr.property(name)) for name in self._properties]
+    ///         return self._bldr.list_properties()
+    ///
+    ///     def remove_property(self, name: str) -> None:
+    ///         self._bldr.remove_property(name)
+    ///
+    ///     def reset(self) -> None:
+    ///         self._bldr.reset()
     ///
     ///     {% else %}
     ///     def list_properties(self) -> typing.List[typing.Tuple[str, {{ class.class_property_type() }}]]:

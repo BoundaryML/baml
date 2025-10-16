@@ -53,6 +53,7 @@ impl BamlError {
                     prompt,
                     raw_output,
                     message,
+                    ..
                 } => Self::ValidationFailure {
                     prompt: prompt.to_string(),
                     raw_output: raw_output.to_string(),
@@ -63,6 +64,7 @@ impl BamlError {
                     raw_output,
                     message,
                     finish_reason,
+                    ..
                 } => Self::FinishReasonError {
                     prompt: prompt.to_string(),
                     raw_output: raw_output.to_string(),
@@ -73,10 +75,14 @@ impl BamlError {
                     client_name,
                     message,
                     status_code,
+                    ..
                 } => Self::ClientHttpError {
                     client_name: client_name.to_string(),
                     message: message.to_string(),
                     status_code: status_code.to_u16(),
+                },
+                ExposedError::AbortError { .. } => Self::InternalError {
+                    message: "AbortError".into(),
                 },
             }
         } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
@@ -109,6 +115,9 @@ impl BamlError {
                 },
                 LLMResponse::InternalFailure(_) => Self::InternalError {
                     message: format!("Something went wrong with the LLM client: {err}"),
+                },
+                LLMResponse::Cancelled(msg) => Self::InternalError {
+                    message: format!("Operation cancelled: {msg}"),
                 },
             }
         } else {

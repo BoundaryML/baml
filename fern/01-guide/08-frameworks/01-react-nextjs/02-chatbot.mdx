@@ -13,7 +13,7 @@ In this tutorial, you'll build a real-time streaming chatbot using BAML React ho
 
 Before starting, ensure you have:
 - Completed the [Quick Start Guide](/guide/framework-integration/react-next-js/quick-start)
-- A Next.js project with BAML set up
+- A Next.js project (version 15 or higher) with BAML set up
 - An OpenAI API key
 
 ## Step 1: Define the Chat Function
@@ -28,7 +28,7 @@ class Message {
 }
 
 function Chat(messages: Message[]) -> string {
-  client "openai/gpt-4o-mini"
+  client "openai/gpt-5-mini"
   prompt #"
     You are a helpful and knowledgeable AI assistant engaging in a conversation.
     Your responses should be:

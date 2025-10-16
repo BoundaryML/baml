@@ -203,7 +203,7 @@ export function getDefaultInputConfig<T extends FunctionNames>(
   example: T,
 ): InputFieldConfig | null {
   const inputs = getInputConfigs(example);
-  return inputs.length > 0 ? inputs[0] : null;
+  return inputs.length > 0 ? inputs[0] ?? null : null;
 }
 
 // Define the OutputFormat type

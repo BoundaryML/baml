@@ -50,6 +50,10 @@ impl UiFunctionIdString {
     pub fn inner(&self) -> &String {
         &self.0
     }
+
+    pub fn from_string(s: String) -> Self {
+        UiFunctionIdString(s)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, TS)]
@@ -94,18 +98,18 @@ pub struct UiFunctionCall {
     #[ts(optional)]
     pub function_id: Option<UiFunctionIdString>,
 
-    #[ts(type = "Record<string, any>")]
+    #[ts(type = "Record<string, unknown>")]
     pub tags: serde_json::Map<String, serde_json::Value>,
 
     #[serde(rename = "start_epoch_ms")]
-    #[ts(type = "number | null")]
-    pub start_time: Option<EpochMsTimestamp>,
+    #[ts(type = "number")]
+    pub start_time: EpochMsTimestamp,
     #[serde(rename = "end_epoch_ms")]
     #[ts(type = "number | null")]
     pub end_time: Option<EpochMsTimestamp>,
     pub status: String,
 
-    #[ts(type = "any")]
+    #[ts(type = "unknown")]
     pub baml_options: serde_json::Value,
     pub inputs: Vec<UiFunctionInput>,
     #[ts(as = "Option<BamlValue>")]
@@ -122,6 +126,8 @@ pub struct UiFunctionCall {
     pub llm_request: Option<UiLlmRequest>,
     #[ts(optional)]
     pub llm_response: Option<UiLlmResponse>,
+    #[ts(optional)]
+    pub http_metadata_summary: Option<Vec<UiHttpMetadataSummary>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -130,9 +136,9 @@ pub struct UiLlmRequest {
     pub client_name: String,
     pub client_provider: String,
     // TODO: type this out properly.
-    #[ts(type = "any")]
+    #[ts(type = "unknown")]
     pub params: serde_json::Value,
-    #[ts(type = "any")]
+    #[ts(type = "unknown")]
     pub prompt: serde_json::Value,
 }
 
@@ -154,11 +160,13 @@ pub struct UiUsageEstimate {
     pub input_tokens: Option<u64>,
     #[ts(type = "number | null")]
     pub output_tokens: Option<u64>,
-    // TODO: add cost estimate data here
-    // This is tricky to do because we need provider & model to effectively
-    // resolve the token costs. Even restricting to just openai is non-straightforward,
-    // and frankly I'm skeptical that restricting to just openai is a sufficiently common
-    // implementation use case.
+    // Cost estimates calculated from provider-specific pricing
+    #[ts(type = "number | null")]
+    pub input_cost: Option<f64>,
+    #[ts(type = "number | null")]
+    pub output_cost: Option<f64>,
+    #[ts(type = "number | null")]
+    pub total_cost: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -184,9 +192,18 @@ pub struct UiHttpRequest {
     pub start_time: EpochMsTimestamp,
     pub url: String,
     pub method: String,
-    #[ts(type = "Record<string, any>")]
-    pub headers: HashMap<String, String>,
+    #[ts(type = "Record<string, string> | undefined")]
+    pub headers: Option<HashMap<String, String>>,
     pub body: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UiHttpMetadataSummary {
+    pub client_name: String,
+    pub client_provider: String,
+    pub model: Option<String>,
+    pub status: u16,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -195,7 +212,7 @@ pub struct UiHttpResponse {
     #[ts(type = "number")]
     pub end_time: EpochMsTimestamp,
     pub status_code: u16,
-    #[ts(type = "Record<string, any>")]
+    #[ts(type = "Record<string, unknown>")]
     pub headers: HashMap<String, serde_json::Value>,
     pub body: String,
 }

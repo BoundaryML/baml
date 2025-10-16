@@ -1,8 +1,8 @@
 client<llm> OpenAIWithAnthropicResponse {
-  provider azure-openai
+  provider openai-responses
   options {
     model "gpt-4o"
-    client_response_type "anthropic"
+    client_response_type "openai-responses"
     base_url "http://localhost:8000"
   }
 }
@@ -10,6 +10,16 @@ client<llm> OpenAIWithAnthropicResponse {
 function OpenAIWithAnthropicResponseHello(s: string) -> string {
   client OpenAIWithAnthropicResponse
   prompt #"
-    Return the string "Hello, world!"
+    Return the string "Hello, world!" with {{ s }} included in the response.
+    {{ _.role("user") }}
   "#
+}
+
+test TestOpenAIWithAnthropicResponse {
+  functions [
+    OpenAIWithAnthropicResponseHello
+  ]
+  args {
+    s "Cherry blossoms"
+  }
 }

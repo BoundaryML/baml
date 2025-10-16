@@ -1,0 +1,24 @@
+import { atom } from 'jotai';
+import { atomWithStorage } from 'jotai/utils';
+import { sessionStore } from '../../baml_wasm_web/JotaiProvider';
+
+// Feature flags atom for standalone playground
+export const standaloneFeatureFlagsAtom = atomWithStorage<string[]>('baml-feature-flags', [], sessionStore);
+
+// Beta feature flag convenience atom for standalone use (with setter)
+export const standaloneBetaFeatureEnabledAtom = atom(
+  (get) => get(standaloneFeatureFlagsAtom).includes('beta'),
+  (get, set, enabled: boolean) => {
+    const currentFlags = get(standaloneFeatureFlagsAtom);
+    const updatedFlags = enabled 
+      ? [...currentFlags.filter(flag => flag !== 'beta'), 'beta']
+      : currentFlags.filter(flag => flag !== 'beta');
+    set(standaloneFeatureFlagsAtom, updatedFlags);
+  }
+);
+
+// Check if we're in a VSCode environment
+export const isVSCodeEnvironment = () => {
+  if (typeof window === 'undefined') return false;
+  return 'acquireVsCodeApi' in window;
+};

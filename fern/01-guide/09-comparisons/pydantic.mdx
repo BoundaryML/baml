@@ -33,7 +33,7 @@ Output JSON:
 def extract_resume(input_text: str) -> Union[Resume, None]:
     prompt = create_prompt(input_text)
     chat_completion = client.chat.completions.create(
-        model="gpt-4", messages=[{"role": "system", "content": prompt}]
+        model="gpt-5", messages=[{"role": "system", "content": prompt}]
     )
     try:
         output = chat_completion.choices[0].message.content
@@ -97,7 +97,7 @@ def extract_resume(input_text: str) -> Union[Resume, None]:
     prompt = create_prompt(input_text)
     print(prompt)
     chat_completion = client.chat.completions.create(
-        model="gpt-4", messages=[{"role": "system", "content": prompt}]
+        model="gpt-5", messages=[{"role": "system", "content": prompt}]
     )
     try:
         output = chat_completion.choices[0].message.content
@@ -128,7 +128,7 @@ You must now change your parser to handle both cases:
 +def extract_resume(input_text: str) -> Union[List[Resume], None]:
 +    prompt = create_prompt(input_text) # Also requires changes
     chat_completion = client.chat.completions.create(
-        model="gpt-4", messages=[{"role": "system", "content": prompt}]
+        model="gpt-5", messages=[{"role": "system", "content": prompt}]
     )
     try:
         output = chat_completion.choices[0].message.content
@@ -305,7 +305,7 @@ And then we use it in our AI function:
 def classify_company(text: str) -> FinancialCategory:
     prompt = create_prompt(text)
     chat_completion = client.chat.completions.create(
-        model="gpt-4", messages=[{"role": "system", "content": prompt}]
+        model="gpt-5", messages=[{"role": "system", "content": prompt}]
     )
     try:
         output = chat_completion.choices[0].message.content

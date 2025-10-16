@@ -25,6 +25,7 @@ pub fn make_trace_event_for_response(
                 input_tokens: llmcomplete_response.metadata.prompt_tokens,
                 output_tokens: llmcomplete_response.metadata.output_tokens,
                 total_tokens: llmcomplete_response.metadata.total_tokens,
+                cached_input_tokens: llmcomplete_response.metadata.cached_input_tokens,
             },
             llmcomplete_response.content.clone(),
             client_stack,
@@ -36,15 +37,15 @@ pub fn make_trace_event_for_response(
             None,
             client_stack,
         ),
-        LLMResponse::UserFailure(e) | LLMResponse::InternalFailure(e) => {
-            LoggedLLMResponse::new_failure(
-                request_id.clone(),
-                e.to_string(),
-                None,
-                None,
-                client_stack,
-            )
-        }
+        LLMResponse::UserFailure(e)
+        | LLMResponse::InternalFailure(e)
+        | LLMResponse::Cancelled(e) => LoggedLLMResponse::new_failure(
+            request_id.clone(),
+            e.to_string(),
+            None,
+            None,
+            client_stack,
+        ),
     };
     TraceEventWithMeta::new_llm_response(call_stack, Arc::new(response))
 }

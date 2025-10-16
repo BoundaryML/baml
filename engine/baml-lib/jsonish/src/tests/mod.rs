@@ -9,6 +9,7 @@ mod test_class_2;
 mod test_code;
 mod test_constraints;
 mod test_enum;
+mod test_international;
 mod test_lists;
 mod test_literals;
 mod test_maps;

@@ -14,10 +14,3 @@ client<llm> GPT4o {
     api_key env.OPENAI_API_KEY
   }
 }
-
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/mixed_pipeline.baml:6
-//    | 
-//  5 | 
-//  6 | function UseLLM(x: int) -> int {
-//    | 

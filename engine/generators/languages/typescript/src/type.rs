@@ -91,6 +91,8 @@ impl WrapType for TypeMetaTS {
 pub enum MediaTypeTS {
     Image,
     Audio,
+    Pdf,
+    Video,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -167,6 +169,8 @@ impl TypeTS {
             TypeTS::Media(media_type, _) => match media_type {
                 MediaTypeTS::Image => "Image".to_string(),
                 MediaTypeTS::Audio => "Audio".to_string(),
+                MediaTypeTS::Pdf => "Pdf".to_string(),
+                MediaTypeTS::Video => "Video".to_string(),
             },
             TypeTS::TypeAlias { name, .. } => name.clone(),
             TypeTS::Class { name, .. } => name.clone(),
@@ -247,6 +251,8 @@ impl SerializeType for TypeTS {
             TypeTS::Media(media, _) => match media {
                 MediaTypeTS::Image => "Image".to_string(),
                 MediaTypeTS::Audio => "Audio".to_string(),
+                MediaTypeTS::Pdf => "Pdf".to_string(),
+                MediaTypeTS::Video => "Video".to_string(),
             },
             TypeTS::Class { package, name, .. } => {
                 format!("{}{}", package.relative_from(pkg), name)
@@ -254,7 +260,16 @@ impl SerializeType for TypeTS {
             TypeTS::TypeAlias { package, name, .. } => {
                 format!("{}{}", package.relative_from(pkg), name)
             }
-            TypeTS::Union { .. } => self.default_name_within_union(),
+            TypeTS::Union { variants, .. } => {
+                let mut parts: Vec<String> = Vec::with_capacity(variants.len());
+                for variant in variants.iter() {
+                    let rendered = variant.serialize_type(pkg);
+                    if !parts.contains(&rendered) {
+                        parts.push(rendered);
+                    }
+                }
+                parts.join(" | ")
+            }
             TypeTS::Enum {
                 package,
                 name,
@@ -268,7 +283,7 @@ impl SerializeType for TypeTS {
                 }
             }
             TypeTS::List(inner, _) => match &**inner {
-                TypeTS::Union { .. } => format!("({})[]", inner.default_name_within_union()),
+                TypeTS::Union { .. } => format!("({})[]", inner.serialize_type(pkg)),
                 _ => {
                     if inner.meta().is_optional() {
                         format!("({})[]", inner.serialize_type(pkg))
@@ -302,6 +317,8 @@ impl SerializeType for MediaTypeTS {
         match self {
             MediaTypeTS::Image => format!("{}.Image", Package::imported_base().relative_from(pkg)),
             MediaTypeTS::Audio => format!("{}.Audio", Package::imported_base().relative_from(pkg)),
+            MediaTypeTS::Pdf => format!("{}.Pdf", Package::imported_base().relative_from(pkg)),
+            MediaTypeTS::Video => format!("{}.Video", Package::imported_base().relative_from(pkg)),
         }
     }
 }

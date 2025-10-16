@@ -19,7 +19,13 @@ use regex::Regex;
 pub use test_execution_args::TestFilter;
 use tokio::sync::{Mutex, MutexGuard};
 
-use crate::{BamlRuntime, TestResponse, TestStatus};
+use crate::{BamlRuntime, TestResponse, TestStatus, TripWire};
+
+#[derive(Debug, Clone, Copy)]
+enum FunctionType {
+    Llm,
+    Expr,
+}
 
 pub enum TestRunStatus {
     /// No tests were selected.
@@ -140,19 +146,38 @@ fn file_reader_pinned(
 
 impl TestExecutor for BamlRuntime {
     fn cli_list_tests(&self, args: &TestFilter) -> Result<()> {
-        let func_test_pairs = self
-            .inner
-            .ir
-            .walk_tests()
-            .filter_map(|node_pair| {
+        let func_test_pairs = {
+            let ir = &self.ir;
+            // Regular LLM function tests
+            let from_fn_tests = ir.walk_function_test_pairs().filter_map(|node_pair| {
                 let (function_name, test_name) = node_pair.name();
                 if args.includes(function_name, test_name) {
-                    Some((function_name, test_name))
+                    Some((function_name.to_string(), test_name.to_string()))
                 } else {
                     None
                 }
-            })
-            .collect::<BTreeSet<_>>();
+            });
+
+            // Expr function tests
+            let expr_fn_tests: Vec<(String, String)> = ir
+                .walk_expr_fns()
+                .flat_map(|f| {
+                    f.walk_tests()
+                        .filter_map(|node_pair| {
+                            let function_name = node_pair.function().name();
+                            let test_name = &node_pair.test_case().name;
+                            if args.includes(function_name, test_name) {
+                                Some((function_name.to_string(), test_name.to_string()))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+
+            from_fn_tests.chain(expr_fn_tests).collect::<BTreeSet<_>>()
+        };
 
         println!("Found {} tests", func_test_pairs.len());
 
@@ -182,24 +207,58 @@ impl TestExecutor for BamlRuntime {
         env_vars: &HashMap<String, String>,
     ) -> TestRunStatus {
         let renderer = AggregateRenderer::new(output_format, junit_path);
-        let selected_tests = self
-            .inner
-            .ir
-            .walk_tests()
-            .filter_map(|node_pair| {
+        let selected_tests: BTreeMap<(String, String), (String, FunctionType)> = {
+            let ir = &self.ir;
+            // Regular LLM function tests
+            let from_fn_tests = ir.walk_function_test_pairs().filter_map(|node_pair| {
                 let (function_name, test_name) = node_pair.name();
                 if args.includes(function_name, test_name) {
                     node_pair.span().map(|s| {
                         (
                             (function_name.to_string(), test_name.to_string()),
-                            format!("{}:{}", s.file.path(), s.line_and_column().0 .0 + 1),
+                            (
+                                format!("{}:{}", s.file.path(), s.line_and_column().0 .0 + 1),
+                                FunctionType::Llm,
+                            ),
                         )
                     })
                 } else {
                     None
                 }
-            })
-            .collect::<BTreeMap<_, _>>();
+            });
+
+            // Expr function tests
+            let expr_fn_tests: Vec<((String, String), (String, FunctionType))> = ir
+                .walk_expr_fns()
+                .flat_map(|f| {
+                    f.walk_tests()
+                        .filter_map(|node_pair| {
+                            let function_name = node_pair.function().name();
+                            let test_name = &node_pair.test_case().name;
+                            if args.includes(function_name, test_name) {
+                                node_pair.span().map(|s| {
+                                    (
+                                        (function_name.to_string(), test_name.to_string()),
+                                        (
+                                            format!(
+                                                "{}:{}",
+                                                s.file.path(),
+                                                s.line_and_column().0 .0 + 1
+                                            ),
+                                            FunctionType::Expr,
+                                        ),
+                                    )
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+
+            from_fn_tests.chain(expr_fn_tests).collect()
+        };
 
         if selected_tests.is_empty() {
             println!("No tests selected");
@@ -212,7 +271,7 @@ impl TestExecutor for BamlRuntime {
         // Build futures and initial test status map.
         let (futs, test_status_map): (Vec<_>, BTreeMap<_, _>) = selected_tests
             .iter()
-            .map(|((fn_name, tt_name), _)| {
+            .map(|((fn_name, tt_name), (_, fn_type))| {
                 let semaphore = semaphore.clone();
                 let tx = tx.clone();
                 // Clone the Arc pointer for self here.
@@ -220,6 +279,7 @@ impl TestExecutor for BamlRuntime {
                 let function_name = fn_name.to_string();
                 let test_name = tt_name.to_string();
                 let env_vars = env_vars.clone();
+                let fn_type = *fn_type;
                 let fut = tokio::spawn(async move {
                     let _permit = semaphore.acquire().await.unwrap();
                     let ctx_manager = runtime.create_ctx_manager(
@@ -233,16 +293,39 @@ impl TestExecutor for BamlRuntime {
                         test_name.clone(),
                         TestExecutionStatus::Running,
                     ));
-                    let (result, _) = runtime
-                        .run_test(
-                            &function_name,
-                            &test_name,
-                            &ctx_manager,
-                            Some(|_| {}),
-                            None,
-                            env_vars,
-                        )
-                        .await;
+
+                    let (result, _) = match fn_type {
+                        FunctionType::Llm => {
+                            // LLM function test - use existing path with events
+                            let on_tick = if false { Some(|| {}) } else { None };
+                            let on_event = if false { Some(|_| {}) } else { None };
+                            runtime
+                                .run_test(
+                                    &function_name,
+                                    &test_name,
+                                    &ctx_manager,
+                                    on_event,
+                                    None,
+                                    env_vars.clone(),
+                                    None,                // tags
+                                    TripWire::new(None), // No tripwire for test executor,
+                                    on_tick,
+                                )
+                                .await
+                        }
+                        FunctionType::Expr => {
+                            // Expr function test - use dedicated simple path
+                            runtime
+                                .run_expr_test(
+                                    &function_name,
+                                    &test_name,
+                                    &ctx_manager,
+                                    env_vars.clone(),
+                                )
+                                .await
+                        }
+                    };
+
                     let duration = start_instant.elapsed();
                     let _ = tx.send((
                         function_name,
@@ -320,7 +403,12 @@ impl TestExecutor for BamlRuntime {
         };
 
         let final_status = test_status_locked.into_inner();
-        renderer.render_final(&final_status, &selected_tests);
+        // Convert selected_tests to the format expected by renderer (without FunctionType)
+        let selected_tests_for_render: BTreeMap<(String, String), String> = selected_tests
+            .iter()
+            .map(|(key, (location, _))| (key.clone(), location.clone()))
+            .collect();
+        renderer.render_final(&final_status, &selected_tests_for_render);
 
         match res {
             Ok(_) => {

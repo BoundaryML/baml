@@ -50,6 +50,24 @@ function Bar1(a: string) -> int {
 // 23 |   prompt #"
 // 24 |     {{ Foo(a) }}
 //    | 
+// warning: Function 'Foo' referenced without parentheses. Did you mean 'Foo()'?
+//   -->  functions_v2/prompt_errors/prompt1.baml:32
+//    | 
+// 31 |     {% if a == "a" %}
+// 32 |       {% set b = Foo %}
+//    | 
+// warning: Function 'Foo2' referenced without parentheses. Did you mean 'Foo2()'?
+//   -->  functions_v2/prompt_errors/prompt1.baml:34
+//    | 
+// 33 |     {% else %}
+// 34 |       {% set b = Foo2 %}
+//    | 
+// warning: 'b' is undefined, expected function
+//   -->  functions_v2/prompt_errors/prompt1.baml:37
+//    | 
+// 36 | 
+// 37 |     {{ b() }}
+//    | 
 // warning: Variable `b` does not exist. Did you mean one of these: `_`, `ctx`?
 //   -->  functions_v2/prompt_errors/prompt1.baml:6
 //    | 

@@ -1,8 +1,10 @@
-use napi::{bindgen_prelude::Env, JsArrayBuffer, JsObject, JsUnknown, NapiValue};
+use napi::{
+    bindgen_prelude::{ArrayBuffer, Env, JsObjectValue, Object},
+    Unknown,
+};
 use napi_derive::napi;
 
-use super::log_collector::serde_value_to_js;
-use crate::errors::from_anyhow_error;
+use crate::{errors::from_anyhow_error, types::log_collector::serde_value_to_js};
 
 crate::lang_wrapper!(
     HTTPRequest,
@@ -47,8 +49,8 @@ impl HTTPRequest {
     }
 
     #[napi(getter)]
-    pub fn headers(&self, env: Env) -> napi::Result<JsObject> {
-        let mut obj = env.create_object()?;
+    pub fn headers(&self, env: &Env) -> napi::Result<Object<'_>> {
+        let mut obj = Object::new(env)?;
         for (k, v) in self.inner.headers() {
             obj.set_named_property(k, v)?;
         }
@@ -59,12 +61,11 @@ impl HTTPRequest {
 #[napi]
 impl HTTPBody {
     #[napi]
-    pub fn raw(&self, env: Env) -> napi::Result<JsArrayBuffer> {
+    pub fn raw<'e>(&self, env: &'e Env) -> napi::Result<ArrayBuffer<'e>> {
         // TODO: Avoid clone by using unsafe `env.create_arraybuffer_with_borrowed_data`
         // (documentation says the borrowed data can be mutated so it doesn't
         // look trivial to implement).
-        env.create_arraybuffer_with_data(self.inner.raw().to_vec())
-            .map(napi::JsArrayBufferValue::into_raw)
+        ArrayBuffer::from_data(env, self.inner.raw().to_vec())
     }
 
     #[napi]
@@ -76,7 +77,7 @@ impl HTTPBody {
     }
 
     #[napi(ts_return_type = "any")]
-    pub fn json(&self, env: Env) -> napi::Result<JsUnknown> {
+    pub fn json<'e>(&self, env: &'e Env) -> napi::Result<Unknown<'e>> {
         serde_value_to_js(env, &self.inner.json().map_err(from_anyhow_error)?)
     }
 }

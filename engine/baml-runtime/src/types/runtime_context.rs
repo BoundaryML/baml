@@ -63,6 +63,8 @@ pub struct RuntimeContext {
     // Only the BAML_TRACER depends on this.
     pub call_id_stack: Vec<FunctionCallId>,
     pub recursive_class_overrides: Vec<IndexSet<String>>,
+    /// Called through modular API.
+    is_modular_api: bool,
 }
 
 impl RuntimeContext {
@@ -76,6 +78,14 @@ impl RuntimeContext {
 
     pub fn proxy_url(&self) -> Option<&str> {
         self.env.get("BOUNDARY_PROXY_URL").map(|s| s.as_str())
+    }
+
+    pub fn is_modular_api(&self) -> bool {
+        self.is_modular_api
+    }
+
+    pub fn set_modular_api(&mut self, is_modular_api: bool) {
+        self.is_modular_api = is_modular_api;
     }
 
     pub fn new(
@@ -101,6 +111,7 @@ impl RuntimeContext {
             recursive_type_alias_overrides,
             call_id_stack,
             recursive_class_overrides,
+            is_modular_api: false,
         }
     }
 

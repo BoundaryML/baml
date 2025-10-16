@@ -1,10 +1,11 @@
 use pyo3::{
     prelude::{pymethods, Py},
     types::{PyDict, PyDictMethods},
-    PyResult, Python,
+    PyObject, PyResult, Python,
 };
 
 use super::request::HTTPBody;
+use crate::{errors::BamlError, types::log_collector::serde_value_to_py};
 
 crate::lang_wrapper!(
     HTTPResponse,
@@ -44,5 +45,30 @@ impl HTTPResponse {
     pub fn body(&self) -> HTTPBody {
         // TODO: Avoid clone.
         HTTPBody::from(self.inner.body.clone())
+    }
+}
+
+crate::lang_wrapper!(
+    SSEResponse,
+    baml_types::tracing::events::SSEEvent,
+    clone_safe
+);
+
+#[pymethods]
+impl SSEResponse {
+    #[getter]
+    pub fn text(&self) -> String {
+        self.inner.data.clone()
+    }
+
+    /// Attempt to parse the data as JSON if it is a valid JSON string.
+    /// otherwise return None.
+    pub fn json<'py>(&self, py: Python<'py>) -> PyResult<Option<PyObject>> {
+        Ok(
+            match serde_json::from_str(&self.inner.data).map_err(BamlError::from_anyhow) {
+                Ok(v) => Some(serde_value_to_py(py, &v)?),
+                Err(_) => None,
+            },
+        )
     }
 }

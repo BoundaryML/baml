@@ -1,0 +1,182 @@
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test expr_constructors_invalid ... FAILED
+
+failures:
+
+---- expr_constructors_invalid stdout ----
+
+thread 'expr_constructors_invalid' panicked at baml-lib/baml/tests/panic_with_diff/mod.rs:4:5:
+
+Snapshot comparison failed. Run the test again with UPDATE_EXPECT=1 in the environment to update the snapshot.
+
+===== EXPECTED ====
+warning: Workflow functions are experimental, and will break in the future.
+  -->  expr/constructors_invalid.baml:6
+   | 
+ 5 | 
+ 6 | fn Foo() -> Bar {
+   | 
+error: Error validating: Bar.a expected type int @stream.done, but found string
+  -->  expr/constructors_invalid.baml:7
+   | 
+ 6 | fn Foo() -> Bar {
+ 7 |   let x = Bar { a: "hello", c: 12 };
+   | 
+error: Error validating: Class Bar has no field c
+  -->  expr/constructors_invalid.baml:7
+   | 
+ 6 | fn Foo() -> Bar {
+ 7 |   let x = Bar { a: "hello", c: 12 };
+   | 
+error: Error validating: Class Bar is missing fields: b
+  -->  expr/constructors_invalid.baml:7
+   | 
+ 6 | fn Foo() -> Bar {
+ 7 |   let x = Bar { a: "hello", c: 12 };
+   | 
+error: Error validating: std::Request.base_url expected type string, but found int
+  -->  expr/constructors_invalid.baml:9
+   | 
+ 8 |   let req_bad = std::Request { 
+ 9 |     base_url: 10,
+   | 
+error: Error validating: std::Request.query_params expected type map<string, string>, but found map<string, int>
+  -->  expr/constructors_invalid.baml:11
+   | 
+10 |     headers: {},
+11 |     query_params: { a 10 },
+   | 
+
+====== FOUND ======
+warning: Workflow functions are experimental, and will break in the future.
+  -->  expr/constructors_invalid.baml:6
+   | 
+ 5 | 
+ 6 | fn Foo() -> Bar {
+   | 
+error: Error validating: Bar.a expected type int, but found string
+  -->  expr/constructors_invalid.baml:7
+   | 
+ 6 | fn Foo() -> Bar {
+ 7 |   let x = Bar { a: "hello", c: 12 };
+   | 
+error: Error validating: Class Bar has no field c
+  -->  expr/constructors_invalid.baml:7
+   | 
+ 6 | fn Foo() -> Bar {
+ 7 |   let x = Bar { a: "hello", c: 12 };
+   | 
+error: Error validating: Class Bar is missing fields: b
+  -->  expr/constructors_invalid.baml:7
+   | 
+ 6 | fn Foo() -> Bar {
+ 7 |   let x = Bar { a: "hello", c: 12 };
+   | 
+error: Error validating: std::Request.base_url expected type string, but found int
+  -->  expr/constructors_invalid.baml:8
+   | 
+ 7 |   let x = Bar { a: "hello", c: 12 };
+ 8 |   let req_bad = std::Request { 
+ 9 |     base_url: 10,
+10 |     headers: {},
+11 |     query_params: { a 10 },
+12 |   };
+   | 
+error: Error validating: std::Request.query_params expected type mapstring:string, but found mapstring:int
+  -->  expr/constructors_invalid.baml:8
+   | 
+ 7 |   let x = Bar { a: "hello", c: 12 };
+ 8 |   let req_bad = std::Request { 
+ 9 |     base_url: 10,
+10 |     headers: {},
+11 |     query_params: { a 10 },
+12 |   };
+   | 
+
+======= DIFF ======
+warning: Workflow functions are experimental, and will break in the future.
+  -->  expr/constructors_invalid.baml:6
+   | 
+ 5 | 
+ 6 | fn Foo() -> Bar {
+   | 
+error: Error validating: Bar.a expected type int[41m @stream.done[0m, but found string
+  -->  expr/constructors_invalid.baml:7
+   | 
+ 6 | fn Foo() -> Bar {
+ 7 |   let x = Bar { a: "hello", c: 12 };
+   | 
+error: Error validating: Class Bar has no field c
+  -->  expr/constructors_invalid.baml:7
+   | 
+ 6 | fn Foo() -> Bar {
+ 7 |   let x = Bar { a: "hello", c: 12 };
+   | 
+error: Error validating: Class Bar is missing fields: b
+  -->  expr/constructors_invalid.baml:7
+   | 
+ 6 | fn Foo() -> Bar {
+ 7 |   let x = Bar { a: "hello", c: 12 };
+   | 
+error: Error validating: std::Request.base_url expected type string, but found int
+  -->  expr/constructors_invalid.baml:[41m9[0m[42m8[0m
+   | 
+[42m 7 |   let x = Bar { a: "hello", c: 12 };
+[0m 8 |   let req_bad = std::Request { 
+ 9 |     base_url: 10,
+[42m10 |     headers: {},
+11 |     query_params: { a 10 },
+12 |   };
+[0m   | 
+error: Error validating: std::Request.query_params expected type map[41m<[0mstring[41m, [0m[42m:[0mstring[41m>[0m, but found map[41m<[0mstring[41m, [0m[42m:[0mint[41m>[0m
+  -->  expr/constructors_invalid.baml:[41m11
+   | [0m[42m8
+   | 
+ 7 |   let x = Bar { a: "hello", c: 12 };
+ 8 |   let req_bad = std::Request { 
+ 9 |     base_url: 10,[0m
+10 |     headers: {},
+11 |     query_params: { a 10 },
+[42m12 |   };
+[0m   | 
+
+      
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    expr_constructors_invalid
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 92 filtered out; finished in 0.01s
+

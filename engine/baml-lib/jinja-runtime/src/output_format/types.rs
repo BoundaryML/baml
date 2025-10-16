@@ -177,7 +177,7 @@ impl Builder {
             classes: Arc::new(
                 self.classes
                     .into_iter()
-                    .map(|c| ((c.name.name.clone(), c.namespace.clone()), c))
+                    .map(|c| ((c.name.name.clone(), c.namespace), c))
                     .collect(),
             ),
             recursive_classes: Arc::new(self.recursive_classes.into_iter().collect()),
@@ -479,6 +479,10 @@ impl OutputFormatContent {
                 TypeIR::Map(_, _, _) => Some(String::from("Answer in JSON using this schema:\n")),
                 TypeIR::Tuple(_, _) => None,
                 TypeIR::Arrow(_, _) => None, // TODO: Error? Arrow shouldn't appear here.
+                TypeIR::Top(_) => panic!(
+                    "TypeGeneric::Top should have been resolved by the compiler before code generation. \
+                     This indicates a bug in the type resolution phase."
+                ),
             }
         }
 
@@ -682,7 +686,7 @@ impl OutputFormatContent {
             TypeIR::Class {
                 name: cls, mode, ..
             } => {
-                let Some(class) = self.classes.get(&(cls.clone(), mode.clone())) else {
+                let Some(class) = self.classes.get(&(cls.clone(), *mode)) else {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
                         format!("Class {cls} not found"),
@@ -762,6 +766,10 @@ impl OutputFormatContent {
                     "Arrow type is not supported in LLM function outputs",
                 ))
             }
+            TypeIR::Top(_) => panic!(
+                "TypeIR::Top should have been resolved by the compiler before code generation. \
+                 This indicates a bug in the type resolution phase."
+            ),
         })
     }
 
@@ -987,7 +995,7 @@ impl OutputFormatContent {
 
     pub fn find_class(&self, mode: &baml_types::StreamingMode, name: &str) -> Result<&Class> {
         self.classes
-            .get(&(name.to_string(), mode.clone()))
+            .get(&(name.to_string(), *mode))
             .ok_or_else(|| anyhow::anyhow!("Class {name} not found"))
     }
 

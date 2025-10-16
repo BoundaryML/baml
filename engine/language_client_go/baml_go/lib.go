@@ -20,7 +20,7 @@ import (
 )
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../include
+#cgo CFLAGS: -I${SRCDIR}
 #cgo CFLAGS: -O3 -g
 #cgo LDFLAGS: -ldl
 #include <dlfcn.h>
@@ -33,7 +33,7 @@ import (
 import "C"
 
 const (
-	VERSION            = "0.90.1"
+	VERSION            = "0.211.2"
 	githubRepo         = "boundaryml/baml"
 	bamlCacheDirEnvVar = "BAML_CACHE_DIR"
 	bamlLibraryPathEnv = "BAML_LIBRARY_PATH"
@@ -143,7 +143,10 @@ func initializeBaml() error {
 		lib.registerFn("register_callbacks")
 		lib.registerFn("call_function_from_c")
 		lib.registerFn("call_function_stream_from_c")
-		lib.registerFn("call_collector_function")
+		lib.registerFn("call_function_parse_from_c")
+		lib.registerFn("cancel_function_call")
+		lib.registerFn("call_object_constructor")
+		lib.registerFn("call_object_method")
 	}()
 
 	if symbolLookupErr != nil {
@@ -187,8 +190,16 @@ func (l *library) registerFn(fnName string) {
 		C.SetCallFunctionFromCFn(fnPtr)
 	case "call_function_stream_from_c":
 		C.SetCallFunctionStreamFromCFn(fnPtr)
-	case "call_collector_function":
-		C.SetCallCollectorFunctionFn(fnPtr)
+	case "call_function_parse_from_c":
+		C.SetCallFunctionParseFromCFn(fnPtr)
+	case "cancel_function_call":
+		C.SetCancelFunctionCallFn(fnPtr)
+	case "call_object_method_function":
+		C.SetCallObjectMethodFunctionFn(fnPtr)
+	case "call_object_constructor":
+		C.SetCallObjectConstructorFn(fnPtr)
+	case "call_object_method":
+		C.SetCallObjectMethodFunctionFn(fnPtr)
 	default:
 		panic(fmt.Sprintf("internal error: attempted to register unknown function '%s'", fnName))
 	}

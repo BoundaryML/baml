@@ -1,4 +1,4 @@
-import { traceAsync } from "../baml_client/tracing";
+import { traceAsync, setTags } from "../baml_client/tracing";
 import { b, b_sync } from "./test-setup";
 import { BamlRuntime, Collector, FunctionLog, Usage } from "@boundaryml/baml";
 
@@ -47,6 +47,7 @@ describe("Collector Tests", () => {
     // Verify usage fields
     expect(log?.usage.inputTokens).toBeGreaterThan(0);
     expect(log?.usage.outputTokens).toBeGreaterThan(0);
+    // expect(log?.usage.cachedInputTokens).toBeUndefined();
 
     // Verify calls
     const calls = log?.calls || [];
@@ -88,10 +89,12 @@ describe("Collector Tests", () => {
     const callUsage = call.usage;
     expect(callUsage?.inputTokens).toBeGreaterThan(0);
     expect(callUsage?.outputTokens).toBeGreaterThan(0);
+    expect(callUsage?.cachedInputTokens).toBeUndefined();
 
     // Usage matches log usage
     expect(callUsage?.inputTokens).toBe(log?.usage.inputTokens);
     expect(callUsage?.outputTokens).toBe(log?.usage.outputTokens);
+    expect(callUsage?.cachedInputTokens).toBe(log?.usage.cachedInputTokens);
 
     // Verify raw response exists
     expect(log?.rawLlmResponse).not.toBeNull();
@@ -108,6 +111,27 @@ describe("Collector Tests", () => {
     console.log("----- gc.collect() -----");
     // Still not collected because it's in use
     expect(Collector.__functionSpanCount()).toBeGreaterThan(0);
+  });
+
+  it("should include parent trace tags in FunctionLog.tags", async () => {
+    const collector = new Collector("tags-collector");
+
+    const parent = traceAsync("parentTS", async () => {
+      setTags({ parentId: "p123", run: "xyz" });
+      return await b.TestOpenAIGPT4oMini("hi there", { collector });
+    });
+
+    await parent();
+
+    const logs = collector.logs;
+    expect(logs.length).toBe(1);
+    const log = logs[0];
+
+    // New tags accessor
+    const tags = (log as any).tags as Record<string, unknown>;
+    expect(typeof tags).toBe("object");
+    expect(tags["parentId"]).toBe("p123");
+    expect(tags["run"]).toBe("xyz");
   });
 
   it("should handle streaming calls correctly", async () => {
@@ -132,7 +156,7 @@ describe("Collector Tests", () => {
     const log = collector.last;
     expect(log).not.toBeNull();
     expect(log?.functionName).toBe("TestOpenAIGPT4oMini");
-    expect(log?.logType).toBe("call");
+    expect(log?.logType).toBe("stream");
 
     // Verify timing fields
     expect(log?.timing.startTimeUtcMs).toBeGreaterThan(0);
@@ -141,6 +165,7 @@ describe("Collector Tests", () => {
     // Verify usage fields
     expect(log?.usage.inputTokens).toBeGreaterThan(0);
     expect(log?.usage.outputTokens).toBeGreaterThan(0);
+    // expect(log?.usage.cachedInputTokens).toBeUndefined();
 
     // Verify calls
     const calls = log?.calls || [];
@@ -180,6 +205,70 @@ describe("Collector Tests", () => {
     expect(Collector.__functionSpanCount()).toBeGreaterThan(0);
   });
 
+  it("should verify LLMStreamCall properties for streaming calls", async () => {
+    const collector = new Collector("openai-stream-chunks");
+
+    // Track chunks as they arrive
+    const chunksReceived: string[] = [];
+    const stream = b.stream.TestOpenAIGPT4oMini("Count from 1 to 5", { collector });
+
+    for await (const chunk of stream) {
+      chunksReceived.push(chunk);
+      console.log(`Received chunk: ${chunk}`);
+    }
+
+    // Get final response
+    const finalResponse = await stream.getFinalResponse();
+
+    // Verify we received multiple chunks
+    expect(chunksReceived.length).toBeGreaterThan(1);
+
+    // Verify final response is complete
+    expect(finalResponse.length).toBeGreaterThan(0);
+
+    // Verify collector captured the stream
+    const logs = collector.logs;
+    expect(logs.length).toBe(1);
+
+    const log = logs[0];
+    expect(log.functionName).toBe("TestOpenAIGPT4oMini");
+    expect(log.logType).toBe("stream");
+
+    // Verify timing for streaming
+    expect(log.timing.startTimeUtcMs).toBeGreaterThan(0);
+    expect(log.timing.durationMs).toBeGreaterThan(0);
+
+    // Verify usage is captured for streaming
+    expect(log.usage.inputTokens).toBeGreaterThan(0);
+    expect(log.usage.outputTokens).toBeGreaterThan(0);
+
+    // Verify call details
+    const call = log.calls[0];
+    // Check if it's an LLMStreamCall by checking for sseResponses method
+    expect('sseResponses' in call).toBe(true);
+    
+    expect(call.provider).toBe("openai");
+    expect(call.clientName).toBe("GPT4oMini");
+    
+    // Cast to any to access sseResponses since TypeScript doesn't know about the union type
+    const sseChunks = (call as any).sseResponses();
+    expect(sseChunks).not.toBeNull();
+    if (sseChunks) {
+      expect(sseChunks.length).toBeGreaterThanOrEqual(chunksReceived.length);
+      for (const chunk of sseChunks) {
+        console.log(`Chunk: ${JSON.stringify(chunk.json())}`);
+      }
+    }
+
+    // For streaming, http response should be null (as noted in existing test)
+    expect(call.httpResponse).toBeNull();
+
+    // But request should exist
+    expect(call.httpRequest).not.toBeNull();
+    const requestBody = call.httpRequest?.body.json();
+    expect(requestBody?.stream).toBe(true); // Verify streaming was requested
+  });
+
   it("should track cumulative usage across multiple calls", async () => {
     const collector = new Collector("my-collector");
 
@@ -192,6 +281,7 @@ describe("Collector Tests", () => {
     const firstCallUsage = functionLogs[0].usage;
     expect(collector.usage.inputTokens).toBe(firstCallUsage.inputTokens);
     expect(collector.usage.outputTokens).toBe(firstCallUsage.outputTokens);
+    expect(collector.usage.cachedInputTokens).toBe(firstCallUsage.cachedInputTokens);
 
     // Second call
     await b.TestOpenAIGPT4oMini("Second call", { collector });
@@ -205,8 +295,11 @@ describe("Collector Tests", () => {
     const totalOutput =
       (firstCallUsage?.outputTokens ?? 0) +
       (secondCallUsage?.outputTokens ?? 0);
+    const totalCachedInput =
+      (firstCallUsage?.cachedInputTokens ?? 0) + (secondCallUsage?.cachedInputTokens ?? 0);
     expect(collector.usage.inputTokens).toBe(totalInput);
     expect(collector.usage.outputTokens).toBe(totalOutput);
+    expect(collector.usage.cachedInputTokens).toBe(totalCachedInput);
   });
 
   it("should support multiple collectors", async () => {
@@ -232,10 +325,14 @@ describe("Collector Tests", () => {
     expect(usageFirstCallColl1.outputTokens).toBe(
       usageFirstCallColl2.outputTokens,
     );
+    expect(usageFirstCallColl1.cachedInputTokens).toBe(
+      usageFirstCallColl2.cachedInputTokens,
+    );
 
     // Also check that the collector-level usage matches the single call usage for each collector
     expect(coll1.usage.inputTokens).toBe(usageFirstCallColl1.inputTokens);
     expect(coll1.usage.outputTokens).toBe(usageFirstCallColl1.outputTokens);
+    expect(coll1.usage.cachedInputTokens).toBe(usageFirstCallColl1.cachedInputTokens);
     expect(coll2.usage.inputTokens).toBe(usageFirstCallColl2.inputTokens);
     expect(coll2.usage.outputTokens).toBe(usageFirstCallColl2.outputTokens);
 
@@ -256,8 +353,12 @@ describe("Collector Tests", () => {
     const totalOutput =
       (usageFirstCallColl1?.outputTokens ?? 0) +
       (usageSecondCallColl1?.outputTokens ?? 0);
+    const totalCachedInput =
+      (usageFirstCallColl1?.cachedInputTokens ?? 0) +
+      (usageSecondCallColl1?.cachedInputTokens ?? 0);
     expect(coll1.usage.inputTokens).toBe(totalInput);
     expect(coll1.usage.outputTokens).toBe(totalOutput);
+    expect(coll1.usage.cachedInputTokens).toBe(totalCachedInput);
 
     // Verify coll2 usage remains unchanged (it did not participate in the second call)
     expect(coll2.usage.inputTokens).toBe(usageFirstCallColl2.inputTokens);
@@ -296,6 +397,8 @@ describe("Collector Tests", () => {
       (usageCall1?.inputTokens ?? 0) + (usageCall2?.inputTokens ?? 0);
     const totalOutput =
       (usageCall1?.outputTokens ?? 0) + (usageCall2?.outputTokens ?? 0);
+    const totalCachedInput =
+      (usageCall1?.cachedInputTokens ?? 0) + (usageCall2?.cachedInputTokens ?? 0);
     expect(collector.usage.inputTokens).toBe(totalInput);
     expect(collector.usage.outputTokens).toBe(totalOutput);
   });
@@ -329,5 +432,135 @@ describe("Collector Tests", () => {
 
     // expect(collector.usage.inputTokens).toBeGreaterThan(0);
     // expect(collector.usage.outputTokens).toBeGreaterThan(0);
+  });
+
+  it("should track cached input tokens for Anthropic caching", async () => {
+    const collector = new Collector("caching-collector");
+
+    // Create substantial content (2048+ tokens) to ensure caching triggers
+    // Each repetition is ~100 tokens, so 25 repetitions = ~2500 tokens
+    const largeContent = `
+    In the ancient kingdom of Eldoria, there lived a brave knight named Sir Galahad who was known throughout the land for his unwavering courage, exceptional wisdom, and boundless compassion for all living creatures. His story began in the small village of Millbrook, where he was born to humble farmers who taught him the values of hard work, honesty, and kindness from a very young age.
+
+    As a child, Galahad showed remarkable intelligence and an innate sense of justice. He would often help settle disputes between the village children and was always the first to defend those who were weaker or being bullied. His parents noticed these qualities and, though they were not wealthy, they saved every copper coin they could to provide him with the best education possible.
+
+    When Galahad turned sixteen, a traveling knight named Sir Roderick visited their village. He immediately recognized the young man's potential and offered to take him as a squire. This was the opportunity of a lifetime, and though it broke their hearts to see him leave, Galahad's parents knew it was his destiny to serve a greater purpose.
+
+    Under Sir Roderick's tutelage, Galahad learned not only the arts of combat and horsemanship but also the deeper principles of chivalry, honor, and service to others. He spent years training in various castles and courts, always demonstrating exceptional skill and character that earned him the respect of nobles and commoners alike.
+    `.repeat(10);
+
+    // First call - establishes cache (using cache_control in the BAML template)
+    await b.TestCaching(largeContent, "What are the key virtues of Sir Galahad?", { collector });
+
+    const firstLog = collector.logs[0];
+    expect(firstLog).not.toBeNull();
+    expect(firstLog.functionName).toBe("TestCaching");
+
+    // Note first request may not have cached tokens
+    // expect(firstLog.usage.cachedInputTokens).toBeDefined();
+    // expect(firstLog.calls[0].usage?.cachedInputTokens).toBeDefined();
+
+    // First call establishes cache, might have some cached tokens from cache creation
+    const firstCachedTokens = firstLog.usage.cachedInputTokens || 0;
+
+    // Second call with same large content - should use cache and show cached tokens > 0
+    await b.TestCaching(largeContent, "What is Sir Galahad's background and origin?", { collector });
+
+    const secondLog = collector.logs[1];
+    expect(secondLog).not.toBeNull();
+    expect(secondLog.functionName).toBe("TestCaching");
+
+    // Verify cached tokens are tracked and should be > 0 for the second call
+    expect(secondLog.usage.cachedInputTokens).toBeDefined();
+    expect(secondLog.calls[0].usage?.cachedInputTokens).toBeDefined();
+
+    // Third call to really ensure caching is working
+    await b.TestCaching(largeContent, "How did Sir Galahad become a knight?", { collector });
+
+    const thirdLog = collector.logs[2];
+    expect(thirdLog).not.toBeNull();
+
+    // At least one of the later calls should have cached tokens > 0
+    const hasCachedTokens =
+      (secondLog.usage.cachedInputTokens || 0) > 0 ||
+      (thirdLog.usage.cachedInputTokens || 0) > 0;
+
+    expect(hasCachedTokens).toBe(true);
+
+    // Verify collector aggregates cached tokens correctly
+    const totalCachedTokens =
+      (collector.logs[0].usage.cachedInputTokens || 0) +
+      (collector.logs[1].usage.cachedInputTokens || 0) +
+      (collector.logs[2].usage.cachedInputTokens || 0);
+    expect(collector.usage.cachedInputTokens).toBe(totalCachedTokens);
+
+    console.log("Cached tokens - First call:", firstLog.usage.cachedInputTokens);
+    console.log("Cached tokens - Second call:", secondLog.usage.cachedInputTokens);
+    console.log("Cached tokens - Third call:", thirdLog.usage.cachedInputTokens);
+    console.log("Total cached tokens:", collector.usage.cachedInputTokens);
+    console.log("Large content length:", largeContent.length, "characters");
+  });
+
+  it("should pass function-specific tags and preserve parent trace tags", async () => {
+    const collector = new Collector("tags-test-collector");
+
+    const parentFnWithMultipleCalls = traceAsync("parentTS", async (msg: string) => {
+      // Set parent trace tags
+      setTags({ parentId: "parent_123", environment: "test" });
+
+      // First BAML call with its own tags
+      const result1 = await b.TestOpenAIGPT4oMini(msg + " - call 1", {
+        collector,
+        tags: { callId: "first", version: "v1" },
+      });
+
+      // Second BAML call with different tags
+      const result2 = await b.TestOpenAIGPT4oMini(msg + " - call 2", {
+        collector,
+        tags: { callId: "second", version: "v2", extra: "data" },
+      });
+
+      return [result1, result2];
+    });
+
+    const results = await parentFnWithMultipleCalls("hello");
+    expect(results[0]).not.toBeNull();
+    expect(results[1]).not.toBeNull();
+
+    const logs = collector.logs;
+    expect(logs.length).toBe(2);
+
+    // Check first function call's tags
+    const log1 = logs[0];
+    const tags1 = (log1 as any).tags as Record<string, unknown>;
+    expect(typeof tags1).toBe("object");
+    console.log("### First call tags:", tags1);
+
+    // Parent trace tags should be present
+    expect(tags1["parentId"]).toBe("parent_123");
+    expect(tags1["environment"]).toBe("test");
+
+    // Function-specific tags should be present
+    expect(tags1["callId"]).toBe("first");
+    expect(tags1["version"]).toBe("v1");
+
+    // Check second function call's tags
+    const log2 = logs[1];
+    const tags2 = (log2 as any).tags as Record<string, unknown>;
+    expect(typeof tags2).toBe("object");
+    console.log("### Second call tags:", tags2);
+
+    // Parent trace tags should still be present
+    expect(tags2["parentId"]).toBe("parent_123");
+    expect(tags2["environment"]).toBe("test");
+
+    // Function-specific tags should be different
+    expect(tags2["callId"]).toBe("second");
+    expect(tags2["version"]).toBe("v2");
+    expect(tags2["extra"]).toBe("data");
+
+    // Verify the tags are different between calls
+    expect(tags1["callId"]).not.toBe(tags2["callId"]);
+    expect(tags1["version"]).not.toBe(tags2["version"]);
   });
 });

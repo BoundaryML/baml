@@ -1,0 +1,15 @@
+{
+  "extends": "../../workspace-tools/typescript/node.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "node_modules/.cache/tsbuildinfo.json",
+    "emitDeclarationOnly": false,
+    "baseUrl": ".",
+    "rootDir": ".",
+    "outDir": "dist",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "target": "ES2020"
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}

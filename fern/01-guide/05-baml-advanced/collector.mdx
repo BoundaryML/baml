@@ -48,6 +48,49 @@ console.log(collector.last?.calls[-1].httpResponse)
 ```
 </Tab>
 
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    // Create a collector with optional name
+    collector, err := b.NewCollector("my-collector")
+    if err != nil {
+        panic(err)
+    }
+    
+    // Use it with a function call
+    result, err := b.ExtractResume(ctx, "...", b.WithCollector(collector))
+    if err != nil {
+        panic(err)
+    }
+    
+    // Access logging information
+    logs, err := collector.Logs()
+    if err != nil {
+        panic(err)
+    }
+    fmt.Printf("Number of logs: %d\n", len(logs))
+    
+    // Get usage information
+    usage, err := collector.Usage()
+    if err != nil {
+        panic(err)
+    }
+    fmt.Printf("Usage: %+v\n", usage)
+}
+```
+</Tab>
+
 <Tab title="Ruby" language="ruby">
 ```ruby
 require_relative "baml_client/client"
@@ -135,6 +178,117 @@ async function run() {
 ```
 </Tab>
 
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func run() {
+    ctx := context.Background()
+    
+    // Create a collector instance with an optional name
+    collector, err := b.NewCollector("my-collector")
+    if err != nil {
+        log.Fatalf("Failed to create collector: %v", err)
+    }
+    
+    // collector will be modified by the function to include all internal state
+    res, err := b.ExtractResume(ctx, "...", b.WithCollector(collector))
+    if err != nil {
+        log.Fatalf("Function call failed: %v", err)
+    }
+    
+    // This will print the return type of the function
+    fmt.Printf("Result: %+v\n", res)
+    
+    // Get all logs from the collector
+    logs, err := collector.Logs()
+    if err != nil {
+        log.Fatalf("Failed to get logs: %v", err)
+    }
+    
+    // This is guaranteed to be set by the function
+    if len(logs) == 0 {
+        log.Fatal("Expected at least one log entry")
+    }
+    
+    lastLog := logs[len(logs)-1]
+    
+    // This will print the id of the last request
+    id, err := lastLog.ID()
+    if err != nil {
+        log.Fatalf("Failed to get log ID: %v", err)
+    }
+    fmt.Printf("Request ID: %s\n", id)
+    
+    // This will print the usage of the last request
+    // (This aggregates usage from all retries if there was usage emitted)
+    usage, err := lastLog.Usage()
+    if err != nil {
+        log.Fatalf("Failed to get usage: %v", err)
+    }
+    
+    inputTokens, err := usage.InputTokens()
+    if err != nil {
+        log.Fatalf("Failed to get input tokens: %v", err)
+    }
+    fmt.Printf("Input tokens: %d\n", inputTokens)
+    
+    outputTokens, err := usage.OutputTokens()
+    if err != nil {
+        log.Fatalf("Failed to get output tokens: %v", err)
+    }
+    fmt.Printf("Output tokens: %d\n", outputTokens)
+    
+    // This will print the raw response of the last request
+    calls, err := lastLog.Calls()
+    if err != nil {
+        log.Fatalf("Failed to get calls: %v", err)
+    }
+    
+    if len(calls) > 0 {
+        lastCall := calls[len(calls)-1]
+        response, err := lastCall.HttpResponse()
+        if err != nil {
+            log.Fatalf("Failed to get HTTP response: %v", err)
+        }
+        
+        if response != nil {
+            body, err := response.Body()
+            if err != nil {
+                log.Fatalf("Failed to get response body: %v", err)
+            }
+            text, err := body.Text()
+            if err != nil {
+                log.Fatalf("Failed to get response text: %v", err)
+            }
+            fmt.Printf("HTTP Response: %s\n", text)
+        }
+    }
+    
+    // This will print the raw text we used to run the parser
+    rawResponse, err := lastLog.RawLLMResponse()
+    if err != nil {
+        log.Fatalf("Failed to get raw LLM response: %v", err)
+    }
+    if rawResponse != nil {
+        fmt.Printf("Raw LLM Response: %s\n", *rawResponse)
+    }
+}
+
+func main() {
+    run()
+}
+```
+</Tab>
+
 <Tab title="Ruby" language="ruby">
 ```ruby
 require_relative "baml_client/client"
@@ -200,6 +354,43 @@ async function run() {
   
     // Reuse the same collector
     const res2 = await b.ExtractResume("...", { collector })
+}
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    "log"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func run() {
+    ctx := context.Background()
+    
+    collector, err := b.NewCollector("reusable-collector")
+    if err != nil {
+        log.Fatalf("Failed to create collector: %v", err)
+    }
+    
+    res, err := b.ExtractResume(ctx, "...", b.WithCollector(collector))
+    if err != nil {
+        log.Fatalf("First call failed: %v", err)
+    }
+    
+    // Reuse the same collector
+    res2, err := b.TestOpenAIGPT4oMini(ctx, "Second call", b.WithCollector(collector))
+    if err != nil {
+        log.Fatalf("Second call failed: %v", err)
+    }
+    
+    // Both results are now available
+    _ = res
+    _ = res2
 }
 ```
 </Tab>
@@ -276,6 +467,83 @@ async function run() {
 ```
 </Tab>
 
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    "log"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func run() {
+    ctx := context.Background()
+    
+    // Create separate collectors for different parts of your application
+    collectorA, err := b.NewCollector("collector-a")
+    if err != nil {
+        log.Fatalf("Failed to create collector A: %v", err)
+    }
+    
+    collectorB, err := b.NewCollector("collector-b")
+    if err != nil {
+        log.Fatalf("Failed to create collector B: %v", err)
+    }
+    
+    // Use both collectors for the same function call
+    res, err := b.ExtractResume(ctx, "...", b.WithCollectors([]b.Collector{collectorA, collectorB}))
+    if err != nil {
+        log.Fatalf("Function call failed: %v", err)
+    }
+    
+    // Both collectors will have the same logs
+    logsA, err := collectorA.Logs()
+    if err != nil {
+        log.Fatalf("Failed to get logs A: %v", err)
+    }
+    
+    logsB, err := collectorB.Logs()
+    if err != nil {
+        log.Fatalf("Failed to get logs B: %v", err)
+    }
+    
+    if len(logsA) != len(logsB) {
+        log.Fatalf("Expected same number of logs, got %d vs %d", len(logsA), len(logsB))
+    }
+    
+    // Use only collector_a for another call
+    res2, err := b.TestOpenAIGPT4oMini(ctx, "another call", b.WithCollector(collectorA))
+    if err != nil {
+        log.Fatalf("Second call failed: %v", err)
+    }
+    
+    // collector_a will have 2 logs, collector_b will still have 1
+    logsA, err = collectorA.Logs()
+    if err != nil {
+        log.Fatalf("Failed to get logs A: %v", err)
+    }
+    
+    logsB, err = collectorB.Logs()
+    if err != nil {
+        log.Fatalf("Failed to get logs B: %v", err)
+    }
+    
+    if len(logsA) != 2 {
+        log.Fatalf("Expected 2 logs in collector A, got %d", len(logsA))
+    }
+    
+    if len(logsB) != 1 {
+        log.Fatalf("Expected 1 log in collector B, got %d", len(logsB))
+    }
+    
+    _ = res
+    _ = res2
+}
+```
+</Tab>
+
 <Tab title="Ruby" language="ruby">
 ```ruby
 require_relative "baml_client/client"
@@ -337,6 +605,81 @@ async function run() {
     // The total usage of both logs is now available
     console.log(collector_a.usage)
     console.log(collector_b.usage)
+}
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func run() {
+    ctx := context.Background()
+    
+    collectorA, err := b.NewCollector("collector-a")
+    if err != nil {
+        log.Fatalf("Failed to create collector A: %v", err)
+    }
+    
+    res, err := b.ExtractResume(ctx, "...", b.WithCollector(collectorA))
+    if err != nil {
+        log.Fatalf("First call failed: %v", err)
+    }
+
+    collectorB, err := b.NewCollector("collector-b")
+    if err != nil {
+        log.Fatalf("Failed to create collector B: %v", err)
+    }
+    
+    res2, err := b.ExtractResume(ctx, "...", b.WithCollector(collectorB))
+    if err != nil {
+        log.Fatalf("Second call failed: %v", err)
+    }
+
+    // The total usage of both collectors is now available
+    usageA, err := collectorA.Usage()
+    if err != nil {
+        log.Fatalf("Failed to get usage A: %v", err)
+    }
+    
+    usageB, err := collectorB.Usage()
+    if err != nil {
+        log.Fatalf("Failed to get usage B: %v", err)
+    }
+    
+    inputTokensA, err := usageA.InputTokens()
+    if err != nil {
+        log.Fatalf("Failed to get input tokens A: %v", err)
+    }
+    
+    outputTokensA, err := usageA.OutputTokens()
+    if err != nil {
+        log.Fatalf("Failed to get output tokens A: %v", err)
+    }
+    
+    inputTokensB, err := usageB.InputTokens()
+    if err != nil {
+        log.Fatalf("Failed to get input tokens B: %v", err)
+    }
+    
+    outputTokensB, err := usageB.OutputTokens()
+    if err != nil {
+        log.Fatalf("Failed to get output tokens B: %v", err)
+    }
+    
+    fmt.Printf("Collector A - Input: %d, Output: %d\n", inputTokensA, outputTokensA)
+    fmt.Printf("Collector B - Input: %d, Output: %d\n", inputTokensB, outputTokensB)
+    
+    _ = res
+    _ = res2
 }
 ```
 </Tab>

@@ -61,4 +61,33 @@ describe "Modular API Tests" do
 
     assert_equal parsed.to_json, JOHN_DOE_PARSED_RESUME.to_json
   end
+
+  it "test_modular_openai_responses" do
+    # Test openai-responses provider using the modular API
+    # Note: This would require the TestOpenAIResponses function to be available
+    # and would use the /v1/responses endpoint instead of /v1/chat/completions
+    
+    baml_req = b.request.TestOpenAIResponses(input: "mountains")
+
+    uri = URI.parse(baml_req.url)
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = uri.scheme == 'https'
+
+    req = Net::HTTP::Post.new(uri.path)
+    req.initialize_http_header(baml_req.headers)
+    req.body = baml_req.body.json.to_json
+
+    response = http.request(req)
+
+    # For openai-responses, the response structure is different
+    # It should have an output_text field instead of choices[0].message.content
+    response_json = JSON.parse(response.body)
+    output_text = response_json["output_text"]
+
+    parsed = b.parse.TestOpenAIResponses(llm_response: output_text)
+
+    # Verify we got a string response (haiku about mountains)
+    assert parsed.is_a?(String)
+    assert parsed.length > 0
+  end
 end

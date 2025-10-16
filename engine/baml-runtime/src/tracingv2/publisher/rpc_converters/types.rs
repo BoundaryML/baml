@@ -1,14 +1,17 @@
 use std::borrow::Cow;
 
 use baml_rpc::{runtime_api, NarrowingType};
-use baml_types::{ir_type::TypeGeneric, type_meta, BamlValueWithMeta, Constraint, HasType};
+use baml_types::{
+    baml_value::TypeQuery, ir_type::TypeGeneric, type_meta, BamlValueWithMeta, Constraint, HasType,
+    StreamingMode, TypeValue,
+};
 
-use super::{IntoRpcEvent, TypeLookup};
+use super::{IRRpcState, IntoRpcEvent};
 
 impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::BamlValue<'a>>
     for BamlValueWithMeta<T>
 {
-    fn to_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> runtime_api::BamlValue<'a> {
+    fn to_rpc_event(&'a self, lookup: &(impl IRRpcState + ?Sized)) -> runtime_api::BamlValue<'a> {
         let type_ref = self.field_type().to_rpc_event(lookup);
         let value = match self {
             BamlValueWithMeta::String(s, _) => {
@@ -54,8 +57,19 @@ impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::Baml
                     baml_rpc::TypeReferenceWithMetadata::Union { union_type, .. } => match value {
                         baml_rpc::runtime_api::ValueContent::Null => runtime_api::TypeIndex::Null,
                         _ => {
-                            baml_log::warn!("Union type index is not set! Please talk to vbv about how to fix this.");
-                            runtime_api::TypeIndex::Index(0)
+                            // Find which type in the union matches the actual value type
+                            match union_type.types.iter().position(|union_variant_type| {
+                                matches_value_with_rpc_type(self, union_variant_type, lookup)
+                            }) {
+                                Some(idx) => runtime_api::TypeIndex::Index(idx),
+                                None => {
+                                    baml_log::warn!(
+                                        "Unexpected Error. Please report this error on https://github.com/boundaryml/baml/issues.\nCould not determine union variant index for value type: {} for value {}",
+                                        type_ref, value
+                                    );
+                                    runtime_api::TypeIndex::NotFound
+                                }
+                            }
                         }
                     },
                     _ => runtime_api::TypeIndex::NotUnion,
@@ -68,8 +82,84 @@ impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::Baml
     }
 }
 
+// Helper function to check if a BamlValueWithMeta matches a specific RPC type reference
+fn matches_value_with_rpc_type<T: HasType<type_meta::NonStreaming>>(
+    value: &BamlValueWithMeta<T>,
+    rpc_type_ref: &baml_rpc::TypeReferenceWithMetadata<baml_rpc::TypeMetadata>,
+    _lookup: &(impl IRRpcState + ?Sized),
+) -> bool {
+    use baml_rpc::TypeReferenceWithMetadata;
+    match (value, rpc_type_ref) {
+        (BamlValueWithMeta::String(_, _), TypeReferenceWithMetadata::String(_)) => true,
+        (BamlValueWithMeta::Int(_, _), TypeReferenceWithMetadata::Int(_)) => true,
+        (BamlValueWithMeta::Float(_, _), TypeReferenceWithMetadata::Float(_)) => true,
+        (BamlValueWithMeta::Bool(_, _), TypeReferenceWithMetadata::Bool(_)) => true,
+        (BamlValueWithMeta::Null(_), _) => true, // Null can match any type in a union
+        (
+            BamlValueWithMeta::Enum(enum_name, _, _),
+            TypeReferenceWithMetadata::Enum { type_id, .. },
+        ) => {
+            // Compare the enum name with the type_id name
+            enum_name == type_id.0.name()
+        }
+        (
+            BamlValueWithMeta::Class(class_name, _, _),
+            TypeReferenceWithMetadata::Class { type_id, .. },
+        ) => {
+            // Compare the class name with the type_id name
+            class_name == type_id.0.name()
+        }
+        (
+            BamlValueWithMeta::List(list_values, _),
+            TypeReferenceWithMetadata::List(inner_type, _),
+        ) => list_values
+            .iter()
+            .all(|value| matches_value_with_rpc_type(value, inner_type, _lookup)),
+        (
+            BamlValueWithMeta::Map(map_values, _),
+            TypeReferenceWithMetadata::Map { key, value, .. },
+        ) => map_values.iter().all(|(map_key, map_value)| {
+            // TODO: Validate key type
+            // matches_value_with_rpc_type(map_key, key, lookup)
+            matches_value_with_rpc_type(map_value, value, _lookup)
+        }),
+        (BamlValueWithMeta::Media(media, _), TypeReferenceWithMetadata::Media(media_type, _)) => {
+            matches!(
+                (&media.media_type, media_type),
+                (
+                    baml_types::BamlMediaType::Image,
+                    baml_rpc::MediaTypeDefinition::Image
+                ) | (
+                    baml_types::BamlMediaType::Audio,
+                    baml_rpc::MediaTypeDefinition::Audio
+                ) | (
+                    baml_types::BamlMediaType::Pdf,
+                    baml_rpc::MediaTypeDefinition::Pdf
+                ) | (
+                    baml_types::BamlMediaType::Video,
+                    baml_rpc::MediaTypeDefinition::Video
+                )
+            )
+        }
+        // Also handle literal values
+        (
+            BamlValueWithMeta::String(s, _),
+            TypeReferenceWithMetadata::Literal(baml_rpc::LiteralTypeDefinition::String(lit_s), _),
+        ) => s == lit_s,
+        (
+            BamlValueWithMeta::Int(i, _),
+            TypeReferenceWithMetadata::Literal(baml_rpc::LiteralTypeDefinition::Int(lit_i), _),
+        ) => i == lit_i,
+        (
+            BamlValueWithMeta::Bool(b, _),
+            TypeReferenceWithMetadata::Literal(baml_rpc::LiteralTypeDefinition::Bool(lit_b), _),
+        ) => b == lit_b,
+        _ => false,
+    }
+}
+
 impl<'a> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::ir_type::TypeNonStreaming {
-    fn to_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> baml_rpc::TypeReference {
+    fn to_rpc_event(&'a self, lookup: &(impl IRRpcState + ?Sized)) -> baml_rpc::TypeReference {
         use baml_rpc::{LiteralTypeDefinition, MediaTypeDefinition, TypeMetadata, TypeReference};
         let mut base_ref = match self {
             TypeGeneric::Primitive(type_value, _) => match type_value {
@@ -84,6 +174,8 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::ir_type::Type
                     TypeReference::media(match baml_media_type {
                         baml_types::BamlMediaType::Image => MediaTypeDefinition::Image,
                         baml_types::BamlMediaType::Audio => MediaTypeDefinition::Audio,
+                        baml_types::BamlMediaType::Pdf => MediaTypeDefinition::Pdf,
+                        baml_types::BamlMediaType::Video => MediaTypeDefinition::Video,
                     })
                 }
             },
@@ -123,6 +215,10 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::ir_type::Type
                 .map(TypeReference::recursive_type_alias)
                 .unwrap_or(TypeReference::Unknown),
             TypeGeneric::Arrow(..) => TypeReference::Unknown,
+            TypeGeneric::Top(_) => panic!(
+                "TypeGeneric::Top should have been resolved by the compiler before code generation. \
+                 This indicates a bug in the type resolution phase."
+            ),
         };
         if !self.meta().constraints.is_empty() {
             let constraints = self.meta().constraints.clone();
@@ -158,7 +254,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::ir_type::Type
 }
 
 impl<'a> IntoRpcEvent<'a, baml_rpc::Expression> for baml_types::JinjaExpression {
-    fn to_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> baml_rpc::Expression {
+    fn to_rpc_event(&'a self, lookup: &(impl IRRpcState + ?Sized)) -> baml_rpc::Expression {
         baml_rpc::Expression::Jinja(self.0.to_string())
     }
 }
@@ -166,7 +262,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::Expression> for baml_types::JinjaExpression 
 impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::Media<'a>> for baml_types::BamlMedia {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::Media<'a> {
         baml_rpc::runtime_api::Media {
             mime_type: self.mime_type.clone(),
@@ -178,7 +274,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::Media<'a>> for baml_types::Baml
 impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::MediaValue<'a>> for baml_types::BamlMediaContent {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::MediaValue<'a> {
         match self {
             baml_types::BamlMediaContent::Url(url) => {

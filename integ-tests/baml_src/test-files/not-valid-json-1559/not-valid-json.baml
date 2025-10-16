@@ -58,6 +58,6 @@ test TestDescribeMedia1559 {
 test TestStructureDocument1559 {
   functions [StructureDocument1559]
   args {
-    // Test arguments would go here
+    document_txt "hello"
   }
 }

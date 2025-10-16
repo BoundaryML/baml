@@ -28,12 +28,15 @@ function TestOpenAIShorthand(input: string) -> string {
   "#
 }
 
+
+
+
 // Test standard GPT-4 (should add default max_tokens)
 function TestOpenAI(input: string) -> string {
   client GPT4
   prompt #"
     {{ _.role("user") }}
-    Write a nice haiku, given the user input. Make sure to reference the input in the haiku.
+    Write a nice haiku, given the user input. Make sure to reference the input in the haiku. Make it 50 paragraphs
 
     Input: {{ input }}
   "#
@@ -107,6 +110,7 @@ function TestOpenAIGPT4oMini(input: string) -> string {
   prompt #"
     {{ _.role("user") }}
     Write a nice haiku, given the user input. Make sure to reference the input in the haiku.
+    {{ input }}
   "#
 }
 function TestOpenAIGPT4oMini2(input: string) -> string {
@@ -125,6 +129,13 @@ function TestOpenAIGPT4oMini3(input: string) -> string {
   "#
 }
 
+function OpenAIGPT4oMissingBaseUrlEnvVar(input: string) -> string {
+  client GPT4oBaseUrlNotSet
+  prompt #"
+    {{ _.role("user") }}
+    Write a nice haiku, given the user input. Make sure to reference the input in the haiku.
+  "#
+}
 
 // Add test cases to verify the behavior
 test TestOpenAIClients {
@@ -137,7 +148,9 @@ test TestOpenAIClients {
     TestOpenAIWithNullMaxTokens
   ]
   args {
-    input "Cherry blossoms"
+    input #"
+    Cherry blossoms
+    "#
   }
 }
 
@@ -145,7 +158,7 @@ client<llm> OpenAIWithNullMaxTokens {
   provider openai
   options {
     api_key env.OPENAI_API_KEY
-    model "gpt-4"
+    model "gpt-4o"
     max_tokens null
   }
 }

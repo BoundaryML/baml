@@ -1,8 +1,10 @@
 use std::any::TypeId;
 
 use lsp_server::{Notification, RequestId};
+use playground_server::WebviewRouterMessage;
 use rustc_hash::FxHashMap;
-use serde_json::Value;
+use serde_json::{json, Value};
+use tokio::sync::broadcast;
 
 use super::{schedule::Task, ClientSender};
 
@@ -15,7 +17,11 @@ pub(crate) struct Client<'s> {
 }
 
 #[derive(Clone)]
-pub struct Notifier(pub ClientSender);
+pub struct Notifier {
+    client_sender: ClientSender,
+    to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
+    lsp_methods_to_forward_to_webview: Vec<String>,
+}
 
 #[derive(Clone)]
 pub(crate) struct Responder(ClientSender);
@@ -27,9 +33,17 @@ pub(crate) struct Requester<'s> {
 }
 
 impl Client<'_> {
-    pub(super) fn new(sender: ClientSender) -> Self {
+    pub(super) fn new(
+        sender: ClientSender,
+        to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
+        lsp_methods_to_forward_to_webview: Vec<String>,
+    ) -> Self {
         Self {
-            notifier: Notifier(sender.clone()),
+            notifier: Notifier {
+                client_sender: sender.clone(),
+                to_webview_router_tx,
+                lsp_methods_to_forward_to_webview,
+            },
             responder: Responder(sender.clone()),
             requester: Requester {
                 sender,
@@ -48,48 +62,59 @@ impl Client<'_> {
     }
 }
 
-#[allow(dead_code)] // we'll need to use `Notifier` in the future
 impl Notifier {
     pub(crate) fn notify<N>(&self, params: N::Params) -> anyhow::Result<()>
     where
         N: lsp_types::notification::Notification,
     {
-        let method = N::METHOD.to_string();
-
-        let message = lsp_server::Message::Notification(Notification::new(method, params));
-
-        self.0.send(message)
+        self.notify_raw(N::METHOD.to_string(), params)
     }
 
-    pub(crate) fn notify_method(&self, method: String) -> anyhow::Result<()> {
-        self.0
-            .send(lsp_server::Message::Notification(Notification::new(
-                method,
-                Value::Null,
-            )))
+    /// Type-unsafe version of self.notify(). We have too many things that just do json!-style notifications.
+    pub(crate) fn notify_raw(
+        &self,
+        method: String,
+        params: impl serde::Serialize,
+    ) -> anyhow::Result<()> {
+        let notification = Notification::new(method.clone(), params);
+        let message = lsp_server::Message::Notification(notification.clone());
+        // Send to both client and webview router
+        self.client_sender.send(message)?;
+        // Use configuration instead of hardcoded list
+        if self.lsp_methods_to_forward_to_webview.contains(&method) {
+            let _ = self
+                .to_webview_router_tx
+                .send(WebviewRouterMessage::SendMessageToWebview(
+                    playground_server::WebviewCommand::LspMessage(notification),
+                ))
+                .inspect_err(|e| {
+                    tracing::error!(
+                        "Failed to send SEND_LSP_NOTIFICATION_TO_WEBVIEW message to webview: {e}"
+                    );
+                });
+        }
+        Ok(())
     }
 
     pub(crate) fn notify_baml_error(&self, msg: &str) -> anyhow::Result<()> {
-        self.0
-            .send(lsp_server::Message::Notification(Notification::new(
-                "baml/message".to_string(),
-                serde_json::json!({
-                    "type": "error",
-                    "message": msg,
-                    "durationMs": 7000,
-                }),
-            )))
+        self.notify_raw(
+            "baml/message".to_string(),
+            json!({
+                "type": "error",
+                "message": msg,
+                "durationMs": 7000,
+            }),
+        )
     }
     pub(crate) fn notify_baml_info(&self, msg: &str) -> anyhow::Result<()> {
-        self.0
-            .send(lsp_server::Message::Notification(Notification::new(
-                "baml/message".to_string(),
-                serde_json::json!({
-                    "type": "info",
-                    "message": msg,
-                    "durationMs": 4000,
-                }),
-            )))
+        self.notify_raw(
+            "baml/message".to_string(),
+            json!({
+                "type": "info",
+                "message": msg,
+                "durationMs": 4000,
+            }),
+        )
     }
 }
 

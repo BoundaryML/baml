@@ -1,0 +1,67 @@
+[package]
+edition = "2021"
+name = "playground-server"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+
+[lints.rust]
+dead_code = "deny"
+elided_named_lifetimes = "deny"
+unused_imports = "deny"
+unused_variables = "deny"
+
+[[bin]]
+name = "playground-barebones"
+path = "src/bin/playground_barebones.rs"
+
+[dependencies]
+anyhow.workspace = true
+aws-config = "1.1"
+aws-credential-types = "1.1"
+axum = { version = "0.8.4", features = ["ws"] }
+base64 = "0.21"
+bytes.workspace = true
+dirs = "5.0"
+flate2 = "1.0"
+futures.workspace = true
+google-cloud-auth.workspace = true
+mime_guess = "2.0.4"
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+tar = "0.4"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1.17"
+tower.workspace = true
+tower-http = { version = "0.6.6", features = ["fs", "cors"] }
+tracing.workspace = true
+webbrowser = "0.8"
+
+# Dependencies for playground-repro binary
+baml-types = { path = "../baml-lib/baml-types" }
+baml-runtime = { path = "../baml-runtime", features = [
+  "internal",
+], default-features = false }
+baml-lsp-types = { path = "../baml-lsp-types" }
+internal-baml-core = { path = "../baml-lib/baml-core" }
+internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
+crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
+ignore = { version = "0.4.22" }
+parking_lot = { version = "0.12", features = ["deadlock_detection"] }
+indexmap = { workspace = true }
+jod-thread = { version = "0.1.2" }
+lsp-server = "0.7.6"
+lsp-types = "0.95.0"
+regex = { version = "1.10.2" }
+rustc-hash = { version = "2.0.0" }
+tracing-log = "0.2.0"
+shellexpand = { version = "3.0.0" }
+semver = "1.0.20"
+toml = { version = "0.8" }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = { version = "2.5.0" }
+walkdir = "2"
+chrono.workspace = true

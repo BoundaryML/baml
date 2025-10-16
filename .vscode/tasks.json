@@ -1,0 +1,90 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "npm: build-vscode",
+      "type": "npm",
+      "script": "build",
+      "path": "vscode-ext/packages/vscode",
+      "group": "build",
+      "problemMatcher": {
+        "owner": "typescript",
+        "pattern": "$tsc"
+      }
+    },
+    {
+      "label": "npm: build-language-server",
+      "type": "npm",
+      "script": "build",
+      "path": "vscode-ext/packages/language-server",
+      "group": "build",
+      "problemMatcher": {
+        "owner": "typescript",
+        "pattern": "$tsc"
+      }
+    },
+    {
+      "label": "Build All",
+      "dependsOn": ["npm: build-vscode", "npm: build-language-server"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Watch All",
+      "dependsOn": ["Watch Web Panel", "Watch VSCode Extension"],
+      "group": "none"
+    },
+    {
+      "label": "Terminate All",
+      "command": "echo ${input:terminate}",
+      "type": "shell",
+      "problemMatcher": []
+    },
+    {
+      "label": "Watch Web Panel",
+      "type": "shell",
+      "command": "cd ${workspaceFolder}/vscode-ext/packages/web-panel && pnpm run watch",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "."
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*VITE.*Dev server running at:",
+          "endsPattern": "^.*ready in.*$"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Watch VSCode Extension",
+      "type": "shell",
+      "command": "cd ${workspaceFolder}/vscode-ext/packages/vscode && pnpm run watch",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "."
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "."
+        }
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "terminate",
+      "type": "command",
+      "command": "workbench.action.tasks.terminate",
+      "args": "terminateAll"
+    }
+  ]
+}

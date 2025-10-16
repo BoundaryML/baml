@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
 use baml_types::{GetEnvVar, StringOr};
@@ -27,7 +27,7 @@ impl ClientSpec {
 
     pub fn new_from_id(arg: &str) -> Result<Self, anyhow::Error> {
         if arg.contains("/") {
-            let (provider, model) = arg.split_once("/").unwrap();
+            let (provider, model) = arg.split_once("/").expect("Already checked for '/'");
             Ok(ClientSpec::Shorthand(provider.parse()?, model.to_string()))
         } else {
             Ok(ClientSpec::Named(arg.into()))
@@ -61,6 +61,8 @@ pub enum OpenAIClientProviderVariant {
     Ollama,
     /// The Azure client provider variant
     Azure,
+    /// The OpenAI Responses API variant
+    Responses,
     /// The generic client provider variant
     Generic,
 }
@@ -93,6 +95,7 @@ impl std::fmt::Display for OpenAIClientProviderVariant {
             OpenAIClientProviderVariant::Base => write!(f, "openai"),
             OpenAIClientProviderVariant::Ollama => write!(f, "ollama"),
             OpenAIClientProviderVariant::Azure => write!(f, "azure-openai"),
+            OpenAIClientProviderVariant::Responses => write!(f, "openai-responses"),
             OpenAIClientProviderVariant::Generic => write!(f, "openai-generic"),
         }
     }
@@ -117,6 +120,9 @@ impl std::str::FromStr for ClientProvider {
             "openai-generic" => Ok(ClientProvider::OpenAI(OpenAIClientProviderVariant::Generic)),
             "azure-openai" => Ok(ClientProvider::OpenAI(OpenAIClientProviderVariant::Azure)),
             "baml-azure-chat" => Ok(ClientProvider::OpenAI(OpenAIClientProviderVariant::Azure)),
+            "openai-responses" => Ok(ClientProvider::OpenAI(
+                OpenAIClientProviderVariant::Responses,
+            )),
             "baml-ollama-chat" => Ok(ClientProvider::OpenAI(OpenAIClientProviderVariant::Ollama)),
             "ollama" => Ok(ClientProvider::OpenAI(OpenAIClientProviderVariant::Ollama)),
             "anthropic" => Ok(ClientProvider::Anthropic),
@@ -141,6 +147,7 @@ impl std::str::FromStr for OpenAIClientProviderVariant {
             "openai" => Ok(OpenAIClientProviderVariant::Base),
             "ollama" => Ok(OpenAIClientProviderVariant::Ollama),
             "azure-openai" => Ok(OpenAIClientProviderVariant::Azure),
+            "openai-responses" => Ok(OpenAIClientProviderVariant::Responses),
             "openai-generic" => Ok(OpenAIClientProviderVariant::Generic),
             _ => Err(anyhow::anyhow!(
                 "Invalid OpenAI client provider variant: {}",
@@ -171,6 +178,7 @@ impl ClientProvider {
             "openai",
             "openai-generic",
             "azure-openai",
+            "openai-responses",
             "anthropic",
             "ollama",
             "round-robin",
@@ -191,7 +199,7 @@ impl std::fmt::Display for ClientSpec {
     }
 }
 
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug, Hash, Default)]
 pub struct SupportedRequestModes {
     // If unset, treat as auto
     pub stream: Option<bool>,
@@ -271,11 +279,20 @@ impl FinishReasonFilter {
 pub(crate) struct UnresolvedRolesSelection {
     pub allowed: Option<Vec<StringOr>>,
     pub default: Option<StringOr>,
+    pub remap: Option<Vec<(String, StringOr)>>,
 }
 
 impl UnresolvedRolesSelection {
-    pub fn new(allowed: Option<Vec<StringOr>>, default: Option<StringOr>) -> Self {
-        Self { allowed, default }
+    pub fn new(
+        allowed: Option<Vec<StringOr>>,
+        default: Option<StringOr>,
+        remap: Option<Vec<(String, StringOr)>>,
+    ) -> Self {
+        Self {
+            allowed,
+            default,
+            remap,
+        }
     }
 
     pub fn required_env_vars(&self) -> HashSet<String> {
@@ -307,6 +324,24 @@ impl UnresolvedRolesSelection {
             .map(|default| default.resolve(ctx))
             .transpose()?;
 
+        let remap = self
+            .remap
+            .as_ref()
+            .map(|remap| {
+                remap
+                    .iter()
+                    .map(|(k, v)| Ok((k.to_string(), v.resolve(ctx)?)))
+                    .collect::<Result<Vec<_>>>()
+            })
+            .transpose()?;
+
+        let remap: Option<HashMap<String, String>> = remap.map(|remap| {
+            remap
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect()
+        });
+
         match (&allowed, &default) {
             (Some(allowed), Some(default)) => {
                 if !allowed.contains(default) {
@@ -321,14 +356,51 @@ impl UnresolvedRolesSelection {
             }
             _ => {}
         }
-        Ok(RolesSelection { allowed, default })
+
+        match (&allowed, &remap) {
+            (Some(allowed), Some(remap)) => {
+                for (k, _) in remap.iter() {
+                    if !allowed.contains(k) {
+                        return Err(anyhow::anyhow!(
+                            "remap_role must be in allowed_roles: {}. Not found in {:?}",
+                            k,
+                            allowed
+                        ));
+                    }
+                }
+            }
+            (None, Some(remap)) => {
+                let allowed = ["system", "user", "assistant"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>();
+                for (k, _) in remap.iter() {
+                    if !allowed.contains(k) {
+                        return Err(anyhow::anyhow!(
+                            "remap_role must be in allowed_roles: {}. Not found in {:?}",
+                            k,
+                            allowed
+                        ));
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(RolesSelection {
+            allowed,
+            default,
+            remap,
+        })
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RolesSelection {
     allowed: Option<Vec<String>>,
     default: Option<String>,
+    // key must be in allowed_roles.
+    // target is what the HTTP request will use.
+    remap: Option<HashMap<String, String>>,
 }
 
 impl RolesSelection {
@@ -337,6 +409,10 @@ impl RolesSelection {
             Some(allowed) => allowed.clone(),
             None => f(),
         }
+    }
+
+    pub fn remap(&self) -> Option<HashMap<String, String>> {
+        self.remap.clone()
     }
 
     pub fn default_or_else(&self, f: impl FnOnce() -> String) -> String {
@@ -409,6 +485,7 @@ impl AllowedRoleMetadata {
 #[derive(Clone, Debug, Hash)]
 pub enum UnresolvedResponseType {
     OpenAI,
+    OpenAIResponses,
     Anthropic,
     Google,
     Vertex,
@@ -417,6 +494,7 @@ pub enum UnresolvedResponseType {
 #[derive(Clone, Debug, Hash)]
 pub enum ResponseType {
     OpenAI,
+    OpenAIResponses,
     Anthropic,
     Google,
     Vertex,
@@ -430,9 +508,116 @@ impl UnresolvedResponseType {
     pub fn resolve(&self, _: &impl GetEnvVar) -> Result<ResponseType> {
         match self {
             Self::OpenAI => Ok(ResponseType::OpenAI),
+            Self::OpenAIResponses => Ok(ResponseType::OpenAIResponses),
             Self::Anthropic => Ok(ResponseType::Anthropic),
             Self::Google => Ok(ResponseType::Google),
             Self::Vertex => Ok(ResponseType::Vertex),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+
+    #[test]
+    fn test_client_provider_parsing() {
+        // Test parsing of openai-responses provider
+        let provider = ClientProvider::from_str("openai-responses");
+        assert!(provider.is_ok());
+
+        let provider = provider.unwrap();
+        match provider {
+            ClientProvider::OpenAI(OpenAIClientProviderVariant::Responses) => {
+                // Success!
+            }
+            _ => panic!("Expected OpenAI Responses variant, got {provider:?}"),
+        }
+    }
+
+    #[test]
+    fn test_openai_client_provider_variant_parsing() {
+        let variant = OpenAIClientProviderVariant::from_str("openai-responses");
+        assert!(variant.is_ok());
+        assert_eq!(variant.unwrap(), OpenAIClientProviderVariant::Responses);
+    }
+
+    #[test]
+    fn test_openai_responses_display() {
+        let variant = OpenAIClientProviderVariant::Responses;
+        assert_eq!(variant.to_string(), "openai-responses");
+    }
+
+    #[test]
+    fn test_openai_responses_in_allowed_providers() {
+        let allowed = ClientProvider::allowed_providers();
+        assert!(allowed.contains(&"openai-responses"));
+    }
+
+    #[test]
+    fn test_response_type_parsing() {
+        // Test UnresolvedResponseType
+        let unresolved = match "openai-responses" {
+            "openai" => UnresolvedResponseType::OpenAI,
+            "openai-responses" => UnresolvedResponseType::OpenAIResponses,
+            "anthropic" => UnresolvedResponseType::Anthropic,
+            "google" => UnresolvedResponseType::Google,
+            "vertex" => UnresolvedResponseType::Vertex,
+            _ => panic!("Unknown response type"),
+        };
+
+        assert!(matches!(
+            unresolved,
+            UnresolvedResponseType::OpenAIResponses
+        ));
+    }
+
+    #[test]
+    fn test_response_type_resolution() {
+        use baml_types::GetEnvVar;
+
+        struct MockEnvContext;
+        impl GetEnvVar for MockEnvContext {
+            fn get_env_var(&self, _name: &str) -> Result<String, anyhow::Error> {
+                Err(anyhow::anyhow!("No env var"))
+            }
+
+            fn set_allow_missing_env_var(&self, _: bool) -> Self {
+                MockEnvContext
+            }
+        }
+
+        let unresolved = UnresolvedResponseType::OpenAIResponses;
+        let ctx = MockEnvContext;
+        let resolved = unresolved.resolve(&ctx);
+
+        assert!(resolved.is_ok());
+        assert!(matches!(resolved.unwrap(), ResponseType::OpenAIResponses));
+    }
+
+    #[test]
+    fn test_provider_roundtrip() {
+        // Test that we can convert to string and back
+        let original = ClientProvider::OpenAI(OpenAIClientProviderVariant::Responses);
+        let string_repr = match &original {
+            ClientProvider::OpenAI(variant) => variant.to_string(),
+            _ => panic!("Expected OpenAI provider"),
+        };
+
+        assert_eq!(string_repr, "openai-responses");
+
+        let parsed_back = ClientProvider::from_str(&string_repr).unwrap();
+        assert_eq!(original, parsed_back);
+    }
+
+    #[test]
+    fn test_invalid_provider_parsing() {
+        let result = ClientProvider::from_str("invalid-provider");
+        assert!(result.is_err());
+
+        let result = OpenAIClientProviderVariant::from_str("invalid-variant");
+        assert!(result.is_err());
     }
 }
