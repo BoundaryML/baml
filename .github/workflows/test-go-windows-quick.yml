@@ -29,10 +29,15 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Setup Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "27.1"
+      - name: Setup Protoc (Windows - Quick)
+        shell: bash
+        run: |
+          # Download protoc directly to avoid rate limiting
+          PROTOC_VERSION="27.1"
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-win64.zip"
+          unzip -q protoc-${PROTOC_VERSION}-win64.zip -d $HOME/.local
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          rm protoc-${PROTOC_VERSION}-win64.zip
 
       - name: Install protoc-gen-go
         run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34.1
