@@ -19,24 +19,28 @@ async def test_emit_basic_changes():
     captured_events = []
 
     def on_x_change(ev):
+        print("SAW X CHANGE!")
         nonlocal saw_x_change
         print(f"x changed: {ev.variable_name} = {ev.value}")
         captured_events.append(("x", ev))
         saw_x_change = True
 
     def on_once_change(ev):
+        print("SAW ONCE CHANGE!")
         nonlocal saw_once_change
         print(f"once changed: {ev.variable_name} = {ev.value}")
         captured_events.append(("once", ev))
         saw_once_change = True
 
     def on_twice_change(ev):
+        print("SAW TWICE CHANGE!")
         nonlocal saw_twice_change
         print(f"twice changed: {ev.variable_name} = {ev.value}")
         captured_events.append(("twice", ev))
         saw_twice_change = True
 
     # Register event handlers
+    # listener.on_var("x", lambda x: print(x))
     listener.on_var("x", on_x_change)
     listener.on_var("once", on_once_change)
     listener.on_var("twice", on_twice_change)

@@ -353,16 +353,26 @@ impl BamlRuntime {
                             }
                             baml_compiler::watch::WatchBamlValue::Value(value) => {
                                 if let Some(var_name) = &notification.variable_name {
-                                    // Serialize BamlValue to JSON
+                                    // Serialize BamlValue to JSON and convert to Python object
                                     let serialized = serde_json::to_value(value.value())
                                         .unwrap_or(serde_json::Value::Null);
 
-                                    let var_event_dict = PyDict::new(py);
-                                    let _ =
-                                        var_event_dict.set_item("variable_name", var_name.clone());
-                                    let _ =
-                                        var_event_dict.set_item("value", serialized.to_string());
-                                    let _ = var_event_dict.set_item(
+                                    // Convert JSON value to Python object using pythonize
+                                    let py_value = match pythonize::pythonize(py, &serialized) {
+                                        Ok(v) => v,
+                                        Err(_) => py.None().into_bound(py),
+                                    };
+
+                                    // Create a simple namespace object with attributes
+                                    // We'll use types.SimpleNamespace which allows attribute access
+                                    let types_module = py.import("types").unwrap();
+                                    let simple_namespace =
+                                        types_module.getattr("SimpleNamespace").unwrap();
+
+                                    let kwargs = PyDict::new(py);
+                                    let _ = kwargs.set_item("variable_name", var_name.clone());
+                                    let _ = kwargs.set_item("value", py_value);
+                                    let _ = kwargs.set_item(
                                         "timestamp",
                                         SystemTime::now()
                                             .duration_since(SystemTime::UNIX_EPOCH)
@@ -370,16 +380,19 @@ impl BamlRuntime {
                                             .as_millis()
                                             .to_string(),
                                     );
-                                    let _ = var_event_dict.set_item(
+                                    let _ = kwargs.set_item(
                                         "function_name",
                                         notification.function_name.clone(),
                                     );
+
+                                    let var_event =
+                                        simple_namespace.call((), Some(&kwargs)).unwrap();
 
                                     // Fire to var handlers only
                                     if let Some(handler_list) = callbacks.var_handlers.get(var_name)
                                     {
                                         for handler in handler_list {
-                                            let _ = handler.call1(py, (var_event_dict.clone(),));
+                                            let _ = handler.call1(py, (var_event.clone(),));
                                         }
                                     }
                                 }
@@ -533,16 +546,26 @@ impl BamlRuntime {
                             }
                             baml_compiler::watch::WatchBamlValue::Value(value) => {
                                 if let Some(var_name) = &event.variable_name {
-                                    // Serialize BamlValue to JSON
+                                    // Serialize BamlValue to JSON and convert to Python object
                                     let serialized = serde_json::to_value(value.value())
                                         .unwrap_or(serde_json::Value::Null);
 
-                                    let var_event_dict = PyDict::new(py);
-                                    let _ =
-                                        var_event_dict.set_item("variable_name", var_name.clone());
-                                    let _ =
-                                        var_event_dict.set_item("value", serialized.to_string());
-                                    let _ = var_event_dict.set_item(
+                                    // Convert JSON value to Python object using pythonize
+                                    let py_value = match pythonize::pythonize(py, &serialized) {
+                                        Ok(v) => v,
+                                        Err(_) => py.None().into_bound(py),
+                                    };
+
+                                    // Create a simple namespace object with attributes
+                                    // We'll use types.SimpleNamespace which allows attribute access
+                                    let types_module = py.import("types").unwrap();
+                                    let simple_namespace =
+                                        types_module.getattr("SimpleNamespace").unwrap();
+
+                                    let kwargs = PyDict::new(py);
+                                    let _ = kwargs.set_item("variable_name", var_name.clone());
+                                    let _ = kwargs.set_item("value", py_value);
+                                    let _ = kwargs.set_item(
                                         "timestamp",
                                         SystemTime::now()
                                             .duration_since(SystemTime::UNIX_EPOCH)
@@ -550,14 +573,17 @@ impl BamlRuntime {
                                             .as_millis()
                                             .to_string(),
                                     );
-                                    let _ = var_event_dict
+                                    let _ = kwargs
                                         .set_item("function_name", event.function_name.clone());
+
+                                    let var_event =
+                                        simple_namespace.call((), Some(&kwargs)).unwrap();
 
                                     // Fire to var handlers only
                                     if let Some(handler_list) = callbacks.var_handlers.get(var_name)
                                     {
                                         for handler in handler_list {
-                                            let _ = handler.call1(py, (var_event_dict.clone(),));
+                                            let _ = handler.call1(py, (var_event.clone(),));
                                         }
                                     }
                                 }
