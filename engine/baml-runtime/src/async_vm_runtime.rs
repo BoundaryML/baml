@@ -345,7 +345,7 @@ impl BamlAsyncVmRuntime {
                     }
                 }
 
-                Ok(VmExecState::Emit(roots)) => {
+                Ok(VmExecState::Notify(roots)) => {
                     println!("Emit: {roots:?}");
                 }
 

@@ -182,7 +182,7 @@ impl ExecState {
             VmExecState::Complete(value) => {
                 Value::from_vm_value(&value, vm).map(ExecState::Complete)
             }
-            VmExecState::Emit(roots) => {
+            VmExecState::Notify(roots) => {
                 let nodes = roots
                     .iter()
                     .map(|node_id| Notification::from_node_id(node_id, vm))

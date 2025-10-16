@@ -219,7 +219,8 @@ pub enum VmExecState {
     /// VM has completed the execution of all available bytecode.
     Complete(Value),
 
-    Emit(Vec<watch::NodeId>),
+    /// Notify about watched variables.
+    Notify(Vec<watch::NodeId>),
 }
 
 #[derive(Clone, Debug)]
@@ -492,13 +493,13 @@ impl Vm {
                     // Check if this binding is emittable.
                     if self.watched_vars.contains(&local_var_index) {
                         // Node ID of the local variable in the emit graph.
-                        let emit_node = NodeId::LocalVar(local_var_index);
+                        let watched_node = NodeId::LocalVar(local_var_index);
 
                         // If we had a previous binding to an object, unlink it
                         // so it doesn't emit anymore.
                         if let Value::Object(old_node) = old_value {
                             self.watch.unlink_edge(
-                                emit_node,
+                                watched_node,
                                 watch::Path::Binding,
                                 NodeId::HeapObject(old_node),
                             );
@@ -507,15 +508,15 @@ impl Vm {
                         // If we have a new binding, link it so it emits.
                         if let Value::Object(new_node) = value {
                             self.watch.link_edge(
-                                emit_node,
+                                watched_node,
                                 watch::Path::Binding,
                                 NodeId::HeapObject(new_node),
                             );
                         }
 
-                        let triggered_emits = self.watch.copy_roots_reaching(emit_node);
-                        if !triggered_emits.is_empty() {
-                            return Ok(VmExecState::Emit(triggered_emits));
+                        let notifications = self.watch.copy_roots_reaching(watched_node);
+                        if !notifications.is_empty() {
+                            return Ok(VmExecState::Notify(notifications));
                         }
                     }
                 }
@@ -563,11 +564,11 @@ impl Vm {
                         .into());
                     };
 
-                    let emit_node = NodeId::HeapObject(instance_index);
+                    let watched_node = NodeId::HeapObject(instance_index);
 
                     if let Value::Object(old_node) = instance.fields[index] {
                         self.watch.unlink_edge(
-                            emit_node,
+                            watched_node,
                             watch::Path::InstanceField(index),
                             NodeId::HeapObject(old_node),
                         );
@@ -584,7 +585,7 @@ impl Vm {
 
                     if let Value::Object(new_node) = new_value {
                         self.watch.link_edge(
-                            emit_node,
+                            watched_node,
                             watch::Path::InstanceField(index),
                             NodeId::HeapObject(new_node),
                         );
@@ -593,9 +594,9 @@ impl Vm {
                     // TODO: Borrow checker stuff.
                     function = self.objects[frame.function].as_function()?;
 
-                    let triggered_emits = self.watch.copy_roots_reaching(emit_node);
-                    if !triggered_emits.is_empty() {
-                        return Ok(VmExecState::Emit(triggered_emits));
+                    let notifications = self.watch.copy_roots_reaching(watched_node);
+                    if !notifications.is_empty() {
+                        return Ok(VmExecState::Notify(notifications));
                     }
                 }
 
@@ -1057,11 +1058,11 @@ impl Vm {
                         }));
                     }
 
-                    let emit_node_id = NodeId::HeapObject(array_obj_index);
+                    let watched_node = NodeId::HeapObject(array_obj_index);
 
                     if let Value::Object(old_child) = array[index] {
                         self.watch.unlink_edge(
-                            emit_node_id,
+                            watched_node,
                             watch::Path::ArrayIndex(index),
                             NodeId::HeapObject(old_child),
                         );
@@ -1072,7 +1073,7 @@ impl Vm {
 
                     if let Value::Object(new_child) = value {
                         self.watch.link_edge(
-                            emit_node_id,
+                            watched_node,
                             watch::Path::ArrayIndex(index),
                             NodeId::HeapObject(new_child),
                         );
@@ -1081,10 +1082,10 @@ impl Vm {
                     // Restore function reference after mutable borrow of self.objects
                     function = self.objects[frame.function].as_function()?;
 
-                    let triggered_emits = self.watch.copy_roots_reaching(emit_node_id);
+                    let notifications = self.watch.copy_roots_reaching(watched_node);
 
-                    if !triggered_emits.is_empty() {
-                        return Ok(VmExecState::Emit(triggered_emits));
+                    if !notifications.is_empty() {
+                        return Ok(VmExecState::Notify(notifications));
                     }
                 }
 
@@ -1122,11 +1123,11 @@ impl Vm {
                         }));
                     };
 
-                    let emit_node_id = NodeId::HeapObject(map_index);
+                    let watched_node = NodeId::HeapObject(map_index);
 
                     if let Some(Value::Object(old_node)) = map.get(&key) {
                         self.watch.unlink_edge(
-                            emit_node_id,
+                            watched_node,
                             watch::Path::MapKey(key.clone()),
                             NodeId::HeapObject(*old_node),
                         );
@@ -1137,7 +1138,7 @@ impl Vm {
 
                     if let Value::Object(new_node) = value {
                         self.watch.link_edge(
-                            emit_node_id,
+                            watched_node,
                             watch::Path::MapKey(key),
                             NodeId::HeapObject(new_node),
                         );
@@ -1146,10 +1147,10 @@ impl Vm {
                     // borrow check
                     function = self.objects[frame.function].as_function()?;
 
-                    let triggered_emits = self.watch.copy_roots_reaching(emit_node_id);
+                    let notifications = self.watch.copy_roots_reaching(watched_node);
 
-                    if !triggered_emits.is_empty() {
-                        return Ok(VmExecState::Emit(triggered_emits));
+                    if !notifications.is_empty() {
+                        return Ok(VmExecState::Notify(notifications));
                     }
                 }
 
