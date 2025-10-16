@@ -156,32 +156,32 @@ jobs:
 
           ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
         working-directory: engine
-        # Skip this step on Windows runners
-        if: matrix._.os != 'windows-2022'
 
       # Determine CFFI library name and artifact suffix based on OS
       - name: Set CFFI Lib Info
         id: cffi_info
-        # Skip this step on Windows runners
-        if: matrix._.os != 'windows-2022'
         shell: bash
         run: |
           target="${{ matrix._.target }}"
           if [[ "${{ matrix._.os }}" == *"windows"* ]]; then
-            # This case is currently excluded by the 'if' condition, but kept for completeness
-            base_name="libbaml_cffi.dll"
+            base_name="baml_cffi.dll"  # Note: no "lib" prefix on Windows
             suffix="windows"
+            extension="dll"
           elif [[ "${{ matrix._.os }}" == *"macos"* ]]; then
             base_name="libbaml_cffi.dylib"
             suffix="darwin"
+            extension="dylib"
           else # Linux
             base_name="libbaml_cffi.so"
             suffix="linux"
+            extension="so"
           fi
-          # Extract extension
-          extension="${base_name##*.}"
-          # Construct new name: libbaml_cffi-${target}.${extension}
-          new_name="libbaml_cffi-${target}.${extension}"
+          # Windows DLLs don't use lib prefix
+          if [[ "${{ matrix._.os }}" == *"windows"* ]]; then
+            new_name="baml_cffi-${target}.${extension}"
+          else
+            new_name="libbaml_cffi-${target}.${extension}"
+          fi
 
           echo "lib_name=${base_name}" >> $GITHUB_OUTPUT
           echo "new_lib_name=${new_name}" >> $GITHUB_OUTPUT
@@ -204,8 +204,6 @@ jobs:
 
       # Rename the CFFI library file
       - name: Rename CFFI Library
-        # Skip this step on Windows runners
-        if: matrix._.os != 'windows-2022'
         shell: bash
         run: |
           set -x # enable debug printing
@@ -236,8 +234,6 @@ jobs:
       # Upload the CFFI library for this specific target
       - name: Upload CFFI Library Artifact
         uses: actions/upload-artifact@v4
-        # Skip this step on Windows runners
-        if: matrix._.os != 'windows-2022'
         with:
           # Artifact name uses the target name for uniqueness (as decided previously)
           name: libbaml-cffi-${{ matrix._.target }}
