@@ -91,10 +91,10 @@ client<llm> MyClient {
 
 <Markdown src="/snippets/finish-reason.mdx" />
 
-<Markdown src="/snippets/media-url-resolver.mdx" />
+<Markdown src="/snippets/media-url-handler.mdx" />
 
 <Note>
-  Google AI uses `if_google_uri` by default for images, which preserves Google Cloud Storage URLs (gs://) while converting other URLs to base64.
+  Google AI uses `send_base64_unless_google_url` by default for images, which preserves Google Cloud Storage URLs (gs://) while converting other URLs to base64.
 </Note>
 
 ## Provider request parameters

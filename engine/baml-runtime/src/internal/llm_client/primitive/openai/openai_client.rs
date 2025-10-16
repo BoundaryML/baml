@@ -500,25 +500,25 @@ macro_rules! make_openai_client {
                 completion: false,
                 max_one_system_prompt: false,
                 resolve_audio_urls: $properties
-                    .media_url_resolver
+                    .media_url_handler
                     .audio
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Always),
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
                 resolve_image_urls: $properties
-                    .media_url_resolver
+                    .media_url_handler
                     .images
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Never),
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 resolve_pdf_urls: $properties
-                    .media_url_resolver
+                    .media_url_handler
                     .pdf
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Never),
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 resolve_video_urls: $properties
-                    .media_url_resolver
+                    .media_url_handler
                     .video
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Never),
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: $properties.allowed_metadata.clone(),
             },
             properties: $properties,
@@ -543,25 +543,25 @@ macro_rules! make_openai_client {
                 completion: false,
                 max_one_system_prompt: false,
                 resolve_audio_urls: $properties
-                    .media_url_resolver
+                    .media_url_handler
                     .audio
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Always),
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
                 resolve_image_urls: $properties
-                    .media_url_resolver
+                    .media_url_handler
                     .images
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Never),
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 resolve_pdf_urls: $properties
-                    .media_url_resolver
+                    .media_url_handler
                     .pdf
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Never),
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 resolve_video_urls: $properties
-                    .media_url_resolver
+                    .media_url_handler
                     .video
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Never),
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: $properties.allowed_metadata.clone(),
             },
             properties: $properties,
@@ -876,10 +876,10 @@ mod tests {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: false,
-                resolve_audio_urls: ResolveMediaUrls::Always,
-                resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Never,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: ResolveMediaUrls::SendBase64,
+                resolve_image_urls: ResolveMediaUrls::SendUrl,
+                resolve_pdf_urls: ResolveMediaUrls::SendUrl,
+                resolve_video_urls: ResolveMediaUrls::SendUrl,
                 allowed_metadata: AllowedRoleMetadata::All,
             },
             properties: ResolvedOpenAI {
@@ -894,7 +894,7 @@ mod tests {
                 proxy_url: None,
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAIResponses,
-                media_url_resolver: internal_llm_client::MediaUrlResolver::default(),
+                media_url_handler: internal_llm_client::MediaUrlResolver::default(),
             },
             client: reqwest::Client::new(),
         };
@@ -929,10 +929,10 @@ mod tests {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: false,
-                resolve_audio_urls: ResolveMediaUrls::Always,
-                resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Never,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: ResolveMediaUrls::SendBase64,
+                resolve_image_urls: ResolveMediaUrls::SendUrl,
+                resolve_pdf_urls: ResolveMediaUrls::SendUrl,
+                resolve_video_urls: ResolveMediaUrls::SendUrl,
                 allowed_metadata: AllowedRoleMetadata::All,
             },
             properties: ResolvedOpenAI {
@@ -947,7 +947,7 @@ mod tests {
                 proxy_url: None,
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAI,
-                media_url_resolver: internal_llm_client::MediaUrlResolver::default(),
+                media_url_handler: internal_llm_client::MediaUrlResolver::default(),
             },
             client: reqwest::Client::new(),
         };
@@ -1024,10 +1024,10 @@ mod tests {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: false,
-                resolve_audio_urls: ResolveMediaUrls::Always,
-                resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Never,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: ResolveMediaUrls::SendBase64,
+                resolve_image_urls: ResolveMediaUrls::SendUrl,
+                resolve_pdf_urls: ResolveMediaUrls::SendUrl,
+                resolve_video_urls: ResolveMediaUrls::SendUrl,
                 allowed_metadata: AllowedRoleMetadata::All,
             },
             properties: ResolvedOpenAI {
@@ -1042,7 +1042,7 @@ mod tests {
                 proxy_url: None,
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAIResponses,
-                media_url_resolver: internal_llm_client::MediaUrlResolver::default(),
+                media_url_handler: internal_llm_client::MediaUrlResolver::default(),
             },
             client: reqwest::Client::new(),
         };

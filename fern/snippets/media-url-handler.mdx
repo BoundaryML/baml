@@ -1,0 +1,50 @@
+### `media_url_handler`
+
+Controls how media URLs are processed before sending to the provider. This allows you to override the default behavior for handling images, audio, PDFs, and videos.
+
+```baml
+client<llm> MyClient {
+  provider openai
+  options {
+    media_url_handler {
+      image "send_base64"                    // Options: send_base64 | send_url | send_url_add_mime_type | send_base64_unless_google_url
+      audio "send_url"
+      pdf "send_url_add_mime_type"
+      video "send_url"
+    }
+  }
+}
+```
+
+#### Options
+
+Each media type can be configured with one of these modes:
+
+- **`send_base64`** - Always download URLs and convert to base64 data URIs
+- **`send_url`** - Pass URLs through unchanged to the provider
+- **`send_url_add_mime_type`** - Ensure MIME type is present (may require downloading to detect)
+- **`send_base64_unless_google_url`** - Only process non-gs:// URLs (keep Google Cloud Storage URLs as-is)
+
+#### Provider Defaults
+
+If not specified, each provider uses these defaults:
+
+| Provider | Image | Audio | PDF | Video |
+|----------|-------|-------|-----|-------|
+| OpenAI | `send_url` | `send_base64` | `send_url` | `send_url` |
+| Anthropic | `send_url` | `send_url` | `send_base64` | `send_url` |
+| Google AI | `send_base64_unless_google_url` | `send_url` | `send_url` | `send_url` |
+| Vertex AI | `send_url_add_mime_type` | `send_url_add_mime_type` | `send_url` | `send_url` |
+| AWS Bedrock | `send_base64` | `send_base64` | `send_base64` | `send_url` |
+| Azure OpenAI | `send_url` | `send_base64` | `send_url` | `send_url` |
+
+#### When to Use
+
+- **Use `send_base64`** when your provider doesn't support external URLs and you need to embed media content
+- **Use `send_url`** when your provider handles URL fetching and you want to avoid the overhead of base64 conversion
+- **Use `send_url_add_mime_type`** when your provider requires MIME type information (e.g., Vertex AI)
+- **Use `send_base64_unless_google_url`** when working with Google Cloud Storage and want to preserve gs:// URLs
+
+<Warning>
+  URL fetching happens at request time and may add latency. Consider caching or pre-converting frequently used media when using `send_base64` mode.
+</Warning>

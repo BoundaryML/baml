@@ -385,7 +385,7 @@ we're working on it!
 
 ## Controlling URL Resolution
 
-By default, BAML automatically handles URL-to-base64 conversion based on what each provider supports. However, you can customize this behavior using the `media_url_resolver` configuration:
+By default, BAML automatically handles URL-to-base64 conversion based on what each provider supports. However, you can customize this behavior using the `media_url_handler` configuration:
 
 ### Example: Optimizing for Performance
 
@@ -397,9 +397,9 @@ client<llm> FastClaude {
   options {
     model "claude-3-5-sonnet-20241022"
     api_key env.ANTHROPIC_API_KEY
-    media_url_resolver {
-      image "never"     // Anthropic can fetch URLs directly
-      pdf "always"      // Required by Anthropic API (As of October 2025)
+    media_url_handler {
+      image "send_url"       // Anthropic can fetch URLs directly
+      pdf "send_base64"      // Required by Anthropic API (As of October 2025)
     }
   }
 }
@@ -415,8 +415,8 @@ client<llm> GeminiWithGCS {
   options {
     model "gemini-1.5-pro"
     api_key env.GOOGLE_API_KEY
-    media_url_resolver {
-      image "if_google_uri"  // Preserve gs:// URLs, convert others
+    media_url_handler {
+      image "send_base64_unless_google_url"  // Preserve gs:// URLs, convert others
     }
   }
 }
@@ -432,10 +432,10 @@ client<llm> CompatibleClient {
   options {
     model "gpt-4o"
     api_key env.OPENAI_API_KEY
-    media_url_resolver {
-      image "always"    // Ensure images are embedded
-      audio "always"    // OpenAI requires base64 for audio
-      pdf "always"      // Embed PDFs for reliability
+    media_url_handler {
+      image "send_base64"    // Ensure images are embedded
+      audio "send_base64"    // OpenAI requires base64 for audio
+      pdf "send_base64"      // Embed PDFs for reliability
     }
   }
 }

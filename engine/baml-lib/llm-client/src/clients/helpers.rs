@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 
 use crate::{
     SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
-    UnresolvedMediaUrlResolver, UnresolvedResolveMediaUrls, UnresolvedResponseType,
+    UnresolvedMediaUrlHandler, UnresolvedResolveMediaUrls, UnresolvedResponseType,
     UnresolvedRolesSelection,
 };
 
@@ -410,10 +410,10 @@ impl<Meta: Clone> PropertyHandler<Meta> {
             })
     }
 
-    pub fn ensure_media_url_resolver(&mut self) -> UnresolvedMediaUrlResolver {
-        let mut result = UnresolvedMediaUrlResolver::default();
+    pub fn ensure_media_url_handler(&mut self) -> UnresolvedMediaUrlHandler {
+        let mut result = UnresolvedMediaUrlHandler::default();
 
-        if let Some((_span, map, _)) = self.ensure_map("media_url_resolver", false) {
+        if let Some((_span, map, _)) = self.ensure_map("media_url_handler", false) {
             for (key, (key_span, value)) in map {
                 let resolve_mode = self.parse_resolve_media_urls(&value, &key_span);
 
@@ -424,7 +424,7 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                     "video" => result.video = resolve_mode,
                     other => {
                         self.push_error(
-                            format!("Unknown media type in media_url_resolver: {}. Expected one of: image, audio, pdf, video", other),
+                            format!("Unknown media type in media_url_handler: {}. Expected one of: image, audio, pdf, video", other),
                             key_span
                         );
                     }
@@ -442,14 +442,14 @@ impl<Meta: Clone> PropertyHandler<Meta> {
     ) -> Option<UnresolvedResolveMediaUrls> {
         match value.as_str() {
             Some(StringOr::Value(s)) => match s.as_str() {
-                "always" => Some(UnresolvedResolveMediaUrls::Always),
-                "never" => Some(UnresolvedResolveMediaUrls::Never),
-                "ensure_mime" => Some(UnresolvedResolveMediaUrls::EnsureMime),
-                "if_google_uri" => Some(UnresolvedResolveMediaUrls::IfMatchesGoogleFileUri),
+                "send_base64" => Some(UnresolvedResolveMediaUrls::SendBase64),
+                "send_url" => Some(UnresolvedResolveMediaUrls::SendUrl),
+                "send_url_add_mime_type" => Some(UnresolvedResolveMediaUrls::SendUrlAddMimeType),
+                "send_base64_unless_google_url" => Some(UnresolvedResolveMediaUrls::SendBase64UnlessGoogleUrl),
                 other => {
                     self.push_error(
                         format!(
-                            "Invalid media URL resolution mode: {}. Expected one of: always, never, ensure_mime, if_google_uri",
+                            "Invalid media URL handling mode: {}. Expected one of: send_base64, send_url, send_url_add_mime_type, send_base64_unless_google_url",
                             other
                         ),
                         span.clone()
@@ -459,13 +459,13 @@ impl<Meta: Clone> PropertyHandler<Meta> {
             },
             Some(StringOr::EnvVar(_)) => {
                 self.push_error(
-                    "media_url_resolver values cannot be environment variables",
+                    "media_url_handler values cannot be environment variables",
                     span.clone(),
                 );
                 None
             }
             _ => {
-                self.push_error("media_url_resolver values must be strings", span.clone());
+                self.push_error("media_url_handler values must be strings", span.clone());
                 None
             }
         }

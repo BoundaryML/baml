@@ -22,15 +22,15 @@ def inspect_request_body(request, provider="openai"):
 
 @pytest.mark.asyncio
 async def test_mode_enforcement():
-    """Test that each mode (always, never, ensure_mime, if_google_uri) works correctly"""
+    """Test that each mode (send_base64, send_url, send_url_add_mime_type, send_base64_unless_google_url) works correctly"""
 
     # Use a small base64 image to avoid network issues
     test_base64 = TEST_IMAGE_DATA_URL.split(",")[1]
 
     test_cases = [
-        # Mode: always - should expand URL to base64
+        # Mode: send_base64 - should expand URL to base64
         {
-            "mode": "always",
+            "mode": "send_base64",
             "provider": "openai",
             "input_type": "base64",
             "input": Image.from_base64(media_type="image", base64=test_base64),
@@ -41,11 +41,11 @@ async def test_mode_enforcement():
                 for content in message.get("content", [])
                 if isinstance(content, dict) and content.get("type") == "image_url"
             ),
-            "description": "Mode 'always' with base64 input should be base64"
+            "description": "Mode 'send_base64' with base64 input should be base64"
         },
-        # Mode: never - should keep URL as-is
+        # Mode: send_url - should keep URL as-is
         {
-            "mode": "never",
+            "mode": "send_url",
             "provider": "openai",
             "input_type": "base64",  # Using base64 since URL would try to fetch
             "input": Image.from_base64(media_type="image", base64=test_base64),
@@ -56,11 +56,11 @@ async def test_mode_enforcement():
                 for content in message.get("content", [])
                 if isinstance(content, dict) and content.get("type") == "image_url"
             ),
-            "description": "Mode 'never' with base64 input should still be base64"
+            "description": "Mode 'send_url' with base64 input should still be base64"
         },
-        # Mode: ensure_mime - should have MIME type (using Anthropic for this)
+        # Mode: send_url_add_mime_type - should have MIME type (using Anthropic for this)
         {
-            "mode": "ensure_mime",
+            "mode": "send_url_add_mime_type",
             "provider": "anthropic",
             "input_type": "base64",
             "input": Image.from_base64(media_type="image", base64=test_base64),
@@ -70,7 +70,7 @@ async def test_mode_enforcement():
                 for content in message.get("content", [])
                 if isinstance(content, dict) and content.get("type") == "image"
             ),
-            "description": "Mode 'ensure_mime' should include MIME type"
+            "description": "Mode 'send_url_add_mime_type' should include MIME type"
         },
     ]
 
@@ -81,7 +81,7 @@ async def test_mode_enforcement():
             cr.add_llm_client("test_client", "openai", {
                 "model": "gpt-4",
                 "api_key": "test-key",
-                "media_url_resolver": {
+                "media_url_handler": {
                     "image": test_case["mode"]
                 }
             })
@@ -89,7 +89,7 @@ async def test_mode_enforcement():
             cr.add_llm_client("test_client", "anthropic", {
                 "model": "claude-3-sonnet-20240229",
                 "api_key": "test-key",
-                "media_url_resolver": {
+                "media_url_handler": {
                     "image": test_case["mode"]
                 }
             })
@@ -109,7 +109,7 @@ async def test_mode_enforcement():
 
 @pytest.mark.asyncio
 async def test_openai_media_url_configuration():
-    """Test that OpenAI client accepts media_url_resolver configuration"""
+    """Test that OpenAI client accepts media_url_handler configuration"""
 
     cr = ClientRegistry()
 
@@ -118,11 +118,11 @@ async def test_openai_media_url_configuration():
         "model": "gpt-4o",
         "api_key": "test-key",
         "base_url": "https://api.openai.com/v1",
-        "media_url_resolver": {
-            "image": "always",      # Override default (never) - expand to base64
-            "audio": "never",       # Override default (always) - keep as URL
-            "pdf": "always",        # Override default (never) - expand to base64
-            "video": "never"        # Keep default - keep as URL
+        "media_url_handler": {
+            "image": "send_base64",      # Override default (send_url) - expand to base64
+            "audio": "send_url",       # Override default (send_base64) - keep as URL
+            "pdf": "send_base64",        # Override default (send_url) - expand to base64
+            "video": "send_url"        # Keep default - keep as URL
         }
     })
 
@@ -155,11 +155,11 @@ async def test_anthropic_media_url_configuration():
         "model": "claude-3-5-sonnet-20241022",
         "api_key": "test-key",
         "base_url": "https://api.anthropic.com",
-        "media_url_resolver": {
-            "image": "ensure_mime",  # Add MIME type but keep as URL
-            "audio": "always",       # Expand to base64
-            "pdf": "never",          # Override default (always) - keep as URL
-            "video": "never"         # Keep as URL
+        "media_url_handler": {
+            "image": "send_url_add_mime_type",  # Add MIME type but keep as URL
+            "audio": "send_base64",       # Expand to base64
+            "pdf": "send_url",          # Override default (send_base64) - keep as URL
+            "video": "send_url"         # Keep as URL
         }
     })
 
@@ -177,7 +177,7 @@ async def test_anthropic_media_url_configuration():
 
 @pytest.mark.asyncio
 async def test_google_ai_conditional_expansion():
-    """Test Google AI with if_google_uri mode"""
+    """Test Google AI with send_base64_unless_google_url mode"""
 
     cr = ClientRegistry()
 
@@ -185,11 +185,11 @@ async def test_google_ai_conditional_expansion():
     cr.add_llm_client("test_google", "google-ai", {
         "model": "gemini-1.5-pro",
         "api_key": "test-key",
-        "media_url_resolver": {
-            "image": "if_google_uri",  # Keep gs:// URLs, expand others
-            "audio": "if_google_uri",  # Keep gs:// URLs, expand others
-            "pdf": "always",           # Always expand
-            "video": "never"           # Never expand
+        "media_url_handler": {
+            "image": "send_base64_unless_google_url",  # Keep gs:// URLs, expand others
+            "audio": "send_base64_unless_google_url",  # Keep gs:// URLs, expand others
+            "pdf": "send_base64",           # Always expand
+            "video": "send_url"           # Never expand
         }
     })
 
@@ -218,11 +218,11 @@ async def test_vertex_media_url_configuration():
         "model": "gemini-1.5-pro",
         "project": "test-project",
         "location": "us-central1",
-        "media_url_resolver": {
-            "image": "ensure_mime",   # Override default (EnsureMime)
-            "audio": "always",        # Override default (EnsureMime)
-            "pdf": "always",          # Override default (Never)
-            "video": "never"          # Keep default
+        "media_url_handler": {
+            "image": "send_url_add_mime_type",   # Keep default (SendUrlAddMimeType)
+            "audio": "send_base64",        # Override default (SendUrlAddMimeType)
+            "pdf": "send_base64",          # Override default (SendUrl)
+            "video": "send_url"          # Keep default
         }
     })
 
@@ -249,11 +249,11 @@ async def test_aws_bedrock_media_url_configuration():
     cr.add_llm_client("test_bedrock", "aws-bedrock", {
         "model": "anthropic.claude-v2",
         "region": "us-east-1",
-        "media_url_resolver": {
-            "image": "never",         # Override default (Always)
-            "audio": "never",         # Override default (Always)
-            "pdf": "never",           # Override default (Always)
-            "video": "always"         # Override default (Never)
+        "media_url_handler": {
+            "image": "send_url",         # Override default (SendBase64)
+            "audio": "send_url",         # Override default (SendBase64)
+            "pdf": "send_url",           # Override default (SendBase64)
+            "video": "send_base64"         # Override default (SendUrl)
         }
     })
 
@@ -272,11 +272,11 @@ async def test_aws_bedrock_media_url_configuration():
 
 @pytest.mark.asyncio
 async def test_baml_defined_clients_with_media_resolver():
-    """Test that BAML-defined clients with media_url_resolver work correctly"""
+    """Test that BAML-defined clients with media_url_handler work correctly"""
 
     # These clients are defined in clients.baml
-    # TestOpenAIWithMediaHandling: image="always", audio="never", pdf="always", video="never"
-    # TestAnthropicWithMediaHandling: image="ensure_mime", audio="always", pdf="never", video="never"
+    # TestOpenAIWithMediaHandling: image="send_base64", audio="send_url", pdf="send_base64", video="send_url"
+    # TestAnthropicWithMediaHandling: image="send_url_add_mime_type", audio="send_base64", pdf="send_url", video="send_url"
 
     img = Image.from_base64(media_type="image", base64=TEST_IMAGE_DATA_URL.split(",")[1])
 
@@ -318,12 +318,12 @@ async def test_baml_defined_clients_with_media_resolver():
 
 @pytest.mark.asyncio
 async def test_default_media_resolver_behavior():
-    """Test that providers use correct defaults when media_url_resolver is not specified"""
+    """Test that providers use correct defaults when media_url_handler is not specified"""
 
     cr = ClientRegistry()
 
-    # OpenAI without media_url_resolver - should use defaults
-    # Default: audio=Always, images=Never, pdf=Never, video=Never
+    # OpenAI without media_url_handler - should use defaults
+    # Default: audio=SendBase64, images=SendUrl, pdf=SendUrl, video=SendUrl
     cr.add_llm_client("default_openai", "openai", {
         "model": "gpt-4o",
         "api_key": "test-key"
@@ -344,7 +344,7 @@ async def test_default_media_resolver_behavior():
 async def test_all_valid_media_resolver_modes():
     """Test that all valid media resolver modes are accepted"""
 
-    valid_modes = ["always", "never", "ensure_mime", "if_google_uri"]
+    valid_modes = ["send_base64", "send_url", "send_url_add_mime_type", "send_base64_unless_google_url"]
 
     for mode in valid_modes:
         cr = ClientRegistry()
@@ -353,7 +353,7 @@ async def test_all_valid_media_resolver_modes():
         cr.add_llm_client(f"test_{mode}", "openai", {
             "model": "gpt-4",
             "api_key": "test-key",
-            "media_url_resolver": {
+            "media_url_handler": {
                 "image": mode,
                 "audio": mode,
                 "pdf": mode,
@@ -385,11 +385,11 @@ async def test_mixed_media_resolver_modes():
     cr.add_llm_client("test_mixed", "openai", {
         "model": "gpt-4o",
         "api_key": "test-key",
-        "media_url_resolver": {
-            "image": "always",        # Expand images
-            "audio": "never",         # Keep audio URLs
-            "pdf": "ensure_mime",     # Add MIME to PDFs
-            "video": "if_google_uri"  # Conditional for videos
+        "media_url_handler": {
+            "image": "send_base64",        # Expand images
+            "audio": "send_url",         # Keep audio URLs
+            "pdf": "send_url_add_mime_type",     # Add MIME to PDFs
+            "video": "send_base64_unless_google_url"  # Conditional for videos
         }
     })
 
@@ -413,11 +413,11 @@ async def test_invalid_mode_compile_time():
     # This test verifies that the BAML compiler rejects invalid modes
     # We already tested this by creating test_invalid_media_resolver.baml
     # and seeing it fail at compile time with:
-    # "Invalid media URL resolution mode: invalid_mode. Expected one of: always, never, ensure_mime, if_google_uri"
+    # "Invalid media URL handling mode: invalid_mode. Expected one of: send_base64, send_url, send_url_add_mime_type, send_base64_unless_google_url"
 
     # Runtime validation may be more permissive
     # Let's just verify that valid modes work
-    valid_modes = ["always", "never", "ensure_mime", "if_google_uri"]
+    valid_modes = ["send_base64", "send_url", "send_url_add_mime_type", "send_base64_unless_google_url"]
 
     for mode in valid_modes:
         cr = ClientRegistry()
@@ -425,7 +425,7 @@ async def test_invalid_mode_compile_time():
         cr.add_llm_client(f"test_{mode}_valid", "openai", {
             "model": "gpt-4",
             "api_key": "test-key",
-            "media_url_resolver": {
+            "media_url_handler": {
                 "image": mode
             }
         })
@@ -435,19 +435,19 @@ async def test_invalid_mode_compile_time():
 
 @pytest.mark.asyncio
 async def test_provider_default_override():
-    """Test that media_url_resolver overrides provider defaults"""
+    """Test that media_url_handler overrides provider defaults"""
 
     test_base64 = TEST_IMAGE_DATA_URL.split(",")[1]
 
-    # OpenAI default: audio=Always, images=Never
-    # Test override: audio=Never, images=Always (opposite of defaults)
+    # OpenAI default: audio=SendBase64, images=SendUrl
+    # Test override: audio=SendUrl, images=SendBase64 (opposite of defaults)
     cr = ClientRegistry()
     cr.add_llm_client("openai_override", "openai", {
         "model": "gpt-4o",
         "api_key": "test-key",
-        "media_url_resolver": {
-            "audio": "never",   # Override default (always)
-            "image": "always"   # Override default (never)
+        "media_url_handler": {
+            "audio": "send_url",   # Override default (send_base64)
+            "image": "send_base64"   # Override default (send_url)
         }
     })
     cr.set_primary("openai_override")
@@ -457,7 +457,7 @@ async def test_provider_default_override():
     img_request = await b.request.DescribeImage(img, {"client_registry": cr})
     img_body = img_request.body.json()
 
-    # Should find base64 data in request (configured as "always" vs default "never")
+    # Should find base64 data in request (configured as "send_base64" vs default "send_url")
     has_base64 = any(
         "data:image" in str(content.get("image_url", {}).get("url", ""))
         for message in img_body.get("messages", [])
@@ -465,16 +465,16 @@ async def test_provider_default_override():
         if isinstance(content, dict) and content.get("type") == "image_url"
     )
 
-    assert has_base64, "OpenAI with image='always' should expand images to base64 (overriding default 'never')"
+    assert has_base64, "OpenAI with image='send_base64' should expand images to base64 (overriding default 'send_url')"
 
-    # Anthropic default: pdf=Always
-    # Test override: pdf=Never (opposite of default)
+    # Anthropic default: pdf=SendBase64
+    # Test override: pdf=SendUrl (opposite of default)
     cr2 = ClientRegistry()
     cr2.add_llm_client("anthropic_override", "anthropic", {
         "model": "claude-3-sonnet-20240229",
         "api_key": "test-key",
-        "media_url_resolver": {
-            "pdf": "never"   # Override default (always)
+        "media_url_handler": {
+            "pdf": "send_url"   # Override default (send_base64)
         }
     })
     cr2.set_primary("anthropic_override")
@@ -485,7 +485,7 @@ async def test_provider_default_override():
 
 @pytest.mark.asyncio
 async def test_google_storage_urls():
-    """Test if_google_uri mode with various URL types"""
+    """Test send_base64_unless_google_url mode with various URL types"""
 
     test_base64 = TEST_IMAGE_DATA_URL.split(",")[1]
 
@@ -500,7 +500,7 @@ async def test_google_storage_urls():
         cr.add_llm_client("google_test", "google-ai", {
             "model": "gemini-1.5-pro",
             "api_key": "test-key",
-            "media_url_resolver": {"image": "if_google_uri"}
+            "media_url_handler": {"image": "send_base64_unless_google_url"}
         })
         cr.set_primary("google_test")
 
@@ -532,12 +532,12 @@ async def test_data_url_handling():
     test_base64 = TEST_IMAGE_DATA_URL.split(",")[1]
     img = Image.from_base64(media_type="image", base64=test_base64)
 
-    for mode in ["always", "never", "ensure_mime"]:
+    for mode in ["send_base64", "send_url", "send_url_add_mime_type"]:
         cr = ClientRegistry()
         cr.add_llm_client(f"test_{mode}", "openai", {
             "model": "gpt-4",
             "api_key": "test-key",
-            "media_url_resolver": {"image": mode}
+            "media_url_handler": {"image": mode}
         })
         cr.set_primary(f"test_{mode}")
 
@@ -566,21 +566,21 @@ async def test_media_type_independence():
     cr.add_llm_client("mixed_config", "openai", {
         "model": "gpt-4o",
         "api_key": "test-key",
-        "media_url_resolver": {
-            "image": "always",      # Expand
-            "audio": "never",       # Keep URL
-            "pdf": "ensure_mime",   # Add MIME
-            "video": "never"        # Keep URL
+        "media_url_handler": {
+            "image": "send_base64",      # Expand
+            "audio": "send_url",       # Keep URL
+            "pdf": "send_url_add_mime_type",   # Add MIME
+            "video": "send_url"        # Keep URL
         }
     })
     cr.set_primary("mixed_config")
 
-    # Test with image - should respect "always" mode
+    # Test with image - should respect "send_base64" mode
     img = Image.from_base64(media_type="image", base64=test_base64)
     request = await b.request.DescribeImage(img, {"client_registry": cr})
     body = request.body.json()
 
-    # Verify image handling with "always" mode
+    # Verify image handling with "send_base64" mode
     has_base64 = any(
         "data:image" in str(content.get("image_url", {}).get("url", ""))
         for message in body.get("messages", [])
@@ -588,7 +588,7 @@ async def test_media_type_independence():
         if isinstance(content, dict) and content.get("type") == "image_url"
     )
 
-    assert has_base64, "Image with mode='always' should be base64"
+    assert has_base64, "Image with mode='send_base64' should be base64"
     assert "messages" in body, "Request should have messages structure"
 
 
@@ -600,9 +600,9 @@ async def test_dynamic_configuration():
 
     # Test changing configuration dynamically
     configs = [
-        {"image": "always"},
-        {"image": "never"},
-        {"image": "ensure_mime"},
+        {"image": "send_base64"},
+        {"image": "send_url"},
+        {"image": "send_url_add_mime_type"},
     ]
 
     for i, config in enumerate(configs):
@@ -610,7 +610,7 @@ async def test_dynamic_configuration():
         cr.add_llm_client(f"dynamic_{i}", "openai", {
             "model": "gpt-4o",
             "api_key": "test-key",
-            "media_url_resolver": config
+            "media_url_handler": config
         })
         cr.set_primary(f"dynamic_{i}")
 
@@ -629,30 +629,30 @@ async def test_provider_specific_defaults():
     providers_and_defaults = {
         "openai": {
             "config": {"model": "gpt-4o", "api_key": "test-key"},
-            # Defaults: audio=Always, images=Never, pdf=Never, video=Never
+            # Defaults: audio=SendBase64, images=SendUrl, pdf=SendUrl, video=SendUrl
         },
         "anthropic": {
             "config": {"model": "claude-3-sonnet-20240229", "api_key": "test-key"},
-            # Defaults: audio=Never, images=Never, pdf=Always, video=Never
+            # Defaults: audio=SendUrl, images=SendUrl, pdf=SendBase64, video=SendUrl
         },
         "google-ai": {
             "config": {"model": "gemini-1.5-pro", "api_key": "test-key"},
-            # Defaults: audio=Never, images=IfMatchesGoogleFileUri, pdf=Never, video=Never
+            # Defaults: audio=SendUrl, images=SendBase64UnlessGoogleUrl, pdf=SendUrl, video=SendUrl
         },
         "vertex-ai": {
             "config": {"model": "gemini-1.5-pro", "project": "test", "location": "us-central1"},
-            # Defaults: audio=EnsureMime, images=EnsureMime, pdf=Never, video=Never
+            # Defaults: audio=SendUrlAddMimeType, images=SendUrlAddMimeType, pdf=SendUrl, video=SendUrl
         },
         "aws-bedrock": {
             "config": {"model": "anthropic.claude-v2", "region": "us-east-1"},
-            # Defaults: audio=Always, images=Always, pdf=Always, video=Never
+            # Defaults: audio=SendBase64, images=SendBase64, pdf=SendBase64, video=SendUrl
         }
     }
 
     for provider, info in providers_and_defaults.items():
         cr = ClientRegistry()
 
-        # Create client without media_url_resolver to test defaults
+        # Create client without media_url_handler to test defaults
         client_name = f"default_{provider.replace('-', '_')}"
         cr.add_llm_client(client_name, provider, info["config"])
 

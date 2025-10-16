@@ -459,25 +459,25 @@ impl AwsClient {
                 completion: false,
                 max_one_system_prompt: true,
                 resolve_audio_urls: properties
-                    .media_url_resolver
+                    .media_url_handler
                     .audio
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Always),
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
                 resolve_image_urls: properties
-                    .media_url_resolver
+                    .media_url_handler
                     .images
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Always),
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
                 resolve_pdf_urls: properties
-                    .media_url_resolver
+                    .media_url_handler
                     .pdf
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Always),
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
                 resolve_video_urls: properties
-                    .media_url_resolver
+                    .media_url_handler
                     .video
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Never),
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
             retry_policy: client.retry_policy.as_ref().map(String::to_owned),
@@ -503,25 +503,25 @@ impl AwsClient {
                 completion: false,
                 max_one_system_prompt: true,
                 resolve_audio_urls: properties
-                    .media_url_resolver
+                    .media_url_handler
                     .audio
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Always),
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
                 resolve_image_urls: properties
-                    .media_url_resolver
+                    .media_url_handler
                     .images
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Always),
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
                 resolve_pdf_urls: properties
-                    .media_url_resolver
+                    .media_url_handler
                     .pdf
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Always),
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
                 resolve_video_urls: properties
-                    .media_url_resolver
+                    .media_url_handler
                     .video
                     .map(Into::into)
-                    .unwrap_or(ResolveMediaUrls::Never),
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
             retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),

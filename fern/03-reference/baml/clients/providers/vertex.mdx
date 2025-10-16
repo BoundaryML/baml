@@ -436,10 +436,10 @@ client<llm> MyClient {
 
 <Markdown src="/snippets/finish-reason.mdx" />
 
-<Markdown src="/snippets/media-url-resolver.mdx" />
+<Markdown src="/snippets/media-url-handler.mdx" />
 
 <Note>
-  Vertex AI uses `ensure_mime` by default for images and audio, which ensures MIME type information is included. This may require downloading the content to detect the MIME type if not provided.
+  Vertex AI uses `send_url_add_mime_type` by default for images and audio, which ensures MIME type information is included. This may require downloading the content to detect the MIME type if not provided.
 </Note>
 
 ## Provider request parameters

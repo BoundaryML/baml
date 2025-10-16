@@ -588,7 +588,7 @@ def call_bedrock():
   return b.parse.ExtractResume(message)
 ```
 
-<Markdown src="/snippets/media-url-resolver.mdx" />
+<Markdown src="/snippets/media-url-handler.mdx" />
 
 <Note>
   AWS Bedrock converts most media to base64 by default (`always` for images, audio, and PDFs). Consider using S3 presigned URLs with `never` mode for large files to avoid base64 overhead.

@@ -27,11 +27,11 @@ client<llm> TestOpenAIWithMediaHandling {
   options {
     model "gpt-4o"
     api_key env.OPENAI_API_KEY
-    media_url_resolver {
-      image "always"     // Override default (never)
-      audio "never"      // Override default (always)
-      pdf "always"       // Override default (never)
-      video "never"      // Keep default
+    media_url_handler {
+      image "send_base64"            // Override default (send_url)
+      audio "send_url"               // Override default (send_base64)
+      pdf "send_base64"              // Override default (send_url)
+      video "send_url"               // Keep default
     }
   }
 }
@@ -41,11 +41,11 @@ client<llm> TestAnthropicWithMediaHandling {
   options {
     model "claude-3-5-sonnet-20241022"
     api_key env.ANTHROPIC_API_KEY
-    media_url_resolver {
-      image "ensure_mime"
-      audio "always"
-      pdf "never"        // Override default (always)
-      video "never"
+    media_url_handler {
+      image "send_url_add_mime_type"
+      audio "send_base64"
+      pdf "send_url"                  // Override default (send_base64)
+      video "send_url"
     }
   }
 }
