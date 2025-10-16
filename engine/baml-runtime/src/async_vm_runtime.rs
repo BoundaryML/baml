@@ -162,7 +162,7 @@ impl BamlAsyncVmRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
-        tags: Option<HashMap<String, String>>,
+        tags: Option<&HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
         _watch_handler: Option<
             impl FnMut(baml_compiler::watch::WatchNotification) + Send + 'static,
@@ -191,8 +191,8 @@ impl BamlAsyncVmRuntime {
                     tb,
                     cb,
                     collectors,
-                    tags,
                     env_vars,
+                    tags,
                     cancel_tripwire,
                 )
                 .await;
@@ -273,7 +273,7 @@ impl BamlAsyncVmRuntime {
             (anyhow::Result<FunctionResult>, FunctionCallId),
         )>();
 
-        let tags_clone = tags.clone();
+        let tags_clone = tags.cloned();
         let vm_result = 'mainloop: loop {
             match vm.exec() {
                 Ok(VmExecState::Await(idx)) => {
@@ -420,8 +420,8 @@ impl BamlAsyncVmRuntime {
                                             tb.as_ref(),
                                             cb.as_ref(),
                                             None,
-                                            tags_for_future,
                                             env_vars,
+                                            tags_for_future.as_ref(),
                                             cancel_tripwire,
                                         )
                                         .await;
@@ -679,7 +679,7 @@ impl BamlAsyncVmRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
-        tags: Option<HashMap<String, String>>,
+        tags: Option<&HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
         watch_handler: Option<impl FnMut(baml_compiler::watch::WatchNotification) + Send + 'static>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
@@ -706,9 +706,8 @@ impl BamlAsyncVmRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
-        tags: Option<HashMap<String, String>>,
-        // FunctionResultStream is responsible for freeing the TripWire and the clean up.
         cancel_tripwire: Arc<TripWire>,
+        tags: Option<&HashMap<String, String>>,
     ) -> anyhow::Result<FunctionResultStream> {
         self.llm_runtime.stream_function(
             function_name,
@@ -718,8 +717,8 @@ impl BamlAsyncVmRuntime {
             cb,
             collectors,
             env_vars,
-            tags,
             cancel_tripwire,
+            tags,
         )
     }
 

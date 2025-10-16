@@ -154,12 +154,9 @@ fn extract_handlers_recursive(
     >,
 ) -> napi::Result<()> {
     // Get the function name from this bindings object
-    let current_function_name =
-        if let Ok(fn_name) = bindings.get_named_property::<String>("functionName") {
-            fn_name
-        } else {
-            String::new()
-        };
+    let current_function_name = bindings
+        .get_named_property::<String>("functionName")
+        .unwrap_or_default();
 
     // Extract block handlers from this level
     if let Ok(block_array) = bindings.get_named_property::<Vec<Function>>("block") {

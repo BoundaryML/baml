@@ -377,6 +377,7 @@ impl BamlRuntime {
                         env_vars,
                         tags.as_ref(),
                         tripwire,
+                        None::<fn(baml_compiler::watch::WatchNotification)>,
                     )
                     .await;
                 result
@@ -741,6 +742,7 @@ impl BamlRuntime {
                 env_vars,
                 tags.as_ref(),
                 tripwire,
+                None::<fn(baml_compiler::watch::WatchNotification)>,
             )
         });
 

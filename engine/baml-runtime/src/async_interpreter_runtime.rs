@@ -188,8 +188,8 @@ impl BamlAsyncInterpreterRuntime {
                     tb,
                     cb,
                     collectors,
-                    None, // TODO: tags?
                     env_vars,
+                    None, // TODO: tags?
                     cancel_tripwire,
                 )
                 .await;
@@ -300,8 +300,8 @@ impl BamlAsyncInterpreterRuntime {
                             runtime_ctx,
                             tokio_rt,
                             vec![], // collectors
-                            tags.clone(),
                             cancel_tripwire.clone(),
+                            tags.as_ref(),
                         )?;
 
                         #[cfg(target_arch = "wasm32")]
@@ -311,8 +311,8 @@ impl BamlAsyncInterpreterRuntime {
                             tracer,
                             runtime_ctx,
                             vec![], // collectors
-                            tags.clone(),
                             cancel_tripwire.clone(),
+                            tags.as_ref(),
                         )?;
 
                         // Fire stream start notification
@@ -411,8 +411,8 @@ impl BamlAsyncInterpreterRuntime {
                                 tb.as_ref(),
                                 cb.as_ref(),
                                 Some(vec![]),
-                                tags.clone(),
                                 env_vars,
+                                tags.as_ref(),
                                 cancel_tripwire,
                             )
                             .await;
@@ -567,8 +567,8 @@ impl BamlAsyncInterpreterRuntime {
             cb,
             collectors,
             env_vars,
-            tags.cloned(),
             cancel_tripwire,
+            tags,
         )
     }
 

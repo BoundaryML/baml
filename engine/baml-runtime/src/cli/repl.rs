@@ -549,8 +549,8 @@ impl ReplState {
                                 None,
                                 None,
                                 None,
-                                None, // tags
                                 env_vars,
+                                None, // tags
                                 TripWire::new_with_on_drop(
                                     None,
                                     Box::new(move || {

@@ -97,8 +97,8 @@ async fn test_call_function() -> Result<FunctionResult> {
             None,
             None,
             None,
-            None, // tags
             std::env::vars().collect(),
+            None, // tags
             stream_cancel::Tripwire::new(None),
         )
         .await;
