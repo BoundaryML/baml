@@ -187,10 +187,10 @@ func stringPtr(s string) *string {
 
 ## URL Handling
 
-Audio URLs are processed according to your client's `media_url_resolver` configuration:
+Audio URLs are processed according to your client's `media_url_handler` configuration:
 
-- **OpenAI**: By default converts to base64 (`always`) for compatibility.
-- **Vertex AI**: By default uses `ensure_mime` to include MIME type.
-- **Other providers**: By default keep URLs as-is (`never`).
+- **OpenAI**: By default converts to base64 (`send_base64`) for compatibility.
+- **Vertex AI**: By default uses `send_url_add_mime_type` to include MIME type.
+- **Other providers**: By default keep URLs as-is (`send_url`).
 
-Note: OpenAI requires audio to be base64-encoded, which is why the default is `always`.
+Note: OpenAI requires audio to be base64-encoded, which is why the default is `send_base64`.

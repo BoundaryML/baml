@@ -6,7 +6,7 @@ description: Learn how to handle Pdf inputs in BAML functions
 Pdf values to BAML functions can be created in client libraries. This document explains how to use these functions both at compile time and runtime to handle Pdf data. For more details, refer to [pdf types](/ref/baml/types#pdf).
 
 <Info>
-  `Pdf` instances can be created from URLs, Base64 data, or local files. URL processing is controlled by your client's `media_url_resolver` configuration.
+  `Pdf` instances can be created from URLs, Base64 data, or local files. URL processing is controlled by your client's `media_url_handler` configuration.
   Please note that many websites will block requests to directly fetch PDFs.
 </Info>
 
@@ -213,15 +213,15 @@ test PdfFileTest {
 
 ## URL Handling
 
-PDF URLs are processed according to your client's `media_url_resolver` configuration:
+PDF URLs are processed according to your client's `media_url_handler` configuration:
 
-- **Anthropic**: By default converts to base64 (`always`) as required by their API.
-- **AWS Bedrock**: By default converts to base64 (`always`).
-- **Other providers**: By default keep URLs as-is (`never`).
+- **Anthropic**: By default converts to base64 (`send_base64`) as required by their API.
+- **AWS Bedrock**: By default converts to base64 (`send_base64`).
+- **Other providers**: By default keep URLs as-is (`send_url`).
 
 <Warning>
   Many websites block direct PDF fetching. If you encounter issues with URL-based PDFs, try:
-  1. Using `media_url_resolver.pdf = "always"` to fetch and embed the content
+  1. Using `media_url_handler.pdf = "send_base64"` to fetch and embed the content
   2. Downloading the PDF locally and using `from_file`
   3. Using a proxy or authenticated request
 </Warning>

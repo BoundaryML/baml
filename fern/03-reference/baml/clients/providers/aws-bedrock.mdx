@@ -591,7 +591,7 @@ def call_bedrock():
 <Markdown src="/snippets/media-url-handler.mdx" />
 
 <Note>
-  AWS Bedrock converts most media to base64 by default (`always` for images, audio, and PDFs). Consider using S3 presigned URLs with `never` mode for large files to avoid base64 overhead.
+  AWS Bedrock converts most media to base64 by default (`send_base64` for images, audio, and PDFs). Consider using S3 presigned URLs with `send_url` mode for large files to avoid base64 overhead.
 </Note>
 
 ## Provider request parameters
