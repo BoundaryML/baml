@@ -187,9 +187,7 @@ mod internal_tests {
 
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
 
-        let render_prompt_future =
-            runtime
-                .render_prompt(function_name, &ctx, &params, Some(0));
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, Some(0));
 
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
@@ -262,9 +260,7 @@ mod internal_tests {
 
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
 
-        let render_prompt_future =
-            runtime
-                .render_prompt(function_name, &ctx, &params, Some(0));
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, Some(0));
 
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
@@ -348,9 +344,7 @@ test ImageReceiptTest {
         let function_name = "ExtractReceipt";
         let test_name = "ImageReceiptTest";
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
-        let render_prompt_future =
-            runtime
-                .render_prompt(function_name, &ctx, &params, None);
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, None);
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
@@ -428,9 +422,7 @@ test TestName {
         let function_name = "Bot";
         let test_name = "TestName";
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
-        let render_prompt_future =
-            runtime
-                .render_prompt(function_name, &ctx, &params, None);
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, None);
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
@@ -495,9 +487,7 @@ test TestTree {
         let function_name = "BuildTree";
         let test_name = "TestTree";
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
-        let render_prompt_future =
-            runtime
-                .render_prompt(function_name, &ctx, &params, None);
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, None);
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
@@ -548,9 +538,7 @@ test RunFoo2Test {
         let function_name = "RunFoo2";
         let test_name = "RunFoo2Test";
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
-        let render_prompt_future =
-            runtime
-                .render_prompt(function_name, &ctx, &params, None);
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, None);
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
@@ -595,9 +583,7 @@ test RecursiveAliasCycle {
         let function_name = "RecursiveAliasCycle";
         let test_name = "RecursiveAliasCycle";
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
-        let render_prompt_future =
-            runtime
-                .render_prompt(function_name, &ctx, &params, None);
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, None);
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
