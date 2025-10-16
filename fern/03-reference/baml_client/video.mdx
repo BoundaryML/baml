@@ -151,13 +151,20 @@ export function TestVideoInput() {
 
 ## URL Handling
 
-Video URLs are typically passed directly to providers without conversion (default: `send_url` for all providers). This is because:
+Video URLs are typically passed directly to providers without conversion (default: `never` for all providers). This is because:
 
 1. Video files are often too large for base64 encoding
 2. Most providers that support video input can fetch URLs directly
 3. Base64 encoding videos significantly increases payload size
 
-You can override this behavior using `media_url_handler.video` in your client configuration, but be aware of size limitations when using `send_base64` mode.
+Provider defaults:
+- **[OpenAI](/baml/clients/providers/openai#media_url_resolver)**: Keeps URLs as-is (`never`)
+- **[Anthropic](/baml/clients/providers/anthropic#media_url_resolver)**: Keeps URLs as-is (`never`)
+- **[Google AI](/baml/clients/providers/google-ai#media_url_resolver)**: Keeps URLs as-is (`never`)
+- **[Vertex AI](/baml/clients/providers/vertex#media_url_resolver)**: Keeps URLs as-is (`never`)
+- **[AWS Bedrock](/baml/clients/providers/aws-bedrock#media_url_resolver)**: Keeps URLs as-is (`never`)
+
+You can override this behavior using `media_url_resolver.video` in your client configuration, but be aware of size limitations when using `always` mode.
 
 ## Model Compatibility
 

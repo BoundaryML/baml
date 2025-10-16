@@ -186,12 +186,12 @@ func stringPtr(s string) *string {
 
 ## URL Handling
 
-When you create an Image using `from_url`, BAML processes the URL according to your client's `media_url_handler` configuration:
+When you create an Image using `from_url`, BAML processes the URL according to your client's `media_url_resolver` configuration:
 
-- **OpenAI**: By default keeps URLs as-is (`send_url`). Set to `send_base64` to convert to base64.
-- **Anthropic**: By default keeps URLs as-is (`send_url`). The provider accepts both formats.
-- **Google AI**: By default uses `send_base64_unless_google_url` to preserve gs:// URLs while converting others.
-- **Vertex AI**: By default uses `send_url_add_mime_type` to include MIME type information.
-- **AWS Bedrock**: By default converts to base64 (`send_base64`).
+- **[OpenAI](/baml/clients/providers/openai#media_url_resolver)**: By default keeps URLs as-is (`never`). Set to `always` to convert to base64.
+- **[Anthropic](/baml/clients/providers/anthropic#media_url_resolver)**: By default keeps URLs as-is (`never`). The provider accepts both formats.
+- **[Google AI](/baml/clients/providers/google-ai#media_url_resolver)**: By default uses `if_google_uri` to preserve gs:// URLs while converting others.
+- **[Vertex AI](/baml/clients/providers/vertex#media_url_resolver)**: By default uses `ensure_mime` to include MIME type information.
+- **[AWS Bedrock](/baml/clients/providers/aws-bedrock#media_url_resolver)**: By default converts to base64 (`always`).
 
-You can override these defaults in your client configuration.
+You can override these defaults in your client configuration. See the provider-specific documentation linked above for details.
