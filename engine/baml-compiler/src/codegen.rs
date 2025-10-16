@@ -707,17 +707,16 @@ impl<'g> HirCompiler<'g> {
                 }
             }
             thir::Statement::DeclareAndAssign {
-                name, value, emit, ..
+                name, value, watch, ..
             } => {
                 self.compile_expression(value);
                 self.track_local(name);
-                // TODO: Revisit this, track emittable should take channel and
-                // filter, which are given in the spec.
-                if let Some(spec) = emit {
+                if let Some(spec) = watch {
                     self.emit_string_literal(&spec.name); // This adds LoadConst
 
                     // TODO: filter
-                    self.emit(Instruction::TrackEmittable);
+
+                    self.emit(Instruction::Watch);
                 }
             }
             thir::Statement::Return { expr, .. } => {

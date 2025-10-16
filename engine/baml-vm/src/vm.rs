@@ -4,13 +4,13 @@ use baml_types::{BamlMap, BamlMedia};
 
 use crate::{
     bytecode::{BinOp, CmpOp, Instruction},
-    emit::{self, Emit, NodeId, RootState},
     errors::{ErrorLocation, InternalError, RuntimeError, VmError},
     indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex},
     types::{
         FunctionKind, FunctionType, Future, FutureKind, FutureType, Instance, Object, ObjectType,
         PendingFuture, Type, Value, Variant,
     },
+    watch::{self, NodeId, RootState, Watch},
     StackTrace, UnaryOp,
 };
 
@@ -189,10 +189,10 @@ pub struct Vm {
     pub env_vars: HashMap<String, String>,
 
     /// Emit dependency graph.
-    pub emit: Emit,
+    pub watch: Watch,
 
-    /// Tracks which local variables are emittable (have @emit).
-    pub emittable_vars: HashSet<StackIndex>,
+    /// Tracks which local variables are watched (have @watch).
+    pub watched_vars: HashSet<StackIndex>,
 }
 
 /// VM execution state.
@@ -219,7 +219,7 @@ pub enum VmExecState {
     /// VM has completed the execution of all available bytecode.
     Complete(Value),
 
-    Emit(Vec<emit::NodeId>),
+    Emit(Vec<watch::NodeId>),
 }
 
 #[derive(Clone, Debug)]
@@ -245,8 +245,8 @@ impl Vm {
             objects,
             globals,
             env_vars,
-            emit: Emit::new(),
-            emittable_vars: HashSet::new(),
+            watch: Watch::new(),
+            watched_vars: HashSet::new(),
         }
     }
 
@@ -490,30 +490,30 @@ impl Vm {
                     let old_value = std::mem::replace(&mut self.stack[local_var_index], value);
 
                     // Check if this binding is emittable.
-                    if self.emittable_vars.contains(&local_var_index) {
+                    if self.watched_vars.contains(&local_var_index) {
                         // Node ID of the local variable in the emit graph.
                         let emit_node = NodeId::LocalVar(local_var_index);
 
                         // If we had a previous binding to an object, unlink it
                         // so it doesn't emit anymore.
                         if let Value::Object(old_node) = old_value {
-                            self.emit.unlink_edge(
+                            self.watch.unlink_edge(
                                 emit_node,
-                                emit::Path::Binding,
+                                watch::Path::Binding,
                                 NodeId::HeapObject(old_node),
                             );
                         }
 
                         // If we have a new binding, link it so it emits.
                         if let Value::Object(new_node) = value {
-                            self.emit.link_edge(
+                            self.watch.link_edge(
                                 emit_node,
-                                emit::Path::Binding,
+                                watch::Path::Binding,
                                 NodeId::HeapObject(new_node),
                             );
                         }
 
-                        let triggered_emits = self.emit.copy_roots_reaching(emit_node);
+                        let triggered_emits = self.watch.copy_roots_reaching(emit_node);
                         if !triggered_emits.is_empty() {
                             return Ok(VmExecState::Emit(triggered_emits));
                         }
@@ -566,9 +566,9 @@ impl Vm {
                     let emit_node = NodeId::HeapObject(instance_index);
 
                     if let Value::Object(old_node) = instance.fields[index] {
-                        self.emit.unlink_edge(
+                        self.watch.unlink_edge(
                             emit_node,
-                            emit::Path::InstanceField(index),
+                            watch::Path::InstanceField(index),
                             NodeId::HeapObject(old_node),
                         );
                     }
@@ -583,9 +583,9 @@ impl Vm {
                     self.stack.ensure_pop()?;
 
                     if let Value::Object(new_node) = new_value {
-                        self.emit.link_edge(
+                        self.watch.link_edge(
                             emit_node,
-                            emit::Path::InstanceField(index),
+                            watch::Path::InstanceField(index),
                             NodeId::HeapObject(new_node),
                         );
                     }
@@ -593,7 +593,7 @@ impl Vm {
                     // TODO: Borrow checker stuff.
                     function = self.objects[frame.function].as_function()?;
 
-                    let triggered_emits = self.emit.copy_roots_reaching(emit_node);
+                    let triggered_emits = self.watch.copy_roots_reaching(emit_node);
                     if !triggered_emits.is_empty() {
                         return Ok(VmExecState::Emit(triggered_emits));
                     }
@@ -607,18 +607,18 @@ impl Vm {
                     // unregister them
                     for i in drain_start..self.stack.len() {
                         let index = StackIndex::from_raw(i);
-                        if self.emittable_vars.remove(&index) {
+                        if self.watched_vars.remove(&index) {
                             let var_node = NodeId::LocalVar(index);
 
                             // Unregister the root since the variable is going
                             // out of scope.
-                            self.emit.unregister_root(var_node);
+                            self.watch.unregister_root(var_node);
 
                             // Also unlink any edge from this variable.
                             if let Value::Object(obj) = self.stack[index] {
-                                self.emit.unlink_edge(
+                                self.watch.unlink_edge(
                                     var_node,
-                                    emit::Path::Binding,
+                                    watch::Path::Binding,
                                     NodeId::HeapObject(obj),
                                 );
                             }
@@ -644,17 +644,17 @@ impl Vm {
                     // popped.
                     for i in drain_start..self.stack.len() {
                         let index = StackIndex::from_raw(i);
-                        if self.emittable_vars.remove(&index) {
+                        if self.watched_vars.remove(&index) {
                             let var_node = NodeId::LocalVar(index);
 
                             // Unregister the root since the variable is going out of scope
-                            self.emit.unregister_root(var_node);
+                            self.watch.unregister_root(var_node);
 
                             // Also unlink any edge from this variable
                             if let Value::Object(obj) = self.stack[index] {
-                                self.emit.unlink_edge(
+                                self.watch.unlink_edge(
                                     var_node,
-                                    emit::Path::Binding,
+                                    watch::Path::Binding,
                                     NodeId::HeapObject(obj),
                                 );
                             }
@@ -1060,9 +1060,9 @@ impl Vm {
                     let emit_node_id = NodeId::HeapObject(array_obj_index);
 
                     if let Value::Object(old_child) = array[index] {
-                        self.emit.unlink_edge(
+                        self.watch.unlink_edge(
                             emit_node_id,
-                            emit::Path::ArrayIndex(index),
+                            watch::Path::ArrayIndex(index),
                             NodeId::HeapObject(old_child),
                         );
                     }
@@ -1071,9 +1071,9 @@ impl Vm {
                     array[index] = value;
 
                     if let Value::Object(new_child) = value {
-                        self.emit.link_edge(
+                        self.watch.link_edge(
                             emit_node_id,
-                            emit::Path::ArrayIndex(index),
+                            watch::Path::ArrayIndex(index),
                             NodeId::HeapObject(new_child),
                         );
                     }
@@ -1081,7 +1081,7 @@ impl Vm {
                     // Restore function reference after mutable borrow of self.objects
                     function = self.objects[frame.function].as_function()?;
 
-                    let triggered_emits = self.emit.copy_roots_reaching(emit_node_id);
+                    let triggered_emits = self.watch.copy_roots_reaching(emit_node_id);
 
                     if !triggered_emits.is_empty() {
                         return Ok(VmExecState::Emit(triggered_emits));
@@ -1125,9 +1125,9 @@ impl Vm {
                     let emit_node_id = NodeId::HeapObject(map_index);
 
                     if let Some(Value::Object(old_node)) = map.get(&key) {
-                        self.emit.unlink_edge(
+                        self.watch.unlink_edge(
                             emit_node_id,
-                            emit::Path::MapKey(key.clone()),
+                            watch::Path::MapKey(key.clone()),
                             NodeId::HeapObject(*old_node),
                         );
                     }
@@ -1136,9 +1136,9 @@ impl Vm {
                     map.insert(key.clone(), value);
 
                     if let Value::Object(new_node) = value {
-                        self.emit.link_edge(
+                        self.watch.link_edge(
                             emit_node_id,
-                            emit::Path::MapKey(key),
+                            watch::Path::MapKey(key),
                             NodeId::HeapObject(new_node),
                         );
                     }
@@ -1146,7 +1146,7 @@ impl Vm {
                     // borrow check
                     function = self.objects[frame.function].as_function()?;
 
-                    let triggered_emits = self.emit.copy_roots_reaching(emit_node_id);
+                    let triggered_emits = self.watch.copy_roots_reaching(emit_node_id);
 
                     if !triggered_emits.is_empty() {
                         return Ok(VmExecState::Emit(triggered_emits));
@@ -1320,9 +1320,15 @@ impl Vm {
                     }
                 }
 
-                Instruction::TrackEmittable => {
-                    // Stack contains: [value] (for now; will be [value, channel, filter] later)
-                    // The value should remain on the stack - we just mark it as emittable
+                Instruction::Watch => {
+                    // Stack contains: [value, channel] (for now; will be
+                    // [value, channel, filter] later)
+
+                    // Consume channel.
+                    let channel = self
+                        .objects
+                        .as_string(&self.stack.ensure_pop()?)?
+                        .to_owned();
 
                     // Get the top of the stack (the value) without popping it
                     let value_index = self.stack.ensure_stack_top()?;
@@ -1332,29 +1338,29 @@ impl Vm {
                     let var_node = NodeId::LocalVar(value_index);
 
                     // Register this variable as an emittable root
-                    self.emit.register_root(
+                    self.watch.register_root(
                         var_node,
                         RootState {
-                            channel: "Test".to_string(),
-                            filter: None,
-                            last_emitted: None,
-                            prev_assigned: None,
+                            channel,
                             value,
+                            last_notified: None,
+                            last_assigned: None,
+                            filter: None,
                         },
                     );
 
                     // Track this so we can unregister on scope exit
-                    self.emittable_vars.insert(value_index);
+                    self.watched_vars.insert(value_index);
 
                     // If it's an object, build the entire dependency graph
                     if let Value::Object(object_index) = value {
                         // Build the graph.
-                        self.emit.build_dependency_graph(value, &self.objects);
+                        self.watch.build_dependency_graph(value, &self.objects);
 
                         // Link the root emittable variable to the object
-                        self.emit.link_edge(
+                        self.watch.link_edge(
                             var_node,
-                            emit::Path::Binding,
+                            watch::Path::Binding,
                             NodeId::HeapObject(object_index),
                         );
                     }
@@ -1464,18 +1470,18 @@ impl Vm {
                     // Clean up any emittable variables in the function's scope
                     for i in frame.locals_offset.0..self.stack.len() {
                         let index = StackIndex::from_raw(i);
-                        if self.emittable_vars.remove(&index) {
+                        if self.watched_vars.remove(&index) {
                             let var_node = NodeId::LocalVar(index);
 
                             // Unregister the root since the variable is going out of scope
-                            self.emit.unregister_root(var_node);
+                            self.watch.unregister_root(var_node);
 
                             // Also unlink any edge from this variable
                             if i < self.stack.len() {
                                 if let Value::Object(obj) = self.stack[index] {
-                                    self.emit.unlink_edge(
+                                    self.watch.unlink_edge(
                                         var_node,
-                                        emit::Path::Binding,
+                                        watch::Path::Binding,
                                         NodeId::HeapObject(obj),
                                     );
                                 }

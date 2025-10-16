@@ -207,8 +207,8 @@ pub enum Instruction {
     /// control flow to the embedder and doesn't care about anything else.
     Await,
 
-    /// Creates an emittable object and tracks its state.
-    TrackEmittable,
+    /// Creates a watched var and tracks its state.
+    Watch,
 
     /// Call a function.
     ///
@@ -334,7 +334,7 @@ impl std::fmt::Display for Instruction {
             Instruction::Return => f.write_str("RETURN"),
             Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
-            Instruction::TrackEmittable => f.write_str("TRACK_EMITTABLE"),
+            Instruction::Watch => f.write_str("WATCH"),
         }
     }
 }

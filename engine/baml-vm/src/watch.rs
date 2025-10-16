@@ -1,24 +1,24 @@
-//! Implementation of the infamous @emit syntax in Baml.
+//! Implementation of the infamous @watch syntax in Baml.
 //!
 //! This module implements a reachability algorithm that tracks which nodes need
 //! to emit when values change.
 //!
-//! The structure maintains reachability sets for each "emittable" root, and
+//! The structure maintains reachability sets for each "watched" root, and
 //! updates them when edges are added or removed.
 //!
 //! Modifications are expensive (link or unlink edges) but lookup is fast:
 //!
-//! "Given a modification to node X, do we need to emit any roots? If so,
+//! "Given a modification to node X, do we need to notify any roots? If so,
 //! which ones?".
 //!
 //! That's the question we'll need to answer most frequently. Knowing if we
-//! have to emit at all is O(1) while collecting the exact roots that have to
+//! have to notify at all is O(1) while collecting the exact roots that have to
 //! emit scales linearly with the number of roots.
 //!
-//! In practice, I'd say even collecting emittable roots is O(1) because no one
-//! will emit a million different objects.
+//! In practice, I'd say even collecting watched roots is O(1) because no one
+//! will watch a million different objects.
 //!
-//! So, with this efficiency, Baml code not using @emit shouldn't take much of
+//! So, with this efficiency, Baml code not using @watch shouldn't take much of
 //! a performance hit other than the if statement constantly asking
 //! "does this change trigger any emission?".
 //!
@@ -68,7 +68,7 @@
 //! ```
 //!
 //! We can see that the only reachable nodes from root r are {x, p}. Therefore,
-//! if this was an emittable object where r is the @emit declaration, then r
+//! if this was an emittable object where r is the @watch declaration, then r
 //! would only emit when x or p change.
 //!
 //! But, adding the edge (p, c):
@@ -94,7 +94,7 @@
 //! ```
 //!
 //! Now the set of reachable nodes from root r is {x, p, c, b, a, y, z}. So, if
-//! r was an @emit object, it would emit when any of the other nodes change.
+//! r was an @watch object, it would emit when any of the other nodes change.
 //!
 //! - Rule 2
 //!
@@ -136,24 +136,22 @@
 //! "SCC condensation"  mixed with "edge reference counting", which is much more
 //! complex than needed.
 //!
-//! If someone ever complains about @emit being slow, then ping me and I'll ask
+//! If someone ever complains about @watch being slow, then ping me and I'll ask
 //! Claude to implement SCC condensation + edge ref counting.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::{Object, ObjectIndex, ObjectPool, StackIndex, Value};
 
-/// State associated with an emittable root.
-///
-/// TODO: Fields (current value, previous assigned value, etc).
+/// State associated with a watched root.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RootState {
     /// Current value.
     pub value: Value,
-    /// Previously assigned value.
-    pub prev_assigned: Option<Value>,
-    /// Last emitted value.
-    pub last_emitted: Option<Value>,
+    /// Last assigned value.
+    pub last_assigned: Option<Value>,
+    /// Last notified value.
+    pub last_notified: Option<Value>,
     /// Channel name.
     pub channel: String,
     /// Pointer to filter function.
@@ -186,17 +184,17 @@ pub enum Path {
 ///
 /// Public API consists of this set of operations:
 ///
-/// - [`Emit::register_root`]
-/// - [`Emit::unregister_root`]
-/// - [`Emit::add_edge`]
-/// - [`Emit::link_edge`]
-/// - [`Emit::unlink_edge`]
-/// - [`Emit::copy_roots_reaching`]
+/// - [`Watch::register_root`]
+/// - [`Watch::unregister_root`]
+/// - [`Watch::add_edge`]
+/// - [`Watch::link_edge`]
+/// - [`Watch::unlink_edge`]
+/// - [`Watch::copy_roots_reaching`]
 ///
 /// It should be possible to change the implementation without changing the
 /// current API.
 #[derive(Default)]
-pub struct Emit {
+pub struct Watch {
     /// Forward edges: `parent -> [(path, child)]`
     children: HashMap<NodeId, HashSet<(Path, NodeId)>>,
 
@@ -220,7 +218,7 @@ pub struct Emit {
     roots: HashMap<NodeId, RootState>,
 }
 
-impl Emit {
+impl Watch {
     /// Creates a new empty emit graph.
     pub fn new() -> Self {
         Self::default()
@@ -344,6 +342,10 @@ impl Emit {
             .unwrap_or_default()
     }
 
+    pub fn root_state(&self, node: NodeId) -> Option<&RootState> {
+        self.roots.get(&node)
+    }
+
     /// Computes all nodes reachable from a starting node using BFS.
     fn breadth_first_search_from(&self, start: NodeId) -> HashSet<NodeId> {
         let mut visited = HashSet::new();
@@ -432,7 +434,7 @@ impl Emit {
     /// Traverses an object graph and builds emit edges from parent to all
     /// children.
     ///
-    /// This is used when an object is marked as @emit to establish all the
+    /// This is used when an object is marked as @watch to establish all the
     /// dependency edges. It does not declare any root, call
     /// [`Self::register_root`] separately.
     pub fn build_dependency_graph(&mut self, value: Value, objects: &ObjectPool) {
@@ -508,16 +510,16 @@ mod tests {
     fn test_root_state() -> RootState {
         RootState {
             value: Value::Int(0),
-            prev_assigned: None,
-            last_emitted: None,
+            last_assigned: None,
+            last_notified: None,
             channel: "Test".to_string(),
             filter: None,
         }
     }
 
     #[test]
-    fn test_basic_emit_registration() {
-        let mut emit = Emit::new();
+    fn test_basic_notify_registration() {
+        let mut emit = Watch::new();
 
         let var = NodeId::LocalVar(StackIndex::from_raw(0));
         emit.register_root(var, test_root_state());
@@ -532,7 +534,7 @@ mod tests {
 
     #[test]
     fn test_link_unlink_edge() {
-        let mut emit = Emit::new();
+        let mut emit = Watch::new();
 
         let var = NodeId::LocalVar(StackIndex::from_raw(0));
         let obj = NodeId::HeapObject(ObjectIndex::from_raw(1));
@@ -557,7 +559,7 @@ mod tests {
 
     #[test]
     fn test_cycle_handling() {
-        let mut emit = Emit::new();
+        let mut emit = Watch::new();
 
         let a = NodeId::HeapObject(ObjectIndex::from_raw(0));
         let b = NodeId::HeapObject(ObjectIndex::from_raw(1));
@@ -587,7 +589,7 @@ mod tests {
 
     #[test]
     fn test_multiple_roots() {
-        let mut emit = Emit::new();
+        let mut emit = Watch::new();
 
         let var1 = NodeId::LocalVar(StackIndex::from_raw(0));
         let var2 = NodeId::LocalVar(StackIndex::from_raw(1));
@@ -619,7 +621,7 @@ mod tests {
 
     #[test]
     fn test_deep_object_graph() {
-        let mut emit = Emit::new();
+        let mut emit = Watch::new();
 
         let var = NodeId::LocalVar(StackIndex::from_raw(0));
         let obj1 = NodeId::HeapObject(ObjectIndex::from_raw(0));

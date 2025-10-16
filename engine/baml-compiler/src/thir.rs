@@ -717,14 +717,14 @@ impl<T: Clone> Statement<T> {
             Statement::Let {
                 name,
                 value,
-                watch: emit,
+                watch,
                 span: _,
             } => {
                 format!(
                     "Let {} = {} {}",
                     name,
                     value.dump_str(),
-                    emit.as_ref().map_or("", |_| "<emit>")
+                    watch.as_ref().map_or("", |_| "<emit>")
                 )
             }
             Statement::Declare { name, span: _ } => format!("var {name}"),

@@ -109,7 +109,7 @@ pub fn display_instruction(
             format!("({})", display_object(objects, *index))
         }
 
-        Instruction::TrackEmittable => {
+        Instruction::Watch => {
             if let Ok(index) = stack.ensure_stack_top() {
                 format!("({})", display_value(&stack[index], objects))
             } else {
@@ -205,7 +205,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Color::Cyan,
         Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
-        Instruction::TrackEmittable => Color::BrightRed,
+        Instruction::Watch => Color::BrightRed,
     }
 }
 

@@ -1,4 +1,4 @@
-//! Compiler tests for emit functionality.
+//! Compiler tests for watch functionality.
 
 use baml_vm::Instruction;
 
@@ -6,11 +6,11 @@ mod common;
 use common::{assert_compiles, Program};
 
 #[test]
-fn emit_primitive() -> anyhow::Result<()> {
+fn watch_primitive() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
             function primitive() -> int {
-                let value = 0 @emit;
+                let value = 0 @watch;
 
                 value = 1;
 
@@ -21,8 +21,9 @@ fn emit_primitive() -> anyhow::Result<()> {
             "primitive",
             vec![
                 Instruction::LoadConst(0),
-                Instruction::TrackEmittable,
                 Instruction::LoadConst(1),
+                Instruction::Watch,
+                Instruction::LoadConst(2),
                 Instruction::StoreVar(1),
                 Instruction::LoadVar(1),
                 Instruction::Return,

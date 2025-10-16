@@ -3,8 +3,8 @@
 use baml_compiler::test::ast;
 use baml_types::{BamlMap, BamlMedia};
 use baml_vm::{
-    emit::{self, Emit},
     errors::VmError,
+    watch::{self, Watch},
     BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool, Instruction,
     Object as VmObject, ObjectIndex, ObjectPool, StackIndex, Value as VmValue, Vm, VmExecState,
 };
@@ -129,59 +129,31 @@ pub struct Variant {
 
 /// Test-friendly representation of NodeId that uses variable names and test Objects.
 #[derive(Debug, Clone, PartialEq)]
-pub enum Node {
-    Variable(String),
+pub enum Notification {
+    Channel(String),
     Object(Object),
 }
 
-impl Node {
-    pub fn variable(name: &str) -> Self {
-        Node::Variable(name.to_string())
+impl Notification {
+    pub fn on_channel(name: &str) -> Self {
+        Notification::Channel(name.to_string())
     }
 }
 
-impl Node {
+impl Notification {
     /// Convert from VM NodeId to test Node by resolving indices to names/objects.
-    pub fn from_node_id(node_id: &emit::NodeId, vm: &Vm) -> anyhow::Result<Self> {
+    pub fn from_node_id(node_id: &watch::NodeId, vm: &Vm) -> anyhow::Result<Self> {
         match node_id {
-            emit::NodeId::LocalVar(stack_index) => {
-                // Get the current frame to access the function
-                let frame = vm.frames.last().ok_or_else(|| {
-                    anyhow::anyhow!("No frame available when converting LocalVar NodeId")
-                })?;
-
-                let function = vm.objects[frame.function].as_function()?;
-
-                // Get the scope for the current instruction pointer
-                let scope_idx = function
-                    .bytecode
-                    .scopes
-                    .get(frame.instruction_ptr as usize)
-                    .copied()
-                    .unwrap_or(0);
-
-                let relative_index = stack_index.raw() - frame.locals_offset.raw();
-
-                // Get the local variable name from the scope
-                let var_name = function
-                    .locals_in_scope
-                    .get(scope_idx)
-                    .and_then(|locals| locals.get(relative_index))
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "Local variable at relative index {} (abs {}) not found in scope {}",
-                            relative_index,
-                            stack_index.raw(),
-                            scope_idx
-                        )
-                    })?
-                    .clone();
-
-                Ok(Node::Variable(var_name))
-            }
-            emit::NodeId::HeapObject(obj_index) => {
-                Ok(Node::Object(Object::from_vm_object(*obj_index, vm)?))
-            }
+            watch::NodeId::LocalVar(stack_index) => vm
+                .watch
+                .root_state(*node_id)
+                .map(|state| Notification::Channel(state.channel.clone()))
+                .ok_or_else(|| {
+                    anyhow::anyhow!("No root state found for local variable: {:?}", stack_index)
+                }),
+            watch::NodeId::HeapObject(obj_index) => Ok(Notification::Object(
+                Object::from_vm_object(*obj_index, vm)?,
+            )),
         }
     }
 }
@@ -196,7 +168,7 @@ pub enum ExecState {
     /// VM has completed the execution with a test-friendly value.
     Complete(Value),
 
-    Emit(Vec<Node>),
+    Emit(Vec<Notification>),
 }
 
 impl ExecState {
@@ -213,7 +185,7 @@ impl ExecState {
             VmExecState::Emit(roots) => {
                 let nodes = roots
                     .iter()
-                    .map(|node_id| Node::from_node_id(node_id, vm))
+                    .map(|node_id| Notification::from_node_id(node_id, vm))
                     .collect::<anyhow::Result<Vec<_>>>()?;
                 Ok(ExecState::Emit(nodes))
             }
@@ -323,8 +295,8 @@ pub fn collect_vm_exec_states(
         objects,
         globals,
         env_vars: Default::default(),
-        emit: Emit::new(),
-        emittable_vars: Default::default(),
+        watch: Watch::new(),
+        watched_vars: Default::default(),
     };
 
     let mut states = Vec::new();
@@ -347,7 +319,7 @@ pub fn collect_vm_exec_states(
 }
 
 /// Helper struct for testing VM execution with expected Emit states.
-pub type EmitProgram = ProgramInput<Vec<Vec<Node>>>;
+pub type EmitProgram = ProgramInput<Vec<Vec<Notification>>>;
 
 /// Assert that a VM program emits the expected sequence of emit states.
 ///
@@ -367,7 +339,7 @@ pub fn assert_vm_emits_with_inspection(
     let (vm, states) = collect_vm_exec_states(input.source, input.function)?;
 
     // Extract only the Emit states
-    let emit_states: Vec<Vec<Node>> = states
+    let emit_states: Vec<Vec<Notification>> = states
         .iter()
         .filter_map(|state| match state {
             ExecState::Emit(roots) => Some(roots.clone()),
@@ -411,8 +383,8 @@ fn setup_and_exec_program(
         objects,
         globals,
         env_vars: Default::default(),
-        emit: Emit::new(),
-        emittable_vars: Default::default(),
+        watch: Watch::new(),
+        watched_vars: Default::default(),
     };
     let result = vm.exec();
     Ok((vm, result))
@@ -471,8 +443,8 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         objects: ObjectPool::from_vec(objects),
         globals: GlobalPool::from_vec(globals),
         env_vars: Default::default(),
-        emit: Emit::new(),
-        emittable_vars: Default::default(),
+        watch: Watch::new(),
+        watched_vars: Default::default(),
     };
 
     let result = vm.exec()?;
