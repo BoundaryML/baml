@@ -13,7 +13,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context};
-use baml_compiler::{self};
+use baml_compiler::{self, watch};
 use baml_ids::FunctionCallId;
 use baml_types::{tracing::events::HTTPRequest, BamlMap, BamlValue, BamlValueWithMeta, Completion};
 use baml_vm::{BamlVmProgram, EvalStack, FunctionKind, ObjectIndex, Vm, VmExecState};
@@ -164,7 +164,7 @@ impl BamlAsyncVmRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<&HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
-        _watch_handler: Option<
+        mut watch_handler: Option<
             impl FnMut(baml_compiler::watch::WatchNotification) + Send + 'static,
         >,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
@@ -345,8 +345,37 @@ impl BamlAsyncVmRuntime {
                     }
                 }
 
-                Ok(VmExecState::Notify(roots)) => {
-                    println!("Emit: {roots:?}");
+                Ok(VmExecState::Notify(nodes)) => {
+                    for node in nodes {
+                        let state = vm.watch.root_state(node).unwrap();
+                        let baml_vm::watch::NodeId::LocalVar(stack_index) = node else {
+                            break 'mainloop Err(anyhow!("expected local variable notification, got object notification {:?}", node));
+                        };
+                        let (watched_var_name, function_name) = vm.watched_vars.get(&stack_index).unwrap();
+                        baml_log::debug!("[VM] Notify: {}", &state.channel);
+
+                        let fake_meta = watch::WatchValueMetadata {
+                            constraints: Vec::new(),
+                            response_checks: Vec::new(),
+                            completion: Completion::default(),
+                            r#type: baml_types::TypeIR::Top(Default::default()),
+                        };
+
+
+                        let current_value = try_baml_value_from_vm_value(&vm, &state.value).unwrap();
+
+                        let baml_value_with_meta = BamlValueWithMeta::with_const_meta(&current_value, fake_meta);
+
+                        let notification = watch::WatchNotification::new_var(
+                            state.channel.to_owned(),
+                            baml_value_with_meta,
+                            function_name.to_owned(),
+                        );
+
+                        if let Some(handler) = watch_handler.as_mut() {
+                            handler(notification);
+                        }
+                    }
                 }
 
                 Ok(VmExecState::ScheduleFuture(idx)) => {

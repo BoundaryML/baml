@@ -1,9 +1,9 @@
-#[cfg(feature = "interpreter")]
+
 use std::time::SystemTime;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use baml_runtime::{runtime_interface::ExperimentalTracingInterface, TripWire};
-#[cfg(feature = "interpreter")]
+
 use pyo3::types::PyDict;
 use pyo3::{
     prelude::{pymethods, PyResult},
@@ -106,7 +106,7 @@ impl BamlLogEvent {
 }
 
 // Helper struct to store event callbacks
-#[cfg(feature = "interpreter")]
+
 struct NotificationCallbacks {
     var_handlers: HashMap<String, Vec<Arc<PyObject>>>,
     stream_handlers: HashMap<String, Vec<Arc<PyObject>>>,
@@ -114,7 +114,7 @@ struct NotificationCallbacks {
 }
 
 // Helper function to recursively extract handlers from a bindings object
-#[cfg(feature = "interpreter")]
+
 fn extract_handlers_recursive(
     py: Python,
     bindings: &Bound<'_, pyo3::PyAny>,
@@ -206,7 +206,7 @@ fn extract_handlers_recursive(
 }
 
 // Extract event handlers from the EventCollector.__handlers__() result
-#[cfg(feature = "interpreter")]
+
 fn extract_notification_callbacks(
     py: Python,
     events_obj: PyObject,
@@ -355,39 +355,13 @@ impl BamlRuntime {
             .unwrap_or_else(|| TripWire::new(None));
 
         // Extract notification callbacks from EventCollector (only for interpreter)
-        #[cfg(feature = "interpreter")]
+
         let notification_callbacks = if let Some(watchers_obj) = watchers {
             extract_notification_callbacks(py, watchers_obj)?
         } else {
             None
         };
 
-        #[cfg(not(feature = "interpreter"))]
-        {
-            let _ = watchers; // Suppress unused variable warning
-            pyo3_async_runtimes::tokio::future_into_py(py, async move {
-                let (result, _) = baml_runtime
-                    .call_function(
-                        function_name,
-                        &args_map,
-                        &ctx_mng,
-                        tb.as_ref(),
-                        cb.as_ref(),
-                        Some(collector_list),
-                        env_vars,
-                        tags.as_ref(),
-                        tripwire,
-                        None::<fn(baml_compiler::watch::WatchNotification)>,
-                    )
-                    .await;
-                result
-                    .map(FunctionResult::from)
-                    .map_err(BamlError::from_anyhow)
-            })
-            .map(pyo3::Bound::into)
-        }
-
-        #[cfg(feature = "interpreter")]
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
                 if let Some(ref callbacks) = notification_callbacks {
@@ -582,14 +556,14 @@ impl BamlRuntime {
             .unwrap_or_else(|| TripWire::new(None));
 
         // Extract notification callbacks from EventCollector (only for interpreter)
-        #[cfg(feature = "interpreter")]
+
         let notification_callbacks = if let Some(watchers_obj) = watchers {
             extract_notification_callbacks(py, watchers_obj)?
         } else {
             None
         };
 
-        #[cfg(feature = "interpreter")]
+
         let (result, _event_id) = py.allow_threads(|| {
             let watch_handler = move |event: baml_compiler::watch::WatchNotification| {
                 if let Some(ref callbacks) = notification_callbacks {
@@ -727,22 +701,6 @@ impl BamlRuntime {
                 tags.as_ref(),
                 tripwire,
                 Some(watch_handler),
-            )
-        });
-
-        #[cfg(not(feature = "interpreter"))]
-        let (result, _event_id) = py.allow_threads(|| {
-            self.inner.call_function_sync(
-                function_name,
-                &args_map,
-                &ctx_mng,
-                tb.as_ref(),
-                cb.as_ref(),
-                Some(collector_list),
-                env_vars,
-                tags.as_ref(),
-                tripwire,
-                None::<fn(baml_compiler::watch::WatchNotification)>,
             )
         });
 

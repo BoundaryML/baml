@@ -192,7 +192,7 @@ pub struct Vm {
     pub watch: Watch,
 
     /// Tracks which local variables are watched (have @watch).
-    pub watched_vars: HashSet<StackIndex>,
+    pub watched_vars: HashMap<StackIndex, (String, String)>,
 }
 
 /// VM execution state.
@@ -247,7 +247,7 @@ impl Vm {
             globals,
             env_vars,
             watch: Watch::new(),
-            watched_vars: HashSet::new(),
+            watched_vars: HashMap::new(),
         }
     }
 
@@ -491,7 +491,7 @@ impl Vm {
                     let old_value = std::mem::replace(&mut self.stack[local_var_index], value);
 
                     // Check if this binding is emittable.
-                    if self.watched_vars.contains(&local_var_index) {
+                    if self.watched_vars.contains_key(&local_var_index) {
                         // Node ID of the local variable in the emit graph.
                         let watched_node = NodeId::LocalVar(local_var_index);
 
@@ -628,7 +628,7 @@ impl Vm {
                     // unregister them
                     for i in drain_start..self.stack.len() {
                         let index = StackIndex::from_raw(i);
-                        if self.watched_vars.remove(&index) {
+                        if self.watched_vars.remove(&index).is_some() {
                             let var_node = NodeId::LocalVar(index);
 
                             // Unregister the root since the variable is going
@@ -665,7 +665,7 @@ impl Vm {
                     // popped.
                     for i in drain_start..self.stack.len() {
                         let index = StackIndex::from_raw(i);
-                        if self.watched_vars.remove(&index) {
+                        if self.watched_vars.remove(&index).is_some() {
                             let var_node = NodeId::LocalVar(index);
 
                             // Unregister the root since the variable is going out of scope
@@ -1382,8 +1382,14 @@ impl Vm {
                         },
                     );
 
+                    let relative_index = value_index.raw() - frame.locals_offset.raw();
+                    let watched_var_name = &function.locals_in_scope
+                        [function.bytecode.scopes[instruction_ptr as usize]][relative_index];
                     // Track this so we can unregister on scope exit
-                    self.watched_vars.insert(value_index);
+                    self.watched_vars.insert(
+                        value_index,
+                        (watched_var_name.to_string(), function.name.clone()),
+                    );
 
                     // If it's an object, build the entire dependency graph
                     if let Value::Object(object_index) = value {
@@ -1503,7 +1509,7 @@ impl Vm {
                     // Clean up any emittable variables in the function's scope
                     for i in frame.locals_offset.0..self.stack.len() {
                         let index = StackIndex::from_raw(i);
-                        if self.watched_vars.remove(&index) {
+                        if self.watched_vars.remove(&index).is_some() {
                             let var_node = NodeId::LocalVar(index);
 
                             // Unregister the root since the variable is going out of scope
