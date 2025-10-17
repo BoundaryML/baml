@@ -1,14 +1,10 @@
-
-use std::time::SystemTime;
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::SystemTime};
 
 use baml_runtime::{runtime_interface::ExperimentalTracingInterface, TripWire};
-
-use pyo3::types::PyDict;
 use pyo3::{
     prelude::{pymethods, PyResult},
     pyclass,
-    types::{PyAnyMethods, PyList},
+    types::{PyAnyMethods, PyDict, PyList},
     Bound, IntoPyObjectExt, PyObject, PyRef, Python,
 };
 
@@ -562,7 +558,6 @@ impl BamlRuntime {
         } else {
             None
         };
-
 
         let (result, _event_id) = py.allow_threads(|| {
             let watch_handler = move |event: baml_compiler::watch::WatchNotification| {

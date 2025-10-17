@@ -351,7 +351,8 @@ impl BamlAsyncVmRuntime {
                         let baml_vm::watch::NodeId::LocalVar(stack_index) = node else {
                             break 'mainloop Err(anyhow!("expected local variable notification, got object notification {:?}", node));
                         };
-                        let (watched_var_name, function_name) = vm.watched_vars.get(&stack_index).unwrap();
+                        let (watched_var_name, function_name) =
+                            vm.watched_vars.get(&stack_index).unwrap();
                         baml_log::debug!("[VM] Notify: {}", &state.channel);
 
                         let fake_meta = watch::WatchValueMetadata {
@@ -361,10 +362,11 @@ impl BamlAsyncVmRuntime {
                             r#type: baml_types::TypeIR::Top(Default::default()),
                         };
 
+                        let current_value =
+                            try_baml_value_from_vm_value(&vm, &state.value).unwrap();
 
-                        let current_value = try_baml_value_from_vm_value(&vm, &state.value).unwrap();
-
-                        let baml_value_with_meta = BamlValueWithMeta::with_const_meta(&current_value, fake_meta);
+                        let baml_value_with_meta =
+                            BamlValueWithMeta::with_const_meta(&current_value, fake_meta);
 
                         let notification = watch::WatchNotification::new_var(
                             state.channel.to_owned(),
