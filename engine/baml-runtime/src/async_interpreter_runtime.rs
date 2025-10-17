@@ -476,7 +476,7 @@ impl BamlAsyncInterpreterRuntime {
 
         // Create watch notification handler that reads from the shared handler
         let watch_handler_for_interp = Arc::clone(&watch_handler_shared);
-        let mut watch_notification_handler =
+        let watch_notification_handler =
             move |notification: baml_compiler::watch::WatchNotification| {
                 let mut handler = watch_handler_for_interp.lock().unwrap();
                 handler(notification);

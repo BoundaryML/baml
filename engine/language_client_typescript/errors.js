@@ -1,7 +1,7 @@
 "use strict";
 // NOTE: Don't take a dependency on ./native here, it will break the browser code
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BamlAbortError = exports.BamlClientHttpError = exports.BamlValidationError = exports.BamlClientFinishReasonError = void 0;
+exports.BamlTimeoutError = exports.BamlAbortError = exports.BamlClientHttpError = exports.BamlValidationError = exports.BamlClientFinishReasonError = void 0;
 exports.isBamlError = isBamlError;
 exports.toBamlError = toBamlError;
 class BamlClientFinishReasonError extends Error {
@@ -144,6 +144,32 @@ class BamlAbortError extends Error {
     }
 }
 exports.BamlAbortError = BamlAbortError;
+class BamlTimeoutError extends BamlClientHttpError {
+    constructor(client_name, message) {
+        super(client_name, message, 408, ''); // HTTP 408 Request Timeout
+        this.name = 'BamlTimeoutError';
+        Object.setPrototypeOf(this, BamlTimeoutError.prototype);
+    }
+    static from(error) {
+        if (error.message.includes('BamlTimeoutError') || error.message.includes('timed out')) {
+            try {
+                const errorData = JSON.parse(error.message);
+                if (errorData.type === 'BamlTimeoutError') {
+                    return new BamlTimeoutError(errorData.client_name || '', errorData.message || error.message);
+                }
+            }
+            catch (parseError) {
+                // If parsing fails, check for timeout in message
+                if (error.message.includes('timed out')) {
+                    return new BamlTimeoutError('', error.message);
+                }
+                console.warn('Failed to parse BamlTimeoutError:', parseError);
+            }
+        }
+        return undefined;
+    }
+}
+exports.BamlTimeoutError = BamlTimeoutError;
 function isError(error) {
     if (typeof error === 'string') {
         return false;
@@ -165,6 +191,10 @@ function createBamlErrorUnsafe(error) {
     if (bamlAbortError) {
         return bamlAbortError;
     }
+    const bamlTimeoutError = BamlTimeoutError.from(error);
+    if (bamlTimeoutError) {
+        return bamlTimeoutError;
+    }
     const bamlClientHttpError = BamlClientHttpError.from(error);
     if (bamlClientHttpError) {
         return bamlClientHttpError;
@@ -184,19 +214,22 @@ function isBamlError(error) {
     if (error.type === 'BamlClientHttpError' ||
         error.type === 'BamlValidationError' ||
         error.type === 'BamlClientFinishReasonError' ||
-        error.type === 'BamlAbortError') {
+        error.type === 'BamlAbortError' ||
+        error.type === 'BamlTimeoutError') {
         return true;
     }
     if (error.name === 'BamlClientHttpError' ||
         error.name === 'BamlValidationError' ||
         error.name === 'BamlClientFinishReasonError' ||
-        error.name === 'BamlAbortError') {
+        error.name === 'BamlAbortError' ||
+        error.name === 'BamlTimeoutError') {
         return true;
     }
     return (error instanceof BamlClientHttpError ||
         error instanceof BamlValidationError ||
         error instanceof BamlClientFinishReasonError ||
-        error instanceof BamlAbortError);
+        error instanceof BamlAbortError ||
+        error instanceof BamlTimeoutError);
 }
 function toBamlError(error) {
     try {

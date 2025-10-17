@@ -8908,7 +8908,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -9118,7 +9118,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -9202,7 +9202,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -9244,7 +9244,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {
@@ -9454,7 +9454,7 @@ export class BamlSyncClient {
         options.tags || {},
         env,
         signal,
-        options.events,
+        options.watchers,
       )
       return raw.parsed(false) as string
     } catch (error: any) {

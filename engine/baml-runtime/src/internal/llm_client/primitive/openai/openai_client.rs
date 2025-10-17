@@ -493,11 +493,6 @@ impl WithStreamChat for OpenAIClient {
 
 macro_rules! make_openai_client {
     ($client:ident, $properties:ident, $provider:expr, dynamic) => {{
-        let resolve_pdf_urls = if $provider == "openai-responses" {
-            ResolveMediaUrls::Never
-        } else {
-            ResolveMediaUrls::Always
-        };
         let http_client = create_http_client(&$properties.http_config)?;
         Ok(Self {
             name: $client.name.clone(),
@@ -542,11 +537,6 @@ macro_rules! make_openai_client {
         })
     }};
     ($client:ident, $properties:ident, $provider:expr) => {{
-        let resolve_pdf_urls = if $provider == "openai-responses" {
-            ResolveMediaUrls::Never
-        } else {
-            ResolveMediaUrls::Always
-        };
         let http_client = create_http_client(&$properties.http_config)?;
         Ok(Self {
             name: $client.name().into(),
