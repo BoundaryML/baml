@@ -25,8 +25,17 @@ jobs:
           version: latest
 
       - name: Prepare branch from upstream
+        env:
+          MY_TOKEN: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
         run: |
           set -euxo pipefail
+
+          curl -sSf \
+          -H "Authorization: Bearer $MY_TOKEN" \
+          -H "Accept: application/vnd.github+json" \
+          https://api.github.com/repos/BoundaryML/zed-extensions \
+          | jq '.permissions'
+
 
           # add fork remote
           git remote rename origin upstream
@@ -77,7 +86,7 @@ jobs:
 
       - name: Open PR against upstream
         env:
-          GH_TOKEN: ${{ secrets.ZED_EXTENSIONS_SYNC_TOKEN }}
+          GH_TOKEN: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           REPO="zed-industries/extensions"
