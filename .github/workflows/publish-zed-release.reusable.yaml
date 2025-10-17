@@ -88,6 +88,6 @@ jobs:
           gh pr create \
             --repo "sxlijin/zed-extensions" \
             --base "main" \
-            --head "$BRANCH_NAME" \
+            --head "BoundaryML:$BRANCH_NAME" \
             --title "release: update baml extension version" \
             --body "Automated update of the baml extension"
