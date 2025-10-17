@@ -21,6 +21,8 @@ jobs:
           token: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
 
       - uses: pnpm/action-setup@v4
+        with:
+          version: latest
 
       - name: Prepare branch from upstream
         run: |
