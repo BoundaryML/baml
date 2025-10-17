@@ -1,0 +1,101 @@
+name: Publish Zed Release
+
+on:
+  push:
+    branches:
+      - sam/zed-sync
+  workflow_call:
+    secrets:
+      ZED_EXTENSIONS_SYNC_TOKEN:
+        required: true
+
+jobs:
+  update-zed-extensions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout upstream zed extensions
+        uses: actions/checkout@v5
+        with:
+          repository: zed-industries/extensions
+          ref: main
+          token: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Prepare branch from upstream
+        run: |
+          set -euo pipefail
+
+          # add fork remote
+          git remote rename origin upstream
+          git remote add fork "https://github.com/BoundaryML/zed-extensions"
+          git fetch upstream main
+          git fetch fork main
+          git push fork upstream/main
+
+          # set up branch for PR
+          BRANCH_NAME="baml-sync-${{ github.run_id }}"
+          git checkout -b "$BRANCH_NAME" upstream/main
+          echo "BRANCH_NAME=$BRANCH_NAME" >> "$GITHUB_ENV"
+
+          # Update baml submodule
+          git submodule update --init --recursive extensions/baml
+          git -C extensions/baml fetch origin main
+          git -C extensions/baml reset --hard origin/main
+          git -C extensions/baml submodule update --init --recursive
+          git add extensions/baml
+
+          # sync baml extension version
+          node <<EOF
+          import fs from "fs";
+          // @iarna/toml is available because zed-extensions uses it to sort the extensions.toml file
+          import * as TOML from "@iarna/toml";
+
+          const extensionTomlPath = "extensions/baml/extension.toml";
+          const configPath = "extensions.toml";
+
+          const bamlExtension = TOML.parse(fs.readFileSync(extensionTomlPath, "utf8"));
+          const zedConfig = TOML.parse(fs.readFileSync(configPath, "utf8"));
+
+          zedConfig.registry.baml.version = bamlExtension.version;
+
+          fs.writeFileSync(configPath, TOML.stringify(zedConfig));
+          EOF
+          git add extensions.toml
+
+          # commit changes
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          if git diff --staged --quiet; then
+            echo "committed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "Update baml extension"
+          git push fork "$BRANCH_NAME"
+
+      - name: Open PR against upstream
+        env:
+          GH_TOKEN: ${{ secrets.ZED_EXTENSIONS_SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO="zed-industries/extensions"
+          HEAD="BoundaryML:${BRANCH_NAME}"
+          BASE="main"
+          TITLE="Update baml extension to version ${{ steps.version_sync.outputs.version }}"
+          BODY="Automated update of the baml extension to version ${{ steps.version_sync.outputs.version }}."
+
+          if gh pr view --repo "$REPO" --head "$HEAD" >/dev/null 2>&1; then
+            echo "Pull request already exists for $HEAD"
+            URL=$(gh pr view --repo "$REPO" --head "$HEAD" --json url --jq .url)
+          else
+            URL=$(gh pr create \
+              --repo "$REPO" \
+              --base "$BASE" \
+              --head "$HEAD" \
+              --title "$TITLE" \
+              --body "$BODY" \
+              --json url --jq .url)
+            echo "Created PR $URL"
+          fi
+
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
