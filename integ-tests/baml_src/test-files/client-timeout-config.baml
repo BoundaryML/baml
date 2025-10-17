@@ -80,8 +80,8 @@ client<llm> TestStreamingTimeoutClient {
     model "gpt-4o-mini"
     api_key env.OPENAI_API_KEY
     http {
-      time_to_first_token_timeout_ms 10  // Very short
-      idle_timeout_ms 5  // Very short
+      time_to_first_token_timeout_ms 1  // 1ms - extremely short, should always timeout
+      idle_timeout_ms 1  // 1ms - extremely short, should always timeout
     }
   }
 }

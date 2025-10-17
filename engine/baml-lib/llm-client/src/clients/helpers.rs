@@ -513,7 +513,8 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                     let mut unrecognized_fields = Vec::new();
 
                     // Define allowed fields based on provider type
-                    let is_composite = provider_type == "fallback" || provider_type == "round-robin";
+                    let is_composite =
+                        provider_type == "fallback" || provider_type == "round-robin";
                     let allowed_fields: HashSet<&str> = if is_composite {
                         // Composite clients only support total_timeout_ms
                         vec!["total_timeout_ms"].into_iter().collect()
@@ -523,8 +524,10 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                             "connect_timeout_ms",
                             "request_timeout_ms",
                             "time_to_first_token_timeout_ms",
-                            "idle_timeout_ms"
-                        ].into_iter().collect()
+                            "idle_timeout_ms",
+                        ]
+                        .into_iter()
+                        .collect()
                     };
 
                     for (key, (_, value)) in config_map {
@@ -534,7 +537,9 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                                 match value.into_numeric() {
                                     Ok((val_str, _)) => {
                                         let val = val_str.parse::<i64>().unwrap_or(-1);
-                                        if let Err(e) = validate_timeout_value(val, "connect_timeout_ms") {
+                                        if let Err(e) =
+                                            validate_timeout_value(val, "connect_timeout_ms")
+                                        {
                                             self.push_error(e, value_meta);
                                         } else {
                                             http_config.connect_timeout_ms = Some(val as u64);
@@ -542,7 +547,10 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                                     }
                                     Err(other) => {
                                         self.push_error(
-                                            format!("connect_timeout_ms must be an integer. Got: {}", other.r#type()),
+                                            format!(
+                                                "connect_timeout_ms must be an integer. Got: {}",
+                                                other.r#type()
+                                            ),
                                             other.meta().clone(),
                                         );
                                     }
@@ -553,7 +561,9 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                                 match value.into_numeric() {
                                     Ok((val_str, _)) => {
                                         let val = val_str.parse::<i64>().unwrap_or(-1);
-                                        if let Err(e) = validate_timeout_value(val, "request_timeout_ms") {
+                                        if let Err(e) =
+                                            validate_timeout_value(val, "request_timeout_ms")
+                                        {
                                             self.push_error(e, value_meta);
                                         } else {
                                             http_config.request_timeout_ms = Some(val as u64);
@@ -561,7 +571,10 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                                     }
                                     Err(other) => {
                                         self.push_error(
-                                            format!("request_timeout_ms must be an integer. Got: {}", other.r#type()),
+                                            format!(
+                                                "request_timeout_ms must be an integer. Got: {}",
+                                                other.r#type()
+                                            ),
                                             other.meta().clone(),
                                         );
                                     }
@@ -572,10 +585,14 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                                 match value.into_numeric() {
                                     Ok((val_str, _)) => {
                                         let val = val_str.parse::<i64>().unwrap_or(-1);
-                                        if let Err(e) = validate_timeout_value(val, "time_to_first_token_timeout_ms") {
+                                        if let Err(e) = validate_timeout_value(
+                                            val,
+                                            "time_to_first_token_timeout_ms",
+                                        ) {
                                             self.push_error(e, value_meta);
                                         } else {
-                                            http_config.time_to_first_token_timeout_ms = Some(val as u64);
+                                            http_config.time_to_first_token_timeout_ms =
+                                                Some(val as u64);
                                         }
                                     }
                                     Err(other) => {
@@ -591,7 +608,9 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                                 match value.into_numeric() {
                                     Ok((val_str, _)) => {
                                         let val = val_str.parse::<i64>().unwrap_or(-1);
-                                        if let Err(e) = validate_timeout_value(val, "idle_timeout_ms") {
+                                        if let Err(e) =
+                                            validate_timeout_value(val, "idle_timeout_ms")
+                                        {
                                             self.push_error(e, value_meta);
                                         } else {
                                             http_config.idle_timeout_ms = Some(val as u64);
@@ -599,7 +618,10 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                                     }
                                     Err(other) => {
                                         self.push_error(
-                                            format!("idle_timeout_ms must be an integer. Got: {}", other.r#type()),
+                                            format!(
+                                                "idle_timeout_ms must be an integer. Got: {}",
+                                                other.r#type()
+                                            ),
                                             other.meta().clone(),
                                         );
                                     }
@@ -610,7 +632,9 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                                 match value.into_numeric() {
                                     Ok((val_str, _)) => {
                                         let val = val_str.parse::<i64>().unwrap_or(-1);
-                                        if let Err(e) = validate_timeout_value(val, "total_timeout_ms") {
+                                        if let Err(e) =
+                                            validate_timeout_value(val, "total_timeout_ms")
+                                        {
                                             self.push_error(e, value_meta);
                                         } else {
                                             http_config.total_timeout_ms = Some(val as u64);
@@ -618,7 +642,10 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                                     }
                                     Err(other) => {
                                         self.push_error(
-                                            format!("total_timeout_ms must be an integer. Got: {}", other.r#type()),
+                                            format!(
+                                                "total_timeout_ms must be an integer. Got: {}",
+                                                other.r#type()
+                                            ),
                                             other.meta().clone(),
                                         );
                                     }
@@ -642,10 +669,9 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                                 if unrecognized_field == "total_timeout_ms" {
                                     // This shouldn't happen as it's in the allowed list for composites
                                     continue;
-                                } else if let Some(suggestion) = find_best_match(
-                                    unrecognized_field,
-                                    &["total_timeout_ms"]
-                                ) {
+                                } else if let Some(suggestion) =
+                                    find_best_match(unrecognized_field, &["total_timeout_ms"])
+                                {
                                     format!(
                                         "Unrecognized field '{}' in http configuration block. Did you mean '{}'? \
                                         Composite clients (fallback/round-robin) only support: total_timeout_ms",
@@ -665,21 +691,18 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                                     "request_timeout_ms",
                                     "time_to_first_token_timeout_ms",
                                     "idle_timeout_ms",
-                                    "total_timeout_ms" // Include for suggestions
+                                    "total_timeout_ms", // Include for suggestions
                                 ];
 
                                 if unrecognized_field == "total_timeout_ms" {
                                     // Special case for total_timeout_ms in regular clients
-                                    format!(
-                                        "Unrecognized field 'total_timeout_ms' in http configuration block. \
+                                    "Unrecognized field 'total_timeout_ms' in http configuration block. \
                                         'total_timeout_ms' is only available for composite clients (fallback/round-robin). \
                                         For regular clients, use: connect_timeout_ms, request_timeout_ms, \
-                                        time_to_first_token_timeout_ms, idle_timeout_ms"
-                                    )
-                                } else if let Some(suggestion) = find_best_match(
-                                    unrecognized_field,
-                                    &all_timeout_fields
-                                ) {
+                                        time_to_first_token_timeout_ms, idle_timeout_ms".to_string()
+                                } else if let Some(suggestion) =
+                                    find_best_match(unrecognized_field, &all_timeout_fields)
+                                {
                                     if suggestion == "total_timeout_ms" {
                                         format!(
                                             "Unrecognized field '{}' in http configuration block. \
@@ -925,7 +948,10 @@ fn ensure_int<Meta: Clone>(
 // Helper function to validate timeout values
 fn validate_timeout_value(value: i64, field_name: &str) -> Result<(), String> {
     if value < 0 {
-        return Err(format!("{} must be non-negative, got: {}ms", field_name, value));
+        return Err(format!(
+            "{} must be non-negative, got: {}ms",
+            field_name, value
+        ));
     }
     // 0 means infinite timeout (no timeout) - explicitly allowed
     // Any non-negative value is valid according to the updated spec
@@ -966,8 +992,8 @@ fn levenshtein_distance(s1: &str, s2: &str) -> usize {
 
     let mut matrix = vec![vec![0; len2 + 1]; len1 + 1];
 
-    for i in 0..=len1 {
-        matrix[i][0] = i;
+    for (i, item) in matrix.iter_mut().enumerate().take(len1 + 1) {
+        item[0] = i;
     }
     for j in 0..=len2 {
         matrix[0][j] = j;
@@ -977,7 +1003,7 @@ fn levenshtein_distance(s1: &str, s2: &str) -> usize {
         for (j, c2) in s2.chars().enumerate() {
             let cost = if c1 == c2 { 0 } else { 1 };
             matrix[i + 1][j + 1] = std::cmp::min(
-                matrix[i][j + 1] + 1,     // deletion
+                matrix[i][j + 1] + 1, // deletion
                 std::cmp::min(
                     matrix[i + 1][j] + 1, // insertion
                     matrix[i][j] + cost,  // substitution

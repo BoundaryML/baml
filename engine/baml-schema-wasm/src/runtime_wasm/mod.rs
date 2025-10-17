@@ -884,6 +884,9 @@ impl WithRenderError for baml_runtime::TestFailReason<'_> {
                         baml_runtime::errors::ExposedError::AbortError { .. } => {
                             Some("AbortError".to_string())
                         }
+                        baml_runtime::errors::ExposedError::TimeoutError { .. } => {
+                            Some("TimeoutError".to_string())
+                        }
                     },
                     None => Some(format!("{e:#}")),
                 }

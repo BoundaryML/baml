@@ -109,10 +109,7 @@ impl std::fmt::Display for ExposedError {
                 client_name,
                 message,
             } => {
-                write!(
-                    f,
-                    "LLM client \"{client_name}\" timed out: {message}"
-                )
+                write!(f, "LLM client \"{client_name}\" timed out: {message}")
             }
             ExposedError::AbortError {
                 detailed_message: _,

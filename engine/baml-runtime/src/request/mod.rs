@@ -30,7 +30,9 @@ pub fn create_client() -> Result<reqwest::Client> {
     builder().build().context("Failed to create reqwest client")
 }
 
-pub fn create_http_client(http_config: &internal_llm_client::HttpConfig) -> Result<reqwest::Client> {
+pub fn create_http_client(
+    http_config: &internal_llm_client::HttpConfig,
+) -> Result<reqwest::Client> {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             // WASM doesn't support timeouts, use default builder

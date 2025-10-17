@@ -95,13 +95,15 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                         failed.message
                     ),
                 ),
+                baml_runtime::internal::llm_client::ErrorCode::Timeout => {
+                    throw_baml_timeout_error(failed.client.as_str(), failed.message.as_str())
+                }
                 baml_runtime::internal::llm_client::ErrorCode::Other(_)
                 | baml_runtime::internal::llm_client::ErrorCode::InvalidAuthentication
                 | baml_runtime::internal::llm_client::ErrorCode::NotSupported
                 | baml_runtime::internal::llm_client::ErrorCode::RateLimited
                 | baml_runtime::internal::llm_client::ErrorCode::ServerError
                 | baml_runtime::internal::llm_client::ErrorCode::ServiceUnavailable
-                | baml_runtime::internal::llm_client::ErrorCode::Timeout
                 | baml_runtime::internal::llm_client::ErrorCode::UnsupportedResponse(_) => {
                     throw_baml_client_http_error(
                         failed.client.as_str(),

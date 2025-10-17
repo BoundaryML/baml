@@ -466,6 +466,10 @@ impl RequestBuilder for OpenAIClient {
     fn request_options(&self) -> &BamlMap<String, serde_json::Value> {
         &self.properties.properties
     }
+
+    fn http_config(&self) -> &internal_llm_client::HttpConfig {
+        &self.properties.http_config
+    }
 }
 
 impl WithStreamChat for OpenAIClient {

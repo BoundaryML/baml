@@ -242,25 +242,97 @@ where
 
                         let on_tick_cb = on_tick_fn.as_ref();
                         let parse_state_for_sse = parse_state.clone();
+
+                        // Get streaming timeout config and clone what we need before moving into async block
+                        let http_config = node.provider.http_config();
+                        let time_to_first_token_timeout = http_config
+                            .time_to_first_token_timeout_ms
+                            .filter(|&ms| ms > 0)
+                            .map(Duration::from_millis);
+                        let idle_timeout = http_config
+                            .idle_timeout_ms
+                            .filter(|&ms| ms > 0)
+                            .map(Duration::from_millis);
+
+                        let client_name = node.provider.name().to_string();
+                        let stream_prompt = prompt.clone();
+                        let request_options_for_timeout = node.provider.request_options().clone();
+
                         let sse_future = async move {
                             let snapshot_sender = snapshot_tx;
-                            while let Some(stream_part) = FuturesStreamExt::next(&mut response_stream).await {
-                                if let Some(on_tick) = on_tick_cb {
-                                    on_tick();
-                                }
+                            let mut first_token_received = false;
+                            let stream_start = web_time::Instant::now();
 
+                            loop {
+                                // Determine which timeout to use for this iteration
+                                let timeout_duration = if !first_token_received {
+                                    time_to_first_token_timeout
+                                } else {
+                                    idle_timeout
+                                };
 
-                                match &stream_part {
-                                    LLMResponse::Success(s) => {
-                                        let snapshot = Arc::new(s.clone());
-                                        let _ = snapshot_sender.send_replace(Some(snapshot.clone()));
-                                        last_response = Some(LLMResponse::Success((*snapshot).clone()));
-
-                                        let mut state = parse_state_for_sse.lock().await;
-                                        state.last_processed_snapshot_ptr = None;
+                                // Wait for next stream part with timeout
+                                let next_result: Result<LLMResponse, ()> = if let Some(timeout_dur) = timeout_duration {
+                                    match timeout(timeout_dur, FuturesStreamExt::next(&mut response_stream)).await {
+                                        Ok(Some(part)) => Ok(part),
+                                        Ok(None) => break, // Stream ended normally
+                                        Err(_elapsed) => {
+                                            // Timeout occurred
+                                            let timeout_type = if !first_token_received {
+                                                "time_to_first_token_timeout"
+                                            } else {
+                                                "idle_timeout"
+                                            };
+                                            let elapsed = stream_start.elapsed();
+                                            last_response = Some(LLMResponse::LLMFailure(LLMErrorResponse {
+                                                client: client_name.clone(),
+                                                model: None,
+                                                prompt: stream_prompt.clone(),
+                                                start_time: system_start,
+                                                latency: elapsed,
+                                                request_options: request_options_for_timeout.clone(),
+                                                message: format!(
+                                                    "Timeout: No data received within {}ms ({})",
+                                                    timeout_dur.as_millis(),
+                                                    timeout_type
+                                                ),
+                                                code: ErrorCode::Timeout,
+                                            }));
+                                            // Explicitly drop the stream to abort the HTTP request
+                                            drop(response_stream);
+                                            break;
+                                        }
                                     }
-                                    other => {
-                                        last_response = Some(other.clone());
+                                } else {
+                                    // No timeout configured, wait indefinitely
+                                    match FuturesStreamExt::next(&mut response_stream).await {
+                                        Some(part) => Ok(part),
+                                        None => break, // Stream ended
+                                    }
+                                };
+
+                                if let Ok(stream_part) = next_result {
+                                    if let Some(on_tick) = on_tick_cb {
+                                        on_tick();
+                                    }
+
+                                    // Mark first token as received
+                                    if !first_token_received {
+                                        first_token_received = true;
+                                    }
+
+                                    match &stream_part {
+                                        LLMResponse::Success(s) => {
+                                            let snapshot = Arc::new(s.clone());
+                                            let _ = snapshot_sender.send_replace(Some(snapshot.clone()));
+                                            last_response = Some(LLMResponse::Success((*snapshot).clone()));
+
+                                            let mut state = parse_state_for_sse.lock().await;
+                                            state.last_processed_snapshot_ptr = None;
+                                        }
+                                        other => {
+                                            last_response = Some(other.clone());
+                                        }
                                     }
                                 }
                             }
@@ -366,6 +438,28 @@ where
                     Some(Err(e)) => Some(Err(e)),
                     None => None,
                 };
+                // Call on_event for the final response (success or failure)
+                // We need to do this before moving response_value_without_flags into result
+                if let Some(ref on_event_cb) = on_event {
+                    // We can't clone anyhow::Error, so we need to check the response type
+                    // and only send on_event for responses we can represent
+                    let event_result = match &response_value_without_flags {
+                        Some(Ok(val)) => Some(Ok(val.clone())),
+                        Some(Err(e)) => {
+                            // We can't clone the error, but we can create a FunctionResult
+                            // from the final_response which contains the error info
+                            None
+                        }
+                        None => None,
+                    };
+
+                    on_event_cb(FunctionResult::new(
+                        node.scope.clone(),
+                        final_response.clone(),
+                        event_result,
+                    ));
+                }
+
                 let result = (node.scope, final_response, response_value_without_flags);
 
                 // Return to signal completion

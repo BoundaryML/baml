@@ -68,6 +68,7 @@ pub trait RequestBuilder {
 
     fn request_options(&self) -> &BamlMap<String, serde_json::Value>;
     fn http_client(&self) -> &reqwest::Client;
+    fn http_config(&self) -> &internal_llm_client::HttpConfig;
 }
 
 pub(crate) fn to_prompt(
@@ -245,7 +246,8 @@ pub async fn execute_request(
                             )
                         }
                     },
-                    e.status().map_or(ErrorCode::Other(2), ErrorCode::from_status)
+                    e.status()
+                        .map_or(ErrorCode::Other(2), ErrorCode::from_status),
                 )
             };
 

@@ -141,12 +141,19 @@ impl BamlError {
                     status_code,
                     detailed_message,
                     ..
-                } => raise_baml_client_http_error(
-                    client_name.clone(),
-                    message.clone(),
-                    status_code.to_u16(),
-                    detailed_message.clone(),
-                ),
+                } => {
+                    // Status code 408 is Request Timeout - raise BamlTimeoutError instead
+                    if status_code.to_u16() == 408 {
+                        raise_baml_timeout_error(client_name.clone(), message.clone())
+                    } else {
+                        raise_baml_client_http_error(
+                            client_name.clone(),
+                            message.clone(),
+                            status_code.to_u16(),
+                            detailed_message.clone(),
+                        )
+                    }
+                }
                 ExposedError::TimeoutError {
                     client_name,
                     message,

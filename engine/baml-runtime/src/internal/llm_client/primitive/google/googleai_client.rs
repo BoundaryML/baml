@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent};
@@ -276,6 +275,10 @@ impl RequestBuilder for GoogleAIClient {
 
     fn request_options(&self) -> &BamlMap<String, serde_json::Value> {
         &self.properties.properties
+    }
+
+    fn http_config(&self) -> &internal_llm_client::HttpConfig {
+        &self.properties.http_config
     }
 }
 

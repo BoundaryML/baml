@@ -113,11 +113,9 @@ impl BamlError {
                     | crate::internal::llm_client::ErrorCode::ServerError
                     | crate::internal::llm_client::ErrorCode::ServiceUnavailable
                     | crate::internal::llm_client::ErrorCode::UnsupportedResponse(_)
-                    | crate::internal::llm_client::ErrorCode::Timeout => {
-                        Self::ClientError {
-                            message: format!("{err:?}"),
-                        }
-                    }
+                    | crate::internal::llm_client::ErrorCode::Timeout => Self::ClientError {
+                        message: format!("{err:?}"),
+                    },
                 },
                 LLMResponse::UserFailure(msg) => Self::InvalidArgument {
                     message: format!("Invalid argument: {msg}"),
