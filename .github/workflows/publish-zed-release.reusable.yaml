@@ -26,7 +26,7 @@ jobs:
 
       - name: Prepare branch from upstream
         run: |
-          set -euo pipefail
+          set -euxo pipefail
 
           # add fork remote
           git remote rename origin upstream
