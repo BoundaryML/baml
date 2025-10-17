@@ -26,7 +26,7 @@ pub struct FunctionTS {
 impl FunctionTS {
     pub fn event_type_param(&self) -> String {
         match &self.event_collector_type {
-            Some(collector_type) => format!("events.{}", collector_type),
+            Some(collector_type) => format!("events.{collector_type}"),
             None => "never".to_string(),
         }
     }

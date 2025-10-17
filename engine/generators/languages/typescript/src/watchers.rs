@@ -266,7 +266,7 @@ fn make_unique(base: String, used: &mut HashSet<String>) -> String {
     };
     let mut counter = 2;
     while used.contains(&candidate) {
-        candidate = format!("{}{}", base, counter);
+        candidate = format!("{base}{counter}");
         counter += 1;
     }
     used.insert(candidate.clone());

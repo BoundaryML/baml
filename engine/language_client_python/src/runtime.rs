@@ -218,7 +218,7 @@ fn extract_notification_callbacks(
     // Recursively extract all handlers including nested functions
     extract_handlers_recursive(
         py,
-        &bindings,
+        bindings,
         "",
         &mut var_handlers,
         &mut stream_handlers,

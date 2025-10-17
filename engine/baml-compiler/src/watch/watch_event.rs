@@ -43,10 +43,10 @@ impl fmt::Display for WatchNotification {
                 }
             }
             WatchBamlValue::Block(label) => {
-                write!(f, "(block) {}", label)
+                write!(f, "(block) {label}")
             }
             WatchBamlValue::StreamStart(stream_id) => {
-                write!(f, "(stream start) {}", stream_id)
+                write!(f, "(stream start) {stream_id}")
             }
             WatchBamlValue::StreamUpdate(stream_id, value) => {
                 write!(
@@ -57,7 +57,7 @@ impl fmt::Display for WatchNotification {
                 )
             }
             WatchBamlValue::StreamEnd(stream_id) => {
-                write!(f, "(stream end) {}", stream_id)
+                write!(f, "(stream end) {stream_id}")
             }
         }
     }

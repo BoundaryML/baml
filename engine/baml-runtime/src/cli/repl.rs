@@ -599,7 +599,7 @@ impl ReplState {
             watch_notifications_clone
                 .lock()
                 .unwrap()
-                .push(format!("{}", notification));
+                .push(format!("{notification}"));
         };
 
         let eval_result = interpret_thir(

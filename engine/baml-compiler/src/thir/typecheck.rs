@@ -2568,14 +2568,14 @@ fn typecheck_emit(
             match context.get_type(&fn_name.to_string()) {
                 None => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Function '{}' not found", fn_name),
+                        &format!("Function '{fn_name}' not found"),
                         fn_name.span().clone(),
                     ));
                 }
                 Some(function_type) => {
                     if !function_type.is_subtype(&required_predicate_type) {
                         diagnostics.push_error(DatamodelError::new_validation_error(
-                            &format!("Function '{}' has incorrect type", fn_name),
+                            &format!("Function '{fn_name}' has incorrect type"),
                             fn_name.span().clone(),
                         ));
                     }

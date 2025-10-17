@@ -728,7 +728,7 @@ fn parse_watch_argument(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
             _ => "",
         };
         diagnostics.push_error(DatamodelError::new_validation_error(
-            &format!("Missing value for watch argument {}", suggestion),
+            &format!("Missing value for watch argument {suggestion}"),
             span.clone(),
         ));
     }

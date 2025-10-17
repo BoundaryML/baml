@@ -424,7 +424,7 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                     "video" => result.video = resolve_mode,
                     other => {
                         self.push_error(
-                            format!("Unknown media type in media_url_handler: {}. Expected one of: image, audio, pdf, video", other),
+                            format!("Unknown media type in media_url_handler: {other}. Expected one of: image, audio, pdf, video"),
                             key_span
                         );
                     }
@@ -451,8 +451,7 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                 other => {
                     self.push_error(
                         format!(
-                            "Invalid media URL handling mode: {}. Expected one of: send_base64, send_url, send_url_add_mime_type, send_base64_unless_google_url",
-                            other
+                            "Invalid media URL handling mode: {other}. Expected one of: send_base64, send_url, send_url_add_mime_type, send_base64_unless_google_url"
                         ),
                         span.clone()
                     );

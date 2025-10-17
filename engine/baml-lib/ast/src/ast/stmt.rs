@@ -205,7 +205,7 @@ impl fmt::Display for Stmt {
                     write!(f, "let {} = {}", stmt.identifier, stmt.expr)?;
                 }
                 if let Some(watch) = &stmt.watch {
-                    write!(f, " {}", watch)?;
+                    write!(f, " {watch}")?;
                 }
                 Ok(())
             }

@@ -256,11 +256,7 @@ async fn check_watch_changes<F, Fut>(
                 // For filter functions, ALWAYS call the filter - it subsumes change detection
                 // Evaluate the filter function
                 log::debug!(
-                    "Evaluating filter function '{}' for variable '{}': prev={:?}, next={:?}",
-                    fn_name,
-                    var_name,
-                    last_notified,
-                    current_baml_value
+                    "Evaluating filter function '{fn_name}' for variable '{var_name}': prev={last_notified:?}, next={current_baml_value:?}"
                 );
                 match evaluate_filter_function(
                     fn_name,
@@ -274,15 +270,12 @@ async fn check_watch_changes<F, Fut>(
                 .await
                 {
                     Ok(result) => {
-                        log::debug!("Filter function '{}' returned: {}", fn_name, result);
+                        log::debug!("Filter function '{fn_name}' returned: {result}");
                         result
                     }
                     Err(e) => {
                         log::error!(
-                            "Error evaluating filter function '{}' for variable '{}': {}",
-                            fn_name,
-                            var_name,
-                            e
+                            "Error evaluating filter function '{fn_name}' for variable '{var_name}': {e}"
                         );
                         false // Don't notify on error
                     }
@@ -333,7 +326,7 @@ where
         .expr_functions
         .iter()
         .find(|f| f.name == fn_name.to_string())
-        .with_context(|| format!("Filter function '{}' not found", fn_name))?;
+        .with_context(|| format!("Filter function '{fn_name}' not found"))?;
 
     // Check arity
     if filter_func.parameters.len() != 2 {
@@ -346,7 +339,7 @@ where
     // Convert BamlValue to BamlValueWithMeta
     let prev_with_meta = match prev_value {
         Some(v) => {
-            log::debug!("Filter function prev_value (Some): {:?}", v);
+            log::debug!("Filter function prev_value (Some): {v:?}");
             baml_value_to_value_with_meta(v.clone())
         }
         None => {
@@ -354,7 +347,7 @@ where
             BamlValueWithMeta::Null((Span::fake(), None))
         }
     };
-    log::debug!("Filter function next_value: {:?}", next_value);
+    log::debug!("Filter function next_value: {next_value:?}");
     let next_with_meta = baml_value_to_value_with_meta(next_value.clone());
 
     // Create a new scope with the function parameters
@@ -633,7 +626,7 @@ where
                             .as_millis();
                         WatchStreamContext {
                             variable_name: name.clone(),
-                            stream_id: format!("{}_{}_{}", function_name, name, timestamp),
+                            stream_id: format!("{function_name}_{name}_{timestamp}"),
                         }
                     });
 
@@ -1391,15 +1384,15 @@ where
 
                 match &mut base_value {
                     BamlValueWithMeta::Class(_, fields, _) => {
-                        let entry = fields.get_mut(field).with_context(|| {
-                            format!("field `{}` not found for assignment", field)
-                        })?;
+                        let entry = fields
+                            .get_mut(field)
+                            .with_context(|| format!("field `{field}` not found for assignment"))?;
                         *entry = value_to_assign.clone();
                     }
                     BamlValueWithMeta::Map(fields, _) => {
-                        let entry = fields.get_mut(field).with_context(|| {
-                            format!("field `{}` not found for assignment", field)
-                        })?;
+                        let entry = fields
+                            .get_mut(field)
+                            .with_context(|| format!("field `{field}` not found for assignment"))?;
                         *entry = value_to_assign.clone();
                     }
                     _ => bail!("field assignment on non-map/class"),
@@ -2735,7 +2728,7 @@ mod tests {
             + Sync,
     {
         let handle_watch = |notification: WatchNotification| {
-            eprintln!("Ignoring watch notification: {}", notification);
+            eprintln!("Ignoring watch notification: {notification}");
         };
         interpret_thir(
             "test".to_string(),
@@ -2976,7 +2969,7 @@ mod tests {
                 assert_eq!(actual, 5);
             }
             v => {
-                panic!("Expected int result, got {:?}", v);
+                panic!("Expected int result, got {v:?}");
             }
         }
     }
@@ -3173,8 +3166,8 @@ mod tests {
         "#;
 
         // Parse BAML code to AST
-        let (db, parse_diagnostics) =
-            parse_and_diagnostics(baml_code).expect(&format!("Failed to parse BAML {}", "code"));
+        let (db, parse_diagnostics) = parse_and_diagnostics(baml_code)
+            .unwrap_or_else(|_| panic!("Failed to parse BAML {}", "code"));
 
         if parse_diagnostics.has_errors() {
             let errors = parse_diagnostics.to_pretty_string();
@@ -3239,8 +3232,8 @@ mod tests {
         "#;
 
         // Parse and compile BAML code
-        let (db, parse_diagnostics) =
-            parse_and_diagnostics(baml_code).expect(&format!("Failed to parse BAML {}", "code"));
+        let (db, parse_diagnostics) = parse_and_diagnostics(baml_code)
+            .unwrap_or_else(|_| panic!("Failed to parse BAML {}", "code"));
 
         if parse_diagnostics.has_errors() {
             let errors = parse_diagnostics.to_pretty_string();
@@ -3352,7 +3345,7 @@ mod tests {
                 assert_eq!(actual, 5);
             }
             v => {
-                panic!("Expected int result, got {:?}", v);
+                panic!("Expected int result, got {v:?}");
             }
         }
     }

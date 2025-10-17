@@ -228,7 +228,7 @@ impl FunctionMetadata {
                         }
                         None => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Variable '{}' has no type", name),
+                                &format!("Variable '{name}' has no type"),
                                 spec.span.clone(),
                             ));
                         }
@@ -256,7 +256,7 @@ impl FunctionMetadata {
                         }
                         None => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Variable '{}' has no type", name),
+                                &format!("Variable '{name}' has no type"),
                                 spec.span.clone(),
                             ));
                         }
@@ -510,7 +510,7 @@ mod tests {
                 .channels
                 .iter()
                 .filter(|channel| channel.0.name == "b_1"
-                    && channel.0.namespace == None
+                    && channel.0.namespace.is_none()
                     && channel.0.r#type == ChannelType::Variable)
                 .count(),
             1
@@ -531,7 +531,7 @@ mod tests {
             a_channels
                 .channels
                 .iter()
-                .filter(|channel| channel.0.namespace == None)
+                .filter(|channel| channel.0.namespace.is_none())
                 .count(),
             2
         );

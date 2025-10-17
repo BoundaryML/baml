@@ -82,9 +82,7 @@ impl WatchSpec {
 
             if has_error {
                 log::error!(
-                    "Impossible case: the grammar should never produce emit argument {:?}={:?}",
-                    name,
-                    value
+                    "Impossible case: the grammar should never produce emit argument {name:?}={value:?}"
                 );
             }
         }

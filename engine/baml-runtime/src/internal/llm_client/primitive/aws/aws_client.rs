@@ -422,7 +422,7 @@ impl AwsClient {
         let host = format!("bedrock-runtime.{region}.amazonaws.com");
         let encoded_model =
             utf8_percent_encode(&self.properties.model, PATH_SEGMENT_ENCODE_SET).to_string();
-        let url = format!("https://{host}/model/{}/converse", encoded_model);
+        let url = format!("https://{host}/model/{encoded_model}/converse");
 
         let mut header_map = HashMap::new();
         header_map.insert("content-type".to_string(), "application/json".to_string());

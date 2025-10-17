@@ -58,7 +58,7 @@ impl CheckArgs {
 
         match runtime {
             Err(e) => {
-                println!("{:?}", e);
+                println!("{e:?}");
 
                 // We should probably name this exit code more specifically
                 exit(1);

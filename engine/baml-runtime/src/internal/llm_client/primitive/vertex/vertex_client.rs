@@ -285,9 +285,6 @@ impl RequestBuilder for VertexClient {
                 };
                 format!(
                     "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/google/models",
-                    domain = domain,
-                    location = location,
-                    project_id = project_id,
                 )
             }
         };

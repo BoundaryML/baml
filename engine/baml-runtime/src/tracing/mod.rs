@@ -415,14 +415,14 @@ impl BamlTracer {
 
         if let Some(tag_map) = tags {
             if !tag_map.is_empty() {
-                log::debug!("start_call: incoming tags: {:#?}", tag_map);
+                log::debug!("start_call: incoming tags: {tag_map:#?}");
                 let tag_values: HashMap<String, BamlValue> = tag_map
                     .iter()
                     .map(|(k, v)| (k.clone(), BamlValue::String(v.clone())))
                     .collect();
                 ctx.upsert_tags(tag_values.clone());
                 ctx_tags.extend(tag_values);
-                log::debug!("start_call: ctx_tags after extend: {:#?}", ctx_tags);
+                log::debug!("start_call: ctx_tags after extend: {ctx_tags:#?}");
             }
         }
 
@@ -582,7 +582,7 @@ impl BamlTracer {
                         .get("type")
                         .and_then(|v| v.as_str())
                         .unwrap_or("Exception");
-                    format!("{}: {}", exc_type, msg)
+                    format!("{exc_type}: {msg}")
                 }
                 _ => "Unknown Python exception".to_string(),
             };
