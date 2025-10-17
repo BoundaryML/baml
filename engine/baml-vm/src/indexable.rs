@@ -82,6 +82,18 @@ impl<K> PartialEq for Index<K> {
     }
 }
 
+impl<K> PartialOrd for Index<K> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<K> Ord for Index<K> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
 impl<K> Eq for Index<K> {}
 
 impl<K> std::hash::Hash for Index<K> {

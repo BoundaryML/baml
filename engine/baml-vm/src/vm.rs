@@ -511,10 +511,21 @@ impl Vm {
                                 watched_node,
                                 watch::Path::Binding,
                                 NodeId::HeapObject(new_node),
+                                &self.objects,
                             );
                         }
 
-                        let notifications = self.watch.copy_roots_reaching(watched_node);
+                        let mut notifications = self.watch.copy_roots_reaching(watched_node);
+                        notifications.sort_by(|a, b| match (a, b) {
+                            (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
+                            (NodeId::LocalVar(_), NodeId::HeapObject(_)) => {
+                                std::cmp::Ordering::Less
+                            }
+                            (NodeId::HeapObject(_), NodeId::LocalVar(_)) => {
+                                std::cmp::Ordering::Greater
+                            }
+                            (NodeId::HeapObject(a), NodeId::HeapObject(b)) => a.cmp(b),
+                        });
                         if !notifications.is_empty() {
                             return Ok(VmExecState::Notify(notifications));
                         }
@@ -588,13 +599,22 @@ impl Vm {
                             watched_node,
                             watch::Path::InstanceField(index),
                             NodeId::HeapObject(new_node),
+                            &self.objects,
                         );
                     }
 
                     // TODO: Borrow checker stuff.
                     function = self.objects[frame.function].as_function()?;
 
-                    let notifications = self.watch.copy_roots_reaching(watched_node);
+                    let mut notifications = self.watch.copy_roots_reaching(watched_node);
+
+                    notifications.sort_by(|a, b| match (a, b) {
+                        (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
+                        (NodeId::LocalVar(_), NodeId::HeapObject(_)) => std::cmp::Ordering::Less,
+                        (NodeId::HeapObject(_), NodeId::LocalVar(_)) => std::cmp::Ordering::Greater,
+                        (NodeId::HeapObject(a), NodeId::HeapObject(b)) => a.cmp(b),
+                    });
+
                     if !notifications.is_empty() {
                         return Ok(VmExecState::Notify(notifications));
                     }
@@ -1076,14 +1096,20 @@ impl Vm {
                             watched_node,
                             watch::Path::ArrayIndex(index),
                             NodeId::HeapObject(new_child),
+                            &self.objects,
                         );
                     }
 
                     // Restore function reference after mutable borrow of self.objects
                     function = self.objects[frame.function].as_function()?;
 
-                    let notifications = self.watch.copy_roots_reaching(watched_node);
-
+                    let mut notifications = self.watch.copy_roots_reaching(watched_node);
+                    notifications.sort_by(|a, b| match (a, b) {
+                        (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
+                        (NodeId::LocalVar(_), NodeId::HeapObject(_)) => std::cmp::Ordering::Less,
+                        (NodeId::HeapObject(_), NodeId::LocalVar(_)) => std::cmp::Ordering::Greater,
+                        (NodeId::HeapObject(a), NodeId::HeapObject(b)) => a.cmp(b),
+                    });
                     if !notifications.is_empty() {
                         return Ok(VmExecState::Notify(notifications));
                     }
@@ -1141,14 +1167,20 @@ impl Vm {
                             watched_node,
                             watch::Path::MapKey(key),
                             NodeId::HeapObject(new_node),
+                            &self.objects,
                         );
                     }
 
                     // borrow check
                     function = self.objects[frame.function].as_function()?;
 
-                    let notifications = self.watch.copy_roots_reaching(watched_node);
-
+                    let mut notifications = self.watch.copy_roots_reaching(watched_node);
+                    notifications.sort_by(|a, b| match (a, b) {
+                        (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
+                        (NodeId::LocalVar(_), NodeId::HeapObject(_)) => std::cmp::Ordering::Less,
+                        (NodeId::HeapObject(_), NodeId::LocalVar(_)) => std::cmp::Ordering::Greater,
+                        (NodeId::HeapObject(a), NodeId::HeapObject(b)) => a.cmp(b),
+                    });
                     if !notifications.is_empty() {
                         return Ok(VmExecState::Notify(notifications));
                     }
@@ -1356,13 +1388,13 @@ impl Vm {
                     // If it's an object, build the entire dependency graph
                     if let Value::Object(object_index) = value {
                         // Build the graph.
-                        self.watch.build_dependency_graph(value, &self.objects);
 
                         // Link the root emittable variable to the object
                         self.watch.link_edge(
                             var_node,
                             watch::Path::Binding,
                             NodeId::HeapObject(object_index),
+                            &self.objects,
                         );
                     }
                 }

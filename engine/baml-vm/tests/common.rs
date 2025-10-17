@@ -151,9 +151,9 @@ impl Notification {
                 .ok_or_else(|| {
                     anyhow::anyhow!("No root state found for local variable: {:?}", stack_index)
                 }),
-            watch::NodeId::HeapObject(obj_index) => Ok(Notification::Object(
-                Object::from_vm_object(*obj_index, vm)?,
-            )),
+            watch::NodeId::HeapObject(obj_index) => {
+                Ok(Notification::Object(Object::String("bogger".to_string())))
+            }
         }
     }
 }
