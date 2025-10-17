@@ -298,5 +298,5 @@ jobs:
         run: |
           # See https://github.com/git/git/blob/master/contrib/subtree/git-subtree.adoc
           # NB(sam): this takes ~20s to run right now, but it preserves repo history so IMO it's worth it
-          git subtree push --prefix="engine/zed" https://$ZED_PUSH_TOKEN@github.com/BoundaryML/zed-baml main
+          git subtree push --prefix="engine/zed" "https://${ZED_PUSH_TOKEN}@github.com/BoundaryML/zed-baml" main
 
