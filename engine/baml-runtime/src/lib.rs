@@ -1185,7 +1185,30 @@ impl BamlRuntime {
                                 Err((&err_anyhow).to_baml_error()),
                             );
                             BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
-                            return (Err(err_anyhow), curr_call_id);
+
+                            // Finish the span before returning
+                            let err_result = Err(err_anyhow);
+                            #[cfg(not(target_arch = "wasm32"))]
+                            match self
+                                .tracer_wrapper
+                                .get_or_create_tracer(&env_vars)
+                                .finish_baml_call(call, ctx, &err_result)
+                            {
+                                Ok(_) => {}
+                                Err(e) => baml_log::error!("Error during logging: {}", e),
+                            }
+                            #[cfg(target_arch = "wasm32")]
+                            match self
+                                .tracer_wrapper
+                                .get_or_create_tracer(&env_vars)
+                                .finish_baml_call(call, ctx, &err_result)
+                                .await
+                            {
+                                Ok(_) => {}
+                                Err(e) => log::error!("Error during logging: {e}"),
+                            }
+
+                            return (err_result, curr_call_id);
                         }
                     };
 
