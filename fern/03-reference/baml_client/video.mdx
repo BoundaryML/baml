@@ -149,6 +149,23 @@ export function TestVideoInput() {
   Convert the video to a JSON representation. Returns either a URL object or a base64 object with media type.
 </ParamField> */}
 
+## URL Handling
+
+Video URLs are typically passed directly to providers without conversion (default: `never` for all providers). This is because:
+
+1. Video files are often too large for base64 encoding
+2. Most providers that support video input can fetch URLs directly
+3. Base64 encoding videos significantly increases payload size
+
+Provider defaults:
+- **[OpenAI](/ref/llm-client-providers/open-ai#media_url_handler)**: Keeps URLs as-is (`send_url`)
+- **[Anthropic](/ref/llm-client-providers/anthropic#media_url_handler)**: Keeps URLs as-is (`send_url`)
+- **[Google AI](/ref/llm-client-providers/google-ai-gemini#media_url_handler)**: Keeps URLs as-is (`send_url`)
+- **[Vertex AI](/ref/llm-client-providers/google-vertex#media_url_handler)**: Keeps URLs as-is (`send_url`)
+- **[AWS Bedrock](/ref/llm-client-providers/aws-bedrock#media_url_handler)**: Keeps URLs as-is (`send_url`)
+
+You can override this behavior using `media_url_handler.video` in your client configuration, but be aware of size limitations when using `send_base64` mode.
+
 ## Model Compatibility
 
 Different AI models have varying levels of support for video input methods **(As of July 2025)**:

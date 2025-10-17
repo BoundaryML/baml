@@ -147,10 +147,26 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_audio_urls: ResolveMediaUrls::Never,
-                resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Always,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: properties
+                    .media_url_handler
+                    .audio
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
+                resolve_image_urls: properties
+                    .media_url_handler
+                    .images
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
+                resolve_pdf_urls: properties
+                    .media_url_handler
+                    .pdf
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_video_urls: properties
+                    .media_url_handler
+                    .video
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.retry_policy.clone(),
@@ -175,10 +191,26 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_audio_urls: ResolveMediaUrls::Never,
-                resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Always,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: properties
+                    .media_url_handler
+                    .audio
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
+                resolve_image_urls: properties
+                    .media_url_handler
+                    .images
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
+                resolve_pdf_urls: properties
+                    .media_url_handler
+                    .pdf
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_video_urls: properties
+                    .media_url_handler
+                    .video
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.elem().retry_policy_id.as_ref().map(String::from),
@@ -207,10 +239,10 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_audio_urls: ResolveMediaUrls::Never,
-                resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Never,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: ResolveMediaUrls::SendUrl,
+                resolve_image_urls: ResolveMediaUrls::SendUrl,
+                resolve_pdf_urls: ResolveMediaUrls::SendUrl,
+                resolve_video_urls: ResolveMediaUrls::SendUrl,
                 allowed_metadata: AllowedRoleMetadata::None,
             },
             client: create_client()?,

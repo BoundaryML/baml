@@ -436,6 +436,12 @@ client<llm> MyClient {
 
 <Markdown src="/snippets/finish-reason.mdx" />
 
+<Markdown src="/snippets/media-url-handler.mdx" />
+
+<Note>
+  Vertex AI uses `send_url_add_mime_type` by default for images and audio, which ensures MIME type information is included. This may require downloading the content to detect the MIME type if not provided.
+</Note>
+
 ## Provider request parameters
 These are other parameters that are passed through to the provider, without modification by BAML. For example if the request has a `temperature` field, you can define it in the client here so every call has that set.
 

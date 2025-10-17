@@ -21,6 +21,35 @@ client<llm> GPT4 {
   }
 }
 
+// Test client with media URL handling configuration
+client<llm> TestOpenAIWithMediaHandling {
+  provider openai
+  options {
+    model "gpt-4o"
+    api_key env.OPENAI_API_KEY
+    media_url_handler {
+      image "send_base64"            // Override default (send_url)
+      audio "send_url"               // Override default (send_base64)
+      pdf "send_base64"              // Override default (send_url)
+      video "send_url"               // Keep default
+    }
+  }
+}
+
+client<llm> TestAnthropicWithMediaHandling {
+  provider anthropic
+  options {
+    model "claude-3-5-sonnet-20241022"
+    api_key env.ANTHROPIC_API_KEY
+    media_url_handler {
+      image "send_url_add_mime_type"
+      audio "send_base64"
+      pdf "send_url"                  // Override default (send_base64)
+      video "send_url"
+    }
+  }
+}
+
 
 client<llm> GPT4o {
   provider openai

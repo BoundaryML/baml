@@ -381,3 +381,71 @@ func testVideoInput() error {
 we're working on it!
 ```
 </CodeBlocks>
+
+
+## Controlling URL Resolution
+
+By default, BAML automatically handles URL-to-base64 conversion based on what each provider supports. However, you can customize this behavior using the `media_url_handler` configuration:
+
+### Example: Optimizing for Performance
+
+If you're using Anthropic and want to avoid the latency of URL fetching:
+
+```baml
+client<llm> FastClaude {
+  provider anthropic
+  options {
+    model "claude-3-5-sonnet-20241022"
+    api_key env.ANTHROPIC_API_KEY
+    media_url_handler {
+      image "send_url"       // Anthropic can fetch URLs directly
+      pdf "send_base64"      // Required by Anthropic API (As of October 2025)
+    }
+  }
+}
+```
+
+### Example: Working with Google Cloud Storage
+
+When using Google AI with images stored in GCS:
+
+```baml
+client<llm> GeminiWithGCS {
+  provider google-ai
+  options {
+    model "gemini-1.5-pro"
+    api_key env.GOOGLE_API_KEY
+    media_url_handler {
+      image "send_base64_unless_google_url"  // Preserve gs:// URLs, convert others
+    }
+  }
+}
+```
+
+### Example: Ensuring Compatibility
+
+For maximum compatibility across providers:
+
+```baml
+client<llm> CompatibleClient {
+  provider openai
+  options {
+    model "gpt-4o"
+    api_key env.OPENAI_API_KEY
+    media_url_handler {
+      image "send_base64"    // Ensure images are embedded
+      audio "send_base64"    // OpenAI requires base64 for audio
+      pdf "send_base64"      // Embed PDFs for reliability
+    }
+  }
+}
+```
+
+### Random Thoughts
+
+1. **`send_url`** - Allows providers to fetch URLs reducing payload size
+2. **`send_base64`** - Embedding content avoids external dependencies
+3. **`send_url_add_mime_type`** - Required for proper media handling for some providers (if the mime type is not provided, it will be downloaded to determine the mime type)
+4. **`send_base64_unless_google_url`** - Preserves Google Cloud Storage URLs for Google providers
+
+See the provider documentation for provider-specific defaults and requirements.

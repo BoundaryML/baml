@@ -17,6 +17,7 @@ pub mod indexable;
 pub mod native;
 pub mod types;
 pub mod vm;
+pub mod watch;
 
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, UnaryOp};
 pub use errors::{InternalError, RuntimeError, StackTrace};

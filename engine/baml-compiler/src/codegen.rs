@@ -706,9 +706,18 @@ impl<'g> HirCompiler<'g> {
                     _ => panic!("Invalid left hand of assignment, only variables, instance fields and array elements can be assigned"),
                 }
             }
-            thir::Statement::DeclareAndAssign { name, value, .. } => {
+            thir::Statement::DeclareAndAssign {
+                name, value, watch, ..
+            } => {
                 self.compile_expression(value);
                 self.track_local(name);
+                if let Some(spec) = watch {
+                    self.emit_string_literal(&spec.name); // This adds LoadConst
+
+                    // TODO: filter
+
+                    self.emit(Instruction::Watch);
+                }
             }
             thir::Statement::Return { expr, .. } => {
                 self.compile_expression(expr);

@@ -7,9 +7,9 @@ use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 use crate::{
-    AllowedRoleMetadata, FinishReasonFilter, ResponseType, RolesSelection, SupportedRequestModes,
-    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedResponseType,
-    UnresolvedRolesSelection,
+    AllowedRoleMetadata, FinishReasonFilter, MediaUrlHandler, ResponseType, RolesSelection,
+    SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
+    UnresolvedMediaUrlHandler, UnresolvedResponseType, UnresolvedRolesSelection,
 };
 
 #[derive(Debug, Clone, BamlHash)]
@@ -27,6 +27,7 @@ pub struct UnresolvedOpenAI<Meta> {
     query_params: IndexMap<String, StringOr>,
     finish_reason_filter: UnresolvedFinishReasonFilter,
     client_response_type: Option<UnresolvedResponseType>,
+    media_url_handler: UnresolvedMediaUrlHandler,
 }
 
 impl<Meta> UnresolvedOpenAI<Meta> {
@@ -54,6 +55,7 @@ impl<Meta> UnresolvedOpenAI<Meta> {
                 .collect(),
             finish_reason_filter: self.finish_reason_filter.clone(),
             client_response_type: self.client_response_type.clone(),
+            media_url_handler: self.media_url_handler.clone(),
         }
     }
 }
@@ -70,6 +72,7 @@ pub struct ResolvedOpenAI {
     pub proxy_url: Option<String>,
     pub finish_reason_filter: FinishReasonFilter,
     pub client_response_type: ResponseType,
+    pub media_url_handler: MediaUrlHandler,
 }
 
 impl ResolvedOpenAI {
@@ -236,6 +239,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
                 .client_response_type
                 .as_ref()
                 .map_or(Ok(ResponseType::OpenAI), |v| v.resolve(ctx))?,
+            media_url_handler: self.media_url_handler.resolve(ctx)?,
         })
     }
 
@@ -383,6 +387,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         let finish_reason_filter = properties.ensure_finish_reason_filter();
         let query_params = properties.ensure_query_params().unwrap_or_default();
         let client_response_type = properties.ensure_client_response_type();
+        let media_url_handler = properties.ensure_media_url_handler();
         let (properties, errors) = properties.finalize();
 
         if !errors.is_empty() {
@@ -400,6 +405,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             query_params,
             finish_reason_filter,
             client_response_type,
+            media_url_handler,
         })
     }
 }

@@ -588,6 +588,12 @@ def call_bedrock():
   return b.parse.ExtractResume(message)
 ```
 
+<Markdown src="/snippets/media-url-handler.mdx" />
+
+<Note>
+  AWS Bedrock converts most media to base64 by default (`send_base64` for images, audio, and PDFs). Consider using S3 presigned URLs with `send_url` mode for large files to avoid base64 overhead.
+</Note>
+
 ## Provider request parameters
 These are other `options` that are passed through to the provider, without modification by BAML. For example if the request has a `temperature` field, you can define it in the client here so every call has that set.
 

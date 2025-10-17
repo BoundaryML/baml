@@ -68,6 +68,12 @@ client<llm> MyClient {
 
 <Markdown src="/snippets/finish-reason.mdx" />
 
+<Markdown src="/snippets/media-url-handler.mdx" />
+
+<Note>
+  Anthropic's default behavior is to convert PDFs to base64 (`send_base64`) while keeping other media types as URLs (`send_url`). This is because Anthropic's API requires PDFs to be base64-encoded.
+</Note>
+
 ## Provider request parameters
 These are other parameters that are passed through to the provider, without modification by BAML. For example if the request has a `temperature` field, you can define it in the client here so every call has that set.
 

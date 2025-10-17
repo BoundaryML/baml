@@ -45,7 +45,7 @@ impl WatchArgument {
 
 impl fmt::Display for WatchDecorator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("@emit")?;
+        f.write_str("@watch")?;
         if !self.arguments.is_empty() {
             f.write_str("(")?;
             for (idx, arg) in self.arguments.iter().enumerate() {

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use baml_types::{BamlMap, BamlMedia};
 
@@ -10,6 +10,7 @@ use crate::{
         FunctionKind, FunctionType, Future, FutureKind, FutureType, Instance, Object, ObjectType,
         PendingFuture, Type, Value, Variant,
     },
+    watch::{self, NodeId, RootState, Watch},
     StackTrace, UnaryOp,
 };
 
@@ -186,6 +187,12 @@ pub struct Vm {
 
     /// Environment variables available during execution.
     pub env_vars: HashMap<String, String>,
+
+    /// Emit dependency graph.
+    pub watch: Watch,
+
+    /// Tracks which local variables are watched (have @watch).
+    pub watched_vars: HashSet<StackIndex>,
 }
 
 /// VM execution state.
@@ -211,6 +218,9 @@ pub enum VmExecState {
 
     /// VM has completed the execution of all available bytecode.
     Complete(Value),
+
+    /// Notify about watched variables.
+    Notify(Vec<watch::NodeId>),
 }
 
 #[derive(Clone, Debug)]
@@ -236,6 +246,8 @@ impl Vm {
             objects,
             globals,
             env_vars,
+            watch: Watch::new(),
+            watched_vars: HashSet::new(),
         }
     }
 
@@ -469,18 +481,44 @@ impl Vm {
                 }
 
                 Instruction::StoreVar(index) => {
-                    // Consume the value. There are some intricacies when it
-                    // comes to consuming the value or not, mainly, should this
-                    // work?
-                    //
-                    // let a = 1;
-                    // let b = (a = 2);
-                    //
-                    // If yes, then we should not consume the value and emit
-                    // a pop instruction after each semicolon.
+                    // Absolute index of the local variable.
+                    let local_var_index = frame.locals_offset + index;
+
+                    // New value.
                     let value = self.stack.ensure_pop()?;
 
-                    self.stack[frame.locals_offset + index] = value;
+                    // Old value being replaced.
+                    let old_value = std::mem::replace(&mut self.stack[local_var_index], value);
+
+                    // Check if this binding is emittable.
+                    if self.watched_vars.contains(&local_var_index) {
+                        // Node ID of the local variable in the emit graph.
+                        let watched_node = NodeId::LocalVar(local_var_index);
+
+                        // If we had a previous binding to an object, unlink it
+                        // so it doesn't emit anymore.
+                        if let Value::Object(old_node) = old_value {
+                            self.watch.unlink_edge(
+                                watched_node,
+                                watch::Path::Binding,
+                                NodeId::HeapObject(old_node),
+                            );
+                        }
+
+                        // If we have a new binding, link it so it emits.
+                        if let Value::Object(new_node) = value {
+                            self.watch.link_edge(
+                                watched_node,
+                                watch::Path::Binding,
+                                NodeId::HeapObject(new_node),
+                            );
+                        }
+
+                        let notifications = self.watch.copy_roots_reaching(watched_node);
+                        if !notifications.is_empty() {
+                            return Ok(VmExecState::Notify(notifications));
+                        }
+                    }
                 }
 
                 Instruction::LoadGlobal(index) => {
@@ -513,31 +551,81 @@ impl Vm {
                 }
 
                 Instruction::StoreField(index) => {
-                    let reference = self.objects.as_object(
+                    let instance_index = self.objects.as_object(
                         &self.stack[self.stack.ensure_slot_from_top(1)?],
                         ObjectType::Instance,
                     )?;
 
-                    let Object::Instance(instance) = &mut self.objects[reference] else {
+                    let Object::Instance(instance) = &mut self.objects[instance_index] else {
                         return Err(InternalError::TypeError {
                             expected: ObjectType::Instance.into(),
-                            got: ObjectType::of(&self.objects[reference]).into(),
+                            got: ObjectType::of(&self.objects[instance_index]).into(),
                         }
                         .into());
                     };
 
-                    // Consume and set the value.
-                    instance.fields[index] = self.stack.ensure_pop()?;
+                    let watched_node = NodeId::HeapObject(instance_index);
+
+                    if let Value::Object(old_node) = instance.fields[index] {
+                        self.watch.unlink_edge(
+                            watched_node,
+                            watch::Path::InstanceField(index),
+                            NodeId::HeapObject(old_node),
+                        );
+                    }
+
+                    // Consume the new value.
+                    let new_value = self.stack.ensure_pop()?;
+
+                    // Set the new value.
+                    instance.fields[index] = new_value;
 
                     // Consume the intance.
                     self.stack.ensure_pop()?;
 
+                    if let Value::Object(new_node) = new_value {
+                        self.watch.link_edge(
+                            watched_node,
+                            watch::Path::InstanceField(index),
+                            NodeId::HeapObject(new_node),
+                        );
+                    }
+
                     // TODO: Borrow checker stuff.
                     function = self.objects[frame.function].as_function()?;
+
+                    let notifications = self.watch.copy_roots_reaching(watched_node);
+                    if !notifications.is_empty() {
+                        return Ok(VmExecState::Notify(notifications));
+                    }
                 }
 
                 Instruction::Pop(n) => {
-                    let drain_range = StackIndex::from_raw(self.stack.len() - n)..;
+                    let drain_start = self.stack.len() - n;
+                    let drain_range = StackIndex::from_raw(drain_start)..;
+
+                    // Check if any of the popped variables are emittable and
+                    // unregister them
+                    for i in drain_start..self.stack.len() {
+                        let index = StackIndex::from_raw(i);
+                        if self.watched_vars.remove(&index) {
+                            let var_node = NodeId::LocalVar(index);
+
+                            // Unregister the root since the variable is going
+                            // out of scope.
+                            self.watch.unregister_root(var_node);
+
+                            // Also unlink any edge from this variable.
+                            if let Value::Object(obj) = self.stack[index] {
+                                self.watch.unlink_edge(
+                                    var_node,
+                                    watch::Path::Binding,
+                                    NodeId::HeapObject(obj),
+                                );
+                            }
+                        }
+                    }
+
                     self.stack.drain(drain_range);
                 }
 
@@ -551,7 +639,30 @@ impl Vm {
                     let value = self.stack.ensure_pop()?;
 
                     // Pop the last `n` locals from the stack.
-                    let drain_range = StackIndex::from_raw(self.stack.len() - n)..;
+                    let drain_start = self.stack.len() - n;
+
+                    // Clean up any emittable variables in the range being
+                    // popped.
+                    for i in drain_start..self.stack.len() {
+                        let index = StackIndex::from_raw(i);
+                        if self.watched_vars.remove(&index) {
+                            let var_node = NodeId::LocalVar(index);
+
+                            // Unregister the root since the variable is going out of scope
+                            self.watch.unregister_root(var_node);
+
+                            // Also unlink any edge from this variable
+                            if let Value::Object(obj) = self.stack[index] {
+                                self.watch.unlink_edge(
+                                    var_node,
+                                    watch::Path::Binding,
+                                    NodeId::HeapObject(obj),
+                                );
+                            }
+                        }
+                    }
+
+                    let drain_range = StackIndex::from_raw(drain_start)..;
                     self.stack.drain(drain_range);
 
                     // Push the value back on top of the stack.
@@ -811,12 +922,13 @@ impl Vm {
                     let index_value = self.stack.ensure_pop()?;
                     let array_value = self.stack.ensure_pop()?;
 
-                    let array_ob_index = self.objects.as_object(&array_value, ObjectType::Array)?;
+                    let array_obj_index =
+                        self.objects.as_object(&array_value, ObjectType::Array)?;
 
-                    let Object::Array(array) = &self.objects[array_ob_index] else {
+                    let Object::Array(array) = &self.objects[array_obj_index] else {
                         return Err(VmError::from(InternalError::TypeError {
                             expected: ObjectType::Array.into(),
-                            got: ObjectType::of(&self.objects[array_ob_index]).into(),
+                            got: ObjectType::of(&self.objects[array_obj_index]).into(),
                         }));
                     };
 
@@ -911,12 +1023,13 @@ impl Vm {
                     let index_value = self.stack.ensure_pop()?;
                     let array_value = self.stack.ensure_pop()?;
 
-                    let array_ob_index = self.objects.as_object(&array_value, ObjectType::Array)?;
+                    let array_obj_index =
+                        self.objects.as_object(&array_value, ObjectType::Array)?;
 
-                    let Object::Array(array) = &mut self.objects[array_ob_index] else {
+                    let Object::Array(array) = &mut self.objects[array_obj_index] else {
                         return Err(VmError::from(InternalError::TypeError {
                             expected: ObjectType::Array.into(),
-                            got: ObjectType::of(&self.objects[array_ob_index]).into(),
+                            got: ObjectType::of(&self.objects[array_obj_index]).into(),
                         }));
                     };
 
@@ -945,11 +1058,35 @@ impl Vm {
                         }));
                     }
 
+                    let watched_node = NodeId::HeapObject(array_obj_index);
+
+                    if let Value::Object(old_child) = array[index] {
+                        self.watch.unlink_edge(
+                            watched_node,
+                            watch::Path::ArrayIndex(index),
+                            NodeId::HeapObject(old_child),
+                        );
+                    }
+
                     // Store the value at the index
                     array[index] = value;
 
+                    if let Value::Object(new_child) = value {
+                        self.watch.link_edge(
+                            watched_node,
+                            watch::Path::ArrayIndex(index),
+                            NodeId::HeapObject(new_child),
+                        );
+                    }
+
                     // Restore function reference after mutable borrow of self.objects
                     function = self.objects[frame.function].as_function()?;
+
+                    let notifications = self.watch.copy_roots_reaching(watched_node);
+
+                    if !notifications.is_empty() {
+                        return Ok(VmExecState::Notify(notifications));
+                    }
                 }
 
                 Instruction::StoreMapElement => {
@@ -986,11 +1123,35 @@ impl Vm {
                         }));
                     };
 
+                    let watched_node = NodeId::HeapObject(map_index);
+
+                    if let Some(Value::Object(old_node)) = map.get(&key) {
+                        self.watch.unlink_edge(
+                            watched_node,
+                            watch::Path::MapKey(key.clone()),
+                            NodeId::HeapObject(*old_node),
+                        );
+                    }
+
                     // Store the value at the key
-                    map.insert(key, value);
+                    map.insert(key.clone(), value);
+
+                    if let Value::Object(new_node) = value {
+                        self.watch.link_edge(
+                            watched_node,
+                            watch::Path::MapKey(key),
+                            NodeId::HeapObject(new_node),
+                        );
+                    }
 
                     // borrow check
                     function = self.objects[frame.function].as_function()?;
+
+                    let notifications = self.watch.copy_roots_reaching(watched_node);
+
+                    if !notifications.is_empty() {
+                        return Ok(VmExecState::Notify(notifications));
+                    }
                 }
 
                 Instruction::AllocInstance(index) => {
@@ -1160,6 +1321,52 @@ impl Vm {
                     }
                 }
 
+                Instruction::Watch => {
+                    // Stack contains: [value, channel] (for now; will be
+                    // [value, channel, filter] later)
+
+                    // Consume channel.
+                    let channel = self
+                        .objects
+                        .as_string(&self.stack.ensure_pop()?)?
+                        .to_owned();
+
+                    // Get the top of the stack (the value) without popping it
+                    let value_index = self.stack.ensure_stack_top()?;
+                    let value = self.stack[value_index];
+
+                    // The variable index should be the same as where the value is stored
+                    let var_node = NodeId::LocalVar(value_index);
+
+                    // Register this variable as an emittable root
+                    self.watch.register_root(
+                        var_node,
+                        RootState {
+                            channel,
+                            value,
+                            last_notified: None,
+                            last_assigned: None,
+                            filter: None,
+                        },
+                    );
+
+                    // Track this so we can unregister on scope exit
+                    self.watched_vars.insert(value_index);
+
+                    // If it's an object, build the entire dependency graph
+                    if let Value::Object(object_index) = value {
+                        // Build the graph.
+                        self.watch.build_dependency_graph(value, &self.objects);
+
+                        // Link the root emittable variable to the object
+                        self.watch.link_edge(
+                            var_node,
+                            watch::Path::Binding,
+                            NodeId::HeapObject(object_index),
+                        );
+                    }
+                }
+
                 Instruction::Call(arg_count) => {
                     // Function calls are pushed onto the stack like this:
                     //
@@ -1261,6 +1468,28 @@ impl Vm {
                     // Pop the result from the eval stack.
                     let result = self.stack.ensure_pop()?;
 
+                    // Clean up any emittable variables in the function's scope
+                    for i in frame.locals_offset.0..self.stack.len() {
+                        let index = StackIndex::from_raw(i);
+                        if self.watched_vars.remove(&index) {
+                            let var_node = NodeId::LocalVar(index);
+
+                            // Unregister the root since the variable is going out of scope
+                            self.watch.unregister_root(var_node);
+
+                            // Also unlink any edge from this variable
+                            if i < self.stack.len() {
+                                if let Value::Object(obj) = self.stack[index] {
+                                    self.watch.unlink_edge(
+                                        var_node,
+                                        watch::Path::Binding,
+                                        NodeId::HeapObject(obj),
+                                    );
+                                }
+                            }
+                        }
+                    }
+
                     // Restore the eval stack to the state before the function
                     // was called and leave the result on top.
                     self.stack.drain(frame.locals_offset..);
@@ -1319,9 +1548,9 @@ impl Vm {
                         // branches which is not ideal for performance. Might want to consider this
                         // in map accesses.
                         let keys = self.stack[idx_of_last_key..].iter().map(|k| {
-                            let ob_index = self.objects.as_object(k, ObjectType::String)?;
+                            let obj_index = self.objects.as_object(k, ObjectType::String)?;
 
-                            self.objects[ob_index].as_string().cloned()
+                            self.objects[obj_index].as_string().cloned()
                         });
 
                         let pairs = values
@@ -1339,9 +1568,9 @@ impl Vm {
                         BamlMap::new()
                     };
 
-                    let ob_index = self.objects.insert(Object::Map(map));
+                    let obj_index = self.objects.insert(Object::Map(map));
 
-                    self.stack.push(Value::Object(ob_index));
+                    self.stack.push(Value::Object(obj_index));
 
                     // borrow check.
                     function = self.objects[frame.function].as_function()?;

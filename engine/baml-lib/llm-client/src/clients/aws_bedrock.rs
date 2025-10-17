@@ -10,8 +10,9 @@ use serde_json::Value;
 
 use super::helpers::{Error, PropertyHandler};
 use crate::{
-    AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes,
-    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
+    AllowedRoleMetadata, FinishReasonFilter, MediaUrlHandler, RolesSelection,
+    SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
+    UnresolvedMediaUrlHandler, UnresolvedRolesSelection,
 };
 
 #[derive(Debug, Clone, BamlHash)]
@@ -30,6 +31,7 @@ pub struct UnresolvedAwsBedrock<Meta> {
     finish_reason_filter: UnresolvedFinishReasonFilter,
     #[baml_safe_hash]
     additional_model_request_fields: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
+    media_url_handler: UnresolvedMediaUrlHandler,
 }
 
 #[derive(Debug, Clone, BamlHash)]
@@ -86,6 +88,7 @@ pub struct ResolvedAwsBedrock {
     pub supported_request_modes: SupportedRequestModes,
     pub finish_reason_filter: FinishReasonFilter,
     pub additional_model_request_fields: IndexMap<String, Value>,
+    pub media_url_handler: MediaUrlHandler,
 }
 
 impl std::fmt::Debug for ResolvedAwsBedrock {
@@ -182,6 +185,7 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
                 .iter()
                 .map(|(k, (_, v))| (k.clone(), ((), v.without_meta())))
                 .collect::<IndexMap<_, _>>(),
+            media_url_handler: self.media_url_handler.clone(),
         }
     }
 }
@@ -415,6 +419,7 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
                 .transpose()?,
             finish_reason_filter: self.finish_reason_filter.resolve(ctx)?,
             additional_model_request_fields,
+            media_url_handler: self.media_url_handler.resolve(ctx)?,
         })
     }
 
@@ -528,6 +533,7 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             Some(inference_config)
         };
         let finish_reason_filter = properties.ensure_finish_reason_filter();
+        let media_url_handler = properties.ensure_media_url_handler();
 
         // TODO: Handle inference_configuration
         let errors = properties.finalize_empty();
@@ -549,6 +555,7 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             inference_config,
             finish_reason_filter,
             additional_model_request_fields,
+            media_url_handler,
         })
     }
 }

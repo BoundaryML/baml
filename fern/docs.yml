@@ -285,6 +285,9 @@ navigation:
           - page: What is BAML?
             icon: fa-regular fa-question-circle
             path: 01-guide/what-are-function-definitions.mdx
+          - page: Why BAML?
+            icon: fa-regular fa-lightbulb
+            path: 01-guide/why-baml.mdx
           - page: What's the baml_src folder
             icon: fa-regular fa-folder
             path: 01-guide/what-is-baml_src.mdx
@@ -431,9 +434,18 @@ navigation:
                 path: 01-guide/07-observability/studio.mdx
       - section: Comparisons
         contents:
+          - page: BAML vs Langchain
+            icon: fa-solid fa-magnifying-glass
+            path: 01-guide/09-comparisons/langchain.mdx
           - page: BAML vs Marvin
             icon: fa-solid fa-magnifying-glass
             path: 01-guide/09-comparisons/marvin.mdx
+          - page: BAML vs Ai-SDK
+            icon: fa-solid fa-magnifying-glass
+            path: 01-guide/09-comparisons/ai-sdk.mdx
+          - page: BAML vs OpenAI SDK
+            icon: fa-solid fa-magnifying-glass
+            path: 01-guide/09-comparisons/openai-sdk.mdx
           - page: BAML vs Pydantic
             icon: fa-solid fa-magnifying-glass
             path: 01-guide/09-comparisons/pydantic.mdx
