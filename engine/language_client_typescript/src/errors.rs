@@ -191,7 +191,7 @@ fn throw_baml_abort_error(detailed_message: Option<&str>) -> napi::Error {
 
 fn throw_baml_timeout_error(client_name: &str, message: &str) -> napi::Error {
     let error_json = serde_json::json!({
-        "type": "BamlClientTimeoutError",
+        "type": "BamlTimeoutError",
         "client_name": client_name,
         "message": format!("BamlError: BamlClientError: BamlTimeoutError: {}", message),
     });

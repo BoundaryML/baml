@@ -4,7 +4,7 @@ describe("Timeout Tests", () => {
   it("should raise BamlTimeoutError for connect timeout", async () => {
     await expect(async () => {
       await b.TestTimeoutError("test input");
-    }).rejects.toThrow("timeout");
+    }).rejects.toThrow("timed out");
 
     try {
       await b.TestTimeoutError("test input");
