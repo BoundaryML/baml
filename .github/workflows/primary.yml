@@ -290,11 +290,11 @@ jobs:
     # if: github.ref == 'refs/heads/canary' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     steps:
       - name: Checkout main repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.ZED_BAML_SYNC_TOKEN }}
 
       - name: Sync engine/zed to BoundaryML/zed-baml
-        env:
-          ZED_PUSH_TOKEN: ${{ secrets.ZED_BAML_SYNC_TOKEN }}
         run: |
           # See https://github.com/git/git/blob/master/contrib/subtree/git-subtree.adoc
           # NB(sam): this takes ~20s to run right now, but it preserves repo history so IMO it's worth it
