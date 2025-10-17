@@ -69,7 +69,7 @@ jobs:
           const bamlExtension = TOML.parse(fs.readFileSync(extensionTomlPath, "utf8"));
           const zedConfig = TOML.parse(fs.readFileSync(configPath, "utf8"));
 
-          zedConfig.registry.baml.version = bamlExtension.version;
+          zedConfig["baml"]["version"] = bamlExtension["version"];
 
           fs.writeFileSync(configPath, TOML.stringify(zedConfig));
           EOF
