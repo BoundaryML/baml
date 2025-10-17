@@ -91,3 +91,24 @@ impl ApiEndpoint for GetOrganization {
 
     const PATH: &'static str = "/v1/get-organization";
 }
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct DeleteOrganizationRequest {
+    pub org_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct DeleteOrganizationResponse {
+    pub success: bool,
+}
+
+pub struct DeleteOrganization;
+
+impl ApiEndpoint for DeleteOrganization {
+    type Request<'a> = DeleteOrganizationRequest;
+    type Response<'a> = DeleteOrganizationResponse;
+
+    const PATH: &'static str = "/v1/delete-organization";
+}
