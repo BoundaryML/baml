@@ -57,10 +57,10 @@ jobs:
           git add extensions/baml
 
           # sync baml extension version
-          node <<EOF
-          import fs from "fs";
+          pnpm exec node <<EOF
+          const fs = require("fs");
           // @iarna/toml is available because zed-extensions uses it to sort the extensions.toml file
-          import * as TOML from "@iarna/toml";
+          const TOML = require("@iarna/toml");
 
           const extensionTomlPath = "extensions/baml/extension.toml";
           const configPath = "extensions.toml";
