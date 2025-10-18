@@ -1,21 +1,21 @@
-// Simple filter function that only emits when value is not empty
+// Simple filter function that only notifies when value is not empty
 function NotEmpty(prev: string, next: string) -> bool {
   next != ""
 }
 
 // Simple test without loops
-function SimpleEmitWithFilter() -> int {
-  let word: string = "" @emit(when=NotEmpty);
+function SimpleWatchWithFilter() -> int {
+  let word: string = "" @watch(when=NotEmpty);
 
-  word = "hello";  // Should emit (not empty)
-  word = "world";  // Should emit (not empty)
-  word = "";       // Should NOT emit (empty)
-  word = "test";   // Should emit (not empty)
+  word = "hello";  // Should notify (not empty)
+  word = "world";  // Should notify (not empty)
+  word = "";       // Should NOT notify (empty)
+  word = "test";   // Should notify (not empty)
 
   42
 }
 
-test TestSimpleEmitWithFilter() {
-  functions [SimpleEmitWithFilter]
+test TestSimpleWatchWithFilter() {
+  functions [SimpleWatchWithFilter]
   args {}
 }

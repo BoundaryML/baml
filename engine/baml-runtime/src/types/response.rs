@@ -266,7 +266,7 @@ pub struct TestResponse {
 impl std::fmt::Display for TestResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(func_response) = &self.function_response {
-            writeln!(f, "{}", func_response)
+            writeln!(f, "{func_response}")
         } else if let Some(expr_response) = &self.expr_function_response {
             match expr_response {
                 Ok(val) => {

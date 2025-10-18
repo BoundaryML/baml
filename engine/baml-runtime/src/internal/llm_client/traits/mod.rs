@@ -608,8 +608,8 @@ async fn process_media(
             // url w/ mime  | unchanged  | unchanged    | b64 w/ mime  |
 
             // Currently:
-            //  - Vertex is ResolveMediaUrls::EnsureMime and is the only one that supports URLs w/ mime-type
-            //  - OpenAI is ResolveMediaUrls::Never and allows passing in URLs with optionally specified mime-type (but it has different behavior for audio inputs)
+            //  - Vertex is ResolveMediaUrls::SendUrlAddMimeType and is the only one that supports URLs w/ mime-type
+            //  - OpenAI is ResolveMediaUrls::SendUrl and allows passing in URLs with optionally specified mime-type (but it has different behavior for audio inputs)
 
             // NOTE(sam): if a provider accepts URLs but requires mime-type
             // (i.e. Vertex), we currently send it to them as b64. This
@@ -617,15 +617,15 @@ async fn process_media(
             // problematic in theory, I'm not going to change it until a
             // customer complains.
             match (resolve_mode, part.mime_type.as_deref()) {
-                (ResolveMediaUrls::Always, _) => {}
-                (ResolveMediaUrls::EnsureMime, Some("")) | (ResolveMediaUrls::EnsureMime, None) => {
-                }
-                (ResolveMediaUrls::IfMatchesGoogleFileUri, _) => {
+                (ResolveMediaUrls::SendBase64, _) => {}
+                (ResolveMediaUrls::SendUrlAddMimeType, Some(""))
+                | (ResolveMediaUrls::SendUrlAddMimeType, None) => {}
+                (ResolveMediaUrls::SendBase64UnlessGoogleUrl, _) => {
                     if media_url.url.starts_with("gs://") {
                         return Ok(part.clone());
                     }
                 }
-                (ResolveMediaUrls::Never, _) | (ResolveMediaUrls::EnsureMime, _) => {
+                (ResolveMediaUrls::SendUrl, _) | (ResolveMediaUrls::SendUrlAddMimeType, _) => {
                     return Ok(part.clone());
                 }
             }

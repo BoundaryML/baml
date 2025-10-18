@@ -5,7 +5,7 @@
 use baml_types::ir_type::TypeIR;
 use internal_baml_diagnostics::Span;
 
-use crate::emit::EmitSpec;
+use crate::watch::WatchSpec;
 
 pub mod dump;
 pub mod lowering;
@@ -118,7 +118,7 @@ pub enum Statement {
         name: String,
         value: Expression,
         annotated_type: Option<TypeIR>,
-        emit: Option<EmitSpec>,
+        watch: Option<WatchSpec>,
         span: Span,
     },
     /// Declare a (mutable) reference.
@@ -145,7 +145,7 @@ pub enum Statement {
         name: String,
         value: Expression,
         annotated_type: Option<TypeIR>,
-        emit: Option<EmitSpec>,
+        watch: Option<WatchSpec>,
         span: Span,
     },
     /// Return from a function.

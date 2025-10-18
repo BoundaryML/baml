@@ -1,13 +1,13 @@
-function WorkflowEmit() -> int {
-  let x: int = 10 @emit;
-  let y: bool = true @emit;
+function WorkflowWatch() -> int {
+  let x: int = 10 @watch;
+  let y: bool = true @watch;
 
   y = false;
-  x = WorkflowEmitChild();
+  x = WorkflowWatchChild();
   x
 }
 
-function WorkflowEmitChild() -> int {
-  let x: string = "Hello" @emit;
+function WorkflowWatchChild() -> int {
+  let x: string = "Hello" @watch;
   100
 }

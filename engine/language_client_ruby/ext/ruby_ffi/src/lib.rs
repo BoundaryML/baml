@@ -140,8 +140,8 @@ impl BamlRuntimeFfi {
             type_registry.map(|t| &t.inner),
             client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
             Some(collectors),
-            None,
             env_vars,
+            None,
             TripWire::new(None),
         )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
@@ -193,8 +193,8 @@ impl BamlRuntimeFfi {
             client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
             Some(collectors),
             env_vars,
-            None,
             TripWire::new(None),
+            None,
         ) {
             Ok(res) => Ok(FunctionResultStream::new(res, rb_self.t.clone())),
             Err(e) => Err(Error::new(

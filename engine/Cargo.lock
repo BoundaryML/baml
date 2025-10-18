@@ -3089,6 +3089,7 @@ version = "0.211.2"
 dependencies = [
  "anyhow",
  "askama",
+ "baml-compiler",
  "baml-types",
  "dir-writer",
  "internal-baml-core",

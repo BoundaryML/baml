@@ -400,10 +400,37 @@ In this image we change the types and BAML automatically updates the prompt, par
 
 Adding retries or resilience requires just [a couple of modifications](/ref/llm-client-strategies/retry-policy). And best of all, **you can test things instantly, without leaving your VSCode**.
 
+### The bottom line
+
+Pydantic is excellent for data validation, but LLM applications need more than validation - they need a complete structured extraction solution.
+
+**BAML's advantages over Pydantic:**
+- **No boilerplate** - BAML generates all parsing, retry, and error handling code
+- **Visual development** - See prompts and test instantly in VSCode
+- **Better prompts** - Optimized schema format uses 80% fewer tokens
+- **Schema-Aligned Parsing** - Handles malformed JSON and edge cases automatically
+- **Multi-model support** - Works with any LLM provider, not just OpenAI
+- **Type safety across languages** - Generated clients for Python, TypeScript, Java, Go
+- **Built-in resilience** - Retries, fallbacks, and smart error recovery
+
+**What you get with BAML that Pydantic can't provide:**
+- **Instant testing** - No API calls or token costs during development
+- **Prompt optimization** - See exactly what's sent and optimize token usage
+- **Production features** - Automatic retries, model fallbacks, streaming support
+- **Better debugging** - Know exactly why extraction failed
+- **Future-proof** - Never get locked into one model or provider
+
+**Why this matters for your team:**
+- **10x faster iteration** - Test prompts instantly without running Python code
+- **Better reliability** - Handle edge cases and malformed outputs automatically
+- **Cost optimization** - Reduce token usage with optimized schema formats
+- **Model flexibility** - Switch between GPT, Claude, open-source models seamlessly
+
+We built BAML because writing a Python library wasn't powerful enough to solve the real challenges of LLM structured extraction.
+
 ### Conclusion
-We built BAML because writing a Python library was just not powerful enough to do everything we envisioned, as we have just explored.
 
-Get started today with [python](/guide/installation-language/python).
+Get started today with [Python](/guide/installation-language/python), [TypeScript](/guide/installation-language/typescript), [Go](/guide/installation-language/go), [Ruby](/guide/installation-language/ruby) or [other languages](/guide/installation-language/rest-api-other-languages).
 
-Our mission is to make the best DX for AI engineers working with LLMs. Contact us at founders@boundaryml.com or [Join us on Discord](https://discord.gg/BTNBeXGuaS) to stay in touch with the community and influence the roadmap.
+Our mission is to make the best developer experience for AI engineers working with LLMs. Contact us at founders@boundaryml.com or [Join us on Discord](https://discord.gg/BTNBeXGuaS) to stay in touch with the community and influence the roadmap.
 

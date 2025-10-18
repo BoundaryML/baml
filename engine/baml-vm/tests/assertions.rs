@@ -14,7 +14,8 @@ fn assert_ok() -> anyhow::Result<()> {
                 assert 2 + 2 == 4;
 
                 3
-            }"#,
+            }
+        "#,
         function: "assertOk",
         expected: ExecState::Complete(Value::Int(3)),
     })
@@ -28,7 +29,8 @@ fn assert_not_ok() -> anyhow::Result<()> {
                 assert 3 == 1;
 
                 2
-            }"#,
+            }
+        "#,
         function: "assertNotOk",
         expected: RuntimeError::AssertionError.into(),
     })

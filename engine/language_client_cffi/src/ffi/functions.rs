@@ -91,8 +91,8 @@ fn call_function_from_c_inner(
                 type_builder.as_ref(),
                 client_registry.as_ref(),
                 collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
-                Some(tags),
                 env_vars,
+                Some(&tags),
                 tripwire.clone(),
             )
             .await;
@@ -258,8 +258,8 @@ fn call_function_stream_from_c_inner(
         client_registry.as_ref(),
         collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
         env_vars,
-        Some(tags),
         tripwire,
+        Some(&tags),
     ) {
         Ok(stream) => stream,
         Err(e) => {

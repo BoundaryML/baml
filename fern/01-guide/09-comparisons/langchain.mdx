@@ -1,10 +1,303 @@
 ---
 title: Comparing Langchain
-slug: docs/comparisons/langchain
 ---
 
+[Langchain](https://github.com/langchain-ai/langchain) is one of the most popular frameworks for building LLM applications. It provides abstractions for chains, agents, memory, and more.
 
-[Langchain](https://langchain.com) is a toolkit that helps developers build AI applications.
+Let's dive into how Langchain handles structured extraction and where it falls short.
 
-### The LCEL
+### Why working with LLMs requires more than just Langchain
 
+Langchain makes structured extraction look simple at first:
+
+```python
+from pydantic import BaseModel, Field
+from langchain_openai import ChatOpenAI
+
+class Resume(BaseModel):
+    name: str
+    skills: List[str]
+
+llm = ChatOpenAI(model="gpt-4o")
+structured_llm = llm.with_structured_output(Resume)
+result = structured_llm.invoke("John Doe, Python, Rust")
+```
+
+That's pretty neat! But now let's add an `Education` model to make it more realistic:
+
+```diff
++class Education(BaseModel):
++    school: str
++    degree: str
++    year: int
+
+class Resume(BaseModel):
+    name: str
+    skills: List[str]
++    education: List[Education]
+
+structured_llm = llm.with_structured_output(Resume)
+result = structured_llm.invoke("""John Doe
+Python, Rust
+University of California, Berkeley, B.S. in Computer Science, 2020""")
+```
+
+Still works... but what's actually happening under the hood? What prompt is being sent? How many tokens are we using?
+
+Let's dig deeper. Say you want to see what's actually being sent to the model:
+
+```python
+# How do you debug this?
+structured_llm = llm.with_structured_output(Resume)
+
+# You need to enable verbose mode or dig into callbacks
+from langchain.globals import set_debug
+set_debug(True)
+
+# Now you get TONS of debug output...
+```
+
+But even with debug mode, you still can't easily:
+- Modify the extraction prompt
+- See the exact token count
+- Understand why extraction failed for certain inputs
+
+### When things go wrong
+
+Here's where it gets tricky. Your PM asks: "Can we classify these resumes by seniority level?"
+
+```python
+from enum import Enum
+
+class SeniorityLevel(str, Enum):
+    JUNIOR = "junior"
+    MID = "mid"
+    SENIOR = "senior"
+    STAFF = "staff"
+
+class Resume(BaseModel):
+    name: str
+    skills: List[str]
+    education: List[Education]
+    seniority: SeniorityLevel
+```
+
+But now you realize you need to give the LLM context about what each level means:
+
+```python
+# Wait... how do I tell the LLM that "junior" means 0-2 years experience?
+# How do I customize the prompt?
+
+# You end up doing this:
+CLASSIFICATION_PROMPT = """
+Given the resume below, classify the seniority level:
+- junior: 0-2 years experience
+- mid: 2-5 years experience  
+- senior: 5-10 years experience
+- staff: 10+ years experience
+
+Resume: {resume_text}
+"""
+
+# Now you need separate chains...
+classification_chain = LLMChain(llm=llm, prompt=PromptTemplate.from_template(CLASSIFICATION_PROMPT))
+extraction_chain = llm.with_structured_output(Resume)
+
+# And combine them somehow...
+```
+
+Your clean code is starting to look messy. But wait, there's more!
+
+### Multi-model madness
+
+Your company wants to use Claude for some tasks (better reasoning) and GPT-4-mini for others (cost savings). With Langchain:
+
+```python
+from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
+
+# Different providers, different imports
+claude = ChatAnthropic(model="claude-3-opus-20240229")
+gpt4 = ChatOpenAI(model="gpt-4o")
+gpt4_mini = ChatOpenAI(model="gpt-4o-mini")
+
+# But wait... does Claude support structured outputs the same way?
+claude_structured = claude.with_structured_output(Resume)  # May not work!
+
+# You need provider-specific handling
+if provider == "anthropic":
+    # Use function calling? XML? JSON mode?
+    # Different providers have different capabilities
+    pass
+```
+
+### Testing nightmare
+
+Now you want to test your extraction logic without burning through API credits:
+
+```python
+# How do you test this?
+structured_llm = llm.with_structured_output(Resume)
+
+# Mock the entire LLM?
+from unittest.mock import Mock
+mock_llm = Mock()
+mock_llm.with_structured_output.return_value.invoke.return_value = Resume(...)
+
+# But you're not really testing your extraction logic...
+# Just that your mocks work
+```
+
+**With BAML, testing is visual and instant:**
+
+<img src="/assets/vscode/test-cases.png" alt="VSCode test case buttons for instant testing" />
+
+*Test your prompts instantly without API calls or mocking*
+
+### The token mystery
+
+Your CFO asks: "Why is our OpenAI bill so high?" You investigate:
+
+```python
+# How many tokens does this use?
+structured_llm = llm.with_structured_output(Resume)
+result = structured_llm.invoke(long_resume_text)
+
+# You need callbacks or token counting utilities
+from langchain.callbacks import get_openai_callback
+
+with get_openai_callback() as cb:
+    result = structured_llm.invoke(long_resume_text)
+    print(f"Tokens: {cb.total_tokens}")  # Finally!
+```
+
+But you still don't know WHY it's using so many tokens. Is it the schema format? The prompt template? The retry logic?
+
+## Enter BAML
+
+BAML was built specifically for these LLM challenges. Here's the same resume extraction:
+
+```baml
+class Education {
+  school string
+  degree string
+  year int
+}
+
+class Resume {
+  name string
+  skills string[]
+  education Education[]
+  seniority SeniorityLevel
+}
+
+enum SeniorityLevel {
+  JUNIOR @description("0-2 years of experience")
+  MID @description("2-5 years of experience") 
+  SENIOR @description("5-10 years of experience")
+  STAFF @description("10+ years of experience, technical leadership")
+}
+
+function ExtractResume(resume_text: string) -> Resume {
+  client GPT4
+  prompt #"
+    Extract information from this resume.
+    
+    For seniority level, consider:
+    {{ ctx.output_format.seniority }}
+    
+    Resume:
+    ---
+    {{ resume_text }}
+    ---
+    
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+Now look what you get:
+
+1. **See exactly what's sent to the LLM** - The prompt is right there!
+2. **Test without API calls** - Use the VSCode playground
+3. **Switch models instantly** - Just change `client GPT4` to `client Claude`
+4. **Token count visibility** - BAML shows exact token usage
+5. **Modify prompts easily** - It's just a template string
+
+### Multi-model support done right
+
+```baml
+// Define all your clients in one place
+client<llm> GPT4 {
+  provider openai
+  options {
+    model "gpt-4o"
+    temperature 0.1
+  }
+}
+
+client<llm> GPT4Mini {
+  provider openai
+  options {
+    model "gpt-4o-mini"
+    temperature 0.1
+  }
+}
+
+client<llm> Claude {
+  provider anthropic
+  options {
+    model "claude-3-opus-20240229"
+    max_tokens 4096
+  }
+}
+
+// Same function works with ANY model
+function ExtractResume(resume_text: string) -> Resume {
+  client GPT4  // Just change this line
+  prompt #"..."#
+}
+```
+
+Use it in Python:
+```python
+from baml_client import baml as b
+
+# Use default model
+resume = await b.ExtractResume(resume_text)
+
+# Override at runtime based on your needs
+resume_complex = await b.ExtractResume(complex_text, {"client": "Claude"})
+resume_simple = await b.ExtractResume(simple_text, {"client": "GPT4Mini"})
+```
+
+### The bottom line
+
+Langchain is great for building complex LLM applications with chains, agents, and memory. But for structured extraction, you're fighting against abstractions that hide important details.
+
+**BAML gives you what Langchain can't:**
+- **Full prompt transparency** - See and control exactly what's sent to the LLM
+- **Native testing** - Test in VSCode without API calls or burning tokens
+- **Multi-model by design** - Switch providers with one line, works with any model
+- **Token visibility** - Know exactly what you're paying for and optimize costs
+- **Type safety** - Generated clients with autocomplete that always match your schema
+- **Schema-Aligned Parsing** - Get structured outputs from any model, even without function calling
+- **Streaming + Structure** - Stream structured data with loading bars and type-safe parsing
+
+**Why this matters for production:**
+- **Faster iteration** - See changes instantly without running Python code
+- **Better debugging** - Know exactly why extraction failed
+- **Cost optimization** - Understand and reduce token usage
+- **Model flexibility** - Never get locked into one provider
+- **Team collaboration** - Prompts are code, not hidden strings
+
+We built BAML because we were tired of wrestling with framework abstractions when all we wanted was reliable structured extraction with full developer control.
+
+### Limitations of BAML
+
+BAML does have some limitations we are continuously working on:
+1. It is a new language. However, it is fully open source and getting started takes less than 10 minutes
+2. Developing requires VSCode. You _could_ use vim but we don't recommend it
+3. It's focused on structured extraction - not a full LLM framework like Langchain
+
+If you need complex chains and agents, use Langchain. If you want the best structured extraction experience with full control, [try BAML](https://docs.boundaryml.com).

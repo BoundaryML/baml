@@ -44,8 +44,8 @@ pub use internal_baml_diagnostics::Span;
 pub use mermaid_debug::MermaidDiagramGenerator;
 pub use newline_type::NewlineType;
 pub use stmt::{
-    AssertStmt, AssignOp, AssignOpStmt, AssignStmt, CForLoopStmt, EmitArgument, EmitDecorator,
-    ExprStmt, ForLoopStmt, Header, LetStmt, ReturnStmt, Stmt, WhileStmt,
+    AssertStmt, AssignOp, AssignOpStmt, AssignStmt, CForLoopStmt, ExprStmt, ForLoopStmt, Header,
+    LetStmt, ReturnStmt, Stmt, WatchArgument, WatchDecorator, WhileStmt,
 };
 pub use template_string::TemplateString;
 pub use top::Top;

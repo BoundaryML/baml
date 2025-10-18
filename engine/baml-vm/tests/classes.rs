@@ -11,16 +11,16 @@ use crate::common::{Instance, Object};
 fn class_constructor() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
-                class Point {
-                    x int
-                    y int
-                }
+            class Point {
+                x int
+                y int
+            }
 
-                function main() -> Point {
-                    let p = Point { x: 1, y: 2 };
-                    p
-                }
-            ",
+            function main() -> Point {
+                let p = Point { x: 1, y: 2 };
+                p
+            }
+        ",
         function: "main",
         expected: ExecState::Complete(Value::Object(Object::Instance(Instance {
             class: String::from("Point"),
@@ -69,26 +69,26 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
 fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
-                class Point {
-                    x int
-                    y int
-                    z int
-                    w int
-                }
+            class Point {
+                x int
+                y int
+                z int
+                w int
+            }
 
-                function x_one() -> Point {
-                    Point { x: 1, y: 0, z: 0, w: 0 }
-                }
+            function x_one() -> Point {
+                Point { x: 1, y: 0, z: 0, w: 0 }
+            }
 
-                function xy_one() -> Point {
-                    Point { x: 1, y: 1, z: 0, w: 0 }
-                }
+            function xy_one() -> Point {
+                Point { x: 1, y: 1, z: 0, w: 0 }
+            }
 
-                function main() -> Point {
-                    let p = Point { ...x_one(), ...xy_one() };
-                    p
-                }
-            ",
+            function main() -> Point {
+                let p = Point { ...x_one(), ...xy_one() };
+                p
+            }
+        ",
         function: "main",
         expected: ExecState::Complete(Value::Object(Object::Instance(Instance {
             class: String::from("Point"),

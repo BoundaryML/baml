@@ -119,6 +119,142 @@ struct EmitCallbacks {
     >,
 }
 
+// Helper function to recursively extract handlers from a bindings object
+#[cfg(feature = "interpreter")]
+fn extract_handlers_recursive(
+    bindings: &Object,
+    var_handlers: &mut HashMap<
+        String,
+        napi::threadsafe_function::ThreadsafeFunction<
+            VarEvent,
+            Unknown<'static>,
+            VarEvent,
+            napi::Status,
+            false,
+        >,
+    >,
+    stream_handlers: &mut HashMap<
+        String,
+        napi::threadsafe_function::ThreadsafeFunction<
+            StreamEvent,
+            Unknown<'static>,
+            StreamEvent,
+            napi::Status,
+            false,
+        >,
+    >,
+    block_handlers: &mut Vec<
+        napi::threadsafe_function::ThreadsafeFunction<
+            BlockEvent,
+            Unknown<'static>,
+            BlockEvent,
+            napi::Status,
+            false,
+        >,
+    >,
+) -> napi::Result<()> {
+    // Get the function name from this bindings object
+    let current_function_name = bindings
+        .get_named_property::<String>("functionName")
+        .unwrap_or_default();
+
+    // Extract block handlers from this level
+    if let Ok(block_array) = bindings.get_named_property::<Vec<Function>>("block") {
+        for handler in block_array {
+            if let Ok(tsfn) = handler
+                .build_threadsafe_function()
+                .weak::<false>()
+                .build_callback(|ctx: ThreadSafeCallContext<BlockEvent>| Ok(ctx.value))
+            {
+                block_handlers.push(tsfn);
+            }
+        }
+    }
+
+    // Extract var handlers from this level
+    if let Ok(vars_obj) = bindings.get_named_property::<Object>("vars") {
+        if let Ok(keys) = vars_obj.get_property_names() {
+            let num_keys = keys.get_array_length()?;
+            for i in 0..num_keys {
+                if let Ok(key_str) = keys.get_element::<JsString>(i) {
+                    let var_name = key_str.into_utf8()?.as_str()?.to_string();
+                    if let Ok(handler_array) =
+                        vars_obj.get_named_property::<Vec<Function>>(&var_name)
+                    {
+                        if let Some(handler) = handler_array.first() {
+                            if let Ok(tsfn) = handler
+                                .build_threadsafe_function()
+                                .weak::<false>()
+                                .build_callback(
+                                    |ctx: ThreadSafeCallContext<VarEvent>| Ok(ctx.value),
+                                )
+                            {
+                                // Key by "FunctionName.variable_name"
+                                let key = format!("{}.{}", current_function_name, var_name);
+                                var_handlers.insert(key, tsfn);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Extract stream handlers from this level
+    if let Ok(streams_obj) = bindings.get_named_property::<Object>("streams") {
+        if let Ok(keys) = streams_obj.get_property_names() {
+            let num_keys = keys.get_array_length()?;
+            for i in 0..num_keys {
+                if let Ok(key_str) = keys.get_element::<JsString>(i) {
+                    let var_name = key_str.into_utf8()?.as_str()?.to_string();
+                    if let Ok(handler_array) =
+                        streams_obj.get_named_property::<Vec<Function>>(&var_name)
+                    {
+                        if let Some(handler) = handler_array.first() {
+                            if let Ok(tsfn) = handler
+                                .build_threadsafe_function()
+                                .weak::<false>()
+                                .build_callback(|ctx: ThreadSafeCallContext<StreamEvent>| {
+                                    Ok(ctx.value)
+                                })
+                            {
+                                // Key by "FunctionName.variable_name"
+                                let key = format!("{}.{}", current_function_name, var_name);
+                                stream_handlers.insert(key, tsfn);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Recursively extract from nested functions
+    if let Ok(functions_obj) = bindings.get_named_property::<Object>("functions") {
+        if let Ok(keys) = functions_obj.get_property_names() {
+            let num_keys = keys.get_array_length()?;
+            for i in 0..num_keys {
+                if let Ok(key_str) = keys.get_element::<JsString>(i) {
+                    let _child_fn_name = key_str.into_utf8()?.as_str()?.to_string();
+                    if let Ok(child_bindings) =
+                        functions_obj.get_named_property::<Object>(&_child_fn_name)
+                    {
+                        // Recursively extract from child function's bindings
+                        extract_handlers_recursive(
+                            &child_bindings,
+                            var_handlers,
+                            stream_handlers,
+                            block_handlers,
+                        )?;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 // Extract event handlers from the EventCollector.__handlers() result
 #[cfg(feature = "interpreter")]
 fn extract_emit_callbacks(env: &Env, events_obj: &Object) -> napi::Result<Option<EmitCallbacks>> {
@@ -139,90 +275,17 @@ fn extract_emit_callbacks(env: &Env, events_obj: &Object) -> napi::Result<Option
     let bindings_result: Unknown = handlers_fn.apply(events_obj, empty_args.into_unknown(env)?)?;
     let bindings: Object = Object::from_unknown(bindings_result)?;
 
-    // Extract block handlers
-    let block_handlers =
-        if let Ok(block_array) = bindings.get_named_property::<Vec<Function>>("block") {
-            block_array
-                .into_iter()
-                .filter_map(|handler| {
-                    handler
-                        .build_threadsafe_function()
-                        .weak::<false>()
-                        .build_callback(|ctx: ThreadSafeCallContext<BlockEvent>| Ok(ctx.value))
-                        .ok()
-                })
-                .collect::<Vec<_>>()
-        } else {
-            Vec::new()
-        };
-
-    // Extract var handlers
     let mut var_handlers = HashMap::new();
-    if let Ok(vars_obj) = bindings.get_named_property::<Object>("vars") {
-        // Get property names as JS array
-        if let Ok(keys) = vars_obj.get_property_names() {
-            let num_keys = keys.get_array_length()?;
-            for i in 0..num_keys {
-                if let Ok(key_str) = keys.get_element::<JsString>(i) {
-                    let key = key_str.into_utf8()?.as_str()?.to_string();
-                    if let Ok(handler_array) = vars_obj.get_named_property::<Vec<Function>>(&key) {
-                        if let Some(handler) = handler_array.first() {
-                            if let Ok(tsfn) = handler
-                                .build_threadsafe_function()
-                                .weak::<false>()
-                                .build_callback(
-                                    |ctx: ThreadSafeCallContext<VarEvent>| Ok(ctx.value),
-                                )
-                            {
-                                var_handlers.insert(key, tsfn);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Extract stream handlers
     let mut stream_handlers = HashMap::new();
-    if let Ok(streams_obj) = bindings.get_named_property::<Object>("streams") {
-        log::info!("[FFI] Found streams object in bindings");
-        if let Ok(keys) = streams_obj.get_property_names() {
-            let num_keys = keys.get_array_length()?;
-            log::info!("[FFI] Number of stream handler keys: {}", num_keys);
-            for i in 0..num_keys {
-                if let Ok(key_str) = keys.get_element::<JsString>(i) {
-                    let key = key_str.into_utf8()?.as_str()?.to_string();
-                    log::info!("[FFI] Found stream handler for channel: {}", key);
-                    if let Ok(handler_array) = streams_obj.get_named_property::<Vec<Function>>(&key)
-                    {
-                        log::info!(
-                            "[FFI] Got handler array with {} handlers",
-                            handler_array.len()
-                        );
-                        if let Some(handler) = handler_array.first() {
-                            if let Ok(tsfn) = handler
-                                .build_threadsafe_function()
-                                .weak::<false>()
-                                .build_callback(|ctx: ThreadSafeCallContext<StreamEvent>| {
-                                    Ok(ctx.value)
-                                })
-                            {
-                                log::info!("[FFI] Successfully created threadsafe function for channel: {}", key);
-                                stream_handlers.insert(key, tsfn);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    } else {
-        log::info!("[FFI] No streams object found in bindings");
-    }
-    log::info!(
-        "[FFI] Total stream handlers extracted: {}",
-        stream_handlers.len()
-    );
+    let mut block_handlers = Vec::new();
+
+    // Recursively extract all handlers including nested functions
+    extract_handlers_recursive(
+        &bindings,
+        &mut var_handlers,
+        &mut stream_handlers,
+        &mut block_handlers,
+    )?;
 
     Ok(Some(EmitCallbacks {
         var_handlers,
@@ -293,8 +356,8 @@ impl BamlRuntime {
         collectors: Vec<&Collector>,
         tags: HashMap<String, String>,
         env_vars: HashMap<String, String>,
-        signal: Option<Object>, // AbortSignal parameter
-        events: Option<Object>, // NEW: EventCollector parameter
+        signal: Option<Object>,   // AbortSignal parameter
+        watchers: Option<Object>, // EventCollector parameter
     ) -> napi::Result<PromiseRaw<'e, FunctionResult>> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -311,8 +374,8 @@ impl BamlRuntime {
 
         // Extract emit callbacks from EventCollector (only for interpreter)
         #[cfg(feature = "interpreter")]
-        let emit_callbacks = if let Some(ref events_obj) = events {
-            extract_emit_callbacks(env, events_obj)?
+        let emit_callbacks = if let Some(ref watchers_obj) = watchers {
+            extract_emit_callbacks(env, watchers_obj)?
         } else {
             None
         };
@@ -332,10 +395,10 @@ impl BamlRuntime {
         let fut = async move {
             // Create emit_handler closure (only for interpreter)
             #[cfg(feature = "interpreter")]
-            let emit_handler = move |event: baml_compiler::emit::EmitEvent| {
+            let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
                 if let Some(ref callbacks) = emit_callbacks {
-                    match event.value {
-                        baml_compiler::emit::EmitBamlValue::Block(block_label) => {
+                    match notification.value {
+                        baml_compiler::watch::WatchBamlValue::Block(block_label) => {
                             // Fire block events to all registered block handlers
                             for handler in &callbacks.block_handlers {
                                 let block_event = BlockEvent {
@@ -346,8 +409,8 @@ impl BamlRuntime {
                                     .call(block_event, ThreadsafeFunctionCallMode::NonBlocking);
                             }
                         }
-                        baml_compiler::emit::EmitBamlValue::Value(value) => {
-                            if let Some(var_name) = &event.variable_name {
+                        baml_compiler::watch::WatchBamlValue::Value(value) => {
+                            if let Some(var_name) = &notification.variable_name {
                                 // Serialize BamlValue to JSON
                                 let serialized = serde_json::to_value(value.value())
                                     .unwrap_or(serde_json::Value::Null);
@@ -360,28 +423,32 @@ impl BamlRuntime {
                                         .unwrap()
                                         .as_millis()
                                         .to_string(),
-                                    function_name: event.function_name.clone(),
+                                    function_name: notification.function_name.clone(),
                                 };
 
-                                // Fire to var handlers only
-                                if let Some(handler) = callbacks.var_handlers.get(var_name) {
+                                // Fire to var handlers using composite key "FunctionName.variable_name"
+                                let handler_key =
+                                    format!("{}.{}", notification.function_name, var_name);
+                                if let Some(handler) = callbacks.var_handlers.get(&handler_key) {
                                     let _ = handler
                                         .call(var_event, ThreadsafeFunctionCallMode::NonBlocking);
                                 }
                             }
                         }
-                        baml_compiler::emit::EmitBamlValue::StreamStart(stream_id) => {
+                        baml_compiler::watch::WatchBamlValue::StreamStart(stream_id) => {
                             log::info!(
-                                "[RUST] StreamStart event for var: {:?}, stream_id: {}",
-                                event.variable_name,
+                                "[RUST] StreamStart notification for var: {:?}, stream_id: {}",
+                                notification.variable_name,
                                 stream_id
                             );
-                            if let Some(var_name) = &event.variable_name {
+                            if let Some(var_name) = &notification.variable_name {
                                 log::info!(
                                     "[RUST] Stream handlers available: {:?}",
                                     callbacks.stream_handlers.keys().collect::<Vec<_>>()
                                 );
-                                if let Some(handler) = callbacks.stream_handlers.get(var_name) {
+                                let handler_key =
+                                    format!("{}.{}", notification.function_name, var_name);
+                                if let Some(handler) = callbacks.stream_handlers.get(&handler_key) {
                                     log::info!(
                                         "[RUST] Found stream handler for {}, calling it",
                                         var_name
@@ -404,9 +471,11 @@ impl BamlRuntime {
                                 }
                             }
                         }
-                        baml_compiler::emit::EmitBamlValue::StreamUpdate(stream_id, value) => {
-                            if let Some(var_name) = &event.variable_name {
-                                if let Some(handler) = callbacks.stream_handlers.get(var_name) {
+                        baml_compiler::watch::WatchBamlValue::StreamUpdate(stream_id, value) => {
+                            if let Some(var_name) = &notification.variable_name {
+                                let handler_key =
+                                    format!("{}.{}", notification.function_name, var_name);
+                                if let Some(handler) = callbacks.stream_handlers.get(&handler_key) {
                                     let serialized = serde_json::to_value(value.value())
                                         .unwrap_or(serde_json::Value::Null);
 
@@ -422,9 +491,11 @@ impl BamlRuntime {
                                 }
                             }
                         }
-                        baml_compiler::emit::EmitBamlValue::StreamEnd(stream_id) => {
-                            if let Some(var_name) = &event.variable_name {
-                                if let Some(handler) = callbacks.stream_handlers.get(var_name) {
+                        baml_compiler::watch::WatchBamlValue::StreamEnd(stream_id) => {
+                            if let Some(var_name) = &notification.variable_name {
+                                let handler_key =
+                                    format!("{}.{}", notification.function_name, var_name);
+                                if let Some(handler) = callbacks.stream_handlers.get(&handler_key) {
                                     let stream_event = StreamEvent {
                                         stream_id: stream_id.clone(),
                                         event_type: "end".to_string(),
@@ -453,7 +524,7 @@ impl BamlRuntime {
                     env_vars,
                     Some(&tags),
                     tripwire,
-                    Some(emit_handler), // pass emit handler for interpreter runtime
+                    Some(watch_handler), // pass watch handler for interpreter runtime
                 )
                 .await;
 
@@ -493,7 +564,8 @@ impl BamlRuntime {
         collectors: Vec<&Collector>,
         tags: HashMap<String, String>,
         env_vars: HashMap<String, String>,
-        signal: Option<Object>, // NEW: AbortSignal parameter (sync doesn't actually use it)
+        signal: Option<Object>,   // AbortSignal parameter
+        watchers: Option<Object>, // EventCollector parameter
     ) -> napi::Result<FunctionResult> {
         let args = parse_ts_types::js_object_to_baml_value(&env, args)?;
         let tripwire = js_abort_signal_to_rust_tripwire(&env, signal)?;
@@ -506,6 +578,14 @@ impl BamlRuntime {
         }
         let args_map = args.as_map_owned().unwrap();
 
+        // Extract emit callbacks from EventCollector (only for interpreter)
+        #[cfg(feature = "interpreter")]
+        let emit_callbacks = if let Some(ref watchers_obj) = watchers {
+            extract_emit_callbacks(&env, watchers_obj)?
+        } else {
+            None
+        };
+
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
         let cb = cb.map(|cb| cb.inner.clone());
@@ -513,18 +593,137 @@ impl BamlRuntime {
             .into_iter()
             .map(|c| c.inner.clone())
             .collect::<Vec<_>>();
-        let (result, _event_id) = self.inner.call_function_sync(
-            function_name,
-            &args_map,
-            &ctx_mng,
-            tb.as_ref(),
-            cb.as_ref(),
-            Some(collector_list),
-            env_vars,
-            tripwire,
-            Some(&tags),
-            None::<fn(baml_compiler::emit::EmitEvent)>,
-        );
+
+        #[cfg(feature = "interpreter")]
+        let (result, _event_id) = {
+            let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
+                if let Some(ref callbacks) = emit_callbacks {
+                    match notification.value {
+                        baml_compiler::watch::WatchBamlValue::Block(block_label) => {
+                            // Fire block events to all registered block handlers
+                            for handler in &callbacks.block_handlers {
+                                let block_event = BlockEvent {
+                                    block_label: block_label.clone(),
+                                    event_type: "enter".to_string(),
+                                };
+                                let _ = handler.call(
+                                    block_event,
+                                    napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
+                                );
+                            }
+                        }
+                        baml_compiler::watch::WatchBamlValue::Value(value) => {
+                            if let Some(var_name) = &notification.variable_name {
+                                let handler_key =
+                                    format!("{}.{}", notification.function_name, var_name);
+                                if let Some(handler) = callbacks.var_handlers.get(&handler_key) {
+                                    let serialized = serde_json::to_value(value.value())
+                                        .unwrap_or(serde_json::Value::Null);
+
+                                    let var_event = VarEvent {
+                                        variable_name: var_name.clone(),
+                                        value: serialized,
+                                        timestamp: SystemTime::now()
+                                            .duration_since(SystemTime::UNIX_EPOCH)
+                                            .unwrap()
+                                            .as_millis()
+                                            .to_string(),
+                                        function_name: notification.function_name.clone(),
+                                    };
+                                    let _ = handler.call(
+                                        var_event,
+                                        napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
+                                    );
+                                }
+                            }
+                        }
+                        baml_compiler::watch::WatchBamlValue::StreamStart(stream_id) => {
+                            if let Some(var_name) = &notification.variable_name {
+                                let handler_key =
+                                    format!("{}.{}", notification.function_name, var_name);
+                                if let Some(handler) = callbacks.stream_handlers.get(&handler_key) {
+                                    let stream_event = StreamEvent {
+                                        stream_id: stream_id.clone(),
+                                        event_type: "start".to_string(),
+                                        value: None,
+                                    };
+                                    let _ = handler.call(
+                                        stream_event,
+                                        napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
+                                    );
+                                }
+                            }
+                        }
+                        baml_compiler::watch::WatchBamlValue::StreamUpdate(stream_id, value) => {
+                            if let Some(var_name) = &notification.variable_name {
+                                let handler_key =
+                                    format!("{}.{}", notification.function_name, var_name);
+                                if let Some(handler) = callbacks.stream_handlers.get(&handler_key) {
+                                    let serialized = serde_json::to_value(value.value())
+                                        .unwrap_or(serde_json::Value::Null);
+
+                                    let stream_event = StreamEvent {
+                                        stream_id: stream_id.clone(),
+                                        event_type: "update".to_string(),
+                                        value: Some(serialized),
+                                    };
+                                    let _ = handler.call(
+                                        stream_event,
+                                        napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
+                                    );
+                                }
+                            }
+                        }
+                        baml_compiler::watch::WatchBamlValue::StreamEnd(stream_id) => {
+                            if let Some(var_name) = &notification.variable_name {
+                                let handler_key =
+                                    format!("{}.{}", notification.function_name, var_name);
+                                if let Some(handler) = callbacks.stream_handlers.get(&handler_key) {
+                                    let stream_event = StreamEvent {
+                                        stream_id: stream_id.clone(),
+                                        event_type: "end".to_string(),
+                                        value: None,
+                                    };
+                                    let _ = handler.call(
+                                        stream_event,
+                                        napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            self.inner.call_function_sync(
+                function_name,
+                &args_map,
+                &ctx_mng,
+                tb.as_ref(),
+                cb.as_ref(),
+                Some(collector_list),
+                env_vars,
+                Some(&tags),
+                tripwire,
+                Some(watch_handler),
+            )
+        };
+
+        #[cfg(not(feature = "interpreter"))]
+        let (result, _event_id) = {
+            let _ = watchers; // Suppress unused variable warning
+            self.inner.call_function_sync(
+                function_name,
+                &args_map,
+                &ctx_mng,
+                tb.as_ref(),
+                cb.as_ref(),
+                Some(collector_list),
+                env_vars,
+                Some(&tags),
+                tripwire,
+            )
+        };
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)
     }

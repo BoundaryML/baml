@@ -58,3 +58,21 @@ test ImageDescriptionFromFile {
         }
     }
 }
+
+## Controlling URL Processing
+
+You can control how BAML processes media URLs before sending them to providers using the `media_url_handler` configuration option:
+
+```baml
+client<llm> MyClient {
+  provider anthropic
+  options {
+    media_url_handler {
+      image "send_base64"     // Convert URLs to base64
+      pdf "send_url"          // Keep URLs as-is
+    }
+  }
+}
+```
+
+This allows you to override the default behavior for each provider and media type combination.

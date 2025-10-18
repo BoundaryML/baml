@@ -17,6 +17,7 @@ mod ir_to_py;
 mod package;
 mod r#type;
 mod utils;
+mod watchers;
 
 #[derive(Default)]
 pub struct PyLanguageFeatures;
@@ -53,12 +54,34 @@ impl LanguageFeatures for PyLanguageFeatures {
         );
         let file_map = args.file_map_as_json_string()?;
 
+        // Build function name map for event collectors
+        let expr_fn_wrappers = ir.expr_fns_as_functions();
+        let mut function_name_map = std::collections::HashMap::new();
+        for func in ir.functions.iter() {
+            let py_fn = ir_to_py::functions::ir_function_to_py(func, &pkg);
+            function_name_map.insert(func.elem.name().to_string(), py_fn.name.clone());
+        }
+        for func in expr_fn_wrappers.iter() {
+            let py_fn = ir_to_py::functions::ir_function_to_py(func, &pkg);
+            function_name_map.insert(func.elem.name().to_string(), py_fn.name.clone());
+        }
+
+        // Generate event collectors first to determine has_events
+        let notification_collectors =
+            watchers::build_notification_collectors(args, &pkg, &function_name_map)?;
+        collector.add_file(
+            "watchers.py",
+            watchers::render_events(&notification_collectors)?,
+        )?;
+
+        // Generate __init__.py with correct has_events value
         collector.add_file("__init__.py", render_init(&pkg, &args.default_client_mode)?)?;
         collector.add_file("inlinedbaml.py", render_source_files(file_map)?)?;
         collector.add_file("runtime.py", render_runtime(&pkg)?)?;
         collector.add_file("tracing.py", render_tracing(&pkg)?)?;
         collector.add_file("globals.py", render_globals(&pkg)?)?;
         collector.add_file("config.py", render_config(&pkg)?)?;
+
         let functions = ir
             .functions
             .iter()

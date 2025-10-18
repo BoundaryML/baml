@@ -422,7 +422,7 @@ impl AwsClient {
         let host = format!("bedrock-runtime.{region}.amazonaws.com");
         let encoded_model =
             utf8_percent_encode(&self.properties.model, PATH_SEGMENT_ENCODE_SET).to_string();
-        let url = format!("https://{host}/model/{}/converse", encoded_model);
+        let url = format!("https://{host}/model/{encoded_model}/converse");
 
         let mut header_map = HashMap::new();
         header_map.insert("content-type".to_string(), "application/json".to_string());
@@ -458,10 +458,26 @@ impl AwsClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_audio_urls: ResolveMediaUrls::Always,
-                resolve_image_urls: ResolveMediaUrls::Always,
-                resolve_pdf_urls: ResolveMediaUrls::Always,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: properties
+                    .media_url_handler
+                    .audio
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_image_urls: properties
+                    .media_url_handler
+                    .images
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_pdf_urls: properties
+                    .media_url_handler
+                    .pdf
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_video_urls: properties
+                    .media_url_handler
+                    .video
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
             retry_policy: client.retry_policy.as_ref().map(String::to_owned),
@@ -486,10 +502,26 @@ impl AwsClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_audio_urls: ResolveMediaUrls::Always,
-                resolve_image_urls: ResolveMediaUrls::Always,
-                resolve_pdf_urls: ResolveMediaUrls::Always,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: properties
+                    .media_url_handler
+                    .audio
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_image_urls: properties
+                    .media_url_handler
+                    .images
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_pdf_urls: properties
+                    .media_url_handler
+                    .pdf
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_video_urls: properties
+                    .media_url_handler
+                    .video
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
             retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),

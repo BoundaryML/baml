@@ -328,3 +328,8 @@ jobs:
           fail_on_unmatched_files: true
           token: ${{ secrets.GITHUB_TOKEN }}
           generate_release_notes: false
+
+
+  publish-to-zed-extensions:
+    needs: [all-builds]
+    uses: ./.github/workflows/publish-zed-release.reusable.yaml

@@ -1,0 +1,137 @@
+from typing import Callable, Any, Protocol, Generic, TypeVar, overload, Literal
+import threading
+import typing
+
+T = TypeVar("T")
+
+class BlockEvent:
+    def __init__(self, block_label: str, event_type: str):
+        self.block_label = block_label
+        self.event_type = event_type  # "enter" | "exit"
+
+class VarEvent(Generic[T]):
+    def __init__(self, variable_name: str, value: T, timestamp: str, function_name: str):
+        self.variable_name = variable_name
+        self.value = value
+        self.timestamp = timestamp
+        self.function_name = function_name
+
+BlockHandler = Callable[[BlockEvent], None]
+VarEventHandler = Callable[[VarEvent[T]], None]
+StreamHandler = Callable[[Any], None]  # Stream will be an async iterator
+
+class InternalEventBindings(Protocol):
+    function_name: str
+    block: list[BlockHandler]
+    vars: dict[str, list[VarEventHandler[Any]]]
+    streams: dict[str, list[StreamHandler]]
+    functions: dict[str, "InternalEventBindings"]
+
+class EventCollectorInternal(Protocol):
+    def __handlers__(self) -> InternalEventBindings:
+        ...
+
+{% for collector in collectors %}
+class {{ collector.class_name }}:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        {% for var in collector.var_events %}
+        self._var_handlers_{{ var.method_suffix }}: list[VarEventHandler[{{ var.value_type }}]] = []
+        self._stream_handlers_{{ var.method_suffix }}: list[StreamHandler] = []
+        {% endfor %}
+
+        {% if collector.has_var_events %}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {
+            {% for var in collector.var_events %}
+            "{{ var.channel_name }}": self._var_handlers_{{ var.method_suffix }},
+            {% endfor %}
+        }
+
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {
+            {% for var in collector.var_events %}
+            "{{ var.channel_name }}": self._stream_handlers_{{ var.method_suffix }},
+            {% endfor %}
+        }
+        {% else %}
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        {% endif %}
+
+        {% if collector.has_child_collectors %}
+        self._function_handler_map: dict[str, EventCollectorInternal] = {
+            {% for child in collector.child_collectors %}
+            "{{ child.baml_name }}": {{ child.factory_name }}(),
+            {% endfor %}
+        }
+        {% else %}
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        {% endif %}
+
+        {% for child in collector.child_collectors %}
+        self.{{ child.property_name }} = self._function_handler_map["{{ child.baml_name }}"]
+        {% endfor %}
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    {% if collector.has_var_events %}
+    {% for var in collector.var_events %}
+    @overload
+    def on_var(self, channel: Literal["{{ var.channel_name }}"], handler: VarEventHandler[{{ var.value_type }}]) -> None: ...
+    {% endfor %}
+
+    def on_var(self, channel: Literal[{{ collector.var_channels_literal }}], handler: VarEventHandler[Any]) -> None:
+        with self._lock:
+            if channel in self._var_handler_map:
+                self._var_handler_map[channel].append(handler)
+
+    {% for var in collector.var_events %}
+    @overload
+    def on_stream(self, channel: Literal["{{ var.channel_name }}"], handler: StreamHandler) -> None: ...
+    {% endfor %}
+
+    def on_stream(self, channel: Literal[{{ collector.var_channels_literal }}], handler: StreamHandler) -> None:
+        with self._lock:
+            if channel in self._stream_handler_map:
+                self._stream_handler_map[channel].append(handler)
+    {% endif %}
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "{{ collector.baml_name }}"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def {{ collector.factory_name }}() -> {{ collector.class_name }}:
+    return {{ collector.class_name }}()
+
+{% endfor %}

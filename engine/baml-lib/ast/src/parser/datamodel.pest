@@ -386,23 +386,23 @@ stmt = {
 // Let-binding statement with optional type annotation.
 // e.g. `let x: int|float = 10.0;` or `let x = 10.0;`
 let_type_annotation = { COLON ~ field_type_chain }
-let_expr = { "let" ~ identifier ~ let_type_annotation? ~ "=" ~ expression ~ emit_decorator? }
+let_expr = { "let" ~ identifier ~ let_type_annotation? ~ "=" ~ expression ~ watch_decorator? }
 
-emit_decorator = { SPACER_TEXT? ~ "@emit" ~ emit_arguments? }
-emit_arguments = {
+watch_decorator = { SPACER_TEXT? ~ "@watch" ~ watch_arguments? }
+watch_arguments = {
     "("
         ~ SPACER_TEXT?
-        ~ emit_argument?
-        ~ ("," ~ SPACER_TEXT? ~ emit_argument)*
+        ~ watch_argument?
+        ~ ("," ~ SPACER_TEXT? ~ watch_argument)*
         ~ ","?
         ~ SPACER_TEXT?
     ~ ")"
 }
-emit_argument = _{ emit_argument_kv | emit_argument_invalid | emit_argument_missing_value }
-emit_argument_kv = { identifier? ~ "=" ~ emit_argument_value? }
-emit_argument_invalid = { expression }
-emit_argument_missing_value = { identifier ~ "=" ~ SPACER_TEXT? ~ &("," | ")") }
-emit_argument_value = { expression }
+watch_argument = _{ watch_argument_kv | watch_argument_invalid | watch_argument_missing_value }
+watch_argument_kv = { identifier? ~ "=" ~ watch_argument_value? }
+watch_argument_invalid = { expression }
+watch_argument_missing_value = { identifier ~ "=" ~ SPACER_TEXT? ~ &("," | ")") }
+watch_argument_value = { expression }
 
 // NOTE: Needs to supports things like `object.getter().field[x + y] = value`,
 // so can't be just `identifier ~ "=" ~ expression`.

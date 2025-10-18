@@ -13,7 +13,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context};
-use baml_compiler::{self};
+use baml_compiler::{self, watch};
 use baml_ids::FunctionCallId;
 use baml_types::{tracing::events::HTTPRequest, BamlMap, BamlValue, BamlValueWithMeta, Completion};
 use baml_vm::{BamlVmProgram, EvalStack, FunctionKind, ObjectIndex, Vm, VmExecState};
@@ -162,9 +162,11 @@ impl BamlAsyncVmRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
-        tags: Option<HashMap<String, String>>,
+        tags: Option<&HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
-        _emit_handler: Option<impl FnMut(baml_compiler::emit::EmitEvent) + Send + 'static>,
+        mut watch_handler: Option<
+            impl FnMut(baml_compiler::watch::WatchNotification) + Send + 'static,
+        >,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         // Find the function.
         let Some((function_index, function_kind)) =
@@ -189,8 +191,8 @@ impl BamlAsyncVmRuntime {
                     tb,
                     cb,
                     collectors,
-                    tags,
                     env_vars,
+                    tags,
                     cancel_tripwire,
                 )
                 .await;
@@ -271,7 +273,7 @@ impl BamlAsyncVmRuntime {
             (anyhow::Result<FunctionResult>, FunctionCallId),
         )>();
 
-        let tags_clone = tags.clone();
+        let tags_clone = tags.cloned();
         let vm_result = 'mainloop: loop {
             match vm.exec() {
                 Ok(VmExecState::Await(idx)) => {
@@ -339,6 +341,41 @@ impl BamlAsyncVmRuntime {
                         // the VM has not "awaited" them yet.
                         if ready_idx == idx {
                             fulfilled = true;
+                        }
+                    }
+                }
+
+                Ok(VmExecState::Notify(nodes)) => {
+                    for node in nodes {
+                        let state = vm.watch.root_state(node).unwrap();
+                        let baml_vm::watch::NodeId::LocalVar(stack_index) = node else {
+                            break 'mainloop Err(anyhow!("expected local variable notification, got object notification {:?}", node));
+                        };
+                        let (watched_var_name, function_name) =
+                            vm.watched_vars.get(&stack_index).unwrap();
+                        baml_log::debug!("[VM] Notify: {}", &state.channel);
+
+                        let fake_meta = watch::WatchValueMetadata {
+                            constraints: Vec::new(),
+                            response_checks: Vec::new(),
+                            completion: Completion::default(),
+                            r#type: baml_types::TypeIR::Top(Default::default()),
+                        };
+
+                        let current_value =
+                            try_baml_value_from_vm_value(&vm, &state.value).unwrap();
+
+                        let baml_value_with_meta =
+                            BamlValueWithMeta::with_const_meta(&current_value, fake_meta);
+
+                        let notification = watch::WatchNotification::new_var(
+                            state.channel.to_owned(),
+                            baml_value_with_meta,
+                            function_name.to_owned(),
+                        );
+
+                        if let Some(handler) = watch_handler.as_mut() {
+                            handler(notification);
                         }
                     }
                 }
@@ -414,8 +451,8 @@ impl BamlAsyncVmRuntime {
                                             tb.as_ref(),
                                             cb.as_ref(),
                                             None,
-                                            tags_for_future,
                                             env_vars,
+                                            tags_for_future.as_ref(),
                                             cancel_tripwire,
                                         )
                                         .await;
@@ -673,9 +710,9 @@ impl BamlAsyncVmRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
-        tags: Option<HashMap<String, String>>,
+        tags: Option<&HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
-        emit_handler: Option<impl FnMut(baml_compiler::emit::EmitEvent) + Send + 'static>,
+        watch_handler: Option<impl FnMut(baml_compiler::watch::WatchNotification) + Send + 'static>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         self.async_runtime.block_on(self.call_function(
             function_name,
@@ -687,7 +724,7 @@ impl BamlAsyncVmRuntime {
             env_vars,
             tags,
             cancel_tripwire,
-            emit_handler,
+            watch_handler,
         ))
     }
 
@@ -700,9 +737,8 @@ impl BamlAsyncVmRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
-        tags: Option<HashMap<String, String>>,
-        // FunctionResultStream is responsible for freeing the TripWire and the clean up.
         cancel_tripwire: Arc<TripWire>,
+        tags: Option<&HashMap<String, String>>,
     ) -> anyhow::Result<FunctionResultStream> {
         self.llm_runtime.stream_function(
             function_name,
@@ -712,8 +748,8 @@ impl BamlAsyncVmRuntime {
             cb,
             collectors,
             env_vars,
-            tags,
             cancel_tripwire,
+            tags,
         )
     }
 
