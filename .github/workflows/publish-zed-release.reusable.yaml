@@ -100,11 +100,6 @@ jobs:
             --body "$(cat <<EOF
           Automated sync of [engine/zed] ([workflow logs]).
 
-          Sync path: [engine/zed] -> [BoundaryML/zed-baml](https://github.com/BoundaryML/zed-baml) -> [BoundaryML/zed-extensions](https://github.com/BoundaryML/zed-extensions) -> here.
-
-          [engine/zed]: https://github.com/BoundaryML/baml/tree/canary/engine/zed
-          [workflow logs]: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job}}
-          [BoundaryML/zed-baml]: https://github.com/BoundaryML/zed-baml
-          [BoundaryML/zed-extensions]: https://github.com/BoundaryML/zed-extensions
+          [workflow logs]: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/
           EOF
           )"
