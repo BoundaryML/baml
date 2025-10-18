@@ -1,18 +1,13 @@
 name: Publish Zed Release
 
 on:
-  push:
-    branches:
-      - sam/zed-sync
-  workflow_call:
-    secrets:
-      SAM_BAML_ZED_GITHUB_TOKEN:
-        required: true
+  workflow_call: {}
 
 permissions: {}
 
 jobs:
-  update-zed-extensions:
+  publish-zed-release:
+    environment: release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout upstream zed extensions
