@@ -18,7 +18,7 @@ jobs:
       - name: Checkout upstream zed extensions
         uses: actions/checkout@v5
         with:
-          repository: sxlijin/zed-extensions
+          repository: zed-industries/extensions
           ref: main
           token: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
 
@@ -93,7 +93,7 @@ jobs:
 
           # open the PR
           gh pr create \
-            --repo "sxlijin/zed-extensions" \
+            --repo "zed-industries/extensions" \
             --base "main" \
             --head "BoundaryML:$BRANCH_NAME" \
             --title "Update baml extension to ${BAML_EXTENSION_VERSION}" \
