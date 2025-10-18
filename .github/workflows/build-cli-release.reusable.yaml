@@ -54,7 +54,7 @@ jobs:
             target: aarch64-unknown-linux-musl
 
     # Run Linux builds inside a more modern manylinux container (AlmaLinux 8 based)
-    # with a newer GLIBC version compatible with Node20 used by actions/checkout@v4
+    # with a newer GLIBC version compatible with Node20 used by actions/checkout@v5
     # container: ${{ contains(matrix._.os, 'ubuntu') && (contains(matrix._.target, 'x86_64') && 'quay.io/pypa/manylinux_2_28_x86_64' || 'ghcr.io/rust-cross/manylinux_2_28-cross:aarch64') || '' }}
     runs-on: ${{ matrix._.os }}
 
@@ -68,7 +68,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -83,7 +83,7 @@ jobs:
         uses: ./.github/actions/setup-go
 
 
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@v3
         with:
           install_args: "protoc-gen-go"
 
