@@ -75,7 +75,7 @@ jobs:
             const TOML = require('@iarna/toml');
             const data = fs.readFileSync('extensions/baml/extension.toml', 'utf8');
             console.log(TOML.parse(data).version);
-            EOF
+          EOF
           )
           git add extensions.toml
 
