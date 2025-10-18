@@ -97,4 +97,14 @@ jobs:
             --base "main" \
             --head "BoundaryML:$BRANCH_NAME" \
             --title "Update baml extension to ${BAML_EXTENSION_VERSION}" \
-            --body "Automated sync of [BoundaryML/zed-baml](https://github.com/BoundaryML/zed-baml) via [BoundaryML/zed-extensions](https://github.com/BoundaryML/zed-extensions) ([workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job}}))"
+            --body "$(cat <<EOF
+          Automated sync of [engine/zed] ([workflow logs]).
+
+          Sync path: [engine/zed] -> [BoundaryML/zed-baml](https://github.com/BoundaryML/zed-baml) -> [BoundaryML/zed-extensions](https://github.com/BoundaryML/zed-extensions) -> here.
+
+          [engine/zed]: https://github.com/BoundaryML/baml/tree/canary/engine/zed
+          [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job}})
+          [BoundaryML/zed-baml]: https://github.com/BoundaryML/zed-baml
+          [BoundaryML/zed-extensions]: https://github.com/BoundaryML/zed-extensions
+          EOF
+          )"
