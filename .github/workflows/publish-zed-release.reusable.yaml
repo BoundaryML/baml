@@ -27,6 +27,9 @@ jobs:
 
       - name: Prepare branch from upstream
         env:
+          # NB(sam): we can't use a fine-grained access token here
+          # fine-grained access tokens only have permissions on a single org,
+          # but the authz check for opening a PR is done against the base of the PR
           GH_TOKEN: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
         run: |
           set -euxo pipefail
@@ -39,10 +42,10 @@ jobs:
 
           # add fork remote
           git remote rename origin upstream
-          git remote add fork "https://github.com/BoundaryML/zed-extensions"
+          git remote add boundaryml-fork "https://github.com/BoundaryML/zed-extensions"
           git fetch upstream main
-          git fetch fork main
-          git push fork upstream/main
+          git fetch boundaryml-fork main
+          git push boundaryml-fork upstream/main
 
           # set up branch for PR
           BRANCH_NAME="baml-sync-${{ github.run_id }}"
@@ -82,7 +85,7 @@ jobs:
             exit 0
           fi
           git commit -m "Update baml extension"
-          git push fork "$BRANCH_NAME"
+          git push boundaryml-fork "$BRANCH_NAME"
 
           # open the PR
           gh pr create \
@@ -90,4 +93,4 @@ jobs:
             --base "main" \
             --head "BoundaryML:$BRANCH_NAME" \
             --title "release: update baml extension version" \
-            --body "Automated update of the baml extension"
+            --body "Automated update of the baml extension from ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
