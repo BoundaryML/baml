@@ -9,6 +9,8 @@ on:
       ZED_EXTENSIONS_SYNC_TOKEN:
         required: true
 
+permissions: {}
+
 jobs:
   update-zed-extensions:
     runs-on: ubuntu-latest
