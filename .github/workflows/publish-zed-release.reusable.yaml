@@ -86,8 +86,10 @@ jobs:
           git checkout -b "${BRANCH_NAME}"
 
           # commit changes
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
+          # Zed requires that the commit author is someone who has signed the Zed CLA,
+          # so we can't use a bot name/email here.
+          git config user.name "Sam Lijin"
+          git config user.email "sam@boundaryml.com"
           git commit -m "Update baml extension to ${BAML_EXTENSION_VERSION}"
           git push boundaryml-fork "${BRANCH_NAME}"
 
@@ -100,6 +102,7 @@ jobs:
             --body "$(cat <<EOF
           Automated sync of [engine/zed] ([workflow logs]).
 
+          [engine/zed]: https://github.com/BoundaryML/baml/tree/canary/engine/zed
           [workflow logs]: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/
           EOF
           )"
