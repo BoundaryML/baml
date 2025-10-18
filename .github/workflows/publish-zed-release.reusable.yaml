@@ -6,7 +6,7 @@ on:
       - sam/zed-sync
   workflow_call:
     secrets:
-      ZED_EXTENSIONS_SYNC_TOKEN:
+      SAM_BAML_ZED_GITHUB_TOKEN:
         required: true
 
 permissions: {}
@@ -71,7 +71,7 @@ jobs:
           zedConfig["baml"]["version"] = bamlExtension["version"];
 
           fs.writeFileSync(configPath, TOML.stringify(zedConfig));
-          dConfig["baml"]["version"]);
+          EOF
           export BAML_EXTENSION_VERSION=$(pnpm exec node <<EOF
             const fs = require('fs');
             const TOML = require('@iarna/toml');
