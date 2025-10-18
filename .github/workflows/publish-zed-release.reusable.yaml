@@ -47,11 +47,6 @@ jobs:
           git fetch boundaryml-fork main
           git push boundaryml-fork upstream/main
 
-          # set up branch for PR
-          BRANCH_NAME="baml-sync-${{ github.run_id }}"
-          git checkout -b "$BRANCH_NAME" upstream/main
-          echo "BRANCH_NAME=$BRANCH_NAME" >> "$GITHUB_ENV"
-
           # Update baml submodule
           git submodule update --init --recursive extensions/baml
           git -C extensions/baml fetch origin main
@@ -74,23 +69,30 @@ jobs:
           zedConfig["baml"]["version"] = bamlExtension["version"];
 
           fs.writeFileSync(configPath, TOML.stringify(zedConfig));
-          EOF
+          dConfig["baml"]["version"]);
+          export BAML_EXTENSION_VERSION=$(pnpm exec node <<EOF
+            const fs = require('fs');
+            const TOML = require('@iarna/toml');
+            const data = fs.readFileSync('extensions/baml/extension.toml', 'utf8');
+            console.log(TOML.parse(data).version);
+            EOF
+          )
           git add extensions.toml
+
+          # set up branch for PR
+          export BRANCH_NAME="update-baml-to-${BAML_EXTENSION_VERSION}"
+          git checkout -b "${BRANCH_NAME}"
 
           # commit changes
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          if git diff --staged --quiet; then
-            echo "committed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git commit -m "Update baml extension"
-          git push boundaryml-fork "$BRANCH_NAME"
+          git commit -m "Update baml extension to ${BAML_EXTENSION_VERSION}"
+          git push boundaryml-fork "${BRANCH_NAME}"
 
           # open the PR
           gh pr create \
             --repo "sxlijin/zed-extensions" \
             --base "main" \
             --head "BoundaryML:$BRANCH_NAME" \
-            --title "release: update baml extension version" \
-            --body "Automated update of the baml extension from ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            --title "Update baml extension to ${BAML_EXTENSION_VERSION}" \
+            --body "Automated sync of [BoundaryML/zed-baml](https://github.com/BoundaryML/zed-baml) via [BoundaryML/zed-extensions](https://github.com/BoundaryML/zed-extensions) ([workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job}}))"
