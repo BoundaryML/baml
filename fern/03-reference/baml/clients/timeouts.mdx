@@ -1,0 +1,326 @@
+---
+title: Timeout Configuration
+---
+
+Configure timeouts on any BAML client to prevent requests from hanging indefinitely.
+
+## Overview
+
+Timeouts can be configured on leaf clients (OpenAI, Anthropic, etc.).
+
+## Timeout Options
+
+All timeout values are specified in **milliseconds** as positive integers.
+
+<ParamField path="connect_timeout_ms" type="int">
+  Maximum time to establish a network connection to the provider.
+
+  **Default:** No timeout (infinite)
+
+  ```baml
+  client<llm> MyClient {
+    provider openai
+    options {
+      model "gpt-4"
+      api_key env.OPENAI_API_KEY
+      http_client {
+        connect_timeout_ms 5000  // 5 seconds
+      }
+    }
+  }
+  ```
+</ParamField>
+
+<ParamField path="time_to_first_token_timeout_ms" type="int">
+  Maximum time to receive the first token after sending the request.
+
+  **Default:** No timeout (infinite)
+
+  Particularly useful for detecting when a provider accepts the request but takes too long to start generating.
+
+  ```baml
+  client<llm> MyClient {
+    provider openai
+    options {
+      model "gpt-4"
+      api_key env.OPENAI_API_KEY
+      http_client {
+        time_to_first_token_timeout_ms 10000  // 10 seconds
+      }
+    }
+  }
+  ```
+</ParamField>
+
+<ParamField path="idle_timeout_ms" type="int">
+  Maximum time between receiving consecutive data chunks.
+
+  **Default:** No timeout (infinite)
+
+  Important for detecting stalled streaming connections.
+
+  ```baml
+  client<llm> MyClient {
+    provider openai
+    options {
+      model "gpt-4"
+      api_key env.OPENAI_API_KEY
+      http_client {
+        idle_timeout_ms 15000  // 15 seconds
+      }
+    }
+  }
+  ```
+</ParamField>
+
+<ParamField path="request_timeout_ms" type="int">
+  Maximum total time for the entire request-response cycle.
+
+  **Default:** No timeout (infinite)
+
+  For streaming responses, this applies to the entire stream duration (first token to last token).
+
+  ```baml
+  client<llm> MyClient {
+    provider openai
+    options {
+      model "gpt-4"
+      api_key env.OPENAI_API_KEY
+      http_client {
+        request_timeout_ms 60000  // 60 seconds
+      }
+    }
+  }
+  ```
+</ParamField>
+
+## Timeout Composition
+
+When composite clients reference subclients with their own timeouts, the **minimum (most restrictive) timeout wins**.
+
+### Example
+
+```baml
+client<llm> FastClient {
+  provider openai
+  options {
+    model "gpt-3.5-turbo"
+    api_key env.OPENAI_API_KEY
+    http_client {
+      connect_timeout_ms 3000
+      request_timeout_ms 20000
+    }
+  }
+}
+
+client<llm> SlowClient {
+  provider openai
+  options {
+    model "gpt-4"
+    api_key env.OPENAI_API_KEY
+    http_client {
+      request_timeout_ms 60000
+    }
+  }
+}
+
+client<llm> MyFallback {
+  provider fallback
+  options {
+    strategy [FastClient, SlowClient]
+    http_client {
+      connect_timeout_ms 5000      // Parent timeout
+      idle_timeout_ms 15000        // Parent timeout
+    }
+  }
+}
+```
+
+**Effective timeouts:**
+
+When calling `FastClient`:
+- `connect_timeout_ms`: `min(5000, 3000)` = **3000ms** (FastClient is stricter)
+- `request_timeout_ms`: `min(∞, 20000)` = **20000ms** (only FastClient defines it)
+- `idle_timeout_ms`: `min(15000, ∞)` = **15000ms** (only parent defines it)
+
+When calling `SlowClient`:
+- `connect_timeout_ms`: `min(5000, ∞)` = **5000ms** (only parent defines it)
+- `request_timeout_ms`: `min(∞, 60000)` = **60000ms** (only SlowClient defines it)
+- `idle_timeout_ms`: `min(15000, ∞)` = **15000ms** (only parent defines it)
+
+## Timeout Evaluation
+
+All timeouts are evaluated concurrently. A request fails when **any** timeout is exceeded:
+
+1. **Connection phase:** `connect_timeout_ms` applies
+2. **After connection:**
+   - `time_to_first_token_timeout_ms` starts when request is sent
+   - `request_timeout_ms` starts when request is sent
+   - `idle_timeout_ms` starts after each chunk is received
+
+## Interaction with Retry Policies
+
+When a client has both timeouts and a retry policy:
+
+- Each retry attempt gets the **full timeout duration**
+- A timeout triggers the retry mechanism (if configured)
+- Total elapsed time = (number of attempts) × (timeout per attempt) + (retry delays)
+
+Example:
+
+```baml
+retry_policy Exponential {
+  max_retries 3
+  strategy {
+    type exponential_backoff
+  }
+}
+
+client<llm> MyClient {
+  provider openai
+  retry_policy Exponential
+  options {
+    model "gpt-4"
+    api_key env.OPENAI_API_KEY
+    http_client {
+      request_timeout_ms 30000  // Each attempt gets 30 seconds
+    }
+  }
+}
+```
+
+Maximum possible time: ~30s × 4 attempts + exponential backoff delays
+
+## Runtime Overrides
+
+Override timeout values at runtime using the client registry:
+
+<CodeGroup>
+```typescript TypeScript
+import { b } from './baml_client'
+
+const result = await b.MyFunction(input, {
+  clientRegistry: b.ClientRegistry.override({
+    "MyClient": {
+      options: {
+        http_client: {
+          request_timeout_ms: 10000,
+          idle_timeout_ms: 5000
+        }
+      }
+    }
+  })
+})
+```
+
+```python Python
+from baml_client import b
+
+result = await b.MyFunction(
+    input,
+    baml_options={
+        "client_registry": b.ClientRegistry.override({
+            "MyClient": {
+                "options": {
+                    "http_client": {
+                        "request_timeout_ms": 10000,
+                        "idle_timeout_ms": 5000
+                    }
+                }
+            }
+        })
+    }
+)
+```
+
+```ruby Ruby
+result = b.my_function(
+  input,
+  baml_options: {
+    client_registry: b.ClientRegistry.override({
+      "MyClient" => {
+        options: {
+          http_client: {
+            request_timeout_ms: 10000,
+            idle_timeout_ms: 5000
+          }
+        }
+      }
+    })
+  }
+)
+```
+</CodeGroup>
+
+Runtime overrides follow the same composition rules: the minimum timeout wins when composing runtime values with config file values.
+
+## Error Handling
+
+Timeout errors are represented by `BamlTimeoutError`, a subclass of `BamlClientError`:
+
+```
+BamlError
+└── BamlClientError
+    └── BamlTimeoutError
+```
+
+Timeout errors include structured fields:
+
+- `client`: The client name that timed out
+- `timeout_type`: The specific timeout that was exceeded
+- `configured_value_ms`: The configured timeout value in milliseconds
+- `elapsed_ms`: The actual elapsed time in milliseconds
+- `message`: A human-readable error message
+
+<CodeGroup>
+```python Python
+from baml_py.errors import BamlTimeoutError
+
+try:
+    result = await b.MyFunction(input)
+except BamlTimeoutError as e:
+    print(f"Timeout: {e.timeout_type}")
+    print(f"Configured: {e.configured_value_ms}ms")
+    print(f"Elapsed: {e.elapsed_ms}ms")
+```
+
+```typescript TypeScript
+import { BamlTimeoutError } from '@boundaryml/baml'
+
+try {
+  const result = await b.MyFunction(input)
+} catch (e) {
+  if (e instanceof BamlTimeoutError) {
+    console.log(`Timeout: ${e.timeout_type}`)
+    console.log(`Configured: ${e.configured_value_ms}ms`)
+    console.log(`Elapsed: ${e.elapsed_ms}ms`)
+  }
+}
+```
+
+```ruby Ruby
+begin
+  result = b.my_function(input)
+rescue Baml::TimeoutError => e
+  puts "Timeout: #{e.timeout_type}"
+  puts "Configured: #{e.configured_value_ms}ms"
+  puts "Elapsed: #{e.elapsed_ms}ms"
+end
+```
+</CodeGroup>
+
+## Validation Rules
+
+BAML validates timeout configurations at compile time:
+
+1. **Positive values:** All timeout values must be positive integers
+3. **Logical constraints:** `request_timeout_ms` must be ≥ `time_to_first_token_timeout_ms` (if both are specified)
+
+Invalid configurations will cause BAML to raise validation errors with helpful messages.
+
+## See Also
+
+- [Configuring Timeouts Guide](/guide/baml-basics/timeouts) - User guide with examples
+- [Fallback Strategy](/ref/llm-client-strategies/fallback) - Using timeouts with fallback clients
+- [Retry Policies](/ref/llm-client-strategies/retry-policy) - Using timeouts with retries
+- [Error Handling](/guide/baml-basics/error-handling) - Handling timeout errors
