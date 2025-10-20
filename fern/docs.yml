@@ -979,6 +979,9 @@ layout:
   searchbar-placement: header
   header-height: 54px
   tabs-placement: header
+settings:
+  dark-mode-code: true
+  http-snippets: false
 
 typography:
   bodyFont:

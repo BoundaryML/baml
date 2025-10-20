@@ -23,7 +23,7 @@ All timeout values are specified in **milliseconds** as positive integers.
     options {
       model "gpt-4"
       api_key env.OPENAI_API_KEY
-      http_client {
+      http {
         connect_timeout_ms 5000  // 5 seconds
       }
     }
@@ -44,7 +44,7 @@ All timeout values are specified in **milliseconds** as positive integers.
     options {
       model "gpt-4"
       api_key env.OPENAI_API_KEY
-      http_client {
+      http {
         time_to_first_token_timeout_ms 10000  // 10 seconds
       }
     }
@@ -65,7 +65,7 @@ All timeout values are specified in **milliseconds** as positive integers.
     options {
       model "gpt-4"
       api_key env.OPENAI_API_KEY
-      http_client {
+      http {
         idle_timeout_ms 15000  // 15 seconds
       }
     }
@@ -86,7 +86,7 @@ All timeout values are specified in **milliseconds** as positive integers.
     options {
       model "gpt-4"
       api_key env.OPENAI_API_KEY
-      http_client {
+      http {
         request_timeout_ms 60000  // 60 seconds
       }
     }
@@ -106,7 +106,7 @@ client<llm> FastClient {
   options {
     model "gpt-3.5-turbo"
     api_key env.OPENAI_API_KEY
-    http_client {
+    http {
       connect_timeout_ms 3000
       request_timeout_ms 20000
     }
@@ -118,7 +118,7 @@ client<llm> SlowClient {
   options {
     model "gpt-4"
     api_key env.OPENAI_API_KEY
-    http_client {
+    http {
       request_timeout_ms 60000
     }
   }
@@ -128,7 +128,7 @@ client<llm> MyFallback {
   provider fallback
   options {
     strategy [FastClient, SlowClient]
-    http_client {
+    http {
       connect_timeout_ms 5000      // Parent timeout
       idle_timeout_ms 15000        // Parent timeout
     }
@@ -182,7 +182,7 @@ client<llm> MyClient {
   options {
     model "gpt-4"
     api_key env.OPENAI_API_KEY
-    http_client {
+    http {
       request_timeout_ms 30000  // Each attempt gets 30 seconds
     }
   }
@@ -203,7 +203,7 @@ const result = await b.MyFunction(input, {
   clientRegistry: b.ClientRegistry.override({
     "MyClient": {
       options: {
-        http_client: {
+        http: {
           request_timeout_ms: 10000,
           idle_timeout_ms: 5000
         }
@@ -222,7 +222,7 @@ result = await b.MyFunction(
         "client_registry": b.ClientRegistry.override({
             "MyClient": {
                 "options": {
-                    "http_client": {
+                    "http": {
                         "request_timeout_ms": 10000,
                         "idle_timeout_ms": 5000
                     }
@@ -240,7 +240,7 @@ result = b.my_function(
     client_registry: b.ClientRegistry.override({
       "MyClient" => {
         options: {
-          http_client: {
+          http: {
             request_timeout_ms: 10000,
             idle_timeout_ms: 5000
           }
