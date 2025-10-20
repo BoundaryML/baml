@@ -383,10 +383,13 @@ navigation:
           - page: Error Handling
             icon: fa-regular fa-triangle-exclamation
             path: 01-guide/04-baml-basics/error-handling.mdx
+          - page: Configuring Timeouts
+            icon: fa-regular fa-stopwatch
+            path: 01-guide/04-baml-basics/timeouts.mdx
           - page: Concurrent Calls
             icon: fa-regular fa-clock-rotate-left
             path: 01-guide/04-baml-basics/concurrent-calls.mdx
-          - page: AbortSignal / Timeouts
+          - page: AbortSignal / Cancellation
             slug: abort-signal
             icon: fa-regular fa-stop-circle
             path: 01-guide/04-baml-basics/abort-signal.mdx
@@ -682,7 +685,7 @@ navigation:
         contents:
           - page: with_options(..)
             path: 03-reference/baml_client/with_options.mdx
-          - page: AbortSignal / Timeouts
+          - page: AbortSignal / Cancellation
             slug: abort-signal
             path: 03-reference/baml_client/abort-signal.mdx
           - page: Collector
@@ -822,6 +825,9 @@ navigation:
             path: 03-reference/baml/clients/providers/vllm.mdx
       - section: LLM Client Strategies
         contents:
+          - page: "Timeout Configuration"
+            slug: timeouts
+            path: 03-reference/baml/clients/timeouts.mdx
           - page: "Retry Policy"
             path: 03-reference/baml/clients/strategy/retry.mdx
           - page: "Fallback"
