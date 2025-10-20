@@ -285,9 +285,6 @@ navigation:
           - page: What is BAML?
             icon: fa-regular fa-question-circle
             path: 01-guide/what-are-function-definitions.mdx
-          - page: Why BAML?
-            icon: fa-regular fa-lightbulb
-            path: 01-guide/why-baml.mdx
           - page: What's the baml_src folder
             icon: fa-regular fa-folder
             path: 01-guide/what-is-baml_src.mdx
@@ -383,10 +380,13 @@ navigation:
           - page: Error Handling
             icon: fa-regular fa-triangle-exclamation
             path: 01-guide/04-baml-basics/error-handling.mdx
+          - page: Configuring Timeouts
+            icon: fa-regular fa-stopwatch
+            path: 01-guide/04-baml-basics/timeouts.mdx
           - page: Concurrent Calls
             icon: fa-regular fa-clock-rotate-left
             path: 01-guide/04-baml-basics/concurrent-calls.mdx
-          - page: AbortSignal / Timeouts
+          - page: AbortSignal / Cancellation
             slug: abort-signal
             icon: fa-regular fa-stop-circle
             path: 01-guide/04-baml-basics/abort-signal.mdx
@@ -428,24 +428,17 @@ navigation:
           #       path: 01-guide/functions/environment-variables.mdx
           - section: Observability
             icon: fa-chart-simple
+            slug: observability
             contents:
               - page: Tracking Usage
+                slug: tracking-usage
                 icon: fa-regular fa-bar-chart
                 path: 01-guide/07-observability/studio.mdx
       - section: Comparisons
         contents:
-          - page: BAML vs Langchain
-            icon: fa-solid fa-magnifying-glass
-            path: 01-guide/09-comparisons/langchain.mdx
           - page: BAML vs Marvin
             icon: fa-solid fa-magnifying-glass
             path: 01-guide/09-comparisons/marvin.mdx
-          - page: BAML vs Ai-SDK
-            icon: fa-solid fa-magnifying-glass
-            path: 01-guide/09-comparisons/ai-sdk.mdx
-          - page: BAML vs OpenAI SDK
-            icon: fa-solid fa-magnifying-glass
-            path: 01-guide/09-comparisons/openai-sdk.mdx
           - page: BAML vs Pydantic
             icon: fa-solid fa-magnifying-glass
             path: 01-guide/09-comparisons/pydantic.mdx
@@ -821,12 +814,19 @@ navigation:
             slug: vllm
             path: 03-reference/baml/clients/providers/vllm.mdx
       - section: LLM Client Strategies
+        slug: llm-client-strategies
         contents:
+          - page: "Timeout Configuration"
+            slug: timeouts
+            path: 03-reference/baml/clients/timeouts.mdx
           - page: "Retry Policy"
+            slug: retry-policy
             path: 03-reference/baml/clients/strategy/retry.mdx
           - page: "Fallback"
+            slug: fallback
             path: 03-reference/baml/clients/strategy/fallback.mdx
           - page: "Round Robin"
+            slug: round-robin
             path: 03-reference/baml/clients/strategy/round-robin.mdx
 
       - section: Prompt Syntax
@@ -979,9 +979,6 @@ layout:
   searchbar-placement: header
   header-height: 54px
   tabs-placement: header
-settings:
-  dark-mode-code: true
-  http-snippets: false
 
 typography:
   bodyFont:
