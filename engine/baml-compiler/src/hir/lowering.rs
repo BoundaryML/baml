@@ -361,8 +361,8 @@ impl Block {
             }) = stmt
             {
                 // Extract name and when from the WatchOptions class constructor expression
-                let (name, when) = extract_watch_options_fields(options_expr);
-                watch_options_map.insert(variable.to_string(), (name, when));
+                let (channel, when) = extract_watch_options_fields(options_expr);
+                watch_options_map.insert(variable.to_string(), (channel, when));
             }
         }
 
