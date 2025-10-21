@@ -24,6 +24,7 @@ pub use ui::{
         CreateOrganization, CreateOrganizationRequest, CreateOrganizationResponse,
         DeleteOrganization, DeleteOrganizationRequest, DeleteOrganizationResponse,
         GetOrganization, GetOrganizationRequest, GetOrganizationResponse, Organization,
+        SyncStripeSubscription, SyncStripeSubscriptionRequest, SyncStripeSubscriptionResponse,
         UpdateOrganization, UpdateOrganizationRequest, UpdateOrganizationResponse,
     },
     ui_control_plane_projects::{
