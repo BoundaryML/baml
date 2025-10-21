@@ -10429,7 +10429,7 @@ export class BamlSyncClient {
   }
   
   NotEmpty(
-      prev: string,value: string,
+      value: string,
       __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
   ): boolean {
     try {
@@ -10453,7 +10453,7 @@ export class BamlSyncClient {
       const raw = this.runtime.callFunctionSync(
         "NotEmpty",
         {
-          "prev": prev,"value": value
+          "value": value
         },
         this.ctxManager.cloneContext(),
         options.tb?.__tb(),

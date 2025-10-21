@@ -3769,19 +3769,19 @@ class BamlAsyncClient:
                 "a": a,"b": b,
             })
             return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
-    async def NotEmpty(self, prev: str,value: str,
+    async def NotEmpty(self, value: str,
         baml_options: BamlCallOptions = {},
     ) -> bool:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.NotEmpty(prev=prev,value=value,
+            stream = self.stream.NotEmpty(value=value,
                 baml_options=baml_options)
             return await stream.get_final_response()
         else:
             # Original non-streaming code
             result = await self.__options.merge_options(baml_options).call_function_async(function_name="NotEmpty", args={
-                "prev": prev,"value": value,
+                "value": value,
             })
             return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
     async def ReturnCategory(self, category: types.Category,
@@ -6955,11 +6955,11 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def NotEmpty(self, prev: str,value: str,
+    def NotEmpty(self, value: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[bool], bool]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="NotEmpty", args={
-            "prev": prev,"value": value,
+            "value": value,
         })
         return baml_py.BamlStream[typing.Optional[bool], bool](
           result,
@@ -8865,11 +8865,11 @@ class BamlHttpRequestClient:
             "a": a,"b": b,
         }, mode="request")
         return result
-    async def NotEmpty(self, prev: str,value: str,
+    async def NotEmpty(self, value: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NotEmpty", args={
-            "prev": prev,"value": value,
+            "value": value,
         }, mode="request")
         return result
     async def ReturnCategory(self, category: types.Category,
@@ -10700,11 +10700,11 @@ class BamlHttpStreamRequestClient:
             "a": a,"b": b,
         }, mode="stream")
         return result
-    async def NotEmpty(self, prev: str,value: str,
+    async def NotEmpty(self, value: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NotEmpty", args={
-            "prev": prev,"value": value,
+            "value": value,
         }, mode="stream")
         return result
     async def ReturnCategory(self, category: types.Category,

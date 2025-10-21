@@ -12666,8 +12666,6 @@ export function useNormalElseIfStmt(
  *
  * **Input Types:**
  *
- * - prev: string
- *
  * - value: string
  *
  *

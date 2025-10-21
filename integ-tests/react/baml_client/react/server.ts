@@ -4487,17 +4487,14 @@ export const NormalElseIfStmt = async (
  * This server action calls the underlying BAML function "NotEmpty"
  * with the specified parameters.
  *
- * @param { string } prev - Input parameter.
  * @param { string } value - Input parameter.
  *
  * @returns {Promise<boolean>} A promise that resolves with the result of the action.
  */
 export const NotEmpty = async (
-  prev: string,
   value: string,
 ): Promise<boolean> => {
   return b.NotEmpty(
-    prev,
     value,
   );
 };

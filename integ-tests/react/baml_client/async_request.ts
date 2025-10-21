@@ -6192,7 +6192,7 @@ env?: Record<string, string | undefined>
       }
       
   async NotEmpty(
-  prev: string,value: string,
+  value: string,
   __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
   ): Promise<HTTPRequest> {
     try {
@@ -6203,7 +6203,7 @@ env?: Record<string, string | undefined>
       return await this.runtime.buildRequest(
       "NotEmpty",
       {
-      "prev": prev,"value": value
+      "value": value
       },
       this.ctxManager.cloneContext(),
       __baml_options__?.tb?.__tb(),
@@ -12723,7 +12723,7 @@ env?: Record<string, string | undefined>
           }
           
       async NotEmpty(
-      prev: string,value: string,
+      value: string,
       __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
       ): Promise<HTTPRequest> {
         try {
@@ -12734,7 +12734,7 @@ env?: Record<string, string | undefined>
           return await this.runtime.buildRequest(
           "NotEmpty",
           {
-          "prev": prev,"value": value
+          "value": value
           },
           this.ctxManager.cloneContext(),
           __baml_options__?.tb?.__tb(),

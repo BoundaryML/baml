@@ -45,18 +45,18 @@ pub fn builtin_classes() -> Vec<Class> {
             methods: vec![],
             fields: vec![
                 Field {
-                    name: String::from("name"),
+                    name: String::from("channel"),
                     r#type: TypeIR::optional(TypeIR::string()),
                     span: Span::fake(),
                 },
                 Field {
                     name: String::from("when"),
-                    // "never" | "manual" | ((T, T) -> bool)
-                    // We use a generic function type with top types for T
+                    // "never" | "manual" | (T -> bool)
+                    // We use a generic function type with top type for T
                     r#type: TypeIR::optional(TypeIR::union(vec![
                         TypeIR::literal_string("never".to_string()),
                         TypeIR::literal_string("manual".to_string()),
-                        TypeIR::arrow(vec![TypeIR::top(), TypeIR::top()], TypeIR::bool()),
+                        TypeIR::arrow(vec![TypeIR::top()], TypeIR::bool()),
                     ])),
                     span: Span::fake(),
                 },

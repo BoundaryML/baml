@@ -6188,7 +6188,7 @@ export class HttpRequest {
   }
   
   NotEmpty(
-      prev: string,value: string,
+      value: string,
       __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
   ): HTTPRequest {
     try {
@@ -6199,7 +6199,7 @@ export class HttpRequest {
       return this.runtime.buildRequestSync(
         "NotEmpty",
         {
-          "prev": prev,"value": value
+          "value": value
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -12719,7 +12719,7 @@ export class HttpStreamRequest {
   }
   
   NotEmpty(
-      prev: string,value: string,
+      value: string,
       __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
   ): HTTPRequest {
     try {
@@ -12730,7 +12730,7 @@ export class HttpStreamRequest {
       return this.runtime.buildRequestSync(
         "NotEmpty",
         {
-          "prev": prev,"value": value
+          "value": value
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),

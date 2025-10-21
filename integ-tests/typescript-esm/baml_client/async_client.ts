@@ -11905,7 +11905,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             }
             
         async NotEmpty(
-        prev: string,value: string,
+        value: string,
         __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
         ): Promise<boolean> {
           try {
@@ -11919,7 +11919,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
           // Check if onTick is provided - route through streaming if so
           if (options.onTick) {
           const stream = this.stream.NotEmpty(
-          prev,value,
+          value,
           __baml_options__
           );
 
@@ -11935,7 +11935,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             const raw = await this.runtime.callFunction(
             "NotEmpty",
             {
-            "prev": prev,"value": value
+            "value": value
             },
             this.ctxManager.cloneContext(),
             options.tb?.__tb(),
@@ -28875,7 +28875,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   }
                   
             NotEmpty(
-            prev: string,value: string,
+            value: string,
             __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
             ): BamlStream<boolean | null, boolean>
               {
@@ -28916,7 +28916,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 const raw = this.runtime.streamFunction(
                 "NotEmpty",
                 {
-                "prev": prev,"value": value
+                "value": value
                 },
                 undefined,
                 this.ctxManager.cloneContext(),
