@@ -30,6 +30,29 @@ pub fn array_len(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     Ok(Value::Int(array.len() as i64))
 }
 
+/// Array push
+pub fn array_push(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    // Arity is already checked by the VM.
+
+    let expected = ObjectType::Array;
+    let ob_index = vm.objects.as_object(&args[0], expected)?;
+
+    let Object::Array(array) = &mut vm.objects[ob_index] else {
+        return Err(InternalError::TypeError {
+            expected: expected.into(),
+            got: ObjectType::of(&vm.objects[ob_index]).into(),
+        }
+        .into());
+    };
+
+    let value = args[1];
+
+    array.push(value);
+
+    // TODO: Should have no return type.
+    Ok(Value::Null)
+}
+
 /// Length of map
 pub fn map_len(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
@@ -331,6 +354,7 @@ pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
     let fns: &[(&str, (NativeFunction, usize))] = &[
         // Array.
         ("baml.Array.length", (array_len, 1)),
+        ("baml.Array.push", (array_push, 2)),
         // Map.
         ("baml.Map.length", (map_len, 1)),
         ("baml.Map.has", (map_has, 2)),

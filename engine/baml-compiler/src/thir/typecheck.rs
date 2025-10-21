@@ -112,6 +112,13 @@ pub fn typecheck_returning_context<'a>(
                 vec![TypeIR::List(Box::new(TypeIR::null()), Default::default())],
                 TypeIR::int(),
             ),
+            "baml.Array.push" => TypeIR::arrow(
+                vec![
+                    TypeIR::List(Box::new(TypeIR::null()), Default::default()),
+                    TypeIR::null(),
+                ],
+                TypeIR::null(),
+            ),
             "baml.Map.length" => TypeIR::arrow(
                 // map<string, V> -> int
                 // NOTE: we don't have a "top" type for map/array values, so we'll use Null.
@@ -1696,6 +1703,7 @@ pub fn typecheck_expression(
                 // TODO: Handle this uniformly with the other cases.
                 Some(TypeIR::List(_, _)) => match method.as_str() {
                     "length" => Some("baml.Array.length".to_string()),
+                    "push" => Some("baml.Array.push".to_string()),
                     _ => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             &format!("Method `{method}` is not available on class `baml.Array`"),
@@ -1812,6 +1820,19 @@ pub fn typecheck_expression(
             };
 
             let mut func_type = context.get_type(&full_name).cloned();
+
+            // Specialize input parameters for baml.Array.push.
+            if let ("baml.Array.push", Some(TypeIR::List(inner, _))) =
+                (full_name.as_str(), &typed_receiver.meta().1)
+            {
+                func_type = Some(TypeIR::arrow(
+                    vec![
+                        TypeIR::List(inner.clone(), Default::default()),
+                        *inner.clone(),
+                    ],
+                    TypeIR::null(),
+                ));
+            }
 
             let (param_types, return_type, is_known_function) = match &func_type {
                 Some(TypeIR::Arrow(arrow, _)) => (
