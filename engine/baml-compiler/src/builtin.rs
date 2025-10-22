@@ -5,6 +5,7 @@ use crate::hir::{Class, Enum, EnumVariant, Field};
 
 pub mod functions {
     pub const FETCH_AS: &str = "baml.fetch_as";
+    pub const FETCH_VALUE: &str = "std.fetch_value";
 }
 
 pub mod classes {
@@ -82,9 +83,14 @@ pub fn std_request_type() -> TypeIR {
     TypeIR::class(classes::REQUEST)
 }
 
-/// Create a function signature for std::fetch_value<T>
+/// Create a function signature for baml.fetch_as<T>
 pub fn baml_fetch_as_signature(return_type: TypeIR) -> TypeIR {
     TypeIR::arrow(vec![TypeIR::string()], return_type)
+}
+
+/// Create a function signature for std.fetch_value<T>
+pub fn std_fetch_value_signature(return_type: TypeIR) -> TypeIR {
+    TypeIR::arrow(vec![TypeIR::class(classes::REQUEST)], return_type)
 }
 
 pub fn is_builtin_identifier(identifier: &str) -> bool {

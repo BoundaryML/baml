@@ -27,7 +27,7 @@ pub fn parse_expr_fn(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<e
     let mut tokens = token.into_inner();
     let name = parse_identifier(tokens.next()?, diagnostics);
     let args = parse_named_argument_list(tokens.next()?, diagnostics);
-    let arrow_or_body = tokens.next()?;
+    let mut arrow_or_body = tokens.next()?;
 
     // We may or may not have an arrow and a return type.
     // If the args list is immediately followed by an arrow, we have an arrow and a return type.
@@ -48,6 +48,9 @@ pub fn parse_expr_fn(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<e
             "function must have a return type: e.g. function Foo() -> int",
             span.clone(),
         ));
+        if matches!(arrow_or_body.as_rule(), Rule::SPACER_TEXT) {
+            arrow_or_body = tokens.next()?;
+        }
         let function_body = parse_function_body(arrow_or_body, diagnostics);
         (None, function_body)
     };
