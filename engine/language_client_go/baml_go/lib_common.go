@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -38,15 +39,11 @@ const (
 	bamlDisableDlEnv   = "BAML_LIBRARY_DISABLE_DOWNLOAD"
 )
 
-// uninstrumentedHTTPClient creates an HTTP client that won't be instrumented by Orchestrion.
-// This is needed because BAML initialization happens in init() before Datadog tracer is ready.
-//
-//orchestrion:ignore
+// uninstrumentedHTTPClient creates an HTTP client for use during init().
+// Uses reflection to set DD__tracer_internal flag if it exists (added by Orchestrion).
 func uninstrumentedHTTPClient() *http.Client {
-	// Create a custom transport with a flag that tells Orchestrion to skip it
 	transport := &http.Transport{
-		DD__tracer_internal: true, // This field prevents Orchestrion instrumentation
-		Proxy:               http.ProxyFromEnvironment,
+		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
 			Timeout:   30 * time.Second,
 			KeepAlive: 30 * time.Second,
@@ -58,9 +55,24 @@ func uninstrumentedHTTPClient() *http.Client {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
+	// Try to set DD__tracer_internal field using reflection
+	// This field only exists when Orchestrion transforms the code
+	setOrchestrionInternalFlag(transport)
+
 	return &http.Client{
 		Transport: transport,
 		Timeout:   5 * time.Minute,
+	}
+}
+
+// setOrchestrionInternalFlag tries to set DD__tracer_internal=true using reflection.
+// This field is added by Orchestrion's code transformation.
+func setOrchestrionInternalFlag(transport *http.Transport) {
+	// Use reflection to set the field if it exists
+	val := reflect.ValueOf(transport).Elem()
+	field := val.FieldByName("DD__tracer_internal")
+	if field.IsValid() && field.CanSet() && field.Kind() == reflect.Bool {
+		field.SetBool(true)
 	}
 }
 
@@ -478,7 +490,9 @@ func downloadBamlLibrary(destDir string, filename string) error {
 	req.Header.Set("User-Agent", fmt.Sprintf("baml-go/%s (%s/%s)", VERSION, runtime.GOOS, runtime.GOARCH))
 
 	// Use uninstrumented client to avoid Orchestrion crash during init()
+	//orchestrion:ignore
 	httpClient := uninstrumentedHTTPClient()
+	//orchestrion:ignore
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w: network error fetching %s: %w", ErrDownloadFailed, downloadURL, err)
@@ -552,7 +566,9 @@ func downloadBamlLibrary(destDir string, filename string) error {
 //orchestrion:ignore
 func downloadChecksum(checksumURL string, targetFilename string) (string, error) {
 	// Use uninstrumented client to avoid Orchestrion crash during init()
+	//orchestrion:ignore
 	httpClient := uninstrumentedHTTPClient()
+	//orchestrion:ignore
 	resp, err := httpClient.Get(checksumURL)
 	if err != nil {
 		return "", fmt.Errorf("network error fetching checksum %s: %w", checksumURL, err)
