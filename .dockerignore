@@ -1,0 +1,28 @@
+# Ignore everything except what we need for the Go integration tests
+*
+!integ-tests/go
+!engine/language_client_go
+!go.mod
+!go.sum
+
+# Exclude large build artifacts and caches
+engine/target/
+**/.cargo/
+**/node_modules/
+**/.turbo/
+**/dist/
+**/.next/
+**/.venv/
+**/__pycache__/
+
+# Exclude binary artifacts
+**/*.dylib
+**/*.so
+**/*.dll
+**/*.a
+*.dylib
+*.so
+*.dll
+
+# Exclude large test binaries
+integ-tests/go/manual_abort_demo
