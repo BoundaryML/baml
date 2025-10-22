@@ -146,6 +146,11 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                     }
                 }
 
+                // Also include BOUNDARY_API_KEY if it exists, for tracing/telemetry
+                if let Some(boundary_api_key) = ctx.env_vars().get("BOUNDARY_API_KEY") {
+                    required_env_vars.insert("BOUNDARY_API_KEY".to_string(), boundary_api_key.to_owned());
+                }
+
                 clients.insert(
                     client_name.into(),
                     CachedClient::new(new_client.clone(), required_env_vars),
