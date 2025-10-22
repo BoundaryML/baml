@@ -38,13 +38,3 @@ function ReturnArray() -> int[] {
 // function ReturnArray() {
 //   [1, 2, 3, 4, 5]
 // }
-//
-// class std::Request {
-//   base_url: string
-//   headers: map<string, string>
-//   query_params: map<string, string>
-// }
-//
-// enum std::HttpMethod {
-//   Get
-// }

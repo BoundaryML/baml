@@ -7,7 +7,7 @@ use super::{
         parse_expr_block, parse_expr_fn, parse_fn_app, parse_generic_fn_app, parse_if_expression,
         parse_lambda,
     },
-    parse_identifier::parse_identifier,
+    parse_identifier::{parse_identifier, parse_path_identifier},
     Rule,
 };
 use crate::{
@@ -627,10 +627,15 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
 
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
-    let class_name = parse_identifier(
-        tokens.next().expect("Guaranteed by the grammar"),
-        diagnostics,
-    );
+    let name_token = tokens.next().expect("Guaranteed by the grammar");
+    let class_name = match name_token.as_rule() {
+        Rule::path_identifier => {
+            // For path identifiers like "baml.WatchOptions", convert to identifier with the full path
+            parse_path_identifier(name_token, diagnostics)
+        }
+        Rule::identifier => parse_identifier(name_token, diagnostics),
+        _ => unreachable!("Grammar guarantees path_identifier or identifier"),
+    };
     let mut fields = Vec::new();
     while let Some(field_or_close_bracket) = tokens.next() {
         if field_or_close_bracket.as_str() == "}" {

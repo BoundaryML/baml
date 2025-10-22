@@ -11,8 +11,7 @@ use crate::{
     assert_correct_parser,
     ast::{
         self, expr::ExprFn, App, ArgumentsList, AssignOp, AssignOpStmt, AssignStmt, ExprStmt,
-        Expression, ExpressionBlock, ForLoopStmt, LetStmt, Stmt, TopLevelAssignment, WatchArgument,
-        WatchDecorator, *,
+        Expression, ExpressionBlock, ForLoopStmt, LetStmt, Stmt, TopLevelAssignment, *,
     },
     parser::{
         parse_arguments::parse_arguments_list, parse_expression::parse_expression,
@@ -28,20 +27,30 @@ pub fn parse_expr_fn(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<e
     let mut tokens = token.into_inner();
     let name = parse_identifier(tokens.next()?, diagnostics);
     let args = parse_named_argument_list(tokens.next()?, diagnostics);
-    let arrow_or_body = tokens.next()?;
+    let mut arrow_or_body = tokens.next()?;
 
     // We may or may not have an arrow and a return type.
     // If the args list is immediately followed by an arrow, we have an arrow and a return type.
     // Otherwise, we have just a body.
     let (maybe_return_type, maybe_body) = if matches!(arrow_or_body.as_rule(), Rule::ARROW) {
         let return_type = parse_field_type_chain(tokens.next()?, diagnostics);
-        let function_body = parse_function_body(tokens.next()?, diagnostics);
+        // Skip optional SPACER_TEXT if present
+        let next_token = tokens.next()?;
+        let body_token = if matches!(next_token.as_rule(), Rule::SPACER_TEXT) {
+            tokens.next()?
+        } else {
+            next_token
+        };
+        let function_body = parse_function_body(body_token, diagnostics);
         (Some(return_type), function_body)
     } else {
         diagnostics.push_error(DatamodelError::new_static(
             "function must have a return type: e.g. function Foo() -> int",
             span.clone(),
         ));
+        if matches!(arrow_or_body.as_rule(), Rule::SPACER_TEXT) {
+            arrow_or_body = tokens.next()?;
+        }
         let function_body = parse_function_body(arrow_or_body, diagnostics);
         (None, function_body)
     };
@@ -119,6 +128,12 @@ pub fn parse_top_level_assignment(
 
         Stmt::Assert(AssertStmt { span, .. }) => {
             only_let_stmt("assert statements", span, diagnostics)
+        }
+        Stmt::WatchOptions(WatchOptionsStmt { span, .. }) => {
+            only_let_stmt("watch options statements", span, diagnostics)
+        }
+        Stmt::WatchNotify(WatchNotifyStmt { span, .. }) => {
+            only_let_stmt("watch notify statements", span, diagnostics)
         }
     }
 }
@@ -500,12 +515,48 @@ fn parse_statement_inner_rule(
 
             finish_assign_op_stmt(span, diagnostics, lhs, op_token, maybe_body).map(Stmt::AssignOp)
         }
+        Rule::watch_options_stmt => {
+            let mut tokens = stmt_token.into_inner();
+
+            // First token is the variable identifier
+            let variable = parse_identifier(tokens.next()?, diagnostics);
+
+            // Second token is the WatchOptions expression (should be a class constructor)
+            let options_expr_token = tokens.next()?;
+            let options_expr = parse_expression(options_expr_token, diagnostics)?;
+
+            Some(Stmt::WatchOptions(WatchOptionsStmt {
+                variable,
+                options_expr,
+                span,
+            }))
+        }
+        Rule::watch_notify_stmt => {
+            let mut tokens = stmt_token.into_inner();
+
+            // Only token is the variable identifier
+            let variable = parse_identifier(tokens.next()?, diagnostics);
+
+            Some(Stmt::WatchNotify(WatchNotifyStmt { variable, span }))
+        }
         Rule::let_expr => {
             let mut let_binding_tokens = stmt_token.into_inner();
 
             let is_mutable = true; // Always mutable now after mut keyword removal
 
-            let identifier = parse_identifier(let_binding_tokens.next()?, diagnostics);
+            // Check if "watch" keyword is present
+            let first_token = let_binding_tokens.next()?;
+
+            let (is_watched, identifier) = if first_token.as_rule() == Rule::WATCH_KEYWORD {
+                // "watch" keyword present, next token is identifier
+                (
+                    true,
+                    parse_identifier(let_binding_tokens.next()?, diagnostics),
+                )
+            } else {
+                // No "watch" keyword, first token is identifier
+                (false, parse_identifier(first_token, diagnostics))
+            };
 
             // Optional type annotation: `: <field_type_chain>`
             // Grammar packs this as a `let_type_annotation` pair if present.
@@ -528,15 +579,6 @@ fn parse_statement_inner_rule(
 
             let rhs_span = diagnostics.span(rhs_pair.as_span());
             let maybe_body = parse_assignment_expr(diagnostics, rhs_pair, rhs_span);
-            let mut watch = None;
-            if let Some(trailing) = let_binding_tokens.next() {
-                match trailing.as_rule() {
-                    Rule::watch_decorator => {
-                        watch = parse_watch_decorator(trailing, diagnostics);
-                    }
-                    _ => parsing_catch_all(trailing, "let expression"),
-                }
-            }
 
             maybe_body.map(|body| {
                 Stmt::Let(LetStmt {
@@ -546,7 +588,7 @@ fn parse_statement_inner_rule(
                     expr: body,
                     span: span.clone(),
                     annotations: vec![],
-                    watch,
+                    is_watched,
                 })
             })
         }
@@ -646,117 +688,6 @@ fn parse_assignment_expr(
                 "Parser only allows expr_block and expr here",
                 rhs_span,
             ));
-            None
-        }
-    }
-}
-
-fn parse_watch_decorator(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<WatchDecorator> {
-    assert_correct_parser!(token, Rule::watch_decorator);
-    let span = diagnostics.span(token.as_span());
-    let mut decorator = WatchDecorator {
-        arguments: Vec::new(),
-        span,
-    };
-
-    for inner in token.into_inner() {
-        match inner.as_rule() {
-            Rule::watch_arguments => {
-                parse_watch_arguments(inner, diagnostics, &mut decorator.arguments)
-            }
-            Rule::SPACER_TEXT => {}
-            _ => parsing_catch_all(inner, "watch decorator"),
-        }
-    }
-
-    Some(decorator)
-}
-
-fn parse_watch_arguments(
-    token: Pair<'_>,
-    diagnostics: &mut Diagnostics,
-    arguments: &mut Vec<WatchArgument>,
-) {
-    assert_correct_parser!(token, Rule::watch_arguments);
-    for inner in token.into_inner() {
-        match inner.as_rule() {
-            Rule::watch_argument_kv => {
-                if let Some(argument) = parse_watch_argument(inner, diagnostics) {
-                    arguments.push(argument);
-                }
-            }
-            Rule::watch_argument_invalid => {
-                let span = diagnostics.span(inner.as_span());
-                diagnostics.push_error(DatamodelError::new_validation_error(
-                    "@watch options must use `name=value` syntax (e.g. `name=updates`).",
-                    span,
-                ));
-
-                // Consume the invalid expression to keep parser state consistent.
-                for expr in inner.into_inner() {
-                    if expr.as_rule() == Rule::expression {
-                        let _ = parse_expression(expr, diagnostics);
-                    }
-                }
-            }
-            Rule::watch_argument_missing_value => {
-                let span = diagnostics.span(inner.as_span());
-                diagnostics.push_error(DatamodelError::new_validation_error(
-                    "@watch options must provide a value after `=` (e.g. `name=updates`).",
-                    span,
-                ));
-            }
-            Rule::SPACER_TEXT => {}
-            _ => parsing_catch_all(inner, "watch decorator arguments"),
-        }
-    }
-}
-
-fn parse_watch_argument(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<WatchArgument> {
-    assert_correct_parser!(token, Rule::watch_argument_kv);
-    let span = diagnostics.span(token.as_span());
-    let mut inner = token.into_inner();
-
-    let name_pair = inner.next()?;
-    let name = parse_identifier(name_pair, diagnostics);
-    let maybe_value_pair = inner.next();
-    if maybe_value_pair.is_none() {
-        let suggestion = match name.name() {
-            "when" => "e.g. false, MyCustomFunction",
-            "skip_def" => "e.g. true, false",
-            "name" => "e.g. any_channel_name",
-            _ => "",
-        };
-        diagnostics.push_error(DatamodelError::new_validation_error(
-            &format!("Missing value for watch argument {suggestion}"),
-            span.clone(),
-        ));
-    }
-    let value_pair = maybe_value_pair?;
-
-    let value = match value_pair.as_rule() {
-        Rule::watch_argument_value => parse_watch_argument_value(value_pair, diagnostics)?,
-        _ => {
-            parsing_catch_all(value_pair, "watch decorator argument");
-            return None;
-        }
-    };
-
-    Some(WatchArgument { name, value, span })
-}
-
-fn parse_watch_argument_value(
-    token: Pair<'_>,
-    diagnostics: &mut Diagnostics,
-) -> Option<Expression> {
-    assert_correct_parser!(token, Rule::watch_argument_value);
-    let inner = token.into_inner().next()?;
-    let span = diagnostics.span(inner.as_span());
-
-    match inner.as_rule() {
-        Rule::expr_block | Rule::expression => parse_assignment_expr(diagnostics, inner, span),
-        _ => {
-            parsing_catch_all(inner, "watch decorator argument value");
             None
         }
     }
@@ -1116,6 +1047,12 @@ fn bind_headers_to_statement(
         }
         Stmt::Assert(_) => {
             // Assert statements do not carry annotations (for now)
+        }
+        Stmt::WatchOptions(_) => {
+            // Watch options statements do not carry annotations
+        }
+        Stmt::WatchNotify(_) => {
+            // Watch notify statements do not carry annotations
         }
     }
 }

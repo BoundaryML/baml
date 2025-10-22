@@ -18,17 +18,7 @@ function TestClass() -> int {
 //   example.a
 // }
 //
-// class std::Request {
-//   base_url: string
-//   headers: map<string, string>
-//   query_params: map<string, string>
-// }
-//
 // class Example {
 //   a: int
 //   b: string
-// }
-//
-// enum std::HttpMethod {
-//   Get
 // }

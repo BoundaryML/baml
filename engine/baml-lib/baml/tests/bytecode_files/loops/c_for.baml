@@ -129,8 +129,9 @@ function Nothing() -> int {
 // 44   3   LOAD_VAR 1     (s)
 //      4   RETURN         
 //
-// Class: std::Request with 3 fields
-// Enum std::HttpMethod
+// Class: baml.Request with 3 fields
+// Class: baml.WatchOptions with 2 fields
+// Enum baml.HttpMethod
 // Function: baml.Array.length
 //
 // Function: baml.Map.length

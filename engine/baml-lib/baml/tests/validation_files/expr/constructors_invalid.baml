@@ -5,12 +5,12 @@ class Bar {
 
 function Foo() -> Bar {
   let x = Bar { a: "hello", c: 12 };
-  let req_bad = std::Request { 
+  let req_bad = baml.Request {
     base_url: 10,
     headers: {},
     query_params: { a 10 },
   };
-  let req_good = std::Request {
+  let req_good = baml.Request {
     base_url: "https://example.com",
     headers: { Authorization "Bearer mytoken" },
     query_params: { foo "bar" },
@@ -36,13 +36,13 @@ function Foo() -> Bar {
 //  6 | function Foo() -> Bar {
 //  7 |   let x = Bar { a: "hello", c: 12 };
 //    | 
-// error: Error validating: std::Request.base_url expected type string, but found int
+// error: Error validating: baml.Request.base_url expected type string, but found int
 //   -->  expr/constructors_invalid.baml:9
 //    | 
-//  8 |   let req_bad = std::Request { 
+//  8 |   let req_bad = baml.Request {
 //  9 |     base_url: 10,
 //    | 
-// error: Error validating: std::Request.query_params expected type map<string, string>, but found map<string, int>
+// error: Error validating: baml.Request.query_params expected type map<string, string>, but found map<string, int>
 //   -->  expr/constructors_invalid.baml:11
 //    | 
 // 10 |     headers: {},

@@ -768,6 +768,14 @@ impl MermaidDiagramGenerator {
                 self.connect(&stmt_id, &value_id, Some("condition"));
                 stmt_id
             }
+            Stmt::WatchOptions(watch_opts) => {
+                let label = format!("WatchOptions: {}", watch_opts.variable.name());
+                self.get_node_id_with_class(&key, &label, "statementNode")
+            }
+            Stmt::WatchNotify(watch_notify) => {
+                let label = format!("WatchNotify: {}", watch_notify.variable.name());
+                self.get_node_id_with_class(&key, &label, "statementNode")
+            }
         }
     }
 

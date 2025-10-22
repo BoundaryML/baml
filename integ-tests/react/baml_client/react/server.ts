@@ -4412,18 +4412,15 @@ export const HomeEnvVarIsEmpty = async (
  * This server action calls the underlying BAML function "IsTargetWord"
  * with the specified parameters.
  *
- * @param { string } prev - Input parameter.
- * @param { string } next - Input parameter.
+ * @param { string } word - Input parameter.
  *
  * @returns {Promise<boolean>} A promise that resolves with the result of the action.
  */
 export const IsTargetWord = async (
-  prev: string,
-  next: string,
+  word: string,
 ): Promise<boolean> => {
   return b.IsTargetWord(
-    prev,
-    next,
+    word,
   );
 };
 
@@ -4433,18 +4430,15 @@ export const IsTargetWord = async (
  * This server action calls the underlying BAML function "IsTargetWord2"
  * with the specified parameters.
  *
- * @param { string } prev - Input parameter.
- * @param { string } next - Input parameter.
+ * @param { string } word - Input parameter.
  *
  * @returns {Promise<boolean>} A promise that resolves with the result of the action.
  */
 export const IsTargetWord2 = async (
-  prev: string,
-  next: string,
+  word: string,
 ): Promise<boolean> => {
   return b.IsTargetWord2(
-    prev,
-    next,
+    word,
   );
 };
 
@@ -4493,18 +4487,15 @@ export const NormalElseIfStmt = async (
  * This server action calls the underlying BAML function "NotEmpty"
  * with the specified parameters.
  *
- * @param { string } prev - Input parameter.
- * @param { string } next - Input parameter.
+ * @param { string } value - Input parameter.
  *
  * @returns {Promise<boolean>} A promise that resolves with the result of the action.
  */
 export const NotEmpty = async (
-  prev: string,
-  next: string,
+  value: string,
 ): Promise<boolean> => {
   return b.NotEmpty(
-    prev,
-    next,
+    value,
   );
 };
 

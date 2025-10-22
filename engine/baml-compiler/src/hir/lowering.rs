@@ -2,7 +2,7 @@
 //!
 //! This files contains the convertions between Baml AST nodes to HIR nodes.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use baml_types::{
     type_meta::{self, base::StreamingBehavior},
@@ -178,33 +178,64 @@ pub fn type_ir_from_ast(type_: &ast::FieldType) -> TypeIR {
         streaming_behavior,
     };
 
-    match type_ {
-        ast::FieldType::Symbol(_, name, _) => TypeIR::Class {
-            name: name.name().to_string(),
-            mode: baml_types::ir_type::StreamingMode::NonStreaming,
-            dynamic: false,
-            meta,
-        },
-        ast::FieldType::Primitive(_, prim, _, _) => TypeIR::Primitive(*prim, meta),
-        ast::FieldType::List(_, inner, dims, _, _) => {
+    let base_type = match type_ {
+        ast::FieldType::Symbol(arity, name, _) => {
+            let base = TypeIR::Class {
+                name: name.name().to_string(),
+                mode: baml_types::ir_type::StreamingMode::NonStreaming,
+                dynamic: false,
+                meta,
+            };
+            if arity.is_optional() {
+                TypeIR::optional(base)
+            } else {
+                base
+            }
+        }
+        ast::FieldType::Primitive(arity, prim, _, _) => {
+            let base = TypeIR::Primitive(*prim, meta);
+            if arity.is_optional() {
+                TypeIR::optional(base)
+            } else {
+                base
+            }
+        }
+        ast::FieldType::List(arity, inner, dims, _, _) => {
             // Respect multi-dimensional arrays (e.g., int[][] has dims=2)
             let mut lowered_inner = type_ir_from_ast(inner);
             for _ in 0..*dims {
                 lowered_inner = TypeIR::List(Box::new(lowered_inner), meta.clone());
             }
-            lowered_inner
+            if arity.is_optional() {
+                TypeIR::optional(lowered_inner)
+            } else {
+                lowered_inner
+            }
         }
-        ast::FieldType::Map(_, box_pair, _, _) => TypeIR::Map(
-            Box::new(type_ir_from_ast(&box_pair.0)),
-            Box::new(type_ir_from_ast(&box_pair.1)),
-            meta,
-        ),
-        ast::FieldType::Union(_, types, _, _) => {
+        ast::FieldType::Map(arity, box_pair, _, _) => {
+            let base = TypeIR::Map(
+                Box::new(type_ir_from_ast(&box_pair.0)),
+                Box::new(type_ir_from_ast(&box_pair.1)),
+                meta,
+            );
+            if arity.is_optional() {
+                TypeIR::optional(base)
+            } else {
+                base
+            }
+        }
+        ast::FieldType::Union(arity, types, _, _) => {
             let union_types: Vec<TypeIR> = types.iter().map(type_ir_from_ast).collect();
-            TypeIR::union_with_meta(union_types, meta)
+            let base = TypeIR::union_with_meta(union_types, meta);
+            if arity.is_optional() {
+                TypeIR::optional(base)
+            } else {
+                base
+            }
         }
         _ => TypeIR::Primitive(TypeValue::String, meta), // Default case for other variants
-    }
+    };
+    base_type
 }
 
 /// Is the type complex enough that it should be parenthesized if it's not
@@ -301,11 +332,80 @@ impl ExprFunction {
     }
 }
 
+/// Extract name and when fields from a WatchOptions class constructor expression.
+/// Expected expression: baml.WatchOptions{name: "value", when: FunctionName}
+fn extract_watch_options_fields(expr: &ast::Expression) -> (Option<String>, Option<String>) {
+    use ast::Expression;
+
+    // The expression should be a class constructor
+    if let Expression::ClassConstructor(class_ctor, _) = expr {
+        let mut name = None;
+        let mut when = None;
+
+        // Extract field values
+        for field in &class_ctor.fields {
+            if let ast::ClassConstructorField::Named(field_name, field_value) = field {
+                match field_name.name() {
+                    "channel" => {
+                        // name should be a string value
+                        if let Expression::StringValue(s, _) = field_value {
+                            name = Some(s.clone());
+                        } else if let Expression::RawStringValue(raw) = field_value {
+                            name = Some(raw.value().to_string());
+                        }
+                    }
+                    "when" => {
+                        // when should be an identifier (function name) or string "manual"
+                        match field_value {
+                            Expression::Identifier(id) => {
+                                when = Some(id.name().to_string());
+                            }
+                            Expression::StringValue(s, _) if s == "manual" => {
+                                when = Some("manual".to_string());
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {} // Ignore unknown fields
+                }
+            }
+        }
+
+        (name, when)
+    } else {
+        // If not a class constructor, return empty options
+        (None, None)
+    }
+}
+
 impl Block {
     /// Lower an expression block into HIR for expression blocks.
     pub fn from_expr_block(block: &ast::ExpressionBlock) -> Self {
+        // First pass: collect all WatchOptions statements into a map
+        let mut watch_options_map: HashMap<String, (Option<String>, Option<String>)> =
+            HashMap::new();
+        for stmt in &block.stmts {
+            if let ast::Stmt::WatchOptions(ast::WatchOptionsStmt {
+                variable,
+                options_expr,
+                ..
+            }) = stmt
+            {
+                // Extract name and when from the WatchOptions class constructor expression
+                let (channel, when) = extract_watch_options_fields(options_expr);
+                watch_options_map.insert(variable.to_string(), (channel, when));
+            }
+        }
+
+        // Second pass: lower statements, applying watch options to watch specs
+        let statements: Vec<Statement> = block
+            .stmts
+            .iter()
+            .map(|stmt| lower_stmt_with_options(stmt, &watch_options_map))
+            .collect();
+
         Block {
-            statements: block.stmts.iter().map(lower_stmt).collect(),
+            statements,
             trailing_expr: block
                 .expr
                 .as_deref()
@@ -316,6 +416,13 @@ impl Block {
 }
 
 fn lower_stmt(stmt: &ast::Stmt) -> Statement {
+    lower_stmt_with_options(stmt, &HashMap::new())
+}
+
+fn lower_stmt_with_options(
+    stmt: &ast::Stmt,
+    watch_options: &HashMap<String, (Option<String>, Option<String>)>,
+) -> Statement {
     match stmt {
         ast::Stmt::CForLoop(stmt) => {
             // we'll add  a block if we an init statement, otherwise we'll just
@@ -414,14 +521,19 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
             expr,
             span,
             annotations: _,
-            watch,
+            is_watched,
         }) => {
             let lifted_expr = Expression::from_ast(expr);
             let annotated_type = annotation.as_ref().map(type_ir_from_ast);
 
-            let watch_spec = watch
-                .as_ref()
-                .map(|e| WatchSpec::from_ast_with_name(e, identifier.to_string()));
+            let watch_spec = if *is_watched {
+                let var_name = identifier.to_string();
+                // Create default watch spec - runtime WatchOptions statements will modify it
+                let spec = WatchSpec::default_for_variable(var_name.clone(), span.clone());
+                Some(spec)
+            } else {
+                None
+            };
 
             if *is_mutable {
                 Statement::DeclareAndAssign {
@@ -474,6 +586,24 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
         },
         ast::Stmt::Assert(AssertStmt { value, span }) => Statement::Assert {
             condition: Expression::from_ast(value),
+            span: span.clone(),
+        },
+        ast::Stmt::WatchOptions(ast::WatchOptionsStmt {
+            variable,
+            options_expr,
+            span,
+        }) => {
+            // Extract name and when from the WatchOptions expression
+            let (channel, when) = extract_watch_options_fields(options_expr);
+            Statement::WatchOptions {
+                variable: variable.to_string(),
+                channel,
+                when,
+                span: span.clone(),
+            }
+        }
+        ast::Stmt::WatchNotify(ast::WatchNotifyStmt { variable, span }) => Statement::WatchNotify {
+            variable: variable.to_string(),
             span: span.clone(),
         },
     }

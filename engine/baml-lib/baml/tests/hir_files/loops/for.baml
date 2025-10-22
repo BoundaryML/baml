@@ -16,13 +16,3 @@ function Sum(xs: int[]) -> int {
 //
 //   result
 // }
-//
-// class std::Request {
-//   base_url: string
-//   headers: map<string, string>
-//   query_params: map<string, string>
-// }
-//
-// enum std::HttpMethod {
-//   Get
-// }

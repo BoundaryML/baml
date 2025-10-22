@@ -906,6 +906,12 @@ impl<'g> HirCompiler<'g> {
                 self.compile_expression(condition);
                 self.emit(Instruction::Assert);
             }
+            thir::Statement::WatchOptions { .. } => {
+                // todo!("bytecode codegen update to variable's WatchOptions")
+            }
+            thir::Statement::WatchNotify { .. } => {
+                // todo!("bytecode codegen for manual notification trigger")
+            }
         }
     }
 
