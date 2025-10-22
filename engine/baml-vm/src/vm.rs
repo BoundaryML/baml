@@ -10,7 +10,7 @@ use crate::{
         FunctionKind, FunctionType, Future, FutureKind, FutureType, Instance, Object, ObjectType,
         PendingFuture, Type, Value, Variant,
     },
-    watch::{self, NodeId, RootState, Watch},
+    watch::{self, NodeId, RootState, Watch, WatchFilter},
     StackTrace, UnaryOp,
 };
 
@@ -193,6 +193,8 @@ pub struct Vm {
 
     /// Tracks which local variables are watched (have @watch).
     pub watched_vars: HashMap<StackIndex, (String, String)>,
+
+    pub interrupt_frame: Option<usize>,
 }
 
 /// VM execution state.
@@ -248,6 +250,7 @@ impl Vm {
             env_vars,
             watch: Watch::new(),
             watched_vars: HashMap::new(),
+            interrupt_frame: None,
         }
     }
 
@@ -404,6 +407,40 @@ impl Vm {
         StackTrace { error, trace }
     }
 
+    /// Stops the execution of the current bytecode in favor of the given
+    /// function
+    ///
+    /// When the new control flow ends (given functions pops from the stack)
+    /// then the previosly running bytecode resumes execution.
+    fn interrupt(
+        &mut self,
+        function_index: ObjectIndex,
+        args: &[Value],
+    ) -> Result<VmExecState, VmError> {
+        if !matches!(&self.objects[function_index], Object::Function(_)) {
+            return Err(RuntimeError::Other("Invalid interrupt function".to_string()).into());
+        }
+
+        // Index of the frame that starts the interrupt code.
+        self.interrupt_frame = Some(self.frames.len());
+
+        let locals_offset = self.stack.len();
+
+        // Params.
+        self.stack.push(Value::Object(function_index));
+        self.stack.extend(args.iter().copied());
+
+        // Push the new frame.
+        self.frames.push(Frame {
+            function: function_index,
+            instruction_ptr: 0,
+            locals_offset: StackIndex::from_raw(locals_offset),
+        });
+
+        // Execute the interrupt code and return the result.
+        self.exec()
+    }
+
     /// Main VM execution loop.
     ///
     /// Each "cycle" (loop iteration) executes a single instruction.
@@ -523,9 +560,6 @@ impl Vm {
                             state.value = value;
                         }
 
-                        frame = self.frames.last_mut().expect("last_mut() was pushed above");
-                        function = self.objects[frame.function].as_function()?;
-
                         let mut notifications = self.watch.copy_roots_reaching(watched_node);
                         notifications.sort_by(|a, b| match (a, b) {
                             (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
@@ -537,8 +571,46 @@ impl Vm {
                             }
                             (NodeId::HeapObject(a), NodeId::HeapObject(b)) => a.cmp(b),
                         });
-                        if !notifications.is_empty() {
-                            return Ok(VmExecState::Notify(notifications));
+
+                        let mut filtered_notifications = vec![];
+
+                        for notification in notifications {
+                            if let Some(state) = self.watch.root_state(notification) {
+                                match state.filter {
+                                    WatchFilter::Manual => continue,
+                                    WatchFilter::Default => {
+                                        // TODO: deep equal
+                                        if let Some(last_assigned) = state.last_assigned {
+                                            if last_assigned != state.value {
+                                                filtered_notifications.push(notification);
+                                            }
+                                        }
+                                    }
+                                    WatchFilter::Function(function_index) => {
+                                        match self.interrupt(function_index, &[state.value]) {
+                                            Ok(VmExecState::Complete(Value::Bool(b))) => {
+                                                if b {
+                                                    filtered_notifications.push(notification);
+                                                }
+                                            }
+
+                                            other => {
+                                                return Err(RuntimeError::Other(
+                                                    "Invalid filter function return".to_string(),
+                                                )
+                                                .into())
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        frame = self.frames.last_mut().expect("last_mut() was pushed above");
+                        function = self.objects[frame.function].as_function()?;
+
+                        if !filtered_notifications.is_empty() {
+                            return Ok(VmExecState::Notify(filtered_notifications));
                         }
                     }
                 }
@@ -1442,8 +1514,20 @@ impl Vm {
                 }
 
                 Instruction::Watch => {
-                    // Stack contains: [value, channel] (for now; will be
-                    // [value, channel, filter] later)
+                    // Stack contains: [value, channel, filter]
+
+                    // Consume filter.
+                    let filter = match self.stack.ensure_pop()? {
+                        Value::Null => WatchFilter::Default,
+                        Value::Object(object_index) => match &self.objects[object_index] {
+                            Object::Function(_) => WatchFilter::Function(object_index),
+                            Object::String(mode) if mode == "manual" => WatchFilter::Manual,
+                            _ => {
+                                return Err(RuntimeError::Other("Invalid filter".to_string()).into())
+                            }
+                        },
+                        _ => return Err(RuntimeError::Other("Invalid filter".to_string()).into()),
+                    };
 
                     // Consume channel.
                     let channel = self
@@ -1464,9 +1548,9 @@ impl Vm {
                         RootState {
                             channel,
                             value,
+                            filter,
                             last_notified: None,
                             last_assigned: None,
-                            filter: None,
                         },
                     );
 
@@ -1623,6 +1707,16 @@ impl Vm {
 
                     // Pop from the call stack.
                     self.frames.pop();
+
+                    // Return from interrupt.
+                    if Some(self.frames.len()) == self.interrupt_frame {
+                        self.interrupt_frame = None;
+                        return self
+                            .stack
+                            .ensure_pop()
+                            .map(VmExecState::Complete)
+                            .map_err(Into::into);
+                    }
 
                     // If there are no more frames, we're done.
                     let Some(previous_frame) = self.frames.last_mut() else {

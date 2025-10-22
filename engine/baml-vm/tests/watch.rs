@@ -289,3 +289,26 @@ fn cyclic_graph() -> anyhow::Result<()> {
         ],
     })
 }
+
+#[test]
+fn run_user_filter() -> anyhow::Result<()> {
+    assert_vm_emits(EmitProgram {
+        source: r#"
+            function greater_than_five(value: int) -> bool {
+                value > 5
+            }
+
+            function primitive() -> int {
+                watch let value = 0;
+                value.$watch.options(baml.WatchOptions { when: greater_than_five });
+
+                value = 1; // No notify
+                value = 6; // Notify
+
+                value
+            }
+        "#,
+        function: "primitive",
+        expected: vec![vec![Notification::on_channel("value")]],
+    })
+}

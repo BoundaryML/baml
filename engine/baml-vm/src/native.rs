@@ -215,7 +215,11 @@ pub fn deep_copy_object(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     deep_copy_value_recursive(vm, args[0], &mut copied_objects)
 }
 
-/// Recursively deep copy a value, handling nested objects
+/// Recursively deep copy a value, handling nested objects.
+///
+/// TODO: Likely will need to be refactored to iterative for perf / stack
+/// overflow issues with big objects. But since this one is not as straight
+/// forward as `while stack.pop()`, we'll leave it as is for now.
 fn deep_copy_value_recursive(
     vm: &mut Vm,
     value: Value,

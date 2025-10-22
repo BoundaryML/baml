@@ -298,6 +298,7 @@ pub fn collect_vm_exec_states(
         env_vars: Default::default(),
         watch: Watch::new(),
         watched_vars: Default::default(),
+        interrupt_frame: None,
     };
 
     let mut states = Vec::new();
@@ -386,6 +387,7 @@ fn setup_and_exec_program(
         env_vars: Default::default(),
         watch: Watch::new(),
         watched_vars: Default::default(),
+        interrupt_frame: None,
     };
     let result = vm.exec();
     Ok((vm, result))
@@ -446,6 +448,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         env_vars: Default::default(),
         watch: Watch::new(),
         watched_vars: Default::default(),
+        interrupt_frame: None,
     };
 
     let result = vm.exec()?;

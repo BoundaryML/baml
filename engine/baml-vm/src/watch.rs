@@ -143,6 +143,13 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::{Object, ObjectIndex, ObjectPool, StackIndex, Value};
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum WatchFilter {
+    Manual,
+    Default,
+    Function(ObjectIndex),
+}
+
 /// State associated with a watched root.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RootState {
@@ -155,7 +162,7 @@ pub struct RootState {
     /// Channel name.
     pub channel: String,
     /// Pointer to filter function.
-    pub filter: Option<ObjectIndex>,
+    pub filter: WatchFilter,
 }
 
 /// Identifies a node in the emit graph.
@@ -523,7 +530,7 @@ mod tests {
             last_assigned: None,
             last_notified: None,
             channel: "Test".to_string(),
-            filter: None,
+            filter: WatchFilter::Default,
         }
     }
 
