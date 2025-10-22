@@ -40,14 +40,14 @@ pub enum Instruction {
 
     /// Loads a variable from the frame's local variable slots.
     ///
-    /// Format: `LOAD_VAR i` where `i` is the index of the variable in the
-    /// [`crate::Frame::locals`] array.
+    /// Format: `LOAD_VAR i` where `i` is the relative index of the variable in
+    /// [`crate::Vm::stack`] array.
     LoadVar(usize),
 
     /// Stores a value in the frame's local variable slots.
     ///
-    /// Format: `STORE_VAR i` where `i` is the index of the variable in the
-    /// [`crate::Frame::locals`] array.
+    /// Format: `STORE_VAR i` where `i` is the relative index of the variable in
+    /// [`crate::Vm::stack`] array.
     StoreVar(usize),
 
     /// Load a global variable from the [`crate::Vm::globals`] array.
@@ -208,7 +208,10 @@ pub enum Instruction {
     Await,
 
     /// Creates a watched var and tracks its state.
-    Watch,
+    ///
+    /// Format: `WATCH i` where `i` is the relative index of the variable in the
+    /// [`crate::Vm::stack`] array.
+    Watch(usize),
 
     /// Call a function.
     ///
@@ -334,7 +337,7 @@ impl std::fmt::Display for Instruction {
             Instruction::Return => f.write_str("RETURN"),
             Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
-            Instruction::Watch => f.write_str("WATCH"),
+            Instruction::Watch(i) => write!(f, "WATCH {i}"),
         }
     }
 }

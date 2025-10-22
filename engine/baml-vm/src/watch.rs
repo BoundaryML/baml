@@ -277,11 +277,6 @@ impl Watch {
     ///
     /// Triggers a BFS graph traversal starting at `root`.
     pub fn register_root(&mut self, root: NodeId, state: RootState) {
-        // If this root already exists, do nothing
-        if self.roots.contains_key(&root) {
-            return;
-        }
-
         self.roots.insert(root, state);
 
         // Compute initial reachability from this root

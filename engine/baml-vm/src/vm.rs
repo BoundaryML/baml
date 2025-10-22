@@ -1513,8 +1513,8 @@ impl Vm {
                     }
                 }
 
-                Instruction::Watch => {
-                    // Stack contains: [value, channel, filter]
+                Instruction::Watch(index) => {
+                    // Stack contains: [channel, filter]
 
                     // Consume filter.
                     let filter = match self.stack.ensure_pop()? {
@@ -1535,14 +1535,13 @@ impl Vm {
                         .as_string(&self.stack.ensure_pop()?)?
                         .to_owned();
 
-                    // Get the top of the stack (the value) without popping it
-                    let value_index = self.stack.ensure_stack_top()?;
+                    let value_index = StackIndex::from_raw(frame.locals_offset.raw() + index);
                     let value = self.stack[value_index];
 
                     // The variable index should be the same as where the value is stored
                     let var_node = NodeId::LocalVar(value_index);
 
-                    // Register this variable as an emittable root
+                    // Register this variable as an emittable root.
                     self.watch.register_root(
                         var_node,
                         RootState {
@@ -1554,9 +1553,8 @@ impl Vm {
                         },
                     );
 
-                    let relative_index = value_index.raw() - frame.locals_offset.raw();
                     let watched_var_name = &function.locals_in_scope
-                        [function.bytecode.scopes[instruction_ptr as usize]][relative_index];
+                        [function.bytecode.scopes[instruction_ptr as usize]][index];
                     // Track this so we can unregister on scope exit
                     self.watched_vars.insert(
                         value_index,

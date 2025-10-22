@@ -21,9 +21,10 @@ fn watch_primitive() -> anyhow::Result<()> {
             "primitive",
             vec![
                 Instruction::LoadConst(0),
-                Instruction::LoadConst(1),
-                Instruction::Watch,
-                Instruction::LoadConst(2),
+                Instruction::LoadConst(1), // channel "value"
+                Instruction::LoadConst(2), // filter null
+                Instruction::Watch(1),
+                Instruction::LoadConst(3),
                 Instruction::StoreVar(1),
                 Instruction::LoadVar(1),
                 Instruction::Return,

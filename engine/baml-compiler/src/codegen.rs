@@ -712,7 +712,7 @@ impl<'g> HirCompiler<'g> {
                 name, value, watch, ..
             } => {
                 self.compile_expression(value);
-                self.track_local(name);
+                let local_index = self.track_local(name);
                 if let Some(spec) = watch {
                     self.emit_string_literal(&spec.name); // This adds LoadConst
 
@@ -735,7 +735,7 @@ impl<'g> HirCompiler<'g> {
                         }
                     }
 
-                    self.emit(Instruction::Watch);
+                    self.emit(Instruction::Watch(local_index));
                 }
             }
             thir::Statement::Return { expr, .. } => {
@@ -925,8 +925,42 @@ impl<'g> HirCompiler<'g> {
                 self.compile_expression(condition);
                 self.emit(Instruction::Assert);
             }
-            thir::Statement::WatchOptions { .. } => {
-                // todo!("bytecode codegen update to variable's WatchOptions")
+            thir::Statement::WatchOptions {
+                variable,
+                channel,
+                when,
+                ..
+            } => {
+                let Some(local_index) = self.locals.get(variable).copied() else {
+                    panic!("watch codegen error: undefined variable: {variable}");
+                };
+
+                self.emit_string_literal(channel.as_ref().unwrap_or(variable).as_str()); // This adds LoadConst
+
+                match when.as_ref().map(String::as_str) {
+                    Some("manual") => {
+                        self.emit_string_literal("manual");
+                    }
+
+                    Some("never") => {
+                        self.emit_string_literal("never");
+                    }
+
+                    Some(fn_name) => {
+                        if let Some(&index) = self.globals.get(fn_name) {
+                            self.emit(Instruction::LoadGlobal(index));
+                        } else {
+                            panic!("watch options codegen: undefined function: {fn_name}");
+                        }
+                    }
+
+                    None => {
+                        let index = self.add_constant(Value::Null);
+                        self.emit(Instruction::LoadConst(index));
+                    }
+                }
+
+                self.emit(Instruction::Watch(local_index));
             }
             thir::Statement::WatchNotify { .. } => {
                 // todo!("bytecode codegen for manual notification trigger")
