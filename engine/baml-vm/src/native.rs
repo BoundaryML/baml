@@ -2,11 +2,14 @@
 //!
 //! We need to find a better pattern for this, but this works for now.
 
+use std::collections::HashMap;
+
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
 
 use crate::{
     errors::{InternalError, RuntimeError, VmError},
-    types::{Object, ObjectType, Value},
+    indexable::ObjectIndex,
+    types::{Instance, Object, ObjectType, Value},
     Vm,
 };
 
@@ -208,20 +211,108 @@ pub fn media_mime_type(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
 
 pub fn deep_copy_object(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
+    let mut copied_objects = HashMap::new();
+    deep_copy_value_recursive(vm, args[0], &mut copied_objects)
+}
 
-    // primitive
-    if matches!(
-        args[0],
-        Value::Null | Value::Int(_) | Value::Float(_) | Value::Bool(_)
-    ) {
-        return Ok(args[0]);
+/// Recursively deep copy a value, handling nested objects
+fn deep_copy_value_recursive(
+    vm: &mut Vm,
+    value: Value,
+    copied_objects: &mut HashMap<ObjectIndex, ObjectIndex>,
+) -> NativeFunctionResult {
+    match value {
+        // Primitive values are copied by value
+        Value::Null | Value::Int(_) | Value::Float(_) | Value::Bool(_) => Ok(value),
+
+        // Objects need deep copying
+        Value::Object(index) => {
+            // Check if we've already copied this object (handles circular references)
+            if let Some(&new_index) = copied_objects.get(&index) {
+                return Ok(Value::Object(new_index));
+            }
+
+            // Clone the object first to avoid borrow checker issues
+            let object = vm.objects[index].clone();
+
+            // Deep copy based on object type
+            let new_index = match object {
+                Object::String(s) => {
+                    // Strings are immutable, but we still create a new copy
+                    vm.objects.insert(Object::String(s))
+                }
+
+                Object::Array(values) => {
+                    // First, register a placeholder to handle circular references
+                    let placeholder_index = vm.objects.insert(Object::Array(Vec::new()));
+                    copied_objects.insert(index, placeholder_index);
+
+                    // Deep copy each element in the array
+                    let mut new_values = Vec::with_capacity(values.len());
+                    for value in values {
+                        new_values.push(deep_copy_value_recursive(vm, value, copied_objects)?);
+                    }
+
+                    // Update the placeholder with the actual array
+                    vm.objects[placeholder_index] = Object::Array(new_values);
+                    placeholder_index
+                }
+
+                Object::Map(map) => {
+                    // First, register a placeholder to handle circular references
+                    let placeholder_index = vm.objects.insert(Object::Map(BamlMap::new()));
+                    copied_objects.insert(index, placeholder_index);
+
+                    // Deep copy each key-value pair
+                    let mut new_map = BamlMap::new();
+                    for (key, value) in map.iter() {
+                        let new_value = deep_copy_value_recursive(vm, *value, copied_objects)?;
+                        new_map.insert(key.clone(), new_value);
+                    }
+
+                    // Update the placeholder with the actual map
+                    vm.objects[placeholder_index] = Object::Map(new_map);
+                    placeholder_index
+                }
+
+                Object::Instance(instance) => {
+                    // First, register a placeholder to handle circular references
+                    let placeholder_index = vm.objects.insert(Object::Instance(Instance {
+                        class: instance.class,
+                        fields: Vec::new(),
+                    }));
+                    copied_objects.insert(index, placeholder_index);
+
+                    // Deep copy each field in the instance
+                    let mut new_fields = Vec::with_capacity(instance.fields.len());
+                    for field in instance.fields {
+                        new_fields.push(deep_copy_value_recursive(vm, field, copied_objects)?);
+                    }
+
+                    // Update the placeholder with the actual instance
+                    vm.objects[placeholder_index] = Object::Instance(Instance {
+                        class: instance.class,
+                        fields: new_fields,
+                    });
+                    placeholder_index
+                }
+
+                // These types don't contain nested objects that need deep copying
+                Object::Function(f) => vm.objects.insert(Object::Function(f)),
+                Object::Class(c) => vm.objects.insert(Object::Class(c)),
+                Object::Enum(e) => vm.objects.insert(Object::Enum(e)),
+                Object::Variant(v) => vm.objects.insert(Object::Variant(v)),
+                Object::Media(m) => vm.objects.insert(Object::Media(m)),
+                Object::Future(f) => vm.objects.insert(Object::Future(f)),
+                Object::BamlType(t) => vm.objects.insert(Object::BamlType(t)),
+            };
+
+            // Record the mapping if not already done (for non-circular cases)
+            copied_objects.entry(index).or_insert(new_index);
+
+            Ok(Value::Object(new_index))
+        }
     }
-
-    let index = vm.objects.as_object(&args[0], ObjectType::Any)?;
-
-    let object = vm.objects[index].clone();
-
-    Ok(Value::Object(vm.objects.insert(object)))
 }
 
 pub fn any_value_to_string(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {

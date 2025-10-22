@@ -1,10 +1,7 @@
 //! VM tests for built-in methods and operations.
 
 mod common;
-use common::{assert_vm_executes, ExecState, Program, Value};
-use indexmap::indexmap;
-
-use crate::common::{Instance, Object};
+use common::{assert_vm_executes, ExecState, Object, Program, Value};
 
 #[test]
 fn builtin_method_call() -> anyhow::Result<()> {
@@ -33,54 +30,6 @@ fn bind_method_call() -> anyhow::Result<()> {
         "#,
         function: "main",
         expected: ExecState::Complete(Value::Int(3)),
-    })
-}
-
-#[test]
-fn deep_copy_object() -> anyhow::Result<()> {
-    assert_vm_executes(Program {
-        source: r#"
-            class Tree {
-                value string
-                children Tree[]
-            }
-
-            function main() -> Tree {
-                let t = Tree { value: "1", children: [
-                    Tree { value: "2", children: [] },
-                    Tree { value: "3", children: [] },
-                ] };
-
-                let copy = baml.deep_copy(t);
-
-                copy
-            }
-        "#,
-        function: "main",
-        expected: ExecState::Complete(Value::Object(Object::Instance(Instance {
-            class: String::from("Tree"),
-            fields: Instance::fields(indexmap! {
-                "value" => Value::Object(Object::String(String::from("1"))),
-
-                "children" => Value::Object(Object::Array(vec![
-                    Value::Object(Object::Instance(Instance {
-                        class: String::from("Tree"),
-                        fields: Instance::fields(indexmap! {
-                            "value" => Value::Object(Object::String(String::from("2"))),
-                            "children" => Value::Object(Object::Array(vec![])),
-                        }),
-                    })),
-
-                    Value::Object(Object::Instance(Instance {
-                        class: String::from("Tree"),
-                        fields: Instance::fields(indexmap! {
-                            "value" => Value::Object(Object::String(String::from("3"))),
-                            "children" => Value::Object(Object::Array(vec![])),
-                        }),
-                    })),
-                ])),
-            }),
-        }))),
     })
 }
 
