@@ -109,8 +109,8 @@ mod internal_tests {
                 None,
                 None,
                 None,
-                None,
                 HashMap::new(),
+                None,
                 TripWire::new(None),
             )
             .await;
