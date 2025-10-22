@@ -493,7 +493,7 @@ impl BamlAsyncVmRuntime {
                             // except for compilation required types, spawn and
                             // spawn_local are essentially equivalent.
                             #[cfg(target_arch = "wasm32")]
-                            tokio::task::spawn_local(future);
+                            wasm_bindgen_futures::spawn_local(future);
                         }
 
                         // TODO: Needs refactor, prepare for some convoluted logic ahead ;)

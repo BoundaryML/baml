@@ -57,6 +57,9 @@ pub fn display_instruction(
     let instruction = &function.bytecode.instructions[instruction_ptr as usize];
 
     let metadata = match instruction {
+        Instruction::NotifyBlock(notification) => {
+            format!("({})", &notification.block_name)
+        }
         Instruction::LoadConst(index) => format!(
             "({})",
             display_value(&function.bytecode.constants[*index], objects)

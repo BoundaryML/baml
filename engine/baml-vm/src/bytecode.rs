@@ -1,6 +1,7 @@
 //! Instruction set and bytecode representation.
 
 use crate::{types::Value, GlobalIndex, ObjectIndex};
+use arraystring::{typenum::U255, ArrayString};
 
 /// Individual bytecode instruction.
 ///
@@ -233,6 +234,30 @@ pub enum Instruction {
     ///
     /// Format: `ASSERT`
     Assert,
+
+    /// Notifies about entering or exiting a block.
+    ///
+    /// Format: `NOTIFY_BLOCK function_name block_name`
+    NotifyBlock(BlockNotification),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BlockNotification {
+    // This is a hack cause i don't wanna deal with implementing Copy by allocating this on the heap + doing an object pointer.
+    pub function_name: ArrayString<U255>,
+    pub block_name: ArrayString<U255>,
+    pub level: usize,
+    pub block_type: BlockNotificationType,
+    pub is_enter: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum BlockNotificationType {
+    Statement,
+    If,
+    While,
+    For,
+    Function,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -337,7 +362,20 @@ impl std::fmt::Display for Instruction {
             Instruction::Return => f.write_str("RETURN"),
             Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
-            Instruction::Watch(i) => write!(f, "WATCH {i}"),
+            Instruction::Watch => f.write_str("WATCH"),
+            Instruction::NotifyBlock(notification) => {
+                write!(
+                    f,
+                    "{}_BLOCK {function_name}.{block_name}",
+                    if notification.is_enter {
+                        "ENTER"
+                    } else {
+                        "EXIT"
+                    },
+                    function_name = &notification.function_name,
+                    block_name = &notification.block_name,
+                )
+            }
         }
     }
 }
