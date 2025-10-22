@@ -78,7 +78,7 @@ pub fn builtin_enums() -> Vec<Enum> {
     }]
 }
 
-/// Create a type for the std::Request class
+/// Create a type for the baml.Request class
 pub fn std_request_type() -> TypeIR {
     TypeIR::class(classes::REQUEST)
 }
@@ -94,12 +94,10 @@ pub fn std_fetch_value_signature(return_type: TypeIR) -> TypeIR {
 }
 
 pub fn is_builtin_identifier(identifier: &str) -> bool {
-    identifier.starts_with("std::")
-        || identifier.starts_with("baml::")
-        || identifier.starts_with("std.")
-        || identifier.starts_with("baml.")
+    identifier.starts_with("baml.")
         || identifier == "true"
         || identifier == "false"
+        || identifier == "null"
 }
 
 pub fn is_builtin_class(class_name: &str) -> bool {

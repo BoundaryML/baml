@@ -1262,7 +1262,7 @@ fn typecheck_assignment(
 
     let rhs_type = &rhs.meta().1;
     if let (Some(left_type), Some(val_type)) = (lhs.meta().1.as_ref(), rhs_type) {
-        if !types_compatible(left_type, val_type) {
+        if !val_type.is_subtype(left_type) {
             diagnostics.push_error(DatamodelError::new_validation_error(
                 &format!(
                     "Cannot assign {} to {}",
@@ -1418,6 +1418,17 @@ pub fn typecheck_expression(
             BamlValueWithMeta::String(value.clone(), (span.clone(), Some(TypeIR::string()))),
         ),
         hir::Expression::Identifier(name, span) => {
+            // Special case for null literal
+            if name == "null" {
+                return thir::Expr::Value(BamlValueWithMeta::Null((
+                    span.clone(),
+                    Some(TypeIR::Primitive(
+                        baml_types::TypeValue::Null,
+                        Default::default(),
+                    )),
+                )));
+            }
+
             // Enum access: let x = Shape.Rectangle
             if let Some(enum_def) = context.enums.get(name) {
                 return thir::Expr::Var(
