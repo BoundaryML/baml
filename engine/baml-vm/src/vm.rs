@@ -515,6 +515,17 @@ impl Vm {
                             );
                         }
 
+                        let old_value_deep_copy =
+                            crate::native::deep_copy_object(self, &[old_value])?;
+
+                        if let Some(state) = self.watch.root_state_mut(watched_node) {
+                            state.last_assigned = Some(old_value_deep_copy);
+                            state.value = value;
+                        }
+
+                        frame = self.frames.last_mut().expect("last_mut() was pushed above");
+                        function = self.objects[frame.function].as_function()?;
+
                         let mut notifications = self.watch.copy_roots_reaching(watched_node);
                         notifications.sort_by(|a, b| match (a, b) {
                             (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
@@ -575,8 +586,14 @@ impl Vm {
                         .into());
                     };
 
-                    let watched_node = NodeId::HeapObject(instance_index);
+                    // Consume the new value.
+                    let new_value = self.stack.ensure_pop()?;
 
+                    // Consume the instance.
+                    self.stack.ensure_pop()?;
+
+                    // Change graph topology.
+                    let watched_node = NodeId::HeapObject(instance_index);
                     if let Value::Object(old_node) = instance.fields[index] {
                         self.watch.unlink_edge(
                             watched_node,
@@ -584,16 +601,6 @@ impl Vm {
                             NodeId::HeapObject(old_node),
                         );
                     }
-
-                    // Consume the new value.
-                    let new_value = self.stack.ensure_pop()?;
-
-                    // Set the new value.
-                    instance.fields[index] = new_value;
-
-                    // Consume the intance.
-                    self.stack.ensure_pop()?;
-
                     if let Value::Object(new_node) = new_value {
                         self.watch.link_edge(
                             watched_node,
@@ -603,7 +610,37 @@ impl Vm {
                         );
                     }
 
+                    // Copy previous values.
+                    let mut old_roots_copies = vec![];
+                    for root in self.watch.copy_roots_reaching(watched_node) {
+                        if let Some(state) = self.watch.root_state(root) {
+                            old_roots_copies
+                                .push(crate::native::deep_copy_object(self, &[state.value])?);
+                        }
+                    }
+
+                    // borrow check
+                    let Object::Instance(instance) = &mut self.objects[instance_index] else {
+                        unreachable!()
+                    };
+
+                    // Set the new value.
+                    instance.fields[index] = new_value;
+
+                    for (root, old_value) in self
+                        .watch
+                        .copy_roots_reaching(watched_node)
+                        .iter()
+                        .zip(old_roots_copies)
+                    {
+                        if let Some(state) = self.watch.root_state_mut(*root) {
+                            state.last_assigned = Some(old_value);
+                            // current value has not really changes, top level object is the same.
+                        }
+                    }
+
                     // TODO: Borrow checker stuff.
+                    frame = self.frames.last_mut().expect("frame must exist");
                     function = self.objects[frame.function].as_function()?;
 
                     let mut notifications = self.watch.copy_roots_reaching(watched_node);
@@ -1078,8 +1115,8 @@ impl Vm {
                         }));
                     }
 
+                    // Change graph topology
                     let watched_node = NodeId::HeapObject(array_obj_index);
-
                     if let Value::Object(old_child) = array[index] {
                         self.watch.unlink_edge(
                             watched_node,
@@ -1087,10 +1124,6 @@ impl Vm {
                             NodeId::HeapObject(old_child),
                         );
                     }
-
-                    // Store the value at the index
-                    array[index] = value;
-
                     if let Value::Object(new_child) = value {
                         self.watch.link_edge(
                             watched_node,
@@ -1100,7 +1133,37 @@ impl Vm {
                         );
                     }
 
-                    // Restore function reference after mutable borrow of self.objects
+                    // Copy previous values.
+                    let mut old_roots_copies = vec![];
+                    for root in self.watch.copy_roots_reaching(watched_node) {
+                        if let Some(state) = self.watch.root_state(root) {
+                            old_roots_copies
+                                .push(crate::native::deep_copy_object(self, &[state.value])?);
+                        }
+                    }
+
+                    // borrow check.
+                    let Object::Array(array) = &mut self.objects[array_obj_index] else {
+                        unreachable!("array: borrow checker");
+                    };
+
+                    // Store the value at the index
+                    array[index] = value;
+
+                    for (root, old_value) in self
+                        .watch
+                        .copy_roots_reaching(watched_node)
+                        .iter()
+                        .zip(old_roots_copies)
+                    {
+                        if let Some(state) = self.watch.root_state_mut(*root) {
+                            state.last_assigned = Some(old_value);
+                            // current value has not really changes, top level object is the same.
+                        }
+                    }
+
+                    // TODO: Borrow checker stuff.
+                    frame = self.frames.last_mut().expect("frame must exist");
                     function = self.objects[frame.function].as_function()?;
 
                     let mut notifications = self.watch.copy_roots_reaching(watched_node);
@@ -1149,8 +1212,8 @@ impl Vm {
                         }));
                     };
 
+                    // Change graph topology
                     let watched_node = NodeId::HeapObject(map_index);
-
                     if let Some(Value::Object(old_node)) = map.get(&key) {
                         self.watch.unlink_edge(
                             watched_node,
@@ -1158,20 +1221,45 @@ impl Vm {
                             NodeId::HeapObject(*old_node),
                         );
                     }
-
-                    // Store the value at the key
-                    map.insert(key.clone(), value);
-
                     if let Value::Object(new_node) = value {
                         self.watch.link_edge(
                             watched_node,
-                            watch::Path::MapKey(key),
+                            watch::Path::MapKey(key.clone()),
                             NodeId::HeapObject(new_node),
                             &self.objects,
                         );
                     }
 
-                    // borrow check
+                    // Copy previous values.
+                    let mut old_roots_copies = vec![];
+                    for root in self.watch.copy_roots_reaching(watched_node) {
+                        if let Some(state) = self.watch.root_state(root) {
+                            old_roots_copies
+                                .push(crate::native::deep_copy_object(self, &[state.value])?);
+                        }
+                    }
+
+                    let Object::Map(map) = &mut self.objects[map_index] else {
+                        unreachable!("map: borrow checker");
+                    };
+
+                    // Store the value at the key
+                    map.insert(key, value);
+
+                    for (root, old_value) in self
+                        .watch
+                        .copy_roots_reaching(watched_node)
+                        .iter()
+                        .zip(old_roots_copies)
+                    {
+                        if let Some(state) = self.watch.root_state_mut(*root) {
+                            state.last_assigned = Some(old_value);
+                            // current value has not really changes, top level object is the same.
+                        }
+                    }
+
+                    // TODO: Borrow checker stuff.
+                    frame = self.frames.last_mut().expect("frame must exist");
                     function = self.objects[frame.function].as_function()?;
 
                     let mut notifications = self.watch.copy_roots_reaching(watched_node);

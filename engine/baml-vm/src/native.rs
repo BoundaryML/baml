@@ -208,6 +208,15 @@ pub fn media_mime_type(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
 
 pub fn deep_copy_object(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
+
+    // primitive
+    if matches!(
+        args[0],
+        Value::Null | Value::Int(_) | Value::Float(_) | Value::Bool(_)
+    ) {
+        return Ok(args[0]);
+    }
+
     let index = vm.objects.as_object(&args[0], ObjectType::Any)?;
 
     let object = vm.objects[index].clone();

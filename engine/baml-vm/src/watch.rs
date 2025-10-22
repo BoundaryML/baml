@@ -411,6 +411,10 @@ impl Watch {
         self.roots.get(&node)
     }
 
+    pub fn root_state_mut(&mut self, node: NodeId) -> Option<&mut RootState> {
+        self.roots.get_mut(&node)
+    }
+
     /// Returns true if the given node is "watched".
     ///
     /// "Watched" means that there is at least one watched root that can reach
