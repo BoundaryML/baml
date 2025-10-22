@@ -1,37 +1,36 @@
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
-use super::helpers::{assert_correct_parser, unreachable_rule, Pair};
+use super::helpers::Pair;
 use crate::{
+    assert_correct_parser,
     ast::{Identifier, RefIdentifier, WithName},
     parser::Rule,
+    unreachable_rule,
 };
 
 pub fn parse_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identifier {
-    assert_correct_parser(&pair, &[Rule::identifier], diagnostics);
+    assert_correct_parser!(pair, Rule::identifier);
 
     if let Some(inner) = pair.into_inner().next() {
         return match inner.as_rule() {
             Rule::path_identifier => parse_path_identifier(inner, diagnostics),
             Rule::namespaced_identifier => parse_namespaced_identifier(inner, diagnostics),
             Rule::single_word => parse_single_word(inner, diagnostics),
-            _ => {
-                unreachable_rule(&inner, "identifier", diagnostics);
-                Identifier::Local(String::new(), diagnostics.span(inner.as_span()))
-            }
+            _ => unreachable_rule!(inner, Rule::identifier),
         };
     }
     unreachable!("Encountered impossible identifier during parsing.")
 }
 
 fn parse_single_word(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identifier {
-    assert_correct_parser(&pair, &[Rule::single_word], diagnostics);
+    assert_correct_parser!(pair, Rule::single_word);
     let span = diagnostics.span(pair.as_span());
 
     Identifier::from((pair.as_str(), span))
 }
 
 pub fn parse_path_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identifier {
-    assert_correct_parser(&pair, &[Rule::path_identifier], diagnostics);
+    assert_correct_parser!(pair, Rule::path_identifier);
 
     let span = diagnostics.span(pair.as_span());
     let raw_str = pair.as_str();
@@ -39,7 +38,7 @@ pub fn parse_path_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> I
     for inner in pair.into_inner() {
         match inner.as_rule() {
             Rule::single_word => vec.push(inner.as_str()),
-            _ => unreachable_rule(&inner, "path_identifier", diagnostics),
+            _ => unreachable_rule!(inner, Rule::path_identifier),
         }
     }
 
@@ -70,7 +69,7 @@ pub fn parse_path_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> I
 /// TODO: `Identifier` should eventually store the namespace components
 /// individually.
 fn parse_namespaced_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identifier {
-    assert_correct_parser(&pair, &[Rule::namespaced_identifier], diagnostics);
+    assert_correct_parser!(pair, Rule::namespaced_identifier);
 
     let raw_str = pair.as_str();
     let span = diagnostics.span(pair.as_span());
@@ -78,7 +77,7 @@ fn parse_namespaced_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) ->
     for inner in pair.into_inner() {
         match inner.as_rule() {
             Rule::single_word => name_parts.push(inner.as_str()),
-            _ => unreachable_rule(&inner, "namespaced_identifier", diagnostics),
+            _ => unreachable_rule!(inner, Rule::namespaced_identifier),
         }
     }
 
