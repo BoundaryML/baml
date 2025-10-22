@@ -95,8 +95,8 @@ mod internal_tests {
             None,
             None,
             Some(collectors),
-            None,
             HashMap::new(),
+            None,
             TripWire::new(None),
         );
 
