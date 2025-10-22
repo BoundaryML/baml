@@ -6064,7 +6064,7 @@ export class HttpRequest {
   
   ExecFetchAsWithHttpPostRequest(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPostRequestEventCollector>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6089,7 +6089,7 @@ export class HttpRequest {
   
   ExecFetchAsWithHttpPutRequestAndClassJson(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12645,7 +12645,7 @@ export class HttpStreamRequest {
   
   ExecFetchAsWithHttpPostRequest(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPostRequestEventCollector>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12670,7 +12670,7 @@ export class HttpStreamRequest {
   
   ExecFetchAsWithHttpPutRequestAndClassJson(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };

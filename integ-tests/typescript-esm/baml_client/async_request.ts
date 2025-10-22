@@ -6068,7 +6068,7 @@ env?: Record<string, string | undefined>
       
   async ExecFetchAsWithHttpPostRequest(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPostRequestEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6093,7 +6093,7 @@ env?: Record<string, string | undefined>
       
   async ExecFetchAsWithHttpPutRequestAndClassJson(
   
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12649,7 +12649,7 @@ env?: Record<string, string | undefined>
           
       async ExecFetchAsWithHttpPostRequest(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPostRequestEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12674,7 +12674,7 @@ env?: Record<string, string | undefined>
           
       async ExecFetchAsWithHttpPutRequestAndClassJson(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };

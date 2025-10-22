@@ -21,7 +21,7 @@ use crate::{
 /// TODO: Define this somewhere else like their own baml.baml file or something,
 /// but we don't have modules yet.
 fn baml_prelude() -> HashSet<String> {
-    let builtin_functions = [ir::builtin::functions::FETCH_VALUE];
+    let builtin_functions = [ir::builtin::functions::FETCH_AS];
 
     let builtin_classes = [ir::builtin::classes::REQUEST];
 

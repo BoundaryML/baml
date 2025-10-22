@@ -106,7 +106,7 @@ pub fn builtin_enums() -> Vec<Enum> {
     }]
 }
 
-/// Create a type for the std::Request class
+/// Create a type for the baml.HttpRequest class
 pub fn baml_request_type() -> TypeIR {
     TypeIR::class(classes::HTTP_REQUEST)
 }

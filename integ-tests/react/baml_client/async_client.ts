@@ -11666,7 +11666,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async ExecFetchAsWithHttpPostRequest(
         
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPostRequestEventCollector>
         ): Promise<types.DummyJsonTodo> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -11704,6 +11704,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.DummyJsonTodo
             } catch (error) {
@@ -11713,7 +11714,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async ExecFetchAsWithHttpPutRequestAndClassJson(
         
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector>
         ): Promise<types.DummyJsonTodo> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -11751,6 +11752,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.DummyJsonTodo
             } catch (error) {
@@ -28640,7 +28642,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             ExecFetchAsWithHttpPostRequest(
             
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPostRequestEventCollector>
             ): BamlStream<partial_types.DummyJsonTodo | null, types.DummyJsonTodo>
               {
               try {
@@ -28706,7 +28708,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             ExecFetchAsWithHttpPutRequestAndClassJson(
             
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector>
             ): BamlStream<partial_types.DummyJsonTodo | null, types.DummyJsonTodo>
               {
               try {
