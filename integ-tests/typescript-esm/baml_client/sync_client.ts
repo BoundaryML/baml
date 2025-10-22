@@ -10261,7 +10261,7 @@ export class BamlSyncClient {
   }
   
   IsTargetWord(
-      prev: string,next: string,
+      word: string,
       __baml_options__?: BamlCallOptions<events.IsTargetWordEventCollector>
   ): boolean {
     try {
@@ -10285,7 +10285,7 @@ export class BamlSyncClient {
       const raw = this.runtime.callFunctionSync(
         "IsTargetWord",
         {
-          "prev": prev,"next": next
+          "word": word
         },
         this.ctxManager.cloneContext(),
         options.tb?.__tb(),
@@ -10303,7 +10303,7 @@ export class BamlSyncClient {
   }
   
   IsTargetWord2(
-      prev: string,next: string,
+      word: string,
       __baml_options__?: BamlCallOptions<events.IsTargetWord2EventCollector>
   ): boolean {
     try {
@@ -10327,7 +10327,7 @@ export class BamlSyncClient {
       const raw = this.runtime.callFunctionSync(
         "IsTargetWord2",
         {
-          "prev": prev,"next": next
+          "word": word
         },
         this.ctxManager.cloneContext(),
         options.tb?.__tb(),
@@ -10429,7 +10429,7 @@ export class BamlSyncClient {
   }
   
   NotEmpty(
-      prev: string,next: string,
+      value: string,
       __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
   ): boolean {
     try {
@@ -10453,7 +10453,7 @@ export class BamlSyncClient {
       const raw = this.runtime.callFunctionSync(
         "NotEmpty",
         {
-          "prev": prev,"next": next
+          "value": value
         },
         this.ctxManager.cloneContext(),
         options.tb?.__tb(),

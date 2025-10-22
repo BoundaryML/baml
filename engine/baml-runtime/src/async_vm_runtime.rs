@@ -369,7 +369,8 @@ impl BamlAsyncVmRuntime {
                             BamlValueWithMeta::with_const_meta(&current_value, fake_meta);
 
                         let notification = watch::WatchNotification::new_var(
-                            state.channel.to_owned(),
+                            watched_var_name.to_owned(), // variable name
+                            state.channel.to_owned(),    // channel name
                             baml_value_with_meta,
                             function_name.to_owned(),
                         );

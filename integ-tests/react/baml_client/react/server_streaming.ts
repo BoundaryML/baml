@@ -4654,18 +4654,15 @@ export const HomeEnvVarIsEmpty = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { string } prev - Input parameter.
- * @param { string } next - Input parameter.
+ * @param { string } word - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const IsTargetWord = async (
-  prev: string,
-  next: string,
+  word: string,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.IsTargetWord(
-    prev,
-    next,
+    word,
   );
   return Promise.resolve(stream.toStreamable());
 };
@@ -4676,18 +4673,15 @@ export const IsTargetWord = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { string } prev - Input parameter.
- * @param { string } next - Input parameter.
+ * @param { string } word - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const IsTargetWord2 = async (
-  prev: string,
-  next: string,
+  word: string,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.IsTargetWord2(
-    prev,
-    next,
+    word,
   );
   return Promise.resolve(stream.toStreamable());
 };
@@ -4739,18 +4733,15 @@ export const NormalElseIfStmt = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { string } prev - Input parameter.
- * @param { string } next - Input parameter.
+ * @param { string } value - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const NotEmpty = async (
-  prev: string,
-  next: string,
+  value: string,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.NotEmpty(
-    prev,
-    next,
+    value,
   );
   return Promise.resolve(stream.toStreamable());
 };

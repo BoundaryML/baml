@@ -6092,7 +6092,7 @@ env?: Record<string, string | undefined>
       }
       
   async IsTargetWord(
-  prev: string,next: string,
+  word: string,
   __baml_options__?: BamlCallOptions<events.IsTargetWordEventCollector>
   ): Promise<HTTPRequest> {
     try {
@@ -6103,7 +6103,7 @@ env?: Record<string, string | undefined>
       return await this.runtime.buildRequest(
       "IsTargetWord",
       {
-      "prev": prev,"next": next
+      "word": word
       },
       this.ctxManager.cloneContext(),
       __baml_options__?.tb?.__tb(),
@@ -6117,7 +6117,7 @@ env?: Record<string, string | undefined>
       }
       
   async IsTargetWord2(
-  prev: string,next: string,
+  word: string,
   __baml_options__?: BamlCallOptions<events.IsTargetWord2EventCollector>
   ): Promise<HTTPRequest> {
     try {
@@ -6128,7 +6128,7 @@ env?: Record<string, string | undefined>
       return await this.runtime.buildRequest(
       "IsTargetWord2",
       {
-      "prev": prev,"next": next
+      "word": word
       },
       this.ctxManager.cloneContext(),
       __baml_options__?.tb?.__tb(),
@@ -6192,7 +6192,7 @@ env?: Record<string, string | undefined>
       }
       
   async NotEmpty(
-  prev: string,next: string,
+  value: string,
   __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
   ): Promise<HTTPRequest> {
     try {
@@ -6203,7 +6203,7 @@ env?: Record<string, string | undefined>
       return await this.runtime.buildRequest(
       "NotEmpty",
       {
-      "prev": prev,"next": next
+      "value": value
       },
       this.ctxManager.cloneContext(),
       __baml_options__?.tb?.__tb(),
@@ -12623,7 +12623,7 @@ env?: Record<string, string | undefined>
           }
           
       async IsTargetWord(
-      prev: string,next: string,
+      word: string,
       __baml_options__?: BamlCallOptions<events.IsTargetWordEventCollector>
       ): Promise<HTTPRequest> {
         try {
@@ -12634,7 +12634,7 @@ env?: Record<string, string | undefined>
           return await this.runtime.buildRequest(
           "IsTargetWord",
           {
-          "prev": prev,"next": next
+          "word": word
           },
           this.ctxManager.cloneContext(),
           __baml_options__?.tb?.__tb(),
@@ -12648,7 +12648,7 @@ env?: Record<string, string | undefined>
           }
           
       async IsTargetWord2(
-      prev: string,next: string,
+      word: string,
       __baml_options__?: BamlCallOptions<events.IsTargetWord2EventCollector>
       ): Promise<HTTPRequest> {
         try {
@@ -12659,7 +12659,7 @@ env?: Record<string, string | undefined>
           return await this.runtime.buildRequest(
           "IsTargetWord2",
           {
-          "prev": prev,"next": next
+          "word": word
           },
           this.ctxManager.cloneContext(),
           __baml_options__?.tb?.__tb(),
@@ -12723,7 +12723,7 @@ env?: Record<string, string | undefined>
           }
           
       async NotEmpty(
-      prev: string,next: string,
+      value: string,
       __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
       ): Promise<HTTPRequest> {
         try {
@@ -12734,7 +12734,7 @@ env?: Record<string, string | undefined>
           return await this.runtime.buildRequest(
           "NotEmpty",
           {
-          "prev": prev,"next": next
+          "value": value
           },
           this.ctxManager.cloneContext(),
           __baml_options__?.tb?.__tb(),

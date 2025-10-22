@@ -8,7 +8,7 @@ fn notify_primitive_on_change() -> anyhow::Result<()> {
     assert_vm_emits(EmitProgram {
         source: r#"
             function primitive() -> int {
-                let value = 0 @watch;
+                watch let value = 0;
 
                 value = 1;
 
@@ -25,7 +25,7 @@ fn notify_primitive_on_nested_scope() -> anyhow::Result<()> {
     assert_vm_emits(EmitProgram {
         source: r#"
             function primitive() -> int {
-                let value = 0 @watch;
+                watch let value = 0;
 
                 if (true) {
                     value = 1;
@@ -50,7 +50,7 @@ fn stop_notifying_on_scope_exit() -> anyhow::Result<()> {
 
             function scope_exit() -> Point {
                 let outter_point =  {
-                    let point = Point { x: 0, y: 0 } @watch;
+                    watch let point = Point { x: 0, y: 0 };
                     point.x = 1; // Expect only one notification here.
                     point
                 };
@@ -82,7 +82,7 @@ fn notify_on_function_call_modifications() -> anyhow::Result<()> {
             }
 
             function call_function() -> Point {
-                let point = Point { x: 0, y: 0 } @watch;
+                watch let point = Point { x: 0, y: 0 };
                 point.set(1, 2);
                 point
             }
@@ -105,7 +105,7 @@ fn notify_on_change_with_alias() -> anyhow::Result<()> {
             }
 
             function alias() -> Point {
-                let point = Point { x: 0, y: 0 } @watch;
+                watch let point = Point { x: 0, y: 0 };
                 let alias = point;
 
                 alias.x = 1; // Notify
@@ -128,7 +128,7 @@ fn notify_on_change_with_alias_in_nested_scope() -> anyhow::Result<()> {
             }
 
             function nested_alias() -> Point {
-                let point = Point { x: 0, y: 0 } @watch;
+                watch let point = Point { x: 0, y: 0 };
                 if (true) {
                     let alias = point;
                     alias.x = 1; // Notify
@@ -161,10 +161,10 @@ fn notify_when_nested_object_is_modified_after_addtion() -> anyhow::Result<()> {
             }
 
             function nested_object_added() -> Vec2D {
-                let vec = Vec2D {
+                watch let vec = Vec2D {
                     p: Point { x: Value { value: 0 }, y: Value { value: 0 } },
                     q: Point { x: Value { value: 0 }, y: Value { value: 0 } },
-                } @watch;
+                };
 
                 let p = Point { x: Value { value: 1 }, y: Value { value: 1 } };
 
@@ -201,10 +201,10 @@ fn dont_notify_when_nested_object_is_modified_after_removal() -> anyhow::Result<
             }
 
             function nested_object_removed() -> Vec2D {
-                let vec = Vec2D {
+                watch let vec = Vec2D {
                     p: Point { x: Value { value: 0 }, y: Value { value: 0 } },
                     q: Point { x: Value { value: 0 }, y: Value { value: 0 } },
-                } @watch;
+                };
 
                 let p = vec.p;
 
@@ -232,9 +232,9 @@ fn cyclic_graph() -> anyhow::Result<()> {
 
             function cycle() -> int {
                 let v1 = Vertex { value: 1, edges: [] };
-                let v2 = Vertex { value: 2, edges: [] } @watch;
+                watch let v2 = Vertex { value: 2, edges: [] };
                 let v3 = Vertex { value: 3, edges: [] };
-                let v4 = Vertex { value: 4, edges: [] } @watch;
+                watch let v4 = Vertex { value: 4, edges: [] };
 
                 // NO EMIT (neither v2 nor v4 have changed)
                 v1.edges = [v2];

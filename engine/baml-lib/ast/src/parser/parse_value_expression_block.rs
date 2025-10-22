@@ -127,6 +127,12 @@ pub(crate) fn parse_value_expression_block(
                             }
                         }
                         Rule::empty_lines => {}
+                        Rule::stmt => {
+                            // Statements are allowed in expression functions that got parsed as value_expression_block.
+                            // They will be handled during HIR lowering when we distinguish between
+                            // LLM functions (with client/prompt) and expression functions (with code).
+                            // For now, just ignore them during parsing.
+                        }
                         Rule::BLOCK_LEVEL_CATCH_ALL => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
                                 "This line is not a valid field or attribute definition. A valid property may look like: 'myProperty \"some value\"' for example, with no colons.",

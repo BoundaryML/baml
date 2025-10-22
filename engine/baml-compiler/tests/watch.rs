@@ -10,7 +10,7 @@ fn watch_primitive() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
             function primitive() -> int {
-                let value = 0 @watch;
+                watch let value = 0;
 
                 value = 1;
 

@@ -6088,7 +6088,7 @@ export class HttpRequest {
   }
   
   IsTargetWord(
-      prev: string,next: string,
+      word: string,
       __baml_options__?: BamlCallOptions<events.IsTargetWordEventCollector>
   ): HTTPRequest {
     try {
@@ -6099,7 +6099,7 @@ export class HttpRequest {
       return this.runtime.buildRequestSync(
         "IsTargetWord",
         {
-          "prev": prev,"next": next
+          "word": word
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -6113,7 +6113,7 @@ export class HttpRequest {
   }
   
   IsTargetWord2(
-      prev: string,next: string,
+      word: string,
       __baml_options__?: BamlCallOptions<events.IsTargetWord2EventCollector>
   ): HTTPRequest {
     try {
@@ -6124,7 +6124,7 @@ export class HttpRequest {
       return this.runtime.buildRequestSync(
         "IsTargetWord2",
         {
-          "prev": prev,"next": next
+          "word": word
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -6188,7 +6188,7 @@ export class HttpRequest {
   }
   
   NotEmpty(
-      prev: string,next: string,
+      value: string,
       __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
   ): HTTPRequest {
     try {
@@ -6199,7 +6199,7 @@ export class HttpRequest {
       return this.runtime.buildRequestSync(
         "NotEmpty",
         {
-          "prev": prev,"next": next
+          "value": value
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -12619,7 +12619,7 @@ export class HttpStreamRequest {
   }
   
   IsTargetWord(
-      prev: string,next: string,
+      word: string,
       __baml_options__?: BamlCallOptions<events.IsTargetWordEventCollector>
   ): HTTPRequest {
     try {
@@ -12630,7 +12630,7 @@ export class HttpStreamRequest {
       return this.runtime.buildRequestSync(
         "IsTargetWord",
         {
-          "prev": prev,"next": next
+          "word": word
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -12644,7 +12644,7 @@ export class HttpStreamRequest {
   }
   
   IsTargetWord2(
-      prev: string,next: string,
+      word: string,
       __baml_options__?: BamlCallOptions<events.IsTargetWord2EventCollector>
   ): HTTPRequest {
     try {
@@ -12655,7 +12655,7 @@ export class HttpStreamRequest {
       return this.runtime.buildRequestSync(
         "IsTargetWord2",
         {
-          "prev": prev,"next": next
+          "word": word
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -12719,7 +12719,7 @@ export class HttpStreamRequest {
   }
   
   NotEmpty(
-      prev: string,next: string,
+      value: string,
       __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
   ): HTTPRequest {
     try {
@@ -12730,7 +12730,7 @@ export class HttpStreamRequest {
       return this.runtime.buildRequestSync(
         "NotEmpty",
         {
-          "prev": prev,"next": next
+          "value": value
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
