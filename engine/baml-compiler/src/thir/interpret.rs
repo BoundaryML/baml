@@ -2138,7 +2138,7 @@ where
                     Builtin::FetchValue => {
                         // FetchValue requires network access and is not supported in the interpreter
                         bail!(
-                            "builtin function std.fetch_value is not supported in interpreter at {:?}",
+                            "builtin function baml.fetch_value is not supported in interpreter at {:?}",
                             meta.0
                         )
                     }

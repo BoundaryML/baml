@@ -389,8 +389,8 @@ pub enum UnaryOperator {
 
 /// A type argument to a generic function call.
 ///
-/// std.fetch_value<int>(...) == TypeArg::Type(int),
-/// std.fetch_value<T>(...) == TypeArg::TypeName("T")
+/// baml.fetch_value<int>(...) == TypeArg::Type(int),
+/// baml.fetch_value<T>(...) == TypeArg::TypeName("T")
 #[derive(Clone, Debug)]
 pub enum TypeArg {
     Type(TypeIR),

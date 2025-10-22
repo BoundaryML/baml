@@ -92,14 +92,19 @@ pub fn typecheck_returning_context<'a>(
     }
 
     // Add builtin functions to typing context
-    // std::fetch_value<T>(std::Request) -> T
-    // This is a generic function that takes a Request and returns any type T
-    // For now, we'll add a placeholder with a Top type.
+    // baml.fetch_as<T>(url: string) -> T
+    // baml.fetch_value<T>(request: baml.Request) -> T
+    // These are generic functions. For now, we'll add a placeholder with a Top type.
     let generic_return_type = TypeIR::Top(Default::default()); // Placeholder for generic T
-    let fetch_as_type = crate::builtin::baml_fetch_as_signature(generic_return_type);
+    let fetch_as_type = crate::builtin::baml_fetch_as_signature(generic_return_type.clone());
     typing_context.symbols.insert(
         crate::builtin::functions::FETCH_AS.to_string(),
         fetch_as_type,
+    );
+    let fetch_value_type = crate::builtin::std_fetch_value_signature(generic_return_type);
+    typing_context.symbols.insert(
+        crate::builtin::functions::FETCH_VALUE.to_string(),
+        fetch_value_type,
     );
 
     // Add native functions to typing context
@@ -1272,7 +1277,7 @@ fn typecheck_assignment(
 
     let rhs_type = &rhs.meta().1;
     if let (Some(left_type), Some(val_type)) = (lhs.meta().1.as_ref(), rhs_type) {
-        if !types_compatible(left_type, val_type) {
+        if !val_type.is_subtype(left_type) {
             diagnostics.push_error(DatamodelError::new_validation_error(
                 &format!(
                     "Cannot assign {} to {}",
@@ -1428,6 +1433,17 @@ pub fn typecheck_expression(
             BamlValueWithMeta::String(value.clone(), (span.clone(), Some(TypeIR::string()))),
         ),
         hir::Expression::Identifier(name, span) => {
+            // Special case for null literal
+            if name == "null" {
+                return thir::Expr::Value(BamlValueWithMeta::Null((
+                    span.clone(),
+                    Some(TypeIR::Primitive(
+                        baml_types::TypeValue::Null,
+                        Default::default(),
+                    )),
+                )));
+            }
+
             // Enum access: let x = Shape.Rectangle
             if let Some(enum_def) = context.enums.get(name) {
                 return thir::Expr::Var(
@@ -1518,9 +1534,17 @@ pub fn typecheck_expression(
             let func_type = context.get_type(&func_name).cloned();
 
             // TODO: Handle generics uniformly, not with this kind of one-off handler.
-            if func_name == crate::builtin::functions::FETCH_AS && type_args.is_empty() {
+            if (func_name == crate::builtin::functions::FETCH_AS
+                || func_name == crate::builtin::functions::FETCH_VALUE)
+                && type_args.is_empty()
+            {
+                let fn_name_display = if func_name == crate::builtin::functions::FETCH_AS {
+                    "baml.fetch_as"
+                } else {
+                    "baml.fetch_value"
+                };
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                        "Generic function std.fetch_value must have a type argument. Try adding a type argument like this: std.fetch_value<Type>",
+                        &format!("Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>", fn_name_display, fn_name_display),
                         function.span().clone(),
                     ));
             }
@@ -1622,6 +1646,7 @@ pub fn typecheck_expression(
                     ("env", "get") => Some("env.get"),
                     ("baml", "deep_copy") => Some("baml.deep_copy"),
                     ("baml", "fetch_as") => Some("baml.fetch_as"),
+                    ("baml", "fetch_value") => Some("baml.fetch_value"),
                     ("image", "from_url") => Some("baml.media.image.from_url"),
                     ("audio", "from_url") => Some("baml.media.audio.from_url"),
                     ("video", "from_url") => Some("baml.media.video.from_url"),
@@ -1642,6 +1667,22 @@ pub fn typecheck_expression(
                         .collect();
 
                     let mut return_type = None;
+
+                    // Validate type arguments for generic functions
+                    if (full_name == crate::builtin::functions::FETCH_AS
+                        || full_name == crate::builtin::functions::FETCH_VALUE)
+                        && type_args.is_empty()
+                    {
+                        let fn_name_display = if full_name == crate::builtin::functions::FETCH_AS {
+                            "baml.fetch_as"
+                        } else {
+                            "baml.fetch_value"
+                        };
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>", fn_name_display, fn_name_display),
+                            span.clone(),
+                        ));
+                    }
 
                     // Handle generic functions with special type inference
                     match full_name {
@@ -1851,6 +1892,7 @@ pub fn typecheck_expression(
                             ("baml", "deep_copy") => Some("baml.deep_copy".to_string()),
 
                             ("baml", "fetch_as") => Some("baml.fetch_as".to_string()),
+                            ("baml", "fetch_value") => Some("baml.fetch_value".to_string()),
 
                             ("baml.unstable", "string") => Some("baml.unstable.string".to_string()),
 
@@ -1900,6 +1942,22 @@ pub fn typecheck_expression(
                     (vec![], None, false)
                 }
             };
+
+            // Validate type arguments for generic functions
+            if (full_name == crate::builtin::functions::FETCH_AS
+                || full_name == crate::builtin::functions::FETCH_VALUE)
+                && type_args.is_empty()
+            {
+                let fn_name_display = if full_name == crate::builtin::functions::FETCH_AS {
+                    "baml.fetch_as"
+                } else {
+                    "baml.fetch_value"
+                };
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    &format!("Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>", fn_name_display, fn_name_display),
+                    span.clone(),
+                ));
+            }
 
             // image.from_url is not a "method", it's an associated function (kind of).
             let is_function_call_on_namespace = matches!(
@@ -1955,19 +2013,25 @@ pub fn typecheck_expression(
                                     ));
                                 }
                                 "baml.fetch_as" => {
-                                    generic_return_type_inferred = match &type_args[0] {
-                                        hir::TypeArg::Type(t) => Some(t.to_owned()),
-                                        hir::TypeArg::TypeName(n) => context
-                                            .classes
-                                            .get(n)
-                                            .map(|c| TypeIR::class(c.name.clone()))
-                                            .or_else(|| {
-                                                context
-                                                    .enums
-                                                    .get(n)
-                                                    .map(|e| TypeIR::r#enum(&e.name))
-                                            })
-                                            .or_else(|| context.get_type(n).map(|t| t.to_owned())),
+                                    generic_return_type_inferred = if !type_args.is_empty() {
+                                        match &type_args[0] {
+                                            hir::TypeArg::Type(t) => Some(t.to_owned()),
+                                            hir::TypeArg::TypeName(n) => context
+                                                .classes
+                                                .get(n)
+                                                .map(|c| TypeIR::class(c.name.clone()))
+                                                .or_else(|| {
+                                                    context
+                                                        .enums
+                                                        .get(n)
+                                                        .map(|e| TypeIR::r#enum(&e.name))
+                                                })
+                                                .or_else(|| {
+                                                    context.get_type(n).map(|t| t.to_owned())
+                                                }),
+                                        }
+                                    } else {
+                                        None
                                     };
 
                                     match &generic_return_type_inferred {
@@ -1985,6 +2049,47 @@ pub fn typecheck_expression(
                                                     arg.span(),
                                                 ),
                                             );
+                                        }
+                                    }
+                                }
+                                "baml.fetch_value" => {
+                                    generic_return_type_inferred = if !type_args.is_empty() {
+                                        match &type_args[0] {
+                                            hir::TypeArg::Type(t) => Some(t.to_owned()),
+                                            hir::TypeArg::TypeName(n) => context
+                                                .classes
+                                                .get(n)
+                                                .map(|c| TypeIR::class(c.name.clone()))
+                                                .or_else(|| {
+                                                    context
+                                                        .enums
+                                                        .get(n)
+                                                        .map(|e| TypeIR::r#enum(&e.name))
+                                                })
+                                                .or_else(|| {
+                                                    context.get_type(n).map(|t| t.to_owned())
+                                                }),
+                                        }
+                                    } else {
+                                        None
+                                    };
+
+                                    match &generic_return_type_inferred {
+                                        Some(t) => {
+                                            func_type = Some(TypeIR::arrow(
+                                                vec![TypeIR::class(
+                                                    crate::builtin::classes::REQUEST,
+                                                )],
+                                                t.clone(),
+                                            ));
+                                        }
+
+                                        None => {
+                                            diagnostics
+                                                .push_error(DatamodelError::new_validation_error(
+                                                "could not infer return type of baml.fetch_value",
+                                                arg.span(),
+                                            ));
                                         }
                                     }
                                 }
@@ -2025,7 +2130,7 @@ pub fn typecheck_expression(
                 &typed_receiver,
                 thir::Expr::Var(name, _) if matches!(
                     name.as_str(),
-                    "image" | "audio" | "video" | "pdf" | "baml" | "baml.unstable"
+                    "image" | "audio" | "video" | "pdf" | "baml" | "baml.unstable" | "std"
                 )
             );
 
@@ -2057,7 +2162,7 @@ pub fn typecheck_expression(
                         full_name.clone(),
                         (span.clone(), func_type.clone()),
                     )),
-                    type_args: if full_name == "baml.fetch_as"
+                    type_args: if (full_name == "baml.fetch_as" || full_name == "baml.fetch_value")
                         && generic_return_type_inferred.is_some()
                     {
                         vec![generic_return_type_inferred.clone().unwrap()]

@@ -178,8 +178,6 @@ impl FunctionMetadata {
     /// Returns Some(new_channel_name) if the next statement is WatchOptions that:
     /// 1. Operates on the same variable
     /// 2. Sets a new channel name (different from the variable name)
-    /// Note: The presence of a `when` filter does NOT prevent this optimization.
-    /// If the user is setting a custom channel name, they don't want the default channel.
     fn is_immediate_channel_rename(
         next_statement: Option<&thir::Statement<ExprMetadata>>,
         var_name: &str,
@@ -817,11 +815,11 @@ mod tests {
         let hir = Hir::from_source(
             r#"
             class WatchOptions {
-                name string
+                channel string
             }
 
             function A() -> int {
-                let opts = baml.WatchOptions{name: "test"};
+                let opts = baml.WatchOptions{channel: "test"};
                 1
             }
         "#,
@@ -834,11 +832,11 @@ mod tests {
         let hir = Hir::from_source(
             r#"
             class WatchOptions {
-                name string
+                channel string
             }
 
             function A() -> int {
-                let opts = WatchOptions{name: "test"};
+                let opts = WatchOptions{channel: "test"};
                 1
             }
         "#,
