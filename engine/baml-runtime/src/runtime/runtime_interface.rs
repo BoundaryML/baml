@@ -146,9 +146,12 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                     }
                 }
 
-                // Also include BOUNDARY_API_KEY if it exists, for tracing/telemetry
+                // Also include BOUNDARY_* env vars if they exist, for tracing/telemetry
                 if let Some(boundary_api_key) = ctx.env_vars().get("BOUNDARY_API_KEY") {
                     required_env_vars.insert("BOUNDARY_API_KEY".to_string(), boundary_api_key.to_owned());
+                }
+                if let Some(boundary_api_url) = ctx.env_vars().get("BOUNDARY_API_URL") {
+                    required_env_vars.insert("BOUNDARY_API_URL".to_string(), boundary_api_url.to_owned());
                 }
 
                 clients.insert(
