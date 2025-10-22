@@ -83,18 +83,52 @@ This happens during package initialization (in an `init()` function), which may 
 
 ## Debugging
 
-To inspect what Orchestrion is doing to the code:
+### Inspect Orchestrion Code Transformations
+
+The Dockerfile already builds with `-work` flag. To inspect the transformed code:
 
 ```bash
-orchestrion go build -work -o app ./orchestrion-repro
-# Check the WORK directory printed to see modified source
+# Build the image targeting only the build stage
+cd /path/to/baml
+docker build --target build -t baml-orchestrion-build \
+    -f integ-tests/go/orchestrion-repro/Dockerfile .
+
+# List all orchestrion transformation directories
+docker run --rm baml-orchestrion-build \
+    find /build/orchestrion-work -type d -name "orchestrion"
+
+# View the modified main.go
+docker run --rm baml-orchestrion-build \
+    cat /build/orchestrion-work/b001/orchestrion/src/main/main.go
+
+# View the modified HTTP roundtrip code
+docker run --rm baml-orchestrion-build \
+    cat /build/orchestrion-work/b103/orchestrion/src/net/http/roundtrip.go
+
+# Find all HTTP-related modifications
+docker run --rm baml-orchestrion-build \
+    find /build/orchestrion-work -path "*/orchestrion/src/*" -name "*.go" | \
+    grep -E "(http|transport)"
 ```
 
-Enable detailed logging:
+### Enable Detailed Logging
+
+Run the container with debug logging:
 ```bash
-export ORCHESTRION_LOG_LEVEL=DEBUG
-export BAML_LOG=DEBUG
-orchestrion go build -o app ./orchestrion-repro
+docker run --rm \
+    -e ORCHESTRION_LOG_LEVEL=DEBUG \
+    -e BAML_LOG=DEBUG \
+    baml-orchestrion-repro
+```
+
+### Local Testing with Orchestrion
+
+If testing locally with orchestrion installed:
+```bash
+cd /path/to/baml/integ-tests/go
+orchestrion go build -work -o app ./orchestrion-repro
+# The WORK= directory will be printed
+# Inspect: ls $WORK_DIR/*/orchestrion/src/
 ./app
 ```
 

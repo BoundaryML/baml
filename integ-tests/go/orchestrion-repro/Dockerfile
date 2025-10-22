@@ -22,9 +22,16 @@ WORKDIR /build/integ-tests/go
 # Download dependencies (uses replace directive to ../../ for BAML)
 RUN go mod download
 
-# Build with Orchestrion instrumentation
+# Build with Orchestrion instrumentation with -work flag to preserve transformations
 # This should trigger the SIGSEGV when BAML tries to initialize
-RUN orchestrion pin && orchestrion go build -o app ./orchestrion-repro
+RUN orchestrion pin && orchestrion go build -work -o app ./orchestrion-repro 2>&1 | tee /build/orchestrion-build.log
+
+# Find and preserve the work directory for inspection
+RUN WORK_DIR=$(grep "^WORK=" /build/orchestrion-build.log | cut -d= -f2) && \
+    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then \
+        echo "Copying orchestrion work from $WORK_DIR"; \
+        cp -r "$WORK_DIR" /build/orchestrion-work || true; \
+    fi
 
 # Start a new stage from Ubuntu
 FROM ubuntu:22.04 AS run

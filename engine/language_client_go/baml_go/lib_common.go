@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -36,6 +37,32 @@ const (
 	bamlLibraryPathEnv = "BAML_LIBRARY_PATH"
 	bamlDisableDlEnv   = "BAML_LIBRARY_DISABLE_DOWNLOAD"
 )
+
+// uninstrumentedHTTPClient creates an HTTP client that won't be instrumented by Orchestrion.
+// This is needed because BAML initialization happens in init() before Datadog tracer is ready.
+//
+//orchestrion:ignore
+func uninstrumentedHTTPClient() *http.Client {
+	// Create a custom transport with a flag that tells Orchestrion to skip it
+	transport := &http.Transport{
+		DD__tracer_internal: true, // This field prevents Orchestrion instrumentation
+		Proxy:               http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          10,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	return &http.Client{
+		Transport: transport,
+		Timeout:   5 * time.Minute,
+	}
+}
 
 var (
 	ErrLoadLibrary          = errors.New("baml: failed loading shared library")
@@ -425,6 +452,7 @@ func isMusl() bool {
 	return false
 }
 
+//orchestrion:ignore
 func downloadBamlLibrary(destDir string, filename string) error {
 	tag := VERSION
 	downloadURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", githubRepo, tag, filename)
@@ -449,7 +477,9 @@ func downloadBamlLibrary(destDir string, filename string) error {
 	}
 	req.Header.Set("User-Agent", fmt.Sprintf("baml-go/%s (%s/%s)", VERSION, runtime.GOOS, runtime.GOARCH))
 
-	resp, err := http.DefaultClient.Do(req)
+	// Use uninstrumented client to avoid Orchestrion crash during init()
+	httpClient := uninstrumentedHTTPClient()
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w: network error fetching %s: %w", ErrDownloadFailed, downloadURL, err)
 	}
@@ -519,8 +549,11 @@ func downloadBamlLibrary(destDir string, filename string) error {
 	return nil
 }
 
+//orchestrion:ignore
 func downloadChecksum(checksumURL string, targetFilename string) (string, error) {
-	resp, err := http.Get(checksumURL)
+	// Use uninstrumented client to avoid Orchestrion crash during init()
+	httpClient := uninstrumentedHTTPClient()
+	resp, err := httpClient.Get(checksumURL)
 	if err != nil {
 		return "", fmt.Errorf("network error fetching checksum %s: %w", checksumURL, err)
 	}
