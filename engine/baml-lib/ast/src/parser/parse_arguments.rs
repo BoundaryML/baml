@@ -35,7 +35,7 @@ pub(crate) fn parse_arguments_list(
                     });
                 }
             }
-            _ => parsing_catch_all(current, "attribute arguments"),
+            _ => parsing_catch_all(current, "attribute arguments", diagnostics),
         }
     }
 }

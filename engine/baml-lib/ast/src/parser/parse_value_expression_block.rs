@@ -139,11 +139,11 @@ pub(crate) fn parse_value_expression_block(
                                 diagnostics.span(item.as_span()),
                             ))
                         }
-                        _ => parsing_catch_all(item, "model"),
+                        _ => parsing_catch_all(item, "model", diagnostics),
                     }
                 }
             }
-            _ => parsing_catch_all(current, "function"),
+            _ => parsing_catch_all(current, "function", diagnostics),
         }
     }
 
@@ -176,7 +176,7 @@ pub(crate) fn parse_value_expression_block(
             output,
             attributes,
             fields,
-            documentation: doc_comment.and_then(parse_comment_block),
+            documentation: doc_comment.and_then(|c| parse_comment_block(c, diagnostics)),
             span: diagnostics.span(pair_span),
             type_builder,
             block_type: sub_type.unwrap_or(ValueExprBlockType::Function),

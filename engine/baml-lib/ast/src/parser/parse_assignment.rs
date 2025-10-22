@@ -1,12 +1,11 @@
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 use super::{
-    helpers::{parsing_catch_all, Pair},
+    helpers::{assert_correct_parser, parsing_catch_all, Pair},
     parse_identifier::parse_identifier,
     Rule,
 };
 use crate::{
-    assert_correct_parser,
     ast::*,
     parser::{parse_field::parse_field_type_with_attr, parse_types::parse_field_type},
 };
@@ -16,7 +15,7 @@ use crate::{
 /// It only works with type aliases for now, it's not generic over all
 /// expressions.
 pub(crate) fn parse_assignment(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Assignment {
-    assert_correct_parser!(pair, Rule::type_alias);
+    assert_correct_parser(&pair, &[Rule::type_alias], diagnostics);
 
     let span = pair.as_span();
 
@@ -56,7 +55,7 @@ pub(crate) fn parse_assignment(pair: Pair<'_>, diagnostics: &mut Diagnostics) ->
                 field_type = parse_field_type_with_attr(current, false, diagnostics)
             }
 
-            _ => parsing_catch_all(current, "type_alias"),
+            _ => parsing_catch_all(current, "type_alias", diagnostics),
         }
     }
 

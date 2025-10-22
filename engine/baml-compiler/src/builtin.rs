@@ -5,16 +5,16 @@ use crate::hir::{Class, Enum, EnumVariant, Field};
 
 pub mod functions {
     pub const FETCH_AS: &str = "baml.fetch_as";
-    pub const FETCH_VALUE: &str = "std.fetch_value";
+    pub const FETCH_VALUE: &str = "baml.fetch_value";
 }
 
 pub mod classes {
-    pub const REQUEST: &str = "std.Request";
+    pub const REQUEST: &str = "baml.Request";
     pub const WATCH_OPTIONS: &str = "baml.WatchOptions";
 }
 
 pub mod enums {
-    pub const HTTP_METHOD: &str = "std.HttpMethod";
+    pub const HTTP_METHOD: &str = "baml.HttpMethod";
 }
 
 pub fn builtin_classes() -> Vec<Class> {
@@ -78,7 +78,7 @@ pub fn builtin_enums() -> Vec<Enum> {
     }]
 }
 
-/// Create a type for the std::Request class
+/// Create a type for the baml.Request class
 pub fn std_request_type() -> TypeIR {
     TypeIR::class(classes::REQUEST)
 }
@@ -88,18 +88,16 @@ pub fn baml_fetch_as_signature(return_type: TypeIR) -> TypeIR {
     TypeIR::arrow(vec![TypeIR::string()], return_type)
 }
 
-/// Create a function signature for std.fetch_value<T>
+/// Create a function signature for baml.fetch_value<T>
 pub fn std_fetch_value_signature(return_type: TypeIR) -> TypeIR {
     TypeIR::arrow(vec![TypeIR::class(classes::REQUEST)], return_type)
 }
 
 pub fn is_builtin_identifier(identifier: &str) -> bool {
-    identifier.starts_with("std::")
-        || identifier.starts_with("baml::")
-        || identifier.starts_with("std.")
-        || identifier.starts_with("baml.")
+    identifier.starts_with("baml.")
         || identifier == "true"
         || identifier == "false"
+        || identifier == "null"
 }
 
 pub fn is_builtin_class(class_name: &str) -> bool {

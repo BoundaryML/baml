@@ -5,11 +5,11 @@ function GetName(person: string) -> string {
 // String: "Antonio"
 // Function: GetName
 // 1   0   LOAD_CONST 0   (Antonio)
-//     1   RETURN         
+//     1   RETURN
 //
-// Class: std.Request with 3 fields
+// Class: baml.Request with 3 fields
 // Class: baml.WatchOptions with 2 fields
-// Enum std.HttpMethod
+// Enum baml.HttpMethod
 // Function: baml.Array.length
 //
 // Function: baml.Map.length

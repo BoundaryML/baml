@@ -7,7 +7,7 @@ use super::{
         parse_expr_block, parse_expr_fn, parse_fn_app, parse_generic_fn_app, parse_if_expression,
         parse_lambda,
     },
-    parse_identifier::{parse_identifier, parse_path_identifier},
+    parse_identifier::parse_identifier,
     Rule,
 };
 use crate::{
@@ -21,7 +21,7 @@ pub(crate) fn parse_expression(
 ) -> Option<Expression> {
     use pest::pratt_parser::{Assoc, Op, PrattParser};
 
-    assert_correct_parser(&token, &[Rule::expression], diagnostics);
+    assert_correct_parser!(token, Rule::expression);
 
     // TODO: Initialize this shit once and pass it in (consider parallel parsing with .par_iter(), use some sync once cell or something).
     let pratt = PrattParser::new()
@@ -67,7 +67,7 @@ pub(crate) fn parse_expression(
             let operator = match operator.as_rule() {
                 Rule::NEG => UnaryOperator::Neg,
                 Rule::NOT => UnaryOperator::Not,
-                _ => unreachable!("Unexpected prefix operator: {:?}", operator.as_rule()),
+                _ => unreachable_rule!(operator, Rule::prefix_operator),
             };
 
             right.map(|right| Expression::UnaryOperation {
@@ -124,10 +124,10 @@ pub(crate) fn parse_expression(
                             }
                         },
 
-                        _ => unreachable!("Unexpected method call rule: {:?}", inner.as_rule()),
+                        _ => unreachable_rule!(inner, Rule::method_call),
                     }
                 }
-                _ => unreachable!("Unexpected postfix operator: {:?}", operator.as_rule()),
+                _ => unreachable_rule!(operator, Rule::postfix_operator),
             })
         })
         .map_infix(|left, operator, right| {
@@ -151,7 +151,7 @@ pub(crate) fn parse_expression(
                 Rule::OR => BinaryOperator::Or,
                 Rule::AND => BinaryOperator::And,
                 Rule::INSTANCE_OF => BinaryOperator::InstanceOf,
-                _ => unreachable!("Unexpected infix operator: {:?}", operator.as_rule()),
+                _ => unreachable_rule!(operator, Rule::infix_operator),
             };
 
             Some(Expression::BinaryOperation {
@@ -216,10 +216,7 @@ fn parse_primary_expression(
             None
         }
 
-        _ => {
-            unreachable_rule(&token, "primary_expression", diagnostics);
-            None
-        }
+        _ => unreachable_rule!(token, Rule::primary_expression),
     }
 }
 
@@ -250,7 +247,7 @@ fn parse_array(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
 }
 
 fn parse_string_literal(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
-    assert_correct_parser(&token, &[Rule::string_literal], diagnostics);
+    assert_correct_parser!(token, Rule::string_literal);
     let contents = token.clone().into_inner().next().unwrap();
     let span = diagnostics.span(contents.as_span());
     match contents.as_rule() {
@@ -279,10 +276,7 @@ fn parse_string_literal(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expre
                 }
             }
         }
-        _ => {
-            unreachable_rule(&contents, "string_literal", diagnostics);
-            Expression::StringValue(String::new(), span)
-        }
+        _ => unreachable_rule!(contents, Rule::string_literal),
     }
 }
 
@@ -291,7 +285,7 @@ fn parse_map(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
         pair: Pair<'_>,
         diagnostics: &mut Diagnostics,
     ) -> Option<(Expression, Expression)> {
-        assert_correct_parser(&pair, &[Rule::expr_map_entry], diagnostics);
+        assert_correct_parser!(pair, Rule::expr_map_entry);
 
         let mut inner = pair.into_inner();
 
@@ -320,7 +314,7 @@ fn parse_map(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
         pair: Pair<'_>,
         diagnostics: &mut Diagnostics,
     ) -> Option<(Expression, Expression)> {
-        assert_correct_parser(&pair, &[Rule::ident_map_entry], diagnostics);
+        assert_correct_parser!(pair, Rule::ident_map_entry);
 
         let mut inner = pair.into_inner();
 
@@ -341,10 +335,7 @@ fn parse_map(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
         match pair.as_rule() {
             Rule::expr_map_entry => parse_expr_map_entry(pair, diagnostics),
             Rule::ident_map_entry => parse_ident_map_entry(pair, diagnostics),
-            _ => {
-                unreachable_rule(&pair, "map_expression", diagnostics);
-                None
-            }
+            _ => unreachable_rule!(pair, Rule::map_expression),
         }
     }
 
@@ -385,7 +376,7 @@ pub fn parse_config_expression(
     token: Pair<'_>,
     diagnostics: &mut internal_baml_diagnostics::Diagnostics,
 ) -> Option<Expression> {
-    assert_correct_parser(&token, &[Rule::config_expression], diagnostics);
+    assert_correct_parser!(token, Rule::config_expression);
     parse_config_primary_expression(token.into_inner().next()?, diagnostics)
 }
 
@@ -393,7 +384,7 @@ pub fn parse_config_primary_expression(
     token: Pair<'_>,
     diagnostics: &mut internal_baml_diagnostics::Diagnostics,
 ) -> Option<Expression> {
-    assert_correct_parser(&token, &[Rule::config_primary_expression], diagnostics);
+    assert_correct_parser!(token, Rule::config_primary_expression);
     let span = diagnostics.span(token.as_span());
 
     let token = token.into_inner().next()?;
@@ -405,10 +396,7 @@ pub fn parse_config_primary_expression(
         Rule::jinja_expression => Some(parse_jinja_expression(token, diagnostics)),
         Rule::config_map_expression => Some(parse_config_map(token, diagnostics)),
         Rule::identifier => Some(Expression::Identifier(parse_identifier(token, diagnostics))),
-        _ => {
-            unreachable_rule(&token, "config_primary_expression", diagnostics);
-            None
-        }
+        _ => unreachable_rule!(token, Rule::config_primary_expression),
     }
 }
 
@@ -461,7 +449,7 @@ fn parse_config_map_entry(
     token: Pair<'_>,
     diagnostics: &mut Diagnostics,
 ) -> Option<(Expression, Expression)> {
-    assert_correct_parser(&token, &[Rule::config_map_entry], diagnostics);
+    assert_correct_parser!(token, Rule::config_map_entry);
 
     let mut key = None;
     let mut value = None;
@@ -512,7 +500,7 @@ fn parse_config_map_entry(
 }
 
 fn parse_config_map_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
-    assert_correct_parser(&token, &[Rule::config_map_key], diagnostics);
+    assert_correct_parser!(token, Rule::config_map_key);
 
     let span = diagnostics.span(token.as_span());
     if let Some(current) = token.into_inner().next() {
@@ -522,17 +510,14 @@ fn parse_config_map_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expre
                 current.into_inner().next().unwrap().as_str().to_string(),
                 span,
             ),
-            _ => {
-                unreachable_rule(&current, "config_map_key", diagnostics);
-                Expression::Identifier(Identifier::Local(String::new(), span))
-            }
+            _ => unreachable_rule!(current, Rule::config_map_key),
         };
     }
     unreachable!("Encountered impossible config map key during parsing")
 }
 
 pub(super) fn parse_raw_string(token: Pair<'_>, diagnostics: &mut Diagnostics) -> RawString {
-    assert_correct_parser(&token, &[Rule::raw_string_literal], diagnostics);
+    assert_correct_parser!(token, Rule::raw_string_literal);
 
     let mut language = None;
     let mut content = None;
@@ -553,7 +538,7 @@ pub(super) fn parse_raw_string(token: Pair<'_>, diagnostics: &mut Diagnostics) -
                     diagnostics.span(current.as_span()),
                 ));
             }
-            _ => unreachable_rule(&current, "raw_string_literal", diagnostics),
+            _ => unreachable_rule!(current, Rule::raw_string_literal),
         };
     }
     match content {
@@ -605,7 +590,7 @@ fn unescape_string(val: &str) -> String {
 /// processing engine, not to break a Jinja Expression into two lines,
 /// therefor the backing string should be contain "\\n".
 pub fn parse_jinja_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
-    assert_correct_parser(&token, &[Rule::jinja_expression], diagnostics);
+    assert_correct_parser!(token, Rule::jinja_expression);
     let value = token
         .into_inner()
         .map(|token| match token.as_rule() {
@@ -624,13 +609,7 @@ pub fn parse_jinja_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) ->
                     diagnostics.span(token.as_span()),
                 )
             }
-            _ => {
-                unreachable_rule(&token, "jinja_expression", diagnostics);
-                Expression::JinjaExpressionValue(
-                    JinjaExpression(String::new()),
-                    diagnostics.span(token.as_span()),
-                )
-            }
+            _ => unreachable_rule!(token, Rule::jinja_expression),
         })
         .next();
 
@@ -642,19 +621,14 @@ pub fn parse_jinja_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) ->
 }
 
 pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
-    assert_correct_parser(&token, &[Rule::class_constructor], diagnostics);
+    assert_correct_parser!(token, Rule::class_constructor);
 
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
-    let name_token = tokens.next().expect("Guaranteed by the grammar");
-    let class_name = match name_token.as_rule() {
-        Rule::path_identifier => {
-            // For path identifiers like "baml.WatchOptions", convert to identifier with the full path
-            parse_path_identifier(name_token, diagnostics)
-        }
-        Rule::identifier => parse_identifier(name_token, diagnostics),
-        _ => unreachable!("Grammar guarantees path_identifier or identifier"),
-    };
+    let class_name = parse_identifier(
+        tokens.next().expect("Guaranteed by the grammar"),
+        diagnostics,
+    );
     let mut fields = Vec::new();
     while let Some(field_or_close_bracket) = tokens.next() {
         if field_or_close_bracket.as_str() == "}" {
@@ -667,11 +641,7 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
             continue;
         }
 
-        assert_correct_parser(
-            &field_or_close_bracket,
-            &[Rule::class_field_value_pair],
-            diagnostics,
-        );
+        assert_correct_parser!(field_or_close_bracket, Rule::class_field_value_pair);
 
         let mut field_tokens = field_or_close_bracket.into_inner();
         let identifier_or_spread = field_tokens.next().expect("Guaranteed by the grammar");
@@ -700,7 +670,7 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
                     fields.push(ClassConstructorField::Named(field_name, expr));
                 }
             }
-            _ => unreachable_rule(&identifier_or_spread, "class_field_value_pair", diagnostics),
+            _ => unreachable_rule!(identifier_or_spread, Rule::class_field_value_pair),
         }
         let _maybe_comma = tokens.next();
     }

@@ -93,7 +93,7 @@ pub fn typecheck_returning_context<'a>(
 
     // Add builtin functions to typing context
     // baml.fetch_as<T>(url: string) -> T
-    // std.fetch_value<T>(request: std.Request) -> T
+    // baml.fetch_value<T>(request: baml.Request) -> T
     // These are generic functions. For now, we'll add a placeholder with a Top type.
     let generic_return_type = TypeIR::Top(Default::default()); // Placeholder for generic T
     let fetch_as_type = crate::builtin::baml_fetch_as_signature(generic_return_type.clone());
@@ -1262,7 +1262,7 @@ fn typecheck_assignment(
 
     let rhs_type = &rhs.meta().1;
     if let (Some(left_type), Some(val_type)) = (lhs.meta().1.as_ref(), rhs_type) {
-        if !types_compatible(left_type, val_type) {
+        if !val_type.is_subtype(left_type) {
             diagnostics.push_error(DatamodelError::new_validation_error(
                 &format!(
                     "Cannot assign {} to {}",
@@ -1418,6 +1418,17 @@ pub fn typecheck_expression(
             BamlValueWithMeta::String(value.clone(), (span.clone(), Some(TypeIR::string()))),
         ),
         hir::Expression::Identifier(name, span) => {
+            // Special case for null literal
+            if name == "null" {
+                return thir::Expr::Value(BamlValueWithMeta::Null((
+                    span.clone(),
+                    Some(TypeIR::Primitive(
+                        baml_types::TypeValue::Null,
+                        Default::default(),
+                    )),
+                )));
+            }
+
             // Enum access: let x = Shape.Rectangle
             if let Some(enum_def) = context.enums.get(name) {
                 return thir::Expr::Var(
@@ -1515,7 +1526,7 @@ pub fn typecheck_expression(
                 let fn_name_display = if func_name == crate::builtin::functions::FETCH_AS {
                     "baml.fetch_as"
                 } else {
-                    "std.fetch_value"
+                    "baml.fetch_value"
                 };
                 diagnostics.push_error(DatamodelError::new_validation_error(
                         &format!("Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>", fn_name_display, fn_name_display),
@@ -1620,7 +1631,7 @@ pub fn typecheck_expression(
                     ("env", "get") => Some("env.get"),
                     ("baml", "deep_copy") => Some("baml.deep_copy"),
                     ("baml", "fetch_as") => Some("baml.fetch_as"),
-                    ("std", "fetch_value") => Some("std.fetch_value"),
+                    ("baml", "fetch_value") => Some("baml.fetch_value"),
                     ("image", "from_url") => Some("baml.media.image.from_url"),
                     ("audio", "from_url") => Some("baml.media.audio.from_url"),
                     ("video", "from_url") => Some("baml.media.video.from_url"),
@@ -1650,7 +1661,7 @@ pub fn typecheck_expression(
                         let fn_name_display = if full_name == crate::builtin::functions::FETCH_AS {
                             "baml.fetch_as"
                         } else {
-                            "std.fetch_value"
+                            "baml.fetch_value"
                         };
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             &format!("Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>", fn_name_display, fn_name_display),
@@ -1866,7 +1877,7 @@ pub fn typecheck_expression(
                             ("baml", "deep_copy") => Some("baml.deep_copy".to_string()),
 
                             ("baml", "fetch_as") => Some("baml.fetch_as".to_string()),
-                            ("std", "fetch_value") => Some("std.fetch_value".to_string()),
+                            ("baml", "fetch_value") => Some("baml.fetch_value".to_string()),
 
                             ("baml.unstable", "string") => Some("baml.unstable.string".to_string()),
 
@@ -1925,7 +1936,7 @@ pub fn typecheck_expression(
                 let fn_name_display = if full_name == crate::builtin::functions::FETCH_AS {
                     "baml.fetch_as"
                 } else {
-                    "std.fetch_value"
+                    "baml.fetch_value"
                 };
                 diagnostics.push_error(DatamodelError::new_validation_error(
                     &format!("Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>", fn_name_display, fn_name_display),
@@ -2026,7 +2037,7 @@ pub fn typecheck_expression(
                                         }
                                     }
                                 }
-                                "std.fetch_value" => {
+                                "baml.fetch_value" => {
                                     generic_return_type_inferred = if !type_args.is_empty() {
                                         match &type_args[0] {
                                             hir::TypeArg::Type(t) => Some(t.to_owned()),
@@ -2061,7 +2072,7 @@ pub fn typecheck_expression(
                                         None => {
                                             diagnostics
                                                 .push_error(DatamodelError::new_validation_error(
-                                                "could not infer return type of std.fetch_value",
+                                                "could not infer return type of baml.fetch_value",
                                                 arg.span(),
                                             ));
                                         }
@@ -2136,7 +2147,7 @@ pub fn typecheck_expression(
                         full_name.clone(),
                         (span.clone(), func_type.clone()),
                     )),
-                    type_args: if (full_name == "baml.fetch_as" || full_name == "std.fetch_value")
+                    type_args: if (full_name == "baml.fetch_as" || full_name == "baml.fetch_value")
                         && generic_return_type_inferred.is_some()
                     {
                         vec![generic_return_type_inferred.clone().unwrap()]

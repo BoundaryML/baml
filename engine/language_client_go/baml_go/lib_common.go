@@ -9,9 +9,11 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -36,6 +38,43 @@ const (
 	bamlLibraryPathEnv = "BAML_LIBRARY_PATH"
 	bamlDisableDlEnv   = "BAML_LIBRARY_DISABLE_DOWNLOAD"
 )
+
+// uninstrumentedHTTPClient creates an HTTP client for use during init().
+// Uses reflection to set DD__tracer_internal flag if it exists (added by Orchestrion).
+func uninstrumentedHTTPClient() *http.Client {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          10,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	// Try to set DD__tracer_internal field using reflection
+	// This field only exists when Orchestrion transforms the code
+	setOrchestrionInternalFlag(transport)
+
+	return &http.Client{
+		Transport: transport,
+		Timeout:   5 * time.Minute,
+	}
+}
+
+// setOrchestrionInternalFlag tries to set DD__tracer_internal=true using reflection.
+// This field is added by Orchestrion's code transformation.
+func setOrchestrionInternalFlag(transport *http.Transport) {
+	// Use reflection to set the field if it exists
+	val := reflect.ValueOf(transport).Elem()
+	field := val.FieldByName("DD__tracer_internal")
+	if field.IsValid() && field.CanSet() && field.Kind() == reflect.Bool {
+		field.SetBool(true)
+	}
+}
 
 var (
 	ErrLoadLibrary          = errors.New("baml: failed loading shared library")
@@ -425,6 +464,7 @@ func isMusl() bool {
 	return false
 }
 
+//orchestrion:ignore
 func downloadBamlLibrary(destDir string, filename string) error {
 	tag := VERSION
 	downloadURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", githubRepo, tag, filename)
@@ -449,7 +489,11 @@ func downloadBamlLibrary(destDir string, filename string) error {
 	}
 	req.Header.Set("User-Agent", fmt.Sprintf("baml-go/%s (%s/%s)", VERSION, runtime.GOOS, runtime.GOARCH))
 
-	resp, err := http.DefaultClient.Do(req)
+	// Use uninstrumented client to avoid Orchestrion crash during init()
+	//orchestrion:ignore
+	httpClient := uninstrumentedHTTPClient()
+	//orchestrion:ignore
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w: network error fetching %s: %w", ErrDownloadFailed, downloadURL, err)
 	}
@@ -519,8 +563,13 @@ func downloadBamlLibrary(destDir string, filename string) error {
 	return nil
 }
 
+//orchestrion:ignore
 func downloadChecksum(checksumURL string, targetFilename string) (string, error) {
-	resp, err := http.Get(checksumURL)
+	// Use uninstrumented client to avoid Orchestrion crash during init()
+	//orchestrion:ignore
+	httpClient := uninstrumentedHTTPClient()
+	//orchestrion:ignore
+	resp, err := httpClient.Get(checksumURL)
 	if err != nil {
 		return "", fmt.Errorf("network error fetching checksum %s: %w", checksumURL, err)
 	}

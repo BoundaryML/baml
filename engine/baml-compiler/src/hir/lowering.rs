@@ -178,33 +178,64 @@ pub fn type_ir_from_ast(type_: &ast::FieldType) -> TypeIR {
         streaming_behavior,
     };
 
-    match type_ {
-        ast::FieldType::Symbol(_, name, _) => TypeIR::Class {
-            name: name.name().to_string(),
-            mode: baml_types::ir_type::StreamingMode::NonStreaming,
-            dynamic: false,
-            meta,
-        },
-        ast::FieldType::Primitive(_, prim, _, _) => TypeIR::Primitive(*prim, meta),
-        ast::FieldType::List(_, inner, dims, _, _) => {
+    let base_type = match type_ {
+        ast::FieldType::Symbol(arity, name, _) => {
+            let base = TypeIR::Class {
+                name: name.name().to_string(),
+                mode: baml_types::ir_type::StreamingMode::NonStreaming,
+                dynamic: false,
+                meta,
+            };
+            if arity.is_optional() {
+                TypeIR::optional(base)
+            } else {
+                base
+            }
+        }
+        ast::FieldType::Primitive(arity, prim, _, _) => {
+            let base = TypeIR::Primitive(*prim, meta);
+            if arity.is_optional() {
+                TypeIR::optional(base)
+            } else {
+                base
+            }
+        }
+        ast::FieldType::List(arity, inner, dims, _, _) => {
             // Respect multi-dimensional arrays (e.g., int[][] has dims=2)
             let mut lowered_inner = type_ir_from_ast(inner);
             for _ in 0..*dims {
                 lowered_inner = TypeIR::List(Box::new(lowered_inner), meta.clone());
             }
-            lowered_inner
+            if arity.is_optional() {
+                TypeIR::optional(lowered_inner)
+            } else {
+                lowered_inner
+            }
         }
-        ast::FieldType::Map(_, box_pair, _, _) => TypeIR::Map(
-            Box::new(type_ir_from_ast(&box_pair.0)),
-            Box::new(type_ir_from_ast(&box_pair.1)),
-            meta,
-        ),
-        ast::FieldType::Union(_, types, _, _) => {
+        ast::FieldType::Map(arity, box_pair, _, _) => {
+            let base = TypeIR::Map(
+                Box::new(type_ir_from_ast(&box_pair.0)),
+                Box::new(type_ir_from_ast(&box_pair.1)),
+                meta,
+            );
+            if arity.is_optional() {
+                TypeIR::optional(base)
+            } else {
+                base
+            }
+        }
+        ast::FieldType::Union(arity, types, _, _) => {
             let union_types: Vec<TypeIR> = types.iter().map(type_ir_from_ast).collect();
-            TypeIR::union_with_meta(union_types, meta)
+            let base = TypeIR::union_with_meta(union_types, meta);
+            if arity.is_optional() {
+                TypeIR::optional(base)
+            } else {
+                base
+            }
         }
         _ => TypeIR::Primitive(TypeValue::String, meta), // Default case for other variants
-    }
+    };
+    base_type
 }
 
 /// Is the type complex enough that it should be parenthesized if it's not
