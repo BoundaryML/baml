@@ -93,6 +93,7 @@ function Nothing() -> int {
 //
 //   s
 // }
+<<<<<<< HEAD
 //
 // class baml.HttpRequest {
 //   url: string
@@ -109,3 +110,13 @@ function Nothing() -> int {
 //   Delete
 //   Patch
 // }
+=======
+>>>>>>> canary
+
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  test.baml:96
+//    | 
+// 95 | // }
+// 96 | <<<<<<< HEAD
+// 97 | //
+//    | 

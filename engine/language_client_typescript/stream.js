@@ -84,6 +84,16 @@ class BamlStream {
             if (event.isOk()) {
                 yield this.partialCoerce(event.parsed(true));
             }
+            else {
+                // Event contains an error (e.g., timeout, LLM failure)
+                // Try to parse it to get the proper error, which will throw
+                try {
+                    event.parsed(true);
+                }
+                catch (error) {
+                    throw (0, errors_1.toBamlError)(error);
+                }
+            }
         }
     }
     async getFinalResponse() {

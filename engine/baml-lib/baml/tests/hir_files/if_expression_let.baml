@@ -14,6 +14,7 @@ function simpleIf() -> string {
 //
 //   x
 // }
+<<<<<<< HEAD
 //
 // class baml.HttpRequest {
 //   url: string
@@ -30,3 +31,13 @@ function simpleIf() -> string {
 //   Delete
 //   Patch
 // }
+=======
+>>>>>>> canary
+
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  test.baml:17
+//    | 
+// 16 | // }
+// 17 | <<<<<<< HEAD
+// 18 | //
+//    | 

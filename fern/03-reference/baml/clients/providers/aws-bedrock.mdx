@@ -479,6 +479,10 @@ You can use this to modify the `region`, `access_key_id`, `secret_access_key`, a
   AWS profile name from credentials file. **Default: `AWS_PROFILE` environment variable**
 </ParamField>
 
+<ParamField path="endpoint_url" type="string">
+  AWS endpoint URL. Useful for using a VPC endpoint.
+</ParamField>
+
 <Markdown src="/snippets/role-selection.mdx" />
 <Markdown src="/snippets/allowed-role-metadata-basic.mdx" />
 <Markdown src="/snippets/supports-streaming.mdx" />
@@ -583,6 +587,12 @@ def call_bedrock():
   message = payload["output"]["message"]["content"][0]["text"]
   return b.parse.ExtractResume(message)
 ```
+
+<Markdown src="/snippets/media-url-handler.mdx" />
+
+<Note>
+  AWS Bedrock converts most media to base64 by default (`send_base64` for images, audio, and PDFs). Consider using S3 presigned URLs with `send_url` mode for large files to avoid base64 overhead.
+</Note>
 
 ## Provider request parameters
 These are other `options` that are passed through to the provider, without modification by BAML. For example if the request has a `temperature` field, you can define it in the client here so every call has that set.

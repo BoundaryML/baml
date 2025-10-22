@@ -1,9 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="211" failures="19" errors="0" time="75.425">
-  <testsuite name="OpenAI Provider" errors="0" failures="2" skipped="0" timestamp="2025-09-24T21:09:17" time="11.298" tests="5">
-    <testcase classname="OpenAI Provider should support openai-responses basic" name="OpenAI Provider should support openai-responses basic" time="0.02">
+<testsuites name="jest tests" tests="221" failures="25" errors="0" time="64.348">
+  <testsuite name="Dynamic Enum Request Tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:58:51" time="10.134" tests="3">
+    <testcase classname="Dynamic Enum Request Tests should include dynamic enum values in RenderDynamicEnum request (direct options)" name="Dynamic Enum Request Tests should include dynamic enum values in RenderDynamicEnum request (direct options)" time="0.021">
     </testcase>
-    <testcase classname="OpenAI Provider should support openai-responses explicit" name="OpenAI Provider should support openai-responses explicit" time="0.007">
+    <testcase classname="Dynamic Enum Request Tests should include dynamic enum values in RenderDynamicEnum request (withOptions default)" name="Dynamic Enum Request Tests should include dynamic enum values in RenderDynamicEnum request (withOptions default)" time="0.011">
+    </testcase>
+    <testcase classname="Dynamic Enum Request Tests should include dynamic class properties in RenderDynamicClass request" name="Dynamic Enum Request Tests should include dynamic class properties in RenderDynamicClass request" time="0.008">
+    </testcase>
+  </testsuite>
+  <testsuite name="Expose Request Tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:58:51" time="10.292" tests="7">
+    <testcase classname="Expose Request Tests should expose request gpt4" name="Expose Request Tests should expose request gpt4" time="0.005">
+    </testcase>
+    <testcase classname="Expose Request Tests should expose request gemini" name="Expose Request Tests should expose request gemini" time="0.004">
+    </testcase>
+    <testcase classname="Expose Request Tests should expose request fallback" name="Expose Request Tests should expose request fallback" time="0.003">
+    </testcase>
+    <testcase classname="Expose Request Tests should expose request round robin" name="Expose Request Tests should expose request round robin" time="0.002">
+    </testcase>
+    <testcase classname="Expose Request Tests should expose request gpt4 sync" name="Expose Request Tests should expose request gpt4 sync" time="0.002">
+    </testcase>
+    <testcase classname="Expose Request Tests should expose request gpt4 stream" name="Expose Request Tests should expose request gpt4 stream" time="0.003">
+    </testcase>
+    <testcase classname="Expose Request Tests should expose request gpt4 stream sync" name="Expose Request Tests should expose request gpt4 stream sync" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="OpenAI Provider" errors="0" failures="2" skipped="0" timestamp="2025-10-12T02:59:01" time="0.651" tests="5">
+    <testcase classname="OpenAI Provider should support openai-responses basic" name="OpenAI Provider should support openai-responses basic" time="0.002">
+    </testcase>
+    <testcase classname="OpenAI Provider should support openai-responses explicit" name="OpenAI Provider should support openai-responses explicit" time="0.004">
       <failure>Error: expect(received).toMatchObject(expected)
 
 - Expected  - 1
@@ -18,9 +42,9 @@
 -   &quot;model&quot;: &quot;gpt-4.1&quot;,
 +   &quot;model&quot;: &quot;gpt-5-mini&quot;,
   }
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/providers/openai-responses.test.ts:24:29)</failure>
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/openai-responses.test.ts:24:29)</failure>
     </testcase>
-    <testcase classname="OpenAI Provider should support openai-responses custom url" name="OpenAI Provider should support openai-responses custom url" time="0.006">
+    <testcase classname="OpenAI Provider should support openai-responses custom url" name="OpenAI Provider should support openai-responses custom url" time="0.002">
       <failure>Error: expect(received).toMatchObject(expected)
 
 - Expected  - 1
@@ -35,131 +59,120 @@
 -   &quot;model&quot;: &quot;gpt-4.1&quot;,
 +   &quot;model&quot;: &quot;gpt-5-mini&quot;,
   }
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/providers/openai-responses.test.ts:42:29)</failure>
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/openai-responses.test.ts:42:29)</failure>
     </testcase>
-    <testcase classname="OpenAI Provider should support openai-responses conversation" name="OpenAI Provider should support openai-responses conversation" time="0.004">
+    <testcase classname="OpenAI Provider should support openai-responses conversation" name="OpenAI Provider should support openai-responses conversation" time="0.001">
     </testcase>
-    <testcase classname="OpenAI Provider should support openai-responses different model" name="OpenAI Provider should support openai-responses different model" time="0.006">
-    </testcase>
-  </testsuite>
-  <testsuite name="Experimental OnTick" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:09:17" time="16.138" tests="5">
-    <testcase classname="Experimental OnTick should fire onTick callbacks for async non-streaming function" name="Experimental OnTick should fire onTick callbacks for async non-streaming function" time="0.731">
-    </testcase>
-    <testcase classname="Experimental OnTick should fire onTick callbacks for streaming function" name="Experimental OnTick should fire onTick callbacks for streaming function" time="0.926">
-    </testcase>
-    <testcase classname="Experimental OnTick should throw error for sync functions with onTick" name="Experimental OnTick should throw error for sync functions with onTick" time="0.384">
-    </testcase>
-    <testcase classname="Experimental OnTick should handle onTick callback errors" name="Experimental OnTick should handle onTick callback errors" time="0.682">
-    </testcase>
-    <testcase classname="Experimental OnTick should not significantly impact performance" name="Experimental OnTick should not significantly impact performance" time="1.451">
+    <testcase classname="OpenAI Provider should support openai-responses different model" name="OpenAI Provider should support openai-responses different model" time="0.002">
     </testcase>
   </testsuite>
-  <testsuite name="Vertex Provider" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:09:17" time="17.851" tests="3">
-    <testcase classname="Vertex Provider should support vertex" name="Vertex Provider should support vertex" time="2.752">
+  <testsuite name="Error Handling Tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:02" time="4.26" tests="5">
+    <testcase classname="Error Handling Tests should raise an error for invalid argument types" name="Error Handling Tests should raise an error for invalid argument types" time="0.001">
     </testcase>
-    <testcase classname="Vertex Provider should support vertex with system_instructions" name="Vertex Provider should support vertex with system_instructions" time="1.674">
+    <testcase classname="Error Handling Tests should raise an error for invalid client configuration" name="Error Handling Tests should raise an error for invalid client configuration" time="0.643">
     </testcase>
-    <testcase classname="Vertex Provider should support vertex api key in query params" name="Vertex Provider should support vertex api key in query params" time="2.057">
+    <testcase classname="Error Handling Tests should raise a BAMLValidationError with proper details" name="Error Handling Tests should raise a BAMLValidationError with proper details" time="0.789">
+    </testcase>
+    <testcase classname="Error Handling Tests should handle client HTTP errors" name="Error Handling Tests should handle client HTTP errors" time="0.459">
+    </testcase>
+    <testcase classname="Error Handling Tests should raise a BamlClientHttpError with proper details" name="Error Handling Tests should raise a BamlClientHttpError with proper details" time="0.832">
     </testcase>
   </testsuite>
-  <testsuite name="AWS Provider" errors="0" failures="10" skipped="0" timestamp="2025-09-24T21:09:17" time="22.982" tests="19">
-    <testcase classname="AWS Provider should support AWS - basic" name="AWS Provider should support AWS - basic" time="1.016">
-      <failure>BamlClientHttpError: BamlError: BamlClientError: BamlClientHttpError: DispatchFailure(
+  <testsuite name="With Options Tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:58:51" time="15.405" tests="3">
+    <testcase classname="With Options Tests should test with options logger async call" name="With Options Tests should test with options logger async call" time="2.798">
+    </testcase>
+    <testcase classname="With Options Tests should test with options logger sync" name="With Options Tests should test with options logger sync" time="1.096">
+    </testcase>
+    <testcase classname="With Options Tests should test with options logger async stream" name="With Options Tests should test with options logger async stream" time="1.055">
+    </testcase>
+  </testsuite>
+  <testsuite name="Expose Parser Tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:06" time="0.565" tests="4">
+    <testcase classname="Expose Parser Tests should expose parser" name="Expose Parser Tests should expose parser" time="0.002">
+    </testcase>
+    <testcase classname="Expose Parser Tests should expose parser sync" name="Expose Parser Tests should expose parser sync" time="0.002">
+    </testcase>
+    <testcase classname="Expose Parser Tests should expose stream parser" name="Expose Parser Tests should expose stream parser" time="0.002">
+    </testcase>
+    <testcase classname="Expose Parser Tests should expose stream parser sync" name="Expose Parser Tests should expose stream parser sync" time="0.003">
+    </testcase>
+  </testsuite>
+  <testsuite name="Union streaming regression" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:58:51" time="16.017" tests="1">
+    <testcase classname="Union streaming regression streams discriminated todo tools" name="Union streaming regression streams discriminated todo tools" time="5.795">
+    </testcase>
+  </testsuite>
+  <testsuite name="Experimental OnTick" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:58:51" time="16.405" tests="5">
+    <testcase classname="Experimental OnTick should fire onTick callbacks for async non-streaming function" name="Experimental OnTick should fire onTick callbacks for async non-streaming function" time="0.968">
+    </testcase>
+    <testcase classname="Experimental OnTick should fire onTick callbacks for streaming function" name="Experimental OnTick should fire onTick callbacks for streaming function" time="1.337">
+    </testcase>
+    <testcase classname="Experimental OnTick should throw error for sync functions with onTick" name="Experimental OnTick should throw error for sync functions with onTick" time="0.701">
+    </testcase>
+    <testcase classname="Experimental OnTick should handle onTick callback errors" name="Experimental OnTick should handle onTick callback errors" time="1.046">
+    </testcase>
+    <testcase classname="Experimental OnTick should not significantly impact performance" name="Experimental OnTick should not significantly impact performance" time="1.634">
+    </testcase>
+  </testsuite>
+  <testsuite name="Logger tests" errors="0" failures="1" skipped="0" timestamp="2025-10-12T02:59:07" time="1.087" tests="1">
+    <testcase classname="Logger tests logger works as expected" name="Logger tests logger works as expected" time="0.044">
+      <failure>BamlClientHttpError: BamlError: BamlClientError: BamlClientHttpError: Request failed with status code: 404 Not Found. {&quot;error&quot;:{&quot;message&quot;:&quot;model &apos;llama3.1&apos; not found&quot;,&quot;type&quot;:&quot;api_error&quot;,&quot;param&quot;:null,&quot;code&quot;:null}}
+    at Function.from (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:110:28)
+    at createBamlErrorUnsafe (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:168:53)
+    at toBamlError (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:206:16)
+    at BamlAsyncClient.TestOllama (/Users/greghale/code/baml/integ-tests/typescript/baml_client/async_client.ts:8639:30)
+    at captureStdout (/Users/greghale/code/baml/integ-tests/typescript/tests/logger.test.ts:39:22)
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/logger.test.ts:51:30)</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="Tracing Tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:58:51" time="17.066" tests="3">
+    <testcase classname="Tracing Tests Sync Tracing supports tracing sync" name="Tracing Tests Sync Tracing supports tracing sync" time="0.019">
+    </testcase>
+    <testcase classname="Tracing Tests Async Tracing supports tracing async" name="Tracing Tests Async Tracing supports tracing async" time="4.52">
+    </testcase>
+    <testcase classname="Tracing Tests Events should work with &apos;onLogEvent&apos;" name="Tracing Tests Events should work with &apos;onLogEvent&apos;" time="2.501">
+    </testcase>
+  </testsuite>
+  <testsuite name="Abort Handlers - Manual Testing" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:58:51" time="17.744" tests="6">
+    <testcase classname="Abort Handlers - Manual Testing cancels a long-running retry operation mid-execution" name="Abort Handlers - Manual Testing cancels a long-running retry operation mid-execution" time="0.272">
+    </testcase>
+    <testcase classname="Abort Handlers - Manual Testing handles rapid successive cancellations" name="Abort Handlers - Manual Testing handles rapid successive cancellations" time="0.034">
+    </testcase>
+    <testcase classname="Abort Handlers - Manual Testing cancels streaming operation and verifies no further events" name="Abort Handlers - Manual Testing cancels streaming operation and verifies no further events" time="0.211">
+    </testcase>
+    <testcase classname="Abort Handlers - Manual Testing verifies no retries occur after cancellation" name="Abort Handlers - Manual Testing verifies no retries occur after cancellation" time="0.153">
+    </testcase>
+    <testcase classname="Abort Handlers - Manual Testing tests with real provider (if available)" name="Abort Handlers - Manual Testing tests with real provider (if available)" time="0.002">
+    </testcase>
+    <testcase classname="Abort Handlers - Manual Testing memory cleanup - multiple aborted operations" name="Abort Handlers - Manual Testing memory cleanup - multiple aborted operations" time="0.174">
+    </testcase>
+  </testsuite>
+  <testsuite name="AWS Provider" errors="0" failures="12" skipped="0" timestamp="2025-10-12T02:58:51" time="19.271" tests="19">
+    <testcase classname="AWS Provider should support AWS - basic" name="AWS Provider should support AWS - basic" time="1.162">
+      <failure>BamlValidationError: BamlValidationError: LLM Failure: DispatchFailure(
     DispatchFailure {
         source: ConnectorError {
             kind: Other(
                 None,
             ),
-            source: ProviderError(
-                ProviderError {
-                    source: ProviderError(
-                        ProviderError {
-                            source: ServiceError(
-                                ServiceError {
-                                    source: UnauthorizedException(
-                                        UnauthorizedException {
-                                            message: Some(
-                                                &quot;Session token not found or invalid&quot;,
-                                            ),
-                                            meta: ErrorMetadata {
-                                                code: Some(
-                                                    &quot;UnauthorizedException&quot;,
-                                                ),
-                                                message: Some(
-                                                    &quot;Session token not found or invalid&quot;,
-                                                ),
-                                                extras: Some(
-                                                    {
-                                                        &quot;aws_request_id&quot;: &quot;51b9f2c0-5c58-4dfb-bd13-5ead63493e37&quot;,
-                                                    },
-                                                ),
-                                            },
-                                        },
-                                    ),
-                                    raw: Response {
-                                        status: StatusCode(
-                                            401,
-                                        ),
-                                        headers: Headers {
-                                            headers: {
-                                                &quot;date&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;Wed, 24 Sep 2025 21:09:30 GMT&quot;,
-                                                    ),
-                                                },
-                                                &quot;content-type&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;application/json&quot;,
-                                                    ),
-                                                },
-                                                &quot;content-length&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;114&quot;,
-                                                    ),
-                                                },
-                                                &quot;access-control-expose-headers&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;RequestId&quot;,
-                                                    ),
-                                                },
-                                                &quot;access-control-expose-headers&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;x-amzn-RequestId&quot;,
-                                                    ),
-                                                },
-                                                &quot;requestid&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;51b9f2c0-5c58-4dfb-bd13-5ead63493e37&quot;,
-                                                    ),
-                                                },
-                                                &quot;server&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;AWS SSO&quot;,
-                                                    ),
-                                                },
-                                                &quot;x-amzn-requestid&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;51b9f2c0-5c58-4dfb-bd13-5ead63493e37&quot;,
-                                                    ),
-                                                },
-                                            },
-                                        },
-                                        body: SdkBody {
-                                            inner: Once(
-                                                Some(
-                                                    b&quot;{\&quot;message\&quot;:\&quot;Session token not found or invalid\&quot;,\&quot;__type\&quot;:\&quot;com.amazonaws.switchboard.portal#UnauthorizedException\&quot;}&quot;,
-                                                ),
-                                            ),
-                                            retryable: true,
-                                        },
-                                        extensions: Extensions {
-                                            extensions_02x: Extensions,
-                                            extensions_1x: Extensions,
-                                        },
-                                    },
-                                },
-                            ),
-                        },
+            source: CredentialsNotLoaded(
+                CredentialsNotLoaded {
+                    source: Some(
+                        &quot;no providers in chain provided credentials&quot;,
+                    ),
+                },
+            ),
+            connection: Unknown,
+        },
+    },
+) (Unspecified error code: 2) - DispatchFailure(
+    DispatchFailure {
+        source: ConnectorError {
+            kind: Other(
+                None,
+            ),
+            source: CredentialsNotLoaded(
+                CredentialsNotLoaded {
+                    source: Some(
+                        &quot;no providers in chain provided credentials&quot;,
                     ),
                 },
             ),
@@ -167,176 +180,148 @@
         },
     },
 )
-    at Function.from (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:110:28)
-    at createBamlErrorUnsafe (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:168:53)
-    at toBamlError (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:206:16)
-    at BamlAsyncClient.TestAws (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/baml_client/async_client.ts:5940:24)
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/providers/aws.test.ts:7:17)</failure>
+    at Function.from (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:73:28)
+    at createBamlErrorUnsafe (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:172:53)
+    at toBamlError (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:206:16)
+    at BamlAsyncClient.TestAws (/Users/greghale/code/baml/integ-tests/typescript/baml_client/async_client.ts:6479:30)
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/aws.test.ts:7:17)</failure>
     </testcase>
-    <testcase classname="AWS Provider should handle invalid AWS region gracefully" name="AWS Provider should handle invalid AWS region gracefully" time="0.658">
+    <testcase classname="AWS Provider should handle invalid AWS region gracefully" name="AWS Provider should handle invalid AWS region gracefully" time="1.009">
+      <failure>Error: expect(received).rejects.toMatchObject(expected)
+
+- Expected  - 1
++ Received  + 1
+
+  Object {
+-   &quot;name&quot;: &quot;BamlClientHttpError&quot;,
++   &quot;name&quot;: &quot;BamlValidationError&quot;,
+  }
+    at Object.toMatchObject (/Users/greghale/code/baml/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/aws.test.ts:14:16)
+    at Promise.then.completed (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
     </testcase>
-    <testcase classname="AWS Provider should allow overriding the region" name="AWS Provider should allow overriding the region" time="0.64">
+    <testcase classname="AWS Provider should allow overriding the region" name="AWS Provider should allow overriding the region" time="1.008">
     </testcase>
-    <testcase classname="AWS Provider should handle invalid AWS profile gracefully" name="AWS Provider should handle invalid AWS profile gracefully" time="0.01">
+    <testcase classname="AWS Provider should handle invalid AWS profile gracefully" name="AWS Provider should handle invalid AWS profile gracefully" time="1.009">
       <failure>Error: expect(received).rejects.toMatchObject(expected)
 
 - Expected  -  3
-+ Received  + 15
++ Received  + 33
 
 - Object {
 -   &quot;code&quot;: &quot;GenericFailure&quot;,
 - }
-+ [BamlClientHttpError: BamlError: BamlClientError: BamlClientHttpError: DispatchFailure(
++ [BamlValidationError: BamlValidationError: LLM Failure: DispatchFailure(
 +     DispatchFailure {
 +         source: ConnectorError {
 +             kind: Other(
 +                 None,
 +             ),
-+             source: InvalidConfiguration(
-+                 InvalidConfiguration {
-+                     source: &quot;ProfileFile provider could not be built: profile `boundaryml-dev-invalid` was not defined: could not find source profile boundaryml-dev-invalid referenced from the root profile&quot;,
++             source: CredentialsNotLoaded(
++                 CredentialsNotLoaded {
++                     source: Some(
++                         &quot;no providers in chain provided credentials&quot;,
++                     ),
++                 },
++             ),
++             connection: Unknown,
++         },
++     },
++ ) (Unspecified error code: 2) - DispatchFailure(
++     DispatchFailure {
++         source: ConnectorError {
++             kind: Other(
++                 None,
++             ),
++             source: CredentialsNotLoaded(
++                 CredentialsNotLoaded {
++                     source: Some(
++                         &quot;no providers in chain provided credentials&quot;,
++                     ),
 +                 },
 +             ),
 +             connection: Unknown,
 +         },
 +     },
 + )]
-    at Object.toMatchObject (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/providers/aws.test.ts:30:36)
-    at Promise.then.completed (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at Object.toMatchObject (/Users/greghale/code/baml/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/aws.test.ts:30:36)
+    at Promise.then.completed (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    at callAsyncCircusFn (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
     </testcase>
-    <testcase classname="AWS Provider should handle invalid AWS access key gracefully" name="AWS Provider should handle invalid AWS access key gracefully" time="0.387">
+    <testcase classname="AWS Provider should handle invalid AWS access key gracefully" name="AWS Provider should handle invalid AWS access key gracefully" time="0.608">
     </testcase>
-    <testcase classname="AWS Provider Streaming should support streaming in AWS" name="AWS Provider Streaming should support streaming in AWS" time="0.709">
-      <failure>Error: {&quot;type&quot;:&quot;BamlClientHttpError&quot;,&quot;client_name&quot;:&quot;AwsBedrock&quot;,&quot;message&quot;:&quot;BamlError: BamlClientError: BamlClientHttpError: DispatchFailure(\n    DispatchFailure {\n        source: ConnectorError {\n            kind: Other(\n                None,\n            ),\n            source: ProviderError(\n                ProviderError {\n                    source: ProviderError(\n                        ProviderError {\n                            source: ServiceError(\n                                ServiceError {\n                                    source: UnauthorizedException(\n                                        UnauthorizedException {\n                                            message: Some(\n                                                \&quot;Session token not found or invalid\&quot;,\n                                            ),\n                                            meta: ErrorMetadata {\n                                                code: Some(\n                                                    \&quot;UnauthorizedException\&quot;,\n                                                ),\n                                                message: Some(\n                                                    \&quot;Session token not found or invalid\&quot;,\n                                                ),\n                                                extras: Some(\n                                                    {\n                                                        \&quot;aws_request_id\&quot;: \&quot;d8b10f7e-760b-44e7-9254-df402a287728\&quot;,\n                                                    },\n                                                ),\n                                            },\n                                        },\n                                    ),\n                                    raw: Response {\n                                        status: StatusCode(\n                                            401,\n                                        ),\n                                        headers: Headers {\n                                            headers: {\n                                                \&quot;date\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;Wed, 24 Sep 2025 21:09:33 GMT\&quot;,\n                                                    ),\n                                                },\n                                                \&quot;content-type\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;application/json\&quot;,\n                                                    ),\n                                                },\n                                                \&quot;content-length\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;114\&quot;,\n                                                    ),\n                                                },\n                                                \&quot;access-control-expose-headers\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;RequestId\&quot;,\n                                                    ),\n                                                },\n                                                \&quot;access-control-expose-headers\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;x-amzn-RequestId\&quot;,\n                                                    ),\n                                                },\n                                                \&quot;requestid\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;d8b10f7e-760b-44e7-9254-df402a287728\&quot;,\n                                                    ),\n                                                },\n                                                \&quot;server\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;AWS SSO\&quot;,\n                                                    ),\n                                                },\n                                                \&quot;x-amzn-requestid\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;d8b10f7e-760b-44e7-9254-df402a287728\&quot;,\n                                                    ),\n                                                },\n                                            },\n                                        },\n                                        body: SdkBody {\n                                            inner: Once(\n                                                Some(\n                                                    b\&quot;{\\\&quot;message\\\&quot;:\\\&quot;Session token not found or invalid\\\&quot;,\\\&quot;__type\\\&quot;:\\\&quot;com.amazonaws.switchboard.portal#UnauthorizedException\\\&quot;}\&quot;,\n                                                ),\n                                            ),\n                                            retryable: true,\n                                        },\n                                        extensions: Extensions {\n                                            extensions_02x: Extensions,\n                                            extensions_1x: Extensions,\n                                        },\n                                    },\n                                },\n                            ),\n                        },\n                    ),\n                },\n            ),\n            connection: Unknown,\n        },\n    },\n)&quot;,&quot;status_code&quot;:500,&quot;detailed_message&quot;:&quot;LLM client \&quot;AwsBedrock\&quot; failed with status code: ServerError (500)\nMessage: DispatchFailure(\n    DispatchFailure {\n        source: ConnectorError {\n            kind: Other(\n                None,\n            ),\n            source: ProviderError(\n                ProviderError {\n                    source: ProviderError(\n                        ProviderError {\n                            source: ServiceError(\n                                ServiceError {\n                                    source: UnauthorizedException(\n                                        UnauthorizedException {\n                                            message: Some(\n                                                \&quot;Session token not found or invalid\&quot;,\n                                            ),\n                                            meta: ErrorMetadata {\n                                                code: Some(\n                                                    \&quot;UnauthorizedException\&quot;,\n                                                ),\n                                                message: Some(\n                                                    \&quot;Session token not found or invalid\&quot;,\n                                                ),\n                                                extras: Some(\n                                                    {\n                                                        \&quot;aws_request_id\&quot;: \&quot;d8b10f7e-760b-44e7-9254-df402a287728\&quot;,\n                                                    },\n                                                ),\n                                            },\n                                        },\n                                    ),\n                                    raw: Response {\n                                        status: StatusCode(\n                                            401,\n                                        ),\n                                        headers: Headers {\n                                            headers: {\n                                                \&quot;date\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;Wed, 24 Sep 2025 21:09:33 GMT\&quot;,\n                                                    ),\n                                                },\n                                                \&quot;content-type\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;application/json\&quot;,\n                                                    ),\n                                                },\n                                                \&quot;content-length\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;114\&quot;,\n                                                    ),\n                                                },\n                                                \&quot;access-control-expose-headers\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;RequestId\&quot;,\n                                                    ),\n                                                },\n                                                \&quot;access-control-expose-headers\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;x-amzn-RequestId\&quot;,\n                                                    ),\n                                                },\n                                                \&quot;requestid\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;d8b10f7e-760b-44e7-9254-df402a287728\&quot;,\n                                                    ),\n                                                },\n                                                \&quot;server\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;AWS SSO\&quot;,\n                                                    ),\n                                                },\n                                                \&quot;x-amzn-requestid\&quot;: HeaderValue {\n                                                    _private: H0(\n                                                        \&quot;d8b10f7e-760b-44e7-9254-df402a287728\&quot;,\n                                                    ),\n                                                },\n                                            },\n                                        },\n                                        body: SdkBody {\n                                            inner: Once(\n                                                Some(\n                                                    b\&quot;{\\\&quot;message\\\&quot;:\\\&quot;Session token not found or invalid\\\&quot;,\\\&quot;__type\\\&quot;:\\\&quot;com.amazonaws.switchboard.portal#UnauthorizedException\\\&quot;}\&quot;,\n                                                ),\n                                            ),\n                                            retryable: true,\n                                        },\n                                        extensions: Extensions {\n                                            extensions_02x: Extensions,\n                                            extensions_1x: Extensions,\n                                        },\n                                    },\n                                },\n                            ),\n                        },\n                    ),\n                },\n            ),\n            connection: Unknown,\n        },\n    },\n)&quot;}
-    at BamlStream.getFinalResponse (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/stream.js:91:39)
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/providers/aws.test.ts:67:21)</failure>
+    <testcase classname="AWS Provider Streaming should support streaming in AWS" name="AWS Provider Streaming should support streaming in AWS" time="0.105">
+      <failure>Error: {&quot;type&quot;:&quot;BamlClientHttpError&quot;,&quot;client_name&quot;:&quot;AwsBedrock&quot;,&quot;message&quot;:&quot;BamlError: BamlClientError: BamlClientHttpError: DispatchFailure(\n    DispatchFailure {\n        source: ConnectorError {\n            kind: Other(\n                None,\n            ),\n            source: CredentialsNotLoaded(\n                CredentialsNotLoaded {\n                    source: Some(\n                        \&quot;no providers in chain provided credentials\&quot;,\n                    ),\n                },\n            ),\n            connection: Unknown,\n        },\n    },\n)&quot;,&quot;status_code&quot;:500,&quot;detailed_message&quot;:&quot;LLM client \&quot;AwsBedrock\&quot; failed with status code: ServerError (500)\nMessage: DispatchFailure(\n    DispatchFailure {\n        source: ConnectorError {\n            kind: Other(\n                None,\n            ),\n            source: CredentialsNotLoaded(\n                CredentialsNotLoaded {\n                    source: Some(\n                        \&quot;no providers in chain provided credentials\&quot;,\n                    ),\n                },\n            ),\n            connection: Unknown,\n        },\n    },\n)&quot;}
+    at BamlStream.getFinalResponse (/Users/greghale/code/baml/engine/language_client_typescript/stream.js:91:39)
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/aws.test.ts:67:21)</failure>
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry Credential Resolution should handle session credentials correctly" name="AWS Provider Dynamic Client Registry Credential Resolution should handle session credentials correctly" time="0.412">
+    <testcase classname="AWS Provider Dynamic Client Registry Credential Resolution should handle session credentials correctly" name="AWS Provider Dynamic Client Registry Credential Resolution should handle session credentials correctly" time="0.525">
       <failure>InvalidClientTokenId: The security token included in the request is invalid.
-    at throwDefaultError (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/@smithy+smithy-client@3.7.0/node_modules/@smithy/smithy-client/dist-cjs/index.js:844:20)
-    at /Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/@smithy+smithy-client@3.7.0/node_modules/@smithy/smithy-client/dist-cjs/index.js:853:5
-    at de_CommandError (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/@aws-sdk+client-sts@3.721.0/node_modules/@aws-sdk/client-sts/dist-cjs/index.js:505:14)
+    at throwDefaultError (/Users/greghale/code/baml/node_modules/.pnpm/@smithy+smithy-client@3.7.0/node_modules/@smithy/smithy-client/dist-cjs/index.js:844:20)
+    at /Users/greghale/code/baml/node_modules/.pnpm/@smithy+smithy-client@3.7.0/node_modules/@smithy/smithy-client/dist-cjs/index.js:853:5
+    at de_CommandError (/Users/greghale/code/baml/node_modules/.pnpm/@aws-sdk+client-sts@3.721.0/node_modules/@aws-sdk/client-sts/dist-cjs/index.js:505:14)
     at processTicksAndRejections (node:internal/process/task_queues:95:5)
-    at /Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/@smithy+middleware-serde@3.0.11/node_modules/@smithy/middleware-serde/dist-cjs/index.js:35:20
-    at /Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/@smithy+core@2.5.7/node_modules/@smithy/core/dist-cjs/index.js:168:18
-    at /Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/@smithy+middleware-retry@3.0.34/node_modules/@smithy/middleware-retry/dist-cjs/index.js:320:38
-    at /Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/@aws-sdk+middleware-logger@3.714.0/node_modules/@aws-sdk/middleware-logger/dist-cjs/index.js:34:22
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/providers/aws.test.ts:88:33)</failure>
+    at /Users/greghale/code/baml/node_modules/.pnpm/@smithy+middleware-serde@3.0.11/node_modules/@smithy/middleware-serde/dist-cjs/index.js:35:20
+    at /Users/greghale/code/baml/node_modules/.pnpm/@smithy+core@2.5.7/node_modules/@smithy/core/dist-cjs/index.js:168:18
+    at /Users/greghale/code/baml/node_modules/.pnpm/@smithy+middleware-retry@3.0.34/node_modules/@smithy/middleware-retry/dist-cjs/index.js:320:38
+    at /Users/greghale/code/baml/node_modules/.pnpm/@aws-sdk+middleware-logger@3.714.0/node_modules/@aws-sdk/middleware-logger/dist-cjs/index.js:34:22
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/aws.test.ts:88:33)</failure>
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry Credential Resolution should require region in all environments" name="AWS Provider Dynamic Client Registry Credential Resolution should require region in all environments" time="0.351">
+    <testcase classname="AWS Provider Dynamic Client Registry Credential Resolution should require region in all environments" name="AWS Provider Dynamic Client Registry Credential Resolution should require region in all environments" time="0.399">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry Credential Resolution should throw error when region is empty or AWS_REGION is unset" name="AWS Provider Dynamic Client Registry Credential Resolution should throw error when region is empty or AWS_REGION is unset" time="0.355">
+    <testcase classname="AWS Provider Dynamic Client Registry Credential Resolution should throw error when region is empty or AWS_REGION is unset" name="AWS Provider Dynamic Client Registry Credential Resolution should throw error when region is empty or AWS_REGION is unset" time="0.532">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should support dynamic client configuration" name="AWS Provider Dynamic Client Registry should support dynamic client configuration" time="0.657">
-      <failure>BamlClientHttpError: BamlError: BamlClientError: BamlClientHttpError: DispatchFailure(
+    <testcase classname="AWS Provider Dynamic Client Registry should support dynamic client configuration" name="AWS Provider Dynamic Client Registry should support dynamic client configuration" time="0.004">
+      <failure>BamlValidationError: BamlValidationError: LLM Failure: DispatchFailure(
     DispatchFailure {
         source: ConnectorError {
             kind: Other(
                 None,
             ),
-            source: ProviderError(
-                ProviderError {
-                    source: ProviderError(
-                        ProviderError {
-                            source: ServiceError(
-                                ServiceError {
-                                    source: UnauthorizedException(
-                                        UnauthorizedException {
-                                            message: Some(
-                                                &quot;Session token not found or invalid&quot;,
-                                            ),
-                                            meta: ErrorMetadata {
-                                                code: Some(
-                                                    &quot;UnauthorizedException&quot;,
-                                                ),
-                                                message: Some(
-                                                    &quot;Session token not found or invalid&quot;,
-                                                ),
-                                                extras: Some(
-                                                    {
-                                                        &quot;aws_request_id&quot;: &quot;ebd9df2c-6de0-4014-9e44-feb576450f0f&quot;,
-                                                    },
-                                                ),
-                                            },
-                                        },
-                                    ),
-                                    raw: Response {
-                                        status: StatusCode(
-                                            401,
-                                        ),
-                                        headers: Headers {
-                                            headers: {
-                                                &quot;date&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;Wed, 24 Sep 2025 21:09:35 GMT&quot;,
-                                                    ),
-                                                },
-                                                &quot;content-type&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;application/json&quot;,
-                                                    ),
-                                                },
-                                                &quot;content-length&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;114&quot;,
-                                                    ),
-                                                },
-                                                &quot;access-control-expose-headers&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;RequestId&quot;,
-                                                    ),
-                                                },
-                                                &quot;access-control-expose-headers&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;x-amzn-RequestId&quot;,
-                                                    ),
-                                                },
-                                                &quot;requestid&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;ebd9df2c-6de0-4014-9e44-feb576450f0f&quot;,
-                                                    ),
-                                                },
-                                                &quot;server&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;AWS SSO&quot;,
-                                                    ),
-                                                },
-                                                &quot;x-amzn-requestid&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;ebd9df2c-6de0-4014-9e44-feb576450f0f&quot;,
-                                                    ),
-                                                },
-                                            },
-                                        },
-                                        body: SdkBody {
-                                            inner: Once(
-                                                Some(
-                                                    b&quot;{\&quot;message\&quot;:\&quot;Session token not found or invalid\&quot;,\&quot;__type\&quot;:\&quot;com.amazonaws.switchboard.portal#UnauthorizedException\&quot;}&quot;,
-                                                ),
-                                            ),
-                                            retryable: true,
-                                        },
-                                        extensions: Extensions {
-                                            extensions_02x: Extensions,
-                                            extensions_1x: Extensions,
-                                        },
-                                    },
-                                },
-                            ),
-                        },
+            source: CredentialsNotLoaded(
+                CredentialsNotLoaded {
+                    source: Some(
+                        &quot;no providers in chain provided credentials&quot;,
+                    ),
+                },
+            ),
+            connection: Unknown,
+        },
+    },
+) (Unspecified error code: 2) - DispatchFailure(
+    DispatchFailure {
+        source: ConnectorError {
+            kind: Other(
+                None,
+            ),
+            source: CredentialsNotLoaded(
+                CredentialsNotLoaded {
+                    source: Some(
+                        &quot;no providers in chain provided credentials&quot;,
                     ),
                 },
             ),
@@ -344,111 +329,41 @@
         },
     },
 )
-    at Function.from (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:110:28)
-    at createBamlErrorUnsafe (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:168:53)
-    at toBamlError (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:206:16)
-    at BamlAsyncClient.TestAws (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/baml_client/async_client.ts:5940:24)
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/providers/aws.test.ts:191:22)</failure>
+    at Function.from (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:73:28)
+    at createBamlErrorUnsafe (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:172:53)
+    at toBamlError (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:206:16)
+    at BamlAsyncClient.TestAws (/Users/greghale/code/baml/integ-tests/typescript/baml_client/async_client.ts:6479:30)
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/aws.test.ts:191:22)</failure>
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should support AWS credentials configuration" name="AWS Provider Dynamic Client Registry should support AWS credentials configuration" time="0.348">
+    <testcase classname="AWS Provider Dynamic Client Registry should support AWS credentials configuration" name="AWS Provider Dynamic Client Registry should support AWS credentials configuration" time="0.505">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should support AWS profile configuration" name="AWS Provider Dynamic Client Registry should support AWS profile configuration" time="0.637">
-      <failure>BamlClientHttpError: BamlError: BamlClientError: BamlClientHttpError: DispatchFailure(
+    <testcase classname="AWS Provider Dynamic Client Registry should support AWS profile configuration" name="AWS Provider Dynamic Client Registry should support AWS profile configuration" time="0.004">
+      <failure>BamlValidationError: BamlValidationError: LLM Failure: DispatchFailure(
     DispatchFailure {
         source: ConnectorError {
             kind: Other(
                 None,
             ),
-            source: ProviderError(
-                ProviderError {
-                    source: ProviderError(
-                        ProviderError {
-                            source: ServiceError(
-                                ServiceError {
-                                    source: UnauthorizedException(
-                                        UnauthorizedException {
-                                            message: Some(
-                                                &quot;Session token not found or invalid&quot;,
-                                            ),
-                                            meta: ErrorMetadata {
-                                                code: Some(
-                                                    &quot;UnauthorizedException&quot;,
-                                                ),
-                                                message: Some(
-                                                    &quot;Session token not found or invalid&quot;,
-                                                ),
-                                                extras: Some(
-                                                    {
-                                                        &quot;aws_request_id&quot;: &quot;1c15a373-7260-414a-a89f-417ea5f471ff&quot;,
-                                                    },
-                                                ),
-                                            },
-                                        },
-                                    ),
-                                    raw: Response {
-                                        status: StatusCode(
-                                            401,
-                                        ),
-                                        headers: Headers {
-                                            headers: {
-                                                &quot;date&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;Wed, 24 Sep 2025 21:09:36 GMT&quot;,
-                                                    ),
-                                                },
-                                                &quot;content-type&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;application/json&quot;,
-                                                    ),
-                                                },
-                                                &quot;content-length&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;114&quot;,
-                                                    ),
-                                                },
-                                                &quot;access-control-expose-headers&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;RequestId&quot;,
-                                                    ),
-                                                },
-                                                &quot;access-control-expose-headers&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;x-amzn-RequestId&quot;,
-                                                    ),
-                                                },
-                                                &quot;requestid&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;1c15a373-7260-414a-a89f-417ea5f471ff&quot;,
-                                                    ),
-                                                },
-                                                &quot;server&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;AWS SSO&quot;,
-                                                    ),
-                                                },
-                                                &quot;x-amzn-requestid&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;1c15a373-7260-414a-a89f-417ea5f471ff&quot;,
-                                                    ),
-                                                },
-                                            },
-                                        },
-                                        body: SdkBody {
-                                            inner: Once(
-                                                Some(
-                                                    b&quot;{\&quot;message\&quot;:\&quot;Session token not found or invalid\&quot;,\&quot;__type\&quot;:\&quot;com.amazonaws.switchboard.portal#UnauthorizedException\&quot;}&quot;,
-                                                ),
-                                            ),
-                                            retryable: true,
-                                        },
-                                        extensions: Extensions {
-                                            extensions_02x: Extensions,
-                                            extensions_1x: Extensions,
-                                        },
-                                    },
-                                },
-                            ),
-                        },
+            source: CredentialsNotLoaded(
+                CredentialsNotLoaded {
+                    source: Some(
+                        &quot;no providers in chain provided credentials&quot;,
+                    ),
+                },
+            ),
+            connection: Unknown,
+        },
+    },
+) (Unspecified error code: 2) - DispatchFailure(
+    DispatchFailure {
+        source: ConnectorError {
+            kind: Other(
+                None,
+            ),
+            source: CredentialsNotLoaded(
+                CredentialsNotLoaded {
+                    source: Some(
+                        &quot;no providers in chain provided credentials&quot;,
                     ),
                 },
             ),
@@ -456,109 +371,39 @@
         },
     },
 )
-    at Function.from (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:110:28)
-    at createBamlErrorUnsafe (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:168:53)
-    at toBamlError (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:206:16)
-    at BamlAsyncClient.TestAws (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/baml_client/async_client.ts:5940:24)
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/providers/aws.test.ts:229:22)</failure>
+    at Function.from (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:73:28)
+    at createBamlErrorUnsafe (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:172:53)
+    at toBamlError (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:206:16)
+    at BamlAsyncClient.TestAws (/Users/greghale/code/baml/integ-tests/typescript/baml_client/async_client.ts:6479:30)
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/aws.test.ts:229:22)</failure>
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should support both model and model_id parameters" name="AWS Provider Dynamic Client Registry should support both model and model_id parameters" time="0.619">
-      <failure>BamlClientHttpError: BamlError: BamlClientError: BamlClientHttpError: DispatchFailure(
+    <testcase classname="AWS Provider Dynamic Client Registry should support both model and model_id parameters" name="AWS Provider Dynamic Client Registry should support both model and model_id parameters" time="0.003">
+      <failure>BamlValidationError: BamlValidationError: LLM Failure: DispatchFailure(
     DispatchFailure {
         source: ConnectorError {
             kind: Other(
                 None,
             ),
-            source: ProviderError(
-                ProviderError {
-                    source: ProviderError(
-                        ProviderError {
-                            source: ServiceError(
-                                ServiceError {
-                                    source: UnauthorizedException(
-                                        UnauthorizedException {
-                                            message: Some(
-                                                &quot;Session token not found or invalid&quot;,
-                                            ),
-                                            meta: ErrorMetadata {
-                                                code: Some(
-                                                    &quot;UnauthorizedException&quot;,
-                                                ),
-                                                message: Some(
-                                                    &quot;Session token not found or invalid&quot;,
-                                                ),
-                                                extras: Some(
-                                                    {
-                                                        &quot;aws_request_id&quot;: &quot;8e31f301-f3e2-4523-b8b4-9e2f3eedf730&quot;,
-                                                    },
-                                                ),
-                                            },
-                                        },
-                                    ),
-                                    raw: Response {
-                                        status: StatusCode(
-                                            401,
-                                        ),
-                                        headers: Headers {
-                                            headers: {
-                                                &quot;date&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;Wed, 24 Sep 2025 21:09:36 GMT&quot;,
-                                                    ),
-                                                },
-                                                &quot;content-type&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;application/json&quot;,
-                                                    ),
-                                                },
-                                                &quot;content-length&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;114&quot;,
-                                                    ),
-                                                },
-                                                &quot;access-control-expose-headers&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;RequestId&quot;,
-                                                    ),
-                                                },
-                                                &quot;access-control-expose-headers&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;x-amzn-RequestId&quot;,
-                                                    ),
-                                                },
-                                                &quot;requestid&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;8e31f301-f3e2-4523-b8b4-9e2f3eedf730&quot;,
-                                                    ),
-                                                },
-                                                &quot;server&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;AWS SSO&quot;,
-                                                    ),
-                                                },
-                                                &quot;x-amzn-requestid&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;8e31f301-f3e2-4523-b8b4-9e2f3eedf730&quot;,
-                                                    ),
-                                                },
-                                            },
-                                        },
-                                        body: SdkBody {
-                                            inner: Once(
-                                                Some(
-                                                    b&quot;{\&quot;message\&quot;:\&quot;Session token not found or invalid\&quot;,\&quot;__type\&quot;:\&quot;com.amazonaws.switchboard.portal#UnauthorizedException\&quot;}&quot;,
-                                                ),
-                                            ),
-                                            retryable: true,
-                                        },
-                                        extensions: Extensions {
-                                            extensions_02x: Extensions,
-                                            extensions_1x: Extensions,
-                                        },
-                                    },
-                                },
-                            ),
-                        },
+            source: CredentialsNotLoaded(
+                CredentialsNotLoaded {
+                    source: Some(
+                        &quot;no providers in chain provided credentials&quot;,
+                    ),
+                },
+            ),
+            connection: Unknown,
+        },
+    },
+) (Unspecified error code: 2) - DispatchFailure(
+    DispatchFailure {
+        source: ConnectorError {
+            kind: Other(
+                None,
+            ),
+            source: CredentialsNotLoaded(
+                CredentialsNotLoaded {
+                    source: Some(
+                        &quot;no providers in chain provided credentials&quot;,
                     ),
                 },
             ),
@@ -566,157 +411,112 @@
         },
     },
 )
-    at Function.from (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:110:28)
-    at createBamlErrorUnsafe (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:168:53)
-    at toBamlError (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:206:16)
-    at BamlAsyncClient.TestAws (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/baml_client/async_client.ts:5940:24)
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/providers/aws.test.ts:247:33)</failure>
+    at Function.from (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:73:28)
+    at createBamlErrorUnsafe (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:172:53)
+    at toBamlError (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:206:16)
+    at BamlAsyncClient.TestAws (/Users/greghale/code/baml/integ-tests/typescript/baml_client/async_client.ts:6479:30)
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/aws.test.ts:247:33)</failure>
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should handle invalid configuration gracefully" name="AWS Provider Dynamic Client Registry should handle invalid configuration gracefully" time="0.677">
-    </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should handle non-existent model gracefully" name="AWS Provider Dynamic Client Registry should handle non-existent model gracefully" time="0.644">
+    <testcase classname="AWS Provider Dynamic Client Registry should handle invalid configuration gracefully" name="AWS Provider Dynamic Client Registry should handle invalid configuration gracefully" time="0.004">
       <failure>Error: expect(received).rejects.toMatchObject(expected)
 
-- Expected  - 2
+- Expected  - 1
 + Received  + 1
 
   Object {
-    &quot;client_name&quot;: &quot;DynamicAWSClient&quot;,
--   &quot;message&quot;: StringContaining &quot;BamlError: BamlClientError: BamlClientHttpError:&quot;,
-    &quot;name&quot;: &quot;BamlClientHttpError&quot;,
--   &quot;status_code&quot;: 401,
-+   &quot;status_code&quot;: 503,
+-   &quot;name&quot;: &quot;BamlClientHttpError&quot;,
++   &quot;name&quot;: &quot;BamlValidationError&quot;,
   }
-    at Object.toMatchObject (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/providers/aws.test.ts:299:18)
-    at Promise.then.completed (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at Object.toMatchObject (/Users/greghale/code/baml/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/aws.test.ts:281:18)
+    at Promise.then.completed (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    at callAsyncCircusFn (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at _runTestsForDescribeBlock (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should throw error when using temporary credentials without session token" name="AWS Provider Dynamic Client Registry should throw error when using temporary credentials without session token" time="0.4">
+    <testcase classname="AWS Provider Dynamic Client Registry should handle non-existent model gracefully" name="AWS Provider Dynamic Client Registry should handle non-existent model gracefully" time="0.004">
+      <failure>Error: expect(received).rejects.toMatchObject(expected)
+
+- Expected  - 4
++ Received  + 1
+
+  Object {
+-   &quot;client_name&quot;: &quot;DynamicAWSClient&quot;,
+-   &quot;message&quot;: StringContaining &quot;BamlError: BamlClientError: BamlClientHttpError:&quot;,
+-   &quot;name&quot;: &quot;BamlClientHttpError&quot;,
+-   &quot;status_code&quot;: 401,
++   &quot;name&quot;: &quot;BamlValidationError&quot;,
+  }
+    at Object.toMatchObject (/Users/greghale/code/baml/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/aws.test.ts:299:18)
+    at Promise.then.completed (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at _runTestsForDescribeBlock (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+    <testcase classname="AWS Provider Dynamic Client Registry should throw error when using temporary credentials without session token" name="AWS Provider Dynamic Client Registry should throw error when using temporary credentials without session token" time="0.497">
       <failure>InvalidClientTokenId: The security token included in the request is invalid.
-    at throwDefaultError (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/@smithy+smithy-client@3.7.0/node_modules/@smithy/smithy-client/dist-cjs/index.js:844:20)
-    at /Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/@smithy+smithy-client@3.7.0/node_modules/@smithy/smithy-client/dist-cjs/index.js:853:5
-    at de_CommandError (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/@aws-sdk+client-sts@3.721.0/node_modules/@aws-sdk/client-sts/dist-cjs/index.js:505:14)
+    at throwDefaultError (/Users/greghale/code/baml/node_modules/.pnpm/@smithy+smithy-client@3.7.0/node_modules/@smithy/smithy-client/dist-cjs/index.js:844:20)
+    at /Users/greghale/code/baml/node_modules/.pnpm/@smithy+smithy-client@3.7.0/node_modules/@smithy/smithy-client/dist-cjs/index.js:853:5
+    at de_CommandError (/Users/greghale/code/baml/node_modules/.pnpm/@aws-sdk+client-sts@3.721.0/node_modules/@aws-sdk/client-sts/dist-cjs/index.js:505:14)
     at processTicksAndRejections (node:internal/process/task_queues:95:5)
-    at /Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/@smithy+middleware-serde@3.0.11/node_modules/@smithy/middleware-serde/dist-cjs/index.js:35:20
-    at /Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/@smithy+core@2.5.7/node_modules/@smithy/core/dist-cjs/index.js:168:18
-    at /Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/@smithy+middleware-retry@3.0.34/node_modules/@smithy/middleware-retry/dist-cjs/index.js:320:38
-    at /Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/@aws-sdk+middleware-logger@3.714.0/node_modules/@aws-sdk/middleware-logger/dist-cjs/index.js:34:22
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/providers/aws.test.ts:319:31)</failure>
+    at /Users/greghale/code/baml/node_modules/.pnpm/@smithy+middleware-serde@3.0.11/node_modules/@smithy/middleware-serde/dist-cjs/index.js:35:20
+    at /Users/greghale/code/baml/node_modules/.pnpm/@smithy+core@2.5.7/node_modules/@smithy/core/dist-cjs/index.js:168:18
+    at /Users/greghale/code/baml/node_modules/.pnpm/@smithy+middleware-retry@3.0.34/node_modules/@smithy/middleware-retry/dist-cjs/index.js:320:38
+    at /Users/greghale/code/baml/node_modules/.pnpm/@aws-sdk+middleware-logger@3.714.0/node_modules/@aws-sdk/middleware-logger/dist-cjs/index.js:34:22
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/aws.test.ts:319:31)</failure>
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should throw error when region is not provided" name="AWS Provider Dynamic Client Registry should throw error when region is not provided" time="0.005">
+    <testcase classname="AWS Provider Dynamic Client Registry should throw error when region is not provided" name="AWS Provider Dynamic Client Registry should throw error when region is not provided" time="0.001">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should throw error when using invalid profile" name="AWS Provider Dynamic Client Registry should throw error when using invalid profile" time="0.009">
+    <testcase classname="AWS Provider Dynamic Client Registry should throw error when using invalid profile" name="AWS Provider Dynamic Client Registry should throw error when using invalid profile" time="0.002">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should support both AWS_REGION and AWS_DEFAULT_REGION environment variables" name="AWS Provider Dynamic Client Registry should support both AWS_REGION and AWS_DEFAULT_REGION environment variables" time="0.613">
-      <failure>BamlClientHttpError: BamlError: BamlClientError: BamlClientHttpError: DispatchFailure(
+    <testcase classname="AWS Provider Dynamic Client Registry should support both AWS_REGION and AWS_DEFAULT_REGION environment variables" name="AWS Provider Dynamic Client Registry should support both AWS_REGION and AWS_DEFAULT_REGION environment variables" time="0.005">
+      <failure>BamlValidationError: BamlValidationError: LLM Failure: DispatchFailure(
     DispatchFailure {
         source: ConnectorError {
             kind: Other(
                 None,
             ),
-            source: ProviderError(
-                ProviderError {
-                    source: ProviderError(
-                        ProviderError {
-                            source: ServiceError(
-                                ServiceError {
-                                    source: UnauthorizedException(
-                                        UnauthorizedException {
-                                            message: Some(
-                                                &quot;Session token not found or invalid&quot;,
-                                            ),
-                                            meta: ErrorMetadata {
-                                                code: Some(
-                                                    &quot;UnauthorizedException&quot;,
-                                                ),
-                                                message: Some(
-                                                    &quot;Session token not found or invalid&quot;,
-                                                ),
-                                                extras: Some(
-                                                    {
-                                                        &quot;aws_request_id&quot;: &quot;3f31c061-b0a5-4249-8df1-8338d555462a&quot;,
-                                                    },
-                                                ),
-                                            },
-                                        },
-                                    ),
-                                    raw: Response {
-                                        status: StatusCode(
-                                            401,
-                                        ),
-                                        headers: Headers {
-                                            headers: {
-                                                &quot;date&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;Wed, 24 Sep 2025 21:09:39 GMT&quot;,
-                                                    ),
-                                                },
-                                                &quot;content-type&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;application/json&quot;,
-                                                    ),
-                                                },
-                                                &quot;content-length&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;114&quot;,
-                                                    ),
-                                                },
-                                                &quot;access-control-expose-headers&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;RequestId&quot;,
-                                                    ),
-                                                },
-                                                &quot;access-control-expose-headers&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;x-amzn-RequestId&quot;,
-                                                    ),
-                                                },
-                                                &quot;requestid&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;3f31c061-b0a5-4249-8df1-8338d555462a&quot;,
-                                                    ),
-                                                },
-                                                &quot;server&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;AWS SSO&quot;,
-                                                    ),
-                                                },
-                                                &quot;x-amzn-requestid&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;3f31c061-b0a5-4249-8df1-8338d555462a&quot;,
-                                                    ),
-                                                },
-                                            },
-                                        },
-                                        body: SdkBody {
-                                            inner: Once(
-                                                Some(
-                                                    b&quot;{\&quot;message\&quot;:\&quot;Session token not found or invalid\&quot;,\&quot;__type\&quot;:\&quot;com.amazonaws.switchboard.portal#UnauthorizedException\&quot;}&quot;,
-                                                ),
-                                            ),
-                                            retryable: true,
-                                        },
-                                        extensions: Extensions {
-                                            extensions_02x: Extensions,
-                                            extensions_1x: Extensions,
-                                        },
-                                    },
-                                },
-                            ),
-                        },
+            source: CredentialsNotLoaded(
+                CredentialsNotLoaded {
+                    source: Some(
+                        &quot;no providers in chain provided credentials&quot;,
+                    ),
+                },
+            ),
+            connection: Unknown,
+        },
+    },
+) (Unspecified error code: 2) - DispatchFailure(
+    DispatchFailure {
+        source: ConnectorError {
+            kind: Other(
+                None,
+            ),
+            source: CredentialsNotLoaded(
+                CredentialsNotLoaded {
+                    source: Some(
+                        &quot;no providers in chain provided credentials&quot;,
                     ),
                 },
             ),
@@ -724,599 +524,501 @@
         },
     },
 )
-    at Function.from (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:110:28)
-    at createBamlErrorUnsafe (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:168:53)
-    at toBamlError (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:206:16)
-    at BamlAsyncClient.TestAws (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/baml_client/async_client.ts:5940:24)
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/providers/aws.test.ts:401:35)</failure>
+    at Function.from (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:73:28)
+    at createBamlErrorUnsafe (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:172:53)
+    at toBamlError (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:206:16)
+    at BamlAsyncClient.TestAws (/Users/greghale/code/baml/integ-tests/typescript/baml_client/async_client.ts:6479:30)
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/aws.test.ts:401:35)</failure>
     </testcase>
   </testsuite>
-  <testsuite name="Recursive Type Tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:09:35" time="9.305" tests="2">
-    <testcase classname="Recursive Type Tests simple recursive type" name="Recursive Type Tests simple recursive type" time="1.894">
+  <testsuite name="Env Vars Tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:08" time="2.786" tests="3">
+    <testcase classname="Env Vars Tests should reset environment variables correctly" name="Env Vars Tests should reset environment variables correctly" time="1.669">
     </testcase>
-    <testcase classname="Recursive Type Tests mutually recursive type" name="Recursive Type Tests mutually recursive type" time="6.459">
-    </testcase>
-  </testsuite>
-  <testsuite name="Collector Tests" errors="0" failures="1" skipped="0" timestamp="2025-09-24T21:09:17" time="32.69" tests="9">
-    <testcase classname="Collector Tests should collect logs for non-streaming calls" name="Collector Tests should collect logs for non-streaming calls" time="1.668">
-      <failure>Error: expect(received).toBeUndefined()
-
-Received: 0
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/collector.test.ts:92:42)</failure>
-    </testcase>
-    <testcase classname="Collector Tests should handle streaming calls correctly" name="Collector Tests should handle streaming calls correctly" time="0.918">
-    </testcase>
-    <testcase classname="Collector Tests should verify LLMStreamCall properties for streaming calls" name="Collector Tests should verify LLMStreamCall properties for streaming calls" time="1.568">
-    </testcase>
-    <testcase classname="Collector Tests should track cumulative usage across multiple calls" name="Collector Tests should track cumulative usage across multiple calls" time="2.246">
-    </testcase>
-    <testcase classname="Collector Tests should support multiple collectors" name="Collector Tests should support multiple collectors" time="1.785">
-    </testcase>
-    <testcase classname="Collector Tests should handle parallel async calls correctly" name="Collector Tests should handle parallel async calls correctly" time="1.071">
-    </testcase>
-    <testcase classname="Collector Tests should handle sync calls correctly" name="Collector Tests should handle sync calls correctly" time="2.775">
-    </testcase>
-    <testcase classname="Collector Tests should handle multiple async calls with nested gathers" name="Collector Tests should handle multiple async calls with nested gathers" time="1.017">
-    </testcase>
-    <testcase classname="Collector Tests should track cached input tokens for Anthropic caching" name="Collector Tests should track cached input tokens for Anthropic caching" time="7.68">
-    </testcase>
-  </testsuite>
-  <testsuite name="Dynamic Type Tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:09:33" time="17.834" tests="21">
-    <testcase classname="Dynamic Type Tests Import Tests should import TypeBuilder and FieldType from type_builder module" name="Dynamic Type Tests Import Tests should import TypeBuilder and FieldType from type_builder module" time="0.002">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic types single" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic types single" time="1.266">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic types enum" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic types enum" time="0.83">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic types class" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic types class" time="0.917">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic literals" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic literals" time="2.955">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic inputs class" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic inputs class" time="1.053">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Complex Dynamic Types should work with dynamic inputs list" name="Dynamic Type Tests Complex Dynamic Types should work with dynamic inputs list" time="1.236">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Complex Dynamic Types should work with dynamic output map" name="Dynamic Type Tests Complex Dynamic Types should work with dynamic output map" time="1.599">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Complex Dynamic Types should work with dynamic output union" name="Dynamic Type Tests Complex Dynamic Types should work with dynamic output union" time="2.095">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Add Baml should add to existing class" name="Dynamic Type Tests Add Baml should add to existing class" time="0.855">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Add Baml should add to existing enum" name="Dynamic Type Tests Add Baml should add to existing enum" time="0.77">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Add Baml should add both class and enum" name="Dynamic Type Tests Add Baml should add both class and enum" time="1.742">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Add Baml should add baml with attrs" name="Dynamic Type Tests Add Baml should add baml with attrs" time="1.027">
-    </testcase>
-    <testcase classname="Dynamic Type Tests TypeBuilder APIs should list properties" name="Dynamic Type Tests TypeBuilder APIs should list properties" time="0.014">
-    </testcase>
-    <testcase classname="Dynamic Type Tests TypeBuilder APIs should reset" name="Dynamic Type Tests TypeBuilder APIs should reset" time="0.017">
-    </testcase>
-    <testcase classname="Dynamic Type Tests TypeBuilder APIs should reset a class" name="Dynamic Type Tests TypeBuilder APIs should reset a class" time="0.002">
-    </testcase>
-    <testcase classname="Dynamic Type Tests TypeBuilder APIs should remove a property from a class" name="Dynamic Type Tests TypeBuilder APIs should remove a property from a class" time="0.002">
-    </testcase>
-    <testcase classname="Dynamic Type Tests TypeBuilder APIs should reset a dynamically added class" name="Dynamic Type Tests TypeBuilder APIs should reset a dynamically added class" time="0.002">
-    </testcase>
-    <testcase classname="Dynamic Type Tests TypeBuilder APIs should remove a property from a dynamically added class" name="Dynamic Type Tests TypeBuilder APIs should remove a property from a dynamically added class" time="0">
-    </testcase>
-    <testcase classname="Dynamic Type Tests TypeBuilder APIs should get property types from a class" name="Dynamic Type Tests TypeBuilder APIs should get property types from a class" time="0.001">
-    </testcase>
-    <testcase classname="Dynamic Type Tests TypeBuilder APIs should set property types" name="Dynamic Type Tests TypeBuilder APIs should set property types" time="0.002">
-    </testcase>
-  </testsuite>
-  <testsuite name="Provider Caching Tests" errors="0" failures="1" skipped="0" timestamp="2025-09-24T21:09:29" time="24.093" tests="6">
-    <testcase classname="Provider Caching Tests should handle OpenAI streaming with cached token tracking" name="Provider Caching Tests should handle OpenAI streaming with cached token tracking" time="0.918">
-    </testcase>
-    <testcase classname="Provider Caching Tests should aggregate cached tokens across multiple OpenAI calls" name="Provider Caching Tests should aggregate cached tokens across multiple OpenAI calls" time="3.001">
-    </testcase>
-    <testcase classname="Provider Caching Tests should verify OpenAI caching with streaming" name="Provider Caching Tests should verify OpenAI caching with streaming" time="3.14">
-    </testcase>
-    <testcase classname="Provider Caching Tests should verify Google/Vertex caching with repeated large content" name="Provider Caching Tests should verify Google/Vertex caching with repeated large content" time="10.276">
-    </testcase>
-    <testcase classname="Provider Caching Tests should handle Vertex AI streaming with cached token tracking" name="Provider Caching Tests should handle Vertex AI streaming with cached token tracking" time="3.678">
-    </testcase>
-    <testcase classname="Provider Caching Tests should verify AWS provider returns null for cached tokens" name="Provider Caching Tests should verify AWS provider returns null for cached tokens" time="1.156">
-      <failure>BamlClientHttpError: BamlError: BamlClientError: BamlClientHttpError: DispatchFailure(
-    DispatchFailure {
-        source: ConnectorError {
-            kind: Other(
-                None,
-            ),
-            source: ProviderError(
-                ProviderError {
-                    source: ProviderError(
-                        ProviderError {
-                            source: ServiceError(
-                                ServiceError {
-                                    source: UnauthorizedException(
-                                        UnauthorizedException {
-                                            message: Some(
-                                                &quot;Session token not found or invalid&quot;,
-                                            ),
-                                            meta: ErrorMetadata {
-                                                code: Some(
-                                                    &quot;UnauthorizedException&quot;,
-                                                ),
-                                                message: Some(
-                                                    &quot;Session token not found or invalid&quot;,
-                                                ),
-                                                extras: Some(
-                                                    {
-                                                        &quot;aws_request_id&quot;: &quot;4190d467-baa3-434f-873b-70526a0eda89&quot;,
-                                                    },
-                                                ),
-                                            },
-                                        },
-                                    ),
-                                    raw: Response {
-                                        status: StatusCode(
-                                            401,
-                                        ),
-                                        headers: Headers {
-                                            headers: {
-                                                &quot;date&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;Wed, 24 Sep 2025 21:09:52 GMT&quot;,
-                                                    ),
-                                                },
-                                                &quot;content-type&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;application/json&quot;,
-                                                    ),
-                                                },
-                                                &quot;content-length&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;114&quot;,
-                                                    ),
-                                                },
-                                                &quot;access-control-expose-headers&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;RequestId&quot;,
-                                                    ),
-                                                },
-                                                &quot;access-control-expose-headers&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;x-amzn-RequestId&quot;,
-                                                    ),
-                                                },
-                                                &quot;requestid&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;4190d467-baa3-434f-873b-70526a0eda89&quot;,
-                                                    ),
-                                                },
-                                                &quot;server&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;AWS SSO&quot;,
-                                                    ),
-                                                },
-                                                &quot;x-amzn-requestid&quot;: HeaderValue {
-                                                    _private: H0(
-                                                        &quot;4190d467-baa3-434f-873b-70526a0eda89&quot;,
-                                                    ),
-                                                },
-                                            },
-                                        },
-                                        body: SdkBody {
-                                            inner: Once(
-                                                Some(
-                                                    b&quot;{\&quot;message\&quot;:\&quot;Session token not found or invalid\&quot;,\&quot;__type\&quot;:\&quot;com.amazonaws.switchboard.portal#UnauthorizedException\&quot;}&quot;,
-                                                ),
-                                            ),
-                                            retryable: true,
-                                        },
-                                        extensions: Extensions {
-                                            extensions_02x: Extensions,
-                                            extensions_1x: Extensions,
-                                        },
-                                    },
-                                },
-                            ),
-                        },
-                    ),
-                },
-            ),
-            connection: Unknown,
-        },
-    },
-)
-    at Function.from (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:110:28)
-    at createBamlErrorUnsafe (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:168:53)
-    at toBamlError (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:206:16)
-    at BamlAsyncClient.TestAws (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/baml_client/async_client.ts:5940:24)
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/providers/caching.test.ts:191:5)</failure>
-    </testcase>
-  </testsuite>
-  <testsuite name="Memory usage tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:09:40" time="13.125" tests="1">
-    <testcase classname="Memory usage tests memory usage stays within limits" name="Memory usage tests memory usage stays within limits" time="11.883">
-    </testcase>
-  </testsuite>
-  <testsuite name="Error Handling Tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:09:51" time="2.281" tests="5">
-    <testcase classname="Error Handling Tests should raise an error for invalid argument types" name="Error Handling Tests should raise an error for invalid argument types" time="0.002">
-    </testcase>
-    <testcase classname="Error Handling Tests should raise an error for invalid client configuration" name="Error Handling Tests should raise an error for invalid client configuration" time="0.294">
-    </testcase>
-    <testcase classname="Error Handling Tests should raise a BAMLValidationError with proper details" name="Error Handling Tests should raise a BAMLValidationError with proper details" time="0.514">
-    </testcase>
-    <testcase classname="Error Handling Tests should handle client HTTP errors" name="Error Handling Tests should handle client HTTP errors" time="0.16">
-    </testcase>
-    <testcase classname="Error Handling Tests should raise a BamlClientHttpError with proper details" name="Error Handling Tests should raise a BamlClientHttpError with proper details" time="0.239">
-    </testcase>
-  </testsuite>
-  <testsuite name="Logger tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:09:45" time="11.928" tests="1">
-    <testcase classname="Logger tests logger works as expected" name="Logger tests logger works as expected" time="9.16">
-    </testcase>
-  </testsuite>
-  <testsuite name="With Options Tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:09:54" time="5.092" tests="3">
-    <testcase classname="With Options Tests should test with options logger async call" name="With Options Tests should test with options logger async call" time="2.095">
-    </testcase>
-    <testcase classname="With Options Tests should test with options logger sync" name="With Options Tests should test with options logger sync" time="0.872">
-    </testcase>
-    <testcase classname="With Options Tests should test with options logger async stream" name="With Options Tests should test with options logger async stream" time="0.98">
-    </testcase>
-  </testsuite>
-  <testsuite name="Tracing Tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:09:53" time="6.112" tests="3">
-    <testcase classname="Tracing Tests Sync Tracing supports tracing sync" name="Tracing Tests Sync Tracing supports tracing sync" time="0.009">
-    </testcase>
-    <testcase classname="Tracing Tests Async Tracing supports tracing async" name="Tracing Tests Async Tracing supports tracing async" time="3.305">
-    </testcase>
-    <testcase classname="Tracing Tests Events should work with &apos;onLogEvent&apos;" name="Tracing Tests Events should work with &apos;onLogEvent&apos;" time="1.991">
-    </testcase>
-  </testsuite>
-  <testsuite name="Azure Provider" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:09:53" time="7.142" tests="7">
-    <testcase classname="Azure Provider should support azure with default max_tokens" name="Azure Provider should support azure with default max_tokens" time="0.547">
-    </testcase>
-    <testcase classname="Azure Provider should support o1 model without max_tokens" name="Azure Provider should support o1 model without max_tokens" time="1.384">
-    </testcase>
-    <testcase classname="Azure Provider should fail when setting max_tokens for o1 model" name="Azure Provider should fail when setting max_tokens for o1 model" time="0.343">
-    </testcase>
-    <testcase classname="Azure Provider should support non-o1 model with explicit max_tokens" name="Azure Provider should support non-o1 model with explicit max_tokens" time="0.589">
-    </testcase>
-    <testcase classname="Azure Provider should support o1 model with explicit max_completion_tokens" name="Azure Provider should support o1 model with explicit max_completion_tokens" time="2.736">
-    </testcase>
-    <testcase classname="Azure Provider should fail if azure is not configured correctly" name="Azure Provider should fail if azure is not configured correctly" time="0.033">
-    </testcase>
-    <testcase classname="Azure Provider should support azure streaming" name="Azure Provider should support azure streaming" time="0.407">
-    </testcase>
-  </testsuite>
-  <testsuite name="Media Tests" errors="0" failures="2" skipped="0" timestamp="2025-09-24T21:09:17" time="44.762" tests="8">
-    <testcase classname="Media Tests should work with image from url" name="Media Tests should work with image from url" time="0.565">
-    </testcase>
-    <testcase classname="Media Tests should work with image from base 64" name="Media Tests should work with image from base 64" time="0.561">
-    </testcase>
-    <testcase classname="Media Tests should work with audio base 64" name="Media Tests should work with audio base 64" time="2.017">
-    </testcase>
-    <testcase classname="Media Tests should work with audio from url" name="Media Tests should work with audio from url" time="3.152">
-      <failure>Error: expect(received).toContain(expected) // indexOf
-
-Expected substring: &quot;no&quot;
-Received string:    &quot;yes&quot;
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/media.test.ts:32:31)</failure>
-    </testcase>
-    <testcase classname="Media Tests should work with pdf from url" name="Media Tests should work with pdf from url" time="1.432">
-    </testcase>
-    <testcase classname="Media Tests should work with pdf from base 64" name="Media Tests should work with pdf from base 64" time="3.737">
-    </testcase>
-    <testcase classname="Media Tests should work with video and a youtube url for gemini" name="Media Tests should work with video and a youtube url for gemini" time="15.308">
-    </testcase>
-    <testcase classname="Media Tests should work with video from base 64" name="Media Tests should work with video from base 64" time="6.389">
-      <failure>Error: expect(received).toMatch(expected)
-
-Expected pattern: /(cartoon|sky|field)/
-Received string:  &quot;calm capybara watches sunset meteor.&quot;
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/media.test.ts:64:31)</failure>
-    </testcase>
-  </testsuite>
-  <testsuite name="Type aliases tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:09:50" time="13.537" tests="12">
-    <testcase classname="Type aliases tests primitive union alias" name="Type aliases tests primitive union alias" time="0.711">
-    </testcase>
-    <testcase classname="Type aliases tests map alias" name="Type aliases tests map alias" time="0.535">
-    </testcase>
-    <testcase classname="Type aliases tests alias union" name="Type aliases tests alias union" time="1.462">
-    </testcase>
-    <testcase classname="Type aliases tests alias pointing to recursive class" name="Type aliases tests alias pointing to recursive class" time="0.586">
-    </testcase>
-    <testcase classname="Type aliases tests class pointing to alias that points to recursive class" name="Type aliases tests class pointing to alias that points to recursive class" time="0.752">
-    </testcase>
-    <testcase classname="Type aliases tests recursive class with alias indirection" name="Type aliases tests recursive class with alias indirection" time="0.812">
-    </testcase>
-    <testcase classname="Type aliases tests merge alias attributes" name="Type aliases tests merge alias attributes" time="0.946">
-    </testcase>
-    <testcase classname="Type aliases tests simple recursive map alias" name="Type aliases tests simple recursive map alias" time="0.522">
-    </testcase>
-    <testcase classname="Type aliases tests simple recursive list alias" name="Type aliases tests simple recursive list alias" time="0.94">
-    </testcase>
-    <testcase classname="Type aliases tests recursive alias cycles" name="Type aliases tests recursive alias cycles" time="0.55">
-    </testcase>
-    <testcase classname="Type aliases tests json type alias cycle" name="Type aliases tests json type alias cycle" time="1.48">
-    </testcase>
-    <testcase classname="Type aliases tests json type alias as class dependency" name="Type aliases tests json type alias as class dependency" time="2.765">
-    </testcase>
-  </testsuite>
-  <testsuite name="Env Vars Tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:10:02" time="2.887" tests="3">
-    <testcase classname="Env Vars Tests should reset environment variables correctly" name="Env Vars Tests should reset environment variables correctly" time="1.92">
-    </testcase>
-    <testcase classname="Env Vars Tests should reflect API key changes in headers" name="Env Vars Tests should reflect API key changes in headers" time="0.005">
+    <testcase classname="Env Vars Tests should reflect API key changes in headers" name="Env Vars Tests should reflect API key changes in headers" time="0.008">
     </testcase>
     <testcase classname="Env Vars Tests should reflect BAML_LOG changes in log level" name="Env Vars Tests should reflect BAML_LOG changes in log level" time="0.002">
     </testcase>
   </testsuite>
-  <testsuite name="Prompt Renderer Tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:09:56" time="9.792" tests="5">
-    <testcase classname="Prompt Renderer Tests should use aliases when serializing input objects - classes" name="Prompt Renderer Tests should use aliases when serializing input objects - classes" time="6.014">
+  <testsuite name="Abort Handlers" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:07" time="3.951" tests="6">
+    <testcase classname="Abort Handlers manual cancellation" name="Abort Handlers manual cancellation" time="0.228">
     </testcase>
-    <testcase classname="Prompt Renderer Tests should use aliases when serializing, but still have original keys in jinja" name="Prompt Renderer Tests should use aliases when serializing, but still have original keys in jinja" time="1.309">
+    <testcase classname="Abort Handlers streaming cancellation" name="Abort Handlers streaming cancellation" time="1.023">
     </testcase>
-    <testcase classname="Prompt Renderer Tests should use aliases when serializing input objects - enums" name="Prompt Renderer Tests should use aliases when serializing input objects - enums" time="0.525">
-    </testcase>
-    <testcase classname="Prompt Renderer Tests should use aliases when serializing input objects - lists" name="Prompt Renderer Tests should use aliases when serializing input objects - lists" time="0.944">
-    </testcase>
-    <testcase classname="Prompt Renderer Tests maintain field order" name="Prompt Renderer Tests maintain field order" time="0.002">
-    </testcase>
-  </testsuite>
-  <testsuite name="Retry Policies" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:09:59" time="7.582" tests="3">
-    <testcase classname="Retry Policies works with retries1" name="Retry Policies works with retries1" time="1.159">
-    </testcase>
-    <testcase classname="Retry Policies works with retries2" name="Retry Policies works with retries2" time="2.181">
-    </testcase>
-    <testcase classname="Retry Policies works with fallbacks" name="Retry Policies works with fallbacks" time="3.291">
-    </testcase>
-  </testsuite>
-  <testsuite name="Constraint Tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:09:59" time="9.138" tests="4">
-    <testcase classname="Constraint Tests should handle checks in return types" name="Constraint Tests should handle checks in return types" time="4.517">
-    </testcase>
-    <testcase classname="Constraint Tests should handle checks in returned unions" name="Constraint Tests should handle checks in returned unions" time="1.362">
-    </testcase>
-    <testcase classname="Constraint Tests should handle block-level checks" name="Constraint Tests should handle block-level checks" time="0.991">
-    </testcase>
-    <testcase classname="Constraint Tests should handle nested-block-level checks" name="Constraint Tests should handle nested-block-level checks" time="0.853">
-    </testcase>
-  </testsuite>
-  <testsuite name="Dynamic Clients" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:10:08" time="1.48" tests="1">
-    <testcase classname="Dynamic Clients should work with dynamic client" name="Dynamic Clients should work with dynamic client" time="0.402">
-    </testcase>
-  </testsuite>
-  <testsuite name="Gemini Provider" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:10:01" time="8.878" tests="2">
-    <testcase classname="Gemini Provider Streaming should support streaming in Gemini" name="Gemini Provider Streaming should support streaming in Gemini" time="4.26">
-    </testcase>
-    <testcase classname="Gemini Provider system message should support system_instructions in Gemini" name="Gemini Provider system message should support system_instructions in Gemini" time="3.62">
-    </testcase>
-  </testsuite>
-  <testsuite name="Abort Handlers" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:10:06" time="3.301" tests="6">
-    <testcase classname="Abort Handlers manual cancellation" name="Abort Handlers manual cancellation" time="0.219">
-    </testcase>
-    <testcase classname="Abort Handlers streaming cancellation" name="Abort Handlers streaming cancellation" time="1.048">
-    </testcase>
-    <testcase classname="Abort Handlers timeout using AbortSignal.timeout" name="Abort Handlers timeout using AbortSignal.timeout" time="0.202">
+    <testcase classname="Abort Handlers timeout using AbortSignal.timeout" name="Abort Handlers timeout using AbortSignal.timeout" time="0.203">
     </testcase>
     <testcase classname="Abort Handlers manual timeout simulation" name="Abort Handlers manual timeout simulation" time="0.203">
     </testcase>
-    <testcase classname="Abort Handlers early abort check" name="Abort Handlers early abort check" time="0.002">
+    <testcase classname="Abort Handlers early abort check" name="Abort Handlers early abort check" time="0.001">
     </testcase>
-    <testcase classname="Abort Handlers normal operation without abort" name="Abort Handlers normal operation without abort" time="0.363">
-    </testcase>
-  </testsuite>
-  <testsuite name="Anthropic Provider" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:10:06" time="4.003" tests="3">
-    <testcase classname="Anthropic Provider should support anthropic shorthand" name="Anthropic Provider should support anthropic shorthand" time="0.843">
-    </testcase>
-    <testcase classname="Anthropic Provider Streaming should support anthropic shorthand streaming" name="Anthropic Provider Streaming should support anthropic shorthand streaming" time="0.59">
-    </testcase>
-    <testcase classname="Anthropic Provider Streaming should support streaming in Claude" name="Anthropic Provider Streaming should support streaming in Claude" time="1.416">
+    <testcase classname="Abort Handlers normal operation without abort" name="Abort Handlers normal operation without abort" time="0.876">
     </testcase>
   </testsuite>
-  <testsuite name="Dynamic Enum Request Tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:10:10" time="0.795" tests="3">
-    <testcase classname="Dynamic Enum Request Tests should include dynamic enum values in RenderDynamicEnum request (direct options)" name="Dynamic Enum Request Tests should include dynamic enum values in RenderDynamicEnum request (direct options)" time="0.006">
+  <testsuite name="Experimental OnTick Basic" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:11" time="0.779" tests="3">
+    <testcase classname="Experimental OnTick Basic should reject onTick for sync functions" name="Experimental OnTick Basic should reject onTick for sync functions" time="0.058">
     </testcase>
-    <testcase classname="Dynamic Enum Request Tests should include dynamic enum values in RenderDynamicEnum request (withOptions default)" name="Dynamic Enum Request Tests should include dynamic enum values in RenderDynamicEnum request (withOptions default)" time="0.004">
+    <testcase classname="Experimental OnTick Basic should accept onTick in BamlCallOptions for async functions" name="Experimental OnTick Basic should accept onTick in BamlCallOptions for async functions" time="0">
     </testcase>
-    <testcase classname="Dynamic Enum Request Tests should include dynamic class properties in RenderDynamicClass request" name="Dynamic Enum Request Tests should include dynamic class properties in RenderDynamicClass request" time="0.002">
-    </testcase>
-  </testsuite>
-  <testsuite name="Map tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:10:09" time="1.564" tests="1">
-    <testcase classname="Map tests enum key in map" name="Map tests enum key in map" time="0.599">
+    <testcase classname="Experimental OnTick Basic should accept onTick in stream functions" name="Experimental OnTick Basic should accept onTick in stream functions" time="0.012">
     </testcase>
   </testsuite>
-  <testsuite name="Expose Request Tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:10:10" time="0.769" tests="7">
-    <testcase classname="Expose Request Tests should expose request gpt4" name="Expose Request Tests should expose request gpt4" time="0.006">
-    </testcase>
-    <testcase classname="Expose Request Tests should expose request gemini" name="Expose Request Tests should expose request gemini" time="0.004">
-    </testcase>
-    <testcase classname="Expose Request Tests should expose request fallback" name="Expose Request Tests should expose request fallback" time="0.009">
-    </testcase>
-    <testcase classname="Expose Request Tests should expose request round robin" name="Expose Request Tests should expose request round robin" time="0.003">
-    </testcase>
-    <testcase classname="Expose Request Tests should expose request gpt4 sync" name="Expose Request Tests should expose request gpt4 sync" time="0.002">
-    </testcase>
-    <testcase classname="Expose Request Tests should expose request gpt4 stream" name="Expose Request Tests should expose request gpt4 stream" time="0.003">
-    </testcase>
-    <testcase classname="Expose Request Tests should expose request gpt4 stream sync" name="Expose Request Tests should expose request gpt4 stream sync" time="0.003">
+  <testsuite name="Emit tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:11" time="2.64" tests="1">
+    <testcase classname="Emit tests should emit basic changes" name="Emit tests should emit basic changes" time="1.757">
     </testcase>
   </testsuite>
-  <testsuite name="Workflow Tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:10:10" time="1.6" tests="1">
-    <testcase classname="Workflow Tests should run workflows" name="Workflow Tests should run workflows" time="0.495">
+  <testsuite name="Memory usage tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:58:51" time="22.868" tests="1">
+    <testcase classname="Memory usage tests memory usage stays within limits" name="Memory usage tests memory usage stays within limits" time="12.335">
     </testcase>
   </testsuite>
-  <testsuite name="Expose Parser Tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:10:11" time="0.745" tests="4">
-    <testcase classname="Expose Parser Tests should expose parser" name="Expose Parser Tests should expose parser" time="0.003">
+  <testsuite name="Prompt Renderer Tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:09" time="5.908" tests="5">
+    <testcase classname="Prompt Renderer Tests should use aliases when serializing input objects - classes" name="Prompt Renderer Tests should use aliases when serializing input objects - classes" time="1.891">
     </testcase>
-    <testcase classname="Expose Parser Tests should expose parser sync" name="Expose Parser Tests should expose parser sync" time="0.003">
+    <testcase classname="Prompt Renderer Tests should use aliases when serializing, but still have original keys in jinja" name="Prompt Renderer Tests should use aliases when serializing, but still have original keys in jinja" time="1.682">
     </testcase>
-    <testcase classname="Expose Parser Tests should expose stream parser" name="Expose Parser Tests should expose stream parser" time="0.003">
+    <testcase classname="Prompt Renderer Tests should use aliases when serializing input objects - enums" name="Prompt Renderer Tests should use aliases when serializing input objects - enums" time="0.649">
     </testcase>
-    <testcase classname="Expose Parser Tests should expose stream parser sync" name="Expose Parser Tests should expose stream parser sync" time="0.003">
+    <testcase classname="Prompt Renderer Tests should use aliases when serializing input objects - lists" name="Prompt Renderer Tests should use aliases when serializing input objects - lists" time="0.689">
     </testcase>
-  </testsuite>
-  <testsuite name="Experimental OnTick Basic" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:10:11" time="0.856" tests="3">
-    <testcase classname="Experimental OnTick Basic should reject onTick for sync functions" name="Experimental OnTick Basic should reject onTick for sync functions" time="0.06">
-    </testcase>
-    <testcase classname="Experimental OnTick Basic should accept onTick in BamlCallOptions for async functions" name="Experimental OnTick Basic should accept onTick in BamlCallOptions for async functions" time="0.001">
-    </testcase>
-    <testcase classname="Experimental OnTick Basic should accept onTick in stream functions" name="Experimental OnTick Basic should accept onTick in stream functions" time="0.002">
+    <testcase classname="Prompt Renderer Tests maintain field order" name="Prompt Renderer Tests maintain field order" time="0.003">
     </testcase>
   </testsuite>
-  <testsuite name="Abort Handlers - Manual Testing" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:10:04" time="8.761" tests="6">
-    <testcase classname="Abort Handlers - Manual Testing cancels a long-running retry operation mid-execution" name="Abort Handlers - Manual Testing cancels a long-running retry operation mid-execution" time="0.258">
+  <testsuite name="Type aliases tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:58:51" time="24.273" tests="12">
+    <testcase classname="Type aliases tests primitive union alias" name="Type aliases tests primitive union alias" time="1.334">
     </testcase>
-    <testcase classname="Abort Handlers - Manual Testing handles rapid successive cancellations" name="Abort Handlers - Manual Testing handles rapid successive cancellations" time="0.034">
+    <testcase classname="Type aliases tests map alias" name="Type aliases tests map alias" time="1.938">
     </testcase>
-    <testcase classname="Abort Handlers - Manual Testing cancels streaming operation and verifies no further events" name="Abort Handlers - Manual Testing cancels streaming operation and verifies no further events" time="0.205">
+    <testcase classname="Type aliases tests alias union" name="Type aliases tests alias union" time="1.367">
     </testcase>
-    <testcase classname="Abort Handlers - Manual Testing verifies no retries occur after cancellation" name="Abort Handlers - Manual Testing verifies no retries occur after cancellation" time="0.153">
+    <testcase classname="Type aliases tests alias pointing to recursive class" name="Type aliases tests alias pointing to recursive class" time="0.839">
     </testcase>
-    <testcase classname="Abort Handlers - Manual Testing tests with real provider (if available)" name="Abort Handlers - Manual Testing tests with real provider (if available)" time="0.002">
+    <testcase classname="Type aliases tests class pointing to alias that points to recursive class" name="Type aliases tests class pointing to alias that points to recursive class" time="0.784">
     </testcase>
-    <testcase classname="Abort Handlers - Manual Testing memory cleanup - multiple aborted operations" name="Abort Handlers - Manual Testing memory cleanup - multiple aborted operations" time="0.187">
+    <testcase classname="Type aliases tests recursive class with alias indirection" name="Type aliases tests recursive class with alias indirection" time="1.198">
     </testcase>
-  </testsuite>
-  <testsuite name="Literal types tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:10:05" time="7.906" tests="8">
-    <testcase classname="Literal types tests return literal union" name="Literal types tests return literal union" time="0.829">
+    <testcase classname="Type aliases tests merge alias attributes" name="Type aliases tests merge alias attributes" time="1.063">
     </testcase>
-    <testcase classname="Literal types tests single literal int" name="Literal types tests single literal int" time="0.617">
+    <testcase classname="Type aliases tests simple recursive map alias" name="Type aliases tests simple recursive map alias" time="1.063">
     </testcase>
-    <testcase classname="Literal types tests single literal bool" name="Literal types tests single literal bool" time="0.434">
+    <testcase classname="Type aliases tests simple recursive list alias" name="Type aliases tests simple recursive list alias" time="0.626">
     </testcase>
-    <testcase classname="Literal types tests single literal string" name="Literal types tests single literal string" time="0.843">
+    <testcase classname="Type aliases tests recursive alias cycles" name="Type aliases tests recursive alias cycles" time="0.7">
     </testcase>
-    <testcase classname="Literal types tests single class with literal prop" name="Literal types tests single class with literal prop" time="0.627">
+    <testcase classname="Type aliases tests json type alias cycle" name="Type aliases tests json type alias cycle" time="1.456">
     </testcase>
-    <testcase classname="Literal types tests single class with literal union prop" name="Literal types tests single class with literal union prop" time="0.784">
-    </testcase>
-    <testcase classname="Literal types tests literal string union key in map" name="Literal types tests literal string union key in map" time="0.73">
-    </testcase>
-    <testcase classname="Literal types tests single literal string key in map" name="Literal types tests single literal string key in map" time="0.596">
+    <testcase classname="Type aliases tests json type alias as class dependency" name="Type aliases tests json type alias as class dependency" time="1.186">
     </testcase>
   </testsuite>
-  <testsuite name="Modular API Tests" errors="0" failures="2" skipped="0" timestamp="2025-09-24T21:09:17" time="60.956" tests="7">
-    <testcase classname="Modular API Tests modular openai gpt4" name="Modular API Tests modular openai gpt4" time="1.505">
+  <testsuite name="Recursive Type Tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:07" time="8.281" tests="2">
+    <testcase classname="Recursive Type Tests simple recursive type" name="Recursive Type Tests simple recursive type" time="2.849">
     </testcase>
-    <testcase classname="Modular API Tests modular anthropic claude 3 haiku" name="Modular API Tests modular anthropic claude 3 haiku" time="1.341">
+    <testcase classname="Recursive Type Tests mutually recursive type" name="Recursive Type Tests mutually recursive type" time="4.318">
+    </testcase>
+  </testsuite>
+  <testsuite name="VM Async Runtime Tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:11" time="5.017" tests="5">
+    <testcase classname="VM Async Runtime Tests should return number calling LLM" name="VM Async Runtime Tests should return number calling LLM" time="0.477">
+    </testcase>
+    <testcase classname="VM Async Runtime Tests should store LLM call in local var" name="VM Async Runtime Tests should store LLM call in local var" time="0.617">
+    </testcase>
+    <testcase classname="VM Async Runtime Tests should convert bool to int with if-else calling LLM" name="VM Async Runtime Tests should convert bool to int with if-else calling LLM" time="1.197">
+    </testcase>
+    <testcase classname="VM Async Runtime Tests should call LLM to describe image" name="VM Async Runtime Tests should call LLM to describe image" time="1.535">
+    </testcase>
+    <testcase classname="VM Async Runtime Tests should execute fetch as" name="VM Async Runtime Tests should execute fetch as" time="0.529">
+    </testcase>
+  </testsuite>
+  <testsuite name="Dynamic Clients" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:16" time="1.444" tests="1">
+    <testcase classname="Dynamic Clients should work with dynamic client" name="Dynamic Clients should work with dynamic client" time="0.66">
+    </testcase>
+  </testsuite>
+  <testsuite name="Dynamic Type Tests" errors="0" failures="1" skipped="0" timestamp="2025-10-12T02:58:51" time="26.094" tests="21">
+    <testcase classname="Dynamic Type Tests Import Tests should import TypeBuilder and FieldType from type_builder module" name="Dynamic Type Tests Import Tests should import TypeBuilder and FieldType from type_builder module" time="0.004">
+    </testcase>
+    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic types single" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic types single" time="2.457">
+    </testcase>
+    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic types enum" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic types enum" time="1.355">
+    </testcase>
+    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic types class" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic types class" time="0.894">
+    </testcase>
+    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic literals" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic literals" time="1.468">
+    </testcase>
+    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic inputs class" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic inputs class" time="0.868">
+    </testcase>
+    <testcase classname="Dynamic Type Tests Complex Dynamic Types should work with dynamic inputs list" name="Dynamic Type Tests Complex Dynamic Types should work with dynamic inputs list" time="1.055">
+    </testcase>
+    <testcase classname="Dynamic Type Tests Complex Dynamic Types should work with dynamic output map" name="Dynamic Type Tests Complex Dynamic Types should work with dynamic output map" time="1.253">
+    </testcase>
+    <testcase classname="Dynamic Type Tests Complex Dynamic Types should work with dynamic output union" name="Dynamic Type Tests Complex Dynamic Types should work with dynamic output union" time="2.479">
+    </testcase>
+    <testcase classname="Dynamic Type Tests Add Baml should add to existing class" name="Dynamic Type Tests Add Baml should add to existing class" time="1.153">
       <failure>Error: expect(received).toEqual(expected) // deep equality
 
 - Expected  - 1
 + Received  + 1
 
-@@ -1,9 +1,9 @@
-  Object {
-    &quot;education&quot;: Array [
-      Object {
--       &quot;degree&quot;: &quot;Master&apos;s&quot;,
-+       &quot;degree&quot;: &quot;Master&apos;s in Computer Science&quot;,
-        &quot;graduation_date&quot;: null,
-        &quot;institution&quot;: &quot;University of California, Berkeley&quot;,
-        &quot;location&quot;: &quot;Berkeley, CA&quot;,
-        &quot;major&quot;: Array [
-          &quot;Computer Science&quot;,
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/modular.test.ts:120:20)
-    at processTicksAndRejections (node:internal/process/task_queues:95:5)</failure>
+@@ -1,10 +1,10 @@
+  Array [
+    Object {
+      &quot;age&quot;: 30,
+      &quot;extra&quot;: Object {
+-       &quot;height&quot;: 6,
++       &quot;height&quot;: 72,
+        &quot;weight&quot;: 180,
+      },
+      &quot;hair_color&quot;: &quot;YELLOW&quot;,
+      &quot;name&quot;: &quot;John Doe&quot;,
+    },
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/dynamic-types.test.ts:185:19)</failure>
     </testcase>
-    <testcase classname="Modular API Tests modular google gemini" name="Modular API Tests modular google gemini" time="2.245">
+    <testcase classname="Dynamic Type Tests Add Baml should add to existing enum" name="Dynamic Type Tests Add Baml should add to existing enum" time="0.782">
     </testcase>
-    <testcase classname="Modular API Tests modular openai gpt4 manual http request" name="Modular API Tests modular openai gpt4 manual http request" time="2.932">
+    <testcase classname="Dynamic Type Tests Add Baml should add both class and enum" name="Dynamic Type Tests Add Baml should add both class and enum" time="0.93">
     </testcase>
-    <testcase classname="Modular API Tests modular openai gpt4 streaming" name="Modular API Tests modular openai gpt4 streaming" time="2.036">
+    <testcase classname="Dynamic Type Tests Add Baml should add baml with attrs" name="Dynamic Type Tests Add Baml should add baml with attrs" time="0.939">
+    </testcase>
+    <testcase classname="Dynamic Type Tests TypeBuilder APIs should list properties" name="Dynamic Type Tests TypeBuilder APIs should list properties" time="0.001">
+    </testcase>
+    <testcase classname="Dynamic Type Tests TypeBuilder APIs should reset" name="Dynamic Type Tests TypeBuilder APIs should reset" time="0.002">
+    </testcase>
+    <testcase classname="Dynamic Type Tests TypeBuilder APIs should reset a class" name="Dynamic Type Tests TypeBuilder APIs should reset a class" time="0.001">
+    </testcase>
+    <testcase classname="Dynamic Type Tests TypeBuilder APIs should remove a property from a class" name="Dynamic Type Tests TypeBuilder APIs should remove a property from a class" time="0">
+    </testcase>
+    <testcase classname="Dynamic Type Tests TypeBuilder APIs should reset a dynamically added class" name="Dynamic Type Tests TypeBuilder APIs should reset a dynamically added class" time="0.001">
+    </testcase>
+    <testcase classname="Dynamic Type Tests TypeBuilder APIs should remove a property from a dynamically added class" name="Dynamic Type Tests TypeBuilder APIs should remove a property from a dynamically added class" time="0.001">
+    </testcase>
+    <testcase classname="Dynamic Type Tests TypeBuilder APIs should get property types from a class" name="Dynamic Type Tests TypeBuilder APIs should get property types from a class" time="0">
+    </testcase>
+    <testcase classname="Dynamic Type Tests TypeBuilder APIs should set property types" name="Dynamic Type Tests TypeBuilder APIs should set property types" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="Azure Provider" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:08" time="9.087" tests="7">
+    <testcase classname="Azure Provider should support azure with default max_tokens" name="Azure Provider should support azure with default max_tokens" time="1.083">
+    </testcase>
+    <testcase classname="Azure Provider should support o1 model without max_tokens" name="Azure Provider should support o1 model without max_tokens" time="3.011">
+    </testcase>
+    <testcase classname="Azure Provider should fail when setting max_tokens for o1 model" name="Azure Provider should fail when setting max_tokens for o1 model" time="0.512">
+    </testcase>
+    <testcase classname="Azure Provider should support non-o1 model with explicit max_tokens" name="Azure Provider should support non-o1 model with explicit max_tokens" time="0.663">
+    </testcase>
+    <testcase classname="Azure Provider should support o1 model with explicit max_completion_tokens" name="Azure Provider should support o1 model with explicit max_completion_tokens" time="2.269">
+    </testcase>
+    <testcase classname="Azure Provider should fail if azure is not configured correctly" name="Azure Provider should fail if azure is not configured correctly" time="0.032">
+    </testcase>
+    <testcase classname="Azure Provider should support azure streaming" name="Azure Provider should support azure streaming" time="0.613">
+    </testcase>
+  </testsuite>
+  <testsuite name="Literal types tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:11" time="7.01" tests="8">
+    <testcase classname="Literal types tests return literal union" name="Literal types tests return literal union" time="0.686">
+    </testcase>
+    <testcase classname="Literal types tests single literal int" name="Literal types tests single literal int" time="0.947">
+    </testcase>
+    <testcase classname="Literal types tests single literal bool" name="Literal types tests single literal bool" time="0.49">
+    </testcase>
+    <testcase classname="Literal types tests single literal string" name="Literal types tests single literal string" time="0.681">
+    </testcase>
+    <testcase classname="Literal types tests single class with literal prop" name="Literal types tests single class with literal prop" time="0.753">
+    </testcase>
+    <testcase classname="Literal types tests single class with literal union prop" name="Literal types tests single class with literal union prop" time="0.589">
+    </testcase>
+    <testcase classname="Literal types tests literal string union key in map" name="Literal types tests literal string union key in map" time="0.829">
+    </testcase>
+    <testcase classname="Literal types tests single literal string key in map" name="Literal types tests single literal string key in map" time="1.042">
+    </testcase>
+  </testsuite>
+  <testsuite name="Anthropic Provider" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:14" time="4.219" tests="3">
+    <testcase classname="Anthropic Provider should support anthropic shorthand" name="Anthropic Provider should support anthropic shorthand" time="0.784">
+    </testcase>
+    <testcase classname="Anthropic Provider Streaming should support anthropic shorthand streaming" name="Anthropic Provider Streaming should support anthropic shorthand streaming" time="1">
+    </testcase>
+    <testcase classname="Anthropic Provider Streaming should support streaming in Claude" name="Anthropic Provider Streaming should support streaming in Claude" time="1.418">
+    </testcase>
+  </testsuite>
+  <testsuite name="Workflow Tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:17" time="1.697" tests="1">
+    <testcase classname="Workflow Tests should run workflows" name="Workflow Tests should run workflows" time="0.662">
+    </testcase>
+  </testsuite>
+  <testsuite name="Map tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:17" time="1.89" tests="1">
+    <testcase classname="Map tests enum key in map" name="Map tests enum key in map" time="0.875">
+    </testcase>
+  </testsuite>
+  <testsuite name="Vertex Provider" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:14" time="7.365" tests="3">
+    <testcase classname="Vertex Provider should support vertex" name="Vertex Provider should support vertex" time="2.13">
+    </testcase>
+    <testcase classname="Vertex Provider should support vertex with system_instructions" name="Vertex Provider should support vertex with system_instructions" time="2.3">
+    </testcase>
+    <testcase classname="Vertex Provider should support vertex api key in query params" name="Vertex Provider should support vertex api key in query params" time="2.023">
+    </testcase>
+  </testsuite>
+  <testsuite name="Gemini Provider" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:16" time="7.24" tests="2">
+    <testcase classname="Gemini Provider Streaming should support streaming in Gemini" name="Gemini Provider Streaming should support streaming in Gemini" time="2.831">
+    </testcase>
+    <testcase classname="Gemini Provider system message should support system_instructions in Gemini" name="Gemini Provider system message should support system_instructions in Gemini" time="3.258">
+    </testcase>
+  </testsuite>
+  <testsuite name="Constraint Tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:15" time="9.069" tests="4">
+    <testcase classname="Constraint Tests should handle checks in return types" name="Constraint Tests should handle checks in return types" time="1.422">
+    </testcase>
+    <testcase classname="Constraint Tests should handle checks in returned unions" name="Constraint Tests should handle checks in returned unions" time="3.799">
+    </testcase>
+    <testcase classname="Constraint Tests should handle block-level checks" name="Constraint Tests should handle block-level checks" time="1.358">
+    </testcase>
+    <testcase classname="Constraint Tests should handle nested-block-level checks" name="Constraint Tests should handle nested-block-level checks" time="1.288">
+    </testcase>
+  </testsuite>
+  <testsuite name="Collector Tests" errors="0" failures="3" skipped="0" timestamp="2025-10-12T02:58:51" time="33.454" tests="11">
+    <testcase classname="Collector Tests should collect logs for non-streaming calls" name="Collector Tests should collect logs for non-streaming calls" time="1.745">
+      <failure>Error: expect(received).toBeUndefined()
+
+Received: 0
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/collector.test.ts:92:42)</failure>
+    </testcase>
+    <testcase classname="Collector Tests should include parent trace tags in FunctionLog.tags" name="Collector Tests should include parent trace tags in FunctionLog.tags" time="1.267">
+    </testcase>
+    <testcase classname="Collector Tests should handle streaming calls correctly" name="Collector Tests should handle streaming calls correctly" time="0.983">
+    </testcase>
+    <testcase classname="Collector Tests should verify LLMStreamCall properties for streaming calls" name="Collector Tests should verify LLMStreamCall properties for streaming calls" time="1.274">
+    </testcase>
+    <testcase classname="Collector Tests should track cumulative usage across multiple calls" name="Collector Tests should track cumulative usage across multiple calls" time="2.681">
+    </testcase>
+    <testcase classname="Collector Tests should support multiple collectors" name="Collector Tests should support multiple collectors" time="2.669">
+    </testcase>
+    <testcase classname="Collector Tests should handle parallel async calls correctly" name="Collector Tests should handle parallel async calls correctly" time="1.406">
+    </testcase>
+    <testcase classname="Collector Tests should handle sync calls correctly" name="Collector Tests should handle sync calls correctly" time="1.145">
+    </testcase>
+    <testcase classname="Collector Tests should handle multiple async calls with nested gathers" name="Collector Tests should handle multiple async calls with nested gathers" time="1.248">
+    </testcase>
+    <testcase classname="Collector Tests should track cached input tokens for Anthropic caching" name="Collector Tests should track cached input tokens for Anthropic caching" time="8.213">
+      <failure>Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: 0
+Received: 1
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/collector.test.ts:20:45)</failure>
+    </testcase>
+    <testcase classname="Collector Tests should pass function-specific tags and preserve parent trace tags" name="Collector Tests should pass function-specific tags and preserve parent trace tags" time="0.034">
+      <failure>Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: 0
+Received: 1
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/collector.test.ts:14:45)
+    at Promise.then.completed (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusHook (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:281:40)
+    at _runTest (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:246:5)
+    at _runTestsForDescribeBlock (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="Retry Policies" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:59:16" time="9.336" tests="3">
+    <testcase classname="Retry Policies works with retries1" name="Retry Policies works with retries1" time="2.041">
+    </testcase>
+    <testcase classname="Retry Policies works with retries2" name="Retry Policies works with retries2" time="2.971">
+    </testcase>
+    <testcase classname="Retry Policies works with fallbacks" name="Retry Policies works with fallbacks" time="3.419">
+    </testcase>
+  </testsuite>
+  <testsuite name="Provider Caching Tests" errors="0" failures="1" skipped="0" timestamp="2025-10-12T02:58:51" time="34.656" tests="6">
+    <testcase classname="Provider Caching Tests should handle OpenAI streaming with cached token tracking" name="Provider Caching Tests should handle OpenAI streaming with cached token tracking" time="1.852">
+    </testcase>
+    <testcase classname="Provider Caching Tests should aggregate cached tokens across multiple OpenAI calls" name="Provider Caching Tests should aggregate cached tokens across multiple OpenAI calls" time="2.146">
+    </testcase>
+    <testcase classname="Provider Caching Tests should verify OpenAI caching with streaming" name="Provider Caching Tests should verify OpenAI caching with streaming" time="3.765">
+    </testcase>
+    <testcase classname="Provider Caching Tests should verify Google/Vertex caching with repeated large content" name="Provider Caching Tests should verify Google/Vertex caching with repeated large content" time="12.731">
+    </testcase>
+    <testcase classname="Provider Caching Tests should handle Vertex AI streaming with cached token tracking" name="Provider Caching Tests should handle Vertex AI streaming with cached token tracking" time="3.362">
+    </testcase>
+    <testcase classname="Provider Caching Tests should verify AWS provider returns null for cached tokens" name="Provider Caching Tests should verify AWS provider returns null for cached tokens" time="0.147">
+      <failure>BamlValidationError: BamlValidationError: LLM Failure: DispatchFailure(
+    DispatchFailure {
+        source: ConnectorError {
+            kind: Other(
+                None,
+            ),
+            source: CredentialsNotLoaded(
+                CredentialsNotLoaded {
+                    source: Some(
+                        &quot;no providers in chain provided credentials&quot;,
+                    ),
+                },
+            ),
+            connection: Unknown,
+        },
+    },
+) (Unspecified error code: 2) - DispatchFailure(
+    DispatchFailure {
+        source: ConnectorError {
+            kind: Other(
+                None,
+            ),
+            source: CredentialsNotLoaded(
+                CredentialsNotLoaded {
+                    source: Some(
+                        &quot;no providers in chain provided credentials&quot;,
+                    ),
+                },
+            ),
+            connection: Unknown,
+        },
+    },
+)
+    at Function.from (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:73:28)
+    at createBamlErrorUnsafe (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:172:53)
+    at toBamlError (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:206:16)
+    at BamlAsyncClient.TestAws (/Users/greghale/code/baml/integ-tests/typescript/baml_client/async_client.ts:6479:30)
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/caching.test.ts:191:5)</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="Media Tests" errors="0" failures="2" skipped="0" timestamp="2025-10-12T02:59:08" time="25.772" tests="8">
+    <testcase classname="Media Tests should work with image from url" name="Media Tests should work with image from url" time="0.719">
+    </testcase>
+    <testcase classname="Media Tests should work with image from base 64" name="Media Tests should work with image from base 64" time="1.012">
+    </testcase>
+    <testcase classname="Media Tests should work with audio base 64" name="Media Tests should work with audio base 64" time="2.718">
+    </testcase>
+    <testcase classname="Media Tests should work with audio from url" name="Media Tests should work with audio from url" time="4.385">
+    </testcase>
+    <testcase classname="Media Tests should work with pdf from url" name="Media Tests should work with pdf from url" time="2.608">
+    </testcase>
+    <testcase classname="Media Tests should work with pdf from base 64" name="Media Tests should work with pdf from base 64" time="4.291">
+    </testcase>
+    <testcase classname="Media Tests should work with video and a youtube url for gemini" name="Media Tests should work with video and a youtube url for gemini" time="2.47">
+      <failure>BamlClientHttpError: BamlError: BamlClientError: BamlClientHttpError: Request failed with status code: 503 Service Unavailable. {&quot;error&quot;:{&quot;code&quot;:503,&quot;message&quot;:&quot;The request timed out. Please try again.&quot;,&quot;status&quot;:&quot;UNAVAILABLE&quot;}}
+    at Function.from (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:110:28)
+    at createBamlErrorUnsafe (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:168:53)
+    at toBamlError (/Users/greghale/code/baml/engine/language_client_typescript/errors.js:206:16)
+    at BamlAsyncClient.VideoInputGemini (/Users/greghale/code/baml/integ-tests/typescript/baml_client/async_client.ts:10943:30)
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/media.test.ts:52:15)</failure>
+    </testcase>
+    <testcase classname="Media Tests should work with video from base 64" name="Media Tests should work with video from base 64" time="6.135">
+      <failure>Error: expect(received).toMatch(expected)
+
+Expected pattern: /(cartoon|sky|field)/
+Received string:  &quot;dog sees meteor at sunset.&quot;
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/media.test.ts:64:31)</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="OpenAI Provider" errors="0" failures="1" skipped="0" timestamp="2025-10-12T02:59:02" time="33.308" tests="10">
+    <testcase classname="OpenAI Provider should support OpenAI shorthand" name="OpenAI Provider should support OpenAI shorthand" time="2.413">
+    </testcase>
+    <testcase classname="OpenAI Provider should support openai with default max_tokens" name="OpenAI Provider should support openai with default max_tokens" time="2.104">
+    </testcase>
+    <testcase classname="OpenAI Provider should support o1 model without max_tokens" name="OpenAI Provider should support o1 model without max_tokens" time="1.93">
+    </testcase>
+    <testcase classname="OpenAI Provider should fail when setting max_tokens for o1 model" name="OpenAI Provider should fail when setting max_tokens for o1 model" time="0.486">
+    </testcase>
+    <testcase classname="OpenAI Provider should support non-o1 model with explicit max_tokens" name="OpenAI Provider should support non-o1 model with explicit max_tokens" time="1.286">
+    </testcase>
+    <testcase classname="OpenAI Provider should support o1 model with explicit max_completion_tokens" name="OpenAI Provider should support o1 model with explicit max_completion_tokens" time="2.452">
+    </testcase>
+    <testcase classname="OpenAI Provider should support openai with null max_tokens" name="OpenAI Provider should support openai with null max_tokens" time="0.904">
+      <failure>Error: expect(received).toContain(expected) // indexOf
+
+Expected substring: &quot;donkey&quot;
+Received string:    &quot;barrels roll sharply,··
+jungle beats with vibrant force—··
+king of kong ascends.&quot;
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/providers/openai.test.ts:37:31)</failure>
+    </testcase>
+    <testcase classname="OpenAI Provider Streaming should support OpenAI shorthand streaming" name="OpenAI Provider Streaming should support OpenAI shorthand streaming" time="0.742">
+    </testcase>
+    <testcase classname="OpenAI Provider Streaming should support streaming in OpenAI" name="OpenAI Provider Streaming should support streaming in OpenAI" time="9.736">
+    </testcase>
+    <testcase classname="OpenAI Provider Streaming should support streaming without iterating" name="OpenAI Provider Streaming should support streaming without iterating" time="10.21">
+    </testcase>
+  </testsuite>
+  <testsuite name="Basic Input/Output Tests" errors="0" failures="0" skipped="0" timestamp="2025-10-12T02:58:51" time="62.448" tests="24">
+    <testcase classname="Basic Input/Output Tests Input Types single bool" name="Basic Input/Output Tests Input Types single bool" time="1.501">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Input Types single string list" name="Basic Input/Output Tests Input Types single string list" time="1.057">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Input Types single class" name="Basic Input/Output Tests Input Types single class" time="1.049">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Input Types multiple classes" name="Basic Input/Output Tests Input Types multiple classes" time="0.955">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Input Types single enum list" name="Basic Input/Output Tests Input Types single enum list" time="1.167">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Input Types single float" name="Basic Input/Output Tests Input Types single float" time="0.772">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Input Types single int" name="Basic Input/Output Tests Input Types single int" time="1.049">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single bool" name="Basic Input/Output Tests Output Types single bool" time="0.842">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single int" name="Basic Input/Output Tests Output Types single int" time="0.838">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single class" name="Basic Input/Output Tests Output Types single class" time="4.846">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single class list" name="Basic Input/Output Tests Output Types single class list" time="4.692">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types enum list" name="Basic Input/Output Tests Output Types enum list" time="0.705">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single class with enum" name="Basic Input/Output Tests Output Types single class with enum" time="1.883">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types optional list and map" name="Basic Input/Output Tests Output Types optional list and map" time="1.677">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single optional string" name="Basic Input/Output Tests Output Types single optional string" time="0.761">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single map string to string" name="Basic Input/Output Tests Output Types single map string to string" time="0.705">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single map string to map" name="Basic Input/Output Tests Output Types single map string to map" time="0.887">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types literal int" name="Basic Input/Output Tests Output Types literal int" time="0.709">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types literal bool" name="Basic Input/Output Tests Output Types literal bool" time="0.66">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types literal string" name="Basic Input/Output Tests Output Types literal string" time="1.661">
+    </testcase>
+    <testcase classname="Clients Tests should work with a sync client" name="Clients Tests should work with a sync client" time="0.833">
+    </testcase>
+    <testcase classname="Streaming Tests should support streaming without iterating" name="Streaming Tests should support streaming without iterating" time="12.624">
+    </testcase>
+    <testcase classname="Streaming Tests should work with nested classes" name="Streaming Tests should work with nested classes" time="1.755">
+    </testcase>
+    <testcase classname="Semantic Streaming Tests should support semantic streaming" name="Semantic Streaming Tests should support semantic streaming" time="8.235">
+    </testcase>
+  </testsuite>
+  <testsuite name="Modular API Tests" errors="0" failures="2" skipped="0" timestamp="2025-10-12T02:58:51" time="64.002" tests="8">
+    <testcase classname="Modular API Tests modular openai gpt4" name="Modular API Tests modular openai gpt4" time="1.282">
+    </testcase>
+    <testcase classname="Modular API Tests modular anthropic claude 3 haiku" name="Modular API Tests modular anthropic claude 3 haiku" time="1.776">
+    </testcase>
+    <testcase classname="Modular API Tests modular google gemini" name="Modular API Tests modular google gemini" time="4.862">
+    </testcase>
+    <testcase classname="Modular API Tests modular openai gpt4 manual http request" name="Modular API Tests modular openai gpt4 manual http request" time="1.185">
+    </testcase>
+    <testcase classname="Modular API Tests modular openai gpt4 streaming" name="Modular API Tests modular openai gpt4 streaming" time="1.089">
     </testcase>
     <testcase classname="Modular API Tests openai batch api" name="Modular API Tests openai batch api" time="30.003">
       <failure>Error: thrown: &quot;Exceeded timeout of 30000 ms for a test.
 Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
-    at /Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/modular.test.ts:179:3
-    at _dispatchDescribe (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/index.js:91:26)
-    at describe (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/index.js:55:5)
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/modular.test.ts:84:1)
-    at Runtime._execModule (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runtime@29.7.0/node_modules/jest-runtime/build/index.js:1439:24)
-    at Runtime._loadModule (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runtime@29.7.0/node_modules/jest-runtime/build/index.js:1022:12)
-    at Runtime.requireModule (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runtime@29.7.0/node_modules/jest-runtime/build/index.js:882:12)
-    at jestAdapter (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
+    at /Users/greghale/code/baml/integ-tests/typescript/tests/modular.test.ts:187:3
+    at _dispatchDescribe (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/index.js:91:26)
+    at describe (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/index.js:55:5)
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/modular.test.ts:92:1)
+    at Runtime._execModule (/Users/greghale/code/baml/node_modules/.pnpm/jest-runtime@29.7.0/node_modules/jest-runtime/build/index.js:1439:24)
+    at Runtime._loadModule (/Users/greghale/code/baml/node_modules/.pnpm/jest-runtime@29.7.0/node_modules/jest-runtime/build/index.js:1022:12)
+    at Runtime.requireModule (/Users/greghale/code/baml/node_modules/.pnpm/jest-runtime@29.7.0/node_modules/jest-runtime/build/index.js:882:12)
+    at jestAdapter (/Users/greghale/code/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
     at processTicksAndRejections (node:internal/process/task_queues:95:5)
-    at runTestInternal (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    at runTestInternal (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/Users/greghale/code/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
     </testcase>
-    <testcase classname="Modular API Tests modular openai responses" name="Modular API Tests modular openai responses" time="8.826">
+    <testcase classname="Modular API Tests modular openai responses" name="Modular API Tests modular openai responses" time="13.072">
     </testcase>
-  </testsuite>
-  <testsuite name="Basic Input/Output Tests" errors="0" failures="0" skipped="0" timestamp="2025-09-24T21:09:17" time="63.16" tests="24">
-    <testcase classname="Basic Input/Output Tests Input Types single bool" name="Basic Input/Output Tests Input Types single bool" time="1.207">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types single string list" name="Basic Input/Output Tests Input Types single string list" time="0.802">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types single class" name="Basic Input/Output Tests Input Types single class" time="1.391">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types multiple classes" name="Basic Input/Output Tests Input Types multiple classes" time="0.673">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types single enum list" name="Basic Input/Output Tests Input Types single enum list" time="0.746">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types single float" name="Basic Input/Output Tests Input Types single float" time="0.526">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types single int" name="Basic Input/Output Tests Input Types single int" time="0.815">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single bool" name="Basic Input/Output Tests Output Types single bool" time="0.532">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single int" name="Basic Input/Output Tests Output Types single int" time="0.687">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single class" name="Basic Input/Output Tests Output Types single class" time="5.476">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single class list" name="Basic Input/Output Tests Output Types single class list" time="7.399">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types enum list" name="Basic Input/Output Tests Output Types enum list" time="1.023">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single class with enum" name="Basic Input/Output Tests Output Types single class with enum" time="1.05">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types optional list and map" name="Basic Input/Output Tests Output Types optional list and map" time="1.54">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single optional string" name="Basic Input/Output Tests Output Types single optional string" time="0.419">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single map string to string" name="Basic Input/Output Tests Output Types single map string to string" time="0.746">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single map string to map" name="Basic Input/Output Tests Output Types single map string to map" time="0.753">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types literal int" name="Basic Input/Output Tests Output Types literal int" time="0.893">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types literal bool" name="Basic Input/Output Tests Output Types literal bool" time="0.606">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types literal string" name="Basic Input/Output Tests Output Types literal string" time="0.659">
-    </testcase>
-    <testcase classname="Clients Tests should work with a sync client" name="Clients Tests should work with a sync client" time="0.613">
-    </testcase>
-    <testcase classname="Streaming Tests should support streaming without iterating" name="Streaming Tests should support streaming without iterating" time="13.738">
-    </testcase>
-    <testcase classname="Streaming Tests should work with nested classes" name="Streaming Tests should work with nested classes" time="1.828">
-    </testcase>
-    <testcase classname="Semantic Streaming Tests should support semantic streaming" name="Semantic Streaming Tests should support semantic streaming" time="7.076">
-    </testcase>
-  </testsuite>
-  <testsuite name="OpenAI Provider" errors="0" failures="1" skipped="0" timestamp="2025-09-24T21:09:17" time="74.78" tests="10">
-    <testcase classname="OpenAI Provider should support OpenAI shorthand" name="OpenAI Provider should support OpenAI shorthand" time="1.601">
-    </testcase>
-    <testcase classname="OpenAI Provider should support openai with default max_tokens" name="OpenAI Provider should support openai with default max_tokens" time="30.006">
-      <failure>Error: thrown: &quot;Exceeded timeout of 30000 ms for a test.
-Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
-    at /Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/providers/openai.test.ts:9:3
-    at _dispatchDescribe (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/index.js:91:26)
-    at describe (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/index.js:55:5)
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/providers/openai.test.ts:3:1)
-    at Runtime._execModule (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runtime@29.7.0/node_modules/jest-runtime/build/index.js:1439:24)
-    at Runtime._loadModule (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runtime@29.7.0/node_modules/jest-runtime/build/index.js:1022:12)
-    at Runtime.requireModule (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runtime@29.7.0/node_modules/jest-runtime/build/index.js:882:12)
-    at jestAdapter (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
-    at processTicksAndRejections (node:internal/process/task_queues:95:5)
-    at runTestInternal (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/aaronvillalpando/Projects/baml/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
-    </testcase>
-    <testcase classname="OpenAI Provider should support o1 model without max_tokens" name="OpenAI Provider should support o1 model without max_tokens" time="2.29">
-    </testcase>
-    <testcase classname="OpenAI Provider should fail when setting max_tokens for o1 model" name="OpenAI Provider should fail when setting max_tokens for o1 model" time="0.362">
-    </testcase>
-    <testcase classname="OpenAI Provider should support non-o1 model with explicit max_tokens" name="OpenAI Provider should support non-o1 model with explicit max_tokens" time="1.376">
-    </testcase>
-    <testcase classname="OpenAI Provider should support o1 model with explicit max_completion_tokens" name="OpenAI Provider should support o1 model with explicit max_completion_tokens" time="1.885">
-    </testcase>
-    <testcase classname="OpenAI Provider should support openai with null max_tokens" name="OpenAI Provider should support openai with null max_tokens" time="1.078">
-    </testcase>
-    <testcase classname="OpenAI Provider Streaming should support OpenAI shorthand streaming" name="OpenAI Provider Streaming should support OpenAI shorthand streaming" time="0.961">
-    </testcase>
-    <testcase classname="OpenAI Provider Streaming should support streaming in OpenAI" name="OpenAI Provider Streaming should support streaming in OpenAI" time="13.82">
-    </testcase>
-    <testcase classname="OpenAI Provider Streaming should support streaming without iterating" name="OpenAI Provider Streaming should support streaming without iterating" time="9.166">
+    <testcase classname="Modular API Tests modular aws bedrock custom cache point" name="Modular API Tests modular aws bedrock custom cache point" time="0.01">
+      <failure>CredentialsProviderError: Unable to find environment variable credentials.
+    at SignatureV4.credentialProvider (/Users/greghale/code/baml/node_modules/.pnpm/@aws-sdk+credential-provider-env@3.826.0/node_modules/@aws-sdk/credential-provider-env/dist-cjs/index.js:63:9)
+    at SignatureV4.signRequest (/Users/greghale/code/baml/node_modules/.pnpm/@smithy+signature-v4@5.2.1/node_modules/@smithy/signature-v4/dist-cjs/index.js:592:36)
+    at SignatureV4.sign (/Users/greghale/code/baml/node_modules/.pnpm/@smithy+signature-v4@5.2.1/node_modules/@smithy/signature-v4/dist-cjs/index.js:538:19)
+    at Object.&lt;anonymous&gt; (/Users/greghale/code/baml/integ-tests/typescript/tests/modular.test.ts:347:33)</failure>
     </testcase>
   </testsuite>
 </testsuites>

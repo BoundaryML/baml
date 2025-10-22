@@ -29,6 +29,7 @@ function ArrayAccess() -> int {
 //
 //   arr[1]
 // }
+<<<<<<< HEAD
 //
 // class baml.HttpRequest {
 //   url: string
@@ -45,3 +46,13 @@ function ArrayAccess() -> int {
 //   Delete
 //   Patch
 // }
+=======
+>>>>>>> canary
+
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  test.baml:32
+//    | 
+// 31 | // }
+// 32 | <<<<<<< HEAD
+// 33 | //
+//    | 

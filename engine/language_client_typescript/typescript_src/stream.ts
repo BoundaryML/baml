@@ -17,7 +17,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
     private partialCoerce: (result: any) => PartialOutputType,
     private finalCoerce: (result: any) => FinalOutputType,
     private ctxManager: RuntimeContextManager,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
   ) {
     this.abortSignal = abortSignal;
 
@@ -35,7 +35,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
       if (this.abortSignal?.aborted) {
         throw new BamlAbortError(
           "Operation was aborted",
-          this.abortSignal.reason
+          this.abortSignal.reason,
         );
       }
 
@@ -47,7 +47,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
           }
 
           this.eventQueue.push(data);
-        }
+        },
       );
 
       const retval = await this.ffiStream.done(this.ctxManager);
@@ -104,6 +104,14 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
 
       if (event.isOk()) {
         yield this.partialCoerce(event.parsed(true));
+      } else {
+        // Event contains an error (e.g., timeout, LLM failure)
+        // Try to parse it to get the proper error, which will throw
+        try {
+          event.parsed(true);
+        } catch (error) {
+          throw toBamlError(error);
+        }
       }
     }
   }
@@ -141,10 +149,10 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
             return;
           } catch (err: unknown) {
             const bamlError = toBamlError(
-              err instanceof Error ? err : new Error(String(err))
+              err instanceof Error ? err : new Error(String(err)),
             );
             controller.enqueue(
-              encoder.encode(JSON.stringify({ error: bamlError }))
+              encoder.encode(JSON.stringify({ error: bamlError })),
             );
             controller.close();
             return;
@@ -161,7 +169,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
           };
 
           controller.enqueue(
-            encoder.encode(JSON.stringify({ error: errorPayload }))
+            encoder.encode(JSON.stringify({ error: errorPayload })),
           );
           controller.close();
         }

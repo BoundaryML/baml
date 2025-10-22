@@ -37,6 +37,13 @@ function TestAwsInvalidRegion(input: string) -> string {
   "#
 }
 
+function TestAwsInvalidEndpoint(input: string) -> string {
+  client AwsBedrockInvalidEndpoint
+  prompt #"
+    Write a nice short story about {{ input }}. Keep it to 15 words or less.
+  "#
+}
+
 function TestAwsInvalidAccessKey(input: string) -> string {
   client AwsBedrockInvalidAccessKey
   prompt #"

@@ -207,6 +207,9 @@ pub enum Instruction {
     /// control flow to the embedder and doesn't care about anything else.
     Await,
 
+    /// Creates a watched var and tracks its state.
+    Watch,
+
     /// Call a function.
     ///
     /// Format: `CALL n` where `n` is the number of arguments passed to the
@@ -331,6 +334,7 @@ impl std::fmt::Display for Instruction {
             Instruction::Return => f.write_str("RETURN"),
             Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
+            Instruction::Watch => f.write_str("WATCH"),
         }
     }
 }

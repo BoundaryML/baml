@@ -288,6 +288,27 @@ export const BuildTree = async (
 };
 
 /**
+ * Executes the "CheckWordEquality" BAML action.
+ *
+ * This server action calls the underlying BAML function "CheckWordEquality"
+ * with the specified parameters.
+ *
+ * @param { string } word - Input parameter.
+ * @param { string } target - Input parameter.
+ *
+ * @returns {Promise<boolean>} A promise that resolves with the result of the action.
+ */
+export const CheckWordEquality = async (
+  word: string,
+  target: string,
+): Promise<boolean> => {
+  return b.CheckWordEquality(
+    word,
+    target,
+  );
+};
+
+/**
  * Executes the "ChooseTodoTools" BAML action.
  *
  * This server action calls the underlying BAML function "ChooseTodoTools"
@@ -2499,6 +2520,24 @@ export const TestAwsInvalidAccessKey = async (
 };
 
 /**
+ * Executes the "TestAwsInvalidEndpoint" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestAwsInvalidEndpoint"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestAwsInvalidEndpoint = async (
+  input: string,
+): Promise<string> => {
+  return b.TestAwsInvalidEndpoint(
+    input,
+  );
+};
+
+/**
  * Executes the "TestAwsInvalidProfile" BAML action.
  *
  * This server action calls the underlying BAML function "TestAwsInvalidProfile"
@@ -3795,6 +3834,24 @@ export const TestOpenaiResponsesPdfs = async (
 };
 
 /**
+ * Executes the "TestRequestTimeout" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestRequestTimeout"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestRequestTimeout = async (
+  input: string,
+): Promise<string> => {
+  return b.TestRequestTimeout(
+    input,
+  );
+};
+
+/**
  * Executes the "TestRetryConstant" BAML action.
  *
  * This server action calls the underlying BAML function "TestRetryConstant"
@@ -3858,6 +3915,24 @@ export const TestSingleFallbackClient = async (
 };
 
 /**
+ * Executes the "TestStreamingTimeout" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestStreamingTimeout"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestStreamingTimeout = async (
+  input: string,
+): Promise<string> => {
+  return b.TestStreamingTimeout(
+    input,
+  );
+};
+
+/**
  * Executes the "TestThinking" BAML action.
  *
  * This server action calls the underlying BAML function "TestThinking"
@@ -3871,6 +3946,42 @@ export const TestThinking = async (
   input: string,
 ): Promise<types.CustomStory> => {
   return b.TestThinking(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestTimeoutError" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestTimeoutError"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestTimeoutError = async (
+  input: string,
+): Promise<string> => {
+  return b.TestTimeoutError(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestTimeoutFallback" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestTimeoutFallback"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestTimeoutFallback = async (
+  input: string,
+): Promise<string> => {
+  return b.TestTimeoutFallback(
     input,
   );
 };
@@ -3941,6 +4052,24 @@ export const TestVertexClaude = async (
 export const TestVertexWithSystemInstructions = async (
 ): Promise<string> => {
   return b.TestVertexWithSystemInstructions(
+  );
+};
+
+/**
+ * Executes the "TestZeroTimeout" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestZeroTimeout"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestZeroTimeout = async (
+  input: string,
+): Promise<string> => {
+  return b.TestZeroTimeout(
+    input,
   );
 };
 
@@ -4103,6 +4232,24 @@ export const VideoInputVertex = async (
 ): Promise<string> => {
   return b.VideoInputVertex(
     vid,
+  );
+};
+
+/**
+ * Executes the "AnotherTakedown" BAML action.
+ *
+ * This server action calls the underlying BAML function "AnotherTakedown"
+ * with the specified parameters.
+ *
+ * @param { string[] } xs - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const AnotherTakedown = async (
+  xs: string[],
+): Promise<number> => {
+  return b.AnotherTakedown(
+    xs,
   );
 };
 
@@ -4290,6 +4437,42 @@ export const HomeEnvVarIsEmpty = async (
 };
 
 /**
+ * Executes the "IsTargetWord" BAML action.
+ *
+ * This server action calls the underlying BAML function "IsTargetWord"
+ * with the specified parameters.
+ *
+ * @param { string } word - Input parameter.
+ *
+ * @returns {Promise<boolean>} A promise that resolves with the result of the action.
+ */
+export const IsTargetWord = async (
+  word: string,
+): Promise<boolean> => {
+  return b.IsTargetWord(
+    word,
+  );
+};
+
+/**
+ * Executes the "IsTargetWord2" BAML action.
+ *
+ * This server action calls the underlying BAML function "IsTargetWord2"
+ * with the specified parameters.
+ *
+ * @param { string } word - Input parameter.
+ *
+ * @returns {Promise<boolean>} A promise that resolves with the result of the action.
+ */
+export const IsTargetWord2 = async (
+  word: string,
+): Promise<boolean> => {
+  return b.IsTargetWord2(
+    word,
+  );
+};
+
+/**
  * Executes the "IterativeFibonacci" BAML action.
  *
  * This server action calls the underlying BAML function "IterativeFibonacci"
@@ -4325,6 +4508,24 @@ export const NormalElseIfStmt = async (
   return b.NormalElseIfStmt(
     a,
     b,
+  );
+};
+
+/**
+ * Executes the "NotEmpty" BAML action.
+ *
+ * This server action calls the underlying BAML function "NotEmpty"
+ * with the specified parameters.
+ *
+ * @param { string } value - Input parameter.
+ *
+ * @returns {Promise<boolean>} A promise that resolves with the result of the action.
+ */
+export const NotEmpty = async (
+  value: string,
+): Promise<boolean> => {
+  return b.NotEmpty(
+    value,
   );
 };
 
@@ -4437,6 +4638,21 @@ export const ReturnOne = async (
 };
 
 /**
+ * Executes the "SimpleWatchWithFilter" BAML action.
+ *
+ * This server action calls the underlying BAML function "SimpleWatchWithFilter"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const SimpleWatchWithFilter = async (
+): Promise<number> => {
+  return b.SimpleWatchWithFilter(
+  );
+};
+
+/**
  * Executes the "StoreFnCallInLocalVar" BAML action.
  *
  * This server action calls the underlying BAML function "StoreFnCallInLocalVar"
@@ -4508,5 +4724,50 @@ export const SumFromTo = async (
   return b.SumFromTo(
     x,
     y,
+  );
+};
+
+/**
+ * Executes the "WorkflowWatch" BAML action.
+ *
+ * This server action calls the underlying BAML function "WorkflowWatch"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const WorkflowWatch = async (
+): Promise<number> => {
+  return b.WorkflowWatch(
+  );
+};
+
+/**
+ * Executes the "WorkflowWatchChild" BAML action.
+ *
+ * This server action calls the underlying BAML function "WorkflowWatchChild"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const WorkflowWatchChild = async (
+): Promise<number> => {
+  return b.WorkflowWatchChild(
+  );
+};
+
+/**
+ * Executes the "WorkflowWatchWithFilter" BAML action.
+ *
+ * This server action calls the underlying BAML function "WorkflowWatchWithFilter"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const WorkflowWatchWithFilter = async (
+): Promise<number> => {
+  return b.WorkflowWatchWithFilter(
   );
 };

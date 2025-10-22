@@ -60,6 +60,7 @@ function AnalyzeSentiment(text: string) -> Sentiment {
 //   prompt "Analyze the sentiment of this text: {{ text }}\n\nRespond with exactly one of: POSITIVE, NEGATIVE, NEUTRAL"
 // }
 //
+<<<<<<< HEAD
 // class baml.HttpRequest {
 //   url: string
 //   method: baml.HttpMethod
@@ -76,8 +77,13 @@ function AnalyzeSentiment(text: string) -> Sentiment {
 //   Patch
 // }
 //
-// enum Sentiment {
-//   POSITIVE
-//   NEGATIVE
-//   NEUTRAL
-// }
+=======
+>>>>>>> canary
+
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  test.baml:63
+//    | 
+// 62 | //
+// 63 | <<<<<<< HEAD
+// 64 | // class baml.HttpRequest {
+//    | 

@@ -18,6 +18,7 @@ function TestClass() -> int {
 //   example.a
 // }
 //
+<<<<<<< HEAD
 // class baml.HttpRequest {
 //   url: string
 //   method: baml.HttpMethod
@@ -26,10 +27,13 @@ function TestClass() -> int {
 //   json: (ANY | null)
 // }
 //
+=======
+>>>>>>> canary
 // class Example {
 //   a: int
 //   b: string
 // }
+<<<<<<< HEAD
 //
 // enum baml.HttpMethod {
 //   Get
@@ -38,3 +42,13 @@ function TestClass() -> int {
 //   Delete
 //   Patch
 // }
+=======
+>>>>>>> canary
+
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  test.baml:21
+//    | 
+// 20 | //
+// 21 | <<<<<<< HEAD
+// 22 | // class baml.HttpRequest {
+//    | 

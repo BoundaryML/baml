@@ -75,17 +75,14 @@ mod internal_tests {
         )?;
         log::info!("Runtime:");
 
-        let missing_env_vars = runtime.internal().ir().required_env_vars();
+        let missing_env_vars = runtime.ir.required_env_vars();
 
         let ctx_manager = runtime.create_ctx_manager(BamlValue::String("test".to_string()), None);
         let ctx = ctx_manager.create_ctx_with_default();
 
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
 
-        let render_prompt_future =
-            runtime
-                .internal()
-                .render_prompt(function_name, &ctx, &params, Some(0));
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, Some(0));
 
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
@@ -98,8 +95,8 @@ mod internal_tests {
             None,
             None,
             Some(collectors),
-            None,
             HashMap::new(),
+            None,
             TripWire::new(None),
         );
 

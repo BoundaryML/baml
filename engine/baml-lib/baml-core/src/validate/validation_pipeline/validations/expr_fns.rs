@@ -18,7 +18,7 @@ use crate::{
 
 /// Builtin functions.
 ///
-/// TODO: Define this somewhere else like their own std.baml file or something,
+/// TODO: Define this somewhere else like their own baml.baml file or something,
 /// but we don't have modules yet.
 fn baml_prelude() -> HashSet<String> {
     let builtin_functions = [ir::builtin::functions::FETCH_VALUE];
@@ -257,6 +257,8 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
         Stmt::Return(ReturnStmt { value, .. }) | Stmt::Assert(AssertStmt { value, .. }) => {
             validate_expression(ctx, value, scope);
         }
+        Stmt::WatchNotify(_) => {}
+        Stmt::WatchOptions(_) => {}
     }
 }
 

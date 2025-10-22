@@ -8,15 +8,15 @@ use super::repr::{Class, Enum, EnumValue, ExprFunction, Field, Node, NodeAttribu
 use crate::{ir::repr::IntermediateRepr, Configuration};
 
 pub mod functions {
-    pub const FETCH_VALUE: &str = "std::fetch_value";
+    pub const FETCH_VALUE: &str = "baml.fetch_value";
 }
 
 pub mod classes {
-    pub const REQUEST: &str = "std::Request";
+    pub const REQUEST: &str = "baml.Request";
 }
 
 pub mod enums {
-    pub const HTTP_METHOD: &str = "std::HttpMethod";
+    pub const HTTP_METHOD: &str = "baml.HttpMethod";
 }
 
 /// Builtins are exposed through a separate IR, which can be combined with

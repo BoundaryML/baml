@@ -16,6 +16,7 @@ function Sum(xs: int[]) -> int {
 //
 //   result
 // }
+<<<<<<< HEAD
 //
 // class baml.HttpRequest {
 //   url: string
@@ -32,3 +33,13 @@ function Sum(xs: int[]) -> int {
 //   Delete
 //   Patch
 // }
+=======
+>>>>>>> canary
+
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  test.baml:19
+//    | 
+// 18 | // }
+// 19 | <<<<<<< HEAD
+// 20 | //
+//    | 

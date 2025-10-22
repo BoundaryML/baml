@@ -357,8 +357,8 @@ Streaming is available via http://localhost:{port}/stream/{{FunctionName}}, but 
                 None,
                 client_registry.as_ref(),
                 None,
-                None, // tags
                 env_vars,
+                None, // tags
                 TripWire::new(None),
             )
             .await;
@@ -461,8 +461,8 @@ Streaming is available via http://localhost:{port}/stream/{{FunctionName}}, but 
                 client_registry.as_ref(),
                 Some(vec![]),
                 env_vars,
-                None, // tags
                 TripWire::new(None),
+                None, // tags
             );
 
             match result_stream {
@@ -640,7 +640,7 @@ Streaming is available via http://localhost:{port}/stream/{{FunctionName}}, but 
         .map_err(|_| BamlError::InternalError {
             message: "Failed to make placeholder generator".to_string(),
         })?;
-        let schema: OpenApiSchema = OpenApiSchema::from_ir(locked.inner.ir.as_ref());
+        let schema: OpenApiSchema = OpenApiSchema::from_ir(locked.ir.as_ref());
         serde_json::to_string(&schema).map_err(|e| {
             log::warn!("Failed to serialize openapi schema: {e}");
             BamlError::InternalError {

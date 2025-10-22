@@ -1,5 +1,5 @@
-# Top Container
+//# Top Container
 function TopLevelNotFlattened() -> string {
-    ## Only Child
+    //## Only Child
     "done"
 }

@@ -24,12 +24,23 @@ pub enum ExposedError {
         status_code: ErrorCode,
         detailed_message: String,
     },
+    TimeoutError {
+        client_name: String,
+        message: String,
+    },
     AbortError {
         detailed_message: String,
     },
 }
 
 impl ExposedError {
+    pub fn timeout_error(client_name: impl Into<String>, message: impl Into<String>) -> Self {
+        ExposedError::TimeoutError {
+            client_name: client_name.into(),
+            message: message.into(),
+        }
+    }
+
     pub fn to_anyhow_with_details(&self) -> anyhow::Error {
         let detailed_message = match self {
             ExposedError::ValidationError {
@@ -41,6 +52,7 @@ impl ExposedError {
             ExposedError::ClientHttpError {
                 detailed_message, ..
             } => detailed_message,
+            ExposedError::TimeoutError { message, .. } => message,
             ExposedError::AbortError {
                 detailed_message, ..
             } => detailed_message,
@@ -92,6 +104,12 @@ impl std::fmt::Display for ExposedError {
                         f,
                         "LLM client \"{client_name}\" failed with status code: {status_code}\nMessage: {message}"
                     )
+            }
+            ExposedError::TimeoutError {
+                client_name,
+                message,
+            } => {
+                write!(f, "LLM client \"{client_name}\" timed out: {message}")
             }
             ExposedError::AbortError {
                 detailed_message: _,
@@ -150,6 +168,13 @@ impl IntoBamlError for &anyhow::Error {
                 } => baml_types::tracing::events::BamlError::ClientHttp {
                     message: Cow::Owned(message.clone()),
                     status_code: status_code.to_u16() as i32,
+                },
+                ExposedError::TimeoutError {
+                    client_name: _,
+                    message,
+                } => baml_types::tracing::events::BamlError::ClientHttp {
+                    message: Cow::Owned(message.clone()),
+                    status_code: 408, // HTTP 408 Request Timeout
                 },
                 ExposedError::AbortError {
                     detailed_message: _,

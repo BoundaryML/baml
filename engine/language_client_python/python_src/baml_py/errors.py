@@ -8,6 +8,7 @@ from .internal_monkeypatch import (
     BamlValidationError,
     BamlClientHttpError,
     BamlClientFinishReasonError,
+    BamlTimeoutError,
 )
 
 
@@ -19,4 +20,5 @@ __all__ = [
     "BamlInvalidArgumentError",
     "BamlValidationError",
     "BamlClientFinishReasonError",
+    "BamlTimeoutError",
 ]

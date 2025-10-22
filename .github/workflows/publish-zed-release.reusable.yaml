@@ -1,0 +1,103 @@
+name: Publish Zed Release
+
+on:
+  workflow_call: {}
+
+permissions: {}
+
+jobs:
+  publish-zed-release:
+    environment: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout upstream zed extensions
+        uses: actions/checkout@v5
+        with:
+          repository: zed-industries/extensions
+          ref: main
+          token: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+          run_install: true
+
+      - name: Prepare branch from upstream
+        env:
+          # NB(sam): we can't use a fine-grained access token here
+          # fine-grained access tokens only have permissions on a single org,
+          # but the authz check for opening a PR is done against the base of the PR
+          GH_TOKEN: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
+        run: |
+          set -euxo pipefail
+
+          curl -sSf \
+          -H "Authorization: Bearer $GH_TOKEN" \
+          -H "Accept: application/vnd.github+json" \
+          https://api.github.com/repos/BoundaryML/zed-extensions \
+          | jq '.permissions'
+
+          # add fork remote
+          git remote rename origin upstream
+          git remote add boundaryml-fork "https://github.com/BoundaryML/zed-extensions"
+          git fetch upstream main
+          git fetch boundaryml-fork main
+          git push boundaryml-fork upstream/main
+
+          # Update baml submodule
+          git submodule update --init --recursive extensions/baml
+          git -C extensions/baml fetch origin main
+          git -C extensions/baml reset --hard origin/main
+          git -C extensions/baml submodule update --init --recursive
+          git add extensions/baml
+
+          # sync baml extension version
+          pnpm exec node <<EOF
+          const fs = require("fs");
+          // @iarna/toml is available because zed-extensions uses it to sort the extensions.toml file
+          const TOML = require("@iarna/toml");
+
+          const extensionTomlPath = "extensions/baml/extension.toml";
+          const configPath = "extensions.toml";
+
+          const bamlExtension = TOML.parse(fs.readFileSync(extensionTomlPath, "utf8"));
+          const zedConfig = TOML.parse(fs.readFileSync(configPath, "utf8"));
+
+          zedConfig["baml"]["version"] = bamlExtension["version"];
+
+          fs.writeFileSync(configPath, TOML.stringify(zedConfig));
+          EOF
+          export BAML_EXTENSION_VERSION=$(pnpm exec node <<EOF
+            const fs = require('fs');
+            const TOML = require('@iarna/toml');
+            const data = fs.readFileSync('extensions/baml/extension.toml', 'utf8');
+            console.log(TOML.parse(data).version);
+          EOF
+          )
+          git add extensions.toml
+
+          # set up branch for PR
+          export BRANCH_NAME="update-baml-to-${BAML_EXTENSION_VERSION}"
+          git checkout -b "${BRANCH_NAME}"
+
+          # commit changes
+          # Zed requires that the commit author is someone who has signed the Zed CLA,
+          # so we can't use a bot name/email here.
+          git config user.name "Sam Lijin"
+          git config user.email "sam@boundaryml.com"
+          git commit -m "Update baml extension to ${BAML_EXTENSION_VERSION}"
+          git push boundaryml-fork "${BRANCH_NAME}"
+
+          # open the PR
+          gh pr create \
+            --repo "zed-industries/extensions" \
+            --base "main" \
+            --head "BoundaryML:$BRANCH_NAME" \
+            --title "Update baml extension to ${BAML_EXTENSION_VERSION}" \
+            --body "$(cat <<EOF
+          Automated sync of [engine/zed] ([workflow logs]).
+
+          [engine/zed]: https://github.com/BoundaryML/baml/tree/canary/engine/zed
+          [workflow logs]: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/
+          EOF
+          )"

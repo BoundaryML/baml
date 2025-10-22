@@ -84,6 +84,7 @@ function Len() -> int {
 //
 //   map.length()
 // }
+<<<<<<< HEAD
 //
 // class baml.HttpRequest {
 //   url: string
@@ -100,3 +101,13 @@ function Len() -> int {
 //   Delete
 //   Patch
 // }
+=======
+>>>>>>> canary
+
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  test.baml:87
+//    | 
+// 86 | // }
+// 87 | <<<<<<< HEAD
+// 88 | //
+//    | 

@@ -272,7 +272,7 @@ impl ReplState {
         }
         let mut names = Vec::new();
         if let Some(runtime) = &self.runtime {
-            let internal = &runtime.inner;
+            let internal = &runtime;
             for function in internal.db.walk_functions() {
                 names.push(function.name().to_string());
             }
@@ -285,7 +285,7 @@ impl ReplState {
     fn function_parameters(&self) -> Result<HashMap<String, Vec<String>>> {
         let hir = match self.runtime.as_ref() {
             Some(runtime) => {
-                let internal = &runtime.inner;
+                let internal = &runtime;
                 Hir::from_ast(&internal.db.ast)
             }
             None => Hir::empty(),
@@ -311,7 +311,7 @@ impl ReplState {
             .as_ref()
             .ok_or_else(|| anyhow!("No BAML sources loaded. Use :load <path> to load sources."))?;
 
-        let internal = &runtime.inner;
+        let internal = &runtime;
 
         // Convert AST to HIR
         let hir = Hir::from_ast(&internal.db.ast);
@@ -435,20 +435,38 @@ impl ReplState {
             let expr_str = expr_str.trim();
 
             // Parse and evaluate the BAML expression
-            let value = self
+            let (value, watch_notifications) = self
                 .parse_and_evaluate_baml_expression_with_status(expr_str, status_tx)
                 .await?;
             self.variables.insert(var_name.clone(), value.clone());
-            Ok(format!("✓ {} = {}", var_name, self.format_value(&value)))
+
+            let mut output = String::new();
+            if !watch_notifications.is_empty() {
+                for event in &watch_notifications {
+                    output.push_str(event);
+                    output.push('\n');
+                }
+            }
+            output.push_str(&format!("✓ {} = {}", var_name, self.format_value(&value)));
+            Ok(output)
         } else if let Some(value) = self.variables.get(input.trim()) {
             // Return variable value
             Ok(self.format_value(value).to_string())
         } else {
             // Try to parse as a BAML expression
-            let value = self
+            let (value, watch_notifications) = self
                 .parse_and_evaluate_baml_expression_with_status(input, status_tx)
                 .await?;
-            Ok(self.format_value(&value))
+
+            let mut output = String::new();
+            if !watch_notifications.is_empty() {
+                for event in &watch_notifications {
+                    output.push_str(event);
+                    output.push('\n');
+                }
+            }
+            output.push_str(&self.format_value(&value));
+            Ok(output)
         }
     }
 
@@ -456,11 +474,11 @@ impl ReplState {
         &self,
         input: &str,
         status_tx: Option<std::sync::mpsc::Sender<LlmStatusEvent>>,
-    ) -> Result<BamlValueWithMeta<ExprMetadata>> {
+    ) -> Result<(BamlValueWithMeta<ExprMetadata>, Vec<String>)> {
         let hir = match self.runtime.as_ref() {
             Some(runtime) => {
                 // Get the internal runtime to access the existing context
-                let internal = &runtime.inner;
+                let internal = &runtime;
 
                 // Convert AST to HIR from existing loaded sources
                 Hir::from_ast(&internal.db.ast)
@@ -483,6 +501,16 @@ impl ReplState {
         let input_expr_thir =
             typecheck_expression(&input_expr_hir, &type_context, &mut type_diagnostics);
 
+        // Check for type errors in the user's expression
+        if type_diagnostics.has_errors() {
+            let error_messages: Vec<String> = type_diagnostics
+                .errors()
+                .iter()
+                .map(|e| e.message().to_string())
+                .collect();
+            return Err(anyhow!("Type error: {}", error_messages.join("; ")));
+        }
+
         // let variables: IndexMap<String, BamlValueWithMeta<TypeGeneric<TypeIR>>> = self
 
         let variables: IndexMap<String, BamlValueWithMeta<ExprMetadata>> = self
@@ -496,7 +524,11 @@ impl ReplState {
         let runtime_clone = self.runtime.clone();
         let env_vars = self.env_vars.clone();
         let run_id = self.current_run_id.unwrap_or(0);
-        let handle_llm_function = move |function_name: String, args: Vec<BamlValue>| {
+        let handle_llm_function = move |function_name: String,
+                                        args: Vec<BamlValue>,
+                                        _watch_context: Option<
+            baml_compiler::thir::interpret::WatchStreamContext,
+        >| {
             let fn_params = fn_params.clone();
             let runtime_clone = runtime_clone.clone();
             let env_vars = env_vars.clone();
@@ -527,8 +559,8 @@ impl ReplState {
                                 None,
                                 None,
                                 None,
-                                None, // tags
                                 env_vars,
+                                None, // tags
                                 TripWire::new_with_on_drop(
                                     None,
                                     Box::new(move || {
@@ -540,7 +572,7 @@ impl ReplState {
                             )
                             .await;
                         let function_result = res.0?;
-                        // Emit final usage if available
+                        // Notify final usage if available
                         if let Some(tx) = &status_tx {
                             use crate::LLMResponse;
                             if let LLMResponse::Success(resp) = function_result.llm_response() {
@@ -570,22 +602,35 @@ impl ReplState {
                 }
             }
         };
+        // REPL watch handler: collect notifications
+        let watch_notifications = Arc::new(Mutex::new(Vec::new()));
+        let watch_notifications_clone = watch_notifications.clone();
+        let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
+            watch_notifications_clone
+                .lock()
+                .unwrap()
+                .push(format!("{notification}"));
+        };
+
         let eval_result = interpret_thir(
+            "repl".to_string(),
             thir.clone(),
             input_expr_thir,
             handle_llm_function,
+            watch_handler,
             variables,
             self.env_vars.clone(),
         )
         .await?;
 
-        Ok(eval_result)
+        let notifications = watch_notifications.lock().unwrap().clone();
+        Ok((eval_result, notifications))
     }
 
     async fn parse_and_evaluate_baml_expression(
         &self,
         input: &str,
-    ) -> Result<BamlValueWithMeta<ExprMetadata>> {
+    ) -> Result<(BamlValueWithMeta<ExprMetadata>, Vec<String>)> {
         self.parse_and_evaluate_baml_expression_with_status(input, None)
             .await
     }
@@ -596,7 +641,7 @@ impl ReplState {
         let hir = match self.runtime.as_ref() {
             Some(runtime) => {
                 // Get the internal runtime to access the existing context
-                let internal = &runtime.inner;
+                let internal = &runtime;
 
                 // Convert AST to HIR from existing loaded sources
                 Hir::from_ast(&internal.db.ast)
@@ -679,7 +724,7 @@ impl ReplState {
 
         // Add functions and declarations from THIR if available
         if let Some(runtime) = &self.runtime {
-            let internal = &runtime.inner;
+            let internal = &runtime;
 
             // Add function names
             for function in internal.db.walk_functions() {

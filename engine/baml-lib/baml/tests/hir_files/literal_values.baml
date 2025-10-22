@@ -38,6 +38,7 @@ function ReturnArray() -> int[] {
 // function ReturnArray() {
 //   [1, 2, 3, 4, 5]
 // }
+<<<<<<< HEAD
 //
 // class baml.HttpRequest {
 //   url: string
@@ -54,3 +55,13 @@ function ReturnArray() -> int[] {
 //   Delete
 //   Patch
 // }
+=======
+>>>>>>> canary
+
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  test.baml:41
+//    | 
+// 40 | // }
+// 41 | <<<<<<< HEAD
+// 42 | //
+//    | 

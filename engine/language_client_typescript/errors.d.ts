@@ -30,7 +30,11 @@ export declare class BamlAbortError extends Error {
     toJSON(): string;
     static from(error: Error): BamlAbortError | undefined;
 }
-export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientFinishReasonError | BamlAbortError;
+export declare class BamlTimeoutError extends BamlClientHttpError {
+    constructor(client_name: string, message: string);
+    static from(error: Error): BamlTimeoutError | undefined;
+}
+export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientFinishReasonError | BamlAbortError | BamlTimeoutError;
 export declare function isBamlError(error: unknown): error is BamlErrors;
 export declare function toBamlError(error: unknown): BamlErrors | Error;
 //# sourceMappingURL=errors.d.ts.map

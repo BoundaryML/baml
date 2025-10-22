@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   FlaskConical,
   Play,
+  Square,
   XCircle,
 } from 'lucide-react';
 import type * as React from 'react';
@@ -46,7 +47,7 @@ export function TestItem({
 }: TestItemProps) {
   const testHistory = useAtomValue(testHistoryAtom);
   const selectedIndex = useAtomValue(selectedHistoryIndexAtom);
-  const { runTests: runBamlTests } = useRunBamlTests();
+  const { runTests: runBamlTests, cancelTests } = useRunBamlTests();
   const setSelectedItem = useSetAtom(selectedItemAtom);
 
   const testAtom = useMemo(
@@ -59,6 +60,9 @@ export function TestItem({
   const testResult = currentRun?.tests.find(
     (t) => t.functionName === functionName && t.testName === label,
   );
+
+  // Only show stop button if THIS specific test is running
+  const isThisTestRunning = testResult?.response.status === 'running';
 
   const getStatusIcon = () => {
     if (!testResult) return <FlaskConical className="size-4" />;
@@ -83,7 +87,11 @@ export function TestItem({
 
   const handleRunTest = (e: React.MouseEvent) => {
     e.stopPropagation();
-    runBamlTests([{ functionName, testName: label }]);
+    if (isThisTestRunning) {
+      cancelTests();
+    } else {
+      runBamlTests([{ functionName, testName: label }]);
+    }
   };
 
   return (
@@ -115,7 +123,7 @@ export function TestItem({
                   {getStatusIcon()}
                   <span className="font-medium">{label}</span>
                 </div>
-                
+
                 {testResult ? (
                   <div className="space-y-1 text-xs">
                     <div className="flex justify-between items-center">
@@ -130,13 +138,13 @@ export function TestItem({
                         {testResult.response.status === 'done' ? getStatus(testResult.response) : testResult.response.status}
                       </span>
                     </div>
-                    
+
                     {/* Show checks/asserts information */}
                     {testResult.response.status === 'done' && testResult.response.response && (() => {
                       const parsedResponse = testResult.response.response.parsed_response();
                       const finalState = getStatus(testResult.response);
                       const checkCount = parsedResponse && typeof parsedResponse !== 'string' ? parsedResponse.check_count : 0;
-                      
+
                       if (checkCount > 0 || finalState === 'constraints_failed' || finalState === 'assert_failed') {
                         return (
                           <div className="space-y-1">
@@ -148,7 +156,7 @@ export function TestItem({
                                 </span>
                               </div>
                             )}
-                            
+
                             {finalState === 'assert_failed' && (
                               <div className="flex justify-between items-center">
                                 <span className="text-muted-foreground">Asserts:</span>
@@ -160,21 +168,21 @@ export function TestItem({
                       }
                       return null;
                     })()}
-                    
+
                     {testResult.response.status === 'done' && testResult.response.latency_ms && (
                       <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">Duration:</span>
                         <span>{testResult.response.latency_ms.toFixed(0)}ms</span>
                       </div>
                     )}
-                    
+
                     {testResult.response.status === 'done' && testResult.response.response?.llm_response()?.model && (
                       <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">Model:</span>
                         <span className="truncate max-w-32">{testResult.response.response.llm_response()?.model}</span>
                       </div>
                     )}
-                    
+
                     <div className="pt-1 border-t border-border text-muted-foreground">
                       Click to navigate to test
                     </div>
@@ -191,9 +199,12 @@ export function TestItem({
         <SidebarMenuAction
           className="cursor-pointer"
           onClick={handleRunTest}
-          disabled={testResult?.response.status === 'running'}
         >
-          <Play className="size-4" />
+          {isThisTestRunning ? (
+            <Square className="size-4 fill-red-500 stroke-red-500" />
+          ) : (
+            <Play className="size-4" />
+          )}
         </SidebarMenuAction>
       </SidebarMenuButton>
     </SidebarMenuItem>

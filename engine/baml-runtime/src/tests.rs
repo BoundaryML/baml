@@ -32,7 +32,7 @@ fn test_graph_test() -> Result<()> {
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("none".to_string()));
     let ctx = ctx.create_ctx();
-    let graph = runtime.inner.orchestration_graph("GPT4Turbo", &ctx)?;
+    let graph = runtime.orchestration_graph("GPT4Turbo", &ctx)?;
     for node in graph.iter() {
         log::info!("Node: {:#}", node);
     }
@@ -45,7 +45,7 @@ fn test_graph_test() -> Result<()> {
     .iter()
     {
         log::info!("Graph: {}", name);
-        let graph = runtime.inner.orchestration_graph(name, &ctx)?;
+        let graph = runtime.orchestration_graph(name, &ctx)?;
         for node in graph.iter() {
             log::info!("Node: {:#}", node);
         }
@@ -97,8 +97,8 @@ async fn test_call_function() -> Result<FunctionResult> {
             None,
             None,
             None,
-            None, // tags
             std::env::vars().collect(),
+            None, // tags
             stream_cancel::Tripwire::new(None),
         )
         .await;

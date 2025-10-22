@@ -517,7 +517,7 @@ mod tests {
                 // Should be the String variant from the choices, not the Display repr
                 assert_eq!(v.value, "[json\n");
             }
-            _ => panic!("Expected String, got {:?}", baml_value),
+            _ => panic!("Expected String, got {baml_value:?}"),
         }
     }
 
@@ -557,7 +557,7 @@ mod tests {
                 // Should fall back to the raw input string
                 assert_eq!(v.value, "some raw input");
             }
-            _ => panic!("Expected String, got {:?}", baml_value),
+            _ => panic!("Expected String, got {baml_value:?}"),
         }
     }
 }

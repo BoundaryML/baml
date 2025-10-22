@@ -134,7 +134,7 @@ export interface MixedEdgeCases {
   singleChar: string
   veryLongArray: string[]
   deeplyNestedMap: Record<string, Record<string, Record<string, string>>>
-  mixedTypeArray: (string | number | boolean)[]
+  mixedTypeArray: (string | number | boolean | null)[]
   optionalEverything?: OptionalEverything | null
   
 }

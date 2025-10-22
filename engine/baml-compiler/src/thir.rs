@@ -3,8 +3,8 @@
 use baml_types::ir_type::TypeIR;
 
 use crate::{
-    emit::EmitSpec,
     hir::{self, AssignOp, BinaryOperator, LlmFunction, UnaryOperator},
+    watch::WatchSpec,
 };
 
 pub mod interpret;
@@ -640,7 +640,7 @@ pub enum Statement<T> {
     Let {
         name: String,
         value: Expr<T>,
-        emit: Option<EmitSpec>,
+        watch: Option<WatchSpec>,
         span: Span,
     },
     /// Declare a (mutable) reference.
@@ -665,7 +665,7 @@ pub enum Statement<T> {
     DeclareAndAssign {
         name: String,
         value: Expr<T>,
-        emit: Option<EmitSpec>,
+        watch: Option<WatchSpec>,
         span: Span,
     },
     /// Return from a function.
@@ -706,6 +706,20 @@ pub enum Statement<T> {
         condition: Expr<T>,
         span: Span,
     },
+
+    /// Configure watch options for a watched variable.
+    WatchOptions {
+        variable: String,
+        channel: Option<String>,
+        when: Option<String>,
+        span: Span,
+    },
+
+    /// Manually notify watchers of a variable.
+    WatchNotify {
+        variable: String,
+        span: Span,
+    },
 }
 
 impl<T: Clone> Statement<T> {
@@ -717,14 +731,14 @@ impl<T: Clone> Statement<T> {
             Statement::Let {
                 name,
                 value,
-                emit,
+                watch,
                 span: _,
             } => {
                 format!(
                     "Let {} = {} {}",
                     name,
                     value.dump_str(),
-                    emit.as_ref().map_or("", |_| "<emit>")
+                    watch.as_ref().map_or("", |_| "<emit>")
                 )
             }
             Statement::Declare { name, span: _ } => format!("var {name}"),
@@ -740,7 +754,7 @@ impl<T: Clone> Statement<T> {
             Statement::DeclareAndAssign {
                 name,
                 value,
-                emit,
+                watch: emit,
                 span: _,
             } => {
                 format!(
@@ -798,6 +812,24 @@ impl<T: Clone> Statement<T> {
             Statement::Assert { condition, .. } => {
                 format!("assert {cond}", cond = condition.dump_str())
             }
+            Statement::WatchOptions {
+                variable,
+                channel,
+                when,
+                ..
+            } => {
+                let mut parts = vec![];
+                if let Some(c) = channel {
+                    parts.push(format!("channel: \"{}\"", c));
+                }
+                if let Some(w) = when {
+                    parts.push(format!("when: {}", w));
+                }
+                format!("{}.$watch.options({{{}}})", variable, parts.join(", "))
+            }
+            Statement::WatchNotify { variable, .. } => {
+                format!("{}.$watch.notify()", variable)
+            }
         }
     }
 
@@ -853,6 +885,10 @@ impl<T: Clone> Statement<T> {
                 block_vars
             }
             Statement::Assert { condition, .. } => condition.variables(),
+            Statement::WatchOptions { .. } | Statement::WatchNotify { .. } => {
+                // These don't reference variables themselves
+                HashSet::new()
+            }
         }
     }
 }

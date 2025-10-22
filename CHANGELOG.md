@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.211.2](https://github.com/boundaryml/baml/compare/0.211.1..0.211.2) - 2025-10-12
+
+### Bug Fixes
+- Fix emit ts codegen bug (#2603) - ([39b1cf6](https://github.com/boundaryml/baml/commit/39b1cf6299b5080234e282367fdec238864c9df4)) - Greg Hale
+
+## [0.211.1](https://github.com/boundaryml/baml/compare/0.211.0..0.211.1) - 2025-10-10
+
+### Docs
+
+- fix TypeScript tool call example (#2550) - ([73bc201](https://github.com/boundaryml/baml/commit/73bc201230fddc410ddcf9547b41d11039eebce1)) - Eric Winer
+- Fix variable name of LLM response in modular-api.mdx docs (#2579) - ([8074499](https://github.com/boundaryml/baml/commit/8074499cc1413e36d37318f00936d4997922b06e)) - Caio Lang
+
+### Features
+
+- added endpoint_url to amazon bedrock (#2555) - ([10fd013](https://github.com/boundaryml/baml/commit/10fd0132bbac6a57f1b9540ac38262286356a744)) - Roey Ben Chaim
+
+## [0.211.0](https://github.com/boundaryml/baml/compare/0.210.0..0.211.0) - 2025-10-07
+
+### Bug Fixes
+
+- **(compiler)** duplicate diagnostics when typechecking (#2535) - ([5a8de50](https://github.com/boundaryml/baml/commit/5a8de50aaf42dc9cdac77e02374c8ad1396b3765)) - José Rafael Oses
+- Properly leave the secondary screen after non-erroring baml-cli init (#2565) - ([b911a19](https://github.com/boundaryml/baml/commit/b911a1927046b7a36d43fdaee1b25ebbfbc37f31)) - Greg Hale
+- Fix json parser in cases where it would output intermediate representations (#2572) - ([c1a0b0e](https://github.com/boundaryml/baml/commit/c1a0b0e15fa36745a4a59d6a322f182cef034a6e)) - aaronvg
+- **(python)** export set_log_max_message_length config for baml logs (#2553) - ([2c689dc](https://github.com/boundaryml/baml/commit/2c689dc3341b1f8ef4030b397b5e93f46cb25b2e)) - Samuel Lijin
+- Add specific error for missing required env vars in clients (#2570) - ([5ea6adb](https://github.com/boundaryml/baml/commit/5ea6adb02f6e4246dd53cd626189ec1578d69b69)) - Antonio Sarosi
+- [Promptfiddle] fix play button disappearing (#2571) - ([7d31c37](https://github.com/boundaryml/baml/commit/7d31c37142d89758ccff805853db0855af2bd318)) - aaronvg
+- Lots of tracing improvements for Boundary Studio [#2576](https://github.com/BoundaryML/baml/pull/2576)
+
+### Documentation
+
+- fix @description documentation (#2544) - ([32aec21](https://github.com/boundaryml/baml/commit/32aec21f10840d28e837216f14ffed116e9bc377)) - Samuel Lijin
+- Document Next.js version 15 requirement (#2540) - ([c1ce2ab](https://github.com/boundaryml/baml/commit/c1ce2abab0bddb42a84e492ef300a4dc14129a0a)) - Greg Hale
+
 
 ## [0.210.0](https://github.com/boundaryml/baml/compare/0.209.0..0.210.0) - 2025-09-30
 
@@ -344,7 +377,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 - Fix fatal log line showing up with publisher not started (#2038) - ([e02c30a](https://github.com/boundaryml/baml/commit/e02c30abf8aecfdccbd28386d0bc4049d017bc8c)) - aaronvg
-  
+
 ## [0.90.0](https://github.com/boundaryml/baml/compare/0.89.0..0.90.0) - 2025-06-14
 
 ### Bug Fixes
@@ -823,7 +856,7 @@ We added a new NextJS generator and deep support for Typebuilder!! Read the docs
 - Update README with better details (#1380) - ([02d1950](https://github.com/boundaryml/baml/commit/02d19503759986c0dba3b022afb03f45a52c31ad)) - hellovai
 - Semantic Streaming (#1293) - ([e30bdd5](https://github.com/boundaryml/baml/commit/e30bdd526910f11a6a9057cc4df90cf302939666)) - Greg Hale
 
-  
+
 ### Bugfixes
 - Drop unnecessary jsonwebtoken dep in wasm build (#1381) - ([7b85c71](https://github.com/boundaryml/baml/commit/7b85c715e07be8f908ee114c50b85bd784cf567b)) - Greg Hale
 - Removing broken links (#1388) - ([e4b0b5b](https://github.com/boundaryml/baml/commit/e4b0b5ba390d3449247bfebb1f24013df69b6068)) - hellovai
@@ -1696,4 +1729,3 @@ The default base URL for the Gemini provider has been updated to v1beta. This ch
 ### Vscode
 
 - check for updates on the hour (#434) - ([c70a3b3](https://github.com/boundaryml/baml/commit/c70a3b373cb2346a0df9a1eba0ebacb74d59b53e)) - Samuel Lijin
-

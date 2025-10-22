@@ -422,7 +422,7 @@ impl AwsClient {
         let host = format!("bedrock-runtime.{region}.amazonaws.com");
         let encoded_model =
             utf8_percent_encode(&self.properties.model, PATH_SEGMENT_ENCODE_SET).to_string();
-        let url = format!("https://{host}/model/{}/converse", encoded_model);
+        let url = format!("https://{host}/model/{encoded_model}/converse");
 
         let mut header_map = HashMap::new();
         header_map.insert("content-type".to_string(), "application/json".to_string());
@@ -458,10 +458,26 @@ impl AwsClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_audio_urls: ResolveMediaUrls::Always,
-                resolve_image_urls: ResolveMediaUrls::Always,
-                resolve_pdf_urls: ResolveMediaUrls::Always,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: properties
+                    .media_url_handler
+                    .audio
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_image_urls: properties
+                    .media_url_handler
+                    .images
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_pdf_urls: properties
+                    .media_url_handler
+                    .pdf
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_video_urls: properties
+                    .media_url_handler
+                    .video
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
             retry_policy: client.retry_policy.as_ref().map(String::to_owned),
@@ -486,10 +502,26 @@ impl AwsClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_audio_urls: ResolveMediaUrls::Always,
-                resolve_image_urls: ResolveMediaUrls::Always,
-                resolve_pdf_urls: ResolveMediaUrls::Always,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: properties
+                    .media_url_handler
+                    .audio
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_image_urls: properties
+                    .media_url_handler
+                    .images
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_pdf_urls: properties
+                    .media_url_handler
+                    .pdf
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_video_urls: properties
+                    .media_url_handler
+                    .video
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
             retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),
@@ -502,6 +534,10 @@ impl AwsClient {
         static DEFAULT_REQUEST_OPTIONS: std::sync::OnceLock<BamlMap<String, serde_json::Value>> =
             std::sync::OnceLock::new();
         DEFAULT_REQUEST_OPTIONS.get_or_init(Default::default)
+    }
+
+    pub fn http_config(&self) -> &internal_llm_client::HttpConfig {
+        &self.properties.http_config
     }
 
     // TODO: this should be memoized on client construction, but because config loading is async,
@@ -592,7 +628,7 @@ impl AwsClient {
         let config = loader.load().await;
         let http_client = custom_http_client::client()?;
 
-        let bedrock_config = aws_sdk_bedrockruntime::config::Builder::from(&config)
+        let mut bedrock_config = aws_sdk_bedrockruntime::config::Builder::from(&config)
             // To support HTTPS_PROXY https://github.com/awslabs/aws-sdk-rust/issues/169
             .http_client(http_client)
             // Adding a custom http client (above) breaks the stalled stream protection for some reason. If a bedrock request takes longer than 5s (the default grace period, it makes it error out), so we disable it.
@@ -601,9 +637,14 @@ impl AwsClient {
                 call_stack,
                 http_request_id.clone(),
                 &self.properties,
-            ))
-            .build();
-        Ok(BedrockRuntimeClient::from_conf(bedrock_config))
+            ));
+
+        // Set endpoint_url if specified
+        if let Some(endpoint_url) = self.properties.endpoint_url.as_ref() {
+            bedrock_config = bedrock_config.endpoint_url(endpoint_url);
+        }
+
+        Ok(BedrockRuntimeClient::from_conf(bedrock_config.build()))
     }
 
     async fn chat_anyhow(&self, response: &ConverseOutput) -> Result<String> {

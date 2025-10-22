@@ -351,6 +351,16 @@ impl LLMPrimitiveProvider {
     pub fn request_options(&self) -> &BamlMap<String, serde_json::Value> {
         match_llm_provider!(self, request_options)
     }
+
+    pub fn http_config(&self) -> &internal_llm_client::HttpConfig {
+        match self {
+            LLMPrimitiveProvider::OpenAI(client) => client.http_config(),
+            LLMPrimitiveProvider::Anthropic(client) => client.http_config(),
+            LLMPrimitiveProvider::Google(client) => client.http_config(),
+            LLMPrimitiveProvider::Vertex(client) => client.http_config(),
+            LLMPrimitiveProvider::Aws(client) => client.http_config(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -376,10 +386,10 @@ mod tests {
                     completion: false,
                     chat: false,
                     max_one_system_prompt: false,
-                    resolve_audio_urls: crate::internal::llm_client::ResolveMediaUrls::Always,
-                    resolve_image_urls: crate::internal::llm_client::ResolveMediaUrls::Always,
-                    resolve_pdf_urls: crate::internal::llm_client::ResolveMediaUrls::Always,
-                    resolve_video_urls: crate::internal::llm_client::ResolveMediaUrls::Always,
+                    resolve_audio_urls: crate::internal::llm_client::ResolveMediaUrls::SendBase64,
+                    resolve_image_urls: crate::internal::llm_client::ResolveMediaUrls::SendBase64,
+                    resolve_pdf_urls: crate::internal::llm_client::ResolveMediaUrls::SendBase64,
+                    resolve_video_urls: crate::internal::llm_client::ResolveMediaUrls::SendBase64,
                     allowed_metadata: crate::internal::llm_client::AllowedRoleMetadata::All,
                 },
                 context: internal_baml_jinja::RenderContext_Client {
@@ -422,6 +432,10 @@ mod tests {
 
         fn http_client(&self) -> &reqwest::Client {
             unimplemented!("Not used in tests")
+        }
+
+        fn http_config(&self) -> &internal_llm_client::HttpConfig {
+            unimplemented!("Not used in test")
         }
     }
 }

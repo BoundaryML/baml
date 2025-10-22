@@ -68,6 +68,17 @@ fn raise_baml_client_finish_reason_error(
     })
 }
 
+#[allow(non_snake_case)]
+fn raise_baml_timeout_error(client_name: String, message: String) -> PyErr {
+    Python::with_gil(|py| {
+        let internal_monkeypatch = py.import("baml_py.internal_monkeypatch").unwrap();
+        let exception = internal_monkeypatch.getattr("BamlTimeoutError").unwrap();
+        let args = (client_name, message);
+        let inst = exception.call1(args).unwrap();
+        PyErr::from_value(inst)
+    })
+}
+
 /// Defines the errors module with the BamlValidationError exception.
 /// IIRC the name of this function is the name of the module that pyo3 generates (errors.py)
 #[pymodule]
@@ -130,12 +141,23 @@ impl BamlError {
                     status_code,
                     detailed_message,
                     ..
-                } => raise_baml_client_http_error(
-                    client_name.clone(),
-                    message.clone(),
-                    status_code.to_u16(),
-                    detailed_message.clone(),
-                ),
+                } => {
+                    // Status code 408 is Request Timeout - raise BamlTimeoutError instead
+                    if status_code.to_u16() == 408 {
+                        raise_baml_timeout_error(client_name.clone(), message.clone())
+                    } else {
+                        raise_baml_client_http_error(
+                            client_name.clone(),
+                            message.clone(),
+                            status_code.to_u16(),
+                            detailed_message.clone(),
+                        )
+                    }
+                }
+                ExposedError::TimeoutError {
+                    client_name,
+                    message,
+                } => raise_baml_timeout_error(client_name.clone(), message.clone()),
                 ExposedError::AbortError { .. } => {
                     PyErr::new::<BamlAbortError, _>("AbortError".to_string())
                 }
@@ -153,6 +175,9 @@ impl BamlError {
                             "Something went wrong with the LLM client {}: {}",
                             failed.client, failed.message
                         ))
+                    }
+                    baml_runtime::internal::llm_client::ErrorCode::Timeout => {
+                        raise_baml_timeout_error(failed.client.clone(), failed.message.clone())
                     }
                     baml_runtime::internal::llm_client::ErrorCode::Other(_)
                     | baml_runtime::internal::llm_client::ErrorCode::InvalidAuthentication

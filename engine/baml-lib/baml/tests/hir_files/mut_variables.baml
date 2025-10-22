@@ -24,6 +24,7 @@ function MutableInArg(x: int) -> int {
 //
 //   x
 // }
+<<<<<<< HEAD
 //
 // class baml.HttpRequest {
 //   url: string
@@ -40,3 +41,13 @@ function MutableInArg(x: int) -> int {
 //   Delete
 //   Patch
 // }
+=======
+>>>>>>> canary
+
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  test.baml:27
+//    | 
+// 26 | // }
+// 27 | <<<<<<< HEAD
+// 28 | //
+//    | 

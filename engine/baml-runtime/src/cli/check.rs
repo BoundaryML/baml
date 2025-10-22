@@ -58,13 +58,13 @@ impl CheckArgs {
 
         match runtime {
             Err(e) => {
-                println!("{:?}", e);
+                println!("{e:?}");
 
                 // We should probably name this exit code more specifically
                 exit(1);
             }
             Ok(runtime) => {
-                let diagnostics = runtime.inner.diagnostics();
+                let diagnostics = &runtime.diagnostics;
                 if diagnostics.has_warnings() {
                     println!("{}", diagnostics.warnings_to_pretty_string());
                 }

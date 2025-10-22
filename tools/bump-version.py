@@ -89,6 +89,7 @@ def main(
     ruby: bool = typer.Option(False, "--ruby", help="Bump patch for ruby"),
     go: bool = typer.Option(False, "--go", help="Bump patch for go"),
     vscode: bool = typer.Option(False, "--vscode", help="Bump patch for vscode"),
+    zed: bool = typer.Option(False, "--zed", help="Bump patch for zed extension"),
     jetbrains: bool = typer.Option(
         False, "--jetbrains", help="Bump patch for jetbrains"
     ),
@@ -101,7 +102,7 @@ def main(
     ),
 ) -> None:
     # Replace VersionBumpArgs with direct flag access
-    modes = [ts, python, ruby, go, vscode, jetbrains, bump_all]
+    modes = [ts, python, ruby, go, vscode, zed, jetbrains, bump_all]
     if sum(modes) > 1:
         c.print("Error: Only one mode can be enabled.", style="red")
         sys.exit(1)
@@ -185,6 +186,7 @@ def main(
         ruby,
         go,
         vscode,
+        zed,
         jetbrains,
         bump_all,
         allow_dirty,
@@ -321,6 +323,7 @@ def perform_version_bumps(
     ruby: bool,
     go: bool,
     vscode: bool,
+    zed: bool,
     jetbrains: bool,
     all: bool,
     allow_dirty: bool,
@@ -344,6 +347,7 @@ def perform_version_bumps(
             "ruby",
             "go",
             "vscode",
+            "zed",
             "integ-tests",
             "jetbrains",
         ]:
@@ -386,6 +390,13 @@ def perform_version_bumps(
         bump2version(
             "--config-file",
             "./versions/vscode.cfg",
+            "patch",
+            f"--new-version={new_version}" if new_version else "",
+        )
+    elif zed:
+        bump2version(
+            "--config-file",
+            "./versions/zed.cfg",
             "patch",
             f"--new-version={new_version}" if new_version else "",
         )

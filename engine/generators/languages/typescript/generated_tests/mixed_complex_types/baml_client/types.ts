@@ -158,7 +158,7 @@ export interface Item {
   id: number
   name: string
   variants: Variant[]
-  attributes: Record<string, string | number | number | boolean>
+  attributes: Record<string, string | number | boolean>
   
 }
 
@@ -202,7 +202,7 @@ export interface NodeMetadata {
 }
 
 export interface PrimaryData {
-  values: (string | number | number)[]
+  values: (string | number)[]
   mappings: Record<string, Record<string, string>>
   flags: boolean[]
   
@@ -248,7 +248,7 @@ export interface Setting {
 export interface SimpleCondition {
   field: string
   operator: "eq" | "ne" | "gt" | "lt" | "contains"
-  value: string | number | number | boolean
+  value: string | number | boolean
   
 }
 

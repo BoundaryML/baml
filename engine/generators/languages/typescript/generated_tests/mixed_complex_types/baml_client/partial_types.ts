@@ -117,7 +117,7 @@ export namespace partial_types {
       id?: number | null
       name?: string | null
       variants: Variant[]
-      attributes: Record<string, string | number | number | boolean>
+      attributes: Record<string, string | number | boolean>
     }
     export interface KitchenSink {
       id?: number | null
@@ -153,7 +153,7 @@ export namespace partial_types {
       attributes: Record<string, string | number | boolean | null>
     }
     export interface PrimaryData {
-      values: (string | number | number)[]
+      values: (string | number)[]
       mappings: Record<string, Record<string, string>>
       flags: boolean[]
     }
@@ -187,7 +187,7 @@ export namespace partial_types {
     export interface SimpleCondition {
       field?: string | null
       operator?: "eq" | "ne" | "gt" | "lt" | "contains" | null
-      value?: string | number | number | boolean | null
+      value?: string | number | boolean | null
     }
     export interface Success {
       type?: "success" | null

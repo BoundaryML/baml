@@ -55,7 +55,7 @@ export interface ArrayWithConstraints {
 }
 
 export interface MixedArrays {
-  primitiveArray: (string | number | number | boolean)[]
+  primitiveArray: (string | number | boolean)[]
   nullableArray: (string | null)[]
   optionalItems: (string | null)[]
   arrayOfArrays: string[][]

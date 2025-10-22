@@ -22,6 +22,7 @@ function GCD(a: int, b: int) -> int {
 //
 //   a
 // }
+<<<<<<< HEAD
 //
 // class baml.HttpRequest {
 //   url: string
@@ -38,3 +39,13 @@ function GCD(a: int, b: int) -> int {
 //   Delete
 //   Patch
 // }
+=======
+>>>>>>> canary
+
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  test.baml:25
+//    | 
+// 24 | // }
+// 25 | <<<<<<< HEAD
+// 26 | //
+//    | 

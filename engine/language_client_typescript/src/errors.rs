@@ -74,6 +74,10 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
             } else {
                 Some(detailed_message.as_str())
             }),
+            ExposedError::TimeoutError {
+                client_name,
+                message,
+            } => throw_baml_timeout_error(client_name, message),
         }
     } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
         invalid_argument_error(&format!("{er}"))
@@ -91,6 +95,9 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                         failed.message
                     ),
                 ),
+                baml_runtime::internal::llm_client::ErrorCode::Timeout => {
+                    throw_baml_timeout_error(failed.client.as_str(), failed.message.as_str())
+                }
                 baml_runtime::internal::llm_client::ErrorCode::Other(_)
                 | baml_runtime::internal::llm_client::ErrorCode::InvalidAuthentication
                 | baml_runtime::internal::llm_client::ErrorCode::NotSupported
@@ -180,6 +187,15 @@ fn throw_baml_abort_error(detailed_message: Option<&str>) -> napi::Error {
     let error_json = serde_json::json!({
         "type": "BamlAbortError",
         "detailed_message": detailed_message,
+    });
+    napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
+}
+
+fn throw_baml_timeout_error(client_name: &str, message: &str) -> napi::Error {
+    let error_json = serde_json::json!({
+        "type": "BamlTimeoutError",
+        "client_name": client_name,
+        "message": format!("BamlError: BamlClientError: BamlTimeoutError: {}", message),
     });
     napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
 }

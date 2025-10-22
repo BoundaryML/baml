@@ -22,6 +22,7 @@ function assertNotOk() -> int {
 //
 //   2
 // }
+<<<<<<< HEAD
 //
 // class baml.HttpRequest {
 //   url: string
@@ -38,3 +39,13 @@ function assertNotOk() -> int {
 //   Delete
 //   Patch
 // }
+=======
+>>>>>>> canary
+
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  test.baml:25
+//    | 
+// 24 | // }
+// 25 | <<<<<<< HEAD
+// 26 | //
+//    | 

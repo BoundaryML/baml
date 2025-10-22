@@ -8,6 +8,7 @@ function AddOne(x: int) -> int {
 //
 //   y
 // }
+<<<<<<< HEAD
 //
 // class baml.HttpRequest {
 //   url: string
@@ -24,3 +25,13 @@ function AddOne(x: int) -> int {
 //   Delete
 //   Patch
 // }
+=======
+>>>>>>> canary
+
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  test.baml:11
+//    | 
+// 10 | // }
+// 11 | <<<<<<< HEAD
+// 12 | //
+//    | 

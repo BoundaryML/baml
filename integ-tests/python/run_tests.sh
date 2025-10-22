@@ -22,3 +22,5 @@ uv run pytest "$@" \
     --ignore=tests/test_ontick.py \
     --ignore=tests/test_abort_handlers.py \
     --ignore=tests/test_abort_handlers_simple.py \
+    --ignore=tests/test_emit.py \
+    --ignore=tests/test_timeouts.py \

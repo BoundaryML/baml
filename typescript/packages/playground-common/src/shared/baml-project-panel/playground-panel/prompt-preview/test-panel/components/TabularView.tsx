@@ -3,7 +3,7 @@ import { Label } from '@baml/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@baml/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@baml/ui/table'
 import { useAtom, useAtomValue } from 'jotai'
-import { Check, Copy, Play } from 'lucide-react'
+import { Check, Copy, Play, Square } from 'lucide-react'
 import * as React from 'react'
 
 import { cn } from '@baml/ui/lib/utils'
@@ -117,7 +117,7 @@ const ResponseContent = ({
 
 export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
   const [config, setConfig] = useAtom(tabularViewConfigAtom)
-  const { runTests: runBamlTests } = useRunBamlTests()
+  const { runTests: runBamlTests, cancelTests } = useRunBamlTests()
   const [selectedItem, setSelectedItem] = useAtom(selectedItemAtom)
 
   const toggleConfig = (key: keyof typeof config) => {
@@ -229,6 +229,7 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
         <TableBody>
           {currentRun?.tests.map((test, index) => {
             const isSelected = selectedItem?.[0] === test.functionName && selectedItem?.[1] === test.testName
+            const isThisTestRunning = test.response.status === 'running'
 
             return (
               <TableRow
@@ -247,16 +248,24 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
                       size='icon'
                       onClick={(e) => {
                         e.stopPropagation() // Prevent row selection when clicking the button
-                        runBamlTests([
-                          {
-                            functionName: test.functionName,
-                            testName: test.testName,
-                          },
-                        ])
+                        if (isThisTestRunning) {
+                          cancelTests()
+                        } else {
+                          runBamlTests([
+                            {
+                              functionName: test.functionName,
+                              testName: test.testName,
+                            },
+                          ])
+                        }
                       }}
                       className='w-6 h-6'
                     >
-                      <Play className='w-4 h-4 text-purple-400' />
+                      {isThisTestRunning ? (
+                        <Square className='w-4 h-4 fill-red-500 stroke-red-500' />
+                      ) : (
+                        <Play className='w-4 h-4 text-purple-400' />
+                      )}
                     </Button>
                     <span
                       className='text-xs truncate whitespace-pre-wrap break-all cursor-pointer text-muted-foreground hover:text-primary'

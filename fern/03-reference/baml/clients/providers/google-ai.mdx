@@ -91,6 +91,12 @@ client<llm> MyClient {
 
 <Markdown src="/snippets/finish-reason.mdx" />
 
+<Markdown src="/snippets/media-url-handler.mdx" />
+
+<Note>
+  Google AI uses `send_base64_unless_google_url` by default for images, which preserves Google Cloud Storage URLs (gs://) while converting other URLs to base64.
+</Note>
+
 ## Provider request parameters
 These are other `options` that are passed through to the provider, without modification by BAML. For example if the request has a `temperature` field, you can define it in the client here so every call has that set.
 

@@ -9,7 +9,10 @@ use anyhow::{anyhow, bail, Context, Result};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
 use internal_baml_diagnostics::Span;
 
-use crate::thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, THir};
+use crate::{
+    thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, THir},
+    watch::WatchNotification,
+};
 
 // Type alias for pinned boxed futures - conditionally Send for non-WASM targets
 #[cfg(not(target_arch = "wasm32"))]
@@ -18,16 +21,35 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 #[cfg(target_arch = "wasm32")]
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 
+// Context for watch streaming - passed to LLM handler when calling LLM function for @watch variable
+#[derive(Clone, Debug)]
+pub struct WatchStreamContext {
+    pub variable_name: String,
+    pub stream_id: String,
+}
+
 // Trait aliases for conditional Send bounds
 #[cfg(not(target_arch = "wasm32"))]
-pub trait LlmHandler<Fut>: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync {}
+pub trait LlmHandler<Fut>:
+    FnMut(String, Vec<BamlValue>, Option<WatchStreamContext>) -> Fut + Send + Sync
+{
+}
 #[cfg(not(target_arch = "wasm32"))]
-impl<F, Fut> LlmHandler<Fut> for F where F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync {}
+impl<F, Fut> LlmHandler<Fut> for F where
+    F: FnMut(String, Vec<BamlValue>, Option<WatchStreamContext>) -> Fut + Send + Sync
+{
+}
 
 #[cfg(target_arch = "wasm32")]
-pub trait LlmHandler<Fut>: FnMut(String, Vec<BamlValue>) -> Fut {}
+pub trait LlmHandler<Fut>:
+    FnMut(String, Vec<BamlValue>, Option<WatchStreamContext>) -> Fut
+{
+}
 #[cfg(target_arch = "wasm32")]
-impl<F, Fut> LlmHandler<Fut> for F where F: FnMut(String, Vec<BamlValue>) -> Fut {}
+impl<F, Fut> LlmHandler<Fut> for F where
+    F: FnMut(String, Vec<BamlValue>, Option<WatchStreamContext>) -> Fut
+{
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 pub trait LlmFuture: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send {}
@@ -44,11 +66,94 @@ impl<T> LlmFuture for T where T: Future<Output = Result<BamlValueWithMeta<ExprMe
 //    mutate them across REPL prompts and see the same downstream effects on their
 //    containers that we would for mutating values within functions.
 
+/// Information about a variable with @watch
+#[derive(Clone)]
+pub struct WatchVariable {
+    /// The name of the variable
+    pub name: String,
+    /// The watch spec from the declaration
+    pub spec: crate::watch::WatchSpec,
+    /// Reference to the variable's value for change detection
+    pub value_ref: Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>,
+    /// Last notified value (passed as prev to filter function)
+    pub last_notified: Arc<Mutex<Option<BamlValue>>>,
+    /// Last checked value (to avoid calling filter multiple times for same value)
+    pub last_checked: Arc<Mutex<Option<BamlValue>>>,
+}
+
 /// A scope is a map of variable names to their values.
 ///
 /// Variables are stored in refcells to allow for mutation.
 pub struct Scope {
     pub variables: BamlMap<String, Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>>,
+    /// Track variables with @watch for change detection
+    pub watch_variables: Vec<WatchVariable>,
+    /// Flag to indicate this scope is for filter function evaluation
+    /// When true, check_watch_changes should skip checking watch variables
+    pub is_filter_context: bool,
+}
+
+/// Register a variable with @watch for tracking
+fn register_watch_variable(
+    scopes: &mut [Scope],
+    name: &str,
+    value_ref: Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>,
+    watch_spec: crate::watch::WatchSpec,
+) {
+    if let Some(scope) = scopes.last_mut() {
+        scope.watch_variables.push(WatchVariable {
+            name: name.to_string(),
+            spec: watch_spec,
+            value_ref,
+            last_notified: Arc::new(Mutex::new(None)),
+            last_checked: Arc::new(Mutex::new(None)),
+        });
+    }
+}
+
+/// Convert ExprMetadata value to WatchValueMetadata value
+fn expr_value_to_watch_value(
+    value: BamlValueWithMeta<ExprMetadata>,
+) -> BamlValueWithMeta<crate::watch::WatchValueMetadata> {
+    value.map_meta(|(_span, type_ir)| crate::watch::WatchValueMetadata {
+        constraints: Vec::new(),
+        response_checks: Vec::new(),
+        completion: baml_types::Completion::default(),
+        r#type: type_ir.clone().unwrap_or(baml_types::TypeIR::string()),
+    })
+}
+
+/// Fire a watch notification for a specific variable (for manual $watch.notify() calls)
+fn fire_watch_notification_for_variable(
+    scopes: &[Scope],
+    var_name: &str,
+    watch_handler: &mut impl FnMut(crate::watch::WatchNotification),
+    function_name: &str,
+) -> Result<()> {
+    // Find the variable in scopes
+    for scope in scopes.iter().rev() {
+        if let Some(value_ref) = scope.variables.get(var_name) {
+            // Find the watch variable to get the current channel name
+            let channel_name = scope
+                .watch_variables
+                .iter()
+                .find(|wv| Arc::ptr_eq(&wv.value_ref, value_ref))
+                .map(|wv| wv.spec.name.clone())
+                .unwrap_or_else(|| var_name.to_string());
+
+            let current_value = value_ref.lock().unwrap();
+            let watch_value = expr_value_to_watch_value(current_value.clone());
+            let notification = crate::watch::WatchNotification::new_var(
+                var_name.to_string(), // variable name
+                channel_name,         // current channel name from WatchSpec
+                watch_value,
+                function_name.to_string(),
+            );
+            watch_handler(notification);
+            return Ok(());
+        }
+    }
+    bail!("Variable '{}' not found for $watch.notify()", var_name)
 }
 
 enum EvalValue {
@@ -65,10 +170,255 @@ enum ControlFlow {
     Return(BamlValueWithMeta<ExprMetadata>),
 }
 
+/// Check all @watch variables for changes and fire notifications
+///
+/// This function should only be called in the main execution context, not during
+/// filter function evaluation to avoid infinite recursion.
+#[allow(clippy::type_complexity)]
+async fn check_watch_changes<F, Fut>(
+    scopes: &mut Vec<Scope>,
+    watch_notification_handler: &mut impl FnMut(WatchNotification),
+    function_name: &str,
+    thir: &THir<ExprMetadata>,
+    run_llm_function: &mut F,
+) where
+    F: LlmHandler<Fut>,
+    Fut: LlmFuture,
+{
+    // Skip watch checking if we're in a filter function evaluation context
+    // This prevents infinite recursion when filter functions have local variables
+    if scopes.iter().any(|scope| scope.is_filter_context) {
+        return;
+    }
+    // Collect the variables to check and their current values
+    // We do this first to avoid holding locks during async operations
+    let mut checks: Vec<(
+        String,
+        crate::watch::WatchSpec,
+        BamlValueWithMeta<ExprMetadata>,
+        Option<BamlValue>,
+        Option<BamlValue>,
+    )> = Vec::new();
+
+    for scope in scopes.iter() {
+        for watch_var in &scope.watch_variables {
+            let current_value = watch_var.value_ref.lock().unwrap().clone();
+            let last_notified = watch_var.last_notified.lock().unwrap().clone();
+            let last_checked = watch_var.last_checked.lock().unwrap().clone();
+
+            checks.push((
+                watch_var.name.clone(),
+                watch_var.spec.clone(),
+                current_value,
+                last_notified,
+                last_checked,
+            ));
+        }
+    }
+
+    // Process each check
+    for (var_name, spec, current_value, last_notified, last_checked) in checks {
+        let current_baml_value = current_value.clone().value();
+
+        // Check if the value has changed since last check
+        // This prevents calling the filter multiple times for the same value
+        let value_changed_since_last_check = match last_checked.as_ref() {
+            None => true,
+            Some(last) => last != &current_baml_value,
+        };
+
+        if !value_changed_since_last_check {
+            // Value hasn't changed since we last checked, skip
+            continue;
+        }
+
+        // Update last_checked for this variable
+        for scope in scopes.iter_mut() {
+            for watch_var in &mut scope.watch_variables {
+                if watch_var.name == var_name {
+                    *watch_var.last_checked.lock().unwrap() = Some(current_baml_value.clone());
+                    break;
+                }
+            }
+        }
+
+        // Determine if we should notify the watcher based on the when condition
+        let should_notify = match &spec.when {
+            crate::watch::WatchWhen::Manual => false, // Manual notification only
+            crate::watch::WatchWhen::True => {
+                // For WatchWhen::True, use built-in change detection
+                let has_changed = match last_notified.as_ref() {
+                    None => false,                             // First time (declaration), don't notify
+                    Some(last) => last != &current_baml_value, // Compare values
+                };
+                has_changed
+            }
+            crate::watch::WatchWhen::FunctionName(fn_name) => {
+                // For filter functions, ALWAYS call the filter - it subsumes change detection
+                // Evaluate the filter function
+                log::debug!(
+                    "Evaluating filter function '{fn_name}' for variable '{var_name}': current={current_baml_value:?}"
+                );
+                match evaluate_filter_function(
+                    fn_name,
+                    &current_baml_value,
+                    scopes,
+                    thir,
+                    run_llm_function,
+                    function_name,
+                )
+                .await
+                {
+                    Ok(result) => {
+                        log::debug!("Filter function '{fn_name}' returned: {result}");
+                        result
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "Error evaluating filter function '{fn_name}' for variable '{var_name}': {e}"
+                        );
+                        false // Don't notify on error
+                    }
+                }
+            }
+        };
+
+        if should_notify {
+            // Update last notified value
+            for scope in scopes.iter_mut() {
+                for watch_var in &mut scope.watch_variables {
+                    if watch_var.name == var_name {
+                        *watch_var.last_notified.lock().unwrap() = Some(current_baml_value.clone());
+                        break;
+                    }
+                }
+            }
+
+            // Fire the notification
+            let watch_value = expr_value_to_watch_value(current_value);
+            let notification = crate::watch::WatchNotification::new_var(
+                var_name.clone(),  // variable name
+                spec.name.clone(), // channel name
+                watch_value,
+                function_name.to_string(),
+            );
+            watch_notification_handler(notification);
+        }
+    }
+}
+
+/// Evaluate a filter function for watch
+/// The filter function takes (current_value) -> bool
+async fn evaluate_filter_function<F, Fut>(
+    fn_name: &internal_baml_ast::ast::Identifier,
+    current_value: &BamlValue,
+    scopes: &mut Vec<Scope>,
+    thir: &THir<ExprMetadata>,
+    run_llm_function: &mut F,
+    function_name: &str,
+) -> Result<bool>
+where
+    F: LlmHandler<Fut>,
+    Fut: LlmFuture,
+{
+    // Look up the filter function
+    let filter_func = thir
+        .expr_functions
+        .iter()
+        .find(|f| f.name == fn_name.to_string())
+        .with_context(|| format!("Filter function '{fn_name}' not found"))?;
+
+    // Check arity
+    if filter_func.parameters.len() != 1 {
+        bail!(
+            "Filter function '{}' must take exactly 1 parameter (current value)",
+            fn_name
+        );
+    }
+
+    // Convert BamlValue to BamlValueWithMeta
+    log::debug!("Filter function current_value: {current_value:?}");
+    let value_with_meta = baml_value_to_value_with_meta(current_value.clone());
+
+    // Create a new scope with the function parameter
+    // Mark this as a filter context to prevent infinite recursion
+    scopes.push(Scope {
+        variables: [(
+            filter_func.parameters[0].name.clone(),
+            Arc::new(Mutex::new(value_with_meta)),
+        )]
+        .into_iter()
+        .collect(),
+        watch_variables: Vec::new(),
+        is_filter_context: true,
+    });
+
+    // Create a no-op watch handler for the filter function evaluation
+    // Filter functions shouldn't send their own notifications
+    let mut noop_watch_handler = |_notification: WatchNotification| {};
+
+    // Evaluate the function body
+    let result = evaluate_block(
+        &filter_func.body,
+        scopes,
+        thir,
+        run_llm_function,
+        &mut noop_watch_handler,
+        function_name,
+    )
+    .await?;
+
+    scopes.pop();
+
+    // Extract boolean result
+    match result {
+        BamlValueWithMeta::Bool(b, _) => Ok(b),
+        _ => bail!(
+            "Filter function '{}' must return a boolean, got {:?}",
+            fn_name,
+            result
+        ),
+    }
+}
+
+/// Convert BamlValue to BamlValueWithMeta (with fake metadata)
+fn baml_value_to_value_with_meta(value: BamlValue) -> BamlValueWithMeta<ExprMetadata> {
+    let meta = (Span::fake(), None);
+    match value {
+        BamlValue::String(s) => BamlValueWithMeta::String(s, meta),
+        BamlValue::Int(i) => BamlValueWithMeta::Int(i, meta),
+        BamlValue::Float(f) => BamlValueWithMeta::Float(f, meta),
+        BamlValue::Bool(b) => BamlValueWithMeta::Bool(b, meta),
+        BamlValue::Map(m) => {
+            let converted = m
+                .into_iter()
+                .map(|(k, v)| (k, baml_value_to_value_with_meta(v)))
+                .collect();
+            BamlValueWithMeta::Map(converted, meta)
+        }
+        BamlValue::List(l) => {
+            let converted = l.into_iter().map(baml_value_to_value_with_meta).collect();
+            BamlValueWithMeta::List(converted, meta)
+        }
+        BamlValue::Media(m) => BamlValueWithMeta::Media(m, meta),
+        BamlValue::Enum(name, val) => BamlValueWithMeta::Enum(name, val, meta),
+        BamlValue::Class(name, fields) => {
+            let converted = fields
+                .into_iter()
+                .map(|(k, v)| (k, baml_value_to_value_with_meta(v)))
+                .collect();
+            BamlValueWithMeta::Class(name, converted, meta)
+        }
+        BamlValue::Null => BamlValueWithMeta::Null(meta),
+    }
+}
+
 pub async fn interpret_thir<F, Fut>(
+    function_name: String,
     thir: THir<ExprMetadata>,
     expr: Expr<ExprMetadata>,
     mut run_llm_function: F,
+    mut watch_notification_handler: impl FnMut(WatchNotification) + Send,
     extra_bindings: BamlMap<String, BamlValueWithMeta<ExprMetadata>>,
     env_vars: HashMap<String, String>,
 ) -> Result<BamlValueWithMeta<ExprMetadata>>
@@ -83,6 +433,8 @@ where
                 .into_iter()
                 .map(|(k, v)| (k, Arc::new(Mutex::new(v)))),
         ),
+        watch_variables: Vec::new(),
+        is_filter_context: false,
     }];
 
     let mut env_entries = BamlMap::new();
@@ -102,30 +454,53 @@ where
 
     // Seed scope with global assignments
     for (name, g) in thir.global_assignments.iter() {
-        let v =
-            expect_value(evaluate_expr(&g.expr, &mut scopes, &thir, &mut run_llm_function).await?)?;
+        let v = expect_value(
+            evaluate_expr(
+                &g.expr,
+                &mut scopes,
+                &thir,
+                &mut run_llm_function,
+                &mut watch_notification_handler,
+                &function_name,
+            )
+            .await?,
+        )?;
         declare(&mut scopes, name, v);
     }
 
     // Evaluate provided expression
-    let result =
-        expect_value(evaluate_expr(&expr, &mut scopes, &thir, &mut run_llm_function).await?)?;
+    let result = expect_value(
+        evaluate_expr(
+            &expr,
+            &mut scopes,
+            &thir,
+            &mut run_llm_function,
+            &mut watch_notification_handler,
+            &function_name,
+        )
+        .await?,
+    )?;
     Ok(result)
 }
 
-fn evaluate_block_with_control_flow<'a, F, Fut>(
+fn evaluate_block_with_control_flow<'a, F, Fut, E>(
     block: &'a Block<ExprMetadata>,
     scopes: &'a mut Vec<Scope>,
     thir: &'a THir<ExprMetadata>,
     run_llm_function: &'a mut F,
+    watch_handler: &'a mut E,
+    function_name: &'a str,
 ) -> BoxFuture<'a, Result<ControlFlow>>
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
+    E: FnMut(crate::watch::WatchNotification) + Send,
 {
     Box::pin(async move {
         scopes.push(Scope {
             variables: BamlMap::new(),
+            watch_variables: Vec::new(),
+            is_filter_context: false,
         });
 
         // Check if we should treat the last statement as the implicit return value
@@ -140,50 +515,178 @@ where
 
         for stmt in block.statements.iter().take(statements_to_execute) {
             match stmt {
-                Statement::Let { name, value, .. } => {
-                    match evaluate_expr(value, scopes, thir, run_llm_function).await? {
+                Statement::Let {
+                    name, value, watch, ..
+                } => {
+                    match evaluate_expr(
+                        value,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?
+                    {
                         EvalValue::Value(v) => {
                             declare(scopes, name, v);
+                            // Register watch tracking if @watch is present
+                            if let Some(watch_spec) = watch {
+                                if let Some(var_ref) = lookup_variable(scopes, name) {
+                                    register_watch_variable(
+                                        scopes,
+                                        name,
+                                        var_ref,
+                                        watch_spec.clone(),
+                                    );
+                                }
+                            }
                         }
                         EvalValue::Reference(cell) => {
-                            declare_with_cell(scopes, name, cell);
+                            declare_with_cell(scopes, name, cell.clone());
+                            // Register watch tracking if @watch is present
+                            if let Some(emit_spec) = watch {
+                                register_watch_variable(scopes, name, cell, emit_spec.clone());
+                            }
                         }
                         EvalValue::Function(_, _, _) => {
                             bail!("cannot assign function to variable `{}`", name);
                         }
                     }
+                    // Check for changes in all watch variables after the let statement
+                    check_watch_changes(
+                        scopes,
+                        watch_handler,
+                        function_name,
+                        thir,
+                        run_llm_function,
+                    )
+                    .await;
                 }
                 Statement::Declare { name, span } => {
                     declare(scopes, name, BamlValueWithMeta::Null((span.clone(), None)));
                 }
                 Statement::Assign { left, value } => {
-                    let assigned_value =
-                        expect_value(evaluate_expr(value, scopes, thir, run_llm_function).await?)?;
-                    assign_to_expr(left, assigned_value, scopes, thir, run_llm_function).await?;
+                    let assigned_value = expect_value(
+                        evaluate_expr(
+                            value,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
+                    )?;
+                    assign_to_expr(
+                        left,
+                        assigned_value,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?;
+                    // Check for changes in watch variables after assignment
+                    check_watch_changes(
+                        scopes,
+                        watch_handler,
+                        function_name,
+                        thir,
+                        run_llm_function,
+                    )
+                    .await;
                 }
-                Statement::DeclareAndAssign { name, value, .. } => {
-                    match evaluate_expr(value, scopes, thir, run_llm_function).await? {
+                Statement::DeclareAndAssign {
+                    name, value, watch, ..
+                } => {
+                    // Create watch context if @watch is present
+                    let watch_ctx = watch.as_ref().map(|_| {
+                        use std::time::{SystemTime, UNIX_EPOCH};
+                        let timestamp = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis();
+                        WatchStreamContext {
+                            variable_name: name.clone(),
+                            stream_id: format!("{function_name}_{name}_{timestamp}"),
+                        }
+                    });
+
+                    match evaluate_expr_with_context(
+                        value,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                        watch_ctx.as_ref(),
+                    )
+                    .await?
+                    {
                         EvalValue::Value(v) => {
                             declare(scopes, name, v);
+                            // Register watch tracking if @watch is present
+                            if let Some(watch_spec) = watch {
+                                if let Some(var_ref) = lookup_variable(scopes, name) {
+                                    register_watch_variable(
+                                        scopes,
+                                        name,
+                                        var_ref,
+                                        watch_spec.clone(),
+                                    );
+                                }
+                            }
                         }
                         EvalValue::Reference(cell) => {
-                            declare_with_cell(scopes, name, cell);
+                            declare_with_cell(scopes, name, cell.clone());
+                            // Register watch tracking if @watch is present
+                            if let Some(emit_spec) = watch {
+                                register_watch_variable(scopes, name, cell, emit_spec.clone());
+                            }
                         }
                         EvalValue::Function(_, _, _) => {
                             bail!("cannot assign function to variable `{}`", name);
                         }
                     }
+                    // Check for changes in all watch variables after the declare and assign
+                    check_watch_changes(
+                        scopes,
+                        watch_handler,
+                        function_name,
+                        thir,
+                        run_llm_function,
+                    )
+                    .await;
                 }
                 Statement::Return { expr, .. } => {
-                    let v =
-                        expect_value(evaluate_expr(expr, scopes, thir, run_llm_function).await?)?;
+                    let v = expect_value(
+                        evaluate_expr(
+                            expr,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
+                    )?;
                     scopes.pop();
                     return Ok(ControlFlow::Return(v));
                 }
                 Statement::Expression { expr, .. } => {
                     // For expression statements, we still need to evaluate them for side effects
                     // (and the last one might be the implicit return value)
-                    let _ = evaluate_expr(expr, scopes, thir, run_llm_function).await?;
+                    let _ = evaluate_expr(
+                        expr,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?;
                 }
                 Statement::Break(_) => {
                     scopes.pop();
@@ -197,7 +700,15 @@ where
                     condition, block, ..
                 } => loop {
                     let cond_val = expect_value(
-                        evaluate_expr(condition, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            condition,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?;
                     match cond_val {
                         BamlValueWithMeta::Bool(true, _) => match evaluate_block_with_control_flow(
@@ -205,6 +716,8 @@ where
                             scopes,
                             thir,
                             run_llm_function,
+                            watch_handler,
+                            function_name,
                         )
                         .await?
                         {
@@ -227,7 +740,15 @@ where
                     ..
                 } => {
                     let iterable_val = expect_value(
-                        evaluate_expr(iterator, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            iterator,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?;
                     match iterable_val {
                         BamlValueWithMeta::List(items, _) => {
@@ -235,6 +756,8 @@ where
                                 // Create new scope for loop iteration
                                 scopes.push(Scope {
                                     variables: BamlMap::new(),
+                                    watch_variables: Vec::new(),
+                                    is_filter_context: false,
                                 });
                                 declare(scopes, identifier, item_val.clone());
 
@@ -243,6 +766,8 @@ where
                                     scopes,
                                     thir,
                                     run_llm_function,
+                                    watch_handler,
+                                    function_name,
                                 )
                                 .await?
                                 {
@@ -276,12 +801,30 @@ where
                 } => {
                     use crate::hir::AssignOp;
 
-                    let current_val =
-                        expect_value(evaluate_expr(left, scopes, thir, run_llm_function).await?)?;
+                    let current_val = expect_value(
+                        evaluate_expr(
+                            left,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
+                    )?;
 
                     // Evaluate the right-hand side expression
-                    let rhs_val =
-                        expect_value(evaluate_expr(value, scopes, thir, run_llm_function).await?)?;
+                    let rhs_val = expect_value(
+                        evaluate_expr(
+                            value,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
+                    )?;
 
                     // Perform the compound assignment operation
                     let result_val = match assign_op {
@@ -409,10 +952,36 @@ where
                     };
 
                     // Assign the result back to the target expression
-                    assign_to_expr(left, result_val, scopes, thir, run_llm_function).await?;
+                    assign_to_expr(
+                        left,
+                        result_val,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?;
+                    // Check for changes in watch variables after compound assignment
+                    check_watch_changes(
+                        scopes,
+                        watch_handler,
+                        function_name,
+                        thir,
+                        run_llm_function,
+                    )
+                    .await;
                 }
                 Statement::SemicolonExpression { expr, .. } => {
-                    let _ = evaluate_expr(expr, scopes, thir, run_llm_function).await?;
+                    let _ = evaluate_expr(
+                        expr,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?;
                 }
                 Statement::CForLoop {
                     condition,
@@ -423,7 +992,15 @@ where
                         // Check condition (if present)
                         if let Some(cond_expr) = condition {
                             let cond_val = expect_value(
-                                evaluate_expr(cond_expr, scopes, thir, run_llm_function).await?,
+                                evaluate_expr(
+                                    cond_expr,
+                                    scopes,
+                                    thir,
+                                    run_llm_function,
+                                    watch_handler,
+                                    function_name,
+                                )
+                                .await?,
                             )?;
                             match cond_val {
                                 BamlValueWithMeta::Bool(false, _) => break,
@@ -438,6 +1015,8 @@ where
                             scopes,
                             thir,
                             run_llm_function,
+                            watch_handler,
+                            function_name,
                         )
                         .await?
                         {
@@ -456,8 +1035,15 @@ where
                                             use crate::hir::AssignOp;
 
                                             let current_val = expect_value(
-                                                evaluate_expr(left, scopes, thir, run_llm_function)
-                                                    .await?,
+                                                evaluate_expr(
+                                                    left,
+                                                    scopes,
+                                                    thir,
+                                                    run_llm_function,
+                                                    watch_handler,
+                                                    function_name,
+                                                )
+                                                .await?,
                                             )?;
                                             let rhs_val = expect_value(
                                                 evaluate_expr(
@@ -465,6 +1051,8 @@ where
                                                     scopes,
                                                     thir,
                                                     run_llm_function,
+                                                    watch_handler,
+                                                    function_name,
                                                 )
                                                 .await?,
                                             )?;
@@ -491,6 +1079,8 @@ where
                                                 scopes,
                                                 thir,
                                                 run_llm_function,
+                                                watch_handler,
+                                                function_name,
                                             )
                                             .await?;
                                         }
@@ -501,11 +1091,21 @@ where
                                                     scopes,
                                                     thir,
                                                     run_llm_function,
+                                                    watch_handler,
+                                                    function_name,
                                                 )
                                                 .await?,
                                             )?;
-                                            assign_to_expr(left, v, scopes, thir, run_llm_function)
-                                                .await?;
+                                            assign_to_expr(
+                                                left,
+                                                v,
+                                                scopes,
+                                                thir,
+                                                run_llm_function,
+                                                watch_handler,
+                                                function_name,
+                                            )
+                                            .await?;
                                         }
                                         _ => bail!(
                                             "unsupported statement type in C-for after clause"
@@ -528,8 +1128,15 @@ where
                                             use crate::hir::AssignOp;
 
                                             let current_val = expect_value(
-                                                evaluate_expr(left, scopes, thir, run_llm_function)
-                                                    .await?,
+                                                evaluate_expr(
+                                                    left,
+                                                    scopes,
+                                                    thir,
+                                                    run_llm_function,
+                                                    watch_handler,
+                                                    function_name,
+                                                )
+                                                .await?,
                                             )?;
                                             let rhs_val = expect_value(
                                                 evaluate_expr(
@@ -537,6 +1144,8 @@ where
                                                     scopes,
                                                     thir,
                                                     run_llm_function,
+                                                    watch_handler,
+                                                    function_name,
                                                 )
                                                 .await?,
                                             )?;
@@ -563,6 +1172,8 @@ where
                                                 scopes,
                                                 thir,
                                                 run_llm_function,
+                                                watch_handler,
+                                                function_name,
                                             )
                                             .await?;
                                         }
@@ -573,11 +1184,21 @@ where
                                                     scopes,
                                                     thir,
                                                     run_llm_function,
+                                                    watch_handler,
+                                                    function_name,
                                                 )
                                                 .await?,
                                             )?;
-                                            assign_to_expr(left, v, scopes, thir, run_llm_function)
-                                                .await?;
+                                            assign_to_expr(
+                                                left,
+                                                v,
+                                                scopes,
+                                                thir,
+                                                run_llm_function,
+                                                watch_handler,
+                                                function_name,
+                                            )
+                                            .await?;
                                         }
                                         _ => bail!(
                                             "unsupported statement type in C-for after clause"
@@ -594,7 +1215,15 @@ where
                 }
                 Statement::Assert { condition, .. } => {
                     let cond_val = expect_value(
-                        evaluate_expr(condition, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            condition,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?;
                     match cond_val {
                         BamlValueWithMeta::Bool(true, _) => {}
@@ -602,18 +1231,88 @@ where
                         _ => bail!("assert condition must be boolean"),
                     }
                 }
+                Statement::WatchOptions {
+                    variable,
+                    channel,
+                    when,
+                    span,
+                } => {
+                    // Find and update the watch variable for this variable
+                    // We need to find the watch variable by checking which one references the same value
+                    for scope in scopes.iter_mut().rev() {
+                        if let Some(var_ref) = scope.variables.get(variable) {
+                            // Find the watch variable that references this variable
+                            if let Some(watch_var) = scope
+                                .watch_variables
+                                .iter_mut()
+                                .find(|wv| Arc::ptr_eq(&wv.value_ref, var_ref))
+                            {
+                                // Update the channel name if provided
+                                if let Some(new_channel) = channel {
+                                    watch_var.spec.name = new_channel.clone();
+                                }
+
+                                // Update the when condition if provided
+                                if let Some(when_str) = when {
+                                    watch_var.spec.when = match when_str.as_str() {
+                                        "manual" => crate::watch::WatchWhen::Manual,
+                                        "true" => crate::watch::WatchWhen::True,
+                                        _ => crate::watch::WatchWhen::FunctionName(
+                                            internal_baml_ast::ast::Identifier::Local(
+                                                when_str.clone(),
+                                                span.clone(),
+                                            ),
+                                        ),
+                                    };
+                                }
+
+                                watch_var.spec.span = span.clone();
+                                break;
+                            }
+                        }
+                    }
+                }
+                Statement::WatchNotify { variable, .. } => {
+                    // Manually trigger a watch notification for this variable
+                    fire_watch_notification_for_variable(
+                        scopes,
+                        variable,
+                        watch_handler,
+                        function_name,
+                    )?;
+                }
             }
         }
 
         // Compute the return value
         let ret = if let Some(trailing_expr) = &block.trailing_expr {
             // Explicit trailing expression
-            expect_value(evaluate_expr(trailing_expr, scopes, thir, run_llm_function).await?)?
+            expect_value(
+                evaluate_expr(
+                    trailing_expr,
+                    scopes,
+                    thir,
+                    run_llm_function,
+                    watch_handler,
+                    function_name,
+                )
+                .await?,
+            )?
         } else if use_last_expr_as_return {
             // No explicit trailing expression, but last statement is an expression statement,
             // so use that as the implicit return value (handles cases like if-else at the end of a block)
             if let Some(Statement::Expression { expr, .. }) = block.statements.last() {
-                expect_value(evaluate_expr(expr, scopes, thir, run_llm_function).await?)?
+                expect_value(
+                    evaluate_expr(
+                        expr,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?
             } else {
                 unreachable!("use_last_expr_as_return is true but last statement is not Expression")
             }
@@ -626,17 +1325,29 @@ where
     })
 }
 
-async fn evaluate_block<F, Fut>(
+async fn evaluate_block<F, Fut, E>(
     block: &Block<ExprMetadata>,
     scopes: &mut Vec<Scope>,
     thir: &THir<ExprMetadata>,
     run_llm_function: &mut F,
+    watch_handler: &mut E,
+    function_name: &str,
 ) -> Result<BamlValueWithMeta<ExprMetadata>>
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
+    E: FnMut(crate::watch::WatchNotification) + Send,
 {
-    match evaluate_block_with_control_flow(block, scopes, thir, run_llm_function).await? {
+    match evaluate_block_with_control_flow(
+        block,
+        scopes,
+        thir,
+        run_llm_function,
+        watch_handler,
+        function_name,
+    )
+    .await?
+    {
         ControlFlow::Normal(val) => Ok(val),
         ControlFlow::Return(val) => Ok(val),
         ControlFlow::Break => bail!("break statement not in loop context"),
@@ -672,16 +1383,19 @@ fn assign(scopes: &mut [Scope], name: &str, value: BamlValueWithMeta<ExprMetadat
     bail!("assign to undeclared variable `{}`", name)
 }
 
-async fn assign_to_expr<F, Fut>(
+async fn assign_to_expr<F, Fut, E>(
     target: &Expr<ExprMetadata>,
     new_value: BamlValueWithMeta<ExprMetadata>,
     scopes: &mut Vec<Scope>,
     thir: &THir<ExprMetadata>,
     run_llm_function: &mut F,
+    watch_handler: &mut E,
+    function_name: &str,
 ) -> Result<()>
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
+    E: FnMut(crate::watch::WatchNotification) + Send,
 {
     let mut current_expr = target;
     let mut value_to_assign = new_value;
@@ -690,20 +1404,29 @@ where
         match current_expr {
             Expr::Var(name, _) => return assign(scopes, name, value_to_assign),
             Expr::FieldAccess { base, field, .. } => {
-                let mut base_value =
-                    expect_value(evaluate_expr(base, scopes, thir, run_llm_function).await?)?;
+                let mut base_value = expect_value(
+                    evaluate_expr(
+                        base,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
 
                 match &mut base_value {
                     BamlValueWithMeta::Class(_, fields, _) => {
-                        let entry = fields.get_mut(field).with_context(|| {
-                            format!("field `{}` not found for assignment", field)
-                        })?;
+                        let entry = fields
+                            .get_mut(field)
+                            .with_context(|| format!("field `{field}` not found for assignment"))?;
                         *entry = value_to_assign.clone();
                     }
                     BamlValueWithMeta::Map(fields, _) => {
-                        let entry = fields.get_mut(field).with_context(|| {
-                            format!("field `{}` not found for assignment", field)
-                        })?;
+                        let entry = fields
+                            .get_mut(field)
+                            .with_context(|| format!("field `{field}` not found for assignment"))?;
                         *entry = value_to_assign.clone();
                     }
                     _ => bail!("field assignment on non-map/class"),
@@ -713,10 +1436,28 @@ where
                 current_expr = base.as_ref();
             }
             Expr::ArrayAccess { base, index, meta } => {
-                let mut base_value =
-                    expect_value(evaluate_expr(base, scopes, thir, run_llm_function).await?)?;
-                let index_value =
-                    expect_value(evaluate_expr(index, scopes, thir, run_llm_function).await?)?;
+                let mut base_value = expect_value(
+                    evaluate_expr(
+                        base,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
+                let index_value = expect_value(
+                    evaluate_expr(
+                        index,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
 
                 let idx = match index_value {
                     BamlValueWithMeta::Int(i, _) if i >= 0 => i as usize,
@@ -765,6 +1506,14 @@ fn lookup_cell(
     None
 }
 
+/// Alias for lookup_cell - looks up a variable and returns its Arc<Mutex<>>
+fn lookup_variable(
+    scopes: &[Scope],
+    name: &str,
+) -> Option<Arc<Mutex<BamlValueWithMeta<ExprMetadata>>>> {
+    lookup_cell(scopes, name)
+}
+
 /// Convert BamlValueWithMeta to BamlValue by stripping metadata
 fn baml_value_with_meta_to_baml_value(value: BamlValueWithMeta<ExprMetadata>) -> BamlValue {
     match value {
@@ -799,15 +1548,45 @@ fn baml_value_with_meta_to_baml_value(value: BamlValueWithMeta<ExprMetadata>) ->
     }
 }
 
-fn evaluate_expr<'a, F, Fut>(
+// Helper wrapper that calls evaluate_expr_with_context with None context
+fn evaluate_expr<'a, F, Fut, E>(
     expr: &'a Expr<ExprMetadata>,
     scopes: &'a mut Vec<Scope>,
     thir: &'a THir<ExprMetadata>,
     run_llm_function: &'a mut F,
+    watch_handler: &'a mut E,
+    function_name: &'a str,
 ) -> BoxFuture<'a, Result<EvalValue>>
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
+    E: FnMut(crate::watch::WatchNotification) + Send,
+{
+    evaluate_expr_with_context(
+        expr,
+        scopes,
+        thir,
+        run_llm_function,
+        watch_handler,
+        function_name,
+        None,
+    )
+}
+
+// Internal function that accepts optional emit context
+fn evaluate_expr_with_context<'a, F, Fut, E>(
+    expr: &'a Expr<ExprMetadata>,
+    scopes: &'a mut Vec<Scope>,
+    thir: &'a THir<ExprMetadata>,
+    run_llm_function: &'a mut F,
+    watch_handler: &'a mut E,
+    function_name: &'a str,
+    watch_context: Option<&'a WatchStreamContext>,
+) -> BoxFuture<'a, Result<EvalValue>>
+where
+    F: LlmHandler<Fut>,
+    Fut: LlmFuture,
+    E: FnMut(crate::watch::WatchNotification) + Send,
 {
     Box::pin(async move {
         Ok(match expr {
@@ -816,7 +1595,15 @@ where
                 let mut out = Vec::with_capacity(items.len());
                 for it in items.iter() {
                     out.push(expect_value(
-                        evaluate_expr(it, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            it,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?);
                 }
                 EvalValue::Value(BamlValueWithMeta::List(out, meta.clone()))
@@ -826,13 +1613,31 @@ where
                 for (k, v) in entries.iter() {
                     out.insert(
                         k.clone(),
-                        expect_value(evaluate_expr(v, scopes, thir, run_llm_function).await?)?,
+                        expect_value(
+                            evaluate_expr(
+                                v,
+                                scopes,
+                                thir,
+                                run_llm_function,
+                                watch_handler,
+                                function_name,
+                            )
+                            .await?,
+                        )?,
                     );
                 }
                 EvalValue::Value(BamlValueWithMeta::Map(out, meta.clone()))
             }
             Expr::Block(block, _meta) => {
-                let v = evaluate_block(block, scopes, thir, run_llm_function).await?;
+                let v = evaluate_block(
+                    block,
+                    scopes,
+                    thir,
+                    run_llm_function,
+                    watch_handler,
+                    function_name,
+                )
+                .await?;
                 EvalValue::Value(v)
             }
             Expr::Var(name, meta) => {
@@ -903,7 +1708,15 @@ where
                         }
 
                         let key_val = expect_value(
-                            evaluate_expr(&args[0], scopes, thir, run_llm_function).await?,
+                            evaluate_expr(
+                                &args[0],
+                                scopes,
+                                thir,
+                                run_llm_function,
+                                watch_handler,
+                                function_name,
+                            )
+                            .await?,
                         )?;
 
                         let key = match key_val {
@@ -927,7 +1740,15 @@ where
                     }
                 }
 
-                let callee = evaluate_expr(func, scopes, thir, run_llm_function).await?;
+                let callee = evaluate_expr(
+                    func,
+                    scopes,
+                    thir,
+                    run_llm_function,
+                    watch_handler,
+                    function_name,
+                )
+                .await?;
                 let (arity, body, meta) = match callee {
                     EvalValue::Function(a, b, m) => (a, b, m),
                     _ => bail!("attempted to call non-function"),
@@ -943,13 +1764,22 @@ where
                         let mut llm_args: Vec<BamlValue> = Vec::with_capacity(args.len());
                         for a in args.iter() {
                             let arg_val = expect_value(
-                                evaluate_expr(a, scopes, thir, run_llm_function).await?,
+                                evaluate_expr(
+                                    a,
+                                    scopes,
+                                    thir,
+                                    run_llm_function,
+                                    watch_handler,
+                                    function_name,
+                                )
+                                .await?,
                             )?;
                             llm_args.push(baml_value_with_meta_to_baml_value(arg_val));
                         }
 
-                        // Call the LLM function
-                        let result = run_llm_function(fn_name, llm_args).await?;
+                        // Call the LLM function with watch context if available
+                        let result =
+                            run_llm_function(fn_name, llm_args, watch_context.cloned()).await?;
                         return Ok(EvalValue::Value(result));
                     }
 
@@ -965,7 +1795,15 @@ where
                             Vec::with_capacity(args.len());
                         for a in args.iter() {
                             arg_vals.push(expect_value(
-                                evaluate_expr(a, scopes, thir, run_llm_function).await?,
+                                evaluate_expr(
+                                    a,
+                                    scopes,
+                                    thir,
+                                    run_llm_function,
+                                    watch_handler,
+                                    function_name,
+                                )
+                                .await?,
                             )?);
                         }
 
@@ -990,32 +1828,44 @@ where
                     Vec::with_capacity(args.len());
                 for a in args.iter() {
                     arg_vals.push(expect_value(
-                        evaluate_expr(a, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            a,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?);
                 }
 
                 // Check if this is an expression function call to get parameter names
-                let param_names = if let Expr::Var(func_name, _) = func.as_ref() {
+                // and the actual function name for watch notifications
+                let (param_names, called_function_name) = if let Expr::Var(func_name, _) =
+                    func.as_ref()
+                {
                     if let Some(expr_func) =
                         thir.expr_functions.iter().find(|f| &f.name == func_name)
                     {
                         // Use actual parameter names from expression function
-                        expr_func
+                        let params = expr_func
                             .parameters
                             .iter()
                             .map(|p| p.name.clone())
-                            .collect::<Vec<_>>()
+                            .collect::<Vec<_>>();
+                        (params, func_name.as_str())
                     } else {
                         // Use fresh names for anonymous functions
                         let body_expr =
                             Expr::Block(Box::new(Arc::unwrap_or_clone(body.clone())), meta.clone());
-                        body_expr.fresh_names(arity)
+                        (body_expr.fresh_names(arity), function_name)
                     }
                 } else {
                     // Use fresh names for complex function expressions
                     let body_expr =
                         Expr::Block(Box::new(Arc::unwrap_or_clone(body.clone())), meta.clone());
-                    body_expr.fresh_names(arity)
+                    (body_expr.fresh_names(arity), function_name)
                 };
 
                 // Create a scope binding parameters to their argument values
@@ -1025,34 +1875,90 @@ where
                         .zip(arg_vals)
                         .map(|(k, v)| (k, Arc::new(Mutex::new(v))))
                         .collect(),
+                    watch_variables: Vec::new(),
+                    is_filter_context: false,
                 });
 
-                // Execute the function body
-                let result = evaluate_block(&body, scopes, thir, run_llm_function).await?;
+                // Execute the function body with the correct function name for watch notifications
+                let result = evaluate_block(
+                    &body,
+                    scopes,
+                    thir,
+                    run_llm_function,
+                    watch_handler,
+                    called_function_name,
+                )
+                .await?;
                 scopes.pop();
                 EvalValue::Value(result)
             }
             Expr::If(cond, then, else_, meta) => {
-                let cv = expect_value(evaluate_expr(cond, scopes, thir, run_llm_function).await?)?;
+                let cv = expect_value(
+                    evaluate_expr(
+                        cond,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
                 let b = match cv {
                     BamlValueWithMeta::Bool(v, _) => v,
                     _ => bail!("condition not bool at {:?}", meta.0),
                 };
                 if b {
                     EvalValue::Value(expect_value(
-                        evaluate_expr(then, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            then,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?)
                 } else if let Some(e) = else_ {
                     EvalValue::Value(expect_value(
-                        evaluate_expr(e, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            e,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?)
                 } else {
                     EvalValue::Value(BamlValueWithMeta::Null(meta.clone()))
                 }
             }
             Expr::ArrayAccess { base, index, meta } => {
-                let b = expect_value(evaluate_expr(base, scopes, thir, run_llm_function).await?)?;
-                let i = expect_value(evaluate_expr(index, scopes, thir, run_llm_function).await?)?;
+                let b = expect_value(
+                    evaluate_expr(
+                        base,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
+                let i = expect_value(
+                    evaluate_expr(
+                        index,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
                 let arr = match b.clone() {
                     BamlValueWithMeta::List(v, _) => v,
                     _ => bail!("array access on non-list at {:?}", meta),
@@ -1065,7 +1971,17 @@ where
                 EvalValue::Value(v.clone())
             }
             Expr::FieldAccess { base, field, meta } => {
-                let b = expect_value(evaluate_expr(base, scopes, thir, run_llm_function).await?)?;
+                let b = expect_value(
+                    evaluate_expr(
+                        base,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
                 match b.clone() {
                     BamlValueWithMeta::Map(m, _) => {
                         let v = m.get(field).context("missing field")?;
@@ -1088,14 +2004,30 @@ where
                             field_map.insert(
                                 name.clone(),
                                 expect_value(
-                                    evaluate_expr(value, scopes, thir, run_llm_function).await?,
+                                    evaluate_expr(
+                                        value,
+                                        scopes,
+                                        thir,
+                                        run_llm_function,
+                                        watch_handler,
+                                        function_name,
+                                    )
+                                    .await?,
                                 )?,
                             );
                         }
 
                         ClassConstructorField::Spread { value } => {
                             let spread_val = expect_value(
-                                evaluate_expr(value, scopes, thir, run_llm_function).await?,
+                                evaluate_expr(
+                                    value,
+                                    scopes,
+                                    thir,
+                                    run_llm_function,
+                                    watch_handler,
+                                    function_name,
+                                )
+                                .await?,
                             )?;
                             match spread_val.clone() {
                                 BamlValueWithMeta::Class(_, spread_fields, _) => {
@@ -1130,7 +2062,7 @@ where
                     Builtin::FetchValue => {
                         // FetchValue requires network access and is not supported in the interpreter
                         bail!(
-                            "builtin function std::fetch_value is not supported in interpreter at {:?}",
+                            "builtin function baml.fetch_value is not supported in interpreter at {:?}",
                             meta.0
                         )
                     }
@@ -1142,10 +2074,28 @@ where
                 right,
                 meta,
             } => {
-                let left_val =
-                    expect_value(evaluate_expr(left, scopes, thir, run_llm_function).await?)?;
-                let right_val =
-                    expect_value(evaluate_expr(right, scopes, thir, run_llm_function).await?)?;
+                let left_val = expect_value(
+                    evaluate_expr(
+                        left,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
+                let right_val = expect_value(
+                    evaluate_expr(
+                        right,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
 
                 let result = evaluate_binary_op(operator, &left_val, &right_val, meta)?;
                 EvalValue::Value(result)
@@ -1155,7 +2105,17 @@ where
                 expr,
                 meta,
             } => {
-                let val = expect_value(evaluate_expr(expr, scopes, thir, run_llm_function).await?)?;
+                let val = expect_value(
+                    evaluate_expr(
+                        expr,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
 
                 let result = evaluate_unary_op(operator, &val, meta)?;
                 EvalValue::Value(result)
@@ -1166,8 +2126,17 @@ where
                 args,
                 meta,
             } => {
-                let receiver_val =
-                    expect_value(evaluate_expr(receiver, scopes, thir, run_llm_function).await?)?;
+                let receiver_val = expect_value(
+                    evaluate_expr(
+                        receiver,
+                        scopes,
+                        thir,
+                        run_llm_function,
+                        watch_handler,
+                        function_name,
+                    )
+                    .await?,
+                )?;
 
                 // Extract method name
                 let method_name = match method.as_ref() {
@@ -1180,14 +2149,32 @@ where
                     Vec::with_capacity(args.len());
                 for arg in args.iter() {
                     arg_vals.push(expect_value(
-                        evaluate_expr(arg, scopes, thir, run_llm_function).await?,
+                        evaluate_expr(
+                            arg,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
                     )?);
                 }
 
                 let result = evaluate_method_call(&receiver_val, &method_name, &arg_vals, meta)?;
                 EvalValue::Value(result)
             }
-            Expr::Paren(inner, _) => evaluate_expr(inner, scopes, thir, run_llm_function).await?,
+            Expr::Paren(inner, _) => {
+                evaluate_expr(
+                    inner,
+                    scopes,
+                    thir,
+                    run_llm_function,
+                    watch_handler,
+                    function_name,
+                )
+                .await?
+            }
         })
     })
 }
@@ -1749,18 +2736,50 @@ mod tests {
         (thir, expr_thir)
     }
 
-    async fn mock_llm_function(
+    fn mock_llm_function(
         _fn_name: String,
         _args: Vec<BamlValue>,
-    ) -> Result<BamlValueWithMeta<ExprMetadata>> {
+        _watch_context: Option<WatchStreamContext>,
+    ) -> BoxFuture<'static, Result<BamlValueWithMeta<ExprMetadata>>> {
         // Mock LLM function that returns an error to simulate unsupported operation
-        Ok(BamlValueWithMeta::Int(10, (Span::fake(), None)))
+        Box::pin(async move { Ok(BamlValueWithMeta::Int(10, (Span::fake(), None))) })
+    }
+
+    async fn interpret_thir_ignoring_watch<F>(
+        thir: THir<ExprMetadata>,
+        expr: Expr<ExprMetadata>,
+        handle_llm_call: F,
+        extra_bindings: BamlMap<String, BamlValueWithMeta<ExprMetadata>>,
+        env_vars: HashMap<String, String>,
+    ) -> Result<BamlValueWithMeta<ExprMetadata>>
+    where
+        F: FnMut(
+                String,
+                Vec<BamlValue>,
+                Option<WatchStreamContext>,
+            ) -> BoxFuture<'static, Result<BamlValueWithMeta<ExprMetadata>>>
+            + Send
+            + Sync,
+    {
+        let handle_watch = |notification: WatchNotification| {
+            eprintln!("Ignoring watch notification: {notification}");
+        };
+        interpret_thir(
+            "test".to_string(),
+            thir,
+            expr,
+            handle_llm_call,
+            handle_watch,
+            extra_bindings,
+            env_vars,
+        )
+        .await
     }
 
     #[tokio::test]
     async fn eval_atom_int() {
         let (thir, expr) = thir_from_src("", "1");
-        let out = super::interpret_thir(
+        let out = interpret_thir_ignoring_watch(
             thir,
             expr,
             mock_llm_function,
@@ -1785,7 +2804,7 @@ mod tests {
 
         let (thir, call) = thir_from_src(src, "ConstantFunction(42)");
 
-        let out = super::interpret_thir(
+        let out = interpret_thir_ignoring_watch(
             thir,
             call,
             mock_llm_function,
@@ -1812,7 +2831,7 @@ mod tests {
 
         let (thir, call) = thir_from_src(src, "UseGlobal()");
 
-        let out = super::interpret_thir(
+        let out = interpret_thir_ignoring_watch(
             thir,
             call,
             mock_llm_function,
@@ -1852,7 +2871,7 @@ mod tests {
         );
 
         // Since the interpreter uses our mock LLM function, this should return our mock value
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_watch(
             thir,
             call,
             mock_llm_function,
@@ -1872,7 +2891,7 @@ mod tests {
     async fn test_method_call_array_len() {
         let (thir, expr) = thir_from_src("", "[1, 2, 3].len()");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_watch(
             thir,
             expr,
             mock_llm_function,
@@ -1892,7 +2911,7 @@ mod tests {
     async fn test_method_call_string_len() {
         let (thir, expr) = thir_from_src("", r#""hello".len()"#);
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_watch(
             thir,
             expr,
             mock_llm_function,
@@ -1921,9 +2940,10 @@ mod tests {
         let mut env_vars = HashMap::new();
         env_vars.insert("API_KEY".to_string(), "secret123".to_string());
 
-        let result = super::interpret_thir(thir, call, mock_llm_function, BamlMap::new(), env_vars)
-            .await
-            .unwrap();
+        let result =
+            interpret_thir_ignoring_watch(thir, call, mock_llm_function, BamlMap::new(), env_vars)
+                .await
+                .unwrap();
 
         match result {
             BamlValueWithMeta::String(value, _) => assert_eq!(value, "secret123"),
@@ -1935,7 +2955,7 @@ mod tests {
     async fn test_method_call_unknown_method() {
         let (thir, expr) = thir_from_src("", r#""hello".unknown_method()"#);
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_watch(
             thir,
             expr,
             mock_llm_function,
@@ -1968,7 +2988,7 @@ mod tests {
 
         let (thir, fib_call) = thir_from_src(src, "Fib(5)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_watch(
             thir,
             fib_call,
             mock_llm_function,
@@ -1983,7 +3003,7 @@ mod tests {
                 assert_eq!(actual, 5);
             }
             v => {
-                panic!("Expected int result, got {:?}", v);
+                panic!("Expected int result, got {v:?}");
             }
         }
     }
@@ -1993,7 +3013,7 @@ mod tests {
         // Test if (true) { 1 } else { 0 }
         let (thir, if_expr_true) = thir_from_src("", "if (true) { 1 } else { 0 }");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_watch(
             thir,
             if_expr_true,
             mock_llm_function,
@@ -2013,7 +3033,7 @@ mod tests {
         // Test if (false) { 1 } else { 0 }
         let (thir, if_expr_false) = thir_from_src("", "if (false) { 1 } else { 0 }");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_watch(
             thir,
             if_expr_false,
             mock_llm_function,
@@ -2043,7 +3063,7 @@ mod tests {
         // Test with true
         let (thir, call_true) = thir_from_src(src, "BoolToIntWithIfElse(true)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_watch(
             thir,
             call_true,
             mock_llm_function,
@@ -2066,7 +3086,7 @@ mod tests {
         // Test with false
         let (thir, call_false) = thir_from_src(src, "BoolToIntWithIfElse(false)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_watch(
             thir,
             call_false,
             mock_llm_function,
@@ -2103,7 +3123,7 @@ mod tests {
         // Test with value 42
         let (thir, call_expr) = thir_from_src(src, "StoreFnCallInLocalVar(42)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_watch(
             thir,
             call_expr,
             mock_llm_function,
@@ -2136,7 +3156,7 @@ mod tests {
         // Test with (true, false) - should return 1
         let (thir, call_expr) = thir_from_src(src, "AssignElseIfExpr(true, false)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_watch(
             thir,
             call_expr,
             mock_llm_function,
@@ -2180,8 +3200,8 @@ mod tests {
         "#;
 
         // Parse BAML code to AST
-        let (db, parse_diagnostics) =
-            parse_and_diagnostics(baml_code).expect(&format!("Failed to parse BAML {}", "code"));
+        let (db, parse_diagnostics) = parse_and_diagnostics(baml_code)
+            .unwrap_or_else(|_| panic!("Failed to parse BAML {}", "code"));
 
         if parse_diagnostics.has_errors() {
             let errors = parse_diagnostics.to_pretty_string();
@@ -2205,7 +3225,7 @@ mod tests {
         // Test the function by calling it
         let (thir, call_expr) = thir_from_src(baml_code, "AssignElseIfExpr(true, false)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_watch(
             thir,
             call_expr,
             mock_llm_function,
@@ -2246,8 +3266,8 @@ mod tests {
         "#;
 
         // Parse and compile BAML code
-        let (db, parse_diagnostics) =
-            parse_and_diagnostics(baml_code).expect(&format!("Failed to parse BAML {}", "code"));
+        let (db, parse_diagnostics) = parse_and_diagnostics(baml_code)
+            .unwrap_or_else(|_| panic!("Failed to parse BAML {}", "code"));
 
         if parse_diagnostics.has_errors() {
             let errors = parse_diagnostics.to_pretty_string();
@@ -2267,7 +3287,7 @@ mod tests {
         // Test with true
         let (thir, call_expr) = thir_from_src(baml_code, "BoolToIntWithIfElse(true)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_watch(
             thir,
             call_expr,
             mock_llm_function,
@@ -2344,7 +3364,7 @@ mod tests {
 
         let (thir, call_expr) = thir_from_src(src, "IterativeFibonacci(5)");
 
-        let result = super::interpret_thir(
+        let result = interpret_thir_ignoring_watch(
             thir,
             call_expr,
             mock_llm_function,
@@ -2359,7 +3379,7 @@ mod tests {
                 assert_eq!(actual, 5);
             }
             v => {
-                panic!("Expected int result, got {:?}", v);
+                panic!("Expected int result, got {v:?}");
             }
         }
     }

@@ -497,24 +497,23 @@ impl BamlRuntimeExt for BamlRuntime {
     }
 
     fn is_valid_class(&self, symbol: &str) -> bool {
-        self.inner.ir.find_class(symbol).is_ok()
+        self.ir.find_class(symbol).is_ok()
     }
 
     fn is_valid_enum(&self, symbol: &str) -> bool {
-        self.inner.ir.find_enum(symbol).is_ok()
+        self.ir.find_enum(symbol).is_ok()
     }
 
     fn is_valid_type_alias(&self, symbol: &str) -> bool {
-        self.inner.ir.find_type_alias(symbol).is_ok()
+        self.ir.find_type_alias(symbol).is_ok()
     }
 
     fn is_valid_function(&self, symbol: &str) -> bool {
-        self.inner.ir.find_function(symbol).is_ok()
+        self.ir.find_function(symbol).is_ok()
     }
 
     fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
-        self.inner
-            .ir
+        self.ir
             .find_class_locations(symbol)
             .into_iter()
             .map(|span| {
@@ -532,8 +531,7 @@ impl BamlRuntimeExt for BamlRuntime {
     }
 
     fn search_for_enum_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
-        self.inner
-            .ir
+        self.ir
             .find_enum_locations(symbol)
             .into_iter()
             .map(|span| {
@@ -551,8 +549,7 @@ impl BamlRuntimeExt for BamlRuntime {
     }
 
     fn search_for_type_alias_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
-        self.inner
-            .ir
+        self.ir
             .find_type_alias_locations(symbol)
             .into_iter()
             .map(|span| {
@@ -574,8 +571,7 @@ impl BamlRuntimeExt for BamlRuntime {
         let ctx = ctx.create_ctx_with_default();
         let ctx = ctx.eval_ctx(false);
 
-        self.inner
-            .ir
+        self.ir
             .walk_functions()
             .map(|f| {
                 let snippet = format!(
@@ -599,7 +595,7 @@ impl BamlRuntimeExt for BamlRuntime {
                             .collect::<indexmap::IndexMap<String, _>>();
 
                         // Use the IR's get_dummy_args method
-                        self.inner.ir.get_dummy_args(2, true, &params)
+                        self.ir.get_dummy_args(2, true, &params)
                     }
                 );
 
@@ -619,8 +615,7 @@ impl BamlRuntimeExt for BamlRuntime {
                                 .map(|(k, runtime_type)| (k.clone(), runtime_type.clone()))
                                 .collect::<indexmap::IndexMap<String, _>>();
 
-                            self.inner
-                                .ir
+                            self.ir
                                 .get_dummy_args(2, false, &params)
                                 .split('\n')
                                 .map(|line| line.trim().to_string())
@@ -722,8 +717,7 @@ impl BamlRuntimeExt for BamlRuntime {
         let ctx = ctx.create_ctx_with_default();
         let ctx = ctx.eval_ctx(false);
 
-        self.inner
-            .ir
+        self.ir
             .walk_expr_fns()
             .map(|f| {
                 let snippet = format!(
@@ -742,7 +736,7 @@ impl BamlRuntimeExt for BamlRuntime {
                             .map(|(k, runtime_type)| (k.clone(), runtime_type.clone()))
                             .collect::<indexmap::IndexMap<String, _>>();
 
-                        self.inner.ir.get_dummy_args(2, true, &params)
+                        self.ir.get_dummy_args(2, true, &params)
                     }
                 );
 
@@ -762,8 +756,7 @@ impl BamlRuntimeExt for BamlRuntime {
                                 .map(|(k, runtime_type)| (k.clone(), runtime_type.clone()))
                                 .collect::<indexmap::IndexMap<String, _>>();
 
-                            self.inner
-                                .ir
+                            self.ir
                                 .get_dummy_args(2, false, &params)
                                 .split('\n')
                                 .map(|line| line.trim().to_string())
@@ -860,7 +853,7 @@ impl BamlRuntimeExt for BamlRuntime {
     }
 
     fn search_for_symbol(&self, symbol: &str) -> Option<SymbolLocation> {
-        let runtime = self.inner.ir.clone();
+        let runtime = self.ir.clone();
 
         if let Ok(walker) = runtime.find_enum(symbol) {
             let elem = walker.span().unwrap();
@@ -965,8 +958,7 @@ impl BamlRuntimeExt for BamlRuntime {
         let ctx = ctx.create_ctx_with_default();
         let ctx = ctx.eval_ctx(true);
 
-        self.inner
-            .ir
+        self.ir
             .walk_function_test_pairs()
             .map(|tc| {
                 let params = match tc.test_case_params(&ctx) {
@@ -1050,8 +1042,7 @@ impl BamlRuntimeExt for BamlRuntime {
         let ctx = ctx.create_ctx_with_default();
         let ctx = ctx.eval_ctx(true);
 
-        self.inner
-            .ir
+        self.ir
             .walk_expr_fn_test_pairs()
             .map(|tc| {
                 let params = match tc.test_case_params(&ctx) {

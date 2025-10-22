@@ -9,6 +9,7 @@ function nestedOps() -> int {
 //
 //   x
 // }
+<<<<<<< HEAD
 //
 // class baml.HttpRequest {
 //   url: string
@@ -25,3 +26,13 @@ function nestedOps() -> int {
 //   Delete
 //   Patch
 // }
+=======
+>>>>>>> canary
+
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  test.baml:12
+//    | 
+// 11 | // }
+// 12 | <<<<<<< HEAD
+// 13 | //
+//    | 

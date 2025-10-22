@@ -5,17 +5,20 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 use super::{helpers::Pair, parse_attribute::parse_attribute, Rule};
 use crate::{
-    assert_correct_parser,
     ast::*,
     parser::{
-        helpers::parsing_catch_all, parse_field::parse_field_type_with_attr,
+        helpers::{assert_correct_parser, parsing_catch_all, unreachable_rule},
+        parse_field::parse_field_type_with_attr,
         parse_identifier::parse_identifier,
     },
-    unreachable_rule,
 };
 
 pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
-    assert_correct_parser!(pair, Rule::field_type, Rule::openParen, Rule::closeParen);
+    assert_correct_parser(
+        &pair,
+        &[Rule::field_type, Rule::openParen, Rule::closeParen],
+        diagnostics,
+    );
 
     let mut arity = FieldArity::Required;
     let mut ftype = None;
@@ -37,7 +40,7 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
             }
             Rule::optional_token => arity = FieldArity::Optional,
             _ => {
-                parsing_catch_all(current, "field_type");
+                parsing_catch_all(current, "field_type", diagnostics);
             }
         }
     }
@@ -57,7 +60,7 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
 }
 
 fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
-    assert_correct_parser!(pair, Rule::union);
+    assert_correct_parser(&pair, &[Rule::union], diagnostics);
 
     let span = diagnostics.span(pair.as_span());
     let mut types = Vec::new();
@@ -75,7 +78,7 @@ fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
             }
             Rule::field_operator => {}
 
-            _ => unreachable_rule!(current, Rule::union),
+            _ => unreachable_rule(&current, "union", diagnostics),
         }
     }
 
@@ -107,7 +110,7 @@ fn parse_base_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> O
                 let att = parse_attribute(current, false, diagnostics);
                 attributes.push(att);
             }
-            _ => unreachable_rule!(current, Rule::base_type_with_attr),
+            _ => unreachable_rule(&current, "base_type_with_attr", diagnostics),
         }
     }
 
@@ -121,11 +124,14 @@ fn parse_base_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> O
 }
 
 fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
-    assert_correct_parser!(
-        pair,
-        Rule::base_type,
-        Rule::non_union,
-        Rule::base_type_without_array
+    assert_correct_parser(
+        &pair,
+        &[
+            Rule::base_type,
+            Rule::non_union,
+            Rule::base_type_without_array,
+        ],
+        diagnostics,
     );
 
     if let Some(current) = pair.into_inner().next() {
@@ -192,7 +198,10 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
             Rule::tuple => parse_tuple(current, diagnostics),
             Rule::parenthesized_type => parse_parenthesized_type(current, diagnostics),
             Rule::literal_type => parse_literal_type(current, diagnostics),
-            _ => unreachable_rule!(current, Rule::base_type),
+            _ => {
+                unreachable_rule(&current, "base_type", diagnostics);
+                None
+            }
         };
     }
 
@@ -200,7 +209,7 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
 }
 
 fn parse_parenthesized_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
-    assert_correct_parser!(pair, Rule::parenthesized_type);
+    assert_correct_parser(&pair, &[Rule::parenthesized_type], diagnostics);
 
     for current in pair.into_inner() {
         match current.as_rule() {
@@ -208,7 +217,7 @@ fn parse_parenthesized_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
             Rule::field_type_with_attr => {
                 return parse_field_type_with_attr(current, true, diagnostics);
             }
-            _ => unreachable_rule!(current, Rule::parenthesized_type),
+            _ => unreachable_rule(&current, "parenthesized_type", diagnostics),
         }
     }
 
@@ -216,7 +225,7 @@ fn parse_parenthesized_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
 }
 
 fn parse_literal_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
-    assert_correct_parser!(pair, Rule::literal_type);
+    assert_correct_parser(&pair, &[Rule::literal_type], diagnostics);
 
     let span = diagnostics.span(pair.as_span());
 
@@ -247,7 +256,10 @@ fn parse_literal_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<F
                 return None;
             }
         },
-        _ => unreachable_rule!(literal_type, Rule::literal_type),
+        _ => {
+            unreachable_rule(&literal_type, "literal_type", diagnostics);
+            LiteralValue::String(String::new())
+        }
     };
 
     Some(FieldType::Literal(
@@ -277,7 +289,7 @@ fn parse_literal_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<F
 /// * Preserves source span info for errors.
 /// * Valid inputs: `string[]`, `int[]?`, `MyClass[][]?`.
 fn parse_array(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
-    assert_correct_parser!(pair, Rule::array_notation);
+    assert_correct_parser(&pair, &[Rule::array_notation], diagnostics);
 
     let mut dims = 0_u32;
     let mut field = None;
@@ -295,7 +307,9 @@ fn parse_array(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
             // Handle optional marker (?) for arrays like string[]?
             // This makes the entire array optional, not its elements
             Rule::optional_token => arity = FieldArity::Optional,
-            _ => unreachable_rule!(current, Rule::map),
+            _ => {
+                unreachable_rule(&current, "map", diagnostics);
+            }
         }
     }
 
@@ -334,7 +348,7 @@ fn parse_array(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
 /// - Preserves source span information for error reporting.
 /// - Example valid inputs: `map<string, int>`, `map<string, myclass>?`.
 fn parse_map(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
-    assert_correct_parser!(pair, Rule::map);
+    assert_correct_parser(&pair, &[Rule::map], diagnostics);
 
     let mut fields = Vec::new();
     // Track whether this map is optional (e.g., map<string, int>?)
@@ -353,7 +367,9 @@ fn parse_map(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType>
             // Handle optional marker (?) for maps like map<string, int>?
             // This makes the entire map optional, not its values
             Rule::optional_token => arity = FieldArity::Optional,
-            _ => unreachable_rule!(current, Rule::map),
+            _ => {
+                unreachable_rule(&current, "map", diagnostics);
+            }
         }
     }
 
@@ -371,7 +387,7 @@ fn parse_map(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType>
 }
 
 fn parse_group(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
-    assert_correct_parser!(pair, Rule::group);
+    assert_correct_parser(&pair, &[Rule::group], diagnostics);
     let mut attributes = Vec::new();
     let mut field_type = None;
 
@@ -385,7 +401,9 @@ fn parse_group(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
                 let attr = parse_attribute(current, true, diagnostics);
                 attributes.push(attr);
             }
-            _ => unreachable_rule!(current, Rule::group),
+            _ => {
+                unreachable_rule(&current, "group", diagnostics);
+            }
         }
     }
 
@@ -397,7 +415,7 @@ fn parse_group(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
 }
 
 fn parse_tuple(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
-    assert_correct_parser!(pair, Rule::tuple);
+    assert_correct_parser(&pair, &[Rule::tuple], diagnostics);
 
     let span = diagnostics.span(pair.as_span());
 
@@ -417,7 +435,9 @@ fn parse_tuple(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
                     fields.push(f)
                 }
             }
-            _ => unreachable_rule!(current, Rule::tuple),
+            _ => {
+                unreachable_rule(&current, "tuple", diagnostics);
+            }
         }
     }
 

@@ -62,6 +62,7 @@ function WithStack(x: int) -> int {
 //
 //   7
 // }
+<<<<<<< HEAD
 //
 // class baml.HttpRequest {
 //   url: string
@@ -78,3 +79,13 @@ function WithStack(x: int) -> int {
 //   Delete
 //   Patch
 // }
+=======
+>>>>>>> canary
+
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  test.baml:65
+//    | 
+// 64 | // }
+// 65 | <<<<<<< HEAD
+// 66 | //
+//    | 

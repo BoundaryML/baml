@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use anyhow::{Context, Result};
 use baml_types::{ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent};
@@ -32,7 +32,7 @@ use crate::{
         ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
         ModelFeatures, ResolveMediaUrls,
     },
-    request::create_client,
+    request::{create_client, create_http_client},
     RuntimeContext,
 };
 
@@ -147,14 +147,30 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_audio_urls: ResolveMediaUrls::Never,
-                resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Always,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: properties
+                    .media_url_handler
+                    .audio
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
+                resolve_image_urls: properties
+                    .media_url_handler
+                    .images
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
+                resolve_pdf_urls: properties
+                    .media_url_handler
+                    .pdf
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_video_urls: properties
+                    .media_url_handler
+                    .video
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.retry_policy.clone(),
-            client: create_client()?,
+            client: create_http_client(&properties.http_config)?,
             properties,
         })
     }
@@ -175,14 +191,30 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_audio_urls: ResolveMediaUrls::Never,
-                resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Always,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: properties
+                    .media_url_handler
+                    .audio
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
+                resolve_image_urls: properties
+                    .media_url_handler
+                    .images
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
+                resolve_pdf_urls: properties
+                    .media_url_handler
+                    .pdf
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_video_urls: properties
+                    .media_url_handler
+                    .video
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.elem().retry_policy_id.as_ref().map(String::from),
-            client: create_client()?,
+            client: create_http_client(&properties.http_config)?,
             properties,
         })
     }
@@ -207,10 +239,10 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_audio_urls: ResolveMediaUrls::Never,
-                resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Never,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: ResolveMediaUrls::SendUrl,
+                resolve_image_urls: ResolveMediaUrls::SendUrl,
+                resolve_pdf_urls: ResolveMediaUrls::SendUrl,
+                resolve_video_urls: ResolveMediaUrls::SendUrl,
                 allowed_metadata: AllowedRoleMetadata::None,
             },
             client: create_client()?,
@@ -247,6 +279,15 @@ impl RequestBuilder for AnthropicClient {
             format!("{destination_url}/v1/messages")
         });
 
+        // Apply request timeout if configured
+        // Defaults were already applied during client creation
+        if let Some(ms) = self.properties.http_config.request_timeout_ms {
+            if ms > 0 {
+                req = req.timeout(Duration::from_millis(ms));
+            }
+            // If ms == 0, don't set timeout (infinite timeout)
+        }
+
         for (key, value) in &self.properties.headers {
             req = req.header(key, value);
         }
@@ -278,6 +319,10 @@ impl RequestBuilder for AnthropicClient {
 
     fn request_options(&self) -> &BamlMap<String, serde_json::Value> {
         &self.properties.properties
+    }
+
+    fn http_config(&self) -> &internal_llm_client::HttpConfig {
+        &self.properties.http_config
     }
 }
 

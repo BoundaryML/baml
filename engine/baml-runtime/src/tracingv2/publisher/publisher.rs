@@ -37,10 +37,7 @@ use wasmtimer::tokio::*;
 use super::rpc_converters::{
     to_rpc_event, BlobRefCache, BlobStorage, IRRpcState, IntoRpcEvent, TypeLookup,
 };
-use crate::{
-    runtime::{AstSignatureWrapper, InternalBamlRuntime},
-    tracingv2::storage::interface::TraceEventWithMeta,
-};
+use crate::{runtime::AstSignatureWrapper, tracingv2::storage::interface::TraceEventWithMeta};
 
 enum PublisherMessage {
     Trace(Arc<TraceEventWithMeta>),
@@ -663,7 +660,7 @@ impl TracePublisher {
         #[cfg(not(target_arch = "wasm32"))]
         {
             if let Ok(trace_file_path) = std::env::var("BAML_TRACE_FILE") {
-                println!("Writing trace events to file: {}", trace_file_path);
+                println!("Writing trace events to file: {trace_file_path}");
                 use tokio::fs::OpenOptions;
                 if let Ok(mut file) = OpenOptions::new()
                     .create(true)
@@ -674,8 +671,8 @@ impl TracePublisher {
                     for e in trace_event_batch.events.iter() {
                         if let Ok(json) = serde_json::to_string(e) {
                             use tokio::io::AsyncWriteExt;
-                            if let Err(e) = file.write_all(format!("{}\n", json).as_bytes()).await {
-                                log::error!("Failed to write to trace file: {}", e);
+                            if let Err(e) = file.write_all(format!("{json}\n").as_bytes()).await {
+                                log::error!("Failed to write to trace file: {e}");
                             }
                         }
                     }
@@ -809,10 +806,7 @@ impl BlobUploader {
                 log::debug!("Successfully uploaded batch of {queued_len} blobs");
             }
             Err(e) => {
-                log::error!(
-                    "Failed to upload queued blob batch ({} blobs): {e}",
-                    queued_len
-                );
+                log::error!("Failed to upload queued blob batch ({queued_len} blobs): {e}");
             }
         }
     }
