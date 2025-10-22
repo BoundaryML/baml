@@ -104,7 +104,7 @@ export const ApiKeyListItem: React.FC<ApiKeyListItemProps> = ({
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Input
-              type={apiKey.hidden ? 'password' : 'text'}
+              type={apiKey.hidden && !isPlaceholderApiKey(localValue) ? 'password' : 'text'}
               value={localValue}
               onChange={handleChange}
               className={`h-8 text-sm font-mono placeholder:font-sans ${
@@ -119,12 +119,7 @@ export const ApiKeyListItem: React.FC<ApiKeyListItemProps> = ({
                 <TooltipProvider delayDuration={300}>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <div className="flex items-center gap-1">
-                        <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                        {isPlaceholderApiKey(apiKey.value) && (
-                          <span className="text-xs text-muted-foreground">(placeholder)</span>
-                        )}
-                      </div>
+                      <AlertTriangle className="h-4 w-4 text-yellow-500" />
                     </TooltipTrigger>
                     <TooltipContent side="top" className="text-xs">
                       {isPlaceholderApiKey(apiKey.value)
