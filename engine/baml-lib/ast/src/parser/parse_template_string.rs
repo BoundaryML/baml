@@ -35,7 +35,7 @@ pub(crate) fn parse_template_string(
                     diagnostics,
                 )))
             }
-            _ => parsing_catch_all(current, "function"),
+            _ => parsing_catch_all(current, "function", diagnostics),
         }
     }
 
@@ -48,7 +48,8 @@ pub(crate) fn parse_template_string(
                         input,
                         value: prompt,
                         attributes,
-                        documentation: doc_comment.and_then(parse_comment_block),
+                        documentation: doc_comment
+                            .and_then(|c| parse_comment_block(c, diagnostics)),
                         span: diagnostics.span(pair_span),
                     });
                 }

@@ -238,6 +238,7 @@ pub fn assert_vm_fails_with_inspection(
     Ok(())
 }
 
+#[track_caller]
 pub fn assert_vm_executes(input: Program) -> anyhow::Result<()> {
     assert_vm_executes_with_inspection(input, |_vm| Ok(()))
 }

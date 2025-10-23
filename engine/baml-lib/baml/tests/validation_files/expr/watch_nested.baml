@@ -1,6 +1,6 @@
 function WorkflowWatch() -> int {
-  let x: int = 10 @watch;
-  let y: bool = true @watch;
+  watch let x: int = 10;
+  watch let y: bool = true;
 
   y = false;
   x = WorkflowWatchChild();
@@ -8,6 +8,6 @@ function WorkflowWatch() -> int {
 }
 
 function WorkflowWatchChild() -> int {
-  let x: string = "Hello" @watch;
+  watch let x: string = "Hello";
   100
 }

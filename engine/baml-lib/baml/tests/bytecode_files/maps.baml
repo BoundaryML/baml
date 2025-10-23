@@ -113,7 +113,7 @@ function Len() -> int {
 // 29   0    LOAD_GLOBAL 1      (<fn CreateMapJSON>)
 //      1    CALL 0             
 //
-// 30   2    LOAD_GLOBAL 11     (<fn baml.Map.has>)
+// 30   2    LOAD_GLOBAL 12     (<fn baml.Map.has>)
 //      3    LOAD_VAR 1         (map)
 //      4    LOAD_CONST 0       (hello)
 //      5    CALL 2             
@@ -133,13 +133,14 @@ function Len() -> int {
 // 38   0   LOAD_GLOBAL 0    (<fn CreateMap>)
 //      1   CALL 0           
 //
-// 39   2   LOAD_GLOBAL 10   (<fn baml.Map.length>)
+// 39   2   LOAD_GLOBAL 11   (<fn baml.Map.length>)
 //      3   LOAD_VAR 1       (map)
 //      4   CALL 1           
 //      5   RETURN           
 //
-// Class: std::Request with 3 fields
-// Enum std::HttpMethod
+// Class: baml.Request with 3 fields
+// Class: baml.WatchOptions with 2 fields
+// Enum baml.HttpMethod
 // Function: baml.Array.length
 //
 // Function: baml.Map.length

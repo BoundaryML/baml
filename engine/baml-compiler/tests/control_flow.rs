@@ -867,7 +867,7 @@ fn for_loop_sum() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(0),
                 Instruction::LoadVar(1),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(4)),
                 Instruction::LoadVar(3),
                 Instruction::Call(1),
                 Instruction::LoadConst(0),
@@ -920,7 +920,7 @@ fn for_with_break() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(0),
                 Instruction::LoadVar(1),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(4)),
                 Instruction::LoadVar(3),
                 Instruction::Call(1),
                 Instruction::LoadConst(0),
@@ -982,7 +982,7 @@ fn for_with_continue() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(0),
                 Instruction::LoadVar(1),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(4)),
                 Instruction::LoadVar(3),
                 Instruction::Call(1),
                 Instruction::LoadConst(0),
@@ -1044,7 +1044,7 @@ fn for_nested() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(0),
                 Instruction::LoadVar(1),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(4)),
                 Instruction::LoadVar(4),
                 Instruction::Call(1),
                 Instruction::LoadConst(0),
@@ -1061,7 +1061,7 @@ fn for_nested() -> anyhow::Result<()> {
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreVar(6),
                 Instruction::LoadVar(2),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(4)),
                 Instruction::LoadVar(8),
                 Instruction::Call(1),
                 Instruction::LoadConst(0),

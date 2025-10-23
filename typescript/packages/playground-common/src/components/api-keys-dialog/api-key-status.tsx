@@ -5,14 +5,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@baml/ui/tooltip';
-import { AlertTriangle, Check } from 'lucide-react';
-import { REQUIRED_ENV_VAR_UNSET_WARNING } from './utils';
+import { AlertTriangle, Check, Info } from 'lucide-react';
+import { REQUIRED_ENV_VAR_UNSET_WARNING, isPlaceholderApiKey, PLACEHOLDER_ENV_VAR_MESSAGE } from './utils';
 
 export function ApiKeyStatus({
   value,
   required,
 }: { value?: string; required: boolean }) {
-  if (!value || value === '') {
+  const isPlaceholder = isPlaceholderApiKey(value);
+
+  if ((!value || value === '') && required) {
     return (
       <TooltipProvider delayDuration={300}>
         <Tooltip>
@@ -27,7 +29,25 @@ export function ApiKeyStatus({
     );
   }
 
-  if (required) {
+  if (isPlaceholder) {
+    return (
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-1">
+              <Info className="h-4 w-4 text-blue-500 flex-shrink-0" />
+              <span className="text-xs text-muted-foreground">(placeholder)</span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            {PLACEHOLDER_ENV_VAR_MESSAGE}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  if (required && value) {
     return (
       <TooltipProvider delayDuration={300}>
         <Tooltip>

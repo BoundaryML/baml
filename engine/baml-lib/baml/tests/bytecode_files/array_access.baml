@@ -19,33 +19,34 @@ function ArrayAccessWithVariable(arr: float[], idx: int) -> float {
 // Function: GetFirstElement
 // 2   0   LOAD_VAR 1           (arr)
 //     1   LOAD_CONST 0         (0)
-//     2   LOAD_ARRAY_ELEMENT   
-//     3   RETURN               
+//     2   LOAD_ARRAY_ELEMENT
+//     3   RETURN
 //
 // Function: GetElementAtIndex
 // 6   0   LOAD_VAR 1           (arr)
 //     1   LOAD_VAR 2           (index)
-//     2   LOAD_ARRAY_ELEMENT   
-//     3   RETURN               
+//     2   LOAD_ARRAY_ELEMENT
+//     3   RETURN
 //
 // Function: GetNestedElement
 // 10   0   LOAD_VAR 1           (matrix)
 //      1   LOAD_CONST 0         (1)
-//      2   LOAD_ARRAY_ELEMENT   
+//      2   LOAD_ARRAY_ELEMENT
 //      3   LOAD_CONST 1         (2)
-//      4   LOAD_ARRAY_ELEMENT   
-//      5   RETURN               
+//      4   LOAD_ARRAY_ELEMENT
+//      5   RETURN
 //
 // Function: ArrayAccessWithVariable
 // 14   0   LOAD_VAR 1           (arr)
 //      1   LOAD_VAR 2           (idx)
-//      2   LOAD_ARRAY_ELEMENT   
+//      2   LOAD_ARRAY_ELEMENT
 //
 // 15   3   LOAD_VAR 3           (result)
-//      4   RETURN               
+//      4   RETURN
 //
-// Class: std::Request with 3 fields
-// Enum std::HttpMethod
+// Class: baml.Request with 3 fields
+// Class: baml.WatchOptions with 2 fields
+// Enum baml.HttpMethod
 // Function: baml.Array.length
 //
 // Function: baml.Map.length

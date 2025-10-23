@@ -2335,11 +2335,15 @@ export function ReturnOne(): ReturnOneEventCollector {
 
 type SimpleWatchWithFilterEventCollectorVarTypes = {
   
+  "new_name": string,
+  
   "word": string
   
 }
 
 type SimpleWatchWithFilterEventCollectorStreamTypes = {
+  
+  "new_name": string | null,
   
   "word": string | null
   
@@ -2351,6 +2355,8 @@ export interface SimpleWatchWithFilterEventCollector extends EventCollectorInter
   
   on_var<K extends keyof SimpleWatchWithFilterEventCollectorVarTypes>(channel: K, handler: (event: VarNotification<SimpleWatchWithFilterEventCollectorVarTypes[K]>) => void): void
   
+  on_stream(channel: "new_name", handler: StreamHandler<string | null, string | null>): void
+  
   on_stream(channel: "word", handler: StreamHandler<string | null, string | null>): void
   
   
@@ -2360,6 +2366,9 @@ export interface SimpleWatchWithFilterEventCollector extends EventCollectorInter
 export function SimpleWatchWithFilter(): SimpleWatchWithFilterEventCollector {
   const blockHandlers = new Set<BlockHandler>()
 
+  
+  const varHandlers_new_name = new Set<VarHandler<string>>()
+  const streamHandlers_new_name = new Set<StreamHandler<string | null, string | null>>()
   
   const varHandlers_word = new Set<VarHandler<string>>()
   const streamHandlers_word = new Set<StreamHandler<string | null, string | null>>()
@@ -2407,11 +2416,15 @@ export function SimpleWatchWithFilter(): SimpleWatchWithFilterEventCollector {
   
   const varHandlerMap = {
     
+    "new_name": varHandlers_new_name,
+    
     "word": varHandlers_word
     
   }
 
   const streamHandlerMap = {
+    
+    "new_name": streamHandlers_new_name,
     
     "word": streamHandlers_word
     

@@ -27,7 +27,7 @@
  // }
 
  // function SearchWikipedia(query: string) -> string {
- //   std::fetch_value<string>(std::Request {
+ //   baml.fetch_value<string>(baml.Request {
  //     base_url: UrlEncode("https://en.wikipedia.org/wiki/Special:Search", {search query})
  //   })
  // }

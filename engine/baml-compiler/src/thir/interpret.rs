@@ -123,7 +123,7 @@ fn expr_value_to_watch_value(
     })
 }
 
-/// Fire a watch notification for a specific variable (for manual watchers.$notify() calls)
+/// Fire a watch notification for a specific variable (for manual $watch.notify() calls)
 fn fire_watch_notification_for_variable(
     scopes: &[Scope],
     var_name: &str,
@@ -133,10 +133,19 @@ fn fire_watch_notification_for_variable(
     // Find the variable in scopes
     for scope in scopes.iter().rev() {
         if let Some(value_ref) = scope.variables.get(var_name) {
+            // Find the watch variable to get the current channel name
+            let channel_name = scope
+                .watch_variables
+                .iter()
+                .find(|wv| Arc::ptr_eq(&wv.value_ref, value_ref))
+                .map(|wv| wv.spec.name.clone())
+                .unwrap_or_else(|| var_name.to_string());
+
             let current_value = value_ref.lock().unwrap();
             let watch_value = expr_value_to_watch_value(current_value.clone());
             let notification = crate::watch::WatchNotification::new_var(
-                var_name.to_string(),
+                var_name.to_string(), // variable name
+                channel_name,         // current channel name from WatchSpec
                 watch_value,
                 function_name.to_string(),
             );
@@ -144,7 +153,7 @@ fn fire_watch_notification_for_variable(
             return Ok(());
         }
     }
-    bail!("Variable '{}' not found for watchers.$notify()", var_name)
+    bail!("Variable '{}' not found for $watch.notify()", var_name)
 }
 
 enum EvalValue {
@@ -197,14 +206,6 @@ async fn check_watch_changes<F, Fut>(
             let last_notified = watch_var.last_notified.lock().unwrap().clone();
             let last_checked = watch_var.last_checked.lock().unwrap().clone();
 
-            log::debug!(
-                "Collecting watch var '{}': current={:?}, last_notified={:?}, last_checked={:?}",
-                watch_var.name,
-                current_value,
-                last_notified,
-                last_checked
-            );
-
             checks.push((
                 watch_var.name.clone(),
                 watch_var.spec.clone(),
@@ -247,7 +248,7 @@ async fn check_watch_changes<F, Fut>(
             crate::watch::WatchWhen::True => {
                 // For WatchWhen::True, use built-in change detection
                 let has_changed = match last_notified.as_ref() {
-                    None => true,                              // First time, always notify
+                    None => false,                             // First time (declaration), don't notify
                     Some(last) => last != &current_baml_value, // Compare values
                 };
                 has_changed
@@ -256,11 +257,10 @@ async fn check_watch_changes<F, Fut>(
                 // For filter functions, ALWAYS call the filter - it subsumes change detection
                 // Evaluate the filter function
                 log::debug!(
-                    "Evaluating filter function '{fn_name}' for variable '{var_name}': prev={last_notified:?}, next={current_baml_value:?}"
+                    "Evaluating filter function '{fn_name}' for variable '{var_name}': current={current_baml_value:?}"
                 );
                 match evaluate_filter_function(
                     fn_name,
-                    last_notified.as_ref(),
                     &current_baml_value,
                     scopes,
                     thir,
@@ -297,7 +297,8 @@ async fn check_watch_changes<F, Fut>(
             // Fire the notification
             let watch_value = expr_value_to_watch_value(current_value);
             let notification = crate::watch::WatchNotification::new_var(
-                spec.name.clone(),
+                var_name.clone(),  // variable name
+                spec.name.clone(), // channel name
                 watch_value,
                 function_name.to_string(),
             );
@@ -307,11 +308,10 @@ async fn check_watch_changes<F, Fut>(
 }
 
 /// Evaluate a filter function for watch
-/// The filter function takes (prev_value, next_value) -> bool
+/// The filter function takes (current_value) -> bool
 async fn evaluate_filter_function<F, Fut>(
     fn_name: &internal_baml_ast::ast::Identifier,
-    prev_value: Option<&BamlValue>,
-    next_value: &BamlValue,
+    current_value: &BamlValue,
     scopes: &mut Vec<Scope>,
     thir: &THir<ExprMetadata>,
     run_llm_function: &mut F,
@@ -329,40 +329,24 @@ where
         .with_context(|| format!("Filter function '{fn_name}' not found"))?;
 
     // Check arity
-    if filter_func.parameters.len() != 2 {
+    if filter_func.parameters.len() != 1 {
         bail!(
-            "Filter function '{}' must take exactly 2 parameters (prev, next)",
+            "Filter function '{}' must take exactly 1 parameter (current value)",
             fn_name
         );
     }
 
     // Convert BamlValue to BamlValueWithMeta
-    let prev_with_meta = match prev_value {
-        Some(v) => {
-            log::debug!("Filter function prev_value (Some): {v:?}");
-            baml_value_to_value_with_meta(v.clone())
-        }
-        None => {
-            log::debug!("Filter function prev_value: None");
-            BamlValueWithMeta::Null((Span::fake(), None))
-        }
-    };
-    log::debug!("Filter function next_value: {next_value:?}");
-    let next_with_meta = baml_value_to_value_with_meta(next_value.clone());
+    log::debug!("Filter function current_value: {current_value:?}");
+    let value_with_meta = baml_value_to_value_with_meta(current_value.clone());
 
-    // Create a new scope with the function parameters
+    // Create a new scope with the function parameter
     // Mark this as a filter context to prevent infinite recursion
     scopes.push(Scope {
-        variables: [
-            (
-                filter_func.parameters[0].name.clone(),
-                Arc::new(Mutex::new(prev_with_meta)),
-            ),
-            (
-                filter_func.parameters[1].name.clone(),
-                Arc::new(Mutex::new(next_with_meta)),
-            ),
-        ]
+        variables: [(
+            filter_func.parameters[0].name.clone(),
+            Arc::new(Mutex::new(value_with_meta)),
+        )]
         .into_iter()
         .collect(),
         watch_variables: Vec::new(),
@@ -1247,6 +1231,56 @@ where
                         _ => bail!("assert condition must be boolean"),
                     }
                 }
+                Statement::WatchOptions {
+                    variable,
+                    channel,
+                    when,
+                    span,
+                } => {
+                    // Find and update the watch variable for this variable
+                    // We need to find the watch variable by checking which one references the same value
+                    for scope in scopes.iter_mut().rev() {
+                        if let Some(var_ref) = scope.variables.get(variable) {
+                            // Find the watch variable that references this variable
+                            if let Some(watch_var) = scope
+                                .watch_variables
+                                .iter_mut()
+                                .find(|wv| Arc::ptr_eq(&wv.value_ref, var_ref))
+                            {
+                                // Update the channel name if provided
+                                if let Some(new_channel) = channel {
+                                    watch_var.spec.name = new_channel.clone();
+                                }
+
+                                // Update the when condition if provided
+                                if let Some(when_str) = when {
+                                    watch_var.spec.when = match when_str.as_str() {
+                                        "manual" => crate::watch::WatchWhen::Manual,
+                                        "true" => crate::watch::WatchWhen::True,
+                                        _ => crate::watch::WatchWhen::FunctionName(
+                                            internal_baml_ast::ast::Identifier::Local(
+                                                when_str.clone(),
+                                                span.clone(),
+                                            ),
+                                        ),
+                                    };
+                                }
+
+                                watch_var.spec.span = span.clone();
+                                break;
+                            }
+                        }
+                    }
+                }
+                Statement::WatchNotify { variable, .. } => {
+                    // Manually trigger a watch notification for this variable
+                    fire_watch_notification_for_variable(
+                        scopes,
+                        variable,
+                        watch_handler,
+                        function_name,
+                    )?;
+                }
             }
         }
 
@@ -2028,7 +2062,7 @@ where
                     Builtin::FetchValue => {
                         // FetchValue requires network access and is not supported in the interpreter
                         bail!(
-                            "builtin function std::fetch_value is not supported in interpreter at {:?}",
+                            "builtin function baml.fetch_value is not supported in interpreter at {:?}",
                             meta.0
                         )
                     }

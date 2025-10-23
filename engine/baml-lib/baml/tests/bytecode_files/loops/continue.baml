@@ -92,8 +92,9 @@ function ContinueNested() -> int {
 // 31   17   LOAD_CONST 3        (5)
 //      18   RETURN              
 //
-// Class: std::Request with 3 fields
-// Enum std::HttpMethod
+// Class: baml.Request with 3 fields
+// Class: baml.WatchOptions with 2 fields
+// Enum baml.HttpMethod
 // Function: baml.Array.length
 //
 // Function: baml.Map.length

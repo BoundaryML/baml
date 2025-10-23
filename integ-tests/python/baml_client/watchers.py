@@ -1310,6 +1310,9 @@ class SimpleWatchWithFilterEventCollector:
         self._lock = threading.Lock()
 
         
+        self._var_handlers_new_name: list[VarEventHandler[str]] = []
+        self._stream_handlers_new_name: list[StreamHandler] = []
+        
         self._var_handlers_word: list[VarEventHandler[str]] = []
         self._stream_handlers_word: list[StreamHandler] = []
         
@@ -1317,11 +1320,15 @@ class SimpleWatchWithFilterEventCollector:
         
         self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {
             
+            "new_name": self._var_handlers_new_name,
+            
             "word": self._var_handlers_word,
             
         }
 
         self._stream_handler_map: dict[str, list[StreamHandler]] = {
+            
+            "new_name": self._stream_handlers_new_name,
             
             "word": self._stream_handlers_word,
             
@@ -1341,20 +1348,26 @@ class SimpleWatchWithFilterEventCollector:
     
     
     @overload
+    def on_var(self, channel: Literal["new_name"], handler: VarEventHandler[str]) -> None: ...
+    
+    @overload
     def on_var(self, channel: Literal["word"], handler: VarEventHandler[str]) -> None: ...
     
 
-    def on_var(self, channel: Literal["word"], handler: VarEventHandler[Any]) -> None:
+    def on_var(self, channel: Literal["new_name", "word"], handler: VarEventHandler[Any]) -> None:
         with self._lock:
             if channel in self._var_handler_map:
                 self._var_handler_map[channel].append(handler)
 
     
     @overload
+    def on_stream(self, channel: Literal["new_name"], handler: StreamHandler) -> None: ...
+    
+    @overload
     def on_stream(self, channel: Literal["word"], handler: StreamHandler) -> None: ...
     
 
-    def on_stream(self, channel: Literal["word"], handler: StreamHandler) -> None:
+    def on_stream(self, channel: Literal["new_name", "word"], handler: StreamHandler) -> None:
         with self._lock:
             if channel in self._stream_handler_map:
                 self._stream_handler_map[channel].append(handler)

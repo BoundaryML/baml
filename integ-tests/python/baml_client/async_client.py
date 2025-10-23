@@ -3709,34 +3709,34 @@ class BamlAsyncClient:
                 
             })
             return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
-    async def IsTargetWord(self, prev: str,next: str,
+    async def IsTargetWord(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> bool:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.IsTargetWord(prev=prev,next=next,
+            stream = self.stream.IsTargetWord(word=word,
                 baml_options=baml_options)
             return await stream.get_final_response()
         else:
             # Original non-streaming code
             result = await self.__options.merge_options(baml_options).call_function_async(function_name="IsTargetWord", args={
-                "prev": prev,"next": next,
+                "word": word,
             })
             return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
-    async def IsTargetWord2(self, prev: str,next: str,
+    async def IsTargetWord2(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> bool:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.IsTargetWord2(prev=prev,next=next,
+            stream = self.stream.IsTargetWord2(word=word,
                 baml_options=baml_options)
             return await stream.get_final_response()
         else:
             # Original non-streaming code
             result = await self.__options.merge_options(baml_options).call_function_async(function_name="IsTargetWord2", args={
-                "prev": prev,"next": next,
+                "word": word,
             })
             return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
     async def IterativeFibonacci(self, n: int,
@@ -3769,19 +3769,19 @@ class BamlAsyncClient:
                 "a": a,"b": b,
             })
             return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
-    async def NotEmpty(self, prev: str,next: str,
+    async def NotEmpty(self, value: str,
         baml_options: BamlCallOptions = {},
     ) -> bool:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.NotEmpty(prev=prev,next=next,
+            stream = self.stream.NotEmpty(value=value,
                 baml_options=baml_options)
             return await stream.get_final_response()
         else:
             # Original non-streaming code
             result = await self.__options.merge_options(baml_options).call_function_async(function_name="NotEmpty", args={
-                "prev": prev,"next": next,
+                "value": value,
             })
             return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
     async def ReturnCategory(self, category: types.Category,
@@ -6907,11 +6907,11 @@ class BamlStreamClient:
           lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def IsTargetWord(self, prev: str,next: str,
+    def IsTargetWord(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[bool], bool]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="IsTargetWord", args={
-            "prev": prev,"next": next,
+            "word": word,
         })
         return baml_py.BamlStream[typing.Optional[bool], bool](
           result,
@@ -6919,11 +6919,11 @@ class BamlStreamClient:
           lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def IsTargetWord2(self, prev: str,next: str,
+    def IsTargetWord2(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[bool], bool]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="IsTargetWord2", args={
-            "prev": prev,"next": next,
+            "word": word,
         })
         return baml_py.BamlStream[typing.Optional[bool], bool](
           result,
@@ -6955,11 +6955,11 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def NotEmpty(self, prev: str,next: str,
+    def NotEmpty(self, value: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[bool], bool]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="NotEmpty", args={
-            "prev": prev,"next": next,
+            "value": value,
         })
         return baml_py.BamlStream[typing.Optional[bool], bool](
           result,
@@ -8837,18 +8837,18 @@ class BamlHttpRequestClient:
             
         }, mode="request")
         return result
-    async def IsTargetWord(self, prev: str,next: str,
+    async def IsTargetWord(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="IsTargetWord", args={
-            "prev": prev,"next": next,
+            "word": word,
         }, mode="request")
         return result
-    async def IsTargetWord2(self, prev: str,next: str,
+    async def IsTargetWord2(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="IsTargetWord2", args={
-            "prev": prev,"next": next,
+            "word": word,
         }, mode="request")
         return result
     async def IterativeFibonacci(self, n: int,
@@ -8865,11 +8865,11 @@ class BamlHttpRequestClient:
             "a": a,"b": b,
         }, mode="request")
         return result
-    async def NotEmpty(self, prev: str,next: str,
+    async def NotEmpty(self, value: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NotEmpty", args={
-            "prev": prev,"next": next,
+            "value": value,
         }, mode="request")
         return result
     async def ReturnCategory(self, category: types.Category,
@@ -10672,18 +10672,18 @@ class BamlHttpStreamRequestClient:
             
         }, mode="stream")
         return result
-    async def IsTargetWord(self, prev: str,next: str,
+    async def IsTargetWord(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="IsTargetWord", args={
-            "prev": prev,"next": next,
+            "word": word,
         }, mode="stream")
         return result
-    async def IsTargetWord2(self, prev: str,next: str,
+    async def IsTargetWord2(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="IsTargetWord2", args={
-            "prev": prev,"next": next,
+            "word": word,
         }, mode="stream")
         return result
     async def IterativeFibonacci(self, n: int,
@@ -10700,11 +10700,11 @@ class BamlHttpStreamRequestClient:
             "a": a,"b": b,
         }, mode="stream")
         return result
-    async def NotEmpty(self, prev: str,next: str,
+    async def NotEmpty(self, value: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NotEmpty", args={
-            "prev": prev,"next": next,
+            "value": value,
         }, mode="stream")
         return result
     async def ReturnCategory(self, category: types.Category,
