@@ -471,8 +471,8 @@ impl Vm {
             };
 
             match state.filter {
-                // Manual notify means skip this notification.
-                WatchFilter::Manual => continue,
+                // Manual notify means skip this notification. If paused also skip
+                WatchFilter::Manual | WatchFilter::Paused => continue,
 
                 // Default filter is a basic diff. If the value has actually
                 // changed, then notify.
@@ -501,8 +501,8 @@ impl Vm {
                 // Run user function to decide if we should notify.
                 WatchFilter::Function(filter_func) => {
                     match self.interrupt(filter_func, &[state.value]) {
-                        Ok(VmExecState::Complete(Value::Bool(b))) => {
-                            if b {
+                        Ok(VmExecState::Complete(Value::Bool(notify))) => {
+                            if notify {
                                 filtered_notifications.push(notification);
                             }
                         }
@@ -1474,6 +1474,7 @@ impl Vm {
                         Value::Object(object_index) => match &self.objects[object_index] {
                             Object::Function(_) => WatchFilter::Function(object_index),
                             Object::String(mode) if mode == "manual" => WatchFilter::Manual,
+                            Object::String(mode) if mode == "never" => WatchFilter::Paused,
                             _ => {
                                 return Err(RuntimeError::Other("Invalid filter".to_string()).into())
                             }
@@ -1487,11 +1488,11 @@ impl Vm {
                         .as_string(&self.stack.ensure_pop()?)?
                         .to_owned();
 
-                    let value_index = StackIndex::from_raw(frame.locals_offset.raw() + index);
-                    let value = self.stack[value_index];
+                    let local_var_index = StackIndex::from_raw(frame.locals_offset.raw() + index);
+                    let value = self.stack[local_var_index];
 
                     // The variable index should be the same as where the value is stored
-                    let var_node = NodeId::LocalVar(value_index);
+                    let var_node = NodeId::LocalVar(local_var_index);
 
                     // Register this variable as an emittable root.
                     self.watch.register_root(
@@ -1509,7 +1510,7 @@ impl Vm {
                         [function.bytecode.scopes[instruction_ptr as usize]][index];
                     // Track this so we can unregister on scope exit
                     self.watched_vars.insert(
-                        value_index,
+                        local_var_index,
                         (watched_var_name.to_string(), function.name.clone()),
                     );
 
@@ -1525,6 +1526,19 @@ impl Vm {
                             &self.objects,
                         );
                     }
+                }
+
+                Instruction::Notify(index) => {
+                    let local_var_index = StackIndex::from_raw(frame.locals_offset.raw() + index);
+                    let var_node = NodeId::LocalVar(local_var_index);
+
+                    let notifications = self.watch.copy_roots_reaching(var_node);
+
+                    if notifications.len() != 1 && notifications.first() != Some(&var_node) {
+                        return Err(RuntimeError::Other("Invalid manual notify".to_string()).into());
+                    }
+
+                    return Ok(VmExecState::Notify(notifications));
                 }
 
                 Instruction::Call(arg_count) => {

@@ -64,7 +64,10 @@ pub fn display_instruction(
         Instruction::LoadGlobal(index) | Instruction::StoreGlobal(index) => {
             format!("({})", display_value(&globals[*index], objects))
         }
-        Instruction::LoadVar(index) | Instruction::StoreVar(index) | Instruction::Watch(index) => {
+        Instruction::LoadVar(index)
+        | Instruction::StoreVar(index)
+        | Instruction::Watch(index)
+        | Instruction::Notify(index) => {
             format!(
                 "({})",
                 function
@@ -197,7 +200,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Color::Cyan,
         Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
-        Instruction::Watch(_) => Color::BrightRed,
+        Instruction::Watch(_) | Instruction::Notify(_) => Color::BrightRed,
     }
 }
 

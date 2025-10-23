@@ -213,6 +213,9 @@ pub enum Instruction {
     /// [`crate::Vm::stack`] array.
     Watch(usize),
 
+    /// Manually triggers notifications for a watched variable.
+    Notify(usize),
+
     /// Call a function.
     ///
     /// Format: `CALL n` where `n` is the number of arguments passed to the
@@ -338,6 +341,7 @@ impl std::fmt::Display for Instruction {
             Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
             Instruction::Watch(i) => write!(f, "WATCH {i}"),
+            Instruction::Notify(i) => write!(f, "NOTIFY {i}"),
         }
     }
 }

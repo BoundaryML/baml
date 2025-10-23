@@ -962,8 +962,12 @@ impl<'g> HirCompiler<'g> {
 
                 self.emit(Instruction::Watch(local_index));
             }
-            thir::Statement::WatchNotify { .. } => {
-                // todo!("bytecode codegen for manual notification trigger")
+            thir::Statement::WatchNotify { variable, .. } => {
+                let Some(local_index) = self.locals.get(variable).copied() else {
+                    panic!("watch codegen error: undefined variable: {variable}");
+                };
+
+                self.emit(Instruction::Notify(local_index));
             }
         }
     }

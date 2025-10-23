@@ -23,7 +23,7 @@ use baml_types::{
     ir_type::{ArrowGeneric, TypeIR},
     BamlMap, BamlMediaType, BamlValueWithMeta, TypeValue,
 };
-use internal_baml_ast::ast::WithSpan;
+use internal_baml_ast::ast::{WithName, WithSpan};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::{
