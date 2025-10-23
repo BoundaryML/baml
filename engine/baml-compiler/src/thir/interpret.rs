@@ -11,7 +11,7 @@ use internal_baml_diagnostics::Span;
 
 use crate::{
     thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, THir},
-    watch::{SharedWatchHandler, WatchNotification},
+    watch::{shared_handler, SharedWatchHandler, WatchNotification},
 };
 
 // Type alias for pinned boxed futures - conditionally Send for non-WASM targets
@@ -2841,9 +2841,9 @@ mod tests {
             + Send
             + Sync,
     {
-        let handle_watch = |notification: WatchNotification| {
+        let handle_watch = shared_handler(|notification: WatchNotification| {
             eprintln!("Ignoring watch notification: {notification}");
-        };
+        });
         interpret_thir(
             "test".to_string(),
             thir,

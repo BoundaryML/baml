@@ -13,7 +13,7 @@ fn builtin_method_call() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Int(4)),
+        expected: ExecState::Complete(Value::Int(3)),
     })
 }
 

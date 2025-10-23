@@ -73,11 +73,13 @@ pub fn shared_handler<F>(handler: F) -> SharedWatchHandler
 where
     F: FnMut(WatchNotification) + 'static,
 {
+    #[allow(clippy::arc_with_non_send_sync)]
     Arc::new(Mutex::new(WatchHandler::new(Box::new(handler))))
 }
 
 /// Helper to create a shared no-op handler
 pub fn shared_noop_handler() -> SharedWatchHandler {
+    #[allow(clippy::arc_with_non_send_sync)]
     Arc::new(Mutex::new(WatchHandler::noop()))
 }
 

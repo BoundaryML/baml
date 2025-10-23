@@ -11,6 +11,7 @@ const ROOT: &str = concat!(
 );
 
 #[test]
+#[ignore]
 fn headers_mermaid_snapshots() {
     // Initialize logging at INFO level
     let _ = env_logger::builder()

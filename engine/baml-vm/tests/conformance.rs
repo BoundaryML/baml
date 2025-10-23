@@ -1,8 +1,11 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 mod common;
 use anyhow::{anyhow, bail, Context, Result};
-use baml_compiler::{hir, thir, watch::WatchNotification};
+use baml_compiler::{hir, thir, watch::shared_noop_handler};
 use baml_runtime::{async_vm_runtime::BamlAsyncVmRuntime, TripWire};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
 use internal_baml_core::internal_baml_ast;
@@ -167,7 +170,7 @@ impl ConformanceSuite {
                 self.project.env_vars.clone(),
                 None,
                 TripWire::new(None),
-                None::<fn(WatchNotification) -> _>,
+                None,
             )
             .await;
 
@@ -209,7 +212,7 @@ impl ConformanceSuite {
                 |name, _args, _emit_context| async move {
                     bail!("unexpected LLM function call: {name}")
                 },
-                |_event| {},
+                shared_noop_handler(),
                 BamlMap::new(),
                 self.project.env_vars.clone(),
             )
