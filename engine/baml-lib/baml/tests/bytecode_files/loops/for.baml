@@ -292,6 +292,8 @@ function NestedFor(as: int[], bs: int[]) -> int {
 //
 // Function: baml.deep_copy
 //
+// Function: baml.deep_equals
+//
 // Function: baml.unstable.string
 //
 // Function: baml.fetch_as

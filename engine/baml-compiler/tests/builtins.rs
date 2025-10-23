@@ -49,7 +49,7 @@ fn fetch_as() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadGlobal(GlobalIndex::from_raw(39)),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(40)),
                 Instruction::LoadConst(0),
                 Instruction::LoadConst(1),
                 Instruction::DispatchFuture(2),
@@ -86,7 +86,7 @@ fn fetch_as_with_request_param() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadGlobal(GlobalIndex::from_raw(39)),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(40)),
                 Instruction::AllocInstance(ObjectIndex::from_raw(7)),
                 Instruction::Copy(0),
                 Instruction::LoadConst(0),
