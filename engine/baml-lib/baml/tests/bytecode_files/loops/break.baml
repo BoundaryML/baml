@@ -94,6 +94,8 @@ function Nested() -> int {
 // Enum baml.HttpMethod
 // Function: baml.Array.length
 //
+// Function: baml.Array.push
+//
 // Function: baml.Map.length
 //
 // Function: baml.Map.has
