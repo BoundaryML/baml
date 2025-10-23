@@ -40,8 +40,9 @@ pub use indentation_type::IndentationType;
 pub use internal_baml_diagnostics::Span;
 pub use newline_type::NewlineType;
 pub use stmt::{
-    AssertStmt, AssignOp, AssignOpStmt, AssignStmt, CForLoopStmt, ExprStmt, ForLoopStmt, Header,
-    LetStmt, ReturnStmt, Stmt, WatchNotifyStmt, WatchOptionsStmt, WhileStmt,
+    AssertStmt, AssignOp, AssignOpStmt, AssignStmt, BreakStmt, CForLoopStmt, ContinueStmt,
+    ExprStmt, ForLoopStmt, Header, LetStmt, ReturnStmt, Stmt, WatchNotifyStmt, WatchOptionsStmt,
+    WhileStmt,
 };
 pub use template_string::TemplateString;
 pub use top::Top;

@@ -115,11 +115,11 @@ pub fn parse_top_level_assignment(
         }
         Stmt::Expression(expr) => only_let_stmt("expressions", expr.span.clone(), diagnostics),
         Stmt::Semicolon(expr) => {
-            only_let_stmt("semicolon expressions", expr.span().clone(), diagnostics)
+            only_let_stmt("semicolon expressions", expr.span.clone(), diagnostics)
         }
         Stmt::WhileLoop(stmt) => only_let_stmt("while loops", stmt.span, diagnostics),
-        Stmt::Break(span) => only_let_stmt("break statements", span, diagnostics),
-        Stmt::Continue(span) => only_let_stmt("continue statements", span, diagnostics),
+        Stmt::Break(stmt) => only_let_stmt("break statements", stmt.span, diagnostics),
+        Stmt::Continue(stmt) => only_let_stmt("continue statements", stmt.span, diagnostics),
         Stmt::Return(ReturnStmt { span, .. }) => {
             only_let_stmt("return statements", span, diagnostics)
         }
@@ -153,6 +153,7 @@ fn parse_while_loop(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stm
         condition,
         body,
         span,
+        annotations: vec![],
     }))
 }
 
@@ -223,7 +224,12 @@ fn parse_c_for_loop(
 
                 let expr = parse_block_aware_tail_expression(tokens.next()?, diagnostics)?;
 
-                Some(Stmt::Assign(AssignStmt { left, expr, span }))
+                Some(Stmt::Assign(AssignStmt {
+                    left,
+                    expr,
+                    span,
+                    annotations: vec![],
+                }))
             }
             Rule::block_aware_assign_op_stmt => {
                 let mut tokens = rule.into_inner();
@@ -245,6 +251,7 @@ fn parse_c_for_loop(
         after_stmt,
         body,
         span,
+        annotations: vec![],
     })
 }
 
@@ -388,7 +395,7 @@ pub fn parse_top_level_statement(token: Pair<'_>, diagnostics: &mut Diagnostics)
     match tokens.next() {
         Some(maybe_semicolon) if maybe_semicolon.as_str() == ";" => {
             if let Some(Stmt::Expression(es)) = stmt {
-                stmt = Some(Stmt::Semicolon(es.expr));
+                stmt = Some(Stmt::Semicolon(es));
             }
         }
         _ => {
@@ -418,7 +425,7 @@ pub fn parse_expr_body_statement(token: Pair<'_>, diagnostics: &mut Diagnostics)
     match tokens.next() {
         Some(maybe_semicolon) if maybe_semicolon.as_str() == ";" => {
             if let Some(Stmt::Expression(es)) = stmt {
-                stmt = Some(Stmt::Semicolon(es.expr));
+                stmt = Some(Stmt::Semicolon(es));
             }
         }
         _ => {
@@ -448,7 +455,7 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     match tokens.next() {
         Some(maybe_semicolon) if maybe_semicolon.as_str() == ";" => {
             if let Some(Stmt::Expression(es)) = stmt {
-                stmt = Some(Stmt::Semicolon(es.expr));
+                stmt = Some(Stmt::Semicolon(es));
             }
         }
         _ => {
@@ -482,14 +489,22 @@ fn parse_statement_inner_rule(
             let assert_value = stmt_token.into_inner().next()?;
             let value = parse_expression(assert_value, diagnostics)?;
 
-            Some(Stmt::Assert(AssertStmt { value, span }))
+            Some(Stmt::Assert(AssertStmt {
+                value,
+                span,
+                annotations: vec![],
+            }))
         }
 
         Rule::return_stmt => {
             let return_value = stmt_token.into_inner().next()?;
             let value = parse_expression(return_value, diagnostics)?;
 
-            Some(Stmt::Return(ReturnStmt { value, span }))
+            Some(Stmt::Return(ReturnStmt {
+                value,
+                span,
+                annotations: vec![],
+            }))
         }
         Rule::assign_stmt => {
             let mut assignment_tokens = stmt_token.into_inner();
@@ -504,6 +519,7 @@ fn parse_statement_inner_rule(
                     left: lhs,
                     expr: body,
                     span,
+                    annotations: vec![],
                 })
             })
         }
@@ -533,6 +549,7 @@ fn parse_statement_inner_rule(
                 variable,
                 options_expr,
                 span,
+                annotations: vec![],
             }))
         }
         Rule::watch_notify_stmt => {
@@ -541,7 +558,11 @@ fn parse_statement_inner_rule(
             // Only token is the variable identifier
             let variable = parse_identifier(tokens.next()?, diagnostics);
 
-            Some(Stmt::WatchNotify(WatchNotifyStmt { variable, span }))
+            Some(Stmt::WatchNotify(WatchNotifyStmt {
+                variable,
+                span,
+                annotations: vec![],
+            }))
         }
         Rule::let_expr => {
             let mut let_binding_tokens = stmt_token.into_inner();
@@ -596,8 +617,14 @@ fn parse_statement_inner_rule(
                 })
             })
         }
-        Rule::BREAK_KEYWORD => Some(Stmt::Break(diagnostics.span(stmt_token.as_span()))),
-        Rule::CONTINUE_KEYWORD => Some(Stmt::Continue(diagnostics.span(stmt_token.as_span()))),
+        Rule::BREAK_KEYWORD => Some(Stmt::Break(BreakStmt {
+            span: diagnostics.span(stmt_token.as_span()),
+            annotations: vec![],
+        })),
+        Rule::CONTINUE_KEYWORD => Some(Stmt::Continue(ContinueStmt {
+            span: diagnostics.span(stmt_token.as_span()),
+            annotations: vec![],
+        })),
         Rule::while_loop => parse_while_loop(stmt_token, diagnostics),
         Rule::for_loop => parse_for_loop(stmt_token, diagnostics),
         Rule::if_expression => parse_if_expression(stmt_token, diagnostics).map(|expr| {
@@ -675,6 +702,7 @@ fn finish_assign_op_stmt(
         assign_op,
         expr: body,
         span,
+        annotations: vec![],
     })
 }
 
@@ -1028,38 +1056,38 @@ fn bind_headers_to_statement(
         Stmt::Expression(es) => {
             es.annotations.extend(pending_headers);
         }
-        Stmt::Assign(_) => {
-            // Assignments do not carry annotations
+        Stmt::Assign(assign_stmt) => {
+            assign_stmt.annotations.extend(pending_headers);
         }
-        Stmt::AssignOp(_) => {
-            // Assignment operations do not carry annotations
+        Stmt::AssignOp(assign_op_stmt) => {
+            assign_op_stmt.annotations.extend(pending_headers);
         }
-        Stmt::CForLoop(_) => {
-            // C-for loops do not carry annotations (for now)
+        Stmt::CForLoop(for_stmt) => {
+            for_stmt.annotations.extend(pending_headers);
         }
-        Stmt::WhileLoop(_) => {
-            // While loops do not carry annotations (for now)
+        Stmt::WhileLoop(while_stmt) => {
+            while_stmt.annotations.extend(pending_headers);
         }
-        Stmt::Semicolon(_) => {
-            // Semicolon expressions do not carry annotations
+        Stmt::Semicolon(es) => {
+            es.annotations.extend(pending_headers);
         }
-        Stmt::Break(_) => {
-            // Break statements do not carry annotations
+        Stmt::Break(break_stmt) => {
+            break_stmt.annotations.extend(pending_headers);
         }
-        Stmt::Continue(_) => {
-            // Continue statements do not carry annotations
+        Stmt::Continue(continue_stmt) => {
+            continue_stmt.annotations.extend(pending_headers);
         }
-        Stmt::Return(_) => {
-            // Return statements do not carry annotations (for now)
+        Stmt::Return(ret_stmt) => {
+            ret_stmt.annotations.extend(pending_headers);
         }
-        Stmt::Assert(_) => {
-            // Assert statements do not carry annotations (for now)
+        Stmt::Assert(assert_stmt) => {
+            assert_stmt.annotations.extend(pending_headers);
         }
-        Stmt::WatchOptions(_) => {
-            // Watch options statements do not carry annotations
+        Stmt::WatchOptions(options_stmt) => {
+            options_stmt.annotations.extend(pending_headers);
         }
-        Stmt::WatchNotify(_) => {
-            // Watch notify statements do not carry annotations
+        Stmt::WatchNotify(notify_stmt) => {
+            notify_stmt.annotations.extend(pending_headers);
         }
     }
 }

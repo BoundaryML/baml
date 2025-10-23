@@ -200,7 +200,7 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
             validate_expression(ctx, &es.expr, scope);
         }
         Stmt::Semicolon(expr) => {
-            validate_expression(ctx, expr, scope);
+            validate_expression(ctx, &expr.expr, scope);
         }
         Stmt::Break(_) | Stmt::Continue(_) => {}
         Stmt::CForLoop(stmt) => {
