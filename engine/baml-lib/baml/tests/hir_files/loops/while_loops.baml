@@ -22,15 +22,3 @@ function GCD(a: int, b: int) -> int {
 //
 //   a
 // }
-
-// function GCD(a, b) {
-//   while a != b {
-//   if a > b {
-//     a = a - b;
-//     } else {
-//     b = b - a;
-//     } 
-//   }
-//
-//   a
-// }

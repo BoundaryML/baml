@@ -16,12 +16,3 @@ function Sum(xs: int[]) -> int {
 //
 //   result
 // }
-
-// function Sum(xs) {
-//   let result = 0;
-//   for x in xs {
-//   result += x;
-//   }
-//
-//   result
-// }

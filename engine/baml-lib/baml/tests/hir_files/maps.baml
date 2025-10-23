@@ -71,12 +71,12 @@ function Len() -> int {
 // function UseMapContains() {
 //   let map = CreateMapJSON();
 //   if map.has("hello") {
-//   
+//
 //     map["hello"]
 //   } else {
-//   
+//
 //     "hi"
-//   } 
+//   }
 // }
 //
 // function Len() {

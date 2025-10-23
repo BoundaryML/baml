@@ -71,7 +71,7 @@ function Nothing() -> int {
 //   {
 //   let i = 0;
 //     while i <= 10 {
-//     
+//
 //     }
 //   }
 //
@@ -81,7 +81,7 @@ function Nothing() -> int {
 // function OnlyCond() {
 //   let s = 0;
 //   while false {
-//   
+//
 //   }
 //
 //   s
