@@ -377,8 +377,8 @@ impl BamlAsyncVmRuntime {
                             function_name.to_owned(),
                         );
 
-                        if let Some(handler) = watch_handler.as_mut() {
-                            handler(notification);
+                        if let Some(handler) = &watch_handler {
+                            handler.lock().unwrap().notify(notification);
                         }
                     }
                 }
