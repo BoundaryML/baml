@@ -46,7 +46,7 @@ serde.workspace = true
 serde_json.workspace = true
 serde-wasm-bindgen = "0.6.5"
 time.workspace = true
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, default-features = false, features = ["sync"] }
 url.workspace = true
 uuid = { workspace = true, features = ["v4", "js"] }
 wasm-bindgen.workspace = true
