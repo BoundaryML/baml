@@ -34,45 +34,45 @@ function WithStack(x: int) -> int {
 // Function: EarlyReturn
 // 1   0    LOAD_VAR 1         (x)
 //     1    LOAD_CONST 0       (42)
-//     2    CMP_OP ==
+//     2    CMP_OP ==          
 //     3    JUMP_IF_FALSE +5   (to 8)
-//     4    POP 1
+//     4    POP 1              
 //     5    LOAD_CONST 1       (1)
-//     6    RETURN
+//     6    RETURN             
 //     7    JUMP +2            (to 9)
-//     8    POP 1
+//     8    POP 1              
 //
 // 3   9    LOAD_VAR 1         (x)
 //     10   LOAD_CONST 2       (5)
-//     11   BIN_OP +
-//     12   RETURN
+//     11   BIN_OP +           
+//     12   RETURN             
 //
 // Function: WithStack
 // 7    0    LOAD_CONST 0        (1)
 //
 // 11   1    LOAD_VAR 2          (a)
 //      2    LOAD_CONST 1        (0)
-//      3    CMP_OP ==
+//      3    CMP_OP ==           
 //      4    JUMP_IF_FALSE +5    (to 9)
-//      5    POP 1
+//      5    POP 1               
 //      6    LOAD_CONST 2        (0)
-//      7    RETURN
+//      7    RETURN              
 //      8    JUMP +2             (to 10)
-//      9    POP 1
+//      9    POP 1               
 //
 // 14   10   LOAD_CONST 3        (1)
 //
 // 15   11   LOAD_VAR 2          (a)
 //      12   LOAD_VAR 3          (b)
-//      13   CMP_OP !=
+//      13   CMP_OP !=           
 //      14   JUMP_IF_FALSE +5    (to 19)
-//      15   POP 1
+//      15   POP 1               
 //
 // 16   16   LOAD_CONST 4        (0)
-//      17   RETURN
+//      17   RETURN              
 //      18   JUMP +2             (to 20)
-//      19   POP 1
-//      20   POP 1
+//      19   POP 1               
+//      20   POP 1               
 //
 // 21   21   LOAD_CONST 5        (2)
 //
@@ -80,24 +80,24 @@ function WithStack(x: int) -> int {
 //
 // 23   23   LOAD_VAR 4          (b)
 //      24   LOAD_VAR 3          (c)
-//      25   CMP_OP !=
+//      25   CMP_OP !=           
 //      26   JUMP_IF_FALSE +10   (to 36)
-//      27   POP 1
+//      27   POP 1               
 //
 // 24   28   LOAD_CONST 7        (true)
 //      29   JUMP_IF_FALSE +5    (to 34)
-//      30   POP 1
+//      30   POP 1               
 //
 // 25   31   LOAD_CONST 8        (0)
-//      32   RETURN
+//      32   RETURN              
 //      33   JUMP +2             (to 35)
-//      34   POP 1
+//      34   POP 1               
 //      35   JUMP -12            (to 23)
-//      36   POP 1
-//      37   POP 2
+//      36   POP 1               
+//      37   POP 2               
 //
 // 30   38   LOAD_CONST 9        (7)
-//      39   RETURN
+//      39   RETURN              
 //
 // Class: baml.HttpRequest with 5 fields
 // Class: baml.WatchOptions with 2 fields

@@ -17,7 +17,7 @@ function GCD(a: int, b: int) -> int {
 //     a = a - b;
 //     } else {
 //     b = b - a;
-//     }
+//     } 
 //   }
 //
 //   a

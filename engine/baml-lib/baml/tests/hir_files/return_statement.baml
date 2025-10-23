@@ -34,7 +34,7 @@ function WithStack(x: int) -> int {
 // function EarlyReturn(x) {
 //   if x == 42 {
 //   return 1;
-//   }
+//   } 
 //
 //   x + 5
 // }
@@ -43,12 +43,12 @@ function WithStack(x: int) -> int {
 //   let a = 1;
 //   if a == 0 {
 //   return 0;
-//   }
+//   } 
 //   {
 //   let b = 1;
 //     if a != b {
 //     return 0;
-//     }
+//     } 
 //   }
 //   {
 //   let c = 2;
@@ -56,7 +56,7 @@ function WithStack(x: int) -> int {
 //     while b != c {
 //     if true {
 //       return 0;
-//       }
+//       } 
 //     }
 //   }
 //

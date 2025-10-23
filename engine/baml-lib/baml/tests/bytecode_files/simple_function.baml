@@ -5,7 +5,7 @@ function GetName(person: string) -> string {
 // String: "Antonio"
 // Function: GetName
 // 1   0   LOAD_CONST 0   (Antonio)
-//     1   RETURN
+//     1   RETURN         
 //
 // Class: baml.HttpRequest with 5 fields
 // Class: baml.WatchOptions with 2 fields
