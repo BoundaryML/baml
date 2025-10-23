@@ -498,8 +498,13 @@ impl<'g> HirCompiler<'g> {
                 // Locals come after.
                 names.resize_with(names.capacity(), String::new);
 
+                log::info!("There are {} locals loremipsum", locals.len());
+
                 // Distribute locals to their respective indexes.
                 for (name, index) in locals {
+                    if *index >= names.len() {
+                        break;
+                    }
                     names[*index] = name.to_string();
                 }
 
@@ -548,6 +553,14 @@ impl<'g> HirCompiler<'g> {
     /// A statement is anything that does not produce a value by itself.
     fn compile_statement(&mut self, statement: &thir::Statement<(Span, Option<TypeIR>)>) {
         match statement {
+            thir::Statement::AnnotatedStatement { headers, statement } => {
+                for header in headers {
+                    self.emit_annotated_block(header);
+                }
+                if let Some(statement) = statement {
+                    self.compile_statement(statement);
+                }
+            }
             thir::Statement::Let { name, value, .. } => {
                 self.compile_expression(value);
                 self.track_local(name);
@@ -1561,6 +1574,31 @@ impl<'g> HirCompiler<'g> {
         // Add a constant that points to the string object
         let const_index = self.add_constant(Value::Object(object_index));
         self.emit(Instruction::LoadConst(const_index));
+    }
+
+    fn emit_annotated_block(&mut self, v: &str) {
+        self.emit_string_literal(v);
+        let mut function_name: [u8; 1024] = [0; 1024];
+        let bytes = v.as_bytes();
+        let len = std::cmp::min(bytes.len(), 1023);
+        function_name[..len].copy_from_slice(&bytes[..len]);
+        // null terminate the vec in case its too long
+        function_name[len] = 0;
+
+        let mut block_name: [u8; 1024] = [0; 1024];
+        block_name[..len].copy_from_slice(&bytes[..len]);
+        // null terminate the vec in case its too long
+        block_name[len] = 0;
+
+        self.emit(Instruction::NotifyBlock(
+            baml_vm::bytecode::BlockNotification {
+                function_name,
+                block_name,
+                level: 1,
+                block_type: baml_vm::bytecode::BlockNotificationType::Statement,
+                is_enter: true,
+            },
+        ));
     }
 
     /// Emits a single instruction and returns the index of the instruction.

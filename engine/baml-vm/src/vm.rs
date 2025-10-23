@@ -608,7 +608,7 @@ impl Vm {
                                                 }
                                             }
 
-                                            other => {
+                                            _other => {
                                                 return Err(RuntimeError::Other(
                                                     "Invalid filter function return".to_string(),
                                                 )
@@ -770,7 +770,7 @@ impl Vm {
                                             }
                                         }
 
-                                        other => {
+                                        _other => {
                                             return Err(RuntimeError::Other(
                                                 "Invalid filter function return".to_string(),
                                             )
@@ -1340,7 +1340,7 @@ impl Vm {
                                             }
                                         }
 
-                                        other => {
+                                        _other => {
                                             return Err(RuntimeError::Other(
                                                 "Invalid filter function return".to_string(),
                                             )
@@ -1485,7 +1485,7 @@ impl Vm {
                                             }
                                         }
 
-                                        other => {
+                                        _other => {
                                             return Err(RuntimeError::Other(
                                                 "Invalid filter function return".to_string(),
                                             )

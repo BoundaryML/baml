@@ -183,10 +183,13 @@ impl ExecState {
                 Value::from_vm_value(&value, vm).map(ExecState::Complete)
             }
             VmExecState::Notify(roots) => {
-                let nodes = roots
-                    .iter()
-                    .map(|node_id| Notification::from_node_id(node_id, vm))
-                    .collect::<anyhow::Result<Vec<_>>>()?;
+                let nodes = match roots {
+                    baml_vm::vm::WatchNotification::Variables(nodes) => nodes
+                        .iter()
+                        .map(|node_id| Notification::from_node_id(node_id, vm))
+                        .collect::<anyhow::Result<Vec<_>>>()?,
+                    baml_vm::vm::WatchNotification::Block(_) => todo!("block notifications"),
+                };
                 Ok(ExecState::Emit(nodes))
             }
         }

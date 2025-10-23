@@ -34,16 +34,34 @@ export const PromptPreviewContent = () => {
       ) {
         return;
       }
-      const newPreview = await selectedFn.render_prompt_for_test(
-        rt,
-        selectedTc.name,
-        ctx,
-        vscode.loadMediaFile,
-        apiKeys,
-      );
-      setLastKnownPreview(newPreview);
-      setPromptData(newPreview);
-      return newPreview;
+      console.log('[PromptPreview] Attempt render_prompt_for_test', {
+        functionName: selectedFn.name,
+        testCaseName: selectedTc.name,
+        hasExprTests: selectedFn.test_cases?.length ?? 0,
+      });
+      try {
+        const newPreview = await selectedFn.render_prompt_for_test(
+          rt,
+          selectedTc.name,
+          ctx,
+          vscode.loadMediaFile,
+          apiKeys,
+        );
+        console.log('[PromptPreview] render_prompt_for_test success', {
+          functionName: selectedFn.name,
+          testCaseName: selectedTc.name,
+        });
+        setLastKnownPreview(newPreview);
+        setPromptData(newPreview);
+        return newPreview;
+      } catch (error) {
+        console.error('[PromptPreview] render_prompt_for_test failed', {
+          functionName: selectedFn.name,
+          testCaseName: selectedTc.name,
+          error,
+        });
+        throw error;
+      }
     },
     [rt, ctx, selectedFn, selectedTc, apiKeys, files, setPromptData],
   );

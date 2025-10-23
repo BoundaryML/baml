@@ -14,6 +14,7 @@ use baml_compiler::{
         interpret::interpret_thir,
         typecheck::{typecheck_expression, typecheck_returning_context, VarInfo},
     },
+    watch::{shared_handler, SharedWatchHandler},
 };
 use baml_types::{
     expr::ExprMetadata, ir_type::TypeGeneric, BamlValue, BamlValueWithMeta, Completion, TypeIR,
@@ -605,12 +606,12 @@ impl ReplState {
         // REPL watch handler: collect notifications
         let watch_notifications = Arc::new(Mutex::new(Vec::new()));
         let watch_notifications_clone = watch_notifications.clone();
-        let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
+        let watch_handler = shared_handler(move |notification| {
             watch_notifications_clone
                 .lock()
                 .unwrap()
                 .push(format!("{notification}"));
-        };
+        });
 
         let eval_result = interpret_thir(
             "repl".to_string(),

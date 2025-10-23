@@ -2,6 +2,7 @@ import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { sessionStore } from '../../../../../baml_wasm_web/JotaiProvider';
 import type { TestState } from '../../atoms';
+import type { WatchNotification, CategorizedNotifications } from './types';
 
 export interface TestHistoryEntry {
   timestamp: number;
@@ -24,3 +25,17 @@ export const isParallelTestsEnabledAtom = atomWithStorage<boolean>(
   true,
   sessionStore,
 );
+
+// Atom for current test's watch notifications
+export const currentWatchNotificationsAtom = atom<WatchNotification[]>([])
+
+// Derived atom for categorized notifications
+export const categorizedNotificationsAtom = atom<CategorizedNotifications>((get) => {
+  const notifications = get(currentWatchNotificationsAtom)
+
+  return {
+    variables: notifications.filter(n => n.variable_name && !n.is_stream),
+    blocks: notifications.filter(n => n.value.startsWith('Block(')),
+    streams: notifications.filter(n => n.is_stream),
+  }
+})

@@ -1048,6 +1048,7 @@ dependencies = [
  "indoc",
  "internal-baml-core",
  "itertools 0.14.0",
+ "log",
  "pretty_assertions",
  "strip-ansi-escapes",
 ]
@@ -1316,6 +1317,7 @@ name = "baml-schema-build"
 version = "0.211.2"
 dependencies = [
  "anyhow",
+ "baml-compiler",
  "baml-ids",
  "baml-runtime",
  "baml-types",
@@ -3949,6 +3951,7 @@ dependencies = [
  "baml-types",
  "bstd",
  "either",
+ "indexmap 2.9.0",
  "internal-baml-diagnostics",
  "log",
  "pest",

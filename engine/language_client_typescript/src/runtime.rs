@@ -1,6 +1,7 @@
 use std::{collections::HashMap, path::PathBuf, time::SystemTime};
 
 // Conditional runtime selection based on the "interpreter" feature flag
+use baml_compiler::watch::shared_handler;
 #[cfg(feature = "interpreter")]
 pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
 #[cfg(not(feature = "interpreter"))]
@@ -395,7 +396,7 @@ impl BamlRuntime {
         let fut = async move {
             // Create emit_handler closure (only for interpreter)
             #[cfg(feature = "interpreter")]
-            let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
+            let watch_handler = shared_handler(move |notification| {
                 if let Some(ref callbacks) = emit_callbacks {
                     match notification.value {
                         baml_compiler::watch::WatchBamlValue::Block(block_label) => {
@@ -426,9 +427,12 @@ impl BamlRuntime {
                                     function_name: notification.function_name.clone(),
                                 };
 
-                                // Fire to var handlers using composite key "FunctionName.variable_name"
+                                // Fire to var handlers using composite key "FunctionName.channel_name"
+                                // Use channel_name if available, otherwise fall back to variable_name
+                                let channel =
+                                    notification.channel_name.as_ref().unwrap_or(var_name);
                                 let handler_key =
-                                    format!("{}.{}", notification.function_name, var_name);
+                                    format!("{}.{}", notification.function_name, channel);
                                 if let Some(handler) = callbacks.var_handlers.get(&handler_key) {
                                     let _ = handler
                                         .call(var_event, ThreadsafeFunctionCallMode::NonBlocking);
@@ -446,8 +450,10 @@ impl BamlRuntime {
                                     "[RUST] Stream handlers available: {:?}",
                                     callbacks.stream_handlers.keys().collect::<Vec<_>>()
                                 );
+                                let channel =
+                                    notification.channel_name.as_ref().unwrap_or(var_name);
                                 let handler_key =
-                                    format!("{}.{}", notification.function_name, var_name);
+                                    format!("{}.{}", notification.function_name, channel);
                                 if let Some(handler) = callbacks.stream_handlers.get(&handler_key) {
                                     log::info!(
                                         "[RUST] Found stream handler for {}, calling it",
@@ -473,8 +479,10 @@ impl BamlRuntime {
                         }
                         baml_compiler::watch::WatchBamlValue::StreamUpdate(stream_id, value) => {
                             if let Some(var_name) = &notification.variable_name {
+                                let channel =
+                                    notification.channel_name.as_ref().unwrap_or(var_name);
                                 let handler_key =
-                                    format!("{}.{}", notification.function_name, var_name);
+                                    format!("{}.{}", notification.function_name, channel);
                                 if let Some(handler) = callbacks.stream_handlers.get(&handler_key) {
                                     let serialized = serde_json::to_value(value.value())
                                         .unwrap_or(serde_json::Value::Null);
@@ -493,8 +501,10 @@ impl BamlRuntime {
                         }
                         baml_compiler::watch::WatchBamlValue::StreamEnd(stream_id) => {
                             if let Some(var_name) = &notification.variable_name {
+                                let channel =
+                                    notification.channel_name.as_ref().unwrap_or(var_name);
                                 let handler_key =
-                                    format!("{}.{}", notification.function_name, var_name);
+                                    format!("{}.{}", notification.function_name, channel);
                                 if let Some(handler) = callbacks.stream_handlers.get(&handler_key) {
                                     let stream_event = StreamEvent {
                                         stream_id: stream_id.clone(),
@@ -510,7 +520,7 @@ impl BamlRuntime {
                         }
                     }
                 }
-            };
+            });
 
             #[cfg(feature = "interpreter")]
             let result = baml_runtime
@@ -596,7 +606,7 @@ impl BamlRuntime {
 
         #[cfg(feature = "interpreter")]
         let (result, _event_id) = {
-            let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
+            let watch_handler = shared_handler(move |notification| {
                 if let Some(ref callbacks) = emit_callbacks {
                     match notification.value {
                         baml_compiler::watch::WatchBamlValue::Block(block_label) => {
@@ -614,8 +624,10 @@ impl BamlRuntime {
                         }
                         baml_compiler::watch::WatchBamlValue::Value(value) => {
                             if let Some(var_name) = &notification.variable_name {
+                                let channel =
+                                    notification.channel_name.as_ref().unwrap_or(var_name);
                                 let handler_key =
-                                    format!("{}.{}", notification.function_name, var_name);
+                                    format!("{}.{}", notification.function_name, channel);
                                 if let Some(handler) = callbacks.var_handlers.get(&handler_key) {
                                     let serialized = serde_json::to_value(value.value())
                                         .unwrap_or(serde_json::Value::Null);
@@ -639,8 +651,10 @@ impl BamlRuntime {
                         }
                         baml_compiler::watch::WatchBamlValue::StreamStart(stream_id) => {
                             if let Some(var_name) = &notification.variable_name {
+                                let channel =
+                                    notification.channel_name.as_ref().unwrap_or(var_name);
                                 let handler_key =
-                                    format!("{}.{}", notification.function_name, var_name);
+                                    format!("{}.{}", notification.function_name, channel);
                                 if let Some(handler) = callbacks.stream_handlers.get(&handler_key) {
                                     let stream_event = StreamEvent {
                                         stream_id: stream_id.clone(),
@@ -656,8 +670,10 @@ impl BamlRuntime {
                         }
                         baml_compiler::watch::WatchBamlValue::StreamUpdate(stream_id, value) => {
                             if let Some(var_name) = &notification.variable_name {
+                                let channel =
+                                    notification.channel_name.as_ref().unwrap_or(var_name);
                                 let handler_key =
-                                    format!("{}.{}", notification.function_name, var_name);
+                                    format!("{}.{}", notification.function_name, channel);
                                 if let Some(handler) = callbacks.stream_handlers.get(&handler_key) {
                                     let serialized = serde_json::to_value(value.value())
                                         .unwrap_or(serde_json::Value::Null);
@@ -676,8 +692,10 @@ impl BamlRuntime {
                         }
                         baml_compiler::watch::WatchBamlValue::StreamEnd(stream_id) => {
                             if let Some(var_name) = &notification.variable_name {
+                                let channel =
+                                    notification.channel_name.as_ref().unwrap_or(var_name);
                                 let handler_key =
-                                    format!("{}.{}", notification.function_name, var_name);
+                                    format!("{}.{}", notification.function_name, channel);
                                 if let Some(handler) = callbacks.stream_handlers.get(&handler_key) {
                                     let stream_event = StreamEvent {
                                         stream_id: stream_id.clone(),
@@ -693,7 +711,7 @@ impl BamlRuntime {
                         }
                     }
                 }
-            };
+            });
 
             self.inner.call_function_sync(
                 function_name,

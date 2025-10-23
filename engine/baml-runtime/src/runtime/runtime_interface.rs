@@ -5,8 +5,8 @@ use baml_types::{
     tracing::events::{FunctionEnd, FunctionStart, TraceData, TraceEvent},
     BamlMap, BamlValue, Constraint, EvaluationContext,
 };
+use internal_baml_ast::diagram_generator;
 use internal_baml_core::{
-    ast::BamlVisDiagramGenerator,
     internal_baml_diagnostics::SourceFile,
     ir::{
         repr::{IntermediateRepr, Node, TypeBuilderEntry},
@@ -209,7 +209,12 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
     fn function_graph(&self, _function_name: &str, _ctx: &RuntimeContext) -> Result<String> {
         // Use baml-vis to generate a Mermaid diagram for the current AST
         let ast = self.db.ast();
-        let graph = BamlVisDiagramGenerator::generate_headers_flowchart(ast);
+        log::info!("[runtime_interface] generating function graph for AST");
+        let graph = diagram_generator::generate_headers_flowchart(ast);
+        log::info!(
+            "[runtime_interface] generated Mermaid graph (chars={})",
+            graph.len()
+        );
         Ok(graph)
     }
 

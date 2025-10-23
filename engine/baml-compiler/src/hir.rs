@@ -201,6 +201,12 @@ pub enum Statement {
         variable: String,
         span: Span,
     },
+
+    /// Annotations that apply to the statement.
+    AnnotatedStatement {
+        headers: Vec<String>,
+        statement: Option<Box<Statement>>,
+    },
 }
 
 #[derive(Clone, Debug)]

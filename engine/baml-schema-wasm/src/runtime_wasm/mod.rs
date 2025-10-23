@@ -3,6 +3,7 @@ pub mod runtime_prompt;
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use anyhow::Context;
+use baml_compiler::watch::shared_handler;
 // Conditional runtime selection based on the "interpreter" feature flag
 #[cfg(feature = "interpreter")]
 pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
@@ -1124,9 +1125,13 @@ impl WasmRuntime {
         let ctx = ctx.create_ctx_with_default();
         let ctx = ctx.eval_ctx(false);
 
-        self.runtime
-            .ir()
-            .walk_expr_fns()
+        let expr_fns = self.runtime.ir().walk_expr_fns().collect::<Vec<_>>();
+        log::info!(
+            "[WasmRuntime] list_expr_fns discovered {} functions",
+            expr_fns.len()
+        );
+        expr_fns
+            .into_iter()
             .map(|f| {
                 let snippet = format!(
                     r#"test TestName {{
@@ -1785,6 +1790,7 @@ impl WasmRuntime {
         get_baml_src_cb: js_sys::Function,
         env: js_sys::Object,
         abort_signal: Option<js_sys::Object>,
+        watch_handler: js_sys::Function,
     ) -> Result<WasmTestResponses, JsValue> {
         // Convert abort signal to tripwire
         let tripwire = match crate::abort_controller::js_abort_signal_to_tripwire(abort_signal) {
@@ -1847,6 +1853,80 @@ impl WasmRuntime {
                     let test_tripwire = tripwire.clone();
                     let on_tick = if false { Some(|| {}) } else { None };
 
+                    // Create watch handler callback for this test
+                    let watch_handler_clone = watch_handler.clone();
+                    let watch_handler_cb = shared_handler(move |notification| {
+                        // Convert notification to a JS object
+                        let js_notification = js_sys::Object::new();
+
+                        if let Some(ref var_name) = notification.variable_name {
+                            js_sys::Reflect::set(
+                                &js_notification,
+                                &JsValue::from_str("variable_name"),
+                                &JsValue::from_str(var_name),
+                            )
+                            .unwrap();
+                        }
+
+                        if let Some(ref channel_name) = notification.channel_name {
+                            js_sys::Reflect::set(
+                                &js_notification,
+                                &JsValue::from_str("channel_name"),
+                                &JsValue::from_str(channel_name),
+                            )
+                            .unwrap();
+                        }
+
+                        js_sys::Reflect::set(
+                            &js_notification,
+                            &JsValue::from_str("function_name"),
+                            &JsValue::from_str(&notification.function_name),
+                        )
+                        .unwrap();
+
+                        js_sys::Reflect::set(
+                            &js_notification,
+                            &JsValue::from_str("is_stream"),
+                            &JsValue::from_bool(notification.is_stream),
+                        )
+                        .unwrap();
+
+                        // Serialize the value as JSON
+                        let value_json = match &notification.value {
+                            baml_compiler::watch::WatchBamlValue::Value(v) => {
+                                let value: BamlValue = v.clone().into();
+                                serde_json::to_string(&value)
+                                    .unwrap_or_else(|_| format!("{:?}", value))
+                            }
+                            baml_compiler::watch::WatchBamlValue::Block(s) => {
+                                serde_json::json!({ "type": "block", "label": s }).to_string()
+                            }
+                            baml_compiler::watch::WatchBamlValue::StreamStart(id) => {
+                                serde_json::json!({ "type": "stream_start", "id": id }).to_string()
+                            }
+                            baml_compiler::watch::WatchBamlValue::StreamUpdate(id, v) => {
+                                let value: BamlValue = v.clone().into();
+                                let value_json = serde_json::to_string(&value)
+                                    .unwrap_or_else(|_| format!("{:?}", value));
+                                serde_json::json!({ "type": "stream_update", "id": id, "value": value_json }).to_string()
+                            }
+                            baml_compiler::watch::WatchBamlValue::StreamEnd(id) => {
+                                serde_json::json!({ "type": "stream_end", "id": id }).to_string()
+                            }
+                        };
+
+                        js_sys::Reflect::set(
+                            &js_notification,
+                            &JsValue::from_str("value"),
+                            &JsValue::from_str(&value_json),
+                        )
+                        .unwrap();
+
+                        watch_handler_clone
+                            .call1(&JsValue::NULL, &js_notification)
+                            .unwrap();
+                    });
+
                     // Create a future for this test
                     let future = async move {
                         let (test_response, span) = rt
@@ -1860,6 +1940,7 @@ impl WasmRuntime {
                                 None,          // tags
                                 test_tripwire, // Pass tripwire to each test
                                 on_tick,
+                                Some(watch_handler_cb),
                             )
                             .await;
 
@@ -2003,6 +2084,11 @@ impl WasmFunction {
         get_baml_src_cb: js_sys::Function,
         env: js_sys::Object,
     ) -> JsResult<WasmPrompt> {
+        log::info!(
+            "[WasmFunction] render_prompt_for_test start function={} test={}",
+            self.name,
+            test_name
+        );
         let context_manager = rt.runtime.create_ctx_manager(
             BamlValue::String("wasm".to_string()),
             js_fn_to_baml_src_reader(get_baml_src_cb),
@@ -2037,13 +2123,31 @@ impl WasmFunction {
             .get_test_params(&self.name, &test_name, &ctx, false)
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
-        rt.runtime
+        match rt
+            .runtime
             .internal()
             .render_prompt(&self.name, &ctx, &params, wasm_call_context.node_index)
             .await
-            .as_ref()
-            .map(|(p, scope, allowed)| (p, scope, allowed).into())
-            .map_err(|e| JsError::new(format!("{e:?}").as_str()))
+        {
+            Ok(rendered) => {
+                log::info!(
+                    "[WasmFunction] render_prompt_for_test success function={} test={}",
+                    self.name,
+                    test_name
+                );
+                let prompt = (&rendered.0, &rendered.1, &rendered.2).into();
+                Ok(prompt)
+            }
+            Err(e) => {
+                log::error!(
+                    "[WasmFunction] render_prompt_for_test error function={} test={} err={:?}",
+                    self.name,
+                    test_name,
+                    e
+                );
+                Err(JsError::new(format!("{e:?}").as_str()))
+            }
+        }
     }
 
     #[wasm_bindgen]
@@ -2162,15 +2266,20 @@ impl WasmFunction {
         on_expr_event: js_sys::Function,
         env: js_sys::Object,
         abort_signal: Option<js_sys::Object>,
+        watch_handler: js_sys::Function,
     ) -> Result<WasmTestResponse, JsValue> {
         // Convert abort signal to tripwire
         let tripwire = js_abort_signal_to_tripwire(abort_signal).map_err(JsValue::from)?;
 
         let rt = &rt.runtime;
         let function_name = self.name.clone();
-
         let function_name_for_test_pair = function_name.clone();
         let test_name_for_test_pair = test_name.clone();
+        log::info!(
+            "[WasmFunction] run_test_with_expr_events start function={} test={}",
+            function_name,
+            test_name.as_str()
+        );
 
         // Create the closure to handle partial responses:
         let cb = Box::new(move |r: FunctionResult| {
@@ -2184,6 +2293,78 @@ impl WasmFunction {
             }
             .into();
             on_partial_response.call1(&this, &res).unwrap();
+        });
+
+        let watch_handler_cb = shared_handler(move |notification| {
+            // Convert notification to a JS object
+            let js_notification = js_sys::Object::new();
+
+            if let Some(var_name) = &notification.variable_name {
+                js_sys::Reflect::set(
+                    &js_notification,
+                    &JsValue::from_str("variable_name"),
+                    &JsValue::from_str(var_name),
+                )
+                .unwrap();
+            }
+
+            if let Some(channel) = &notification.channel_name {
+                js_sys::Reflect::set(
+                    &js_notification,
+                    &JsValue::from_str("channel_name"),
+                    &JsValue::from_str(channel),
+                )
+                .unwrap();
+            }
+
+            js_sys::Reflect::set(
+                &js_notification,
+                &JsValue::from_str("function_name"),
+                &JsValue::from_str(&notification.function_name),
+            )
+            .unwrap();
+
+            js_sys::Reflect::set(
+                &js_notification,
+                &JsValue::from_str("is_stream"),
+                &JsValue::from_bool(notification.is_stream),
+            )
+            .unwrap();
+
+            // Serialize the value as JSON
+            let value_json = match &notification.value {
+                baml_compiler::watch::WatchBamlValue::Value(v) => {
+                    let value: BamlValue = v.clone().into();
+                    serde_json::to_string(&value).unwrap_or_else(|_| format!("{:?}", value))
+                }
+                baml_compiler::watch::WatchBamlValue::Block(s) => {
+                    serde_json::json!({ "type": "block", "label": s }).to_string()
+                }
+                baml_compiler::watch::WatchBamlValue::StreamStart(id) => {
+                    serde_json::json!({ "type": "stream_start", "id": id }).to_string()
+                }
+                baml_compiler::watch::WatchBamlValue::StreamUpdate(id, v) => {
+                    let value: BamlValue = v.clone().into();
+                    let value_json =
+                        serde_json::to_string(&value).unwrap_or_else(|_| format!("{:?}", value));
+                    serde_json::json!({ "type": "stream_update", "id": id, "value": value_json })
+                        .to_string()
+                }
+                baml_compiler::watch::WatchBamlValue::StreamEnd(id) => {
+                    serde_json::json!({ "type": "stream_end", "id": id }).to_string()
+                }
+            };
+
+            js_sys::Reflect::set(
+                &js_notification,
+                &JsValue::from_str("value"),
+                &JsValue::from_str(&value_json),
+            )
+            .unwrap();
+
+            watch_handler
+                .call1(&JsValue::NULL, &js_notification)
+                .unwrap();
         });
 
         // Create the channel for expression events
@@ -2231,10 +2412,24 @@ impl WasmFunction {
                 None, // tags
                 tripwire,
                 on_tick,
+                Some(watch_handler_cb),
             )
             .await;
 
         let (test_response, span) = result;
+        match &test_response {
+            Ok(_) => log::info!(
+                "[WasmFunction] run_test_with_expr_events success function={} test={}",
+                function_name,
+                test_name.as_str()
+            ),
+            Err(e) => log::error!(
+                "[WasmFunction] run_test_with_expr_events error function={} test={} err={:?}",
+                function_name,
+                test_name.as_str(),
+                e
+            ),
+        }
 
         Ok(WasmTestResponse {
             test_response,
@@ -2259,6 +2454,7 @@ impl WasmFunction {
         get_baml_src_cb: js_sys::Function,
         env: js_sys::Object,
         abort_signal: Option<js_sys::Object>,
+        watch_handler: js_sys::Function,
     ) -> Result<WasmTestResponse, JsValue> {
         // Convert abort signal to tripwire
         let tripwire = js_abort_signal_to_tripwire(abort_signal).map_err(JsValue::from)?;
@@ -2281,6 +2477,79 @@ impl WasmFunction {
             }
             .into();
             on_partial_response.call1(&this, &res).unwrap();
+        });
+
+        // Create the closure to handle watch notifications (similar to on_partial_response):
+        let watch_handler_cb = shared_handler(move |notification| {
+            // Convert notification to a JS object
+            let js_notification = js_sys::Object::new();
+
+            if let Some(var_name) = &notification.variable_name {
+                js_sys::Reflect::set(
+                    &js_notification,
+                    &JsValue::from_str("variable_name"),
+                    &JsValue::from_str(var_name),
+                )
+                .unwrap();
+            }
+
+            if let Some(channel) = &notification.channel_name {
+                js_sys::Reflect::set(
+                    &js_notification,
+                    &JsValue::from_str("channel_name"),
+                    &JsValue::from_str(channel),
+                )
+                .unwrap();
+            }
+
+            js_sys::Reflect::set(
+                &js_notification,
+                &JsValue::from_str("function_name"),
+                &JsValue::from_str(&notification.function_name),
+            )
+            .unwrap();
+
+            js_sys::Reflect::set(
+                &js_notification,
+                &JsValue::from_str("is_stream"),
+                &JsValue::from_bool(notification.is_stream),
+            )
+            .unwrap();
+
+            // Serialize the value as JSON
+            let value_json = match &notification.value {
+                baml_compiler::watch::WatchBamlValue::Value(v) => {
+                    let value: BamlValue = v.clone().into();
+                    serde_json::to_string(&value).unwrap_or_else(|_| format!("{:?}", value))
+                }
+                baml_compiler::watch::WatchBamlValue::Block(s) => {
+                    serde_json::json!({ "type": "block", "label": s }).to_string()
+                }
+                baml_compiler::watch::WatchBamlValue::StreamStart(id) => {
+                    serde_json::json!({ "type": "stream_start", "id": id }).to_string()
+                }
+                baml_compiler::watch::WatchBamlValue::StreamUpdate(id, v) => {
+                    let value: BamlValue = v.clone().into();
+                    let value_json =
+                        serde_json::to_string(&value).unwrap_or_else(|_| format!("{:?}", value));
+                    serde_json::json!({ "type": "stream_update", "id": id, "value": value_json })
+                        .to_string()
+                }
+                baml_compiler::watch::WatchBamlValue::StreamEnd(id) => {
+                    serde_json::json!({ "type": "stream_end", "id": id }).to_string()
+                }
+            };
+
+            js_sys::Reflect::set(
+                &js_notification,
+                &JsValue::from_str("value"),
+                &JsValue::from_str(&value_json),
+            )
+            .unwrap();
+
+            watch_handler
+                .call1(&JsValue::NULL, &js_notification)
+                .unwrap();
         });
 
         // Create your evaluation context, etc.
@@ -2307,6 +2576,7 @@ impl WasmFunction {
                 None, // tags
                 tripwire,
                 on_tick,
+                Some(watch_handler_cb),
             )
             .await;
 
@@ -2331,10 +2601,18 @@ impl WasmFunction {
         let ctx = rt
             .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
             .create_ctx_with_default();
+        log::info!(
+            "[wasm::function_graph] generating graph for function {}",
+            self.name
+        );
         let graph = rt
             .internal()
             .function_graph(&self.name, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
+        log::info!(
+            "[wasm::function_graph] generated Mermaid graph (chars={})",
+            graph.len()
+        );
         Ok(graph)
     }
 
