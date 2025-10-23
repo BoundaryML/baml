@@ -34,6 +34,38 @@ function WithStack(x: int) -> int {
 // function EarlyReturn(x) {
 //   if x == 42 {
 //   return 1;
+//   }
+//
+//   x + 5
+// }
+//
+// function WithStack(x) {
+//   let a = 1;
+//   if a == 0 {
+//   return 0;
+//   }
+//   {
+//   let b = 1;
+//     if a != b {
+//     return 0;
+//     }
+//   }
+//   {
+//   let c = 2;
+//     let b = 3;
+//     while b != c {
+//     if true {
+//       return 0;
+//       }
+//     }
+//   }
+//
+//   7
+// }
+
+// function EarlyReturn(x) {
+//   if x == 42 {
+//   return 1;
 //   } 
 //
 //   x + 5
@@ -62,30 +94,3 @@ function WithStack(x: int) -> int {
 //
 //   7
 // }
-<<<<<<< HEAD
-//
-// class baml.HttpRequest {
-//   url: string
-//   method: baml.HttpMethod
-//   headers: (map<string, string> | null)
-//   query_params: (map<string, string> | null)
-//   json: (ANY | null)
-// }
-//
-// enum baml.HttpMethod {
-//   Get
-//   Post
-//   Put
-//   Delete
-//   Patch
-// }
-=======
->>>>>>> canary
-
-// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
-//   -->  test.baml:65
-//    | 
-// 64 | // }
-// 65 | <<<<<<< HEAD
-// 66 | //
-//    | 

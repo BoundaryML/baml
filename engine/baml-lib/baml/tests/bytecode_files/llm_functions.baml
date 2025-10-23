@@ -9,7 +9,7 @@ function ClassifyText(text: string) -> string {
     prompt #"
         Classify the following text as positive, negative, or neutral:
         {{ text }}
-        
+
         Return just the classification.
     "#
 }
@@ -24,7 +24,7 @@ function AnalyzeSentiment(text: string) -> Sentiment {
     client "openai/gpt-4o-mini"
     prompt #"
         Analyze the sentiment of this text: {{ text }}
-        
+
         Respond with exactly one of: POSITIVE, NEGATIVE, NEUTRAL
     "#
 }
@@ -35,17 +35,85 @@ function AnalyzeSentiment(text: string) -> Sentiment {
 //
 // Function: AnalyzeSentiment
 //
-<<<<<<< HEAD
-// Class: baml.HttpRequest with 5 fields
-=======
 // Class: baml.Request with 3 fields
 // Class: baml.WatchOptions with 2 fields
->>>>>>> canary
 
-// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
-//   -->  test.baml:38
-//    | 
-// 37 | //
-// 38 | <<<<<<< HEAD
-// 39 | // Class: baml.HttpRequest with 5 fields
-//    | 
+// Function: GeneratePoem
+//
+// Function: ClassifyText
+//
+// Function: AnalyzeSentiment
+//
+// Class: baml.HttpRequest with 5 fields
+// Class: baml.WatchOptions with 2 fields
+// Enum baml.HttpMethod
+// Enum Sentiment
+// Function: baml.Array.length
+//
+// Function: baml.Map.length
+//
+// Function: baml.Map.has
+//
+// Function: baml.media.image.from_url
+//
+// Function: baml.media.audio.from_url
+//
+// Function: baml.media.video.from_url
+//
+// Function: baml.media.pdf.from_url
+//
+// Function: baml.media.image.from_base64
+//
+// Function: baml.media.audio.from_base64
+//
+// Function: baml.media.video.from_base64
+//
+// Function: baml.media.pdf.from_base64
+//
+// Function: baml.media.image.is_url
+//
+// Function: baml.media.video.is_url
+//
+// Function: baml.media.audio.is_url
+//
+// Function: baml.media.pdf.is_url
+//
+// Function: baml.media.image.is_base64
+//
+// Function: baml.media.video.is_base64
+//
+// Function: baml.media.audio.is_base64
+//
+// Function: baml.media.pdf.is_base64
+//
+// Function: baml.media.image.as_url
+//
+// Function: baml.media.video.as_url
+//
+// Function: baml.media.audio.as_url
+//
+// Function: baml.media.pdf.as_url
+//
+// Function: baml.media.image.as_base64
+//
+// Function: baml.media.video.as_base64
+//
+// Function: baml.media.audio.as_base64
+//
+// Function: baml.media.pdf.as_base64
+//
+// Function: baml.media.image.mime
+//
+// Function: baml.media.video.mime
+//
+// Function: baml.media.audio.mime
+//
+// Function: baml.media.pdf.mime
+//
+// Function: env.get
+//
+// Function: baml.deep_copy
+//
+// Function: baml.unstable.string
+//
+// Function: baml.fetch_as

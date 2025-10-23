@@ -71,6 +71,54 @@ function Nothing() -> int {
 //   {
 //   let i = 0;
 //     while i <= 10 {
+//
+//     }
+//   }
+//
+//   s
+// }
+//
+// function OnlyCond() {
+//   let s = 0;
+//   while false {
+//
+//   }
+//
+//   s
+// }
+//
+// function Nothing() {
+//   let s = 0;
+//   for (;;) { }
+//
+//   s
+// }
+
+// function SumToTen() {
+//   let s = 0;
+//   {
+//   let i = 1;
+//     for (;i <= 10;i += 1;) { s += i;}
+//   }
+//
+//   s
+// }
+//
+// function NoCondition() {
+//   let s = 0;
+//   {
+//   let i = 0;
+//     for (;;s += i;) { }
+//   }
+//
+//   s
+// }
+//
+// function NoAfter() {
+//   let s = 0;
+//   {
+//   let i = 0;
+//     while i <= 10 {
 //     
 //     }
 //   }
@@ -93,30 +141,3 @@ function Nothing() -> int {
 //
 //   s
 // }
-<<<<<<< HEAD
-//
-// class baml.HttpRequest {
-//   url: string
-//   method: baml.HttpMethod
-//   headers: (map<string, string> | null)
-//   query_params: (map<string, string> | null)
-//   json: (ANY | null)
-// }
-//
-// enum baml.HttpMethod {
-//   Get
-//   Post
-//   Put
-//   Delete
-//   Patch
-// }
-=======
->>>>>>> canary
-
-// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
-//   -->  test.baml:96
-//    | 
-// 95 | // }
-// 96 | <<<<<<< HEAD
-// 97 | //
-//    | 

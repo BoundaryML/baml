@@ -45,17 +45,104 @@ function ReturnArray() -> int[] {
 //      5   ALLOC_ARRAY 5
 //      6   RETURN
 //
-<<<<<<< HEAD
-// Class: baml.HttpRequest with 5 fields
-=======
 // Class: baml.Request with 3 fields
 // Class: baml.WatchOptions with 2 fields
->>>>>>> canary
 
-// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
-//   -->  test.baml:48
-//    | 
-// 47 | //
-// 48 | <<<<<<< HEAD
-// 49 | // Class: baml.HttpRequest with 5 fields
-//    | 
+// Function: ReturnInt
+// 2   0   LOAD_CONST 0   (42)
+//     1   RETURN         
+//
+// String: "Hello World"
+// Function: ReturnString
+// 6   0   LOAD_CONST 0   (Hello World)
+//     1   RETURN         
+//
+// Function: ReturnBool
+// 10   0   LOAD_CONST 0   (true)
+//      1   RETURN         
+//
+// Function: ReturnFloat
+// 14   0   LOAD_CONST 0   (3.14)
+//      1   RETURN         
+//
+// Function: ReturnArray
+// 18   0   LOAD_CONST 0    (1)
+//      1   LOAD_CONST 1    (2)
+//      2   LOAD_CONST 2    (3)
+//      3   LOAD_CONST 3    (4)
+//      4   LOAD_CONST 4    (5)
+//      5   ALLOC_ARRAY 5   
+//      6   RETURN          
+//
+// Class: baml.HttpRequest with 5 fields
+// Class: baml.WatchOptions with 2 fields
+// Enum baml.HttpMethod
+// Function: baml.Array.length
+//
+// Function: baml.Map.length
+//
+// Function: baml.Map.has
+//
+// Function: baml.media.image.from_url
+//
+// Function: baml.media.audio.from_url
+//
+// Function: baml.media.video.from_url
+//
+// Function: baml.media.pdf.from_url
+//
+// Function: baml.media.image.from_base64
+//
+// Function: baml.media.audio.from_base64
+//
+// Function: baml.media.video.from_base64
+//
+// Function: baml.media.pdf.from_base64
+//
+// Function: baml.media.image.is_url
+//
+// Function: baml.media.video.is_url
+//
+// Function: baml.media.audio.is_url
+//
+// Function: baml.media.pdf.is_url
+//
+// Function: baml.media.image.is_base64
+//
+// Function: baml.media.video.is_base64
+//
+// Function: baml.media.audio.is_base64
+//
+// Function: baml.media.pdf.is_base64
+//
+// Function: baml.media.image.as_url
+//
+// Function: baml.media.video.as_url
+//
+// Function: baml.media.audio.as_url
+//
+// Function: baml.media.pdf.as_url
+//
+// Function: baml.media.image.as_base64
+//
+// Function: baml.media.video.as_base64
+//
+// Function: baml.media.audio.as_base64
+//
+// Function: baml.media.pdf.as_base64
+//
+// Function: baml.media.image.mime
+//
+// Function: baml.media.video.mime
+//
+// Function: baml.media.audio.mime
+//
+// Function: baml.media.pdf.mime
+//
+// Function: env.get
+//
+// Function: baml.deep_copy
+//
+// Function: baml.unstable.string
+//
+// Function: baml.fetch_as

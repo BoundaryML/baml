@@ -38,6 +38,30 @@ function ContinueNested() -> int {
 //     continue;
 //     } else {
 //     should_continue = false;
+//     }
+//   }
+//
+//   result
+// }
+//
+// function ContinueNested() {
+//   while true {
+//   while true {
+//     continue;
+//     }
+//   }
+// }
+
+// function Factorial(limit) {
+//   let result = 1;
+//   let should_continue = true;
+//   while should_continue {
+//   result = result * limit;
+//     limit = limit - 1;
+//     if limit != 0 {
+//     continue;
+//     } else {
+//     should_continue = false;
 //     } 
 //   }
 //
@@ -51,30 +75,3 @@ function ContinueNested() -> int {
 //     }
 //   }
 // }
-<<<<<<< HEAD
-//
-// class baml.HttpRequest {
-//   url: string
-//   method: baml.HttpMethod
-//   headers: (map<string, string> | null)
-//   query_params: (map<string, string> | null)
-//   json: (ANY | null)
-// }
-//
-// enum baml.HttpMethod {
-//   Get
-//   Post
-//   Put
-//   Delete
-//   Patch
-// }
-=======
->>>>>>> canary
-
-// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
-//   -->  test.baml:54
-//    | 
-// 53 | // }
-// 54 | <<<<<<< HEAD
-// 55 | //
-//    | 
