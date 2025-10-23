@@ -7,6 +7,7 @@ from ..baml_client import watchers
 @pytest.mark.asyncio
 async def test_emit_basic_changes():
     """Test that emit events are fired correctly"""
+    print("TESTING")
     listener = watchers.WorkflowWatch()
 
     # Track if we saw changes
@@ -45,6 +46,7 @@ async def test_emit_basic_changes():
 
     # Register event handlers
     # listener.on_var("x", lambda x: print(x))
+    listener.on_var("x", lambda ev: print(ev))
     listener.on_var("x", on_x_change)
     listener.on_var("once", on_once_change)
     listener.on_var("twice", on_twice_change)
@@ -95,6 +97,7 @@ async def test_emit_stream_handler():
     print(f"\nReceived {len(stream_chunks)} stream chunks")
     for chunk in stream_chunks:
         print(f"  {chunk.variable_name} = {chunk.value} at {chunk.timestamp}")
+    assert len(stream_chunks) > 0
 
 
 @pytest.mark.asyncio
@@ -120,6 +123,7 @@ async def test_emit_block_handler():
     print(f"\nReceived {len(block_events)} block events:")
     for event in block_events:
         print(f"  {event.block_label}: {event.event_type}")
+    assert len(block_events) > 0
 
 
 # @pytest.mark.asyncio

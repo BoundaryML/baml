@@ -13,7 +13,10 @@ use std::{
 };
 
 use anyhow::{anyhow, Context};
-use baml_compiler::{self, watch};
+use baml_compiler::{
+    self,
+    watch::{self, shared_noop_handler, SharedWatchHandler},
+};
 use baml_ids::FunctionCallId;
 use baml_types::{tracing::events::HTTPRequest, BamlMap, BamlValue, BamlValueWithMeta, Completion};
 use baml_vm::{BamlVmProgram, EvalStack, FunctionKind, ObjectIndex, Vm, VmExecState};
@@ -164,9 +167,7 @@ impl BamlAsyncVmRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<&HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
-        watch_handler: Option<
-            impl Fn(baml_compiler::watch::WatchNotification),
-        >,
+        watch_handler: Option<SharedWatchHandler>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         // Find the function.
         let Some((function_index, function_kind)) =
@@ -378,17 +379,20 @@ impl BamlAsyncVmRuntime {
                                 );
 
                                 if let Some(handler) = watch_handler.as_ref() {
-                                    handler(notification);
+                                    handler.lock().unwrap().notify(notification);
                                 }
                             }
                         }
                         baml_vm::vm::WatchNotification::Block(notification) => {
                             if let Some(handler) = watch_handler.as_ref() {
-                                handler(watch::WatchNotification::new_block(
-                                    String::from_utf8_lossy(&notification.block_name).to_string(),
-                                    String::from_utf8_lossy(&notification.function_name)
-                                        .to_string(),
-                                ));
+                                handler.lock().unwrap().notify(
+                                    watch::WatchNotification::new_block(
+                                        String::from_utf8_lossy(&notification.block_name)
+                                            .to_string(),
+                                        String::from_utf8_lossy(&notification.function_name)
+                                            .to_string(),
+                                    ),
+                                );
                             }
                         }
                     }
@@ -726,7 +730,7 @@ impl BamlAsyncVmRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<&HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
-        watch_handler: Option<impl Fn(baml_compiler::watch::WatchNotification)>,
+        watch_handler: Option<SharedWatchHandler>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         self.async_runtime.block_on(self.call_function(
             function_name,
@@ -873,7 +877,7 @@ impl BamlAsyncVmRuntime {
     }
 
     // Test execution methods
-    pub async fn run_test<F, G, H>(
+    pub async fn run_test<F, G>(
         &self,
         function_name: &str,
         test_name: &str,
@@ -884,7 +888,7 @@ impl BamlAsyncVmRuntime {
         tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<crate::TripWire>,
         on_tick: Option<G>,
-        watch_handler: Option<H>,
+        watch_handler: Option<SharedWatchHandler>,
     ) -> (
         Result<crate::TestResponse, anyhow::Error>,
         baml_ids::FunctionCallId,
@@ -892,7 +896,6 @@ impl BamlAsyncVmRuntime {
     where
         F: Fn(crate::FunctionResult),
         G: Fn(),
-        H: Fn(baml_compiler::watch::WatchNotification),
     {
         self.llm_runtime
             .run_test(
@@ -910,7 +913,7 @@ impl BamlAsyncVmRuntime {
             .await
     }
 
-    pub async fn run_test_with_expr_events<F, G, H>(
+    pub async fn run_test_with_expr_events<F, G>(
         &self,
         function_name: &str,
         test_name: &str,
@@ -926,7 +929,7 @@ impl BamlAsyncVmRuntime {
         tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<crate::TripWire>,
         on_tick: Option<G>,
-        watch_handler: Option<H>,
+        watch_handler: Option<SharedWatchHandler>,
     ) -> (
         Result<crate::TestResponse, anyhow::Error>,
         baml_ids::FunctionCallId,
@@ -934,7 +937,6 @@ impl BamlAsyncVmRuntime {
     where
         F: Fn(crate::FunctionResult),
         G: Fn(),
-        H: Fn(baml_compiler::watch::WatchNotification),
     {
         self.llm_runtime
             .run_test_with_expr_events(

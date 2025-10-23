@@ -1,6 +1,7 @@
 use std::{collections::HashMap, path::PathBuf, time::SystemTime};
 
 // Conditional runtime selection based on the "interpreter" feature flag
+use baml_compiler::watch::shared_handler;
 #[cfg(feature = "interpreter")]
 pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
 #[cfg(not(feature = "interpreter"))]
@@ -395,7 +396,7 @@ impl BamlRuntime {
         let fut = async move {
             // Create emit_handler closure (only for interpreter)
             #[cfg(feature = "interpreter")]
-            let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
+            let watch_handler = shared_handler(move |notification| {
                 if let Some(ref callbacks) = emit_callbacks {
                     match notification.value {
                         baml_compiler::watch::WatchBamlValue::Block(block_label) => {
@@ -510,7 +511,7 @@ impl BamlRuntime {
                         }
                     }
                 }
-            };
+            });
 
             #[cfg(feature = "interpreter")]
             let result = baml_runtime
@@ -596,7 +597,7 @@ impl BamlRuntime {
 
         #[cfg(feature = "interpreter")]
         let (result, _event_id) = {
-            let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
+            let watch_handler = shared_handler(move |notification| {
                 if let Some(ref callbacks) = emit_callbacks {
                     match notification.value {
                         baml_compiler::watch::WatchBamlValue::Block(block_label) => {
@@ -693,7 +694,7 @@ impl BamlRuntime {
                         }
                     }
                 }
-            };
+            });
 
             self.inner.call_function_sync(
                 function_name,

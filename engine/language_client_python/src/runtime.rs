@@ -1,6 +1,8 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc, time::SystemTime};
 
+use baml_compiler::watch::shared_handler;
 use baml_runtime::{runtime_interface::ExperimentalTracingInterface, TripWire};
+
 use pyo3::{
     prelude::{pymethods, PyResult},
     pyclass,
@@ -359,7 +361,7 @@ impl BamlRuntime {
         };
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let watch_handler = move |notification: baml_compiler::watch::WatchNotification| {
+            let watch_handler = shared_handler(move |notification| {
                 if let Some(ref callbacks) = notification_callbacks {
                     Python::with_gil(|py| {
                         match notification.value {
@@ -484,7 +486,7 @@ impl BamlRuntime {
                         }
                     });
                 }
-            };
+            });
 
             let (result, _) = baml_runtime
                 .call_function(
@@ -560,7 +562,7 @@ impl BamlRuntime {
         };
 
         let (result, _event_id) = py.allow_threads(|| {
-            let watch_handler = move |event: baml_compiler::watch::WatchNotification| {
+            let watch_handler = shared_handler(move |event| {
                 if let Some(ref callbacks) = notification_callbacks {
                     Python::with_gil(|py| {
                         match event.value {
@@ -683,7 +685,7 @@ impl BamlRuntime {
                         }
                     });
                 }
-            };
+            });
 
             self.inner.call_function_sync(
                 function_name,

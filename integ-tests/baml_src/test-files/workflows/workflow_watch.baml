@@ -1,5 +1,6 @@
 function WorkflowWatch() -> int {
   watch let x: int = 10;
+  x = x + 1;
   watch let y: bool = true;
   watch let once: string = "Hello";
   watch let twice: string[] = ["Takedown", ""];

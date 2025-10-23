@@ -11,7 +11,7 @@ use internal_baml_diagnostics::Span;
 
 use crate::{
     thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, THir},
-    watch::WatchNotification,
+    watch::{SharedWatchHandler, WatchNotification},
 };
 
 // Type alias for pinned boxed futures - conditionally Send for non-WASM targets
@@ -61,16 +61,7 @@ pub trait LlmFuture: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> {}
 #[cfg(target_arch = "wasm32")]
 impl<T> LlmFuture for T where T: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> {}
 
-// Trait aliases for watch handler with conditional Send bounds
-#[cfg(not(target_arch = "wasm32"))]
-pub trait WatchHandler: FnMut(WatchNotification) + Send {}
-#[cfg(not(target_arch = "wasm32"))]
-impl<F> WatchHandler for F where F: FnMut(WatchNotification) + Send {}
-
-#[cfg(target_arch = "wasm32")]
-pub trait WatchHandler: FnMut(WatchNotification) {}
-#[cfg(target_arch = "wasm32")]
-impl<F> WatchHandler for F where F: FnMut(WatchNotification) {}
+// Watch handler is now a concrete type - no more conditional compilation needed!
 
 // TODO:
 //  - Variables should be expressions, not BamlValues. Because we want to be able to
@@ -135,15 +126,12 @@ fn expr_value_to_watch_value(
 }
 
 /// Fire a watch notification for a specific variable (for manual $watch.notify() calls)
-fn fire_watch_notification_for_variable<W>(
+fn fire_watch_notification_for_variable(
     scopes: &[Scope],
     var_name: &str,
-    watch_handler: &mut W,
+    watch_handler: &SharedWatchHandler,
     function_name: &str,
-) -> Result<()>
-where
-    W: WatchHandler,
-{
+) -> Result<()> {
     // Find the variable in scopes
     for scope in scopes.iter().rev() {
         if let Some(value_ref) = scope.variables.get(var_name) {
@@ -163,7 +151,7 @@ where
                 watch_value,
                 function_name.to_string(),
             );
-            watch_handler(notification);
+            watch_handler.lock().unwrap().notify(notification);
             return Ok(());
         }
     }
@@ -189,16 +177,15 @@ enum ControlFlow {
 /// This function should only be called in the main execution context, not during
 /// filter function evaluation to avoid infinite recursion.
 #[allow(clippy::type_complexity)]
-async fn check_watch_changes<F, Fut, W>(
+async fn check_watch_changes<F, Fut>(
     scopes: &mut Vec<Scope>,
-    watch_notification_handler: &mut W,
+    watch_notification_handler: &SharedWatchHandler,
     function_name: &str,
     thir: &THir<ExprMetadata>,
     run_llm_function: &mut F,
 ) where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    W: WatchHandler,
 {
     // Skip watch checking if we're in a filter function evaluation context
     // This prevents infinite recursion when filter functions have local variables
@@ -317,7 +304,10 @@ async fn check_watch_changes<F, Fut, W>(
                 watch_value,
                 function_name.to_string(),
             );
-            watch_notification_handler(notification);
+            watch_notification_handler
+                .lock()
+                .unwrap()
+                .notify(notification);
         }
     }
 }
@@ -370,7 +360,7 @@ where
 
     // Create a no-op watch handler for the filter function evaluation
     // Filter functions shouldn't send their own notifications
-    let mut noop_watch_handler = |_notification: WatchNotification| {};
+    let noop_watch_handler = crate::watch::shared_noop_handler();
 
     // Evaluate the function body
     let result = evaluate_block(
@@ -378,7 +368,7 @@ where
         scopes,
         thir,
         run_llm_function,
-        &mut noop_watch_handler,
+        &noop_watch_handler,
         function_name,
     )
     .await?;
@@ -428,19 +418,18 @@ fn baml_value_to_value_with_meta(value: BamlValue) -> BamlValueWithMeta<ExprMeta
     }
 }
 
-pub async fn interpret_thir<F, Fut, W>(
+pub async fn interpret_thir<F, Fut>(
     function_name: String,
     thir: THir<ExprMetadata>,
     expr: Expr<ExprMetadata>,
     mut run_llm_function: F,
-    mut watch_notification_handler: W,
+    watch_notification_handler: SharedWatchHandler,
     extra_bindings: BamlMap<String, BamlValueWithMeta<ExprMetadata>>,
     env_vars: HashMap<String, String>,
 ) -> Result<BamlValueWithMeta<ExprMetadata>>
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    W: WatchHandler,
 {
     let env_vars_map = env_vars;
     let mut scopes = vec![Scope {
@@ -476,7 +465,7 @@ where
                 &mut scopes,
                 &thir,
                 &mut run_llm_function,
-                &mut watch_notification_handler,
+                &watch_notification_handler,
                 &function_name,
             )
             .await?,
@@ -491,7 +480,7 @@ where
             &mut scopes,
             &thir,
             &mut run_llm_function,
-            &mut watch_notification_handler,
+            &watch_notification_handler,
             &function_name,
         )
         .await?,
@@ -499,18 +488,17 @@ where
     Ok(result)
 }
 
-fn evaluate_block_with_control_flow<'a, F, Fut, E>(
+fn evaluate_block_with_control_flow<'a, F, Fut>(
     block: &'a Block<ExprMetadata>,
     scopes: &'a mut Vec<Scope>,
     thir: &'a THir<ExprMetadata>,
     run_llm_function: &'a mut F,
-    watch_handler: &'a mut E,
+    watch_handler: &'a SharedWatchHandler,
     function_name: &'a str,
 ) -> BoxFuture<'a, Result<ControlFlow>>
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    E: WatchHandler,
 {
     Box::pin(async move {
         scopes.push(Scope {
@@ -529,27 +517,29 @@ where
             block.statements.len()
         };
 
-        fn handle_statement<'a, F, Fut, E>(
+        fn handle_statement<'a, F, Fut>(
             stmt: &'a Statement<ExprMetadata>,
             scopes: &'a mut Vec<Scope>,
             thir: &'a THir<ExprMetadata>,
             run_llm_function: &'a mut F,
-            watch_handler: &'a mut E,
+            watch_handler: &'a SharedWatchHandler,
             function_name: &'a str,
         ) -> BoxFuture<'a, Result<Option<ControlFlow>>>
         where
             F: LlmHandler<Fut>,
             Fut: LlmFuture,
-            E: WatchHandler,
         {
             Box::pin(async move {
                 match stmt {
                     Statement::AnnotatedStatement { headers, statement } => {
                         headers.iter().for_each(|header| {
-                            watch_handler(WatchNotification::new_block(
-                                header.clone(),
-                                "FunctionNameNotPlumbed".to_string(),
-                            ));
+                            watch_handler
+                                .lock()
+                                .unwrap()
+                                .notify(WatchNotification::new_block(
+                                    header.clone(),
+                                    "FunctionNameNotPlumbed".to_string(),
+                                ));
                         });
                         if let Some(statement) = statement {
                             return handle_statement(
@@ -1417,18 +1407,17 @@ where
     })
 }
 
-async fn evaluate_block<F, Fut, E>(
+async fn evaluate_block<F, Fut>(
     block: &Block<ExprMetadata>,
     scopes: &mut Vec<Scope>,
     thir: &THir<ExprMetadata>,
     run_llm_function: &mut F,
-    watch_handler: &mut E,
+    watch_handler: &SharedWatchHandler,
     function_name: &str,
 ) -> Result<BamlValueWithMeta<ExprMetadata>>
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    E: WatchHandler,
 {
     match evaluate_block_with_control_flow(
         block,
@@ -1475,19 +1464,18 @@ fn assign(scopes: &mut [Scope], name: &str, value: BamlValueWithMeta<ExprMetadat
     bail!("assign to undeclared variable `{}`", name)
 }
 
-async fn assign_to_expr<F, Fut, E>(
+async fn assign_to_expr<F, Fut>(
     target: &Expr<ExprMetadata>,
     new_value: BamlValueWithMeta<ExprMetadata>,
     scopes: &mut Vec<Scope>,
     thir: &THir<ExprMetadata>,
     run_llm_function: &mut F,
-    watch_handler: &mut E,
+    watch_handler: &SharedWatchHandler,
     function_name: &str,
 ) -> Result<()>
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    E: WatchHandler,
 {
     let mut current_expr = target;
     let mut value_to_assign = new_value;
@@ -1641,18 +1629,17 @@ fn baml_value_with_meta_to_baml_value(value: BamlValueWithMeta<ExprMetadata>) ->
 }
 
 // Helper wrapper that calls evaluate_expr_with_context with None context
-fn evaluate_expr<'a, F, Fut, E>(
+fn evaluate_expr<'a, F, Fut>(
     expr: &'a Expr<ExprMetadata>,
     scopes: &'a mut Vec<Scope>,
     thir: &'a THir<ExprMetadata>,
     run_llm_function: &'a mut F,
-    watch_handler: &'a mut E,
+    watch_handler: &'a SharedWatchHandler,
     function_name: &'a str,
 ) -> BoxFuture<'a, Result<EvalValue>>
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    E: WatchHandler,
 {
     evaluate_expr_with_context(
         expr,
@@ -1666,19 +1653,18 @@ where
 }
 
 // Internal function that accepts optional emit context
-fn evaluate_expr_with_context<'a, F, Fut, E>(
+fn evaluate_expr_with_context<'a, F, Fut>(
     expr: &'a Expr<ExprMetadata>,
     scopes: &'a mut Vec<Scope>,
     thir: &'a THir<ExprMetadata>,
     run_llm_function: &'a mut F,
-    watch_handler: &'a mut E,
+    watch_handler: &'a SharedWatchHandler,
     function_name: &'a str,
     watch_context: Option<&'a WatchStreamContext>,
 ) -> BoxFuture<'a, Result<EvalValue>>
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    E: WatchHandler,
 {
     Box::pin(async move {
         Ok(match expr {
