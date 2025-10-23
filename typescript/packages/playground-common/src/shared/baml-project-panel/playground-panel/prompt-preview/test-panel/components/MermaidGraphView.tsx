@@ -43,7 +43,7 @@ const MERMAID_CSS_OVERRIDE = `
   #bamlMermaidSvg foreignObject div,
   #bamlMermaidSvg foreignObject span,
   #bamlMermaidSvg foreignObject p {
-    font-family: inherit !important;
+    font-family: var(--font-sans) !important;
     font-size: 1em !important;
     line-height: 1.4;
   }
@@ -99,7 +99,7 @@ const MERMAID_CSS_OVERRIDE = `
   #bamlMermaidSvg .baml-mermaid-highlight ellipse,
   #bamlMermaidSvg .baml-mermaid-highlight polygon,
   #bamlMermaidSvg .baml-mermaid-highlight path {
-    fill: color-mix(in srgb, var(--vscode-editor-inactiveSelectionBackground) 75%, transparent) !important;
+    fill: color-mix(in oklab, var(--vscode-focusBorder, var(--ring)) 50%, transparent) !important;
     stroke: var(--vscode-focusBorder) !important;
     stroke-width: 6.3px !important;
     filter: drop-shadow(0 0 0.45rem rgba(124, 93, 255, 0.45));
