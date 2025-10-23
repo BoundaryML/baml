@@ -303,7 +303,7 @@ impl Statement {
                     );
                 }
                 if let Some(w) = when {
-                    parts.push(RcDoc::text("when: ").append(RcDoc::text(format!("{:?}", w))));
+                    parts.push(RcDoc::text("when: ").append(RcDoc::text("when")));
                 }
 
                 doc = doc.append(RcDoc::intersperse(parts, RcDoc::text(", ")));
