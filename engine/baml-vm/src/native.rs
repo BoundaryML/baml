@@ -403,9 +403,9 @@ fn deep_equals_recursive(
                 (Object::Map(a_map), Object::Map(b_map)) => {
                     a_map.len() == b_map.len()
                         && a_map.iter().all(|(key, a_val)| {
-                            b_map
-                                .get(key)
-                                .map_or(false, |b_val| deep_equals_recursive(vm, *a_val, *b_val, visited))
+                            b_map.get(key).map_or(false, |b_val| {
+                                deep_equals_recursive(vm, *a_val, *b_val, visited)
+                            })
                         })
                 }
 
@@ -444,7 +444,11 @@ fn deep_equals_recursive(
                     (Future::Pending(a_pend), Future::Pending(b_pend)) => {
                         // Compare pending futures by their function and args
                         a_pend.function == b_pend.function
-                            && matches!((&a_pend.kind, &b_pend.kind), (FutureKind::Llm, FutureKind::Llm) | (FutureKind::Net, FutureKind::Net))
+                            && matches!(
+                                (&a_pend.kind, &b_pend.kind),
+                                (FutureKind::Llm, FutureKind::Llm)
+                                    | (FutureKind::Net, FutureKind::Net)
+                            )
                             && a_pend.args.len() == b_pend.args.len()
                             && a_pend
                                 .args

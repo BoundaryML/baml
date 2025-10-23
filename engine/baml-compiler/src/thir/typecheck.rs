@@ -200,7 +200,10 @@ pub fn typecheck_returning_context<'a>(
                 // baml.deep_equals<T>(T, T) -> bool
                 // Use Top as placeholder for generic types
                 TypeIR::arrow(
-                    vec![TypeIR::Top(Default::default()), TypeIR::Top(Default::default())],
+                    vec![
+                        TypeIR::Top(Default::default()),
+                        TypeIR::Top(Default::default()),
+                    ],
                     TypeIR::bool(),
                 )
             }
@@ -1716,7 +1719,10 @@ pub fn typecheck_expression(
                             // For now, we just return bool without strict type checking
                             // The VM will handle comparison of different types by returning false
                             func_type = Some(TypeIR::arrow(
-                                vec![TypeIR::Top(Default::default()), TypeIR::Top(Default::default())],
+                                vec![
+                                    TypeIR::Top(Default::default()),
+                                    TypeIR::Top(Default::default()),
+                                ],
                                 TypeIR::bool(),
                             ));
                             return_type = Some(TypeIR::bool());
@@ -2034,10 +2040,13 @@ pub fn typecheck_expression(
                                     generic_return_type_inferred = Some(TypeIR::bool());
 
                                     func_type = Some(TypeIR::arrow(
-                                        vec![TypeIR::Top(Default::default()), TypeIR::Top(Default::default())],
+                                        vec![
+                                            TypeIR::Top(Default::default()),
+                                            TypeIR::Top(Default::default()),
+                                        ],
                                         TypeIR::bool(),
                                     ));
-                                },
+                                }
                                 "baml.unstable.string" => {
                                     generic_return_type_inferred = Some(TypeIR::string());
 
