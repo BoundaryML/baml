@@ -347,6 +347,7 @@ impl BamlAsyncVmRuntime {
                 }
 
                 Ok(VmExecState::Notify(notification)) => {
+                    log::debug!("[VM] Notify: {:?}", notification);
                     match notification {
                         baml_vm::vm::WatchNotification::Variables(nodes) => {
                             for node in nodes {
@@ -508,7 +509,7 @@ impl BamlAsyncVmRuntime {
                             // except for compilation required types, spawn and
                             // spawn_local are essentially equivalent.
                             #[cfg(target_arch = "wasm32")]
-                            tokio::task::spawn_local(future);
+                            wasm_bindgen_futures::spawn_local(future);
                         }
 
                         baml_vm::FutureKind::Net => {

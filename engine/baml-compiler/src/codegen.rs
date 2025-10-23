@@ -550,7 +550,12 @@ impl<'g> HirCompiler<'g> {
     fn compile_statement(&mut self, statement: &thir::Statement<(Span, Option<TypeIR>)>) {
         match statement {
             thir::Statement::AnnotatedStatement { headers, statement } => {
-                // TODO
+                for header in headers {
+                    self.emit_annotated_block(header);
+                }
+                if let Some(statement) = statement {
+                    self.compile_statement(statement);
+                }
             }
             thir::Statement::Let { name, value, .. } => {
                 self.compile_expression(value);

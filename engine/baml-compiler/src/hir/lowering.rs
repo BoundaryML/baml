@@ -398,19 +398,35 @@ impl Block {
         }
 
         // Second pass: lower statements, applying watch options to watch specs
-        let statements: Vec<Statement> = block
+        let mut statements: Vec<Statement> = block
             .stmts
             .iter()
             .map(|stmt| lower_stmt_with_options(stmt, &watch_options_map))
             .collect();
 
+        let trailing_expr = block
+            .expr
+            .as_deref()
+            .map(Expression::from_ast)
+            .map(Box::new);
+
+        if !block.expr_headers.is_empty() {
+            println!(
+                "Annotated!: {}",
+                trailing_expr
+                    .as_ref()
+                    .map(|f| f.to_doc().pretty(80).to_string())
+                    .unwrap_or_else(|| "<..>".to_string())
+            );
+            statements.push(Statement::AnnotatedStatement {
+                headers: block.expr_headers.iter().map(|h| h.title.clone()).collect(),
+                statement: None,
+            });
+        }
+
         Block {
             statements,
-            trailing_expr: block
-                .expr
-                .as_deref()
-                .map(Expression::from_ast)
-                .map(Box::new),
+            trailing_expr,
         }
     }
 }
