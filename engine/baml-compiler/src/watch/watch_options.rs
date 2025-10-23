@@ -13,7 +13,8 @@ pub struct WatchSpec {
 #[derive(Clone, Debug, PartialEq)]
 pub enum WatchWhen {
     Manual, // Manual notification only (via .$watch.notify())
-    True,
+    Auto,
+    Never,
     FunctionName(Identifier),
 }
 
@@ -22,7 +23,7 @@ impl WatchSpec {
     /// Configuration will be provided via VAR_NAME.$watch.options() method calls.
     pub fn default_for_variable(variable_name: String, span: Span) -> Self {
         WatchSpec {
-            when: WatchWhen::True,
+            when: WatchWhen::Auto,
             name: variable_name,
             span,
         }
