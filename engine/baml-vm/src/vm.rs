@@ -725,10 +725,6 @@ impl Vm {
                         }
                     }
 
-                    // TODO: Borrow checker stuff.
-                    frame = self.frames.last_mut().expect("frame must exist");
-                    function = self.objects[frame.function].as_function()?;
-
                     let mut notifications = self.watch.copy_roots_reaching(watched_node);
 
                     notifications.sort_by(|a, b| match (a, b) {
@@ -738,8 +734,60 @@ impl Vm {
                         (NodeId::HeapObject(a), NodeId::HeapObject(b)) => a.cmp(b),
                     });
 
-                    if !notifications.is_empty() {
-                        return Ok(VmExecState::Notify(notifications));
+                    let mut filtered_notifications = vec![];
+
+                    for notification in notifications {
+                        if let Some(state) = self.watch.root_state(notification) {
+                            match state.filter {
+                                WatchFilter::Manual => continue,
+                                WatchFilter::Default => {
+                                    if let Some(last_assigned) = state.last_assigned {
+                                        match crate::native::deep_equals(
+                                            self,
+                                            &[last_assigned, state.value],
+                                        ) {
+                                            Ok(Value::Bool(b)) => {
+                                                if !b {
+                                                    filtered_notifications.push(notification);
+                                                }
+                                            }
+                                            other => {
+                                                return Err(RuntimeError::Other(format!(
+                                                    "Invalid deep equals result during watch: {other:?}"
+                                                ))
+                                                .into());
+                                            }
+                                        }
+                                    } else {
+                                        filtered_notifications.push(notification);
+                                    }
+                                }
+                                WatchFilter::Function(function_index) => {
+                                    match self.interrupt(function_index, &[state.value]) {
+                                        Ok(VmExecState::Complete(Value::Bool(b))) => {
+                                            if b {
+                                                filtered_notifications.push(notification);
+                                            }
+                                        }
+
+                                        other => {
+                                            return Err(RuntimeError::Other(
+                                                "Invalid filter function return".to_string(),
+                                            )
+                                            .into())
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // TODO: Borrow checker stuff.
+                    frame = self.frames.last_mut().expect("frame must exist");
+                    function = self.objects[frame.function].as_function()?;
+
+                    if !filtered_notifications.is_empty() {
+                        return Ok(VmExecState::Notify(filtered_notifications));
                     }
                 }
 
@@ -1248,10 +1296,6 @@ impl Vm {
                         }
                     }
 
-                    // TODO: Borrow checker stuff.
-                    frame = self.frames.last_mut().expect("frame must exist");
-                    function = self.objects[frame.function].as_function()?;
-
                     let mut notifications = self.watch.copy_roots_reaching(watched_node);
                     notifications.sort_by(|a, b| match (a, b) {
                         (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
@@ -1259,8 +1303,61 @@ impl Vm {
                         (NodeId::HeapObject(_), NodeId::LocalVar(_)) => std::cmp::Ordering::Greater,
                         (NodeId::HeapObject(a), NodeId::HeapObject(b)) => a.cmp(b),
                     });
-                    if !notifications.is_empty() {
-                        return Ok(VmExecState::Notify(notifications));
+
+                    let mut filtered_notifications = vec![];
+
+                    for notification in notifications {
+                        if let Some(state) = self.watch.root_state(notification) {
+                            match state.filter {
+                                WatchFilter::Manual => continue,
+                                WatchFilter::Default => {
+                                    if let Some(last_assigned) = state.last_assigned {
+                                        match crate::native::deep_equals(
+                                            self,
+                                            &[last_assigned, state.value],
+                                        ) {
+                                            Ok(Value::Bool(b)) => {
+                                                if !b {
+                                                    filtered_notifications.push(notification);
+                                                }
+                                            }
+                                            other => {
+                                                return Err(RuntimeError::Other(format!(
+                                                    "Invalid deep equals result during watch: {other:?}"
+                                                ))
+                                                .into());
+                                            }
+                                        }
+                                    } else {
+                                        filtered_notifications.push(notification);
+                                    }
+                                }
+                                WatchFilter::Function(function_index) => {
+                                    match self.interrupt(function_index, &[state.value]) {
+                                        Ok(VmExecState::Complete(Value::Bool(b))) => {
+                                            if b {
+                                                filtered_notifications.push(notification);
+                                            }
+                                        }
+
+                                        other => {
+                                            return Err(RuntimeError::Other(
+                                                "Invalid filter function return".to_string(),
+                                            )
+                                            .into())
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // TODO: Borrow checker stuff.
+                    frame = self.frames.last_mut().expect("frame must exist");
+                    function = self.objects[frame.function].as_function()?;
+
+                    if !filtered_notifications.is_empty() {
+                        return Ok(VmExecState::Notify(filtered_notifications));
                     }
                 }
 
@@ -1344,10 +1441,6 @@ impl Vm {
                         }
                     }
 
-                    // TODO: Borrow checker stuff.
-                    frame = self.frames.last_mut().expect("frame must exist");
-                    function = self.objects[frame.function].as_function()?;
-
                     let mut notifications = self.watch.copy_roots_reaching(watched_node);
                     notifications.sort_by(|a, b| match (a, b) {
                         (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
@@ -1355,8 +1448,61 @@ impl Vm {
                         (NodeId::HeapObject(_), NodeId::LocalVar(_)) => std::cmp::Ordering::Greater,
                         (NodeId::HeapObject(a), NodeId::HeapObject(b)) => a.cmp(b),
                     });
-                    if !notifications.is_empty() {
-                        return Ok(VmExecState::Notify(notifications));
+
+                    let mut filtered_notifications = vec![];
+
+                    for notification in notifications {
+                        if let Some(state) = self.watch.root_state(notification) {
+                            match state.filter {
+                                WatchFilter::Manual => continue,
+                                WatchFilter::Default => {
+                                    if let Some(last_assigned) = state.last_assigned {
+                                        match crate::native::deep_equals(
+                                            self,
+                                            &[last_assigned, state.value],
+                                        ) {
+                                            Ok(Value::Bool(b)) => {
+                                                if !b {
+                                                    filtered_notifications.push(notification);
+                                                }
+                                            }
+                                            other => {
+                                                return Err(RuntimeError::Other(format!(
+                                                    "Invalid deep equals result during watch: {other:?}"
+                                                ))
+                                                .into());
+                                            }
+                                        }
+                                    } else {
+                                        filtered_notifications.push(notification);
+                                    }
+                                }
+                                WatchFilter::Function(function_index) => {
+                                    match self.interrupt(function_index, &[state.value]) {
+                                        Ok(VmExecState::Complete(Value::Bool(b))) => {
+                                            if b {
+                                                filtered_notifications.push(notification);
+                                            }
+                                        }
+
+                                        other => {
+                                            return Err(RuntimeError::Other(
+                                                "Invalid filter function return".to_string(),
+                                            )
+                                            .into())
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // TODO: Borrow checker stuff.
+                    frame = self.frames.last_mut().expect("frame must exist");
+                    function = self.objects[frame.function].as_function()?;
+
+                    if !filtered_notifications.is_empty() {
+                        return Ok(VmExecState::Notify(filtered_notifications));
                     }
                 }
 
