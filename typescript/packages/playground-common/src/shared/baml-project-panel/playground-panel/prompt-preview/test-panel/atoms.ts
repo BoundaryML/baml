@@ -64,7 +64,7 @@ export const currentWatchNotificationsAtom = atom(
   },
 )
 
-const highlightedBlocksBaseAtom = atom<Set<string>>(new Set())
+const highlightedBlocksBaseAtom = atom<Set<string>>(new Set<string>())
 export const highlightedBlocksAtom = atom(
   (get) => get(highlightedBlocksBaseAtom),
   (get, set, update: string | Set<string> | ((prev: Set<string>) => Set<string>)) => {
@@ -72,7 +72,7 @@ export const highlightedBlocksAtom = atom(
     let next: Set<string>
 
     if (update instanceof Set) {
-      next = update
+      next = new Set<string>(update)
     } else if (typeof update === 'function') {
       next = update(prev)
     } else {

@@ -31,9 +31,9 @@ export function getNotificationLabel(notification: WatchNotification): string {
   }
 
   if (notification.is_stream) {
-    return `Stream: ${notification.block_name}`;
+    return `Stream: ${notification.block_name ?? 'unknown'}`;
   }
-  return notification.block_name;
+  return notification.block_name ?? 'Block';
 }
 
 export function getNotificationType(notification: WatchNotification): 'variable' | 'block' | 'stream' {
