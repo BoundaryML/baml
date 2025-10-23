@@ -14,12 +14,6 @@ class Widget {
 //   size: int
 // }
 //
-
-// class Widget {
-//   color: Color
-//   size: int
-// }
-//
 // enum Color {
 //   Red
 //   Green

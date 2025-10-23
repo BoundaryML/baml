@@ -19,14 +19,3 @@ class User {
 //   name: string @constrained
 //   age: int @constrained
 // }
-
-// class MyClass {
-//   field1: string @stream.done
-//   field2: int @stream.needed
-//   field3: bool @stream.with_state
-// }
-//
-// class User {
-//   name: string @constrained
-//   age: int @constrained
-// }

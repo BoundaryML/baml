@@ -35,15 +35,6 @@ function AnalyzeSentiment(text: string) -> Sentiment {
 //
 // Function: AnalyzeSentiment
 //
-// Class: baml.Request with 3 fields
-// Class: baml.WatchOptions with 2 fields
-
-// Function: GeneratePoem
-//
-// Function: ClassifyText
-//
-// Function: AnalyzeSentiment
-//
 // Class: baml.HttpRequest with 5 fields
 // Class: baml.WatchOptions with 2 fields
 // Enum baml.HttpMethod

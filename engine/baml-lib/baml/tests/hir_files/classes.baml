@@ -22,14 +22,3 @@ function TestClass() -> int {
 //   a: int
 //   b: string
 // }
-
-// function TestClass() {
-//   let example = Example { a: 1, b: "hello" };
-//
-//   example.a
-// }
-//
-// class Example {
-//   a: int
-//   b: string
-// }

@@ -19,15 +19,6 @@ function GetTodoMissingTypeArg() -> Todo {
   })
 }
 
-// error: Error validating: could not infer return type of baml.fetch_as
-//   -->  expr/builtin.baml:16
-//    |
-// 15 | function GetTodoMissingTypeArg() -> Todo {
-// 16 |   baml.fetch_as(baml.HttpRequest {
-// 17 |     method: baml.HttpMethod.Get,
-// 18 |     url: "https://dummyjson.com/todos/1",
-// 19 |   })
-
 // error: Error validating: Generic function baml.fetch_as must have a type argument. Try adding a type argument like this: baml.fetch_as<Type>
 //   -->  expr/builtin.baml:16
 //    | 

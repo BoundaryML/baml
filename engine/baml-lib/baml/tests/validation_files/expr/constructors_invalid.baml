@@ -20,32 +20,6 @@ function Foo() -> Bar {
 
 // error: Error validating: Bar.a expected type int, but found string
 //   -->  expr/constructors_invalid.baml:7
-//    |
-//  6 | function Foo() -> Bar {
-//  7 |   let x = Bar { a: "hello", c: 12 };
-//    |
-// error: Error validating: Class Bar has no field c
-//   -->  expr/constructors_invalid.baml:7
-//    |
-//  6 | function Foo() -> Bar {
-//  7 |   let x = Bar { a: "hello", c: 12 };
-//    |
-// error: Error validating: Class Bar is missing fields: b
-//   -->  expr/constructors_invalid.baml:7
-//    |
-//  6 | function Foo() -> Bar {
-//  7 |   let x = Bar { a: "hello", c: 12 };
-//    |
-// error: Error validating: baml.Request.base_url expected type string, but found int
-//   -->  expr/constructors_invalid.baml:9
-//    |
-//  8 |   let req_bad = baml.Request {
-//  9 |     base_url: 10,
-//    |
-// error: Error validating: baml.Request.query_params expected type map<string, string>, but found map<string, int>
-
-// error: Error validating: Bar.a expected type int, but found string
-//   -->  expr/constructors_invalid.baml:7
 //    | 
 //  6 | function Foo() -> Bar {
 //  7 |   let x = Bar { a: "hello", c: 12 };

@@ -71,54 +71,6 @@ function Nothing() -> int {
 //   {
 //   let i = 0;
 //     while i <= 10 {
-//
-//     }
-//   }
-//
-//   s
-// }
-//
-// function OnlyCond() {
-//   let s = 0;
-//   while false {
-//
-//   }
-//
-//   s
-// }
-//
-// function Nothing() {
-//   let s = 0;
-//   for (;;) { }
-//
-//   s
-// }
-
-// function SumToTen() {
-//   let s = 0;
-//   {
-//   let i = 1;
-//     for (;i <= 10;i += 1;) { s += i;}
-//   }
-//
-//   s
-// }
-//
-// function NoCondition() {
-//   let s = 0;
-//   {
-//   let i = 0;
-//     for (;;s += i;) { }
-//   }
-//
-//   s
-// }
-//
-// function NoAfter() {
-//   let s = 0;
-//   {
-//   let i = 0;
-//     while i <= 10 {
 //     
 //     }
 //   }

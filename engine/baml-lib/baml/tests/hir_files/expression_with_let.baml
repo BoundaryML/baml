@@ -8,9 +8,3 @@ function AddOne(x: int) -> int {
 //
 //   y
 // }
-
-// function AddOne(x) {
-//   let y = x;
-//
-//   y
-// }
