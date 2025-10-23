@@ -49,6 +49,8 @@ function ArrayAccessWithVariable(arr: float[], idx: int) -> float {
 // Enum baml.HttpMethod
 // Function: baml.Array.length
 //
+// Function: baml.Array.push
+//
 // Function: baml.Map.length
 //
 // Function: baml.Map.has

@@ -41,6 +41,8 @@ function AnalyzeSentiment(text: string) -> Sentiment {
 // Enum Sentiment
 // Function: baml.Array.length
 //
+// Function: baml.Array.push
+//
 // Function: baml.Map.length
 //
 // Function: baml.Map.has
