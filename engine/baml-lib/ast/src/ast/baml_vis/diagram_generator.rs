@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use baml_types::BamlMap;
 use internal_baml_diagnostics::SerializedSpan;
 
+use super::header_collector::HeaderCollector;
 use crate::ast::{
     baml_vis::{
         graph::{
@@ -19,8 +20,6 @@ use crate::ast::{
     },
     Ast,
 };
-
-use super::header_collector::HeaderCollector;
 
 pub struct MermaidGeneratorContext {
     /// Include custom styles for the diagram.

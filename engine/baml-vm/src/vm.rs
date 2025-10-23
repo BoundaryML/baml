@@ -206,6 +206,7 @@ pub struct Vm {
 /// the embedder, expecting the embedder to await the future and fulfil it with
 /// the final result before yielding back control flow to the VM.
 #[derive(Debug, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum VmExecState {
     /// VM cannot proceed. It is awaiting a pending future to complete.
     Await(ObjectIndex),
@@ -224,6 +225,7 @@ pub enum VmExecState {
 }
 
 #[derive(Debug, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum WatchNotification {
     Variables(Vec<watch::NodeId>),
     Block(BlockNotification),

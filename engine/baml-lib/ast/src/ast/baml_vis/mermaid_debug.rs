@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 
+use super::header_collector::{HeaderCollector, HeaderIndex};
 use crate::ast::{
     traits::{WithIdentifier, WithName},
     Argument, ArgumentsList, Assignment, Ast, Attribute, BlockArgs, ClassConstructor,
     ClassConstructorField, ExprFn, Expression, ExpressionBlock, Field, FieldType, Header, Stmt,
     TemplateString, Top, TopLevelAssignment, TypeExpressionBlock, ValueExprBlock,
 };
-
-use super::header_collector::{HeaderCollector, HeaderIndex};
 
 /// A debug utility for converting AST structures to Mermaid diagrams
 #[derive(Debug)]

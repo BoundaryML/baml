@@ -201,7 +201,7 @@ impl<'index, 'pre> GraphBuilder<'index, 'pre> {
 
         let top_scopes = self.index.scopes().filter(|scope| {
             let root_hid = &scope_root[scope];
-            !self.nested_targets.contains(&root_hid)
+            !self.nested_targets.contains(root_hid)
         });
 
         let filtered_headers = self.classify_and_filter_headers();
@@ -318,6 +318,7 @@ impl<'index, 'pre> GraphBuilder<'index, 'pre> {
 
                 let total_children = md_children.len() + nested_children.len();
 
+                #[allow(clippy::absurd_extreme_comparisons)]
                 let should_flatten = total_children <= MAX_CHILDREN_TO_FLATTEN
                     && !single_nested_child_has_multiple_items;
 
@@ -546,7 +547,7 @@ impl<'index, 'pre> GraphBuilder<'index, 'pre> {
                 // post-order: build scope sequence <- cluster_id, visited_scopes. Only for direct nested
                 // children.
                 for child_hid in nested_children {
-                    let child_scope = self.by_hid[&child_hid].scope;
+                    let child_scope = self.by_hid[child_hid].scope;
                     self.build_scope_sequence(child_scope, Some(cluster_id), filtered);
                 }
 
@@ -559,7 +560,7 @@ impl<'index, 'pre> GraphBuilder<'index, 'pre> {
 
                 // Merge markdown children and direct nested roots, preserving each list's internal order
                 let items_merged: Vec<_> =
-                    merge_by_pos(self.by_hid, &md_children, &nested_children).collect();
+                    merge_by_pos(self.by_hid, md_children, nested_children).collect();
 
                 // We should have at least one item, since empty children are handled separately.
                 let first_rep = self.header_entry[&items_merged[0]];

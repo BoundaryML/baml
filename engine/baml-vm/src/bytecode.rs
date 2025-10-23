@@ -31,6 +31,7 @@ use crate::{types::Value, GlobalIndex, ObjectIndex};
 /// Instead store the state or complex structure in the [`crate::Vm`] struct and
 /// find a way to reference it with very simple instructions.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum Instruction {
     /// Loads a constant from the bytecode's constant pool.
     ///

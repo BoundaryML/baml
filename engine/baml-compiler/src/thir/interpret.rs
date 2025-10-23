@@ -286,16 +286,6 @@ async fn check_watch_changes<F, Fut>(
         };
 
         if should_notify {
-            // Update last notified value
-            for scope in scopes.iter_mut() {
-                for watch_var in &mut scope.watch_variables {
-                    if watch_var.name == var_name {
-                        *watch_var.last_notified.lock().unwrap() = Some(current_baml_value.clone());
-                        break;
-                    }
-                }
-            }
-
             // Fire the notification
             let watch_value = expr_value_to_watch_value(current_value);
             let notification = crate::watch::WatchNotification::new_var(
@@ -308,6 +298,18 @@ async fn check_watch_changes<F, Fut>(
                 .lock()
                 .unwrap()
                 .notify(notification);
+        }
+
+        // Always update last_notified after checking (whether we notified or not)
+        // This ensures that on first declaration (when last_notified is None), we record
+        // the initial value so that subsequent changes will be detected
+        for scope in scopes.iter_mut() {
+            for watch_var in &mut scope.watch_variables {
+                if watch_var.name == var_name {
+                    *watch_var.last_notified.lock().unwrap() = Some(current_baml_value.clone());
+                    break;
+                }
+            }
         }
     }
 }

@@ -419,6 +419,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
     lower_stmt_with_options(stmt, &HashMap::new())
 }
 
+#[allow(clippy::ptr_arg)]
 fn maybe_annotated_statement(
     stmt: Statement,
     annotated_comments: &Vec<std::sync::Arc<ast::Header>>,
@@ -592,7 +593,7 @@ fn lower_stmt_with_options(
                 span: span.clone(),
             };
 
-            maybe_annotated_statement(statement, &annotated_comments)
+            maybe_annotated_statement(statement, annotated_comments)
         }
         ast::Stmt::Expression(ast::ExprStmt {
             expr,
@@ -603,7 +604,7 @@ fn lower_stmt_with_options(
                 expr: Expression::from_ast(expr),
                 span: span.clone(),
             };
-            maybe_annotated_statement(statement, &annotated_comments)
+            maybe_annotated_statement(statement, annotated_comments)
         }
         ast::Stmt::Semicolon(expr) => Statement::Semicolon {
             expr: Expression::from_ast(expr),

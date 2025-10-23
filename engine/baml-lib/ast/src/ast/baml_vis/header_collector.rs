@@ -82,7 +82,7 @@ impl HeaderIndex {
     pub fn headers_in_scope_iter(
         &self,
         scope: ScopeId,
-    ) -> impl Iterator<Item = &RenderableHeader> + DoubleEndedIterator {
+    ) -> impl DoubleEndedIterator<Item = &RenderableHeader> {
         self.by_scope
             .get(&scope)
             .into_iter()
@@ -377,19 +377,18 @@ impl HeaderCollector {
                 }
             }
             Expression::UnaryOperation { expr, .. } => self.visit_expression(expr),
-            _ => {}
-            // Expression::BoolValue(_, span) => todo!(),
-            // Expression::NumericValue(_, span) => todo!(),
-            // Expression::Identifier(identifier) => todo!(),
-            // Expression::StringValue(_, span) => todo!(),
-            // Expression::RawStringValue(raw_string) => todo!(),
-            // Expression::JinjaExpressionValue(jinja_expression, span) => todo!(),
-            // Expression::App(app) => todo!(),
-            // Expression::ArrayAccess(expression, expression1, span) => todo!(),
-            // Expression::FieldAccess(expression, identifier, span) => todo!(),
-            // Expression::MethodCall { receiver, method, args, type_args, span } => todo!(),
-            // Expression::BinaryOperation { left, operator, right, span } => todo!(),
-            // Expression::Paren(expression, span) => todo!(),
+            _ => {} // Expression::BoolValue(_, span) => todo!(),
+                    // Expression::NumericValue(_, span) => todo!(),
+                    // Expression::Identifier(identifier) => todo!(),
+                    // Expression::StringValue(_, span) => todo!(),
+                    // Expression::RawStringValue(raw_string) => todo!(),
+                    // Expression::JinjaExpressionValue(jinja_expression, span) => todo!(),
+                    // Expression::App(app) => todo!(),
+                    // Expression::ArrayAccess(expression, expression1, span) => todo!(),
+                    // Expression::FieldAccess(expression, identifier, span) => todo!(),
+                    // Expression::MethodCall { receiver, method, args, type_args, span } => todo!(),
+                    // Expression::BinaryOperation { left, operator, right, span } => todo!(),
+                    // Expression::Paren(expression, span) => todo!(),
         }
     }
 

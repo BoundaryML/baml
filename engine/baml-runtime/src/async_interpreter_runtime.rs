@@ -226,7 +226,7 @@ impl BamlAsyncInterpreterRuntime {
 
         // Use provided SharedWatchHandler or create a noop one
         let watch_handler_shared: SharedWatchHandler =
-            watch_handler.unwrap_or_else(|| shared_noop_handler());
+            watch_handler.unwrap_or_else(shared_noop_handler);
 
         // Create a cloneable watch handler for llm_handler
         let watch_handler_for_llm = Arc::clone(&watch_handler_shared);

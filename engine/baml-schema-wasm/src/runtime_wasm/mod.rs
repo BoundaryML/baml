@@ -3,14 +3,12 @@ pub mod runtime_prompt;
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use anyhow::Context;
+use baml_compiler::watch::shared_handler;
 // Conditional runtime selection based on the "interpreter" feature flag
 #[cfg(feature = "interpreter")]
 pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
 #[cfg(not(feature = "interpreter"))]
 pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
-
-use baml_compiler::watch::shared_handler;
-
 use baml_runtime::{
     internal::{
         llm_client::{

@@ -1,5 +1,7 @@
-use std::fmt;
-use std::sync::{Arc, Mutex};
+use std::{
+    fmt,
+    sync::{Arc, Mutex},
+};
 
 use baml_types::{BamlValueWithMeta, Completion, Constraint, ResponseCheck, TypeIR};
 

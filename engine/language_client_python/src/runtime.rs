@@ -2,7 +2,6 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc, time::SystemTime};
 
 use baml_compiler::watch::shared_handler;
 use baml_runtime::{runtime_interface::ExperimentalTracingInterface, TripWire};
-
 use pyo3::{
     prelude::{pymethods, PyResult},
     pyclass,
@@ -412,9 +411,12 @@ impl BamlRuntime {
                                     let var_event =
                                         simple_namespace.call((), Some(&kwargs)).unwrap();
 
-                                    // Fire to var handlers using composite key "FunctionName.variable_name"
+                                    // Fire to var handlers using composite key "FunctionName.channel_name"
+                                    // Use channel_name if available, otherwise fall back to variable_name
+                                    let channel =
+                                        notification.channel_name.as_ref().unwrap_or(var_name);
                                     let handler_key =
-                                        format!("{}.{}", notification.function_name, var_name);
+                                        format!("{}.{}", notification.function_name, channel);
                                     if let Some(handler_list) =
                                         callbacks.var_handlers.get(&handler_key)
                                     {
@@ -426,8 +428,10 @@ impl BamlRuntime {
                             }
                             baml_compiler::watch::WatchBamlValue::StreamStart(stream_id) => {
                                 if let Some(var_name) = &notification.variable_name {
+                                    let channel =
+                                        notification.channel_name.as_ref().unwrap_or(var_name);
                                     let handler_key =
-                                        format!("{}.{}", notification.function_name, var_name);
+                                        format!("{}.{}", notification.function_name, channel);
                                     if let Some(handler_list) =
                                         callbacks.stream_handlers.get(&handler_key)
                                     {
@@ -446,8 +450,10 @@ impl BamlRuntime {
                                 value,
                             ) => {
                                 if let Some(var_name) = &notification.variable_name {
+                                    let channel =
+                                        notification.channel_name.as_ref().unwrap_or(var_name);
                                     let handler_key =
-                                        format!("{}.{}", notification.function_name, var_name);
+                                        format!("{}.{}", notification.function_name, channel);
                                     if let Some(handler_list) =
                                         callbacks.stream_handlers.get(&handler_key)
                                     {
@@ -468,8 +474,10 @@ impl BamlRuntime {
                             }
                             baml_compiler::watch::WatchBamlValue::StreamEnd(stream_id) => {
                                 if let Some(var_name) = &notification.variable_name {
+                                    let channel =
+                                        notification.channel_name.as_ref().unwrap_or(var_name);
                                     let handler_key =
-                                        format!("{}.{}", notification.function_name, var_name);
+                                        format!("{}.{}", notification.function_name, channel);
                                     if let Some(handler_list) =
                                         callbacks.stream_handlers.get(&handler_key)
                                     {
@@ -611,9 +619,11 @@ impl BamlRuntime {
                                     let var_event =
                                         simple_namespace.call((), Some(&kwargs)).unwrap();
 
-                                    // Fire to var handlers using composite key "FunctionName.variable_name"
+                                    // Fire to var handlers using composite key "FunctionName.channel_name"
+                                    // Use channel_name if available, otherwise fall back to variable_name
+                                    let channel = event.channel_name.as_ref().unwrap_or(var_name);
                                     let handler_key =
-                                        format!("{}.{}", event.function_name, var_name);
+                                        format!("{}.{}", event.function_name, channel);
                                     if let Some(handler_list) =
                                         callbacks.var_handlers.get(&handler_key)
                                     {
@@ -625,8 +635,9 @@ impl BamlRuntime {
                             }
                             baml_compiler::watch::WatchBamlValue::StreamStart(stream_id) => {
                                 if let Some(var_name) = &event.variable_name {
+                                    let channel = event.channel_name.as_ref().unwrap_or(var_name);
                                     let handler_key =
-                                        format!("{}.{}", event.function_name, var_name);
+                                        format!("{}.{}", event.function_name, channel);
                                     if let Some(handler_list) =
                                         callbacks.stream_handlers.get(&handler_key)
                                     {
@@ -645,8 +656,9 @@ impl BamlRuntime {
                                 value,
                             ) => {
                                 if let Some(var_name) = &event.variable_name {
+                                    let channel = event.channel_name.as_ref().unwrap_or(var_name);
                                     let handler_key =
-                                        format!("{}.{}", event.function_name, var_name);
+                                        format!("{}.{}", event.function_name, channel);
                                     if let Some(handler_list) =
                                         callbacks.stream_handlers.get(&handler_key)
                                     {
@@ -667,8 +679,9 @@ impl BamlRuntime {
                             }
                             baml_compiler::watch::WatchBamlValue::StreamEnd(stream_id) => {
                                 if let Some(var_name) = &event.variable_name {
+                                    let channel = event.channel_name.as_ref().unwrap_or(var_name);
                                     let handler_key =
-                                        format!("{}.{}", event.function_name, var_name);
+                                        format!("{}.{}", event.function_name, channel);
                                     if let Some(handler_list) =
                                         callbacks.stream_handlers.get(&handler_key)
                                     {
