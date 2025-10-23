@@ -278,6 +278,7 @@ fn relevant_data_models<'a>(
 
                     classes.push(Class {
                         name: Name::new_with_alias(name.to_string(), walker?.alias(env_values)?),
+                        description: None,
                         namespace: *mode,
                         fields,
                         constraints: metadata.constraints.clone(),
