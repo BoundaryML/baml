@@ -61,6 +61,17 @@ pub trait LlmFuture: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> {}
 #[cfg(target_arch = "wasm32")]
 impl<T> LlmFuture for T where T: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> {}
 
+// Trait aliases for watch handler with conditional Send bounds
+#[cfg(not(target_arch = "wasm32"))]
+pub trait WatchHandler: FnMut(WatchNotification) + Send {}
+#[cfg(not(target_arch = "wasm32"))]
+impl<F> WatchHandler for F where F: FnMut(WatchNotification) + Send {}
+
+#[cfg(target_arch = "wasm32")]
+pub trait WatchHandler: FnMut(WatchNotification) {}
+#[cfg(target_arch = "wasm32")]
+impl<F> WatchHandler for F where F: FnMut(WatchNotification) {}
+
 // TODO:
 //  - Variables should be expressions, not BamlValues. Because we want to be able to
 //    mutate them across REPL prompts and see the same downstream effects on their
@@ -124,12 +135,15 @@ fn expr_value_to_watch_value(
 }
 
 /// Fire a watch notification for a specific variable (for manual $watch.notify() calls)
-fn fire_watch_notification_for_variable(
+fn fire_watch_notification_for_variable<W>(
     scopes: &[Scope],
     var_name: &str,
-    watch_handler: &mut impl FnMut(crate::watch::WatchNotification),
+    watch_handler: &mut W,
     function_name: &str,
-) -> Result<()> {
+) -> Result<()>
+where
+    W: WatchHandler,
+{
     // Find the variable in scopes
     for scope in scopes.iter().rev() {
         if let Some(value_ref) = scope.variables.get(var_name) {
@@ -175,15 +189,16 @@ enum ControlFlow {
 /// This function should only be called in the main execution context, not during
 /// filter function evaluation to avoid infinite recursion.
 #[allow(clippy::type_complexity)]
-async fn check_watch_changes<F, Fut>(
+async fn check_watch_changes<F, Fut, W>(
     scopes: &mut Vec<Scope>,
-    watch_notification_handler: &mut impl FnMut(WatchNotification),
+    watch_notification_handler: &mut W,
     function_name: &str,
     thir: &THir<ExprMetadata>,
     run_llm_function: &mut F,
 ) where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
+    W: WatchHandler,
 {
     // Skip watch checking if we're in a filter function evaluation context
     // This prevents infinite recursion when filter functions have local variables
@@ -413,18 +428,19 @@ fn baml_value_to_value_with_meta(value: BamlValue) -> BamlValueWithMeta<ExprMeta
     }
 }
 
-pub async fn interpret_thir<F, Fut>(
+pub async fn interpret_thir<F, Fut, W>(
     function_name: String,
     thir: THir<ExprMetadata>,
     expr: Expr<ExprMetadata>,
     mut run_llm_function: F,
-    mut watch_notification_handler: impl FnMut(WatchNotification),
+    mut watch_notification_handler: W,
     extra_bindings: BamlMap<String, BamlValueWithMeta<ExprMetadata>>,
     env_vars: HashMap<String, String>,
 ) -> Result<BamlValueWithMeta<ExprMetadata>>
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
+    W: WatchHandler,
 {
     let env_vars_map = env_vars;
     let mut scopes = vec![Scope {
@@ -494,7 +510,7 @@ fn evaluate_block_with_control_flow<'a, F, Fut, E>(
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    E: FnMut(crate::watch::WatchNotification),
+    E: WatchHandler,
 {
     Box::pin(async move {
         scopes.push(Scope {
@@ -524,7 +540,7 @@ where
         where
             F: LlmHandler<Fut>,
             Fut: LlmFuture,
-            E: FnMut(crate::watch::WatchNotification),
+            E: WatchHandler,
         {
             Box::pin(async move {
                 match stmt {
@@ -1412,7 +1428,7 @@ async fn evaluate_block<F, Fut, E>(
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    E: FnMut(crate::watch::WatchNotification),
+    E: WatchHandler,
 {
     match evaluate_block_with_control_flow(
         block,
@@ -1471,7 +1487,7 @@ async fn assign_to_expr<F, Fut, E>(
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    E: FnMut(crate::watch::WatchNotification),
+    E: WatchHandler,
 {
     let mut current_expr = target;
     let mut value_to_assign = new_value;
@@ -1636,7 +1652,7 @@ fn evaluate_expr<'a, F, Fut, E>(
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    E: FnMut(crate::watch::WatchNotification),
+    E: WatchHandler,
 {
     evaluate_expr_with_context(
         expr,
@@ -1662,7 +1678,7 @@ fn evaluate_expr_with_context<'a, F, Fut, E>(
 where
     F: LlmHandler<Fut>,
     Fut: LlmFuture,
-    E: FnMut(crate::watch::WatchNotification),
+    E: WatchHandler,
 {
     Box::pin(async move {
         Ok(match expr {
