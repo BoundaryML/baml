@@ -190,6 +190,14 @@ pub fn typecheck_returning_context<'a>(
                     TypeIR::Top(Default::default()),
                 )
             }
+            "baml.deep_equals" => {
+                // baml.deep_equals<T>(T, T) -> bool
+                // Use Top as placeholder for generic types
+                TypeIR::arrow(
+                    vec![TypeIR::Top(Default::default()), TypeIR::Top(Default::default())],
+                    TypeIR::bool(),
+                )
+            }
             "baml.unstable.string" => {
                 // baml.unstable.string<T>(T) -> string
                 // Takes any type and returns string representation
@@ -1630,6 +1638,7 @@ pub fn typecheck_expression(
                 let namespace_method = match (name.as_str(), method.as_str()) {
                     ("env", "get") => Some("env.get"),
                     ("baml", "deep_copy") => Some("baml.deep_copy"),
+                    ("baml", "deep_equals") => Some("baml.deep_equals"),
                     ("baml", "fetch_as") => Some("baml.fetch_as"),
                     ("baml", "fetch_value") => Some("baml.fetch_value"),
                     ("image", "from_url") => Some("baml.media.image.from_url"),
@@ -1695,6 +1704,16 @@ pub fn typecheck_expression(
                                     }
                                 }
                             }
+                        }
+                        "baml.deep_equals" => {
+                            // baml.deep_equals<T>(T, T) -> bool
+                            // For now, we just return bool without strict type checking
+                            // The VM will handle comparison of different types by returning false
+                            func_type = Some(TypeIR::arrow(
+                                vec![TypeIR::Top(Default::default()), TypeIR::Top(Default::default())],
+                                TypeIR::bool(),
+                            ));
+                            return_type = Some(TypeIR::bool());
                         }
                         "baml.unstable.string" => {
                             // baml.unstable.string<T>(T) -> string
@@ -1875,6 +1894,7 @@ pub fn typecheck_expression(
                             }
 
                             ("baml", "deep_copy") => Some("baml.deep_copy".to_string()),
+                            ("baml", "deep_equals") => Some("baml.deep_equals".to_string()),
 
                             ("baml", "fetch_as") => Some("baml.fetch_as".to_string()),
                             ("baml", "fetch_value") => Some("baml.fetch_value".to_string()),
@@ -1988,6 +2008,15 @@ pub fn typecheck_expression(
                                             ),
                                         );
                                     }
+                                },
+                                "baml.deep_equals" => {
+                                    // For deep_equals, we always return bool
+                                    generic_return_type_inferred = Some(TypeIR::bool());
+
+                                    func_type = Some(TypeIR::arrow(
+                                        vec![TypeIR::Top(Default::default()), TypeIR::Top(Default::default())],
+                                        TypeIR::bool(),
+                                    ));
                                 },
                                 "baml.unstable.string" => {
                                     generic_return_type_inferred = Some(TypeIR::string());

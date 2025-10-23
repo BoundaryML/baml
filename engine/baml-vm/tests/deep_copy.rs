@@ -212,3 +212,225 @@ fn deep_copy_circular_reference() -> anyhow::Result<()> {
         expected: ExecState::Complete(Value::Int(1)),
     })
 }
+
+// ============ deep_equals tests ============
+
+#[test]
+fn deep_equals_primitives() -> anyhow::Result<()> {
+    // Test equality of primitive values
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> bool {
+                let a = 42;
+                let b = 42;
+                baml.deep_equals(a, b)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(true)),
+    })
+}
+
+#[test]
+fn deep_equals_different_primitives() -> anyhow::Result<()> {
+    // Test inequality of different primitive values
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> bool {
+                let a = 42;
+                let b = 43;
+                baml.deep_equals(a, b)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(false)),
+    })
+}
+
+#[test]
+fn deep_equals_simple_objects() -> anyhow::Result<()> {
+    // Test equality of simple class instances
+    assert_vm_executes(Program {
+        source: r#"
+            class Point {
+                x int
+                y int
+            }
+
+            function main() -> bool {
+                let p1 = Point { x: 10, y: 20 };
+                let p2 = Point { x: 10, y: 20 };
+                baml.deep_equals(p1, p2)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(true)),
+    })
+}
+
+#[test]
+fn deep_equals_different_objects() -> anyhow::Result<()> {
+    // Test inequality when objects have different values
+    assert_vm_executes(Program {
+        source: r#"
+            class Point {
+                x int
+                y int
+            }
+
+            function main() -> bool {
+                let p1 = Point { x: 10, y: 20 };
+                let p2 = Point { x: 10, y: 21 };
+                baml.deep_equals(p1, p2)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(false)),
+    })
+}
+
+#[test]
+fn deep_equals_nested_objects() -> anyhow::Result<()> {
+    // Test deep equality with nested objects
+    assert_vm_executes(Program {
+        source: r#"
+            class Node {
+                value int
+                children Node[]
+            }
+
+            function main() -> bool {
+                let n1 = Node { value: 1, children: [
+                    Node { value: 2, children: [] },
+                    Node { value: 3, children: [] }
+                ] };
+
+                let n2 = Node { value: 1, children: [
+                    Node { value: 2, children: [] },
+                    Node { value: 3, children: [] }
+                ] };
+
+                baml.deep_equals(n1, n2)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(true)),
+    })
+}
+
+#[test]
+fn deep_equals_nested_objects_different() -> anyhow::Result<()> {
+    // Test inequality with different nested objects
+    assert_vm_executes(Program {
+        source: r#"
+            class Node {
+                value int
+                children Node[]
+            }
+
+            function main() -> bool {
+                let n1 = Node { value: 1, children: [
+                    Node { value: 2, children: [] },
+                    Node { value: 3, children: [] }
+                ] };
+
+                let n2 = Node { value: 1, children: [
+                    Node { value: 2, children: [] },
+                    Node { value: 4, children: [] } // Different value here
+                ] };
+
+                baml.deep_equals(n1, n2)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(false)),
+    })
+}
+
+#[test]
+fn deep_equals_with_arrays() -> anyhow::Result<()> {
+    // Test equality with arrays in class fields
+    assert_vm_executes(Program {
+        source: r#"
+            class Container {
+                data int[]
+            }
+
+            function main() -> bool {
+                let c1 = Container { data: [1, 2, 3, 4] };
+                let c2 = Container { data: [1, 2, 3, 4] };
+                baml.deep_equals(c1, c2)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(true)),
+    })
+}
+
+#[test]
+fn deep_equals_with_maps() -> anyhow::Result<()> {
+    // Test equality with maps in class fields
+    assert_vm_executes(Program {
+        source: r#"
+            class MapContainer {
+                values map<string, int>
+            }
+
+            function main() -> bool {
+                let m1 = MapContainer { values: {"a": 1, "b": 2} };
+                let m2 = MapContainer { values: {"a": 1, "b": 2} };
+                baml.deep_equals(m1, m2)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(true)),
+    })
+}
+
+#[test]
+fn deep_equals_same_reference() -> anyhow::Result<()> {
+    // Test that same reference is equal (optimization path)
+    assert_vm_executes(Program {
+        source: r#"
+            class Node {
+                value int
+                children Node[]
+            }
+
+            function main() -> bool {
+                let n = Node { value: 1, children: [] };
+                baml.deep_equals(n, n)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(true)),
+    })
+}
+
+#[test]
+fn deep_equals_circular_structure() -> anyhow::Result<()> {
+    // Test deep equals with circular references
+    assert_vm_executes(Program {
+        source: r#"
+            class Node {
+                value int
+                children Node[]
+            }
+
+            function main() -> bool {
+                // Create two identical circular structures
+                let a1 = Node { value: 1, children: [] };
+                let b1 = Node { value: 2, children: [a1] };
+                a1.children = [b1];
+
+                let a2 = Node { value: 1, children: [] };
+                let b2 = Node { value: 2, children: [a2] };
+                a2.children = [b2];
+
+                baml.deep_equals(a1, a2)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(true)),
+    })
+}

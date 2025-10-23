@@ -579,11 +579,25 @@ impl Vm {
                                 match state.filter {
                                     WatchFilter::Manual => continue,
                                     WatchFilter::Default => {
-                                        // TODO: deep equal
                                         if let Some(last_assigned) = state.last_assigned {
-                                            if last_assigned != state.value {
-                                                filtered_notifications.push(notification);
+                                            match crate::native::deep_equals(
+                                                self,
+                                                &[last_assigned, state.value],
+                                            ) {
+                                                Ok(Value::Bool(b)) => {
+                                                    if !b {
+                                                        filtered_notifications.push(notification);
+                                                    }
+                                                }
+                                                other => {
+                                                    return Err(RuntimeError::Other(format!(
+                                                        "Invalid deep equals result during watch: {other:?}"
+                                                    ))
+                                                    .into());
+                                                }
                                             }
+                                        } else {
+                                            filtered_notifications.push(notification);
                                         }
                                     }
                                     WatchFilter::Function(function_index) => {

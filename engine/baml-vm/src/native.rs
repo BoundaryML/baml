@@ -9,7 +9,7 @@ use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
 use crate::{
     errors::{InternalError, RuntimeError, VmError},
     indexable::ObjectIndex,
-    types::{Instance, Object, ObjectType, Value},
+    types::{Future, FutureKind, Instance, Object, ObjectType, Value},
     Vm,
 };
 
@@ -215,6 +215,14 @@ pub fn deep_copy_object(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     deep_copy_value_recursive(vm, args[0], &mut copied_objects)
 }
 
+/// Deep equality comparison between two values
+pub fn deep_equals(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    // Arity is already checked by the VM
+    let mut visited = HashMap::new();
+    let result = deep_equals_recursive(vm, args[0], args[1], &mut visited);
+    Ok(Value::Bool(result))
+}
+
 /// Recursively deep copy a value, handling nested objects.
 ///
 /// TODO: Likely will need to be refactored to iterative for perf / stack
@@ -316,6 +324,127 @@ fn deep_copy_value_recursive(
 
             Ok(Value::Object(new_index))
         }
+    }
+}
+
+/// Recursively compare two values for deep equality
+fn deep_equals_recursive(
+    vm: &Vm,
+    a: Value,
+    b: Value,
+    visited: &mut HashMap<(ObjectIndex, ObjectIndex), bool>,
+) -> bool {
+    match (a, b) {
+        // Primitive values - direct comparison
+        (Value::Null, Value::Null) => true,
+        (Value::Int(a), Value::Int(b)) => a == b,
+        (Value::Float(a), Value::Float(b)) => {
+            // Handle NaN case: NaN != NaN but we want deep_equals to consider them equal
+            (a.is_nan() && b.is_nan()) || a == b
+        }
+        (Value::Bool(a), Value::Bool(b)) => a == b,
+
+        // Objects - need recursive comparison
+        (Value::Object(a_idx), Value::Object(b_idx)) => {
+            // Check if same reference (optimization)
+            if a_idx == b_idx {
+                return true;
+            }
+
+            // Check if we've already compared these objects (circular reference handling)
+            let key = if a_idx < b_idx {
+                (a_idx, b_idx)
+            } else {
+                (b_idx, a_idx)
+            };
+
+            if let Some(&result) = visited.get(&key) {
+                return result;
+            }
+
+            // Mark as being visited (assume equal to handle circular refs)
+            visited.insert(key, true);
+
+            // Compare based on object type
+            let result = match (&vm.objects[a_idx], &vm.objects[b_idx]) {
+                (Object::String(a), Object::String(b)) => a == b,
+
+                (Object::Array(a_values), Object::Array(b_values)) => {
+                    a_values.len() == b_values.len()
+                        && a_values
+                            .iter()
+                            .zip(b_values.iter())
+                            .all(|(a, b)| deep_equals_recursive(vm, *a, *b, visited))
+                }
+
+                (Object::Map(a_map), Object::Map(b_map)) => {
+                    a_map.len() == b_map.len()
+                        && a_map.iter().all(|(key, a_val)| {
+                            b_map
+                                .get(key)
+                                .map_or(false, |b_val| deep_equals_recursive(vm, *a_val, *b_val, visited))
+                        })
+                }
+
+                (Object::Instance(a_inst), Object::Instance(b_inst)) => {
+                    a_inst.class == b_inst.class
+                        && a_inst.fields.len() == b_inst.fields.len()
+                        && a_inst
+                            .fields
+                            .iter()
+                            .zip(b_inst.fields.iter())
+                            .all(|(a, b)| deep_equals_recursive(vm, *a, *b, visited))
+                }
+
+                (Object::Variant(a_var), Object::Variant(b_var)) => {
+                    a_var.enm == b_var.enm && a_var.index == b_var.index
+                }
+
+                (Object::Enum(a_enum), Object::Enum(b_enum)) => {
+                    a_enum.name == b_enum.name && a_enum.variant_names == b_enum.variant_names
+                }
+
+                (Object::Class(a_class), Object::Class(b_class)) => {
+                    a_class.name == b_class.name && a_class.field_names == b_class.field_names
+                }
+
+                (Object::Media(a_media), Object::Media(b_media)) => a_media == b_media,
+
+                // Functions are compared by reference (they're the same if they point to the same function)
+                (Object::Function(_), Object::Function(_)) => a_idx == b_idx,
+
+                // Future comparison - compare the inner values if both are ready
+                (Object::Future(a_fut), Object::Future(b_fut)) => match (a_fut, b_fut) {
+                    (Future::Ready(a_val), Future::Ready(b_val)) => {
+                        deep_equals_recursive(vm, *a_val, *b_val, visited)
+                    }
+                    (Future::Pending(a_pend), Future::Pending(b_pend)) => {
+                        // Compare pending futures by their function and args
+                        a_pend.function == b_pend.function
+                            && matches!((&a_pend.kind, &b_pend.kind), (FutureKind::Llm, FutureKind::Llm) | (FutureKind::Net, FutureKind::Net))
+                            && a_pend.args.len() == b_pend.args.len()
+                            && a_pend
+                                .args
+                                .iter()
+                                .zip(b_pend.args.iter())
+                                .all(|(a, b)| deep_equals_recursive(vm, *a, *b, visited))
+                    }
+                    _ => false,
+                },
+
+                (Object::BamlType(a_type), Object::BamlType(b_type)) => a_type == b_type,
+
+                // Different types are not equal
+                _ => false,
+            };
+
+            // Update the visited map with the actual result
+            visited.insert(key, result);
+            result
+        }
+
+        // Different types are not equal
+        _ => false,
     }
 }
 
@@ -471,6 +600,7 @@ pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
         ("env.get", (env_get, 1)),
         // Utility functions.
         ("baml.deep_copy", (deep_copy_object, 1)),
+        ("baml.deep_equals", (deep_equals, 2)),
         ("baml.unstable.string", (any_value_to_string, 1)),
     ];
 
