@@ -7541,6 +7541,20 @@ components:
       - todo
       - userId
       additionalProperties: false
+    DummyJsonTodoUpdate:
+      type: object
+      properties:
+        completed:
+          type: boolean
+        todo:
+          type: string
+        userId:
+          type: integer
+      required:
+      - completed
+      - todo
+      - userId
+      additionalProperties: false
     DummyOutput:
       type: object
       properties:

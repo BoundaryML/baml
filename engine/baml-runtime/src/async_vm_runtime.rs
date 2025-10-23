@@ -9,6 +9,7 @@
 
 use std::{
     collections::HashMap,
+    str::FromStr,
     sync::{Arc, Mutex},
 };
 
@@ -494,6 +495,7 @@ impl BamlAsyncVmRuntime {
                             tokio::task::spawn_local(future);
                         }
 
+                        // TODO: Needs refactor, prepare for some convoluted logic ahead ;)
                         baml_vm::FutureKind::Net => {
                             // Only `baml.fetch_as` is supported for now.
                             if pending_future.function != "baml.fetch_as" {
@@ -510,24 +512,28 @@ impl BamlAsyncVmRuntime {
                                 ));
                             }
 
-                            let url_str_index = match &pending_future.args[0] {
-                                baml_vm::Value::Object(url_str_index) => url_str_index,
+                            let url_or_request =
+                                match try_baml_value_from_vm_value(&vm, &pending_future.args[0]) {
+                                    Ok(url_or_request) => url_or_request,
+                                    Err(e) => {
+                                        break 'mainloop Err(e.context(
+                                        "baml.fetch_as: failed to get url or request from VM value",
+                                    ));
+                                    }
+                                };
+
+                            match &url_or_request {
+                                BamlValue::String(_) => {} // Ok,
+
+                                BamlValue::Class(name, _) if name == "baml.HttpRequest" => {} // Ok,
+
                                 _ => {
                                     break 'mainloop Err(anyhow!(
-                                        "baml.fetch_as: expected URL to be a string, got {}",
-                                        pending_future.args[0]
+                                        "baml.fetch_as: expected baml.fetch_as arg to be a string or HttpRequest, got {}",
+                                        url_or_request
                                     ));
                                 }
-                            };
-
-                            let url = match &vm.objects[*url_str_index] {
-                                baml_vm::Object::String(url) => url.to_owned(),
-                                _ => {
-                                    break 'mainloop Err(anyhow::anyhow!(
-                                        "baml.fetch_as: failed to get URL from VM value"
-                                    ));
-                                }
-                            };
+                            }
 
                             let parse_as_type = match vm
                                 .objects
@@ -563,10 +569,91 @@ impl BamlAsyncVmRuntime {
                                 .unwrap();
 
                                 async move {
-                                    let client = reqwest::Client::new();
-
                                     let response = 'res: {
-                                        let res = match client.get(url).send().await {
+                                        let client = reqwest::Client::new();
+
+                                        let req = match &url_or_request {
+                                            BamlValue::String(url) => {
+                                                client.get(url)
+                                            }
+
+                                            // we type checked earlier, should be http request type
+                                            BamlValue::Class(name, fields) => {
+                                                let Some(BamlValue::String(url)) = fields.get("url") else {
+                                                    break 'res Err(anyhow!(
+                                                        "baml.fetch_as: expected url to be a string, got {}",
+                                                        url_or_request
+                                                    ));
+                                                };
+
+                                                let Some(BamlValue::Enum(_, method)) = fields.get("method") else {
+                                                    break 'res Err(anyhow!(
+                                                        "baml.fetch_as: expected method to be a valid HTTP method, got {}",
+                                                        url_or_request
+                                                    ));
+                                                };
+
+                                                let mut req = match method.as_str() {
+                                                    "Get" => client.get(url),
+                                                    "Post" => client.post(url),
+                                                    "Put" => client.put(url),
+                                                    "Patch" => client.patch(url),
+                                                    "Delete" => client.delete(url),
+                                                    _ => break 'res Err(anyhow!(
+                                                        "baml.fetch_as: expected method to be a valid HTTP method, got {}",
+                                                        method
+                                                    ))
+                                                };
+
+                                                if let Some(BamlValue::Map(headers)) = fields.get("headers") {
+                                                    let mut header_map = reqwest::header::HeaderMap::new();
+
+                                                    for (k, v) in headers {
+                                                        let Ok(key) = reqwest::header::HeaderName::from_str(k) else {
+                                                            break 'res Err(anyhow!(
+                                                                "baml.fetch_as: expected header key to be a valid HTTP header name, got {}",
+                                                                k
+                                                            ));
+                                                        };
+
+                                                        let Some(value_as_string) = v.as_str() else {
+                                                            break 'res Err(anyhow!(
+                                                                "baml.fetch_as: expected header value to be a string, got {}",
+                                                                v
+                                                            ));
+                                                        };
+
+                                                        let Ok(value) = reqwest::header::HeaderValue::from_str(value_as_string) else {
+                                                            break 'res Err(anyhow!(
+                                                                "baml.fetch_as: expected header value to be a string, got {}",
+                                                                v
+                                                            ));
+                                                        };
+
+                                                        header_map.insert(key, value);
+                                                    }
+
+                                                    req = req.headers(header_map);
+                                                }
+
+                                                if let Some(BamlValue::Map(query_params)) = fields.get("query_params") {
+                                                    req = req.query(query_params);
+                                                }
+
+                                                if let Some(json) = fields.get("json") {
+                                                    req = req.json(json)
+                                                }
+
+                                                req
+                                            }
+
+                                            _ => break 'res Err(anyhow!(
+                                                "baml.fetch_as: expected baml.fetch_as arg to be a string or HttpRequest, got {}",
+                                                url_or_request
+                                            ))
+                                        };
+
+                                        let res = match req.send().await {
                                             Ok(res) => res,
                                             Err(e) => {
                                                 break 'res Err(anyhow::Error::from(e).context(

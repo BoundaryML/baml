@@ -9,7 +9,7 @@ function ClassifyText(text: string) -> string {
     prompt #"
         Classify the following text as positive, negative, or neutral:
         {{ text }}
-        
+
         Return just the classification.
     "#
 }
@@ -18,9 +18,9 @@ function ExtractInfo(document: string, field: string) -> string {
     client "openai/gpt-4o"
     prompt #"
         From the following document, extract the {{ field }}:
-        
+
         Document: {{ document }}
-        
+
         {{ field }}:
     "#
 }
@@ -35,7 +35,7 @@ function AnalyzeSentiment(text: string) -> Sentiment {
     client "openai/gpt-4o-mini"
     prompt #"
         Analyze the sentiment of this text: {{ text }}
-        
+
         Respond with exactly one of: POSITIVE, NEGATIVE, NEUTRAL
     "#
 }

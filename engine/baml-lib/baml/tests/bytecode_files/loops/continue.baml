@@ -92,7 +92,7 @@ function ContinueNested() -> int {
 // 31   17   LOAD_CONST 3        (5)
 //      18   RETURN              
 //
-// Class: baml.Request with 3 fields
+// Class: baml.HttpRequest with 5 fields
 // Class: baml.WatchOptions with 2 fields
 // Enum baml.HttpMethod
 // Function: baml.Array.length

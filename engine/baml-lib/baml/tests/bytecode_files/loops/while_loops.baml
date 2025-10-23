@@ -126,7 +126,7 @@ function WhileWithScopes() -> int {
 // 51   32   LOAD_CONST 8        (3)
 //      33   RETURN              
 //
-// Class: baml.Request with 3 fields
+// Class: baml.HttpRequest with 5 fields
 // Class: baml.WatchOptions with 2 fields
 // Enum baml.HttpMethod
 // Function: baml.Array.length

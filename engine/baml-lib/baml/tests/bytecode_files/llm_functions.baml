@@ -9,7 +9,7 @@ function ClassifyText(text: string) -> string {
     prompt #"
         Classify the following text as positive, negative, or neutral:
         {{ text }}
-        
+
         Return just the classification.
     "#
 }
@@ -24,7 +24,7 @@ function AnalyzeSentiment(text: string) -> Sentiment {
     client "openai/gpt-4o-mini"
     prompt #"
         Analyze the sentiment of this text: {{ text }}
-        
+
         Respond with exactly one of: POSITIVE, NEGATIVE, NEUTRAL
     "#
 }
@@ -35,7 +35,7 @@ function AnalyzeSentiment(text: string) -> Sentiment {
 //
 // Function: AnalyzeSentiment
 //
-// Class: baml.Request with 3 fields
+// Class: baml.HttpRequest with 5 fields
 // Class: baml.WatchOptions with 2 fields
 // Enum baml.HttpMethod
 // Enum Sentiment
