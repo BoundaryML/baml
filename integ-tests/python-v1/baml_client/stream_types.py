@@ -24,7 +24,7 @@ class StreamState(GenericModel, typing.Generic[StreamStateValueT]):
     value: StreamStateValueT
     state: typing_extensions.Literal["Pending", "Incomplete", "Complete"]
 # #########################################################################
-# Generated classes (104)
+# Generated classes (105)
 # #########################################################################
 
 class AddTodoItem(BaseModel):
@@ -178,6 +178,13 @@ class DummyJsonTodo(BaseModel):
     class Config:
         arbitrary_types_allowed = True
     id: typing.Optional[int] = None
+    todo: typing.Optional[str] = None
+    completed: typing.Optional[bool] = None
+    userId: typing.Optional[int] = None
+
+class DummyJsonTodoUpdate(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     todo: typing.Optional[str] = None
     completed: typing.Optional[bool] = None
     userId: typing.Optional[int] = None

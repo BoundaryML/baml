@@ -911,6 +911,46 @@ func (t *DummyJsonTodoClassView) Type() (baml.Type, error) {
 	return t.inner.Type()
 }
 
+type DummyJsonTodoUpdateClassView struct {
+	inner baml.ClassBuilder
+}
+
+func (t *DummyJsonTodoUpdateClassView) ListProperties() ([]ClassPropertyView, error) {
+	result, err := t.inner.ListProperties()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]ClassPropertyView, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+func (t *DummyJsonTodoUpdateClassView) PropertyTodo() (ClassPropertyView, error) {
+	return t.inner.Property("todo")
+}
+
+func (t *DummyJsonTodoUpdateClassView) PropertyCompleted() (ClassPropertyView, error) {
+	return t.inner.Property("completed")
+}
+
+func (t *DummyJsonTodoUpdateClassView) PropertyUserId() (ClassPropertyView, error) {
+	return t.inner.Property("userId")
+}
+
+func (t *TypeBuilder) DummyJsonTodoUpdate() (*DummyJsonTodoUpdateClassView, error) {
+	bld, err := t.inner.Class("DummyJsonTodoUpdate")
+	if err != nil {
+		return nil, err
+	}
+	return &DummyJsonTodoUpdateClassView{inner: bld}, nil
+}
+
+func (t *DummyJsonTodoUpdateClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+
 type DummyOutputClassBuilder struct {
 	inner baml.ClassBuilder
 }

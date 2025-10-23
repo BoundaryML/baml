@@ -3,45 +3,52 @@ use std::collections::HashMap;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 use super::{
-    helpers::{parsing_catch_all, Pair},
+    helpers::{assert_correct_parser, parsing_catch_all, unreachable_rule, Pair},
     parse_identifier::parse_identifier,
     Rule,
 };
 use crate::{
-    assert_correct_parser,
     ast::{
         self, expr::ExprFn, App, ArgumentsList, AssignOp, AssignOpStmt, AssignStmt, ExprStmt,
-        Expression, ExpressionBlock, ForLoopStmt, LetStmt, Stmt, TopLevelAssignment, WatchArgument,
-        WatchDecorator, *,
+        Expression, ExpressionBlock, ForLoopStmt, LetStmt, Stmt, TopLevelAssignment, *,
     },
     parser::{
         parse_arguments::parse_arguments_list, parse_expression::parse_expression,
         parse_field::parse_field_type_chain, parse_identifier,
         parse_named_args_list::parse_named_argument_list, parse_types::parse_field_type,
     },
-    unreachable_rule,
 };
 
 pub fn parse_expr_fn(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<expr::ExprFn> {
-    assert_correct_parser!(token, Rule::expr_fn);
+    assert_correct_parser(&token, &[Rule::expr_fn], diagnostics);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
     let name = parse_identifier(tokens.next()?, diagnostics);
     let args = parse_named_argument_list(tokens.next()?, diagnostics);
-    let arrow_or_body = tokens.next()?;
+    let mut arrow_or_body = tokens.next()?;
 
     // We may or may not have an arrow and a return type.
     // If the args list is immediately followed by an arrow, we have an arrow and a return type.
     // Otherwise, we have just a body.
     let (maybe_return_type, maybe_body) = if matches!(arrow_or_body.as_rule(), Rule::ARROW) {
         let return_type = parse_field_type_chain(tokens.next()?, diagnostics);
-        let function_body = parse_function_body(tokens.next()?, diagnostics);
+        // Skip optional SPACER_TEXT if present
+        let next_token = tokens.next()?;
+        let body_token = if matches!(next_token.as_rule(), Rule::SPACER_TEXT) {
+            tokens.next()?
+        } else {
+            next_token
+        };
+        let function_body = parse_function_body(body_token, diagnostics);
         (Some(return_type), function_body)
     } else {
         diagnostics.push_error(DatamodelError::new_static(
             "function must have a return type: e.g. function Foo() -> int",
             span.clone(),
         ));
+        if matches!(arrow_or_body.as_rule(), Rule::SPACER_TEXT) {
+            arrow_or_body = tokens.next()?;
+        }
         let function_body = parse_function_body(arrow_or_body, diagnostics);
         (None, function_body)
     };
@@ -80,7 +87,7 @@ pub fn parse_top_level_assignment(
     token: Pair<'_>,
     diagnostics: &mut Diagnostics,
 ) -> Option<expr::TopLevelAssignment> {
-    assert_correct_parser!(token, Rule::top_level_assignment);
+    assert_correct_parser(&token, &[Rule::top_level_assignment], diagnostics);
     let mut tokens = token.into_inner();
 
     let only_let_stmt = |name, span, diagnostics: &mut Diagnostics| {
@@ -120,11 +127,17 @@ pub fn parse_top_level_assignment(
         Stmt::Assert(AssertStmt { span, .. }) => {
             only_let_stmt("assert statements", span, diagnostics)
         }
+        Stmt::WatchOptions(WatchOptionsStmt { span, .. }) => {
+            only_let_stmt("watch options statements", span, diagnostics)
+        }
+        Stmt::WatchNotify(WatchNotifyStmt { span, .. }) => {
+            only_let_stmt("watch notify statements", span, diagnostics)
+        }
     }
 }
 
 fn parse_while_loop(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
-    assert_correct_parser!(pair, Rule::while_loop);
+    assert_correct_parser(&pair, &[Rule::while_loop], diagnostics);
 
     let span = diagnostics.span(pair.as_span());
     let mut while_loop = pair.into_inner();
@@ -144,7 +157,7 @@ fn parse_while_loop(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stm
 }
 
 fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
-    assert_correct_parser!(token, Rule::for_loop);
+    assert_correct_parser(&token, &[Rule::for_loop], diagnostics);
 
     let span = diagnostics.span(token.as_span());
 
@@ -162,7 +175,10 @@ fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt
         Rule::iterator_for_loop => {
             parse_iterator_for_loop(in_between_rule, body, span, diagnostics).map(Stmt::ForLoop)
         }
-        _ => unreachable_rule!(in_between_rule, Rule::for_loop),
+        _ => {
+            unreachable_rule(&in_between_rule, "for_loop", diagnostics);
+            None
+        }
     }
 }
 
@@ -172,7 +188,7 @@ fn parse_c_for_loop(
     span: Span,
     diagnostics: &mut Diagnostics,
 ) -> Option<CForLoopStmt> {
-    assert_correct_parser!(token, Rule::c_for_loop);
+    assert_correct_parser(&token, &[Rule::c_for_loop], diagnostics);
 
     let mut header = token.into_inner();
 
@@ -238,7 +254,7 @@ fn parse_iterator_for_loop(
     span: Span,
     diagnostics: &mut Diagnostics,
 ) -> Option<ForLoopStmt> {
-    assert_correct_parser!(token, Rule::iterator_for_loop);
+    assert_correct_parser(&token, &[Rule::iterator_for_loop], diagnostics);
 
     let mut header = token.into_inner();
 
@@ -267,7 +283,7 @@ fn parse_block_aware_tail_expression(
     pair: Pair<'_>,
     diagnostics: &mut Diagnostics,
 ) -> Option<Expression> {
-    assert_correct_parser!(pair, Rule::block_aware_tail_expression);
+    assert_correct_parser(&pair, &[Rule::block_aware_tail_expression], diagnostics);
 
     let inner = pair
         .into_inner()
@@ -277,7 +293,10 @@ fn parse_block_aware_tail_expression(
     match inner.as_rule() {
         Rule::expression => parse_expression(inner, diagnostics),
         Rule::identifier => Some(Expression::Identifier(parse_identifier(inner, diagnostics))),
-        _ => unreachable_rule!(inner, Rule::block_aware_tail_expression),
+        _ => {
+            unreachable_rule(&inner, "block_aware_tail_expression", diagnostics);
+            None
+        }
     }
 }
 
@@ -360,7 +379,7 @@ pub fn consume_span_if_rule(
 }
 
 pub fn parse_top_level_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
-    assert_correct_parser!(token, Rule::top_level_stmt);
+    assert_correct_parser(&token, &[Rule::top_level_stmt], diagnostics);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
 
@@ -390,7 +409,7 @@ pub fn parse_top_level_statement(token: Pair<'_>, diagnostics: &mut Diagnostics)
 }
 
 pub fn parse_expr_body_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
-    assert_correct_parser!(token, Rule::expr_body_stmt);
+    assert_correct_parser(&token, &[Rule::expr_body_stmt], diagnostics);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
 
@@ -420,7 +439,7 @@ pub fn parse_expr_body_statement(token: Pair<'_>, diagnostics: &mut Diagnostics)
 }
 
 pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
-    assert_correct_parser!(token, Rule::stmt);
+    assert_correct_parser(&token, &[Rule::stmt], diagnostics);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
 
@@ -500,12 +519,48 @@ fn parse_statement_inner_rule(
 
             finish_assign_op_stmt(span, diagnostics, lhs, op_token, maybe_body).map(Stmt::AssignOp)
         }
+        Rule::watch_options_stmt => {
+            let mut tokens = stmt_token.into_inner();
+
+            // First token is the variable identifier
+            let variable = parse_identifier(tokens.next()?, diagnostics);
+
+            // Second token is the WatchOptions expression (should be a class constructor)
+            let options_expr_token = tokens.next()?;
+            let options_expr = parse_expression(options_expr_token, diagnostics)?;
+
+            Some(Stmt::WatchOptions(WatchOptionsStmt {
+                variable,
+                options_expr,
+                span,
+            }))
+        }
+        Rule::watch_notify_stmt => {
+            let mut tokens = stmt_token.into_inner();
+
+            // Only token is the variable identifier
+            let variable = parse_identifier(tokens.next()?, diagnostics);
+
+            Some(Stmt::WatchNotify(WatchNotifyStmt { variable, span }))
+        }
         Rule::let_expr => {
             let mut let_binding_tokens = stmt_token.into_inner();
 
             let is_mutable = true; // Always mutable now after mut keyword removal
 
-            let identifier = parse_identifier(let_binding_tokens.next()?, diagnostics);
+            // Check if "watch" keyword is present
+            let first_token = let_binding_tokens.next()?;
+
+            let (is_watched, identifier) = if first_token.as_rule() == Rule::WATCH_KEYWORD {
+                // "watch" keyword present, next token is identifier
+                (
+                    true,
+                    parse_identifier(let_binding_tokens.next()?, diagnostics),
+                )
+            } else {
+                // No "watch" keyword, first token is identifier
+                (false, parse_identifier(first_token, diagnostics))
+            };
 
             // Optional type annotation: `: <field_type_chain>`
             // Grammar packs this as a `let_type_annotation` pair if present.
@@ -528,15 +583,6 @@ fn parse_statement_inner_rule(
 
             let rhs_span = diagnostics.span(rhs_pair.as_span());
             let maybe_body = parse_assignment_expr(diagnostics, rhs_pair, rhs_span);
-            let mut watch = None;
-            if let Some(trailing) = let_binding_tokens.next() {
-                match trailing.as_rule() {
-                    Rule::watch_decorator => {
-                        watch = parse_watch_decorator(trailing, diagnostics);
-                    }
-                    _ => parsing_catch_all(trailing, "let expression"),
-                }
-            }
 
             maybe_body.map(|body| {
                 Stmt::Let(LetStmt {
@@ -546,7 +592,7 @@ fn parse_statement_inner_rule(
                     expr: body,
                     span: span.clone(),
                     annotations: vec![],
-                    watch,
+                    is_watched,
                 })
             })
         }
@@ -618,7 +664,10 @@ fn finish_assign_op_stmt(
         Rule::BIT_XOR_ASSIGN => AssignOp::BitXorAssign,
         Rule::BIT_SHL_ASSIGN => AssignOp::ShlAssign,
         Rule::BIT_SHR_ASSIGN => AssignOp::ShrAssign,
-        other => unreachable_rule!(op_token, other),
+        _ => {
+            unreachable_rule(&op_token, "assign_op", diagnostics);
+            AssignOp::AddAssign // Default fallback
+        }
     };
 
     maybe_body.map(|body| AssignOpStmt {
@@ -651,119 +700,8 @@ fn parse_assignment_expr(
     }
 }
 
-fn parse_watch_decorator(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<WatchDecorator> {
-    assert_correct_parser!(token, Rule::watch_decorator);
-    let span = diagnostics.span(token.as_span());
-    let mut decorator = WatchDecorator {
-        arguments: Vec::new(),
-        span,
-    };
-
-    for inner in token.into_inner() {
-        match inner.as_rule() {
-            Rule::watch_arguments => {
-                parse_watch_arguments(inner, diagnostics, &mut decorator.arguments)
-            }
-            Rule::SPACER_TEXT => {}
-            _ => parsing_catch_all(inner, "watch decorator"),
-        }
-    }
-
-    Some(decorator)
-}
-
-fn parse_watch_arguments(
-    token: Pair<'_>,
-    diagnostics: &mut Diagnostics,
-    arguments: &mut Vec<WatchArgument>,
-) {
-    assert_correct_parser!(token, Rule::watch_arguments);
-    for inner in token.into_inner() {
-        match inner.as_rule() {
-            Rule::watch_argument_kv => {
-                if let Some(argument) = parse_watch_argument(inner, diagnostics) {
-                    arguments.push(argument);
-                }
-            }
-            Rule::watch_argument_invalid => {
-                let span = diagnostics.span(inner.as_span());
-                diagnostics.push_error(DatamodelError::new_validation_error(
-                    "@watch options must use `name=value` syntax (e.g. `name=updates`).",
-                    span,
-                ));
-
-                // Consume the invalid expression to keep parser state consistent.
-                for expr in inner.into_inner() {
-                    if expr.as_rule() == Rule::expression {
-                        let _ = parse_expression(expr, diagnostics);
-                    }
-                }
-            }
-            Rule::watch_argument_missing_value => {
-                let span = diagnostics.span(inner.as_span());
-                diagnostics.push_error(DatamodelError::new_validation_error(
-                    "@watch options must provide a value after `=` (e.g. `name=updates`).",
-                    span,
-                ));
-            }
-            Rule::SPACER_TEXT => {}
-            _ => parsing_catch_all(inner, "watch decorator arguments"),
-        }
-    }
-}
-
-fn parse_watch_argument(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<WatchArgument> {
-    assert_correct_parser!(token, Rule::watch_argument_kv);
-    let span = diagnostics.span(token.as_span());
-    let mut inner = token.into_inner();
-
-    let name_pair = inner.next()?;
-    let name = parse_identifier(name_pair, diagnostics);
-    let maybe_value_pair = inner.next();
-    if maybe_value_pair.is_none() {
-        let suggestion = match name.name() {
-            "when" => "e.g. false, MyCustomFunction",
-            "skip_def" => "e.g. true, false",
-            "name" => "e.g. any_channel_name",
-            _ => "",
-        };
-        diagnostics.push_error(DatamodelError::new_validation_error(
-            &format!("Missing value for watch argument {suggestion}"),
-            span.clone(),
-        ));
-    }
-    let value_pair = maybe_value_pair?;
-
-    let value = match value_pair.as_rule() {
-        Rule::watch_argument_value => parse_watch_argument_value(value_pair, diagnostics)?,
-        _ => {
-            parsing_catch_all(value_pair, "watch decorator argument");
-            return None;
-        }
-    };
-
-    Some(WatchArgument { name, value, span })
-}
-
-fn parse_watch_argument_value(
-    token: Pair<'_>,
-    diagnostics: &mut Diagnostics,
-) -> Option<Expression> {
-    assert_correct_parser!(token, Rule::watch_argument_value);
-    let inner = token.into_inner().next()?;
-    let span = diagnostics.span(inner.as_span());
-
-    match inner.as_rule() {
-        Rule::expr_block | Rule::expression => parse_assignment_expr(diagnostics, inner, span),
-        _ => {
-            parsing_catch_all(inner, "watch decorator argument value");
-            None
-        }
-    }
-}
-
 pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<ExpressionBlock> {
-    assert_correct_parser!(token, Rule::expr_block);
+    assert_correct_parser(&token, &[Rule::expr_block], diagnostics);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
     let mut stmts = Vec::new();
@@ -1117,11 +1055,17 @@ fn bind_headers_to_statement(
         Stmt::Assert(_) => {
             // Assert statements do not carry annotations (for now)
         }
+        Stmt::WatchOptions(_) => {
+            // Watch options statements do not carry annotations
+        }
+        Stmt::WatchNotify(_) => {
+            // Watch notify statements do not carry annotations
+        }
     }
 }
 
 pub(crate) fn parse_fn_args(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Vec<Expression> {
-    assert_correct_parser!(token, Rule::fn_args);
+    assert_correct_parser(&token, &[Rule::fn_args], diagnostics);
 
     token
         .into_inner()
@@ -1130,7 +1074,7 @@ pub(crate) fn parse_fn_args(token: Pair<'_>, diagnostics: &mut Diagnostics) -> V
 }
 
 pub fn parse_fn_app(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
-    assert_correct_parser!(token, Rule::fn_app);
+    assert_correct_parser(&token, &[Rule::fn_app], diagnostics);
 
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
@@ -1152,7 +1096,7 @@ pub fn parse_fn_app(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Ex
 /// Grammar rules for this one are a little bit more complicated than for
 /// normal functions so can't reuse parse_fn_app easily.
 pub fn parse_generic_fn_app(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
-    assert_correct_parser!(token, Rule::generic_fn_app);
+    assert_correct_parser(&token, &[Rule::generic_fn_app], diagnostics);
 
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
@@ -1178,7 +1122,7 @@ pub fn parse_generic_fn_app(token: Pair<'_>, diagnostics: &mut Diagnostics) -> O
 }
 
 pub fn parse_lambda(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
-    assert_correct_parser!(token, Rule::lambda);
+    assert_correct_parser(&token, &[Rule::lambda], diagnostics);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
     let mut args = ArgumentsList {
@@ -1197,7 +1141,7 @@ pub fn parse_function_body(
 }
 
 pub fn parse_if_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
-    assert_correct_parser!(token, Rule::if_expression);
+    assert_correct_parser(&token, &[Rule::if_expression], diagnostics);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
 
@@ -1213,15 +1157,17 @@ pub fn parse_if_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
     let else_branch = tokens.next().and_then(|else_branch_expr| {
         let else_branch_span = diagnostics.span(else_branch_expr.as_span());
 
-        let else_branch = match else_branch_expr.as_rule() {
+        match else_branch_expr.as_rule() {
             Rule::expr_block => parse_expr_block(else_branch_expr, diagnostics)
                 .map(|e| Box::new(Expression::ExprBlock(e, else_branch_span))),
 
             Rule::if_expression => parse_if_expression(else_branch_expr, diagnostics).map(Box::new),
 
-            _ => unreachable_rule!(else_branch_expr, Rule::if_expression),
-        };
-        else_branch
+            _ => {
+                unreachable_rule(&else_branch_expr, "if_expression", diagnostics);
+                None
+            }
+        }
     });
 
     Some(Expression::If(

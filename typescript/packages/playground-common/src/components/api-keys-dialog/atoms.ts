@@ -215,18 +215,37 @@ const defaultEnvKeyValues: [string, string][] = (() => {
   if (typeof window === 'undefined') {
     return [];
   }
-  if ((window as any).next?.version) {
 
+  const baseDefaults: [string, string][] = [];
+
+  // Add proxy URL defaults based on environment
+  if ((window as any).next?.version) {
     const domain = window?.location?.origin || '';
     if (domain.includes('localhost')) {
       // we can do somehting fancier here later if we want to test locally.
-      return [['BOUNDARY_PROXY_URL', 'https://fiddle-proxy.fly.dev']];
+      baseDefaults.push(['BOUNDARY_PROXY_URL', 'https://fiddle-proxy.fly.dev']);
+    } else {
+      baseDefaults.push(['BOUNDARY_PROXY_URL', 'https://fiddle-proxy.fly.dev']);
     }
-    return [['BOUNDARY_PROXY_URL', 'https://fiddle-proxy.fly.dev']];
+  } else {
+    // VSCode environment
+    baseDefaults.push(['BOUNDARY_PROXY_URL', 'http://localhost:0000']);
+
+    // Add placeholder API keys for new VSCode users
+    // Check if this is a new user (no existing storage)
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const storedValue = window.localStorage.getItem('env-key-values');
+      if (!storedValue || storedValue === '[]') {
+        // New user - add placeholder keys
+        baseDefaults.push(['OPENAI_API_KEY', 'PLACEHOLDER_OPENAI_KEY']);
+        baseDefaults.push(['ANTHROPIC_API_KEY', 'PLACEHOLDER_ANTHROPIC_KEY']);
+        console.debug('New VSCode user detected - adding placeholder API keys');
+      }
+    }
   }
-  console.debug('Not running in a Next.js environment, set default value');
-  // Not running in a Next.js environment, set default value
-  return [['BOUNDARY_PROXY_URL', 'http://localhost:0000']];
+
+  console.debug('Default environment values:', baseDefaults);
+  return baseDefaults;
 })();
 
 

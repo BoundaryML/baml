@@ -1062,6 +1062,218 @@ export function ExecFetchAs(): ExecFetchAsEventCollector {
 
 
 
+export interface ExecFetchAsWithHttpPostRequestEventCollector extends EventCollectorInternal {
+  on_block(handler: BlockHandler): void
+  
+  
+}
+
+export function ExecFetchAsWithHttpPostRequest(): ExecFetchAsWithHttpPostRequestEventCollector {
+  const blockHandlers = new Set<BlockHandler>()
+
+  
+
+  // Track active streams by stream_id
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
+
+  // Internal handler for stream lifecycle events
+  const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
+    if (event.eventType === "start") {
+      // Create new stream and fire to handlers immediately
+      const stream = new NotificationStream<any, any>()
+      activeStreams.set(event.streamId, { stream, varName, functionName })
+
+      const handlers = streamHandlerMap[varName]
+      if (handlers) {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
+          variable_name: varName,
+          value: stream,
+          timestamp: Date.now().toString(),
+          function_name: functionName
+        }
+
+        for (const handler of handlers) {
+          handler(varNotification)
+        }
+      }
+    } else if (event.eventType === "update") {
+      // Push value to existing stream
+      const streamInfo = activeStreams.get(event.streamId)
+      if (streamInfo && event.value !== undefined) {
+        streamInfo.stream.pushValue(event.value)
+      }
+    } else if (event.eventType === "end") {
+      // Complete and cleanup stream
+      const streamInfo = activeStreams.get(event.streamId)
+      if (streamInfo) {
+        streamInfo.stream.complete()
+        activeStreams.delete(event.streamId)
+      }
+    }
+  }
+
+  
+  const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
+  
+
+  
+  const functionHandlerMap: Record<string, EventCollectorInternal> = {}
+  
+
+  
+
+  return {
+    on_block(handler) {
+      blockHandlers.add(handler)
+    },
+    
+    
+    __handlers() {
+      const vars: Record<string, VarHandler<any>[]> = {}
+      for (const [channel, handlers] of Object.entries(varHandlerMap)) {
+        if (handlers.size > 0) {
+          vars[channel] = Array.from(handlers) as VarHandler<any>[]
+        }
+      }
+
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
+      const streams: Record<string, InternalStreamHandler[]> = {}
+      for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
+        if (handlers.size > 0) {
+          // Create a wrapper that processes stream lifecycle events
+          const wrapper: InternalStreamHandler = (event: InternalStreamEvent) => {
+            handleInternalStreamEvent(channel, event, "ExecFetchAsWithHttpPostRequest")
+          }
+          streams[channel] = [wrapper]
+        }
+      }
+
+      const functions: Record<string, InternalEventBindings> = {}
+      for (const [fn, collector] of Object.entries(functionHandlerMap)) {
+        functions[fn] = collector.__handlers()
+      }
+
+      return {
+        functionName: "ExecFetchAsWithHttpPostRequest",
+        block: Array.from(blockHandlers),
+        vars,
+        streams,
+        functions,
+      }
+    },
+  }
+}
+
+
+
+
+export interface ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector extends EventCollectorInternal {
+  on_block(handler: BlockHandler): void
+  
+  
+}
+
+export function ExecFetchAsWithHttpPutRequestAndClassJson(): ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector {
+  const blockHandlers = new Set<BlockHandler>()
+
+  
+
+  // Track active streams by stream_id
+  const activeStreams = new Map<string, { stream: NotificationStream<any, any>, varName: string, functionName: string }>()
+
+  // Internal handler for stream lifecycle events
+  const handleInternalStreamEvent = (varName: string, event: InternalStreamEvent, functionName: string) => {
+    if (event.eventType === "start") {
+      // Create new stream and fire to handlers immediately
+      const stream = new NotificationStream<any, any>()
+      activeStreams.set(event.streamId, { stream, varName, functionName })
+
+      const handlers = streamHandlerMap[varName]
+      if (handlers) {
+        const varNotification: VarNotification<BamlStream<any, any>> = {
+          variable_name: varName,
+          value: stream,
+          timestamp: Date.now().toString(),
+          function_name: functionName
+        }
+
+        for (const handler of handlers) {
+          handler(varNotification)
+        }
+      }
+    } else if (event.eventType === "update") {
+      // Push value to existing stream
+      const streamInfo = activeStreams.get(event.streamId)
+      if (streamInfo && event.value !== undefined) {
+        streamInfo.stream.pushValue(event.value)
+      }
+    } else if (event.eventType === "end") {
+      // Complete and cleanup stream
+      const streamInfo = activeStreams.get(event.streamId)
+      if (streamInfo) {
+        streamInfo.stream.complete()
+        activeStreams.delete(event.streamId)
+      }
+    }
+  }
+
+  
+  const varHandlerMap: Record<string, Set<VarHandler<any>>> = {}
+  const streamHandlerMap: Record<string, Set<StreamHandler<any, any>>> = {}
+  
+
+  
+  const functionHandlerMap: Record<string, EventCollectorInternal> = {}
+  
+
+  
+
+  return {
+    on_block(handler) {
+      blockHandlers.add(handler)
+    },
+    
+    
+    __handlers() {
+      const vars: Record<string, VarHandler<any>[]> = {}
+      for (const [channel, handlers] of Object.entries(varHandlerMap)) {
+        if (handlers.size > 0) {
+          vars[channel] = Array.from(handlers) as VarHandler<any>[]
+        }
+      }
+
+      // Create internal stream handlers that convert InternalStreamEvent to VarNotification<BamlStream>
+      const streams: Record<string, InternalStreamHandler[]> = {}
+      for (const [channel, handlers] of Object.entries(streamHandlerMap)) {
+        if (handlers.size > 0) {
+          // Create a wrapper that processes stream lifecycle events
+          const wrapper: InternalStreamHandler = (event: InternalStreamEvent) => {
+            handleInternalStreamEvent(channel, event, "ExecFetchAsWithHttpPutRequestAndClassJson")
+          }
+          streams[channel] = [wrapper]
+        }
+      }
+
+      const functions: Record<string, InternalEventBindings> = {}
+      for (const [fn, collector] of Object.entries(functionHandlerMap)) {
+        functions[fn] = collector.__handlers()
+      }
+
+      return {
+        functionName: "ExecFetchAsWithHttpPutRequestAndClassJson",
+        block: Array.from(blockHandlers),
+        vars,
+        streams,
+        functions,
+      }
+    },
+  }
+}
+
+
+
+
 export interface HomeEnvVarIsEmptyEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
@@ -2335,11 +2547,15 @@ export function ReturnOne(): ReturnOneEventCollector {
 
 type SimpleWatchWithFilterEventCollectorVarTypes = {
   
+  "new_name": string,
+  
   "word": string
   
 }
 
 type SimpleWatchWithFilterEventCollectorStreamTypes = {
+  
+  "new_name": string | null,
   
   "word": string | null
   
@@ -2351,6 +2567,8 @@ export interface SimpleWatchWithFilterEventCollector extends EventCollectorInter
   
   on_var<K extends keyof SimpleWatchWithFilterEventCollectorVarTypes>(channel: K, handler: (event: VarNotification<SimpleWatchWithFilterEventCollectorVarTypes[K]>) => void): void
   
+  on_stream(channel: "new_name", handler: StreamHandler<string | null, string | null>): void
+  
   on_stream(channel: "word", handler: StreamHandler<string | null, string | null>): void
   
   
@@ -2360,6 +2578,9 @@ export interface SimpleWatchWithFilterEventCollector extends EventCollectorInter
 export function SimpleWatchWithFilter(): SimpleWatchWithFilterEventCollector {
   const blockHandlers = new Set<BlockHandler>()
 
+  
+  const varHandlers_new_name = new Set<VarHandler<string>>()
+  const streamHandlers_new_name = new Set<StreamHandler<string | null, string | null>>()
   
   const varHandlers_word = new Set<VarHandler<string>>()
   const streamHandlers_word = new Set<StreamHandler<string | null, string | null>>()
@@ -2407,11 +2628,15 @@ export function SimpleWatchWithFilter(): SimpleWatchWithFilterEventCollector {
   
   const varHandlerMap = {
     
+    "new_name": varHandlers_new_name,
+    
     "word": varHandlers_word
     
   }
 
   const streamHandlerMap = {
+    
+    "new_name": streamHandlers_new_name,
     
     "word": streamHandlers_word
     

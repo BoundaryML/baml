@@ -32,8 +32,19 @@ pub struct GlobalKind;
 pub struct ObjectKind;
 
 /// Generic index type that forces a subtype during compilation.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct Index<K>(pub(crate) usize, PhantomData<K>);
+
+impl<K> std::fmt::Debug for Index<K> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}({})",
+            std::any::type_name::<K>().split("::").last().unwrap_or(""),
+            self.0
+        )
+    }
+}
 
 impl<K> Index<K> {
     /// Create an index from a raw usize value.

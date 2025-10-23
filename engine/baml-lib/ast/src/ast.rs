@@ -45,7 +45,7 @@ pub use mermaid_debug::MermaidDiagramGenerator;
 pub use newline_type::NewlineType;
 pub use stmt::{
     AssertStmt, AssignOp, AssignOpStmt, AssignStmt, CForLoopStmt, ExprStmt, ForLoopStmt, Header,
-    LetStmt, ReturnStmt, Stmt, WatchArgument, WatchDecorator, WhileStmt,
+    LetStmt, ReturnStmt, Stmt, WatchNotifyStmt, WatchOptionsStmt, WhileStmt,
 };
 pub use template_string::TemplateString;
 pub use top::Top;

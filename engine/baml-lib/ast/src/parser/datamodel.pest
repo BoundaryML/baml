@@ -27,7 +27,7 @@ field_type_with_attr = { field_type ~ (NEWLINE? ~ (field_attribute | trailing_co
 value_expression_keyword  = { FUNCTION_KEYWORD | TEST_KEYWORD | CLIENT_KEYWORD | RETRY_POLICY_KEYWORD | GENERATOR_KEYWORD }
 value_expression_block    = { value_expression_keyword ~ identifier ~ named_argument_list? ~ ARROW? ~ field_type_chain? ~ SPACER_TEXT ~ BLOCK_OPEN ~ value_expression_contents ~ BLOCK_CLOSE }
 value_expression_contents = {
-    (stmt | type_builder_block | value_expression | comment_block | block_attribute | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
+    (type_builder_block | value_expression | comment_block | block_attribute | empty_lines)*
 }
 value_expression          = { identifier ~ config_expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
 
@@ -336,7 +336,7 @@ top_level_stmt = {
 // function foo(x:int, y: bool?) -> string {
 //   go(x,y)
 // }
-expr_fn = { "function" ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_block }
+expr_fn = { "function" ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ SPACER_TEXT? ~ expr_block }
 
 // Body of a function (including curly brackets).
 expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (expr_body_stmt | stmt | comment_block | empty_lines)* ~ expression? ~ (comment_block | empty_lines)* ~ BLOCK_CLOSE }
@@ -347,6 +347,8 @@ expr_body_stmt = {
         INVALID_STMT_STARTING_CHAR* ~
         (
             let_expr
+            | watch_options_stmt
+            | watch_notify_stmt
             | assign_op_stmt
             | assign_stmt
         )
@@ -371,6 +373,8 @@ stmt = {
                 | let_expr
                 | return_stmt
                 | assert_stmt
+                | watch_options_stmt
+                | watch_notify_stmt
                 | assign_op_stmt
                 | assign_stmt
                 | expression
@@ -385,24 +389,10 @@ stmt = {
 
 // Let-binding statement with optional type annotation.
 // e.g. `let x: int|float = 10.0;` or `let x = 10.0;`
+// Watch-binding statement for watched variables (watch keyword comes before let).
+// e.g. `watch let x: int = 10;`
 let_type_annotation = { COLON ~ field_type_chain }
-let_expr = { "let" ~ identifier ~ let_type_annotation? ~ "=" ~ expression ~ watch_decorator? }
-
-watch_decorator = { SPACER_TEXT? ~ "@watch" ~ watch_arguments? }
-watch_arguments = {
-    "("
-        ~ SPACER_TEXT?
-        ~ watch_argument?
-        ~ ("," ~ SPACER_TEXT? ~ watch_argument)*
-        ~ ","?
-        ~ SPACER_TEXT?
-    ~ ")"
-}
-watch_argument = _{ watch_argument_kv | watch_argument_invalid | watch_argument_missing_value }
-watch_argument_kv = { identifier? ~ "=" ~ watch_argument_value? }
-watch_argument_invalid = { expression }
-watch_argument_missing_value = { identifier ~ "=" ~ SPACER_TEXT? ~ &("," | ")") }
-watch_argument_value = { expression }
+let_expr = { WATCH_KEYWORD? ~ "let" ~ identifier ~ let_type_annotation? ~ "=" ~ expression }
 
 // NOTE: Needs to supports things like `object.getter().field[x + y] = value`,
 // so can't be just `identifier ~ "=" ~ expression`.
@@ -417,6 +407,15 @@ watch_argument_value = { expression }
 // assignable_expression = { prefix_operator* ~ primary_expression ~ postfix_operator* }
 assign_stmt = { expression ~ "=" ~ expression }
 assign_op_stmt = { expression ~ assign_op ~ expression }
+
+// Special syntax for configuring watch options on a watched variable
+// e.g. variable.$watch.options(baml.WatchOptions{name: "channel", when: FilterFunc})
+// Note: .$watch.options is a special method, but baml.WatchOptions is a real struct
+watch_options_stmt = { identifier ~ ".$watch.options" ~ "(" ~ expression ~ ")" }
+
+// Special syntax for manually notifying watchers of a variable
+// e.g. variable.$watch.notify()
+watch_notify_stmt = { identifier ~ ".$watch.notify" ~ "(" ~ ")" }
 
 assign_op = _{ BIT_SHL_ASSIGN | BIT_SHR_ASSIGN | ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | MOD_ASSIGN | BIT_AND_ASSIGN | BIT_OR_ASSIGN | BIT_XOR_ASSIGN }
 
@@ -459,6 +458,7 @@ while_loop = { "while" ~ condition_and_block }
 for_loop = { "for" ~ openParen? ~ (iterator_for_loop | c_for_loop) ~ closeParen? ~ expr_block }
 // Allow optional `let` before the loop variable in iterator-style for loops
 LET_KEYWORD = { "let" }
+WATCH_KEYWORD = { "watch" }
 iterator_for_loop = { (LET_KEYWORD ~ identifier | identifier) ~ "in" ~ block_aware_tail_expression }
 c_for_loop = { c_for_init_stmt? ~ ";" ~ expression? ~ ";" ~ c_for_after_stmt?  }
 // NOTE: let_expr ... list copied from `stmt` rule, discarding nonsensical stmts
@@ -478,9 +478,9 @@ assert_stmt = { "assert" ~ expression }
 lambda = { named_argument_list ~ "=>" ~ expression }
 
 // Class constructors.
-// e.g. `new MyClass { x = 1, y = 2 }`.
+// e.g. `new MyClass { x = 1, y = 2 }` or `baml.MyClass { x = 1, y = 2 }`.
 //
-class_constructor = { identifier ~ "{" ~ NEWLINE? ~ (class_field_value_pair ~ COMMA? ~ NEWLINE?)* ~ NEWLINE? ~ "}" }
+class_constructor = { (path_identifier | identifier) ~ "{" ~ NEWLINE? ~ (class_field_value_pair ~ COMMA? ~ NEWLINE?)* ~ NEWLINE? ~ "}" }
 
 // A single field in a class constructor.
 class_field_value_pair = { (identifier ~ COLON ~ expression) | struct_spread }

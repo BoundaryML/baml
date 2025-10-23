@@ -7,12 +7,14 @@ use baml_vm::{
     BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex,
     GlobalPool, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
 };
+use internal_baml_ast::ast::WithName;
 use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_parser_database::ParserDatabase;
 
 use crate::{
     hir::{self},
     thir::{self, ClassConstructorField},
+    watch::WatchWhen,
 };
 
 /// Compile a Baml AST into bytecode.
@@ -710,13 +712,30 @@ impl<'g> HirCompiler<'g> {
                 name, value, watch, ..
             } => {
                 self.compile_expression(value);
-                self.track_local(name);
+                let local_index = self.track_local(name);
                 if let Some(spec) = watch {
                     self.emit_string_literal(&spec.name); // This adds LoadConst
 
-                    // TODO: filter
+                    match &spec.when {
+                        WatchWhen::FunctionName(fn_name) => {
+                            if let Some(&index) = self.globals.get(fn_name.name()) {
+                                self.emit(Instruction::LoadGlobal(index));
+                            } else {
+                                panic!("undefined function: {name}");
+                            }
+                        }
 
-                    self.emit(Instruction::Watch);
+                        WatchWhen::Manual => {
+                            self.emit_string_literal("manual");
+                        }
+
+                        WatchWhen::True => {
+                            let index = self.add_constant(Value::Null);
+                            self.emit(Instruction::LoadConst(index));
+                        }
+                    }
+
+                    self.emit(Instruction::Watch(local_index));
                 }
             }
             thir::Statement::Return { expr, .. } => {
@@ -905,6 +924,46 @@ impl<'g> HirCompiler<'g> {
             thir::Statement::Assert { condition, .. } => {
                 self.compile_expression(condition);
                 self.emit(Instruction::Assert);
+            }
+            thir::Statement::WatchOptions {
+                variable,
+                channel,
+                when,
+                ..
+            } => {
+                let Some(local_index) = self.locals.get(variable).copied() else {
+                    panic!("watch codegen error: undefined variable: {variable}");
+                };
+
+                self.emit_string_literal(channel.as_ref().unwrap_or(variable).as_str()); // This adds LoadConst
+
+                match when.as_ref().map(String::as_str) {
+                    Some("manual") => {
+                        self.emit_string_literal("manual");
+                    }
+
+                    Some("never") => {
+                        self.emit_string_literal("never");
+                    }
+
+                    Some(fn_name) => {
+                        if let Some(&index) = self.globals.get(fn_name) {
+                            self.emit(Instruction::LoadGlobal(index));
+                        } else {
+                            panic!("watch options codegen: undefined function: {fn_name}");
+                        }
+                    }
+
+                    None => {
+                        let index = self.add_constant(Value::Null);
+                        self.emit(Instruction::LoadConst(index));
+                    }
+                }
+
+                self.emit(Instruction::Watch(local_index));
+            }
+            thir::Statement::WatchNotify { .. } => {
+                // todo!("bytecode codegen for manual notification trigger")
             }
         }
     }

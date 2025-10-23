@@ -501,6 +501,16 @@ impl ReplState {
         let input_expr_thir =
             typecheck_expression(&input_expr_hir, &type_context, &mut type_diagnostics);
 
+        // Check for type errors in the user's expression
+        if type_diagnostics.has_errors() {
+            let error_messages: Vec<String> = type_diagnostics
+                .errors()
+                .iter()
+                .map(|e| e.message().to_string())
+                .collect();
+            return Err(anyhow!("Type error: {}", error_messages.join("; ")));
+        }
+
         // let variables: IndexMap<String, BamlValueWithMeta<TypeGeneric<TypeIR>>> = self
 
         let variables: IndexMap<String, BamlValueWithMeta<ExprMetadata>> = self

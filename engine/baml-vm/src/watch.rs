@@ -143,6 +143,13 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::{Object, ObjectIndex, ObjectPool, StackIndex, Value};
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum WatchFilter {
+    Manual,
+    Default,
+    Function(ObjectIndex),
+}
+
 /// State associated with a watched root.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RootState {
@@ -155,7 +162,7 @@ pub struct RootState {
     /// Channel name.
     pub channel: String,
     /// Pointer to filter function.
-    pub filter: Option<ObjectIndex>,
+    pub filter: WatchFilter,
 }
 
 /// Identifies a node in the emit graph.
@@ -270,11 +277,6 @@ impl Watch {
     ///
     /// Triggers a BFS graph traversal starting at `root`.
     pub fn register_root(&mut self, root: NodeId, state: RootState) {
-        // If this root already exists, do nothing
-        if self.roots.contains_key(&root) {
-            return;
-        }
-
         self.roots.insert(root, state);
 
         // Compute initial reachability from this root
@@ -411,6 +413,10 @@ impl Watch {
         self.roots.get(&node)
     }
 
+    pub fn root_state_mut(&mut self, node: NodeId) -> Option<&mut RootState> {
+        self.roots.get_mut(&node)
+    }
+
     /// Returns true if the given node is "watched".
     ///
     /// "Watched" means that there is at least one watched root that can reach
@@ -519,7 +525,7 @@ mod tests {
             last_assigned: None,
             last_notified: None,
             channel: "Test".to_string(),
-            filter: None,
+            filter: WatchFilter::Default,
         }
     }
 

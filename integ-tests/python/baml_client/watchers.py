@@ -584,6 +584,126 @@ def ExecFetchAs() -> ExecFetchAsEventCollector:
     return ExecFetchAsEventCollector()
 
 
+class ExecFetchAsWithHttpPostRequestEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "ExecFetchAsWithHttpPostRequest"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def ExecFetchAsWithHttpPostRequest() -> ExecFetchAsWithHttpPostRequestEventCollector:
+    return ExecFetchAsWithHttpPostRequestEventCollector()
+
+
+class ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "ExecFetchAsWithHttpPutRequestAndClassJson"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def ExecFetchAsWithHttpPutRequestAndClassJson() -> ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector:
+    return ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector()
+
+
 class HomeEnvVarIsEmptyEventCollector:
     def __init__(self):
         self._block_handlers: list[BlockHandler] = []
@@ -1310,6 +1430,9 @@ class SimpleWatchWithFilterEventCollector:
         self._lock = threading.Lock()
 
         
+        self._var_handlers_new_name: list[VarEventHandler[str]] = []
+        self._stream_handlers_new_name: list[StreamHandler] = []
+        
         self._var_handlers_word: list[VarEventHandler[str]] = []
         self._stream_handlers_word: list[StreamHandler] = []
         
@@ -1317,11 +1440,15 @@ class SimpleWatchWithFilterEventCollector:
         
         self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {
             
+            "new_name": self._var_handlers_new_name,
+            
             "word": self._var_handlers_word,
             
         }
 
         self._stream_handler_map: dict[str, list[StreamHandler]] = {
+            
+            "new_name": self._stream_handlers_new_name,
             
             "word": self._stream_handlers_word,
             
@@ -1341,20 +1468,26 @@ class SimpleWatchWithFilterEventCollector:
     
     
     @overload
+    def on_var(self, channel: Literal["new_name"], handler: VarEventHandler[str]) -> None: ...
+    
+    @overload
     def on_var(self, channel: Literal["word"], handler: VarEventHandler[str]) -> None: ...
     
 
-    def on_var(self, channel: Literal["word"], handler: VarEventHandler[Any]) -> None:
+    def on_var(self, channel: Literal["new_name", "word"], handler: VarEventHandler[Any]) -> None:
         with self._lock:
             if channel in self._var_handler_map:
                 self._var_handler_map[channel].append(handler)
 
     
     @overload
+    def on_stream(self, channel: Literal["new_name"], handler: StreamHandler) -> None: ...
+    
+    @overload
     def on_stream(self, channel: Literal["word"], handler: StreamHandler) -> None: ...
     
 
-    def on_stream(self, channel: Literal["word"], handler: StreamHandler) -> None:
+    def on_stream(self, channel: Literal["new_name", "word"], handler: StreamHandler) -> None:
         with self._lock:
             if channel in self._stream_handler_map:
                 self._stream_handler_map[channel].append(handler)

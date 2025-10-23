@@ -12412,6 +12412,102 @@ export function useExecFetchAs(
   }
 }
 /**
+ * A specialized hook for the ExecFetchAsWithHttpPostRequest BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** types.DummyJsonTodo
+ * - **Streaming Partial:** DummyJsonTodo | null
+ * - **Streaming Final:** types.DummyJsonTodo
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useExecFetchAsWithHttpPostRequest({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useExecFetchAsWithHttpPostRequest({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useExecFetchAsWithHttpPostRequest(props: HookInput<'ExecFetchAsWithHttpPostRequest', { stream: false }>): HookOutput<'ExecFetchAsWithHttpPostRequest', { stream: false }>
+export function useExecFetchAsWithHttpPostRequest(props?: HookInput<'ExecFetchAsWithHttpPostRequest', { stream?: true }>): HookOutput<'ExecFetchAsWithHttpPostRequest', { stream: true }>
+export function useExecFetchAsWithHttpPostRequest(
+  props: HookInput<'ExecFetchAsWithHttpPostRequest', { stream?: boolean }> = {},
+): HookOutput<'ExecFetchAsWithHttpPostRequest', { stream: true }> | HookOutput<'ExecFetchAsWithHttpPostRequest', { stream: false }> {
+  let action: ServerAction = Actions.ExecFetchAsWithHttpPostRequest;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.ExecFetchAsWithHttpPostRequest;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'ExecFetchAsWithHttpPostRequest', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the ExecFetchAsWithHttpPutRequestAndClassJson BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** types.DummyJsonTodo
+ * - **Streaming Partial:** DummyJsonTodo | null
+ * - **Streaming Final:** types.DummyJsonTodo
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useExecFetchAsWithHttpPutRequestAndClassJson({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useExecFetchAsWithHttpPutRequestAndClassJson({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useExecFetchAsWithHttpPutRequestAndClassJson(props: HookInput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream: false }>): HookOutput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream: false }>
+export function useExecFetchAsWithHttpPutRequestAndClassJson(props?: HookInput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream?: true }>): HookOutput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream: true }>
+export function useExecFetchAsWithHttpPutRequestAndClassJson(
+  props: HookInput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream?: boolean }> = {},
+): HookOutput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream: true }> | HookOutput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream: false }> {
+  let action: ServerAction = Actions.ExecFetchAsWithHttpPutRequestAndClassJson;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.ExecFetchAsWithHttpPutRequestAndClassJson;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the HomeEnvVarIsEmpty BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -12464,9 +12560,7 @@ export function useHomeEnvVarIsEmpty(
  *
  * **Input Types:**
  *
- * - prev: string
- *
- * - next: string
+ * - word: string
  *
  *
  * **Return Type:**
@@ -12516,9 +12610,7 @@ export function useIsTargetWord(
  *
  * **Input Types:**
  *
- * - prev: string
- *
- * - next: string
+ * - word: string
  *
  *
  * **Return Type:**
@@ -12670,9 +12762,7 @@ export function useNormalElseIfStmt(
  *
  * **Input Types:**
  *
- * - prev: string
- *
- * - next: string
+ * - value: string
  *
  *
  * **Return Type:**

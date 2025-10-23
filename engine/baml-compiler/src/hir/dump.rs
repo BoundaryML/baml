@@ -24,13 +24,17 @@ impl Hir {
         for func in &self.llm_functions {
             docs.push(func.to_doc());
         }
-        // Add classes
+        // Add classes (excluding builtins)
         for class in &self.classes {
-            docs.push(class.to_doc());
+            if !crate::builtin::is_builtin_class(&class.name) {
+                docs.push(class.to_doc());
+            }
         }
-        // Add enums
+        // Add enums (excluding builtins)
         for enum_def in &self.enums {
-            docs.push(enum_def.to_doc());
+            if !crate::builtin::is_builtin_enum(&enum_def.name) {
+                docs.push(enum_def.to_doc());
+            }
         }
         if docs.is_empty() {
             RcDoc::nil()
@@ -269,6 +273,32 @@ impl Statement {
                     .append(RcDoc::space())
                     .append(block)
                     .append(RcDoc::text("}"))
+            }
+            Statement::WatchOptions {
+                variable,
+                channel,
+                when,
+                ..
+            } => {
+                let mut doc = RcDoc::text(variable.clone()).append(RcDoc::text(".$watch.options("));
+
+                let mut parts = vec![];
+                if let Some(n) = channel {
+                    parts.push(
+                        RcDoc::text("name: \"")
+                            .append(RcDoc::text(n.clone()))
+                            .append(RcDoc::text("\"")),
+                    );
+                }
+                if let Some(w) = when {
+                    parts.push(RcDoc::text("when: ").append(RcDoc::text(w.clone())));
+                }
+
+                doc = doc.append(RcDoc::intersperse(parts, RcDoc::text(", ")));
+                doc.append(RcDoc::text(");"))
+            }
+            Statement::WatchNotify { variable, .. } => {
+                RcDoc::text(variable.clone()).append(RcDoc::text(".$watch.notify();"))
             }
         }
     }
@@ -695,9 +725,6 @@ impl AssignOp {
 impl WatchSpec {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
         let mut args: Vec<String> = Vec::new();
-        if self.skip_def {
-            args.push("skip_def=true".to_string())
-        }
         match &self.when {
             WatchWhen::Manual => args.push("when=manual".to_string()),
             WatchWhen::True => {}

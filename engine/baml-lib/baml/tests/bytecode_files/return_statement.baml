@@ -99,9 +99,12 @@ function WithStack(x: int) -> int {
 // 30   38   LOAD_CONST 9        (7)
 //      39   RETURN              
 //
-// Class: std::Request with 3 fields
-// Enum std::HttpMethod
+// Class: baml.HttpRequest with 5 fields
+// Class: baml.WatchOptions with 2 fields
+// Enum baml.HttpMethod
 // Function: baml.Array.length
+//
+// Function: baml.Array.push
 //
 // Function: baml.Map.length
 //
@@ -166,6 +169,8 @@ function WithStack(x: int) -> int {
 // Function: env.get
 //
 // Function: baml.deep_copy
+//
+// Function: baml.deep_equals
 //
 // Function: baml.unstable.string
 //

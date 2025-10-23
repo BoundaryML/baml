@@ -23,7 +23,7 @@ fn return_enum_variant() -> anyhow::Result<()> {
             "main",
             vec![
                 Instruction::LoadConst(0),
-                Instruction::AllocVariant(ObjectIndex::from_raw(3)),
+                Instruction::AllocVariant(ObjectIndex::from_raw(4)),
                 Instruction::Return,
             ],
         )],
@@ -49,7 +49,7 @@ fn assign_enum_variant() -> anyhow::Result<()> {
             "main",
             vec![
                 Instruction::LoadConst(0),
-                Instruction::AllocVariant(ObjectIndex::from_raw(3)),
+                Instruction::AllocVariant(ObjectIndex::from_raw(4)),
                 Instruction::LoadVar(1),
                 Instruction::Return,
             ],

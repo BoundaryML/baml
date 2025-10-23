@@ -24,7 +24,7 @@ import { b } from '../index';
 import type { Check, Checked  } from "../types";
 import type { Image, Audio, Pdf, Video } from "@boundaryml/baml";
 
-import type {  AddTodoItem,  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  TodoMessageToUser,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
+import type {  AddTodoItem,  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyJsonTodoUpdate,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  TodoMessageToUser,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
 
 import type * as types from "../types"
 
@@ -4633,6 +4633,38 @@ export const ExecFetchAs = async (
 };
 
 /**
+ * Executes the streaming variant of the "ExecFetchAsWithHttpPostRequest" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ExecFetchAsWithHttpPostRequest = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.ExecFetchAsWithHttpPostRequest(
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "ExecFetchAsWithHttpPutRequestAndClassJson" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ExecFetchAsWithHttpPutRequestAndClassJson = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.ExecFetchAsWithHttpPutRequestAndClassJson(
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "HomeEnvVarIsEmpty" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -4654,18 +4686,15 @@ export const HomeEnvVarIsEmpty = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { string } prev - Input parameter.
- * @param { string } next - Input parameter.
+ * @param { string } word - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const IsTargetWord = async (
-  prev: string,
-  next: string,
+  word: string,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.IsTargetWord(
-    prev,
-    next,
+    word,
   );
   return Promise.resolve(stream.toStreamable());
 };
@@ -4676,18 +4705,15 @@ export const IsTargetWord = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { string } prev - Input parameter.
- * @param { string } next - Input parameter.
+ * @param { string } word - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const IsTargetWord2 = async (
-  prev: string,
-  next: string,
+  word: string,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.IsTargetWord2(
-    prev,
-    next,
+    word,
   );
   return Promise.resolve(stream.toStreamable());
 };
@@ -4739,18 +4765,15 @@ export const NormalElseIfStmt = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { string } prev - Input parameter.
- * @param { string } next - Input parameter.
+ * @param { string } value - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const NotEmpty = async (
-  prev: string,
-  next: string,
+  value: string,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.NotEmpty(
-    prev,
-    next,
+    value,
   );
   return Promise.resolve(stream.toStreamable());
 };

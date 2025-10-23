@@ -297,8 +297,7 @@ The `@emit` decorator supports several options:
 ```baml
 let x = 10 @emit(
   name="custom_name",    // Custom channel name (default: variable name)
-  when=SomeFunction,     // Conditional emission (future feature)
-  skip_def=true         // Skip initial definition event (future feature)
+  when=SomeFunction      // Conditional emission (future feature)
 );
 ```
 
@@ -313,9 +312,8 @@ Controls when auto-emission occurs:
 
 1. **Markdown Header Events** - Emit events when entering/exiting prompt template sections
 2. **Conditional Emission** - `when` parameter to conditionally emit based on runtime values
-3. **Skip Definition** - `skip_def` to only emit on reassignments
-4. **Block Scoping** - Emit events for control flow blocks (if/else, loops)
-5. **Error Events** - Special events for exceptions and validation failures
+3. **Block Scoping** - Emit events for control flow blocks (if/else, loops)
+4. **Error Events** - Special events for exceptions and validation failures
 
 ## Testing
 
