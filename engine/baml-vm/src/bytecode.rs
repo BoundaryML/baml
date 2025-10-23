@@ -362,7 +362,7 @@ impl std::fmt::Display for Instruction {
             Instruction::Return => f.write_str("RETURN"),
             Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
-            Instruction::Watch => f.write_str("WATCH"),
+            Instruction::Watch(i) => write!(f, "WATCH {i}"),
             Instruction::NotifyBlock(notification) => {
                 write!(
                     f,

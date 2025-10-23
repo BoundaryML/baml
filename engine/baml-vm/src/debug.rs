@@ -174,6 +174,7 @@ const COLUMN_MARGIN: usize = 3;
 /// Get color for instruction based on its type
 fn instruction_color(instruction: &Instruction) -> Color {
     match instruction {
+        Instruction::NotifyBlock(_) => Color::BrightYellow,
         Instruction::LoadConst(_)
         | Instruction::LoadVar(_)
         | Instruction::LoadGlobal(_)

@@ -9,14 +9,13 @@
 
 use std::{
     collections::HashMap,
-    str::FromStr,
     sync::{Arc, Mutex},
 };
 
 use anyhow::{anyhow, Context};
 use baml_compiler::{
     self,
-    watch::{self, shared_noop_handler, SharedWatchHandler},
+    watch::{self, SharedWatchHandler},
 };
 use baml_ids::FunctionCallId;
 use baml_types::{tracing::events::HTTPRequest, BamlMap, BamlValue, BamlValueWithMeta, Completion};
@@ -347,38 +346,54 @@ impl BamlAsyncVmRuntime {
                     }
                 }
 
-                Ok(VmExecState::Notify(nodes)) => {
-                    for node in nodes {
-                        let state = vm.watch.root_state(node).unwrap();
-                        let baml_vm::watch::NodeId::LocalVar(stack_index) = node else {
-                            break 'mainloop Err(anyhow!("expected local variable notification, got object notification {:?}", node));
-                        };
-                        let (watched_var_name, function_name) =
-                            vm.watched_vars.get(&stack_index).unwrap();
-                        baml_log::debug!("[VM] Notify: {}", &state.channel);
+                Ok(VmExecState::Notify(notification)) => {
+                    match notification {
+                        baml_vm::vm::WatchNotification::Variables(nodes) => {
+                            for node in nodes {
+                                let state = vm.watch.root_state(node).unwrap();
+                                let baml_vm::watch::NodeId::LocalVar(stack_index) = node else {
+                                    break 'mainloop Err(anyhow!("expected local variable notification, got object notification {:?}", node));
+                                };
+                                let (watched_var_name, function_name) =
+                                    vm.watched_vars.get(&stack_index).unwrap();
+                                baml_log::debug!("[VM] Notify: {}", &state.channel);
 
-                        let fake_meta = watch::WatchValueMetadata {
-                            constraints: Vec::new(),
-                            response_checks: Vec::new(),
-                            completion: Completion::default(),
-                            r#type: baml_types::TypeIR::Top(Default::default()),
-                        };
+                                let fake_meta = watch::WatchValueMetadata {
+                                    constraints: Vec::new(),
+                                    response_checks: Vec::new(),
+                                    completion: Completion::default(),
+                                    r#type: baml_types::TypeIR::Top(Default::default()),
+                                };
 
-                        let current_value =
-                            try_baml_value_from_vm_value(&vm, &state.value).unwrap();
+                                let current_value =
+                                    try_baml_value_from_vm_value(&vm, &state.value).unwrap();
 
-                        let baml_value_with_meta =
-                            BamlValueWithMeta::with_const_meta(&current_value, fake_meta);
+                                let baml_value_with_meta =
+                                    BamlValueWithMeta::with_const_meta(&current_value, fake_meta);
 
-                        let notification = watch::WatchNotification::new_var(
-                            watched_var_name.to_owned(), // variable name
-                            state.channel.to_owned(),    // channel name
-                            baml_value_with_meta,
-                            function_name.to_owned(),
-                        );
+                                let notification = watch::WatchNotification::new_var(
+                                    watched_var_name.to_owned(), // variable name
+                                    state.channel.to_owned(),    // channel name
+                                    baml_value_with_meta,
+                                    function_name.to_owned(),
+                                );
 
-                        if let Some(handler) = &watch_handler {
-                            handler.lock().unwrap().notify(notification);
+                                if let Some(handler) = watch_handler.as_ref() {
+                                    if let Ok(mut handler) = handler.lock() {
+                                        handler.notify(notification);
+                                    }
+                                }
+                            }
+                        }
+                        baml_vm::vm::WatchNotification::Block(notification) => {
+                            if let Some(handler) = watch_handler.as_ref() {
+                                if let Ok(mut handler) = handler.lock() {
+                                    handler.notify(watch::WatchNotification::new_block(
+                                        notification.block_name.as_str().to_string(),
+                                        notification.function_name.as_str().to_string(),
+                                    ));
+                                }
+                            }
                         }
                     }
                 }
@@ -493,10 +508,9 @@ impl BamlAsyncVmRuntime {
                             // except for compilation required types, spawn and
                             // spawn_local are essentially equivalent.
                             #[cfg(target_arch = "wasm32")]
-                            wasm_bindgen_futures::spawn_local(future);
+                            tokio::task::spawn_local(future);
                         }
 
-                        // TODO: Needs refactor, prepare for some convoluted logic ahead ;)
                         baml_vm::FutureKind::Net => {
                             // Only `baml.fetch_as` is supported for now.
                             if pending_future.function != "baml.fetch_as" {
@@ -513,28 +527,24 @@ impl BamlAsyncVmRuntime {
                                 ));
                             }
 
-                            let url_or_request =
-                                match try_baml_value_from_vm_value(&vm, &pending_future.args[0]) {
-                                    Ok(url_or_request) => url_or_request,
-                                    Err(e) => {
-                                        break 'mainloop Err(e.context(
-                                        "baml.fetch_as: failed to get url or request from VM value",
-                                    ));
-                                    }
-                                };
-
-                            match &url_or_request {
-                                BamlValue::String(_) => {} // Ok,
-
-                                BamlValue::Class(name, _) if name == "baml.HttpRequest" => {} // Ok,
-
+                            let url_str_index = match &pending_future.args[0] {
+                                baml_vm::Value::Object(url_str_index) => url_str_index,
                                 _ => {
                                     break 'mainloop Err(anyhow!(
-                                        "baml.fetch_as: expected baml.fetch_as arg to be a string or HttpRequest, got {}",
-                                        url_or_request
+                                        "baml.fetch_as: expected URL to be a string, got {}",
+                                        pending_future.args[0]
                                     ));
                                 }
-                            }
+                            };
+
+                            let url = match &vm.objects[*url_str_index] {
+                                baml_vm::Object::String(url) => url.to_owned(),
+                                _ => {
+                                    break 'mainloop Err(anyhow::anyhow!(
+                                        "baml.fetch_as: failed to get URL from VM value"
+                                    ));
+                                }
+                            };
 
                             let parse_as_type = match vm
                                 .objects
@@ -570,91 +580,10 @@ impl BamlAsyncVmRuntime {
                                 .unwrap();
 
                                 async move {
+                                    let client = reqwest::Client::new();
+
                                     let response = 'res: {
-                                        let client = reqwest::Client::new();
-
-                                        let req = match &url_or_request {
-                                            BamlValue::String(url) => {
-                                                client.get(url)
-                                            }
-
-                                            // we type checked earlier, should be http request type
-                                            BamlValue::Class(name, fields) => {
-                                                let Some(BamlValue::String(url)) = fields.get("url") else {
-                                                    break 'res Err(anyhow!(
-                                                        "baml.fetch_as: expected url to be a string, got {}",
-                                                        url_or_request
-                                                    ));
-                                                };
-
-                                                let Some(BamlValue::Enum(_, method)) = fields.get("method") else {
-                                                    break 'res Err(anyhow!(
-                                                        "baml.fetch_as: expected method to be a valid HTTP method, got {}",
-                                                        url_or_request
-                                                    ));
-                                                };
-
-                                                let mut req = match method.as_str() {
-                                                    "Get" => client.get(url),
-                                                    "Post" => client.post(url),
-                                                    "Put" => client.put(url),
-                                                    "Patch" => client.patch(url),
-                                                    "Delete" => client.delete(url),
-                                                    _ => break 'res Err(anyhow!(
-                                                        "baml.fetch_as: expected method to be a valid HTTP method, got {}",
-                                                        method
-                                                    ))
-                                                };
-
-                                                if let Some(BamlValue::Map(headers)) = fields.get("headers") {
-                                                    let mut header_map = reqwest::header::HeaderMap::new();
-
-                                                    for (k, v) in headers {
-                                                        let Ok(key) = reqwest::header::HeaderName::from_str(k) else {
-                                                            break 'res Err(anyhow!(
-                                                                "baml.fetch_as: expected header key to be a valid HTTP header name, got {}",
-                                                                k
-                                                            ));
-                                                        };
-
-                                                        let Some(value_as_string) = v.as_str() else {
-                                                            break 'res Err(anyhow!(
-                                                                "baml.fetch_as: expected header value to be a string, got {}",
-                                                                v
-                                                            ));
-                                                        };
-
-                                                        let Ok(value) = reqwest::header::HeaderValue::from_str(value_as_string) else {
-                                                            break 'res Err(anyhow!(
-                                                                "baml.fetch_as: expected header value to be a string, got {}",
-                                                                v
-                                                            ));
-                                                        };
-
-                                                        header_map.insert(key, value);
-                                                    }
-
-                                                    req = req.headers(header_map);
-                                                }
-
-                                                if let Some(BamlValue::Map(query_params)) = fields.get("query_params") {
-                                                    req = req.query(query_params);
-                                                }
-
-                                                if let Some(json) = fields.get("json") {
-                                                    req = req.json(json)
-                                                }
-
-                                                req
-                                            }
-
-                                            _ => break 'res Err(anyhow!(
-                                                "baml.fetch_as: expected baml.fetch_as arg to be a string or HttpRequest, got {}",
-                                                url_or_request
-                                            ))
-                                        };
-
-                                        let res = match req.send().await {
+                                        let res = match client.get(url).send().await {
                                             Ok(res) => res,
                                             Err(e) => {
                                                 break 'res Err(anyhow::Error::from(e).context(

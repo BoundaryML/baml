@@ -42,7 +42,6 @@ default-members = [
   "cli",
   "language_client_cffi",
   "language_client_python",
-  "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
   "language_server",
   "generators/utils/*",

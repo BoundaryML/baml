@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use baml_types::{BamlMap, BamlMedia};
 
 use crate::{
-    bytecode::{BinOp, CmpOp, Instruction},
+    bytecode::{BinOp, BlockNotification, CmpOp, Instruction},
     errors::{ErrorLocation, InternalError, RuntimeError, VmError},
     indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex},
     types::{
@@ -222,7 +222,13 @@ pub enum VmExecState {
     Complete(Value),
 
     /// Notify about watched variables.
-    Notify(Vec<watch::NodeId>),
+    Notify(WatchNotification),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum WatchNotification {
+    Variables(Vec<watch::NodeId>),
+    Block(BlockNotification),
 }
 
 #[derive(Clone, Debug)]
@@ -507,6 +513,9 @@ impl Vm {
             // }
 
             match function.bytecode.instructions[instruction_ptr as usize] {
+                Instruction::NotifyBlock(notification) => {
+                    return Ok(VmExecState::Notify(WatchNotification::Block(notification)));
+                }
                 Instruction::LoadConst(index) => {
                     let value = &function.bytecode.constants[index];
                     self.stack.push(*value);
@@ -624,7 +633,9 @@ impl Vm {
                         function = self.objects[frame.function].as_function()?;
 
                         if !filtered_notifications.is_empty() {
-                            return Ok(VmExecState::Notify(filtered_notifications));
+                            return Ok(VmExecState::Notify(WatchNotification::Variables(
+                                filtered_notifications,
+                            )));
                         }
                     }
                 }
@@ -787,7 +798,9 @@ impl Vm {
                     function = self.objects[frame.function].as_function()?;
 
                     if !filtered_notifications.is_empty() {
-                        return Ok(VmExecState::Notify(filtered_notifications));
+                        return Ok(VmExecState::Notify(WatchNotification::Variables(
+                            filtered_notifications,
+                        )));
                     }
                 }
 
@@ -1357,7 +1370,9 @@ impl Vm {
                     function = self.objects[frame.function].as_function()?;
 
                     if !filtered_notifications.is_empty() {
-                        return Ok(VmExecState::Notify(filtered_notifications));
+                        return Ok(VmExecState::Notify(WatchNotification::Variables(
+                            filtered_notifications,
+                        )));
                     }
                 }
 
@@ -1502,7 +1517,9 @@ impl Vm {
                     function = self.objects[frame.function].as_function()?;
 
                     if !filtered_notifications.is_empty() {
-                        return Ok(VmExecState::Notify(filtered_notifications));
+                        return Ok(VmExecState::Notify(WatchNotification::Variables(
+                            filtered_notifications,
+                        )));
                     }
                 }
 
