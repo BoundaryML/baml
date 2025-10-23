@@ -1206,9 +1206,7 @@ Color
             name: Name::new("User".to_string()),
             description: Some("Represents a system user".to_string()),
             namespace: baml_types::StreamingMode::NonStreaming,
-            fields: vec![
-                (Name::new("name".to_string()), TypeIR::string(), None, false),
-            ],
+            fields: vec![(Name::new("name".to_string()), TypeIR::string(), None, false)],
             constraints: Vec::new(),
             streaming_behavior: Default::default(),
         }];
@@ -1263,11 +1261,11 @@ Color
     fn test_class_with_multiline_description() {
         let classes = vec![Class {
             name: Name::new("Resume".to_string()),
-            description: Some("A professional resume\ncontaining work history\nand qualifications".to_string()),
+            description: Some(
+                "A professional resume\ncontaining work history\nand qualifications".to_string(),
+            ),
             namespace: baml_types::StreamingMode::NonStreaming,
-            fields: vec![
-                (Name::new("name".to_string()), TypeIR::string(), None, false),
-            ],
+            fields: vec![(Name::new("name".to_string()), TypeIR::string(), None, false)],
             constraints: Vec::new(),
             streaming_behavior: Default::default(),
         }];
