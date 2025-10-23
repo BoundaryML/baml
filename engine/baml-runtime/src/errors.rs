@@ -163,7 +163,7 @@ impl IntoBamlError for &anyhow::Error {
             return baml_error.clone();
         }
         baml_types::tracing::events::BamlError::External {
-            message: Cow::Owned(format!("into_baml_error: {self:?}")),
+            message: Cow::Owned(format!("ExternalException: {self:?}")),
         }
     }
 }
