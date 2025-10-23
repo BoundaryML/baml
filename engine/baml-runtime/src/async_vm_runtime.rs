@@ -512,17 +512,15 @@ impl BamlAsyncVmRuntime {
                                 ));
                             }
 
-                            let url_or_request = match try_baml_value_from_vm_value(
-                                &vm,
-                                &pending_future.args[0],
-                            ) {
-                                Ok(url_or_request) => url_or_request,
-                                Err(e) => {
-                                    break 'mainloop Err(e.context(
+                            let url_or_request =
+                                match try_baml_value_from_vm_value(&vm, &pending_future.args[0]) {
+                                    Ok(url_or_request) => url_or_request,
+                                    Err(e) => {
+                                        break 'mainloop Err(e.context(
                                         "baml.fetch_as: failed to get url or request from VM value",
                                     ));
-                                }
-                            };
+                                    }
+                                };
 
                             match &url_or_request {
                                 BamlValue::String(_) => {} // Ok,
