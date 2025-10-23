@@ -64,7 +64,7 @@ pub fn display_instruction(
         Instruction::LoadGlobal(index) | Instruction::StoreGlobal(index) => {
             format!("({})", display_value(&globals[*index], objects))
         }
-        Instruction::LoadVar(index) | Instruction::StoreVar(index) => {
+        Instruction::LoadVar(index) | Instruction::StoreVar(index) | Instruction::Watch(index) => {
             format!(
                 "({})",
                 function
@@ -107,14 +107,6 @@ pub fn display_instruction(
         }
         Instruction::AllocInstance(index) | Instruction::AllocVariant(index) => {
             format!("({})", display_object(objects, *index))
-        }
-
-        Instruction::Watch => {
-            if let Ok(index) = stack.ensure_stack_top() {
-                format!("({})", display_value(&stack[index], objects))
-            } else {
-                String::new()
-            }
         }
 
         Instruction::Pop(_)
@@ -205,7 +197,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Color::Cyan,
         Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
-        Instruction::Watch => Color::BrightRed,
+        Instruction::Watch(_) => Color::BrightRed,
     }
 }
 

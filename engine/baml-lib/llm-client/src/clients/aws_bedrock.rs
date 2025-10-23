@@ -8,7 +8,7 @@ use secrecy::SecretString;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::helpers::{Error, PropertyHandler};
+use super::helpers::{Error, HttpConfig, PropertyHandler};
 use crate::{
     AllowedRoleMetadata, FinishReasonFilter, MediaUrlHandler, RolesSelection,
     SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
@@ -32,6 +32,7 @@ pub struct UnresolvedAwsBedrock<Meta> {
     #[baml_safe_hash]
     additional_model_request_fields: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
     media_url_handler: UnresolvedMediaUrlHandler,
+    http_config: HttpConfig,
 }
 
 #[derive(Debug, Clone, BamlHash)]
@@ -89,6 +90,7 @@ pub struct ResolvedAwsBedrock {
     pub finish_reason_filter: FinishReasonFilter,
     pub additional_model_request_fields: IndexMap<String, Value>,
     pub media_url_handler: MediaUrlHandler,
+    pub http_config: HttpConfig,
 }
 
 impl std::fmt::Debug for ResolvedAwsBedrock {
@@ -186,6 +188,7 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
                 .map(|(k, (_, v))| (k.clone(), ((), v.without_meta())))
                 .collect::<IndexMap<_, _>>(),
             media_url_handler: self.media_url_handler.clone(),
+            http_config: self.http_config.clone(),
         }
     }
 }
@@ -420,6 +423,7 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             finish_reason_filter: self.finish_reason_filter.resolve(ctx)?,
             additional_model_request_fields,
             media_url_handler: self.media_url_handler.resolve(ctx)?,
+            http_config: self.http_config.clone(),
         })
     }
 
@@ -534,6 +538,7 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
         };
         let finish_reason_filter = properties.ensure_finish_reason_filter();
         let media_url_handler = properties.ensure_media_url_handler();
+        let http_config = properties.ensure_http_config("aws");
 
         // TODO: Handle inference_configuration
         let errors = properties.finalize_empty();
@@ -556,6 +561,7 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             finish_reason_filter,
             additional_model_request_fields,
             media_url_handler,
+            http_config,
         })
     }
 }

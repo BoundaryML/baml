@@ -1,9 +1,11 @@
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+
 use super::Rule;
 
 pub type Pair<'a> = pest::iterators::Pair<'a, Rule>;
 
 #[track_caller]
-pub fn parsing_catch_all(token: Pair<'_>, kind: &str) {
+pub fn parsing_catch_all(token: Pair<'_>, kind: &str, diagnostics: &mut Diagnostics) {
     match token.as_rule() {
         Rule::empty_lines
         | Rule::trailing_comment
@@ -11,46 +13,47 @@ pub fn parsing_catch_all(token: Pair<'_>, kind: &str) {
         | Rule::block_comment
         | Rule::SPACER_TEXT
         | Rule::NEWLINE => {}
-        x => unreachable!(
-            "Encountered impossible {} during parsing: {:?} {:?}",
-            kind,
-            &x,
-            token.clone().tokens()
-        ),
+        x => {
+            let message = format!(
+                "Encountered impossible {} during parsing: {:?} {:?}",
+                kind,
+                &x,
+                token.clone().tokens()
+            );
+            diagnostics.push_error(DatamodelError::new_parser_error(
+                message,
+                diagnostics.span(token.as_span()),
+            ))
+        }
     }
 }
 
-#[macro_export]
-macro_rules! assert_correct_parser {
-    ($pair:expr, $rule:expr) => {
-        assert_eq!(
-            $pair.as_rule(),
-            $rule,
-            "Expected {:?}. Got: {:?}.",
-            $rule,
-            $pair.as_rule()
-        );
-    };
-    ($pair:expr, $($rule:expr),+ ) => {
-        let rules = vec![$($rule),+];
-        assert!(
-            rules.contains(&$pair.as_rule()),
-            "Expected one of {:?}. Got: {:?}.",
-            rules,
-            $pair.as_rule()
-        );
-    };
+#[track_caller]
+pub fn assert_correct_parser(pair: &Pair<'_>, expected: &[Rule], diagnostics: &mut Diagnostics) {
+    if !expected.contains(&pair.as_rule()) {
+        let message = if expected.len() == 1 {
+            format!("Expected {:?}. Got: {:?}.", expected[0], pair.as_rule())
+        } else {
+            format!("Expected one of {:?}. Got: {:?}.", expected, pair.as_rule())
+        };
+        diagnostics.push_error(DatamodelError::new_parser_error(
+            message,
+            diagnostics.span(pair.as_span()),
+        ));
+    }
 }
 
-#[macro_export]
-macro_rules! unreachable_rule {
-    ($pair:expr, $rule:expr) => {
-        unreachable!(
-            "Encountered impossible field during parsing {:?}: {:?}",
-            $rule,
-            $pair.as_rule()
-        )
-    };
+#[track_caller]
+pub fn unreachable_rule(pair: &Pair<'_>, context: &str, diagnostics: &mut Diagnostics) {
+    let message = format!(
+        "Encountered impossible field during parsing {:?}: {:?}",
+        context,
+        pair.as_rule()
+    );
+    diagnostics.push_error(DatamodelError::new_parser_error(
+        message,
+        diagnostics.span(pair.as_span()),
+    ));
 }
 
 #[macro_export]

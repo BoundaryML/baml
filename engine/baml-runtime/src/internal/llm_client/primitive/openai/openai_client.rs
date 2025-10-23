@@ -26,7 +26,7 @@ use crate::{
         ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
         ModelFeatures, ResolveMediaUrls,
     },
-    request::create_client,
+    request::{create_client, create_http_client},
     RuntimeContext,
 };
 
@@ -430,6 +430,15 @@ impl RequestBuilder for OpenAIClient {
 
         let mut req = self.client.post(endpoint);
 
+        // Apply request timeout if configured
+        // Defaults were already applied during client creation
+        if let Some(ms) = self.properties.http_config.request_timeout_ms {
+            if ms > 0 {
+                req = req.timeout(std::time::Duration::from_millis(ms));
+            }
+            // If ms == 0, don't set timeout (infinite timeout)
+        }
+
         if !self.properties.query_params.is_empty() {
             req = req.query(&self.properties.query_params);
         }
@@ -456,6 +465,10 @@ impl RequestBuilder for OpenAIClient {
 
     fn request_options(&self) -> &BamlMap<String, serde_json::Value> {
         &self.properties.properties
+    }
+
+    fn http_config(&self) -> &internal_llm_client::HttpConfig {
+        &self.properties.http_config
     }
 }
 
@@ -484,6 +497,7 @@ impl WithStreamChat for OpenAIClient {
 
 macro_rules! make_openai_client {
     ($client:ident, $properties:ident, $provider:expr, dynamic) => {{
+        let http_client = create_http_client(&$properties.http_config)?;
         Ok(Self {
             name: $client.name.clone(),
             provider: $provider.into(),
@@ -523,10 +537,11 @@ macro_rules! make_openai_client {
             },
             properties: $properties,
             retry_policy: $client.retry_policy.clone(),
-            client: create_client()?,
+            client: http_client,
         })
     }};
     ($client:ident, $properties:ident, $provider:expr) => {{
+        let http_client = create_http_client(&$properties.http_config)?;
         Ok(Self {
             name: $client.name().into(),
             provider: $provider.into(),
@@ -570,7 +585,7 @@ macro_rules! make_openai_client {
                 .retry_policy_id
                 .as_ref()
                 .map(|s| s.to_string()),
-            client: create_client()?,
+            client: http_client,
         })
     }};
 }
@@ -853,7 +868,7 @@ fn convert_completion_prompt_to_body(prompt: &str) -> serde_json::Map<String, se
 mod tests {
     use indexmap::IndexMap;
     use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
-    use internal_llm_client::{RolesSelection, SupportedRequestModes};
+    use internal_llm_client::{openai, RolesSelection, SupportedRequestModes};
 
     use super::*;
 
@@ -895,6 +910,7 @@ mod tests {
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAIResponses,
                 media_url_handler: internal_llm_client::MediaUrlHandler::default(),
+                http_config: Default::default(),
             },
             client: reqwest::Client::new(),
         };
@@ -948,6 +964,7 @@ mod tests {
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAI,
                 media_url_handler: internal_llm_client::MediaUrlHandler::default(),
+                http_config: Default::default(),
             },
             client: reqwest::Client::new(),
         };
@@ -1043,6 +1060,7 @@ mod tests {
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAIResponses,
                 media_url_handler: internal_llm_client::MediaUrlHandler::default(),
+                http_config: Default::default(),
             },
             client: reqwest::Client::new(),
         };

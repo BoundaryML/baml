@@ -62,6 +62,7 @@ pub struct EnumValue {
 #[derive(Debug)]
 pub struct Class {
     pub name: Name,
+    pub description: Option<String>,
     pub namespace: baml_types::StreamingMode,
     // fields have name, type, description, and streaming_needed.
     pub fields: Vec<(Name, TypeIR, Option<String>, bool)>,
@@ -346,6 +347,7 @@ impl std::fmt::Display for Attribute {
 struct ClassRender {
     #[allow(dead_code)]
     name: String,
+    description: Option<String>,
     values: Vec<ClassFieldRender>,
 }
 
@@ -357,6 +359,14 @@ struct ClassFieldRender {
 
 impl std::fmt::Display for ClassRender {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Render class description if present
+        if let Some(desc) = &self.description {
+            // Write description as comment before opening brace
+            for line in desc.lines() {
+                writeln!(f, "// {}", line)?;
+            }
+        }
+
         writeln!(f, "{{")?;
         for value in &self.values {
             if let Some(desc) = &value.description {
@@ -695,6 +705,7 @@ impl OutputFormatContent {
 
                 ClassRender {
                     name: class.name.rendered_name().to_string(),
+                    description: class.description.clone(),
                     values: class
                         .fields
                         .iter()
@@ -896,12 +907,40 @@ impl OutputFormatContent {
             let schema =
                 self.inner_type_render(&options, &TypeIR::class(class_name), &render_ctx)?;
 
-            class_definitions.push(match &options.hoisted_class_prefix {
-                RenderSetting::Always(prefix) if !prefix.is_empty() => {
-                    format!("{prefix} {class_name} {schema}")
+            // Extract description comments from the beginning of schema
+            let (description_lines, schema_body) = if schema.starts_with("//") {
+                let lines: Vec<&str> = schema.lines().collect();
+                let mut desc_lines = Vec::new();
+                let mut body_start = 0;
+
+                for (i, line) in lines.iter().enumerate() {
+                    if line.trim_start().starts_with("//") {
+                        desc_lines.push(*line);
+                        body_start = i + 1;
+                    } else {
+                        break;
+                    }
                 }
-                _ => format!("{class_name} {schema}"),
-            });
+
+                let body = lines[body_start..].join("\n");
+                (desc_lines, body)
+            } else {
+                (Vec::new(), schema)
+            };
+
+            let class_def = match &options.hoisted_class_prefix {
+                RenderSetting::Always(prefix) if !prefix.is_empty() => {
+                    format!("{prefix} {class_name} {schema_body}")
+                }
+                _ => format!("{class_name} {schema_body}"),
+            };
+
+            // Prepend description if present
+            if !description_lines.is_empty() {
+                class_definitions.push(format!("{}\n{}", description_lines.join("\n"), class_def));
+            } else {
+                class_definitions.push(class_def);
+            }
         }
 
         for (alias, target) in self.structural_recursive_aliases.iter() {
@@ -1078,6 +1117,7 @@ Color
     fn render_class() {
         let classes = vec![Class {
             name: Name::new("Person".to_string()),
+            description: None,
             namespace: baml_types::StreamingMode::NonStreaming,
             fields: vec![
                 (
@@ -1119,6 +1159,7 @@ Color
     fn render_class_with_multiline_descriptions() {
         let classes = vec![Class {
             name: Name::new("Education".to_string()),
+            description: None,
             namespace: baml_types::StreamingMode::NonStreaming,
             fields: vec![
                 (
@@ -1160,6 +1201,89 @@ Color
     }
 
     #[test]
+    fn test_class_with_block_description() {
+        let classes = vec![Class {
+            name: Name::new("User".to_string()),
+            description: Some("Represents a system user".to_string()),
+            namespace: baml_types::StreamingMode::NonStreaming,
+            fields: vec![(Name::new("name".to_string()), TypeIR::string(), None, false)],
+            constraints: Vec::new(),
+            streaming_behavior: Default::default(),
+        }];
+
+        let content = OutputFormatContent::target(TypeIR::class("User"))
+            .classes(classes)
+            .build();
+        let rendered = content.render(RenderOptions::default()).unwrap();
+
+        assert_eq!(
+            rendered,
+            Some(String::from(
+                "Answer in JSON using this schema:\n// Represents a system user\n{\n  name: string,\n}"
+            ))
+        );
+    }
+
+    #[test]
+    fn test_hoisted_class_with_description() {
+        let classes = vec![Class {
+            name: Name::new("Node".to_string()),
+            description: Some("A node in a linked list".to_string()),
+            namespace: baml_types::StreamingMode::NonStreaming,
+            fields: vec![
+                (Name::new("value".to_string()), TypeIR::int(), None, false),
+                (
+                    Name::new("next".to_string()),
+                    TypeIR::optional(TypeIR::class("Node")),
+                    None,
+                    false,
+                ),
+            ],
+            constraints: Vec::new(),
+            streaming_behavior: Default::default(),
+        }];
+
+        let content = OutputFormatContent::target(TypeIR::class("Node"))
+            .classes(classes)
+            .recursive_classes(IndexSet::from_iter(["Node".to_string()]))
+            .build();
+        let rendered = content.render(RenderOptions::default()).unwrap();
+
+        assert_eq!(
+            rendered,
+            Some(String::from(
+                "// A node in a linked list\nNode {\n  value: int,\n  next: Node or null,\n}\n\nAnswer in JSON using this schema: Node"
+            ))
+        );
+    }
+
+    #[test]
+    fn test_class_with_multiline_description() {
+        let classes = vec![Class {
+            name: Name::new("Resume".to_string()),
+            description: Some(
+                "A professional resume\ncontaining work history\nand qualifications".to_string(),
+            ),
+            namespace: baml_types::StreamingMode::NonStreaming,
+            fields: vec![(Name::new("name".to_string()), TypeIR::string(), None, false)],
+            constraints: Vec::new(),
+            streaming_behavior: Default::default(),
+        }];
+
+        let content = OutputFormatContent::target(TypeIR::class("Resume"))
+            .classes(classes)
+            .build();
+        let rendered = content.render(RenderOptions::default()).unwrap();
+
+        assert_eq!(
+            rendered,
+            Some(String::from(
+                "Answer in JSON using this schema:\n// A professional resume\n// containing work history\n// and qualifications\n{\n  name: string,\n}"
+            ))
+        );
+    }
+
+    #[test]
     fn hoist_enum_if_more_than_max_values() {
         let enums = vec![Enum {
             name: Name::new("Enm".to_string()),
@@ -1177,6 +1301,7 @@ Color
 
         let classes = vec![Class {
             name: Name::new("Output".to_string()),
+            description: None,
             namespace: baml_types::StreamingMode::NonStreaming,
             fields: vec![(
                 Name::new("output".to_string()),
@@ -1234,6 +1359,7 @@ Answer in JSON using this schema:
 
         let classes = vec![Class {
             name: Name::new("Output".to_string()),
+            description: None,
             namespace: baml_types::StreamingMode::NonStreaming,
             fields: vec![(
                 Name::new("output".to_string()),
@@ -1287,6 +1413,7 @@ Answer in JSON using this schema:
 
         let classes = vec![Class {
             name: Name::new("Output".to_string()),
+            description: None,
             namespace: baml_types::StreamingMode::NonStreaming,
             fields: vec![(
                 Name::new("output".to_string()),
@@ -1333,6 +1460,7 @@ Answer in JSON using this schema:
         let classes = vec![
             Class {
                 name: Name::new("Bug".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -1353,6 +1481,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("Enhancement".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -1373,6 +1502,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("Documentation".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -1425,6 +1555,7 @@ r#"Answer in JSON using any of these schemas:
         let classes = vec![
             Class {
                 name: Name::new("Issue".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -1444,6 +1575,7 @@ r#"Answer in JSON using any of these schemas:
             },
             Class {
                 name: Name::new("Bug".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -1464,6 +1596,7 @@ r#"Answer in JSON using any of these schemas:
             },
             Class {
                 name: Name::new("Enhancement".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -1484,6 +1617,7 @@ r#"Answer in JSON using any of these schemas:
             },
             Class {
                 name: Name::new("Documentation".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -1534,6 +1668,7 @@ r#"Answer in JSON using this schema:
     fn render_top_level_simple_recursive_class() {
         let classes = vec![Class {
             name: Name::new("Node".to_string()),
+            description: None,
             namespace: baml_types::StreamingMode::NonStreaming,
             fields: vec![
                 (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -1572,6 +1707,7 @@ Answer in JSON using this schema: Node"#
         let classes = vec![
             Class {
                 name: Name::new("Node".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -1587,6 +1723,7 @@ Answer in JSON using this schema: Node"#
             },
             Class {
                 name: Name::new("LinkedList".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -1630,6 +1767,7 @@ Answer in JSON using this schema:
         let classes = vec![
             Class {
                 name: Name::new("A".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("pointer".to_string()),
@@ -1642,6 +1780,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("B".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("pointer".to_string()),
@@ -1654,6 +1793,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("C".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("pointer".to_string()),
@@ -1699,6 +1839,7 @@ Answer in JSON using this schema: A"#
         let classes = vec![
             Class {
                 name: Name::new("A".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("pointer".to_string()),
@@ -1711,6 +1852,7 @@ Answer in JSON using this schema: A"#
             },
             Class {
                 name: Name::new("B".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("pointer".to_string()),
@@ -1723,6 +1865,7 @@ Answer in JSON using this schema: A"#
             },
             Class {
                 name: Name::new("C".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("pointer".to_string()),
@@ -1735,6 +1878,7 @@ Answer in JSON using this schema: A"#
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -1789,6 +1933,7 @@ Answer in JSON using this schema:
         let classes = vec![
             Class {
                 name: Name::new("A".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -1809,6 +1954,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("B".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("pointer".to_string()),
@@ -1821,6 +1967,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("C".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("pointer".to_string()),
@@ -1833,6 +1980,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -1849,6 +1997,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("Nested".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -1901,6 +2050,7 @@ Answer in JSON using this schema:
         let classes = vec![
             Class {
                 name: Name::new("Tree".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -1916,6 +2066,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("Forest".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("trees".to_string()),
@@ -1957,6 +2108,7 @@ Answer in JSON using this schema: Tree"#
     fn self_referential_union() {
         let classes = vec![Class {
             name: Name::new("SelfReferential".to_string()),
+            description: None,
             namespace: baml_types::StreamingMode::NonStreaming,
             fields: vec![(
                 Name::new("recursion".to_string()),
@@ -1997,6 +2149,7 @@ Answer in JSON using this schema: SelfReferential"#
         let classes = vec![
             Class {
                 name: Name::new("Node".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2012,6 +2165,7 @@ Answer in JSON using this schema: SelfReferential"#
             },
             Class {
                 name: Name::new("Tree".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2062,6 +2216,7 @@ Node or Tree"#
         let classes = vec![
             Class {
                 name: Name::new("DataType".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -2083,6 +2238,7 @@ Node or Tree"#
             },
             Class {
                 name: Name::new("Node".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2098,6 +2254,7 @@ Node or Tree"#
             },
             Class {
                 name: Name::new("Tree".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2149,6 +2306,7 @@ Answer in JSON using this schema:
         let classes = vec![
             Class {
                 name: Name::new("Node".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2164,6 +2322,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("Tree".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2179,6 +2338,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2228,6 +2388,7 @@ Node or Tree or {
         let classes = vec![
             Class {
                 name: Name::new("DataType".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -2253,6 +2414,7 @@ Node or Tree or {
             },
             Class {
                 name: Name::new("Node".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2268,6 +2430,7 @@ Node or Tree or {
             },
             Class {
                 name: Name::new("Tree".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2283,6 +2446,7 @@ Node or Tree or {
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2332,6 +2496,7 @@ Answer in JSON using this schema:
         let classes = vec![
             Class {
                 name: Name::new("A".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("pointer".to_string()),
@@ -2344,6 +2509,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("B".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("pointer".to_string()),
@@ -2356,6 +2522,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("C".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("pointer".to_string()),
@@ -2368,6 +2535,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -2424,6 +2592,7 @@ Answer in JSON using this interface:
         let classes = vec![
             Class {
                 name: Name::new("Node".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2439,6 +2608,7 @@ Answer in JSON using this interface:
             },
             Class {
                 name: Name::new("Tree".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2489,6 +2659,7 @@ Node or int or string or Tree"#
         let classes = vec![
             Class {
                 name: Name::new("Node".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2504,6 +2675,7 @@ Node or int or string or Tree"#
             },
             Class {
                 name: Name::new("Tree".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2519,6 +2691,7 @@ Node or int or string or Tree"#
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -2573,6 +2746,7 @@ Answer in JSON using this schema:
     fn render_top_level_list_with_recursive_items() {
         let classes = vec![Class {
             name: Name::new("Node".to_string()),
+            description: None,
             namespace: baml_types::StreamingMode::NonStreaming,
             fields: vec![
                 (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2611,6 +2785,7 @@ Node[]"#
     fn render_top_level_class_with_self_referential_map() {
         let classes = vec![Class {
             name: Name::new("RecursiveMap".to_string()),
+            description: None,
             namespace: baml_types::StreamingMode::NonStreaming,
             fields: vec![(
                 Name::new("data".to_string()),
@@ -2645,6 +2820,7 @@ Answer in JSON using this schema: RecursiveMap"#
         let classes = vec![
             Class {
                 name: Name::new("RecursiveMap".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("data".to_string()),
@@ -2657,6 +2833,7 @@ Answer in JSON using this schema: RecursiveMap"#
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("rec_map".to_string()),
@@ -2694,6 +2871,7 @@ Answer in JSON using this schema:
     fn render_top_level_map_pointing_to_another_recursive_class() {
         let classes = vec![Class {
             name: Name::new("Node".to_string()),
+            description: None,
             namespace: baml_types::StreamingMode::NonStreaming,
             fields: vec![
                 (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2734,6 +2912,7 @@ map<string, Node>"#
         let classes = vec![
             Class {
                 name: Name::new("MapWithRecValue".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("data".to_string()),
@@ -2746,6 +2925,7 @@ map<string, Node>"#
             },
             Class {
                 name: Name::new("Node".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2788,6 +2968,7 @@ Answer in JSON using this schema:
         let classes = vec![
             Class {
                 name: Name::new("MapWithRecValue".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("data".to_string()),
@@ -2800,6 +2981,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("Node".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2842,6 +3024,7 @@ Answer in JSON using this schema:
         let classes = vec![
             Class {
                 name: Name::new("Node".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2857,6 +3040,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -2907,6 +3091,7 @@ map<string, Node or int or {
         let classes = vec![
             Class {
                 name: Name::new("MapWithRecUnion".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(
                     Name::new("data".to_string()),
@@ -2926,6 +3111,7 @@ map<string, Node or int or {
             },
             Class {
                 name: Name::new("Node".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("data".to_string()), TypeIR::int(), None, false),
@@ -2941,6 +3127,7 @@ map<string, Node or int or {
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (
@@ -3064,6 +3251,7 @@ Answer in JSON using this type: A"#
         let classes = vec![
             Class {
                 name: Name::new("A".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(Name::new("prop".to_string()), TypeIR::int(), None, false)],
                 constraints: Vec::new(),
@@ -3071,6 +3259,7 @@ Answer in JSON using this type: A"#
             },
             Class {
                 name: Name::new("B".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(Name::new("prop".to_string()), TypeIR::string(), None, false)],
                 constraints: Vec::new(),
@@ -3078,6 +3267,7 @@ Answer in JSON using this type: A"#
             },
             Class {
                 name: Name::new("C".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(Name::new("prop".to_string()), TypeIR::float(), None, false)],
                 constraints: Vec::new(),
@@ -3085,6 +3275,7 @@ Answer in JSON using this type: A"#
             },
             Class {
                 name: Name::new("Ret".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("a".to_string()), TypeIR::class("A"), None, false),
@@ -3134,6 +3325,7 @@ Answer in JSON using this schema:
         let classes = vec![
             Class {
                 name: Name::new("A".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(Name::new("prop".to_string()), TypeIR::int(), None, false)],
                 constraints: Vec::new(),
@@ -3141,6 +3333,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("B".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(Name::new("prop".to_string()), TypeIR::string(), None, false)],
                 constraints: Vec::new(),
@@ -3148,6 +3341,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("C".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![(Name::new("prop".to_string()), TypeIR::float(), None, false)],
                 constraints: Vec::new(),
@@ -3155,6 +3349,7 @@ Answer in JSON using this schema:
             },
             Class {
                 name: Name::new("Ret".to_string()),
+                description: None,
                 namespace: baml_types::StreamingMode::NonStreaming,
                 fields: vec![
                     (Name::new("a".to_string()), TypeIR::class("A"), None, false),

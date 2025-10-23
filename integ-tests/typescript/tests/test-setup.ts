@@ -3,6 +3,7 @@ import {
   ClientRegistry,
   BamlValidationError,
   BamlClientHttpError,
+  BamlTimeoutError,
 } from "@boundaryml/baml";
 import { b } from "../baml_client";
 import { watchers } from "../baml_client";
@@ -37,6 +38,7 @@ export {
   ClientRegistry,
   BamlValidationError,
   BamlClientHttpError,
+  BamlTimeoutError,
   resetBamlEnvVars,
   DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME,
 };

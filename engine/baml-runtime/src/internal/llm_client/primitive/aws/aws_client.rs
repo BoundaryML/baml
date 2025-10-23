@@ -536,6 +536,10 @@ impl AwsClient {
         DEFAULT_REQUEST_OPTIONS.get_or_init(Default::default)
     }
 
+    pub fn http_config(&self) -> &internal_llm_client::HttpConfig {
+        &self.properties.http_config
+    }
+
     // TODO: this should be memoized on client construction, but because config loading is async,
     // we can't do this in AwsClient::new (which is called from LLMPRimitiveProvider::try_from)
     // Note: This function necessarily exposes secret keys when they are provided, so it should

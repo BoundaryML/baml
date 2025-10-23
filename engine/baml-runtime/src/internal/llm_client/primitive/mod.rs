@@ -351,6 +351,16 @@ impl LLMPrimitiveProvider {
     pub fn request_options(&self) -> &BamlMap<String, serde_json::Value> {
         match_llm_provider!(self, request_options)
     }
+
+    pub fn http_config(&self) -> &internal_llm_client::HttpConfig {
+        match self {
+            LLMPrimitiveProvider::OpenAI(client) => client.http_config(),
+            LLMPrimitiveProvider::Anthropic(client) => client.http_config(),
+            LLMPrimitiveProvider::Google(client) => client.http_config(),
+            LLMPrimitiveProvider::Vertex(client) => client.http_config(),
+            LLMPrimitiveProvider::Aws(client) => client.http_config(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -422,6 +432,10 @@ mod tests {
 
         fn http_client(&self) -> &reqwest::Client {
             unimplemented!("Not used in tests")
+        }
+
+        fn http_config(&self) -> &internal_llm_client::HttpConfig {
+            unimplemented!("Not used in test")
         }
     }
 }

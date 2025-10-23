@@ -28,9 +28,12 @@ function MutableInArg(x: int) -> int {
 // 11   2   LOAD_VAR 1     (x)
 //      3   RETURN         
 //
-// Class: std::Request with 3 fields
-// Enum std::HttpMethod
+// Class: baml.HttpRequest with 5 fields
+// Class: baml.WatchOptions with 2 fields
+// Enum baml.HttpMethod
 // Function: baml.Array.length
+//
+// Function: baml.Array.push
 //
 // Function: baml.Map.length
 //
@@ -95,6 +98,8 @@ function MutableInArg(x: int) -> int {
 // Function: env.get
 //
 // Function: baml.deep_copy
+//
+// Function: baml.deep_equals
 //
 // Function: baml.unstable.string
 //

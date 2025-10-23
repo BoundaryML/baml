@@ -24,7 +24,7 @@ import { b } from '../index';
 import type { Check, Checked  } from "../types";
 import type { Image, Audio, Pdf, Video } from "@boundaryml/baml";
 
-import type {  AddTodoItem,  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  TodoMessageToUser,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
+import type {  AddTodoItem,  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyJsonTodoUpdate,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  TodoMessageToUser,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
 
 import type * as types from "../types"
 
@@ -3834,6 +3834,24 @@ export const TestOpenaiResponsesPdfs = async (
 };
 
 /**
+ * Executes the "TestRequestTimeout" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestRequestTimeout"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestRequestTimeout = async (
+  input: string,
+): Promise<string> => {
+  return b.TestRequestTimeout(
+    input,
+  );
+};
+
+/**
  * Executes the "TestRetryConstant" BAML action.
  *
  * This server action calls the underlying BAML function "TestRetryConstant"
@@ -3897,6 +3915,24 @@ export const TestSingleFallbackClient = async (
 };
 
 /**
+ * Executes the "TestStreamingTimeout" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestStreamingTimeout"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestStreamingTimeout = async (
+  input: string,
+): Promise<string> => {
+  return b.TestStreamingTimeout(
+    input,
+  );
+};
+
+/**
  * Executes the "TestThinking" BAML action.
  *
  * This server action calls the underlying BAML function "TestThinking"
@@ -3910,6 +3946,42 @@ export const TestThinking = async (
   input: string,
 ): Promise<types.CustomStory> => {
   return b.TestThinking(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestTimeoutError" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestTimeoutError"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestTimeoutError = async (
+  input: string,
+): Promise<string> => {
+  return b.TestTimeoutError(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestTimeoutFallback" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestTimeoutFallback"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestTimeoutFallback = async (
+  input: string,
+): Promise<string> => {
+  return b.TestTimeoutFallback(
     input,
   );
 };
@@ -3980,6 +4052,24 @@ export const TestVertexClaude = async (
 export const TestVertexWithSystemInstructions = async (
 ): Promise<string> => {
   return b.TestVertexWithSystemInstructions(
+  );
+};
+
+/**
+ * Executes the "TestZeroTimeout" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestZeroTimeout"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestZeroTimeout = async (
+  input: string,
+): Promise<string> => {
+  return b.TestZeroTimeout(
+    input,
   );
 };
 
@@ -4302,6 +4392,36 @@ export const ExecFetchAs = async (
 };
 
 /**
+ * Executes the "ExecFetchAsWithHttpPostRequest" BAML action.
+ *
+ * This server action calls the underlying BAML function "ExecFetchAsWithHttpPostRequest"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<types.DummyJsonTodo>} A promise that resolves with the result of the action.
+ */
+export const ExecFetchAsWithHttpPostRequest = async (
+): Promise<types.DummyJsonTodo> => {
+  return b.ExecFetchAsWithHttpPostRequest(
+  );
+};
+
+/**
+ * Executes the "ExecFetchAsWithHttpPutRequestAndClassJson" BAML action.
+ *
+ * This server action calls the underlying BAML function "ExecFetchAsWithHttpPutRequestAndClassJson"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<types.DummyJsonTodo>} A promise that resolves with the result of the action.
+ */
+export const ExecFetchAsWithHttpPutRequestAndClassJson = async (
+): Promise<types.DummyJsonTodo> => {
+  return b.ExecFetchAsWithHttpPutRequestAndClassJson(
+  );
+};
+
+/**
  * Executes the "HomeEnvVarIsEmpty" BAML action.
  *
  * This server action calls the underlying BAML function "HomeEnvVarIsEmpty"
@@ -4322,18 +4442,15 @@ export const HomeEnvVarIsEmpty = async (
  * This server action calls the underlying BAML function "IsTargetWord"
  * with the specified parameters.
  *
- * @param { string } prev - Input parameter.
- * @param { string } next - Input parameter.
+ * @param { string } word - Input parameter.
  *
  * @returns {Promise<boolean>} A promise that resolves with the result of the action.
  */
 export const IsTargetWord = async (
-  prev: string,
-  next: string,
+  word: string,
 ): Promise<boolean> => {
   return b.IsTargetWord(
-    prev,
-    next,
+    word,
   );
 };
 
@@ -4343,18 +4460,15 @@ export const IsTargetWord = async (
  * This server action calls the underlying BAML function "IsTargetWord2"
  * with the specified parameters.
  *
- * @param { string } prev - Input parameter.
- * @param { string } next - Input parameter.
+ * @param { string } word - Input parameter.
  *
  * @returns {Promise<boolean>} A promise that resolves with the result of the action.
  */
 export const IsTargetWord2 = async (
-  prev: string,
-  next: string,
+  word: string,
 ): Promise<boolean> => {
   return b.IsTargetWord2(
-    prev,
-    next,
+    word,
   );
 };
 
@@ -4403,18 +4517,15 @@ export const NormalElseIfStmt = async (
  * This server action calls the underlying BAML function "NotEmpty"
  * with the specified parameters.
  *
- * @param { string } prev - Input parameter.
- * @param { string } next - Input parameter.
+ * @param { string } value - Input parameter.
  *
  * @returns {Promise<boolean>} A promise that resolves with the result of the action.
  */
 export const NotEmpty = async (
-  prev: string,
-  next: string,
+  value: string,
 ): Promise<boolean> => {
   return b.NotEmpty(
-    prev,
-    next,
+    value,
   );
 };
 

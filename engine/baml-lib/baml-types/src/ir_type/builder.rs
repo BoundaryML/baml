@@ -1,6 +1,10 @@
 use super::{BamlMediaType, StreamingMode, TypeGeneric, TypeValue};
 
 impl<T: Default> TypeGeneric<T> {
+    pub fn top() -> Self {
+        TypeGeneric::Top(T::default())
+    }
+
     pub fn string() -> Self {
         TypeGeneric::Primitive(TypeValue::String, T::default())
     }

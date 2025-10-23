@@ -37,6 +37,7 @@ fn bootstrap_vm(input: Program) -> Vm {
         env_vars: Default::default(),
         watch: Watch::new(),
         watched_vars: Default::default(),
+        interrupt_frame: None,
     }
 }
 

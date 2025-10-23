@@ -387,6 +387,22 @@ fn relevant_data_models<'a>(
                         }
                     }
 
+                    let mut description = OverridableValue::Unset;
+
+                    // Check for runtime override first (future enhancement)
+                    // if let Some(desc_override) = overrides.and_then(|o| o.meta.get("description")) {
+                    //     description = OverridableValue::<String>::from(Some(desc_override));
+                    // }
+
+                    // Fall back to walker description
+                    if matches!(description, OverridableValue::Unset) {
+                        if let Ok(walker) = &walker {
+                            if let Some(d) = walker.description(&eval_ctx)? {
+                                description = OverridableValue::Set(d);
+                            }
+                        }
+                    }
+
                     let fields = fields
                         .chain(new_fields)
                         .map(|field| {
@@ -436,6 +452,7 @@ fn relevant_data_models<'a>(
 
                     classes.push(Class {
                         name: Name::new_with_alias(cls.to_string(), alias.value()),
+                        description: description.value(),
                         namespace: if !metadata.streaming_behavior.done && partialize {
                             StreamingMode::Streaming
                         } else {

@@ -37,8 +37,8 @@ impl Hir {
         Hir {
             expr_functions: vec![],
             llm_functions: vec![],
-            classes: vec![],
-            enums: vec![],
+            classes: crate::builtin::builtin_classes(),
+            enums: crate::builtin::builtin_enums(),
             global_assignments: baml_types::BamlMap::new(),
         }
     }
@@ -184,6 +184,21 @@ pub enum Statement {
 
     Assert {
         condition: Expression,
+        span: Span,
+    },
+
+    /// Configure watch options for a watched variable.
+    /// Syntax: `variable.$watch.options( baml.WatchOptions { channel: "channel", when: FilterFunc } )`
+    WatchOptions {
+        variable: String,
+        channel: Option<String>,
+        when: Option<String>,
+        span: Span,
+    },
+    /// Manually notify watchers of a variable.
+    /// Syntax: `variable.$watch.notify()`
+    WatchNotify {
+        variable: String,
         span: Span,
     },
 }
@@ -368,8 +383,8 @@ pub enum UnaryOperator {
 
 /// A type argument to a generic function call.
 ///
-/// std.fetch_value<int>(...) == TypeArg::Type(int),
-/// std.fetch_value<T>(...) == TypeArg::TypeName("T")
+/// baml.fetch_value<int>(...) == TypeArg::Type(int),
+/// baml.fetch_value<T>(...) == TypeArg::TypeName("T")
 #[derive(Clone, Debug)]
 pub enum TypeArg {
     Type(TypeIR),

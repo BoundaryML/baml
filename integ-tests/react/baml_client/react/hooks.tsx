@@ -10824,6 +10824,56 @@ export function useTestOpenaiResponsesPdfs(
   }
 }
 /**
+ * A specialized hook for the TestRequestTimeout BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestRequestTimeout({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestRequestTimeout({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestRequestTimeout(props: HookInput<'TestRequestTimeout', { stream: false }>): HookOutput<'TestRequestTimeout', { stream: false }>
+export function useTestRequestTimeout(props?: HookInput<'TestRequestTimeout', { stream?: true }>): HookOutput<'TestRequestTimeout', { stream: true }>
+export function useTestRequestTimeout(
+  props: HookInput<'TestRequestTimeout', { stream?: boolean }> = {},
+): HookOutput<'TestRequestTimeout', { stream: true }> | HookOutput<'TestRequestTimeout', { stream: false }> {
+  let action: ServerAction = Actions.TestRequestTimeout;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestRequestTimeout;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TestRequestTimeout', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the TestRetryConstant BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -11018,6 +11068,56 @@ export function useTestSingleFallbackClient(
   }
 }
 /**
+ * A specialized hook for the TestStreamingTimeout BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestStreamingTimeout({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestStreamingTimeout({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestStreamingTimeout(props: HookInput<'TestStreamingTimeout', { stream: false }>): HookOutput<'TestStreamingTimeout', { stream: false }>
+export function useTestStreamingTimeout(props?: HookInput<'TestStreamingTimeout', { stream?: true }>): HookOutput<'TestStreamingTimeout', { stream: true }>
+export function useTestStreamingTimeout(
+  props: HookInput<'TestStreamingTimeout', { stream?: boolean }> = {},
+): HookOutput<'TestStreamingTimeout', { stream: true }> | HookOutput<'TestStreamingTimeout', { stream: false }> {
+  let action: ServerAction = Actions.TestStreamingTimeout;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestStreamingTimeout;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TestStreamingTimeout', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the TestThinking BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -11065,6 +11165,106 @@ export function useTestThinking(
     return useBamlAction(action, props)
   } else {
     return useBamlAction(action, props as HookInput<'TestThinking', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the TestTimeoutError BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestTimeoutError({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestTimeoutError({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestTimeoutError(props: HookInput<'TestTimeoutError', { stream: false }>): HookOutput<'TestTimeoutError', { stream: false }>
+export function useTestTimeoutError(props?: HookInput<'TestTimeoutError', { stream?: true }>): HookOutput<'TestTimeoutError', { stream: true }>
+export function useTestTimeoutError(
+  props: HookInput<'TestTimeoutError', { stream?: boolean }> = {},
+): HookOutput<'TestTimeoutError', { stream: true }> | HookOutput<'TestTimeoutError', { stream: false }> {
+  let action: ServerAction = Actions.TestTimeoutError;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestTimeoutError;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TestTimeoutError', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the TestTimeoutFallback BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestTimeoutFallback({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestTimeoutFallback({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestTimeoutFallback(props: HookInput<'TestTimeoutFallback', { stream: false }>): HookOutput<'TestTimeoutFallback', { stream: false }>
+export function useTestTimeoutFallback(props?: HookInput<'TestTimeoutFallback', { stream?: true }>): HookOutput<'TestTimeoutFallback', { stream: true }>
+export function useTestTimeoutFallback(
+  props: HookInput<'TestTimeoutFallback', { stream?: boolean }> = {},
+): HookOutput<'TestTimeoutFallback', { stream: true }> | HookOutput<'TestTimeoutFallback', { stream: false }> {
+  let action: ServerAction = Actions.TestTimeoutFallback;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestTimeoutFallback;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TestTimeoutFallback', { stream: false }>)
   }
 }
 /**
@@ -11263,6 +11463,56 @@ export function useTestVertexWithSystemInstructions(
     return useBamlAction(action, props)
   } else {
     return useBamlAction(action, props as HookInput<'TestVertexWithSystemInstructions', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the TestZeroTimeout BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestZeroTimeout({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestZeroTimeout({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestZeroTimeout(props: HookInput<'TestZeroTimeout', { stream: false }>): HookOutput<'TestZeroTimeout', { stream: false }>
+export function useTestZeroTimeout(props?: HookInput<'TestZeroTimeout', { stream?: true }>): HookOutput<'TestZeroTimeout', { stream: true }>
+export function useTestZeroTimeout(
+  props: HookInput<'TestZeroTimeout', { stream?: boolean }> = {},
+): HookOutput<'TestZeroTimeout', { stream: true }> | HookOutput<'TestZeroTimeout', { stream: false }> {
+  let action: ServerAction = Actions.TestZeroTimeout;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestZeroTimeout;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TestZeroTimeout', { stream: false }>)
   }
 }
 /**
@@ -12162,6 +12412,102 @@ export function useExecFetchAs(
   }
 }
 /**
+ * A specialized hook for the ExecFetchAsWithHttpPostRequest BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** types.DummyJsonTodo
+ * - **Streaming Partial:** DummyJsonTodo | null
+ * - **Streaming Final:** types.DummyJsonTodo
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useExecFetchAsWithHttpPostRequest({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useExecFetchAsWithHttpPostRequest({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useExecFetchAsWithHttpPostRequest(props: HookInput<'ExecFetchAsWithHttpPostRequest', { stream: false }>): HookOutput<'ExecFetchAsWithHttpPostRequest', { stream: false }>
+export function useExecFetchAsWithHttpPostRequest(props?: HookInput<'ExecFetchAsWithHttpPostRequest', { stream?: true }>): HookOutput<'ExecFetchAsWithHttpPostRequest', { stream: true }>
+export function useExecFetchAsWithHttpPostRequest(
+  props: HookInput<'ExecFetchAsWithHttpPostRequest', { stream?: boolean }> = {},
+): HookOutput<'ExecFetchAsWithHttpPostRequest', { stream: true }> | HookOutput<'ExecFetchAsWithHttpPostRequest', { stream: false }> {
+  let action: ServerAction = Actions.ExecFetchAsWithHttpPostRequest;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.ExecFetchAsWithHttpPostRequest;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'ExecFetchAsWithHttpPostRequest', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the ExecFetchAsWithHttpPutRequestAndClassJson BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** types.DummyJsonTodo
+ * - **Streaming Partial:** DummyJsonTodo | null
+ * - **Streaming Final:** types.DummyJsonTodo
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useExecFetchAsWithHttpPutRequestAndClassJson({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useExecFetchAsWithHttpPutRequestAndClassJson({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useExecFetchAsWithHttpPutRequestAndClassJson(props: HookInput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream: false }>): HookOutput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream: false }>
+export function useExecFetchAsWithHttpPutRequestAndClassJson(props?: HookInput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream?: true }>): HookOutput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream: true }>
+export function useExecFetchAsWithHttpPutRequestAndClassJson(
+  props: HookInput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream?: boolean }> = {},
+): HookOutput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream: true }> | HookOutput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream: false }> {
+  let action: ServerAction = Actions.ExecFetchAsWithHttpPutRequestAndClassJson;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.ExecFetchAsWithHttpPutRequestAndClassJson;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'ExecFetchAsWithHttpPutRequestAndClassJson', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the HomeEnvVarIsEmpty BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -12214,9 +12560,7 @@ export function useHomeEnvVarIsEmpty(
  *
  * **Input Types:**
  *
- * - prev: string
- *
- * - next: string
+ * - word: string
  *
  *
  * **Return Type:**
@@ -12266,9 +12610,7 @@ export function useIsTargetWord(
  *
  * **Input Types:**
  *
- * - prev: string
- *
- * - next: string
+ * - word: string
  *
  *
  * **Return Type:**
@@ -12420,9 +12762,7 @@ export function useNormalElseIfStmt(
  *
  * **Input Types:**
  *
- * - prev: string
- *
- * - next: string
+ * - value: string
  *
  *
  * **Return Type:**

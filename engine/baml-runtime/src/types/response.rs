@@ -119,7 +119,34 @@ impl FunctionResult {
                 Ok(val) => Ok(val),
                 Err(err) => Err(anyhow::anyhow!(self.format_last_error_with_details(err))),
             })
-            .unwrap_or_else(|| Err(anyhow::anyhow!("No result from baml - Please report this error to our team with BAML_LOG=info enabled so we can improve this error message")))
+            .unwrap_or_else(|| {
+                // If we don't have a parsed result, check if we have an LLMFailure
+                match self.llm_response() {
+                    LLMResponse::LLMFailure(err) => {
+                        // Convert LLMFailure to appropriate error type
+                        match &err.code {
+                            crate::internal::llm_client::ErrorCode::Timeout => {
+                                Err(anyhow::anyhow!(crate::errors::ExposedError::TimeoutError {
+                                    client_name: err.client.clone(),
+                                    message: err.message.clone(),
+                                }))
+                            }
+                            crate::internal::llm_client::ErrorCode::Other(2) => {
+                                Err(anyhow::anyhow!(err.message.clone()))
+                            }
+                            _ => {
+                                Err(anyhow::anyhow!(crate::errors::ExposedError::ClientHttpError {
+                                    client_name: err.client.clone(),
+                                    message: err.message.clone(),
+                                    status_code: err.code.clone(),
+                                    detailed_message: err.message.clone(),
+                                }))
+                            }
+                        }
+                    }
+                    _ => Err(anyhow::anyhow!("No result from baml - Please report this error to our team with BAML_LOG=info enabled so we can improve this error message"))
+                }
+            })
     }
 
     fn format_last_error_with_details(&self, last_error: &anyhow::Error) -> ExposedError {
@@ -247,6 +274,10 @@ impl FunctionResult {
                 detailed_message: ref mut prev,
                 ..
             } => *prev = detail,
+            ExposedError::TimeoutError { .. } => {
+                // TimeoutError doesn't have a detailed_message field, so we can't update it
+                // We would need to redesign TimeoutError to include a detailed_message field if needed
+            }
             ExposedError::AbortError {
                 detailed_message: ref mut prev,
             } => *prev = detail,

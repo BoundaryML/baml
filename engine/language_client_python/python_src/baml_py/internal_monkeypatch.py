@@ -62,3 +62,17 @@ class BamlClientFinishReasonError(BamlError):
         if self.detailed_message:
             return f"BamlClientFinishReasonError(message={self.message}, raw_output={self.raw_output}, prompt={self.prompt}, finish_reason={self.finish_reason}, detailed_message={self.detailed_message})"
         return f"BamlClientFinishReasonError(message={self.message}, raw_output={self.raw_output}, prompt={self.prompt}, finish_reason={self.finish_reason})"
+
+
+class BamlTimeoutError(BamlClientError):
+    """Raised when a request times out."""
+    def __init__(self, client_name: str, message: str):
+        super().__init__(message)
+        self.client_name = client_name
+        self.message = message
+
+    def __str__(self):
+        return f"BamlTimeoutError(client_name={self.client_name}, message={self.message})"
+
+    def __repr__(self):
+        return f"BamlTimeoutError(client_name={self.client_name}, message={self.message})"

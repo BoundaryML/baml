@@ -153,7 +153,7 @@ class TestEnum(str, Enum):
     G = "G"
 
 # #########################################################################
-# Generated classes (104)
+# Generated classes (105)
 # #########################################################################
 
 class AddTodoItem(BaseModel):
@@ -261,6 +261,11 @@ class Document1559(BaseModel):
 
 class DummyJsonTodo(BaseModel):
     id: int
+    todo: str
+    completed: bool
+    userId: int
+
+class DummyJsonTodoUpdate(BaseModel):
     todo: str
     completed: bool
     userId: int

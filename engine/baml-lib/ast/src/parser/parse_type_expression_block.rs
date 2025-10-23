@@ -1,7 +1,7 @@
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 use super::{
-    helpers::{parsing_catch_all, Pair},
+    helpers::{assert_correct_parser, parsing_catch_all, Pair},
     parse_attribute::parse_attribute,
     parse_comments::*,
     parse_identifier::parse_identifier,
@@ -9,17 +9,16 @@ use super::{
     Rule,
 };
 use crate::{
-    assert_correct_parser,
     ast::{TypeExpressionBlock, *},
     parser::{parse_expr::parse_expr_fn, parse_field::parse_type_expr},
-}; // Add this line to import DatamodelParser
+};
 
 pub(crate) fn parse_type_expression_block(
     pair: Pair<'_>,
     doc_comment: Option<Pair<'_>>,
     diagnostics: &mut Diagnostics,
 ) -> TypeExpressionBlock {
-    assert_correct_parser!(pair, Rule::type_expression_block);
+    assert_correct_parser(&pair, &[Rule::type_expression_block], diagnostics);
 
     let pair_span = pair.as_span();
     let mut name: Option<Identifier> = None;
@@ -132,12 +131,12 @@ pub(crate) fn parse_type_expression_block(
                                 diagnostics.span(item.as_span()),
                             ))
                         }
-                        _ => parsing_catch_all(item, "type_expression"),
+                        _ => parsing_catch_all(item, "type_expression", diagnostics),
                     }
                 }
             }
 
-            _ => parsing_catch_all(current, "type_expression"),
+            _ => parsing_catch_all(current, "type_expression", diagnostics),
         }
     }
 
@@ -161,7 +160,7 @@ pub(crate) fn parse_type_expression_block(
             methods,
             input,
             attributes,
-            documentation: doc_comment.and_then(parse_comment_block),
+            documentation: doc_comment.and_then(|c| parse_comment_block(c, diagnostics)),
             span: diagnostics.span(pair_span),
             sub_type: sub_type.0,
             type_span: diagnostics.span(sub_type.1),

@@ -406,10 +406,16 @@ fn main() -> std::io::Result<()> {
             .write_to_file(out_path.clone());
         if std::env::var("CI").is_ok() && res {
             let new_content = std::fs::read_to_string(&out_path).unwrap();
-            println!("New header content: \n==============\n{new_content}");
-            println!("\n\n");
-            println!("Old header content: \n==============\n{outpath_content}");
-            panic!("cbindgen generated a diff");
+            // Normalize line endings for comparison (Windows CRLF vs Unix LF)
+            let normalized_old = outpath_content.replace("\r\n", "\n");
+            let normalized_new = new_content.replace("\r\n", "\n");
+
+            if normalized_old != normalized_new {
+                println!("New header content: \n==============\n{new_content}");
+                println!("\n\n");
+                println!("Old header content: \n==============\n{outpath_content}");
+                panic!("cbindgen generated a diff");
+            }
         }
     }
 

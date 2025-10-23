@@ -127,17 +127,23 @@ pub(crate) fn parse_value_expression_block(
                             }
                         }
                         Rule::empty_lines => {}
+                        Rule::stmt => {
+                            // Statements are allowed in expression functions that got parsed as value_expression_block.
+                            // They will be handled during HIR lowering when we distinguish between
+                            // LLM functions (with client/prompt) and expression functions (with code).
+                            // For now, just ignore them during parsing.
+                        }
                         Rule::BLOCK_LEVEL_CATCH_ALL => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
                                 "This line is not a valid field or attribute definition. A valid property may look like: 'myProperty \"some value\"' for example, with no colons.",
                                 diagnostics.span(item.as_span()),
                             ))
                         }
-                        _ => parsing_catch_all(item, "model"),
+                        _ => parsing_catch_all(item, "model", diagnostics),
                     }
                 }
             }
-            _ => parsing_catch_all(current, "function"),
+            _ => parsing_catch_all(current, "function", diagnostics),
         }
     }
 
@@ -170,7 +176,7 @@ pub(crate) fn parse_value_expression_block(
             output,
             attributes,
             fields,
-            documentation: doc_comment.and_then(parse_comment_block),
+            documentation: doc_comment.and_then(|c| parse_comment_block(c, diagnostics)),
             span: diagnostics.span(pair_span),
             type_builder,
             block_type: sub_type.unwrap_or(ValueExprBlockType::Function),

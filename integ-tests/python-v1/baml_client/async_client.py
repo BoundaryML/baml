@@ -3214,6 +3214,21 @@ class BamlAsyncClient:
                 "pdf": pdf,
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestRequestTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestRequestTimeout(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestRequestTimeout", args={
+                "input": input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestRetryConstant(self, 
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -3274,6 +3289,21 @@ class BamlAsyncClient:
                 
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestStreamingTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestStreamingTimeout(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestStreamingTimeout", args={
+                "input": input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestThinking(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.CustomStory:
@@ -3289,6 +3319,36 @@ class BamlAsyncClient:
                 "input": input,
             })
             return typing.cast(types.CustomStory, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestTimeoutError(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestTimeoutError(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTimeoutError", args={
+                "input": input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestTimeoutFallback(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestTimeoutFallback(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTimeoutFallback", args={
+                "input": input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestUniverseQuestion(self, question: types.UniverseQuestionInput,
         baml_options: BamlCallOptions = {},
     ) -> types.UniverseQuestion:
@@ -3347,6 +3407,21 @@ class BamlAsyncClient:
             # Original non-streaming code
             result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestVertexWithSystemInstructions", args={
                 
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestZeroTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestZeroTimeout(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestZeroTimeout", args={
+                "input": input,
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def UnionTest_Function(self, input: typing.Union[str, bool],
@@ -3619,6 +3694,36 @@ class BamlAsyncClient:
                 "url": url,
             })
             return typing.cast(types.DummyJsonTodo, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ExecFetchAsWithHttpPostRequest(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> types.DummyJsonTodo:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.ExecFetchAsWithHttpPostRequest(
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="ExecFetchAsWithHttpPostRequest", args={
+                
+            })
+            return typing.cast(types.DummyJsonTodo, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> types.DummyJsonTodo:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.ExecFetchAsWithHttpPutRequestAndClassJson(
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
+                
+            })
+            return typing.cast(types.DummyJsonTodo, result.cast_to(types, types, stream_types, False, __runtime__))
     async def HomeEnvVarIsEmpty(self, 
         baml_options: BamlCallOptions = {},
     ) -> bool:
@@ -3634,34 +3739,34 @@ class BamlAsyncClient:
                 
             })
             return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
-    async def IsTargetWord(self, prev: str,next: str,
+    async def IsTargetWord(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> bool:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.IsTargetWord(prev=prev,next=next,
+            stream = self.stream.IsTargetWord(word=word,
                 baml_options=baml_options)
             return await stream.get_final_response()
         else:
             # Original non-streaming code
             result = await self.__options.merge_options(baml_options).call_function_async(function_name="IsTargetWord", args={
-                "prev": prev,"next": next,
+                "word": word,
             })
             return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
-    async def IsTargetWord2(self, prev: str,next: str,
+    async def IsTargetWord2(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> bool:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.IsTargetWord2(prev=prev,next=next,
+            stream = self.stream.IsTargetWord2(word=word,
                 baml_options=baml_options)
             return await stream.get_final_response()
         else:
             # Original non-streaming code
             result = await self.__options.merge_options(baml_options).call_function_async(function_name="IsTargetWord2", args={
-                "prev": prev,"next": next,
+                "word": word,
             })
             return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
     async def IterativeFibonacci(self, n: int,
@@ -3694,19 +3799,19 @@ class BamlAsyncClient:
                 "a": a,"b": b,
             })
             return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
-    async def NotEmpty(self, prev: str,next: str,
+    async def NotEmpty(self, value: str,
         baml_options: BamlCallOptions = {},
     ) -> bool:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.NotEmpty(prev=prev,next=next,
+            stream = self.stream.NotEmpty(value=value,
                 baml_options=baml_options)
             return await stream.get_final_response()
         else:
             # Original non-streaming code
             result = await self.__options.merge_options(baml_options).call_function_async(function_name="NotEmpty", args={
-                "prev": prev,"next": next,
+                "value": value,
             })
             return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
     async def ReturnCategory(self, category: types.Category,
@@ -6436,6 +6541,18 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def TestRequestTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestRequestTimeout", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def TestRetryConstant(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[str, str]:
@@ -6484,6 +6601,18 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def TestStreamingTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestStreamingTimeout", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def TestThinking(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.CustomStory, types.CustomStory]:
@@ -6494,6 +6623,30 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(stream_types.CustomStory, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.CustomStory, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTimeoutError(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestTimeoutError", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTimeoutFallback(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestTimeoutFallback", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestUniverseQuestion(self, question: types.UniverseQuestionInput,
@@ -6537,6 +6690,18 @@ class BamlStreamClient:
     ) -> baml_py.BamlStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestVertexWithSystemInstructions", args={
             
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestZeroTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestZeroTimeout", args={
+            "input": input,
         })
         return baml_py.BamlStream[str, str](
           result,
@@ -6760,6 +6925,30 @@ class BamlStreamClient:
           lambda x: typing.cast(types.DummyJsonTodo, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def ExecFetchAsWithHttpPostRequest(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ExecFetchAsWithHttpPostRequest", args={
+            
+        })
+        return baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo](
+          result,
+          lambda x: typing.cast(typing.Optional["stream_types.DummyJsonTodo"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.DummyJsonTodo, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
+            
+        })
+        return baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo](
+          result,
+          lambda x: typing.cast(typing.Optional["stream_types.DummyJsonTodo"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.DummyJsonTodo, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def HomeEnvVarIsEmpty(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[bool], bool]:
@@ -6772,11 +6961,11 @@ class BamlStreamClient:
           lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def IsTargetWord(self, prev: str,next: str,
+    def IsTargetWord(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[bool], bool]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="IsTargetWord", args={
-            "prev": prev,"next": next,
+            "word": word,
         })
         return baml_py.BamlStream[typing.Optional[bool], bool](
           result,
@@ -6784,11 +6973,11 @@ class BamlStreamClient:
           lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def IsTargetWord2(self, prev: str,next: str,
+    def IsTargetWord2(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[bool], bool]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="IsTargetWord2", args={
-            "prev": prev,"next": next,
+            "word": word,
         })
         return baml_py.BamlStream[typing.Optional[bool], bool](
           result,
@@ -6820,11 +7009,11 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def NotEmpty(self, prev: str,next: str,
+    def NotEmpty(self, value: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[bool], bool]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="NotEmpty", args={
-            "prev": prev,"next": next,
+            "value": value,
         })
         return baml_py.BamlStream[typing.Optional[bool], bool](
           result,
@@ -8471,6 +8660,13 @@ class BamlHttpRequestClient:
             "pdf": pdf,
         }, mode="request")
         return result
+    async def TestRequestTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestRequestTimeout", args={
+            "input": input,
+        }, mode="request")
+        return result
     async def TestRetryConstant(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -8499,10 +8695,31 @@ class BamlHttpRequestClient:
             
         }, mode="request")
         return result
+    async def TestStreamingTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestStreamingTimeout", args={
+            "input": input,
+        }, mode="request")
+        return result
     async def TestThinking(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestThinking", args={
+            "input": input,
+        }, mode="request")
+        return result
+    async def TestTimeoutError(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTimeoutError", args={
+            "input": input,
+        }, mode="request")
+        return result
+    async def TestTimeoutFallback(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTimeoutFallback", args={
             "input": input,
         }, mode="request")
         return result
@@ -8532,6 +8749,13 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestVertexWithSystemInstructions", args={
             
+        }, mode="request")
+        return result
+    async def TestZeroTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestZeroTimeout", args={
+            "input": input,
         }, mode="request")
         return result
     async def UnionTest_Function(self, input: typing.Union[str, bool],
@@ -8660,6 +8884,20 @@ class BamlHttpRequestClient:
             "url": url,
         }, mode="request")
         return result
+    async def ExecFetchAsWithHttpPostRequest(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPostRequest", args={
+            
+        }, mode="request")
+        return result
+    async def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
+            
+        }, mode="request")
+        return result
     async def HomeEnvVarIsEmpty(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -8667,18 +8905,18 @@ class BamlHttpRequestClient:
             
         }, mode="request")
         return result
-    async def IsTargetWord(self, prev: str,next: str,
+    async def IsTargetWord(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="IsTargetWord", args={
-            "prev": prev,"next": next,
+            "word": word,
         }, mode="request")
         return result
-    async def IsTargetWord2(self, prev: str,next: str,
+    async def IsTargetWord2(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="IsTargetWord2", args={
-            "prev": prev,"next": next,
+            "word": word,
         }, mode="request")
         return result
     async def IterativeFibonacci(self, n: int,
@@ -8695,11 +8933,11 @@ class BamlHttpRequestClient:
             "a": a,"b": b,
         }, mode="request")
         return result
-    async def NotEmpty(self, prev: str,next: str,
+    async def NotEmpty(self, value: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NotEmpty", args={
-            "prev": prev,"next": next,
+            "value": value,
         }, mode="request")
         return result
     async def ReturnCategory(self, category: types.Category,
@@ -10271,6 +10509,13 @@ class BamlHttpStreamRequestClient:
             "pdf": pdf,
         }, mode="stream")
         return result
+    async def TestRequestTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestRequestTimeout", args={
+            "input": input,
+        }, mode="stream")
+        return result
     async def TestRetryConstant(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -10299,10 +10544,31 @@ class BamlHttpStreamRequestClient:
             
         }, mode="stream")
         return result
+    async def TestStreamingTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestStreamingTimeout", args={
+            "input": input,
+        }, mode="stream")
+        return result
     async def TestThinking(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestThinking", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    async def TestTimeoutError(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTimeoutError", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    async def TestTimeoutFallback(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTimeoutFallback", args={
             "input": input,
         }, mode="stream")
         return result
@@ -10332,6 +10598,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestVertexWithSystemInstructions", args={
             
+        }, mode="stream")
+        return result
+    async def TestZeroTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestZeroTimeout", args={
+            "input": input,
         }, mode="stream")
         return result
     async def UnionTest_Function(self, input: typing.Union[str, bool],
@@ -10460,6 +10733,20 @@ class BamlHttpStreamRequestClient:
             "url": url,
         }, mode="stream")
         return result
+    async def ExecFetchAsWithHttpPostRequest(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPostRequest", args={
+            
+        }, mode="stream")
+        return result
+    async def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
+            
+        }, mode="stream")
+        return result
     async def HomeEnvVarIsEmpty(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -10467,18 +10754,18 @@ class BamlHttpStreamRequestClient:
             
         }, mode="stream")
         return result
-    async def IsTargetWord(self, prev: str,next: str,
+    async def IsTargetWord(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="IsTargetWord", args={
-            "prev": prev,"next": next,
+            "word": word,
         }, mode="stream")
         return result
-    async def IsTargetWord2(self, prev: str,next: str,
+    async def IsTargetWord2(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="IsTargetWord2", args={
-            "prev": prev,"next": next,
+            "word": word,
         }, mode="stream")
         return result
     async def IterativeFibonacci(self, n: int,
@@ -10495,11 +10782,11 @@ class BamlHttpStreamRequestClient:
             "a": a,"b": b,
         }, mode="stream")
         return result
-    async def NotEmpty(self, prev: str,next: str,
+    async def NotEmpty(self, value: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NotEmpty", args={
-            "prev": prev,"next": next,
+            "value": value,
         }, mode="stream")
         return result
     async def ReturnCategory(self, category: types.Category,

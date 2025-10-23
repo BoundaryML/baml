@@ -6,7 +6,7 @@ use baml_types::{ApiKeyWithProvenance, EvaluationContext, StringOr, UnresolvedVa
 use indexmap::IndexMap;
 use secrecy::SecretString;
 
-use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
+use super::helpers::{Error, HttpConfig, PropertyHandler, UnresolvedUrl};
 use crate::{
     AllowedRoleMetadata, FinishReasonFilter, MediaUrlHandler, RolesSelection,
     SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
@@ -29,6 +29,7 @@ pub struct UnresolvedAnthropic<Meta> {
     properties: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
     finish_reason_filter: UnresolvedFinishReasonFilter,
     media_url_handler: UnresolvedMediaUrlHandler,
+    http_config: HttpConfig,
 }
 
 impl<Meta> UnresolvedAnthropic<Meta> {
@@ -51,6 +52,7 @@ impl<Meta> UnresolvedAnthropic<Meta> {
                 .collect(),
             finish_reason_filter: self.finish_reason_filter.clone(),
             media_url_handler: self.media_url_handler.clone(),
+            http_config: self.http_config.clone(),
         }
     }
 }
@@ -66,6 +68,7 @@ pub struct ResolvedAnthropic {
     pub proxy_url: Option<String>,
     pub finish_reason_filter: FinishReasonFilter,
     pub media_url_handler: MediaUrlHandler,
+    pub http_config: HttpConfig,
 }
 
 impl ResolvedAnthropic {
@@ -114,6 +117,7 @@ impl ResolvedAnthropic {
             allowed_metadata: AllowedRoleMetadata::All,
             supported_request_modes: SupportedRequestModes { stream: Some(true) },
             media_url_handler: MediaUrlHandler::default(),
+            http_config: HttpConfig::default(),
         }
     }
 }
@@ -175,6 +179,7 @@ impl<Meta: Clone> UnresolvedAnthropic<Meta> {
             proxy_url: super::helpers::get_proxy_url(ctx),
             finish_reason_filter: self.finish_reason_filter.resolve(ctx)?,
             media_url_handler: self.media_url_handler.resolve(ctx)?,
+            http_config: self.http_config.clone(),
         })
     }
 
@@ -185,6 +190,8 @@ impl<Meta: Clone> UnresolvedAnthropic<Meta> {
             .ensure_string("api_key", false)
             .map(|(_, v, _)| v.clone())
             .unwrap_or(StringOr::EnvVar("ANTHROPIC_API_KEY".to_string()));
+
+        let http_config = properties.ensure_http_config("anthropic");
 
         let role_selection = properties.ensure_roles_selection();
         let allowed_metadata = properties.ensure_allowed_metadata();
@@ -207,6 +214,7 @@ impl<Meta: Clone> UnresolvedAnthropic<Meta> {
             properties,
             finish_reason_filter,
             media_url_handler,
+            http_config,
         })
     }
 }

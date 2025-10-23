@@ -1278,6 +1278,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenaiResponsesPdfs", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def TestRequestTimeout(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestRequestTimeout", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def TestRetryConstant(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -1302,11 +1308,29 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestSingleFallbackClient", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def TestStreamingTimeout(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestStreamingTimeout", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def TestThinking(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.CustomStory:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestThinking", llm_response=llm_response, mode="request")
         return typing.cast(types.CustomStory, result)
+
+    def TestTimeoutError(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTimeoutError", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestTimeoutFallback(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTimeoutFallback", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
 
     def TestUniverseQuestion(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -1330,6 +1354,12 @@ class LlmResponseParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestVertexWithSystemInstructions", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestZeroTimeout(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestZeroTimeout", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
     def UnionTest_Function(
@@ -1438,6 +1468,18 @@ class LlmResponseParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.DummyJsonTodo:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAs", llm_response=llm_response, mode="request")
+        return typing.cast(types.DummyJsonTodo, result)
+
+    def ExecFetchAsWithHttpPostRequest(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.DummyJsonTodo:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPostRequest", llm_response=llm_response, mode="request")
+        return typing.cast(types.DummyJsonTodo, result)
+
+    def ExecFetchAsWithHttpPutRequestAndClassJson(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.DummyJsonTodo:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", llm_response=llm_response, mode="request")
         return typing.cast(types.DummyJsonTodo, result)
 
     def HomeEnvVarIsEmpty(
@@ -2822,6 +2864,12 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenaiResponsesPdfs", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
+    def TestRequestTimeout(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestRequestTimeout", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
     def TestRetryConstant(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -2846,11 +2894,29 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestSingleFallbackClient", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
+    def TestStreamingTimeout(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestStreamingTimeout", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
     def TestThinking(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.CustomStory:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestThinking", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.CustomStory, result)
+
+    def TestTimeoutError(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTimeoutError", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestTimeoutFallback(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTimeoutFallback", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
 
     def TestUniverseQuestion(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2874,6 +2940,12 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestVertexWithSystemInstructions", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestZeroTimeout(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestZeroTimeout", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
     def UnionTest_Function(
@@ -2982,6 +3054,18 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional["stream_types.DummyJsonTodo"]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAs", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], result)
+
+    def ExecFetchAsWithHttpPostRequest(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional["stream_types.DummyJsonTodo"]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPostRequest", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], result)
+
+    def ExecFetchAsWithHttpPutRequestAndClassJson(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional["stream_types.DummyJsonTodo"]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], result)
 
     def HomeEnvVarIsEmpty(

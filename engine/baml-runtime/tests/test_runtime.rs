@@ -109,8 +109,8 @@ mod internal_tests {
                 None,
                 None,
                 None,
-                None,
                 HashMap::new(),
+                None,
                 TripWire::new(None),
             )
             .await;
@@ -271,6 +271,50 @@ mod internal_tests {
         //     .map_err(|e| anyhow::anyhow!("Error rendering prompt: {:#?}", e))?;
 
         log::info!("Prompt: {prompt:#?}");
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn test_class_with_block_description() -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = make_test_runtime(
+            r##"
+        class User {
+          name string @description("Full name")
+          email string
+
+          @@description("Represents a system user")
+        }
+
+        function GetUser(input: string) -> User {
+          client "openai/gpt-4o"
+          prompt #"
+            Extract user info:
+            {{ ctx.output_format }}
+          "#
+        }
+
+        test TestUser {
+          functions [GetUser]
+          args {
+            input "John Doe john@example.com"
+          }
+        }
+        "##,
+        )?;
+
+        let ctx = runtime
+            .create_ctx_manager(BamlValue::String("test".to_string()), None)
+            .create_ctx_with_default();
+
+        let params = runtime.get_test_params("GetUser", "TestUser", &ctx, true)?;
+        let render_prompt_future = runtime.render_prompt("GetUser", &ctx, &params, Some(0));
+        let (prompt, _scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
+
+        // Verify the rendered prompt contains the class description
+        let prompt_str = prompt.to_string();
+        assert!(prompt_str.contains("// Represents a system user"));
+        assert!(prompt_str.contains("// Full name"));
 
         Ok(())
     }
