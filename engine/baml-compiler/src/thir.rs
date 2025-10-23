@@ -839,15 +839,15 @@ impl<T: Clone> Statement<T> {
             } => {
                 let mut parts = vec![];
                 if let Some(c) = channel {
-                    parts.push(format!("channel: \"{}\"", c));
+                    parts.push(format!("channel: \"{c}\""));
                 }
                 if let Some(w) = when {
-                    parts.push(format!("when: {:?}", w));
+                    parts.push(format!("when: {w:?}"));
                 }
                 format!("{}.$watch.options({{{}}})", variable, parts.join(", "))
             }
             Statement::WatchNotify { variable, .. } => {
-                format!("{}.$watch.notify()", variable)
+                format!("{variable}.$watch.notify()")
             }
         }
     }

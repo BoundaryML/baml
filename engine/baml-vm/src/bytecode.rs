@@ -1,7 +1,8 @@
 //! Instruction set and bytecode representation.
 
-use crate::{types::Value, GlobalIndex, ObjectIndex};
 use arraystring::{typenum::U255, ArrayString};
+
+use crate::{types::Value, GlobalIndex, ObjectIndex};
 
 /// Individual bytecode instruction.
 ///

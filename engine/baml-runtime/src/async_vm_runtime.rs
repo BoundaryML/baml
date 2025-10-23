@@ -348,7 +348,7 @@ impl BamlAsyncVmRuntime {
                 }
 
                 Ok(VmExecState::Notify(notification)) => {
-                    log::debug!("[VM] Notify: {:?}", notification);
+                    log::debug!("[VM] Notify: {notification:?}");
                     match notification {
                         baml_vm::vm::WatchNotification::Variables(nodes) => {
                             for node in nodes {

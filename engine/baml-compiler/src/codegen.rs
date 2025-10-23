@@ -1,8 +1,8 @@
 //! Baml VM bytecode generation.
 
-use arraystring::{typenum::U255, ArrayString};
 use std::collections::{HashMap, HashSet};
 
+use arraystring::{typenum::U255, ArrayString};
 use baml_types::{ir_type::TypeIR, BamlMap, BamlMediaType, BamlValueWithMeta, TypeValue};
 use baml_vm::{
     BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex,
