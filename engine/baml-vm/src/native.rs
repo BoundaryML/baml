@@ -403,7 +403,7 @@ fn deep_equals_recursive(
                 (Object::Map(a_map), Object::Map(b_map)) => {
                     a_map.len() == b_map.len()
                         && a_map.iter().all(|(key, a_val)| {
-                            b_map.get(key).map_or(false, |b_val| {
+                            b_map.get(key).is_some_and(|b_val| {
                                 deep_equals_recursive(vm, *a_val, *b_val, visited)
                             })
                         })
