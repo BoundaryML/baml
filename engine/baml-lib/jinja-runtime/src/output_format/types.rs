@@ -368,7 +368,7 @@ impl std::fmt::Display for ClassRender {
                 for line in desc.lines() {
                     writeln!(f, "  // {}", line)?;
                 }
-                writeln!(f, "")?;
+                writeln!(f)?;
             }
         }
 
