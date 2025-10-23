@@ -1555,7 +1555,9 @@ impl Vm {
                         return Err(RuntimeError::Other("Invalid manual notify".to_string()).into());
                     }
 
-                    return Ok(VmExecState::Notify(notifications));
+                    return Ok(VmExecState::Notify(WatchNotification::Variables(
+                        notifications,
+                    )));
                 }
 
                 Instruction::Call(arg_count) => {
