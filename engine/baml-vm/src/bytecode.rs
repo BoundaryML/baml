@@ -214,6 +214,9 @@ pub enum Instruction {
     /// [`crate::Vm::stack`] array.
     Watch(usize),
 
+    /// Manually triggers notifications for a watched variable.
+    Notify(usize),
+
     /// Call a function.
     ///
     /// Format: `CALL n` where `n` is the number of arguments passed to the
@@ -376,6 +379,7 @@ impl std::fmt::Display for Instruction {
                     block_name = &notification.block_name,
                 )
             }
+            Instruction::Notify(i) => write!(f, "NOTIFY {i}"),
         }
     }
 }

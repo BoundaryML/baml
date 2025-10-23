@@ -665,6 +665,7 @@ test RecursiveAliasCycle {
             None,
             TripWire::new(None),
             on_tick,
+            None,
         );
         let (res, call) = runtime.async_runtime.block_on(run_test_future);
 
@@ -1112,6 +1113,7 @@ test RecursiveAliasCycle {
             None,
             TripWire::new(None),
             on_tick,
+            None,
         );
         let (res1, _) = runtime.async_runtime.block_on(run_test_future);
         // Get the first client instance
@@ -1130,6 +1132,7 @@ test RecursiveAliasCycle {
             None,
             TripWire::new(None),
             on_tick,
+            None,
         );
         let (res2, _) = runtime.async_runtime.block_on(run_test_future);
         let client2 = runtime.llm_provider_from_function(

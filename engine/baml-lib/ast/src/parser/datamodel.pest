@@ -363,9 +363,9 @@ expr_body_stmt = {
 stmt = {
     INVALID_STMT_STARTING_CHAR* ~
     (
-        for_loop
-        | while_loop
-        | if_expression
+        (for_loop ~ SEMICOLON?)
+        | (while_loop ~ SEMICOLON?)
+        | (if_expression ~ SEMICOLON?)
         | (
             (
                 BREAK_KEYWORD

@@ -321,21 +321,21 @@ pub fn collect_vm_exec_states(
 }
 
 /// Helper struct for testing VM execution with expected Emit states.
-pub type EmitProgram = ProgramInput<Vec<Vec<Notification>>>;
+pub type WatchProgram = ProgramInput<Vec<Vec<Notification>>>;
 
 /// Assert that a VM program emits the expected sequence of emit states.
 ///
 /// This function drives the VM by repeatedly calling exec() and collects all states.
 /// It then filters for Emit states and compares them against the expected sequence.
 #[track_caller]
-pub fn assert_vm_emits(input: EmitProgram) -> anyhow::Result<()> {
+pub fn assert_vm_emits(input: WatchProgram) -> anyhow::Result<()> {
     assert_vm_emits_with_inspection(input, |_vm, _states| Ok(()))
 }
 
 /// Assert that a VM program emits the expected sequence of emit states, with custom inspection.
 #[track_caller]
 pub fn assert_vm_emits_with_inspection(
-    input: EmitProgram,
+    input: WatchProgram,
     inspect: impl FnOnce(&Vm, &[ExecState]) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     let (vm, states) = collect_vm_exec_states(input.source, input.function)?;

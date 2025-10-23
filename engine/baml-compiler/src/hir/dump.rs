@@ -303,7 +303,7 @@ impl Statement {
                     );
                 }
                 if let Some(w) = when {
-                    parts.push(RcDoc::text("when: ").append(RcDoc::text(w.clone())));
+                    parts.push(RcDoc::text("when: ").append(RcDoc::text("when")));
                 }
 
                 doc = doc.append(RcDoc::intersperse(parts, RcDoc::text(", ")));
@@ -739,7 +739,8 @@ impl WatchSpec {
         let mut args: Vec<String> = Vec::new();
         match &self.when {
             WatchWhen::Manual => args.push("when=manual".to_string()),
-            WatchWhen::True => {}
+            WatchWhen::Auto => {}
+            WatchWhen::Never => args.push("when=never".to_string()),
             WatchWhen::FunctionName(fn_name) => args.push(format!("when={fn_name}")),
         }
         args.push(format!("name={}", self.name));
