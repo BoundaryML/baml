@@ -347,54 +347,38 @@ impl BamlAsyncVmRuntime {
                     }
                 }
 
-                Ok(VmExecState::Notify(notification)) => {
-                    match notification {
-                        baml_vm::vm::WatchNotification::Variables(nodes) => {
-                            for node in nodes {
-                                let state = vm.watch.root_state(node).unwrap();
-                                let baml_vm::watch::NodeId::LocalVar(stack_index) = node else {
-                                    break 'mainloop Err(anyhow!("expected local variable notification, got object notification {:?}", node));
-                                };
-                                let (watched_var_name, function_name) =
-                                    vm.watched_vars.get(&stack_index).unwrap();
-                                baml_log::debug!("[VM] Notify: {}", &state.channel);
+                Ok(VmExecState::Notify(nodes)) => {
+                    for node in nodes {
+                        let state = vm.watch.root_state(node).unwrap();
+                        let baml_vm::watch::NodeId::LocalVar(stack_index) = node else {
+                            break 'mainloop Err(anyhow!("expected local variable notification, got object notification {:?}", node));
+                        };
+                        let (watched_var_name, function_name) =
+                            vm.watched_vars.get(&stack_index).unwrap();
+                        baml_log::debug!("[VM] Notify: {}", &state.channel);
 
-                                let fake_meta = watch::WatchValueMetadata {
-                                    constraints: Vec::new(),
-                                    response_checks: Vec::new(),
-                                    completion: Completion::default(),
-                                    r#type: baml_types::TypeIR::Top(Default::default()),
-                                };
+                        let fake_meta = watch::WatchValueMetadata {
+                            constraints: Vec::new(),
+                            response_checks: Vec::new(),
+                            completion: Completion::default(),
+                            r#type: baml_types::TypeIR::Top(Default::default()),
+                        };
 
-                                let current_value =
-                                    try_baml_value_from_vm_value(&vm, &state.value).unwrap();
+                        let current_value =
+                            try_baml_value_from_vm_value(&vm, &state.value).unwrap();
 
-                                let baml_value_with_meta =
-                                    BamlValueWithMeta::with_const_meta(&current_value, fake_meta);
+                        let baml_value_with_meta =
+                            BamlValueWithMeta::with_const_meta(&current_value, fake_meta);
 
-                                let notification = watch::WatchNotification::new_var(
-                                    watched_var_name.to_owned(), // variable name
-                                    state.channel.to_owned(),    // channel name
-                                    baml_value_with_meta,
-                                    function_name.to_owned(),
-                                );
+                        let notification = watch::WatchNotification::new_var(
+                            watched_var_name.to_owned(), // variable name
+                            state.channel.to_owned(),    // channel name
+                            baml_value_with_meta,
+                            function_name.to_owned(),
+                        );
 
-                                if let Some(handler) = watch_handler.as_ref() {
-                                    handler.lock().unwrap().notify(notification);
-                                }
-                            }
-                        }
-                        baml_vm::vm::WatchNotification::Block(notification) => {
-                            if let Some(handler) = watch_handler.as_ref() {
-                                handler.lock().unwrap().notify(
-                                    watch::WatchNotification::new_block(
-                                        String::from_utf8_lossy(&notification.block_name)
-                                            .to_string(),
-                                        String::from_utf8_lossy(&notification.function_name)
-                                            .to_string(),
-                                    ),
-                                );
-                            }
+                        if let Some(handler) = watch_handler.as_mut() {
+                            handler(notification);
                         }
                     }
                 }
