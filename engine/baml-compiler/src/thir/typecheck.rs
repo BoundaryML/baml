@@ -826,6 +826,21 @@ fn typecheck_statement(
     diagnostics: &mut Diagnostics,
 ) -> Option<thir::Statement<ExprMetadata>> {
     match stmt {
+        hir::Statement::AnnotatedStatement { headers, statement } => {
+            if let Some(statement) = statement {
+                typecheck_statement(statement, context, diagnostics).map(|stmt| {
+                    thir::Statement::AnnotatedStatement {
+                        headers: headers.clone(),
+                        statement: Some(Box::new(stmt)),
+                    }
+                })
+            } else {
+                Some(thir::Statement::AnnotatedStatement {
+                    headers: headers.clone(),
+                    statement: None,
+                })
+            }
+        }
         hir::Statement::Let {
             name,
             value,

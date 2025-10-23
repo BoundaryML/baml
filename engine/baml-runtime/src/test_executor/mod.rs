@@ -310,6 +310,7 @@ impl TestExecutor for BamlRuntime {
                                     None,                // tags
                                     TripWire::new(None), // No tripwire for test executor,
                                     on_tick,
+                                    None,
                                 )
                                 .await
                         }
@@ -321,6 +322,7 @@ impl TestExecutor for BamlRuntime {
                                     &test_name,
                                     &ctx_manager,
                                     env_vars.clone(),
+                                    None,
                                 )
                                 .await
                         }

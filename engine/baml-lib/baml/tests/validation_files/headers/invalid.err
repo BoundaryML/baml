@@ -1,64 +1,64 @@
-error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
-  -->  tests/validation_files/headers/invalid.baml:12
-   | 
-11 | function MixedOnSameLine() -> string {
-12 |     let x = "hello" ## Inline Header // Should fail
-13 |     x
-   | 
-error: Error validating Function "MixedOnSameLine": This field declaration is invalid. It is either missing a name or a type.
-  -->  tests/validation_files/headers/invalid.baml:13
-   | 
-12 |     let x = "hello" ## Inline Header // Should fail
-13 |     x
-   | 
-error: Statement must end with a semicolon.
-  -->  tests/validation_files/headers/invalid.baml:18
-   | 
-17 |     //#No Space After Hash // Should potentially fail depending on grammar rules
-18 |     let x = "test"
-19 |     x
-   | 
-error: Statement must end with a semicolon.
-  -->  tests/validation_files/headers/invalid.baml:25
-   | 
-24 |     // Empty header title - this should fail
-25 |     let x = "test"
-26 |     //##
-   | 
-error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
-  -->  tests/validation_files/headers/invalid.baml:33
-   | 
-32 | function HeaderInExpression() -> string {
-33 |     let x = "start" + # Middle Header // Should fail
-34 |         "end"
-   | 
-error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
-  -->  tests/validation_files/headers/invalid.baml:34
-   | 
-33 |     let x = "start" + # Middle Header // Should fail
-34 |         "end"
-35 |     x
-   | 
-error: Error validating Function "HeaderInExpression": This field declaration is invalid. It is either missing a name or a type.
-  -->  tests/validation_files/headers/invalid.baml:35
-   | 
-34 |         "end"
-35 |     x
-   | 
-error: Statement must end with a semicolon.
-  -->  tests/validation_files/headers/invalid.baml:39
-   | 
-38 | function HeaderInStringLiteral() -> string {
-39 |     let x = "This string contains # Header Text"
-40 |     let y = #"
-   | 
-error: Statement must end with a semicolon.
-  -->  tests/validation_files/headers/invalid.baml:40
-   | 
-39 |     let x = "This string contains # Header Text"
-40 |     let y = #"
-41 |         Raw string with # Header
-42 |         Should not be parsed
-43 |     "#
-44 |     x + y
-   | 
+[1;91merror[0m: [1mError validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.[0m
+  [1;94m-->[0m  [4mtests/validation_files/headers/invalid.baml:12[0m
+[1;94m   | [0m
+[1;94m11 | [0mfunction MixedOnSameLine() -> string {
+[1;94m12 | [0m    let x = "hello" [1;91m## Inline Header // Should fail[0m
+[1;94m13 | [0m    x
+[1;94m   | [0m
+[1;91merror[0m: [1mError validating Function "MixedOnSameLine": This field declaration is invalid. It is either missing a name or a type.[0m
+  [1;94m-->[0m  [4mtests/validation_files/headers/invalid.baml:13[0m
+[1;94m   | [0m
+[1;94m12 | [0m    let x = "hello" ## Inline Header // Should fail
+[1;94m13 | [0m    [1;91mx[0m
+[1;94m   | [0m
+[1;91merror[0m: [1mStatement must end with a semicolon.[0m
+  [1;94m-->[0m  [4mtests/validation_files/headers/invalid.baml:18[0m
+[1;94m   | [0m
+[1;94m17 | [0m    //#No Space After Hash // Should potentially fail depending on grammar rules
+[1;94m18 | [0m    [1;91mlet x = "test"[0m
+[1;94m19 | [0m    x
+[1;94m   | [0m
+[1;91merror[0m: [1mStatement must end with a semicolon.[0m
+  [1;94m-->[0m  [4mtests/validation_files/headers/invalid.baml:25[0m
+[1;94m   | [0m
+[1;94m24 | [0m    // Empty header title - this should fail
+[1;94m25 | [0m    [1;91mlet x = "test"[0m
+[1;94m26 | [0m    //##
+[1;94m   | [0m
+[1;91merror[0m: [1mError validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.[0m
+  [1;94m-->[0m  [4mtests/validation_files/headers/invalid.baml:33[0m
+[1;94m   | [0m
+[1;94m32 | [0mfunction HeaderInExpression() -> string {
+[1;94m33 | [0m    let x = "start" [1;91m+ # Middle Header // Should fail[0m
+[1;94m34 | [0m        "end"
+[1;94m   | [0m
+[1;91merror[0m: [1mError validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.[0m
+  [1;94m-->[0m  [4mtests/validation_files/headers/invalid.baml:34[0m
+[1;94m   | [0m
+[1;94m33 | [0m    let x = "start" + # Middle Header // Should fail
+[1;94m34 | [0m        [1;91m"end"[0m
+[1;94m35 | [0m    x
+[1;94m   | [0m
+[1;91merror[0m: [1mError validating Function "HeaderInExpression": This field declaration is invalid. It is either missing a name or a type.[0m
+  [1;94m-->[0m  [4mtests/validation_files/headers/invalid.baml:35[0m
+[1;94m   | [0m
+[1;94m34 | [0m        "end"
+[1;94m35 | [0m    [1;91mx[0m
+[1;94m   | [0m
+[1;91merror[0m: [1mStatement must end with a semicolon.[0m
+  [1;94m-->[0m  [4mtests/validation_files/headers/invalid.baml:39[0m
+[1;94m   | [0m
+[1;94m38 | [0mfunction HeaderInStringLiteral() -> string {
+[1;94m39 | [0m    [1;91mlet x = "This string contains # Header Text"[0m
+[1;94m40 | [0m    let y = #"
+[1;94m   | [0m
+[1;91merror[0m: [1mStatement must end with a semicolon.[0m
+  [1;94m-->[0m  [4mtests/validation_files/headers/invalid.baml:40[0m
+[1;94m   | [0m
+[1;94m39 | [0m    let x = "This string contains # Header Text"
+[1;94m40 | [0m    [1;91mlet y = #"[0m
+[1;94m41 | [0m        Raw string with # Header
+[1;94m42 | [0m        Should not be parsed
+[1;94m43 | [0m    "#
+[1;94m44 | [0m    x + y
+[1;94m   | [0m

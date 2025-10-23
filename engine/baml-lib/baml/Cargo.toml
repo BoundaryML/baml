@@ -24,6 +24,7 @@ base64.workspace = true
 dissimilar.workspace = true
 expect-test.workspace = true
 env_logger.workspace = true
+log.workspace = true
 indoc.workspace = true
 either.workspace = true
 strip-ansi-escapes.workspace = true

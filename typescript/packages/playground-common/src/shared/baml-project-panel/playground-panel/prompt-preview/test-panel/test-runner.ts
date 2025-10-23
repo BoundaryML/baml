@@ -13,6 +13,7 @@ import {
   currentAbortControllerAtom,
   flashRangesAtom,
 } from '../../atoms'
+import type { WatchNotification } from './types'
 import { isParallelTestsEnabledAtom, testHistoryAtom, selectedHistoryIndexAtom, type TestHistoryRun } from './atoms'
 import { isClientCallGraphEnabledAtom } from '../../preview-toolbar'
 import { apiKeysAtom } from '../../../../../components/api-keys-dialog/atoms';
@@ -116,11 +117,24 @@ const useRunTests = (maxBatchSize = 5) => {
               hasSignal: !!controller.signal,
               signalAborted: controller.signal.aborted
             })
+            // Collect watch notifications
+            const watchNotifications: WatchNotification[] = [];
+
+            console.log('[TestRunner] Starting run_test_with_expr_events', {
+              functionName: testCase.fn.name,
+              testCaseName: testCase.tc.name,
+              signature: testCase.fn.signature,
+              abortSignalAborted: controller.signal.aborted,
+            })
             const result = await testCase.fn.run_test_with_expr_events(
               rt,
               testCase.tc.name,
               (partial: WasmFunctionResponse) => {
-                setState(test, { status: 'running', response: partial })
+                setState(test, {
+                  status: 'running',
+                  response: partial,
+                  watchNotifications: [...watchNotifications]  // Include current notifications
+                })
               },
               vscode.loadMediaFile,
               (spans: WasmSpan[]) => {
@@ -146,14 +160,30 @@ const useRunTests = (maxBatchSize = 5) => {
                   console.error('Failed to send spans to VSCode:', e)
                 }
               },
-              // TODO this needs to be moved down cause its wrong param.
               apiKeys,
               controller.signal, // Pass abort signal
+              (notification: any) => {  // NEW 8th parameter - watch handler
+                // Collect notifications
+                watchNotifications.push(notification as WatchNotification);
+
+                // Log for debugging
+                console.log('Watch notification:', notification);
+
+                // Update state with accumulated notifications
+                // Don't update state on every notification to avoid too many re-renders
+                // The notifications are already being collected and will be included
+                // in the partial response updates and final state
+              }
             )
             console.log('result', result)
 
             const endTime = performance.now()
             const response_status = result.status()
+            console.log('[TestRunner] run_test_with_expr_events completed', {
+              functionName: testCase.fn.name,
+              testCaseName: testCase.tc.name,
+              responseStatus: response_status,
+            })
             const responseStatusMap = {
               [wasm.TestStatus.Passed]: 'passed',
               [wasm.TestStatus.LLMFailure]: 'llm_failed',
@@ -169,10 +199,15 @@ const useRunTests = (maxBatchSize = 5) => {
               response: result,
               response_status: responseStatusMap[response_status] || 'error',
               latency_ms: endTime - startTime,
+              watchNotifications: [...watchNotifications]  // NEW - preserve notifications
             })
           } catch (e) {
             console.log('test error!')
-            console.error(e)
+            console.error('[TestRunner] run_test_with_expr_events error', {
+              functionName: test.functionName,
+              testCaseName: test.testName,
+              error: e,
+            })
 
             // Check if this is an abort error
             if (e instanceof Error && (e.name === 'AbortError' || e.message?.includes('BamlAbortError'))) {
@@ -367,19 +402,40 @@ const useParallelRunTests = (maxBatchSize = 5) => {
             const startTime = performance.now()
             set(areTestsRunningAtom, true)
 
+            // Collect watch notifications per test
+            const watchNotificationsByTest: Record<string, WatchNotification[]> = {}
+
             // Call `run_tests` on the runtime
             const results = await rt.run_tests(
               testCases,
               (partial: WasmFunctionResponse) => {
                 const pair = partial.func_test_pair()
+                const testKey = `${pair.function_name}:${pair.test_name}`
                 setState(
                   { functionName: pair.function_name, testName: pair.test_name },
-                  { status: 'running', response: partial },
+                  {
+                    status: 'running',
+                    response: partial,
+                    watchNotifications: watchNotificationsByTest[testKey] || []
+                  },
                 )
               },
               vscode.loadMediaFile,
               apiKeys,
-              controller.signal, // Now supported!
+              controller.signal,
+              (notification: any) => {  // Watch handler for parallel tests
+                // Determine which test this notification belongs to
+                const testKey = `${notification.function_name}:${notification.test_name || 'unknown'}`
+
+                if (!watchNotificationsByTest[testKey]) {
+                  watchNotificationsByTest[testKey] = []
+                }
+
+                watchNotificationsByTest[testKey].push(notification as WatchNotification)
+
+                // Log for debugging
+                console.log('Watch notification (parallel):', notification)
+              }
             )
 
             const endTime = performance.now()
@@ -411,6 +467,7 @@ const useParallelRunTests = (maxBatchSize = 5) => {
                 failureMessage: response.failure_message(),
               })
 
+              const testKey = `${pair.function_name}:${pair.test_name}`
               setState(
                 { functionName: pair.function_name, testName: pair.test_name },
                 {
@@ -418,6 +475,7 @@ const useParallelRunTests = (maxBatchSize = 5) => {
                   response: response,
                   response_status: responseStatusMap[status] || 'error',
                   latency_ms: endTime - startTime,
+                  watchNotifications: watchNotificationsByTest[testKey] || []
                 },
               )
             }

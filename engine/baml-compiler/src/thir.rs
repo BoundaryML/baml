@@ -720,6 +720,12 @@ pub enum Statement<T> {
         variable: String,
         span: Span,
     },
+
+    /// Annotations that apply to the statement.
+    AnnotatedStatement {
+        headers: Vec<String>,
+        statement: Option<Box<Statement<T>>>,
+    },
 }
 
 impl<T: Clone> Statement<T> {
@@ -728,6 +734,19 @@ impl<T: Clone> Statement<T> {
         T: std::fmt::Debug,
     {
         match self {
+            Statement::AnnotatedStatement { headers, statement } => {
+                let headers_str =
+                    headers
+                        .iter()
+                        .map(|h| format!("//# {h}"))
+                        .chain(std::iter::once(
+                            statement
+                                .as_ref()
+                                .map(|s| s.dump_str())
+                                .unwrap_or_else(String::new),
+                        ));
+                join(headers_str, "\n")
+            }
             Statement::Let {
                 name,
                 value,
@@ -838,6 +857,10 @@ impl<T: Clone> Statement<T> {
         T: Clone,
     {
         match self {
+            Statement::AnnotatedStatement { statement, .. } => statement
+                .as_ref()
+                .map(|s| s.variables())
+                .unwrap_or_else(HashSet::new),
             Statement::Declare { .. } | Statement::Break(_) | Statement::Continue(_) => {
                 HashSet::new()
             }

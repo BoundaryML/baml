@@ -132,6 +132,18 @@ impl TypeDocumentRender for TypeIR {
 impl Statement {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
         match self {
+            Statement::AnnotatedStatement { headers, statement } => {
+                let mut doc = RcDoc::text("//#")
+                    .append(RcDoc::intersperse(
+                        headers.iter().map(|h| RcDoc::text(h.clone())),
+                        RcDoc::text(" "),
+                    ))
+                    .append(RcDoc::text("#//"));
+                if let Some(statement) = statement {
+                    doc = doc.append(statement.to_doc().nest(2));
+                }
+                doc
+            }
             Statement::Let {
                 name,
                 value,

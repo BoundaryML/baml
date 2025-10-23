@@ -14,7 +14,10 @@ use std::{
 };
 
 use anyhow::{anyhow, Context};
-use baml_compiler::{self, watch};
+use baml_compiler::{
+    self,
+    watch::{self, shared_noop_handler, SharedWatchHandler},
+};
 use baml_ids::FunctionCallId;
 use baml_types::{tracing::events::HTTPRequest, BamlMap, BamlValue, BamlValueWithMeta, Completion};
 use baml_vm::{BamlVmProgram, EvalStack, FunctionKind, ObjectIndex, Vm, VmExecState};
@@ -165,9 +168,7 @@ impl BamlAsyncVmRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<&HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
-        mut watch_handler: Option<
-            impl FnMut(baml_compiler::watch::WatchNotification) + Send + 'static,
-        >,
+        watch_handler: Option<SharedWatchHandler>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         // Find the function.
         let Some((function_index, function_kind)) =
@@ -376,14 +377,14 @@ impl BamlAsyncVmRuntime {
                             function_name.to_owned(),
                         );
 
-                        if let Some(handler) = watch_handler.as_mut() {
-                            handler(notification);
+                        if let Some(handler) = &watch_handler {
+                            handler.lock().unwrap().notify(notification);
                         }
                     }
                 }
 
-                Ok(VmExecState::ScheduleFuture(idx)) => {
-                    let pending_future = match vm.pending_future(idx) {
+                Ok(VmExecState::ScheduleFuture(idxan)) => {
+                    let pending_future = match vm.pending_future(idxan) {
                         Ok(f) => f,
                         Err(e) => {
                             break 'mainloop Err(
@@ -460,7 +461,7 @@ impl BamlAsyncVmRuntime {
                                         .await;
 
                                     // TODO: Handle panic somehow.
-                                    futures_tx.send((idx, result)).unwrap_or_else(|e| {
+                                    futures_tx.send((idxan, result)).unwrap_or_else(|e| {
                                         panic!("failed to send LLM function result to futures channel: {e}")
                                     });
                                 }
@@ -712,7 +713,7 @@ impl BamlAsyncVmRuntime {
                                     );
 
                                     // TODO: Handle panic somehow.
-                                    futures_tx.send((idx, (Ok(result), current_call_id))).unwrap_or_else(|e| {
+                                    futures_tx.send((idxan, (Ok(result), current_call_id))).unwrap_or_else(|e| {
                                         panic!("failed to send LLM function result to futures channel: {e}")
                                     });
                                 }
@@ -800,7 +801,7 @@ impl BamlAsyncVmRuntime {
         env_vars: HashMap<String, String>,
         tags: Option<&HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
-        watch_handler: Option<impl FnMut(baml_compiler::watch::WatchNotification) + Send + 'static>,
+        watch_handler: Option<SharedWatchHandler>,
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         self.async_runtime.block_on(self.call_function(
             function_name,
@@ -958,6 +959,7 @@ impl BamlAsyncVmRuntime {
         tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<crate::TripWire>,
         on_tick: Option<G>,
+        watch_handler: Option<SharedWatchHandler>,
     ) -> (
         Result<crate::TestResponse, anyhow::Error>,
         baml_ids::FunctionCallId,
@@ -977,6 +979,7 @@ impl BamlAsyncVmRuntime {
                 tags,
                 cancel_tripwire,
                 on_tick,
+                watch_handler,
             )
             .await
     }
@@ -997,6 +1000,7 @@ impl BamlAsyncVmRuntime {
         tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<crate::TripWire>,
         on_tick: Option<G>,
+        watch_handler: Option<SharedWatchHandler>,
     ) -> (
         Result<crate::TestResponse, anyhow::Error>,
         baml_ids::FunctionCallId,
@@ -1017,6 +1021,7 @@ impl BamlAsyncVmRuntime {
                 tags,
                 cancel_tripwire,
                 on_tick,
+                watch_handler,
             )
             .await
     }

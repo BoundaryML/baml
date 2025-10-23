@@ -548,6 +548,9 @@ impl<'g> HirCompiler<'g> {
     /// A statement is anything that does not produce a value by itself.
     fn compile_statement(&mut self, statement: &thir::Statement<(Span, Option<TypeIR>)>) {
         match statement {
+            thir::Statement::AnnotatedStatement { headers, statement } => {
+                // TODO
+            }
             thir::Statement::Let { name, value, .. } => {
                 self.compile_expression(value);
                 self.track_local(name);

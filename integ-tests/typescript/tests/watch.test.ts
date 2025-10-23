@@ -19,6 +19,7 @@ describe("Watch tests", () => {
     });
 
     watcher.function_WorkflowWatchChild.on_var("x", (ev) => {
+      console.log("SUB EVENT:", ev);
       saw_sub += 1;
     });
 

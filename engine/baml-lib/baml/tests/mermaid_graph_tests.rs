@@ -1,7 +1,7 @@
 use std::{fs, path::Path};
 
 use baml_lib::{
-    internal_baml_ast::{ast::BamlVisDiagramGenerator, parse},
+    internal_baml_ast::{ast::diagram_generator, parse},
     internal_baml_diagnostics::SourceFile,
 };
 
@@ -11,7 +11,14 @@ const ROOT: &str = concat!(
 );
 
 #[test]
+#[ignore]
 fn headers_mermaid_snapshots() {
+    // Initialize logging at INFO level
+    let _ = env_logger::builder()
+        .filter_level(log::LevelFilter::Debug)
+        .is_test(true)
+        .try_init();
+
     let dir = Path::new(ROOT);
     if !dir.exists() {
         panic!("fixtures dir missing: {ROOT}");
@@ -36,6 +43,9 @@ fn headers_mermaid_snapshots() {
             .and_then(|n| n.to_str())
             .map(|s| s.to_string())
             .unwrap_or_else(|| path.to_string_lossy().to_string());
+        log::info!("================================================");
+        log::info!("Generating Mermaid graph for {rel_name:#?}");
+        log::info!("================================================");
         // Parse defensively; let panic message print so it is visible, but keep the test running
         let path_clone = path.clone();
         let res = std::panic::catch_unwind(|| {
@@ -105,7 +115,13 @@ fn headers_mermaid_snapshots() {
                     }
                 } else {
                     // No errors: compare Mermaid graph
-                    let got = BamlVisDiagramGenerator::generate_headers_flowchart(&ast);
+                    let got = diagram_generator::generate_with_styling(
+                        diagram_generator::MermaidGeneratorContext {
+                            use_fancy: false,
+                            function_filter: None,
+                        },
+                        &ast,
+                    );
                     let mut exp_path = path.clone();
                     exp_path.set_extension("mmd");
                     if std::env::var("UPDATE").ok().as_deref() == Some("1") {

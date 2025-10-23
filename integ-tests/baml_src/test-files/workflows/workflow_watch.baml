@@ -1,8 +1,11 @@
 function WorkflowWatch() -> int {
   watch let x: int = 10;
+  x = x + 1;
   watch let y: bool = true;
   watch let once: string = "Hello";
+  once = "World"; // Change once so it triggers notification
   watch let twice: string[] = ["Takedown", ""];
+  twice = ["Takedown", "Takedown"]; // Change twice so it triggers notification
   watch let story = LLMEcho(#"
     Hello world this is a test of a longish string.
     I want it to be long enough to generate a few chunks.
@@ -15,7 +18,8 @@ function WorkflowWatch() -> int {
 }
 
 function WorkflowWatchChild() -> int {
-  watch let x: string = "Hello";
+  watch let x: string = "InitialValue";
+  x = "ChangedValue"; // Change x so it triggers notification
   100
 }
 
