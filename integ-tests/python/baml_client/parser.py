@@ -1470,6 +1470,18 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAs", llm_response=llm_response, mode="request")
         return typing.cast(types.DummyJsonTodo, result)
 
+    def ExecFetchAsWithHttpPostRequest(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.DummyJsonTodo:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPostRequest", llm_response=llm_response, mode="request")
+        return typing.cast(types.DummyJsonTodo, result)
+
+    def ExecFetchAsWithHttpPutRequestAndClassJson(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.DummyJsonTodo:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", llm_response=llm_response, mode="request")
+        return typing.cast(types.DummyJsonTodo, result)
+
     def HomeEnvVarIsEmpty(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> bool:
@@ -3042,6 +3054,18 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional["stream_types.DummyJsonTodo"]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAs", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], result)
+
+    def ExecFetchAsWithHttpPostRequest(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional["stream_types.DummyJsonTodo"]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPostRequest", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], result)
+
+    def ExecFetchAsWithHttpPutRequestAndClassJson(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional["stream_types.DummyJsonTodo"]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], result)
 
     def HomeEnvVarIsEmpty(

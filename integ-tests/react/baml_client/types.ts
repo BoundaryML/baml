@@ -338,6 +338,13 @@ export interface DummyJsonTodo {
   
 }
 
+export interface DummyJsonTodoUpdate {
+  todo: string
+  completed: boolean
+  userId: number
+  
+}
+
 export interface DummyOutput {
   nonce: string
   nonce2: string

@@ -101,15 +101,14 @@ pub fn typecheck_returning_context<'a>(
         crate::builtin::functions::FETCH_AS.to_string(),
         fetch_as_type,
     );
-    let fetch_value_type = crate::builtin::std_fetch_value_signature(generic_return_type);
+    let fetch_value_type = crate::builtin::baml_fetch_as_signature(generic_return_type);
     typing_context.symbols.insert(
         crate::builtin::functions::FETCH_VALUE.to_string(),
         fetch_value_type,
     );
 
     // Add native functions to typing context
-    let native_fns = baml_vm::native::functions();
-    for (name, (_, arity)) in native_fns {
+    for (name, (_, arity)) in baml_vm::native::functions() {
         // For now, create a simple function signature
         // baml.Array.length takes an array and returns int
         let function_type = match name.as_str() {
@@ -2027,25 +2026,20 @@ pub fn typecheck_expression(
                                     ));
                                 }
                                 "baml.fetch_as" => {
-                                    generic_return_type_inferred = if !type_args.is_empty() {
-                                        match &type_args[0] {
-                                            hir::TypeArg::Type(t) => Some(t.to_owned()),
-                                            hir::TypeArg::TypeName(n) => context
-                                                .classes
-                                                .get(n)
-                                                .map(|c| TypeIR::class(c.name.clone()))
-                                                .or_else(|| {
-                                                    context
-                                                        .enums
-                                                        .get(n)
-                                                        .map(|e| TypeIR::r#enum(&e.name))
-                                                })
-                                                .or_else(|| {
-                                                    context.get_type(n).map(|t| t.to_owned())
-                                                }),
-                                        }
-                                    } else {
-                                        None
+                                    generic_return_type_inferred = match type_args.first() {
+                                        Some(hir::TypeArg::Type(t)) => Some(t.to_owned()),
+                                        Some(hir::TypeArg::TypeName(n)) => context
+                                            .classes
+                                            .get(n)
+                                            .map(|c| TypeIR::class(c.name.clone()))
+                                            .or_else(|| {
+                                                context
+                                                    .enums
+                                                    .get(n)
+                                                    .map(|e| TypeIR::r#enum(&e.name))
+                                            })
+                                            .or_else(|| context.get_type(n).map(|t| t.to_owned())),
+                                        None => None,
                                     };
 
                                     match &generic_return_type_inferred {
@@ -2092,7 +2086,7 @@ pub fn typecheck_expression(
                                         Some(t) => {
                                             func_type = Some(TypeIR::arrow(
                                                 vec![TypeIR::class(
-                                                    crate::builtin::classes::REQUEST,
+                                                    crate::builtin::classes::HTTP_REQUEST,
                                                 )],
                                                 t.clone(),
                                             ));
@@ -2239,7 +2233,16 @@ pub fn typecheck_expression(
                             // Check field type if field exists in class
                             if let Some(expected_type) = class_field_types.get(name) {
                                 if let Some(actual_type) = typed_value.meta().1.as_ref() {
-                                    if !actual_type.is_subtype(expected_type) {
+                                    let needs_type_check = match expected_type {
+                                        TypeIR::Top(_) => false, // generic T
+                                        TypeIR::Union(union, _) => union
+                                            .iter_include_null()
+                                            .iter()
+                                            .all(|t| !matches!(t, TypeIR::Top(_))),
+                                        _ => true,
+                                    };
+
+                                    if needs_type_check && !actual_type.is_subtype(expected_type) {
                                         let expected_str = {
                                             let doc = expected_type.to_doc();
                                             let mut buf = Vec::new();
@@ -2522,23 +2525,46 @@ pub fn typecheck_expression(
                         if name == "baml" {
                             is_namespace = true;
 
-                            if field == "unstable" {
+                            match field.as_str() {
                                 // Typecheck as var and then next thing is MethodCall.
                                 // MethodCall figures out this is function on namespace.
-                                return thir::Expr::Var(
-                                    "baml.unstable".to_string(),
-                                    (base.span(), None),
-                                );
-                            } else {
-                                diagnostics.push_error(DatamodelError::new_validation_error(
-                                    &format!("Unknown namespace baml.{field}"),
-                                    base.span(),
-                                ));
+                                "unstable" => {
+                                    return thir::Expr::Var(
+                                        "baml.unstable".to_string(),
+                                        (base.span(), None),
+                                    );
+                                }
+
+                                "HttpRequest" => {
+                                    return thir::Expr::Var(
+                                        "baml.HttpRequest".to_string(),
+                                        (base.span(), Some(crate::builtin::baml_request_type())),
+                                    )
+                                }
+
+                                "HttpMethod" => {
+                                    return thir::Expr::Var(
+                                        "baml.HttpMethod".to_string(),
+                                        (
+                                            base.span(),
+                                            Some(crate::builtin::baml_http_method_type()),
+                                        ),
+                                    );
+                                }
+
+                                _ => {
+                                    diagnostics.push_error(DatamodelError::new_validation_error(
+                                        &format!("Unknown namespace baml.{field}"),
+                                        base.span(),
+                                    ));
+                                }
                             }
                         }
                     }
 
                     if !is_namespace {
+                        eprintln!("This shit aint working add err");
+
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             "Can only access fields on class instances",
                             base.span(),

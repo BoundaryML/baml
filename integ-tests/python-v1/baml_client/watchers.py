@@ -584,6 +584,126 @@ def ExecFetchAs() -> ExecFetchAsEventCollector:
     return ExecFetchAsEventCollector()
 
 
+class ExecFetchAsWithHttpPostRequestEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "ExecFetchAsWithHttpPostRequest"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def ExecFetchAsWithHttpPostRequest() -> ExecFetchAsWithHttpPostRequestEventCollector:
+    return ExecFetchAsWithHttpPostRequestEventCollector()
+
+
+class ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "ExecFetchAsWithHttpPutRequestAndClassJson"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def ExecFetchAsWithHttpPutRequestAndClassJson() -> ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector:
+    return ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector()
+
+
 class HomeEnvVarIsEmptyEventCollector:
     def __init__(self):
         self._block_handlers: list[BlockHandler] = []

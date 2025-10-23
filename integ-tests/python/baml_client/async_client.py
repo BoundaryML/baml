@@ -3694,6 +3694,36 @@ class BamlAsyncClient:
                 "url": url,
             })
             return typing.cast(types.DummyJsonTodo, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ExecFetchAsWithHttpPostRequest(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> types.DummyJsonTodo:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.ExecFetchAsWithHttpPostRequest(
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="ExecFetchAsWithHttpPostRequest", args={
+                
+            })
+            return typing.cast(types.DummyJsonTodo, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> types.DummyJsonTodo:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.ExecFetchAsWithHttpPutRequestAndClassJson(
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
+                
+            })
+            return typing.cast(types.DummyJsonTodo, result.cast_to(types, types, stream_types, False, __runtime__))
     async def HomeEnvVarIsEmpty(self, 
         baml_options: BamlCallOptions = {},
     ) -> bool:
@@ -6895,6 +6925,30 @@ class BamlStreamClient:
           lambda x: typing.cast(types.DummyJsonTodo, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def ExecFetchAsWithHttpPostRequest(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ExecFetchAsWithHttpPostRequest", args={
+            
+        })
+        return baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo](
+          result,
+          lambda x: typing.cast(typing.Optional["stream_types.DummyJsonTodo"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.DummyJsonTodo, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
+            
+        })
+        return baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo](
+          result,
+          lambda x: typing.cast(typing.Optional["stream_types.DummyJsonTodo"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.DummyJsonTodo, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def HomeEnvVarIsEmpty(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[bool], bool]:
@@ -8830,6 +8884,20 @@ class BamlHttpRequestClient:
             "url": url,
         }, mode="request")
         return result
+    async def ExecFetchAsWithHttpPostRequest(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPostRequest", args={
+            
+        }, mode="request")
+        return result
+    async def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
+            
+        }, mode="request")
+        return result
     async def HomeEnvVarIsEmpty(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -10663,6 +10731,20 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAs", args={
             "url": url,
+        }, mode="stream")
+        return result
+    async def ExecFetchAsWithHttpPostRequest(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPostRequest", args={
+            
+        }, mode="stream")
+        return result
+    async def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
+            
         }, mode="stream")
         return result
     async def HomeEnvVarIsEmpty(self, 

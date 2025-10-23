@@ -6,21 +6,20 @@ class Todo {
 }
 
 function GetTodo() -> Todo {
-  baml.fetch_value<Todo>(baml.Request {
-    base_url: "https://dummyjson.com/todos/1",
-    headers: {},
-    query_params: {},
+  baml.fetch_as<Todo>(baml.HttpRequest {
+    method: baml.HttpMethod.Get,
+    url: "https://dummyjson.com/todos/1",
   })
 }
 
 function GetTodoMissingTypeArg() -> Todo {
-  baml.fetch_value(baml.Request {
-    base_url: "https://dummyjson.com/todos/1",
-    headers: {},
-    query_params: {},
+  baml.fetch_as(baml.HttpRequest {
+    method: baml.HttpMethod.Get,
+    url: "https://dummyjson.com/todos/1",
   })
 }
 
+<<<<<<< HEAD
 // error: Error validating: Generic function baml.fetch_value must have a type argument. Try adding a type argument like this: baml.fetch_value<Type>
 //   -->  expr/builtin.baml:17
 //    |
@@ -31,3 +30,14 @@ function GetTodoMissingTypeArg() -> Todo {
 // 20 |     query_params: {},
 // 21 |   })
 //    |
+=======
+// error: Error validating: Generic function baml.fetch_as must have a type argument. Try adding a type argument like this: baml.fetch_as<Type>
+//   -->  expr/builtin.baml:16
+//    | 
+// 15 | function GetTodoMissingTypeArg() -> Todo {
+// 16 |   baml.fetch_as(baml.HttpRequest {
+// 17 |     method: baml.HttpMethod.Get,
+// 18 |     url: "https://dummyjson.com/todos/1",
+// 19 |   })
+//    | 
+>>>>>>> canary

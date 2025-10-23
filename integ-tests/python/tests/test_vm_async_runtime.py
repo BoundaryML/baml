@@ -52,3 +52,27 @@ async def test_baml_fetch_as():
         completed=False,
         userId=152,
     )
+
+
+@pytest.mark.asyncio
+async def test_baml_fetch_as_with_http_post_request():
+    result = await b.ExecFetchAsWithHttpPostRequest()
+
+    assert result == DummyJsonTodo(
+        id=255,
+        todo="Buy milk",
+        completed=False,
+        userId=5,
+    )
+
+
+@pytest.mark.asyncio
+async def test_baml_fetch_as_with_http_put_request_and_class_json():
+    result = await b.ExecFetchAsWithHttpPutRequestAndClassJson()
+
+    assert result == DummyJsonTodo(
+        id=1,
+        todo="Buy milk",
+        completed=False,
+        userId=5,
+    )

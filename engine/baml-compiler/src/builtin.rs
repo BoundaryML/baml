@@ -9,7 +9,7 @@ pub mod functions {
 }
 
 pub mod classes {
-    pub const REQUEST: &str = "baml.Request";
+    pub const HTTP_REQUEST: &str = "baml.HttpRequest";
     pub const WATCH_OPTIONS: &str = "baml.WatchOptions";
 }
 
@@ -20,22 +20,32 @@ pub mod enums {
 pub fn builtin_classes() -> Vec<Class> {
     vec![
         Class {
-            name: String::from(classes::REQUEST),
+            name: String::from(classes::HTTP_REQUEST),
             methods: vec![],
             fields: vec![
                 Field {
-                    name: String::from("base_url"),
+                    name: String::from("url"),
                     r#type: TypeIR::string(),
                     span: Span::fake(),
                 },
                 Field {
+                    name: String::from("method"),
+                    r#type: TypeIR::r#enum(enums::HTTP_METHOD),
+                    span: Span::fake(),
+                },
+                Field {
                     name: String::from("headers"),
-                    r#type: TypeIR::map(TypeIR::string(), TypeIR::string()),
+                    r#type: TypeIR::optional(TypeIR::map(TypeIR::string(), TypeIR::string())),
                     span: Span::fake(),
                 },
                 Field {
                     name: String::from("query_params"),
-                    r#type: TypeIR::map(TypeIR::string(), TypeIR::string()),
+                    r#type: TypeIR::optional(TypeIR::map(TypeIR::string(), TypeIR::string())),
+                    span: Span::fake(),
+                },
+                Field {
+                    name: String::from("json"),
+                    r#type: TypeIR::optional(TypeIR::Top(Default::default())), // generic T
                     span: Span::fake(),
                 },
             ],
@@ -70,27 +80,50 @@ pub fn builtin_classes() -> Vec<Class> {
 pub fn builtin_enums() -> Vec<Enum> {
     vec![Enum {
         name: String::from(enums::HTTP_METHOD),
-        variants: vec![EnumVariant {
-            name: String::from("Get"),
-            span: Span::fake(),
-        }],
+        variants: vec![
+            EnumVariant {
+                name: String::from("Get"),
+                span: Span::fake(),
+            },
+            EnumVariant {
+                name: String::from("Post"),
+                span: Span::fake(),
+            },
+            EnumVariant {
+                name: String::from("Put"),
+                span: Span::fake(),
+            },
+            EnumVariant {
+                name: String::from("Delete"),
+                span: Span::fake(),
+            },
+            EnumVariant {
+                name: String::from("Patch"),
+                span: Span::fake(),
+            },
+        ],
         span: Span::fake(),
     }]
 }
 
-/// Create a type for the baml.Request class
-pub fn std_request_type() -> TypeIR {
-    TypeIR::class(classes::REQUEST)
+/// Create a type for the baml.HttpRequest class
+pub fn baml_request_type() -> TypeIR {
+    TypeIR::class(classes::HTTP_REQUEST)
+}
+
+pub fn baml_http_method_type() -> TypeIR {
+    TypeIR::r#enum(enums::HTTP_METHOD)
 }
 
 /// Create a function signature for baml.fetch_as<T>
 pub fn baml_fetch_as_signature(return_type: TypeIR) -> TypeIR {
-    TypeIR::arrow(vec![TypeIR::string()], return_type)
-}
-
-/// Create a function signature for baml.fetch_value<T>
-pub fn std_fetch_value_signature(return_type: TypeIR) -> TypeIR {
-    TypeIR::arrow(vec![TypeIR::class(classes::REQUEST)], return_type)
+    TypeIR::arrow(
+        vec![TypeIR::union(vec![
+            TypeIR::string(),
+            TypeIR::class(classes::HTTP_REQUEST),
+        ])],
+        return_type,
+    )
 }
 
 pub fn is_builtin_identifier(identifier: &str) -> bool {
@@ -101,7 +134,7 @@ pub fn is_builtin_identifier(identifier: &str) -> bool {
 }
 
 pub fn is_builtin_class(class_name: &str) -> bool {
-    class_name == classes::REQUEST || class_name == classes::WATCH_OPTIONS
+    class_name == classes::HTTP_REQUEST || class_name == classes::WATCH_OPTIONS
 }
 
 pub fn is_builtin_enum(enum_name: &str) -> bool {
