@@ -35,7 +35,12 @@ pub(crate) fn parse_value_expression_block(
                 "client" | "client<llm>" => sub_type = Some(ValueExprBlockType::Client),
                 "retry_policy" => sub_type = Some(ValueExprBlockType::RetryPolicy),
                 "generator" => sub_type = Some(ValueExprBlockType::Generator),
-                _ => panic!("Unexpected value expression keyword: {}", current.as_str()),
+                _ => {
+                    diagnostics.push_error(DatamodelError::new_parser_error(
+                        format!("Unexpected value expression keyword: {}", current.as_str()),
+                        diagnostics.span(current.as_span()),
+                    ));
+                }
             },
             Rule::ARROW => has_arrow = true,
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
