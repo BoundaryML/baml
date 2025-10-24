@@ -360,14 +360,18 @@ struct ClassFieldRender {
 impl std::fmt::Display for ClassRender {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Render class description if present
+        writeln!(f, "{{")?;
         if let Some(desc) = &self.description {
             // Write description as comment before opening brace
-            for line in desc.lines() {
-                writeln!(f, "// {line}")?;
+            let desc = desc.trim();
+            if !desc.is_empty() {
+                for line in desc.lines() {
+                    writeln!(f, "  // {}", line)?;
+                }
+                writeln!(f)?;
             }
         }
 
-        writeln!(f, "{{")?;
         for value in &self.values {
             if let Some(desc) = &value.description {
                 writeln!(f, "  // {}", desc.replace("\n", "\n  // "))?;
@@ -1219,7 +1223,7 @@ Color
         assert_eq!(
             rendered,
             Some(String::from(
-                "Answer in JSON using this schema:\n// Represents a system user\n{\n  name: string,\n}"
+                "Answer in JSON using this schema:\n{\n  // Represents a system user\n\n  name: string,\n}"
             ))
         );
     }
@@ -1252,7 +1256,7 @@ Color
         assert_eq!(
             rendered,
             Some(String::from(
-                "// A node in a linked list\nNode {\n  value: int,\n  next: Node or null,\n}\n\nAnswer in JSON using this schema: Node"
+                "Node {\n  // A node in a linked list\n\n  value: int,\n  next: Node or null,\n}\n\nAnswer in JSON using this schema: Node"
             ))
         );
     }
@@ -1278,7 +1282,7 @@ Color
         assert_eq!(
             rendered,
             Some(String::from(
-                "Answer in JSON using this schema:\n// A professional resume\n// containing work history\n// and qualifications\n{\n  name: string,\n}"
+                "Answer in JSON using this schema:\n{\n  // A professional resume\n  // containing work history\n  // and qualifications\n\n  name: string,\n}"
             ))
         );
     }

@@ -313,8 +313,14 @@ mod internal_tests {
 
         // Verify the rendered prompt contains the class description
         let prompt_str = prompt.to_string();
-        assert!(prompt_str.contains("// Represents a system user"));
-        assert!(prompt_str.contains("// Full name"));
+        assert!(
+            prompt_str.contains("// Represents a system user"),
+            "Missing class description"
+        );
+        assert!(
+            prompt_str.contains("// Full name"),
+            "Missing field description"
+        );
 
         Ok(())
     }
