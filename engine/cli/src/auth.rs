@@ -26,6 +26,7 @@ impl AuthCommands {
 pub struct LoginArgs {}
 
 impl LoginArgs {
+    #[allow(clippy::print_stdout)]
     pub async fn run_async(&self) -> Result<()> {
         let propel_auth_client = super::propelauth::PropelAuthClient::new()?;
         let mut token_data = propel_auth_client.run_authorization_code_flow().await?;
@@ -50,6 +51,7 @@ impl LoginArgs {
 pub struct TokenArgs {}
 
 impl TokenArgs {
+    #[allow(clippy::print_stdout)]
     pub async fn run_async(&self) -> Result<()> {
         let mut token_data = PersistedTokenData::read_from_storage()?;
         let token = token_data.access_token().await?;

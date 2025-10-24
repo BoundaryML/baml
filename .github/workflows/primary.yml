@@ -86,7 +86,7 @@ jobs:
 
       - name: Run Rust lint (Clippy)
         if: matrix.check == 'rust-lint'
-        run: RUSTFLAGS="-A unused -D warnings" cargo clippy
+        run: RUSTFLAGS="-A unused -D warnings" cargo clippy --workspace -- -D clippy::print_stdout
         working-directory: engine
 
       - name: Run Rust lint WASM (Clippy)

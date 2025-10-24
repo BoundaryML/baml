@@ -225,6 +225,7 @@ impl Deployer {
         }
     }
 
+    #[allow(clippy::print_stdout)]
     async fn deploy_new_project(&self) -> Result<CreateDeploymentResponse> {
         let api_client = ApiClient {
             base_url: self.api_url.clone(),

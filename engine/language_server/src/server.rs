@@ -546,13 +546,13 @@ impl Server {
             code_lens_provider: Some(CodeLensOptions {
                 resolve_provider: Some(true),
             }),
-            code_action_provider: Some(lsp_types::CodeActionProviderCapability::Simple(true)),
+            code_action_provider: None,
             execute_command_provider: Some(lsp_types::ExecuteCommandOptions {
                 commands: vec![api::OPEN_IN_BROWSER_COMMAND.to_string()],
                 work_done_progress_options: Default::default(),
             }),
             definition_provider: Some(lsp_types::OneOf::Left(true)),
-            document_formatting_provider: Some(lsp_types::OneOf::Left(true)),
+            document_formatting_provider: None,
             hover_provider: Some(HoverProviderCapability::Simple(true)),
             rename_provider: Some(lsp_types::OneOf::Left(true)),
             text_document_sync: Some(TextDocumentSyncCapability::Options(

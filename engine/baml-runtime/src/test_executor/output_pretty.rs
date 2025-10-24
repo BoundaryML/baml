@@ -284,6 +284,7 @@ impl PrettyTestExecutionStatusRenderer {
         }
     }
 
+    #[allow(clippy::print_stdout)]
     pub fn print_final_results(
         &self,
         test_status_map: &TestExecutionStatusMap,

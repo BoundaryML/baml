@@ -414,7 +414,7 @@ impl Block {
             .map(Box::new);
 
         if !block.expr_headers.is_empty() {
-            println!(
+            eprintln!(
                 "Annotated!: {}",
                 trailing_expr
                     .as_ref()
@@ -446,7 +446,7 @@ fn maybe_annotated_statement(
     if annotated_comments.is_empty() {
         stmt
     } else {
-        println!("Annotated!: {}", stmt.to_doc().pretty(80));
+        eprintln!("Annotated!: {}", stmt.to_doc().pretty(80));
         Statement::AnnotatedStatement {
             headers: annotated_comments
                 .iter()

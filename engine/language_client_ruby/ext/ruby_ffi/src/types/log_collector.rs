@@ -138,7 +138,7 @@ impl Collector {
 
     pub fn __print_storage() {
         let tracer = BAML_TRACER.lock().unwrap();
-        println!("Storage: {tracer:#?}");
+        eprintln!("Storage: {tracer:#?}");
     }
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
