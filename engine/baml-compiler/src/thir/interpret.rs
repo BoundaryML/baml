@@ -2156,31 +2156,69 @@ where
                 right,
                 meta,
             } => {
-                let left_val = expect_value(
-                    evaluate_expr(
-                        left,
-                        scopes,
-                        thir,
-                        run_llm_function,
-                        watch_handler,
-                        function_name,
-                    )
-                    .await?,
-                )?;
-                let right_val = expect_value(
-                    evaluate_expr(
-                        right,
-                        scopes,
-                        thir,
-                        run_llm_function,
-                        watch_handler,
-                        function_name,
-                    )
-                    .await?,
-                )?;
+                // Special handling for instanceof: right operand is a type name, not a value
+                if matches!(operator, crate::hir::BinaryOperator::InstanceOf) {
+                    let left_val = expect_value(
+                        evaluate_expr(
+                            left,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
+                    )?;
 
-                let result = evaluate_binary_op(operator, &left_val, &right_val, meta)?;
-                EvalValue::Value(result)
+                    // Extract class name from right side (should be Expr::Var)
+                    let class_name = match right.as_ref() {
+                        Expr::Var(name, _) => name.clone(),
+                        _ => bail!(
+                            "instanceof requires a class name on the right side at {:?}",
+                            meta.0
+                        ),
+                    };
+
+                    // Check if left value is a class instance matching the class name
+                    let result = match left_val {
+                        BamlValueWithMeta::Class(ref left_class, ..) => {
+                            BamlValueWithMeta::Bool(left_class == &class_name, meta.clone())
+                        }
+                        _ => bail!(
+                            "instanceof requires a class instance on the left side at {:?}",
+                            meta.0
+                        ),
+                    };
+
+                    EvalValue::Value(result)
+                } else {
+                    // Normal binary operation: evaluate both sides
+                    let left_val = expect_value(
+                        evaluate_expr(
+                            left,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
+                    )?;
+                    let right_val = expect_value(
+                        evaluate_expr(
+                            right,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
+                    )?;
+
+                    let result = evaluate_binary_op(operator, &left_val, &right_val, meta)?;
+                    EvalValue::Value(result)
+                }
             }
             Expr::UnaryOperation {
                 operator,
