@@ -754,6 +754,88 @@ impl TypeContext<'_> {
     }
 }
 
+/// Analyzes an instanceof expression and returns type narrowing information
+/// Returns Some((variable_name, narrowed_type)) if the expression is `var instanceof ClassName`
+fn extract_instanceof_narrowing(
+    expr: &hir::Expression,
+    context: &TypeContext,
+) -> Option<(String, TypeIR)> {
+    match expr {
+        hir::Expression::BinaryOperation {
+            left,
+            operator: hir::BinaryOperator::InstanceOf,
+            right,
+            ..
+        } => {
+            // Extract variable name from left side
+            let var_name = match left.as_ref() {
+                hir::Expression::Identifier(name, _) => name.clone(),
+                _ => return None, // Only handle simple variable instanceof for now
+            };
+
+            // Extract class name from right side
+            let class_name = match right.as_ref() {
+                hir::Expression::Identifier(name, _) => name.clone(),
+                _ => return None,
+            };
+
+            // Verify the class exists
+            if !context.classes.contains_key(&class_name) {
+                return None;
+            }
+
+            // Create the narrowed type
+            let narrowed_type = TypeIR::class(&class_name);
+
+            Some((var_name, narrowed_type))
+        }
+        _ => None,
+    }
+}
+
+/// Analyzes a negated instanceof (!(...))
+fn extract_negated_instanceof_narrowing(
+    expr: &hir::Expression,
+    context: &TypeContext,
+) -> Option<(String, TypeIR)> {
+    match expr {
+        hir::Expression::UnaryOperation {
+            operator: hir::UnaryOperator::Not,
+            expr,
+            ..
+        } => extract_instanceof_narrowing(expr, context),
+        _ => None,
+    }
+}
+
+/// Determines if a type should be narrowed based on instanceof check
+fn should_narrow_type(current_type: &TypeIR, target_type: &TypeIR) -> bool {
+    match current_type {
+        TypeIR::Union(items, _) => {
+            // Check if target type is one of the union members
+            items.iter_include_null().iter().any(|t| match t {
+                TypeIR::Class { name, .. } => match target_type {
+                    TypeIR::Class {
+                        name: target_name, ..
+                    } => name == target_name,
+                    _ => false,
+                },
+                _ => false,
+            })
+        }
+        TypeIR::Class { name, .. } => {
+            // Allow narrowing if it's the same class (redundant but harmless)
+            match target_type {
+                TypeIR::Class {
+                    name: target_name, ..
+                } => name == target_name,
+                _ => false,
+            }
+        }
+        _ => false, // Don't narrow other types
+    }
+}
+
 /// Convert HIR block to THIR block with type inference
 fn typecheck_block(
     block: &hir::Block,
@@ -2413,10 +2495,41 @@ pub fn typecheck_expression(
                 }
             }
 
-            let typed_then = typecheck_expression(if_branch, context, diagnostics);
-            let typed_else = else_branch
-                .as_ref()
-                .map(|e| Arc::new(typecheck_expression(e, context, diagnostics)));
+            // Extract type narrowing information from instanceof
+            let then_narrowing = extract_instanceof_narrowing(condition, context);
+            let else_narrowing = extract_negated_instanceof_narrowing(condition, context);
+
+            // Typecheck then-branch with narrowed context
+            let typed_then = if let Some((var_name, narrowed_type)) = then_narrowing {
+                // Clone context for then-branch
+                let mut then_context = context.clone();
+
+                // Update variable type if it exists
+                if let Some(var_info) = then_context.vars.get_mut(&var_name) {
+                    // Only narrow if current type is compatible (union or the class itself)
+                    if should_narrow_type(&var_info.ty, &narrowed_type) {
+                        var_info.ty = narrowed_type;
+                    }
+                }
+
+                // Typecheck with narrowed context
+                typecheck_expression(if_branch, &then_context, diagnostics)
+            } else {
+                // No narrowing, use original context
+                typecheck_expression(if_branch, context, diagnostics)
+            };
+
+            // Typecheck else-branch (with potential narrowing for negated instanceof)
+            let typed_else = else_branch.as_ref().map(|e| {
+                if let Some((var_name, excluded_type)) = else_narrowing {
+                    // For else branch after instanceof, we could implement
+                    // exclusion narrowing (remove type from union)
+                    // For now, just use original context
+                    Arc::new(typecheck_expression(e, context, diagnostics))
+                } else {
+                    Arc::new(typecheck_expression(e, context, diagnostics))
+                }
+            });
 
             // Infer type from branches
             let if_type = typed_then.meta().1.clone();
@@ -2519,6 +2632,51 @@ pub fn typecheck_expression(
                     } else {
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             &format!("Enum {enum_name} not found"),
+                            span.clone(),
+                        ));
+                        None
+                    }
+                }
+                Some(TypeIR::Union(items, _)) => {
+                    // Try to find the field in all non-null union members
+                    let mut field_types = Vec::new();
+                    let mut all_have_field = true;
+
+                    for item in items.iter_skip_null() {
+                        match item {
+                            TypeIR::Class {
+                                name: class_name, ..
+                            } => {
+                                if let Some(class_def) = context.classes.get(class_name) {
+                                    if let Some(class_field) =
+                                        class_def.fields.iter().find(|f| &f.name == field)
+                                    {
+                                        field_types.push(class_field.r#type.clone());
+                                    } else {
+                                        all_have_field = false;
+                                        break;
+                                    }
+                                } else {
+                                    all_have_field = false;
+                                    break;
+                                }
+                            }
+                            _ => {
+                                // Non-class types in union don't have fields
+                                all_have_field = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if all_have_field && !field_types.is_empty() {
+                        // All union members have the field
+                        // For now, return the first field type (could create union of field types)
+                        Some(field_types[0].clone())
+                    } else {
+                        // Not all members have the field
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Not all members of union have field '{}'", field),
                             span.clone(),
                         ));
                         None
