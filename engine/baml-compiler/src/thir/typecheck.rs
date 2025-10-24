@@ -93,18 +93,12 @@ pub fn typecheck_returning_context<'a>(
 
     // Add builtin functions to typing context
     // baml.fetch_as<T>(url: string) -> T
-    // baml.fetch_value<T>(request: baml.Request) -> T
     // These are generic functions. For now, we'll add a placeholder with a Top type.
     let generic_return_type = TypeIR::Top(Default::default()); // Placeholder for generic T
     let fetch_as_type = crate::builtin::baml_fetch_as_signature(generic_return_type.clone());
     typing_context.symbols.insert(
         crate::builtin::functions::FETCH_AS.to_string(),
         fetch_as_type,
-    );
-    let fetch_value_type = crate::builtin::baml_fetch_as_signature(generic_return_type);
-    typing_context.symbols.insert(
-        crate::builtin::functions::FETCH_VALUE.to_string(),
-        fetch_value_type,
     );
 
     // Add native functions to typing context
@@ -1546,17 +1540,9 @@ pub fn typecheck_expression(
             let func_type = context.get_type(&func_name).cloned();
 
             // TODO: Handle generics uniformly, not with this kind of one-off handler.
-            if (func_name == crate::builtin::functions::FETCH_AS
-                || func_name == crate::builtin::functions::FETCH_VALUE)
-                && type_args.is_empty()
-            {
-                let fn_name_display = if func_name == crate::builtin::functions::FETCH_AS {
-                    "baml.fetch_as"
-                } else {
-                    "baml.fetch_value"
-                };
+            if (func_name == crate::builtin::functions::FETCH_AS) && type_args.is_empty() {
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Generic function {fn_name_display} must have a type argument. Try adding a type argument like this: {fn_name_display}<Type>"),
+                        &format!("Generic function {func_name} must have a type argument. Try adding a type argument like this: {func_name}<Type>"),
                         function.span().clone(),
                     ));
             }
@@ -1651,11 +1637,6 @@ pub fn typecheck_expression(
             type_args,
             span,
         } => {
-            eprintln!("receiver: {receiver:?}");
-            eprintln!("method: {method:?}");
-            eprintln!("args: {args:?}");
-            eprintln!("type_args: {type_args:?}");
-            eprintln!("span: {span:?}");
             // Special case for namespace method calls (e.g., env.get, baml.fetch_as)
             // We need to check this before typechecking the receiver to avoid "unknown variable" errors
             if let hir::Expression::Identifier(name, id_span) = receiver.as_ref() {
