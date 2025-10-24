@@ -145,8 +145,9 @@ use crate::{Object, ObjectIndex, ObjectPool, StackIndex, Value};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum WatchFilter {
-    Manual,
     Default,
+    Manual,
+    Paused,
     Function(ObjectIndex),
 }
 

@@ -4,7 +4,7 @@ use baml_types::ir_type::TypeIR;
 
 use crate::{
     hir::{self, AssignOp, BinaryOperator, LlmFunction, UnaryOperator},
-    watch::WatchSpec,
+    watch::{WatchSpec, WatchWhen},
 };
 
 pub mod interpret;
@@ -711,7 +711,7 @@ pub enum Statement<T> {
     WatchOptions {
         variable: String,
         channel: Option<String>,
-        when: Option<String>,
+        when: Option<WatchWhen>,
         span: Span,
     },
 
@@ -842,7 +842,7 @@ impl<T: Clone> Statement<T> {
                     parts.push(format!("channel: \"{}\"", c));
                 }
                 if let Some(w) = when {
-                    parts.push(format!("when: {}", w));
+                    parts.push(format!("when: {:?}", w));
                 }
                 format!("{}.$watch.options({{{}}})", variable, parts.join(", "))
             }

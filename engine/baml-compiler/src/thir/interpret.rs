@@ -246,12 +246,13 @@ async fn check_watch_changes<F, Fut>(
 
         // Determine if we should notify the watcher based on the when condition
         let should_notify = match &spec.when {
-            crate::watch::WatchWhen::Manual => false, // Manual notification only
-            crate::watch::WatchWhen::True => {
-                // For WatchWhen::True, use built-in change detection
+            crate::watch::WatchWhen::Manual => false, // Manual notification only.
+            crate::watch::WatchWhen::Never => false,  // No notifications at all.
+            crate::watch::WatchWhen::Auto => {
+                // For WatchWhen::Auto, use built-in change detection.
                 let has_changed = match last_notified.as_ref() {
-                    None => false,                             // First time (declaration), don't notify
-                    Some(last) => last != &current_baml_value, // Compare values
+                    None => false,                             // First time (declaration), don't notify.
+                    Some(last) => last != &current_baml_value, // Compare values.
                 };
                 has_changed
             }
@@ -1319,17 +1320,8 @@ where
                                     }
 
                                     // Update the when condition if provided
-                                    if let Some(when_str) = when {
-                                        watch_var.spec.when = match when_str.as_str() {
-                                            "manual" => crate::watch::WatchWhen::Manual,
-                                            "true" => crate::watch::WatchWhen::True,
-                                            _ => crate::watch::WatchWhen::FunctionName(
-                                                internal_baml_ast::ast::Identifier::Local(
-                                                    when_str.clone(),
-                                                    span.clone(),
-                                                ),
-                                            ),
-                                        };
+                                    if let Some(when) = when {
+                                        watch_var.spec.when = when.clone();
                                     }
 
                                     watch_var.spec.span = span.clone();

@@ -727,12 +727,13 @@ impl<'g> HirCompiler<'g> {
                                 panic!("undefined function: {name}");
                             }
                         }
+                        WatchWhen::Never => {}
 
                         WatchWhen::Manual => {
                             self.emit_string_literal("manual");
                         }
 
-                        WatchWhen::True => {
+                        WatchWhen::Auto => {
                             let index = self.add_constant(Value::Null);
                             self.emit(Instruction::LoadConst(index));
                         }
@@ -940,17 +941,21 @@ impl<'g> HirCompiler<'g> {
 
                 self.emit_string_literal(channel.as_ref().unwrap_or(variable).as_str()); // This adds LoadConst
 
-                match when.as_ref().map(String::as_str) {
-                    Some("manual") => {
+                match when.as_ref() {
+                    Some(WatchWhen::Manual) => {
                         self.emit_string_literal("manual");
                     }
 
-                    Some("never") => {
+                    Some(WatchWhen::Never) => {
                         self.emit_string_literal("never");
                     }
 
-                    Some(fn_name) => {
-                        if let Some(&index) = self.globals.get(fn_name) {
+                    Some(WatchWhen::Auto) => {
+                        // No action needed.
+                    }
+
+                    Some(WatchWhen::FunctionName(fn_name)) => {
+                        if let Some(&index) = self.globals.get(fn_name.name()) {
                             self.emit(Instruction::LoadGlobal(index));
                         } else {
                             panic!("watch options codegen: undefined function: {fn_name}");
@@ -965,8 +970,12 @@ impl<'g> HirCompiler<'g> {
 
                 self.emit(Instruction::Watch(local_index));
             }
-            thir::Statement::WatchNotify { .. } => {
-                // todo!("bytecode codegen for manual notification trigger")
+            thir::Statement::WatchNotify { variable, .. } => {
+                let Some(local_index) = self.locals.get(variable).copied() else {
+                    panic!("watch codegen error: undefined variable: {variable}");
+                };
+
+                self.emit(Instruction::Notify(local_index));
             }
         }
     }

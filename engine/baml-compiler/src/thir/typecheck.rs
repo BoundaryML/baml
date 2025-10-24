@@ -1221,12 +1221,7 @@ fn typecheck_statement(
             }
 
             // Validate the 'when' function if provided
-            if let Some(when_str) = when {
-                // Parse the when string to get the function name
-                // For now, when is just a string with the function name
-                let fn_name =
-                    internal_baml_ast::ast::Identifier::Local(when_str.clone(), span.clone());
-
+            if let Some(when) = when {
                 // Get the variable's type for validation (clone to avoid borrow issues)
                 let var_type = context.vars.get(variable).map(|vi| vi.ty.clone());
 
@@ -1234,7 +1229,7 @@ fn typecheck_statement(
                     // Create a WatchSpec to validate
                     let watch_spec = crate::watch::WatchSpec {
                         name: variable.clone(),
-                        when: crate::watch::WatchWhen::FunctionName(fn_name),
+                        when: when.clone(),
                         span: span.clone(),
                     };
 
@@ -2851,8 +2846,9 @@ fn typecheck_emit(
                 }
             }
         }
-        WatchWhen::True => {}
+        WatchWhen::Auto => {}
         WatchWhen::Manual => {}
+        WatchWhen::Never => {}
     }
 }
 

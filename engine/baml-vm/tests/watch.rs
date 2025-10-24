@@ -1,11 +1,11 @@
 //! VM tests for watch functionality.
 
 mod common;
-use common::{assert_vm_emits, EmitProgram, Notification};
+use common::{assert_vm_emits, Notification, WatchProgram};
 
 #[test]
 fn notify_primitive_on_change() -> anyhow::Result<()> {
-    assert_vm_emits(EmitProgram {
+    assert_vm_emits(WatchProgram {
         source: r#"
             function primitive() -> int {
                 watch let value = 0;
@@ -22,7 +22,7 @@ fn notify_primitive_on_change() -> anyhow::Result<()> {
 
 #[test]
 fn notify_primitive_on_nested_scope() -> anyhow::Result<()> {
-    assert_vm_emits(EmitProgram {
+    assert_vm_emits(WatchProgram {
         source: r#"
             function primitive() -> int {
                 watch let value = 0;
@@ -41,7 +41,7 @@ fn notify_primitive_on_nested_scope() -> anyhow::Result<()> {
 
 #[test]
 fn stop_notifying_on_scope_exit() -> anyhow::Result<()> {
-    assert_vm_emits(EmitProgram {
+    assert_vm_emits(WatchProgram {
         source: r#"
             class Point {
                 x int
@@ -67,7 +67,7 @@ fn stop_notifying_on_scope_exit() -> anyhow::Result<()> {
 
 #[test]
 fn notify_on_function_call_modifications() -> anyhow::Result<()> {
-    assert_vm_emits(EmitProgram {
+    assert_vm_emits(WatchProgram {
         source: r#"
             class Point {
                 x int
@@ -97,7 +97,7 @@ fn notify_on_function_call_modifications() -> anyhow::Result<()> {
 
 #[test]
 fn notify_on_change_with_alias() -> anyhow::Result<()> {
-    assert_vm_emits(EmitProgram {
+    assert_vm_emits(WatchProgram {
         source: r#"
             class Point {
                 x int
@@ -120,7 +120,7 @@ fn notify_on_change_with_alias() -> anyhow::Result<()> {
 
 #[test]
 fn notify_on_change_with_alias_in_nested_scope() -> anyhow::Result<()> {
-    assert_vm_emits(EmitProgram {
+    assert_vm_emits(WatchProgram {
         source: r#"
             class Point {
                 x int
@@ -144,7 +144,7 @@ fn notify_on_change_with_alias_in_nested_scope() -> anyhow::Result<()> {
 
 #[test]
 fn notify_when_nested_object_is_modified_after_addtion() -> anyhow::Result<()> {
-    assert_vm_emits(EmitProgram {
+    assert_vm_emits(WatchProgram {
         source: r#"
             class Value {
                 value int
@@ -184,7 +184,7 @@ fn notify_when_nested_object_is_modified_after_addtion() -> anyhow::Result<()> {
 
 #[test]
 fn dont_notify_when_nested_object_is_modified_after_removal() -> anyhow::Result<()> {
-    assert_vm_emits(EmitProgram {
+    assert_vm_emits(WatchProgram {
         source: r#"
             class Value {
                 value int
@@ -223,7 +223,7 @@ fn dont_notify_when_nested_object_is_modified_after_removal() -> anyhow::Result<
 // Complicated case from the edge cases doc.
 #[test]
 fn cyclic_graph() -> anyhow::Result<()> {
-    assert_vm_emits(EmitProgram {
+    assert_vm_emits(WatchProgram {
         source: r#"
             class Vertex {
                 edges Vertex[]
@@ -292,7 +292,7 @@ fn cyclic_graph() -> anyhow::Result<()> {
 
 #[test]
 fn run_user_filter() -> anyhow::Result<()> {
-    assert_vm_emits(EmitProgram {
+    assert_vm_emits(WatchProgram {
         source: r#"
             function greater_than_five(value: int) -> bool {
                 value > 5
@@ -304,6 +304,46 @@ fn run_user_filter() -> anyhow::Result<()> {
 
                 value = 1; // No notify
                 value = 6; // Notify
+
+                value
+            }
+        "#,
+        function: "primitive",
+        expected: vec![vec![Notification::on_channel("value")]],
+    })
+}
+
+#[test]
+fn run_default_filter() -> anyhow::Result<()> {
+    assert_vm_emits(WatchProgram {
+        source: r#"
+            function primitive() -> int {
+                watch let value = 0;
+
+                value = 0; // No notify
+                value = 6; // Notify
+
+                value
+            }
+        "#,
+        function: "primitive",
+        expected: vec![vec![Notification::on_channel("value")]],
+    })
+}
+
+#[test]
+fn manual_notify() -> anyhow::Result<()> {
+    assert_vm_emits(WatchProgram {
+        source: r#"
+            function primitive() -> int {
+                watch let value = 0;
+                value.$watch.options(baml.WatchOptions { when: "manual" });
+
+                value = 1; // No notify
+                value = 2; // No notify
+                value = 3; // No notify
+
+                value.$watch.notify(); // Notify
 
                 value
             }

@@ -15,7 +15,7 @@ use crate::{
         self, Block, Class, ClassConstructor, ClassConstructorField, Enum, EnumVariant,
         ExprFunction, Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg,
     },
-    watch::WatchSpec,
+    watch::{WatchSpec, WatchWhen},
 };
 
 impl Hir {
@@ -334,7 +334,7 @@ impl ExprFunction {
 
 /// Extract name and when fields from a WatchOptions class constructor expression.
 /// Expected expression: baml.WatchOptions{name: "value", when: FunctionName}
-fn extract_watch_options_fields(expr: &ast::Expression) -> (Option<String>, Option<String>) {
+fn extract_watch_options_fields(expr: &ast::Expression) -> (Option<String>, Option<WatchWhen>) {
     use ast::Expression;
 
     // The expression should be a class constructor
@@ -358,10 +358,13 @@ fn extract_watch_options_fields(expr: &ast::Expression) -> (Option<String>, Opti
                         // when should be an identifier (function name) or string "manual"
                         match field_value {
                             Expression::Identifier(id) => {
-                                when = Some(id.name().to_string());
+                                when = Some(WatchWhen::FunctionName(id.clone()));
                             }
                             Expression::StringValue(s, _) if s == "manual" => {
-                                when = Some("manual".to_string());
+                                when = Some(WatchWhen::Manual);
+                            }
+                            Expression::StringValue(s, _) if s == "never" => {
+                                when = Some(WatchWhen::Never);
                             }
                             _ => {}
                         }
@@ -382,7 +385,7 @@ impl Block {
     /// Lower an expression block into HIR for expression blocks.
     pub fn from_expr_block(block: &ast::ExpressionBlock) -> Self {
         // First pass: collect all WatchOptions statements into a map
-        let mut watch_options_map: HashMap<String, (Option<String>, Option<String>)> =
+        let mut watch_options_map: HashMap<String, (Option<String>, Option<WatchWhen>)> =
             HashMap::new();
         for stmt in &block.stmts {
             if let ast::Stmt::WatchOptions(ast::WatchOptionsStmt {
@@ -440,7 +443,7 @@ fn maybe_annotated_statement(
 
 fn lower_stmt_with_options(
     stmt: &ast::Stmt,
-    watch_options: &HashMap<String, (Option<String>, Option<String>)>,
+    watch_options: &HashMap<String, (Option<String>, Option<WatchWhen>)>,
 ) -> Statement {
     match stmt {
         ast::Stmt::CForLoop(stmt) => {
