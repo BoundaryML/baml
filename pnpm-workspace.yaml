@@ -8,7 +8,11 @@ packages:
   - engine/baml-lib/baml/tests/validation_files/headers/mermaid-sandbox/
   - engine/baml-schema-wasm/*
   - fern
-  - examples/**/*
+  - examples/internal/vaibhav/*
+  - examples/internal/aaron/*
+  - examples/internal/sam/*
+  - examples/internal/greg/*
+  - examples/internal/antonio/*
   # - engine/language_client_typescript/npm/darwin-arm64
   # - engine/language_client_typescript/npm/darwin-x64
   # - engine/language_client_typescript/npm/linux-arm64-gmu
