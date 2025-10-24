@@ -813,22 +813,22 @@ fn should_narrow_type(current_type: &TypeIR, target_type: &TypeIR) -> bool {
     match current_type {
         TypeIR::Union(items, _) => {
             // Check if target type is one of the union members
-            items.iter_include_null()
-                .iter()
-                .any(|t| match t {
-                    TypeIR::Class { name, .. } => {
-                        match target_type {
-                            TypeIR::Class { name: target_name, .. } => name == target_name,
-                            _ => false,
-                        }
-                    }
+            items.iter_include_null().iter().any(|t| match t {
+                TypeIR::Class { name, .. } => match target_type {
+                    TypeIR::Class {
+                        name: target_name, ..
+                    } => name == target_name,
                     _ => false,
-                })
+                },
+                _ => false,
+            })
         }
         TypeIR::Class { name, .. } => {
             // Allow narrowing if it's the same class (redundant but harmless)
             match target_type {
-                TypeIR::Class { name: target_name, .. } => name == target_name,
+                TypeIR::Class {
+                    name: target_name, ..
+                } => name == target_name,
                 _ => false,
             }
         }
@@ -2520,18 +2520,16 @@ pub fn typecheck_expression(
             };
 
             // Typecheck else-branch (with potential narrowing for negated instanceof)
-            let typed_else = else_branch
-                .as_ref()
-                .map(|e| {
-                    if let Some((var_name, excluded_type)) = else_narrowing {
-                        // For else branch after instanceof, we could implement
-                        // exclusion narrowing (remove type from union)
-                        // For now, just use original context
-                        Arc::new(typecheck_expression(e, context, diagnostics))
-                    } else {
-                        Arc::new(typecheck_expression(e, context, diagnostics))
-                    }
-                });
+            let typed_else = else_branch.as_ref().map(|e| {
+                if let Some((var_name, excluded_type)) = else_narrowing {
+                    // For else branch after instanceof, we could implement
+                    // exclusion narrowing (remove type from union)
+                    // For now, just use original context
+                    Arc::new(typecheck_expression(e, context, diagnostics))
+                } else {
+                    Arc::new(typecheck_expression(e, context, diagnostics))
+                }
+            });
 
             // Infer type from branches
             let if_type = typed_then.meta().1.clone();
@@ -2646,9 +2644,13 @@ pub fn typecheck_expression(
 
                     for item in items.iter_skip_null() {
                         match item {
-                            TypeIR::Class { name: class_name, .. } => {
+                            TypeIR::Class {
+                                name: class_name, ..
+                            } => {
                                 if let Some(class_def) = context.classes.get(class_name) {
-                                    if let Some(class_field) = class_def.fields.iter().find(|f| &f.name == field) {
+                                    if let Some(class_field) =
+                                        class_def.fields.iter().find(|f| &f.name == field)
+                                    {
                                         field_types.push(class_field.r#type.clone());
                                     } else {
                                         all_have_field = false;

@@ -30,9 +30,7 @@ fn test_instanceof_type_narrowing_weather() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Object(Object::String(
-            "Temperature: 72".to_string()
-        ))),
+        expected: ExecState::Complete(Value::Object(Object::String("Temperature: 72".to_string()))),
     })
 }
 
@@ -64,7 +62,7 @@ fn test_instanceof_type_narrowing_error() -> anyhow::Result<()> {
         "#,
         function: "main",
         expected: ExecState::Complete(Value::Object(Object::String(
-            "Error: Not found".to_string()
+            "Error: Not found".to_string(),
         ))),
     })
 }
@@ -95,7 +93,7 @@ fn test_instanceof_narrowing_with_field_access() -> anyhow::Result<()> {
         "#,
         function: "main",
         expected: ExecState::Complete(Value::Object(Object::String(
-            "Getting weather for: San Francisco".to_string()
+            "Getting weather for: San Francisco".to_string(),
         ))),
     })
 }
@@ -126,8 +124,6 @@ fn test_instanceof_narrowing_with_unions() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Object(Object::String(
-            "test".to_string()
-        ))),
+        expected: ExecState::Complete(Value::Object(Object::String("test".to_string()))),
     })
 }

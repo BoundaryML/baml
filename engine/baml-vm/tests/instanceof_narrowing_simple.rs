@@ -28,9 +28,7 @@ fn test_instanceof_type_narrowing_simple() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Object(Object::String(
-            "test value".to_string()
-        ))),
+        expected: ExecState::Complete(Value::Object(Object::String("test value".to_string()))),
     })
 }
 
@@ -59,9 +57,7 @@ fn test_instanceof_false_case() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Object(Object::String(
-            "not foo".to_string()
-        ))),
+        expected: ExecState::Complete(Value::Object(Object::String("not foo".to_string()))),
     })
 }
 
@@ -98,8 +94,6 @@ fn test_nested_instanceof_checks() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Object(Object::String(
-            "b value".to_string()
-        ))),
+        expected: ExecState::Complete(Value::Object(Object::String("b value".to_string()))),
     })
 }
