@@ -15,6 +15,13 @@ use crate::{
 
 type NativeFunctionResult = Result<Value, VmError>;
 
+/// String length.
+pub fn string_len(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    // Arity is already checked by the VM.
+    let s = vm.objects.as_string(&args[0])?;
+    Ok(Value::Int(s.chars().count() as i64))
+}
+
 /// Array length.
 pub fn array_len(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
@@ -589,6 +596,8 @@ pub type NativeFunction = fn(&mut Vm, &[Value]) -> NativeFunctionResult;
 
 pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
     let fns: &[(&str, (NativeFunction, usize))] = &[
+        // String.
+        ("baml.String.length", (string_len, 1)),
         // Array.
         ("baml.Array.length", (array_len, 1)),
         ("baml.Array.push", (array_push, 2)),

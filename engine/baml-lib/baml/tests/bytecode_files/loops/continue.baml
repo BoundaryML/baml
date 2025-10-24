@@ -95,6 +95,8 @@ function ContinueNested() -> int {
 // Class: baml.HttpRequest with 5 fields
 // Class: baml.WatchOptions with 2 fields
 // Enum baml.HttpMethod
+// Function: baml.String.length
+//
 // Function: baml.Array.length
 //
 // Function: baml.Array.push

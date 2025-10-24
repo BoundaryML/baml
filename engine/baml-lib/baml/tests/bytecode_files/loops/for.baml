@@ -51,7 +51,7 @@ function NestedFor(as: int[], bs: int[]) -> int {
 // 1   0    LOAD_CONST 0         (0)
 //
 // 3   1    LOAD_VAR 1           (xs)
-//     2    LOAD_GLOBAL 7        (<fn baml.Array.length>)
+//     2    LOAD_GLOBAL 8        (<fn baml.Array.length>)
 //     3    LOAD_VAR 3           (__baml for loop iterated array 0)
 //     4    CALL 1               
 //     5    LOAD_CONST 0         (0)
@@ -84,7 +84,7 @@ function NestedFor(as: int[], bs: int[]) -> int {
 // 11   0    LOAD_CONST 0         (0)
 //
 // 13   1    LOAD_VAR 1           (xs)
-//      2    LOAD_GLOBAL 7        (<fn baml.Array.length>)
+//      2    LOAD_GLOBAL 8        (<fn baml.Array.length>)
 //      3    LOAD_VAR 3           (__baml for loop iterated array 1)
 //      4    CALL 1               
 //      5    LOAD_CONST 0         (0)
@@ -127,7 +127,7 @@ function NestedFor(as: int[], bs: int[]) -> int {
 // 24   0    LOAD_CONST 0         (0)
 //
 // 26   1    LOAD_VAR 1           (xs)
-//      2    LOAD_GLOBAL 7        (<fn baml.Array.length>)
+//      2    LOAD_GLOBAL 8        (<fn baml.Array.length>)
 //      3    LOAD_VAR 3           (__baml for loop iterated array 2)
 //      4    CALL 1               
 //      5    LOAD_CONST 0         (0)
@@ -170,7 +170,7 @@ function NestedFor(as: int[], bs: int[]) -> int {
 // 38   0    LOAD_CONST 0         (0)
 //
 // 40   1    LOAD_VAR 1           (as)
-//      2    LOAD_GLOBAL 7        (<fn baml.Array.length>)
+//      2    LOAD_GLOBAL 8        (<fn baml.Array.length>)
 //      3    LOAD_VAR 4           (__baml for loop iterated array 3)
 //      4    CALL 1               
 //      5    LOAD_CONST 0         (0)
@@ -188,7 +188,7 @@ function NestedFor(as: int[], bs: int[]) -> int {
 //      17   STORE_VAR 6          (__baml for loop index 3)
 //
 // 41   18   LOAD_VAR 2           (bs)
-//      19   LOAD_GLOBAL 7        (<fn baml.Array.length>)
+//      19   LOAD_GLOBAL 8        (<fn baml.Array.length>)
 //      20   LOAD_VAR 8           (__baml for loop iterated array 4)
 //      21   CALL 1               
 //      22   LOAD_CONST 0         (0)
@@ -226,6 +226,8 @@ function NestedFor(as: int[], bs: int[]) -> int {
 // Class: baml.HttpRequest with 5 fields
 // Class: baml.WatchOptions with 2 fields
 // Enum baml.HttpMethod
+// Function: baml.String.length
+//
 // Function: baml.Array.length
 //
 // Function: baml.Array.push

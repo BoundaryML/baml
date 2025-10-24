@@ -39,6 +39,8 @@ function AnalyzeSentiment(text: string) -> Sentiment {
 // Class: baml.WatchOptions with 2 fields
 // Enum baml.HttpMethod
 // Enum Sentiment
+// Function: baml.String.length
+//
 // Function: baml.Array.length
 //
 // Function: baml.Array.push

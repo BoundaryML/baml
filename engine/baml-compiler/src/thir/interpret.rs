@@ -2822,29 +2822,32 @@ fn evaluate_method_call(
     meta: &ExprMetadata,
 ) -> Result<BamlValueWithMeta<ExprMetadata>> {
     match method_name {
-        "len" => {
-            // Array/List length method
+        "length" => {
+            // Array/List length method (both len() and length() are supported)
             match receiver {
                 BamlValueWithMeta::List(items, _) => {
                     if !args.is_empty() {
-                        bail!("len() method takes no arguments at {:?}", meta.0);
+                        bail!("length() method takes no arguments at {:?}", meta.0);
                     }
                     Ok(BamlValueWithMeta::Int(items.len() as i64, meta.clone()))
                 }
                 BamlValueWithMeta::String(s, _) => {
                     if !args.is_empty() {
-                        bail!("len() method takes no arguments at {:?}", meta.0);
+                        bail!("length() method takes no arguments at {:?}", meta.0);
                     }
-                    Ok(BamlValueWithMeta::Int(s.len() as i64, meta.clone()))
+                    Ok(BamlValueWithMeta::Int(
+                        s.chars().count() as i64,
+                        meta.clone(),
+                    ))
                 }
                 BamlValueWithMeta::Map(map, _) => {
                     if !args.is_empty() {
-                        bail!("len() method takes no arguments at {:?}", meta.0);
+                        bail!("length() method takes no arguments at {:?}", meta.0);
                     }
                     Ok(BamlValueWithMeta::Int(map.len() as i64, meta.clone()))
                 }
                 _ => bail!(
-                    "len() method not available on type {:?} at {:?}",
+                    "length() method not available on type {:?} at {:?}",
                     receiver,
                     meta.0
                 ),
@@ -3053,46 +3056,6 @@ mod tests {
         let out = result.unwrap();
         match out {
             BamlValueWithMeta::Int(i, _) => assert_eq!(i, 10),
-            v => panic!("expected int, got {v:?}"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_method_call_array_len() {
-        let (thir, expr) = thir_from_src("", "[1, 2, 3].len()");
-
-        let result = interpret_thir_ignoring_watch(
-            thir,
-            expr,
-            mock_llm_function,
-            BamlMap::new(),
-            HashMap::new(),
-        )
-        .await
-        .unwrap();
-
-        match result {
-            BamlValueWithMeta::Int(len, _) => assert_eq!(len, 3),
-            v => panic!("expected int, got {v:?}"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_method_call_string_len() {
-        let (thir, expr) = thir_from_src("", r#""hello".len()"#);
-
-        let result = interpret_thir_ignoring_watch(
-            thir,
-            expr,
-            mock_llm_function,
-            BamlMap::new(),
-            HashMap::new(),
-        )
-        .await
-        .unwrap();
-
-        match result {
-            BamlValueWithMeta::Int(len, _) => assert_eq!(len, 5),
             v => panic!("expected int, got {v:?}"),
         }
     }

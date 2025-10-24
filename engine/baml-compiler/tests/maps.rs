@@ -112,7 +112,7 @@ fn contains() -> anyhow::Result<()> {
                 vec![
                     Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(8)),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(9)),
                     Instruction::LoadVar(1),
                     Instruction::LoadConst(0),
                     Instruction::Call(2),
@@ -194,7 +194,7 @@ fn len() -> anyhow::Result<()> {
                 Instruction::LoadConst(2),
                 Instruction::LoadConst(3),
                 Instruction::AllocMap(2),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(6)),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(7)),
                 Instruction::LoadVar(1),
                 Instruction::Call(1),
                 Instruction::Return,

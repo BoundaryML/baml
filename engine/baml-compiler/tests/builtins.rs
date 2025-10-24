@@ -21,7 +21,7 @@ fn builtin_method_call() -> anyhow::Result<()> {
                 Instruction::LoadConst(1),
                 Instruction::LoadConst(2),
                 Instruction::AllocArray(3),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(4)),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(5)),
                 Instruction::LoadVar(1),
                 // call with one argument (self)
                 Instruction::Call(1),
@@ -49,7 +49,7 @@ fn fetch_as() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadGlobal(GlobalIndex::from_raw(41)),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(42)),
                 Instruction::LoadConst(0),
                 Instruction::LoadConst(1),
                 Instruction::DispatchFuture(2),
@@ -87,7 +87,7 @@ fn fetch_as_let_binding() -> anyhow::Result<()> {
                 Instruction::LoadConst(0),
                 Instruction::LoadVar(1),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(42)),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(43)),
                 Instruction::LoadVar(2),
                 Instruction::LoadConst(1),
                 Instruction::DispatchFuture(2),
@@ -129,7 +129,7 @@ fn fetch_as_with_request_param() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadGlobal(GlobalIndex::from_raw(41)),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(42)),
                 Instruction::AllocInstance(ObjectIndex::from_raw(7)),
                 Instruction::Copy(0),
                 Instruction::LoadConst(0),

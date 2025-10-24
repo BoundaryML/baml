@@ -106,6 +106,7 @@ pub fn typecheck_returning_context<'a>(
         // For now, create a simple function signature
         // baml.Array.length takes an array and returns int
         let function_type = match name.as_str() {
+            "baml.String.length" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::int()),
             "baml.Array.length" => TypeIR::arrow(
                 vec![TypeIR::List(Box::new(TypeIR::null()), Default::default())],
                 TypeIR::int(),
@@ -1951,6 +1952,17 @@ pub fn typecheck_expression(
                     _ => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             &format!("Method `{method}` is not available on class `baml.Map`"),
+                            span.clone(),
+                        ));
+                        None
+                    }
+                },
+
+                Some(TypeIR::Primitive(TypeValue::String, _)) => match method.as_str() {
+                    "length" => Some("baml.String.length".to_string()),
+                    _ => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Method `{method}` is not available on type `string`"),
                             span.clone(),
                         ));
                         None
