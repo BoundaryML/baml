@@ -1,0 +1,11 @@
+[project]
+name = "stock-agent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "maturin>=1.9.6",
+    "pydantic>=2.12.3",
+    "typing-extensions>=4.15.0",
+]
