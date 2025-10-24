@@ -1542,9 +1542,9 @@ pub fn typecheck_expression(
             // TODO: Handle generics uniformly, not with this kind of one-off handler.
             if (func_name == crate::builtin::functions::FETCH_AS) && type_args.is_empty() {
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Generic function {func_name} must have a type argument. Try adding a type argument like this: {func_name}<Type>"),
-                        function.span().clone(),
-                    ));
+                    &format!("Generic function {func_name} must have a type argument. Try adding a type argument like this: {func_name}<Type>"),
+                    function.span().clone(),
+                ));
             }
 
             let (param_types, return_type, is_known_function) = match &func_type {
@@ -1729,6 +1729,8 @@ pub fn typecheck_expression(
                         }
 
                         "baml.fetch_as" => {
+                            let has_type_args = !type_args.is_empty();
+
                             return_type = match type_args.first() {
                                 Some(hir::TypeArg::Type(t)) => Some(t.to_owned()),
                                 Some(hir::TypeArg::TypeName(n)) => context
@@ -1749,10 +1751,19 @@ pub fn typecheck_expression(
                                 }
 
                                 None => {
-                                    diagnostics.push_error(DatamodelError::new_validation_error(
-                                        "could not infer return type of baml.fetch_as",
-                                        span.clone(),
-                                    ));
+                                    if has_type_args {
+                                        diagnostics.push_error(
+                                            DatamodelError::new_validation_error(
+                                                "could not infer return type of baml.fetch_as",
+                                                span.clone(),
+                                            ),
+                                        );
+                                    } else {
+                                        diagnostics.push_error(DatamodelError::new_validation_error(
+                                            &format!("Generic function {full_name} must have a type argument. Try adding a type argument like this: {full_name}<Type>"),
+                                            span.clone(),
+                                        ));
+                                    }
                                 }
                             }
                         }
