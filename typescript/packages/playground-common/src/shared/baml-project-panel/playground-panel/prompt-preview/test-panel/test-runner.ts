@@ -14,10 +14,21 @@ import {
   flashRangesAtom,
 } from '../../atoms'
 import type { WatchNotification } from './types'
-import { isParallelTestsEnabledAtom, testHistoryAtom, selectedHistoryIndexAtom, type TestHistoryRun } from './atoms'
+import { isParallelTestsEnabledAtom, testHistoryAtom, selectedHistoryIndexAtom, type TestHistoryRun, currentWatchNotificationsAtom, highlightedBlocksAtom } from './atoms'
 import { isClientCallGraphEnabledAtom } from '../../preview-toolbar'
 import { apiKeysAtom } from '../../../../../components/api-keys-dialog/atoms';
 
+const enrichNotification = (notification: WatchNotification): WatchNotification => {
+  if (!notification.block_name) {
+    try {
+      const parsed = JSON.parse(notification.value) as { type?: string; label?: string } | undefined
+      if (parsed?.type === 'block' && typeof parsed.label === 'string') {
+        notification.block_name = parsed.label
+      }
+    } catch { }
+  }
+  return notification
+}
 
 // TODO: use a single hook for both run and parallel run
 const useRunTests = (maxBatchSize = 5) => {
@@ -28,6 +39,8 @@ const useRunTests = (maxBatchSize = 5) => {
   const setSelectedFunction = useSetAtom(selectedFunctionAtom)
   const setIsClientCallGraphEnabled = useSetAtom(isClientCallGraphEnabledAtom)
   const apiKeys = useAtomValue(apiKeysAtom)
+  const setCurrentWatchNotifications = useSetAtom(currentWatchNotificationsAtom)
+  const setHighlightedBlocks = useSetAtom(highlightedBlocksAtom)
   const setFlashRanges = useSetAtom(flashRangesAtom)
   const runTests = useAtomCallback(
     useCallback(
@@ -52,6 +65,8 @@ const useRunTests = (maxBatchSize = 5) => {
 
         set(testHistoryAtom, (prev) => [historyRun, ...prev])
         set(selectedHistoryIndexAtom, 0)
+        setCurrentWatchNotifications([])
+        setHighlightedBlocks(new Set())
 
         const setState = (test: { functionName: string; testName: string }, update: TestState) => {
           set(testHistoryAtom, (prev) => {
@@ -163,11 +178,19 @@ const useRunTests = (maxBatchSize = 5) => {
               apiKeys,
               controller.signal, // Pass abort signal
               (notification: any) => {  // NEW 8th parameter - watch handler
-                // Collect notifications
-                watchNotifications.push(notification as WatchNotification);
+                const typedNotification = enrichNotification(notification as WatchNotification)
 
-                // Log for debugging
-                console.log('Watch notification:', notification);
+                // Collect notifications
+                watchNotifications.push(typedNotification);
+
+                setCurrentWatchNotifications((prev) => [...prev, typedNotification])
+                if (typedNotification.block_name) {
+                  setHighlightedBlocks((prev) => {
+                    const next = new Set(prev)
+                    next.add(typedNotification.block_name as string)
+                    return next
+                  })
+                }
 
                 // Update state with accumulated notifications
                 // Don't update state on every notification to avoid too many re-renders
@@ -274,7 +297,7 @@ const useRunTests = (maxBatchSize = 5) => {
           set(currentAbortControllerAtom, null) // Clean up abort controller
         })
       },
-      [maxBatchSize, rt, ctx, wasm, apiKeys],
+      [maxBatchSize, rt, ctx, wasm, apiKeys, setCurrentWatchNotifications, setHighlightedBlocks],
     ),
   )
 
@@ -288,6 +311,8 @@ const useParallelRunTests = (maxBatchSize = 5) => {
   const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)
   const setSelectedFunction = useSetAtom(selectedFunctionAtom)
   const setIsClientCallGraphEnabled = useSetAtom(isClientCallGraphEnabledAtom)
+  const setCurrentWatchNotifications = useSetAtom(currentWatchNotificationsAtom)
+  const setHighlightedBlocks = useSetAtom(highlightedBlocksAtom)
   const apiKeys = useAtomValue(apiKeysAtom)
   const runParallelTests = useAtomCallback(
     useCallback(
@@ -319,6 +344,8 @@ const useParallelRunTests = (maxBatchSize = 5) => {
 
         set(testHistoryAtom, (prev) => [historyRun, ...prev])
         set(selectedHistoryIndexAtom, 0)
+        setCurrentWatchNotifications([])
+        setHighlightedBlocks(new Set())
 
         const setState = (test: { functionName: string; testName: string }, update: TestState) => {
           set(testHistoryAtom, (prev) => {
@@ -431,10 +458,16 @@ const useParallelRunTests = (maxBatchSize = 5) => {
                   watchNotificationsByTest[testKey] = []
                 }
 
-                watchNotificationsByTest[testKey].push(notification as WatchNotification)
-
-                // Log for debugging
-                console.log('Watch notification (parallel):', notification)
+                const typedNotification = enrichNotification(notification as WatchNotification)
+                watchNotificationsByTest[testKey].push(typedNotification)
+                setCurrentWatchNotifications((prev) => [...prev, typedNotification])
+                if (typedNotification.block_name) {
+                  setHighlightedBlocks((prev) => {
+                    const next = new Set(prev)
+                    next.add(typedNotification.block_name as string)
+                    return next
+                  })
+                }
               }
             )
 
@@ -495,7 +528,7 @@ const useParallelRunTests = (maxBatchSize = 5) => {
 
         await run()
       },
-      [maxBatchSize, rt, ctx, wasm, apiKeys],
+      [maxBatchSize, rt, ctx, wasm, apiKeys, setCurrentWatchNotifications, setHighlightedBlocks],
     ),
   )
 

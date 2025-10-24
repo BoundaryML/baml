@@ -20,8 +20,8 @@ function MyFunctionGood(value: int) -> bool {
 //   let x = 5 @watch(name=x);
 //   let y = 10 @watch(name=y);
 //   let z: int = 20 @watch(name=z);
-//   z.$watch.options(when: MyFunctionGood);
-//   z.$watch.options(when: MyFunctionBad);
+//   z.$watch.options(when: when);
+//   z.$watch.options(when: when);
 //
 //   10
 // }

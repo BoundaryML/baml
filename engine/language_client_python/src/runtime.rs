@@ -150,7 +150,7 @@ fn extract_handlers_recursive(
                             .collect();
                         if !handlers.is_empty() {
                             // Key by "FunctionName.variable_name"
-                            let key = format!("{}.{}", current_function_name, var_name);
+                            let key = format!("{current_function_name}.{var_name}");
                             var_handlers.insert(key, handlers);
                         }
                     }
@@ -171,7 +171,7 @@ fn extract_handlers_recursive(
                             .collect();
                         if !handlers.is_empty() {
                             // Key by "FunctionName.variable_name"
-                            let key = format!("{}.{}", current_function_name, var_name);
+                            let key = format!("{current_function_name}.{var_name}");
                             stream_handlers.insert(key, handlers);
                         }
                     }

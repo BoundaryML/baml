@@ -23,6 +23,7 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     let mut arity = FieldArity::Required;
     let mut ftype = None;
     let mut attributes = Vec::new();
+    let span = diagnostics.span(pair.as_span());
 
     for current in pair.into_inner() {
         match current.as_rule() {
@@ -54,7 +55,11 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
             }
         }
         None => {
-            unreachable!("Ftype should always be defined")
+            diagnostics.push_error(DatamodelError::new_parser_error(
+                "Field type must be defined".to_string(),
+                span,
+            ));
+            None
         }
     }
 }
@@ -83,7 +88,13 @@ fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
     }
 
     let mut union = match types.len() {
-        0 => unreachable!("A union must have atleast 1 type"),
+        0 => {
+            diagnostics.push_error(DatamodelError::new_parser_error(
+                "A union must have at least 1 type".to_string(),
+                span,
+            ));
+            None
+        }
         1 => Some(types[0].to_owned()),
         _ => Some(FieldType::Union(FieldArity::Required, types, span, None)),
     };
@@ -134,6 +145,7 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
         diagnostics,
     );
 
+    let span = diagnostics.span(pair.as_span());
     if let Some(current) = pair.into_inner().next() {
         return match current.as_rule() {
             Rule::path_identifier => {
@@ -205,12 +217,17 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
         };
     }
 
-    unreachable!("A base type must be one of the above");
+    diagnostics.push_error(DatamodelError::new_parser_error(
+        "A base type must be defined".to_string(),
+        span,
+    ));
+    None
 }
 
 fn parse_parenthesized_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
     assert_correct_parser(&pair, &[Rule::parenthesized_type], diagnostics);
 
+    let span = diagnostics.span(pair.as_span());
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::openParen | Rule::closeParen => continue,
@@ -221,7 +238,11 @@ fn parse_parenthesized_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
         }
     }
 
-    unreachable!("impossible parenthesized parsing");
+    diagnostics.push_error(DatamodelError::new_parser_error(
+        "Parenthesized type must contain a field type".to_string(),
+        span,
+    ));
+    None
 }
 
 fn parse_literal_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
@@ -230,13 +251,23 @@ fn parse_literal_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<F
     let span = diagnostics.span(pair.as_span());
 
     let Some(literal_type) = pair.into_inner().next() else {
-        unreachable!("impossible literal parsing");
+        diagnostics.push_error(DatamodelError::new_parser_error(
+            "Literal type must contain a value".to_string(),
+            span,
+        ));
+        return None;
     };
 
     let literal_value = match literal_type.as_rule() {
         Rule::quoted_string_literal => match literal_type.into_inner().next() {
             Some(string_content) => LiteralValue::String(string_content.as_str().into()),
-            None => unreachable!("quoted string literal has no string content"),
+            None => {
+                diagnostics.push_error(DatamodelError::new_parser_error(
+                    "Quoted string literal has no string content".to_string(),
+                    span,
+                ));
+                return None;
+            }
         },
 
         Rule::numeric_literal => match literal_type.as_str().parse::<i64>() {
@@ -321,7 +352,13 @@ fn parse_array(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
             span,            // Source location for error reporting
             None,            // No attributes initially
         )),
-        _ => unreachable!("Field must have been defined"),
+        None => {
+            diagnostics.push_error(DatamodelError::new_parser_error(
+                "Array type must have a base type defined".to_string(),
+                span,
+            ));
+            None
+        }
     }
 }
 
@@ -382,7 +419,13 @@ fn parse_map(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType>
             span, // Source location for error reporting
             None, // No attributes initially
         )),
-        _ => unreachable!("Maps must specify a key type and value type"),
+        _ => {
+            diagnostics.push_error(DatamodelError::new_parser_error(
+                "Maps must specify exactly a key type and a value type".to_string(),
+                span,
+            ));
+            None
+        }
     }
 }
 
@@ -469,7 +512,9 @@ pub fn reassociate_union_attributes(field_type: &mut FieldType) {
             }
         }
         _ => {
-            panic!("Unexpected: `reassociate_union_attributes` should only be called when parsing a union.");
+            // This is an internal error - the function should only be called on unions
+            // Since we don't have diagnostics here, we silently return
+            // The validation pipeline will catch any type errors later
         }
     }
 }

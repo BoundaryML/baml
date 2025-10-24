@@ -191,7 +191,7 @@ fn extract_handlers_recursive(
                                 )
                             {
                                 // Key by "FunctionName.variable_name"
-                                let key = format!("{}.{}", current_function_name, var_name);
+                                let key = format!("{current_function_name}.{var_name}");
                                 var_handlers.insert(key, tsfn);
                             }
                         }
@@ -220,7 +220,7 @@ fn extract_handlers_recursive(
                                 })
                             {
                                 // Key by "FunctionName.variable_name"
-                                let key = format!("{}.{}", current_function_name, var_name);
+                                let key = format!("{current_function_name}.{var_name}");
                                 stream_handlers.insert(key, tsfn);
                             }
                         }
@@ -266,7 +266,7 @@ fn extract_emit_callbacks(env: &Env, events_obj: &Object) -> napi::Result<Option
             f
         }
         Err(e) => {
-            log::debug!("No __handlers function found: {:?}", e);
+            log::debug!("No __handlers function found: {e:?}");
             return Ok(None);
         }
     };
@@ -456,8 +456,7 @@ impl BamlRuntime {
                                     format!("{}.{}", notification.function_name, channel);
                                 if let Some(handler) = callbacks.stream_handlers.get(&handler_key) {
                                     log::info!(
-                                        "[RUST] Found stream handler for {}, calling it",
-                                        var_name
+                                        "[RUST] Found stream handler for {var_name}, calling it"
                                     );
                                     let stream_event = StreamEvent {
                                         stream_id: stream_id.clone(),
@@ -468,11 +467,10 @@ impl BamlRuntime {
                                         stream_event,
                                         ThreadsafeFunctionCallMode::NonBlocking,
                                     );
-                                    log::info!("[RUST] Handler call result: {:?}", result);
+                                    log::info!("[RUST] Handler call result: {result:?}");
                                 } else {
                                     log::info!(
-                                        "[RUST] No stream handler found for channel: {}",
-                                        var_name
+                                        "[RUST] No stream handler found for channel: {var_name}"
                                     );
                                 }
                             }

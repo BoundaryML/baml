@@ -1215,18 +1215,13 @@ fn typecheck_statement(
             // Check that the variable exists in context
             if !context.vars.contains_key(variable) {
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Unknown variable '{}' in watch options", variable),
+                    &format!("Unknown variable '{variable}' in watch options"),
                     span.clone(),
                 ));
             }
 
             // Validate the 'when' function if provided
-            if let Some(when_str) = when {
-                // Parse the when string to get the function name
-                // For now, when is just a string with the function name
-                let fn_name =
-                    internal_baml_ast::ast::Identifier::Local(when_str.clone(), span.clone());
-
+            if let Some(when) = when {
                 // Get the variable's type for validation (clone to avoid borrow issues)
                 let var_type = context.vars.get(variable).map(|vi| vi.ty.clone());
 
@@ -1234,7 +1229,7 @@ fn typecheck_statement(
                     // Create a WatchSpec to validate
                     let watch_spec = crate::watch::WatchSpec {
                         name: variable.clone(),
-                        when: crate::watch::WatchWhen::FunctionName(fn_name),
+                        when: when.clone(),
                         span: span.clone(),
                     };
 
@@ -1254,7 +1249,7 @@ fn typecheck_statement(
             // Check that the variable exists in context
             if !context.vars.contains_key(variable) {
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Unknown variable '{}' in watch notify", variable),
+                    &format!("Unknown variable '{variable}' in watch notify"),
                     span.clone(),
                 ));
             }
@@ -1561,7 +1556,7 @@ pub fn typecheck_expression(
                     "baml.fetch_value"
                 };
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>", fn_name_display, fn_name_display),
+                        &format!("Generic function {fn_name_display} must have a type argument. Try adding a type argument like this: {fn_name_display}<Type>"),
                         function.span().clone(),
                     ));
             }
@@ -1697,7 +1692,7 @@ pub fn typecheck_expression(
                             "baml.fetch_value"
                         };
                         diagnostics.push_error(DatamodelError::new_validation_error(
-                            &format!("Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>", fn_name_display, fn_name_display),
+                            &format!("Generic function {fn_name_display} must have a type argument. Try adding a type argument like this: {fn_name_display}<Type>"),
                             span.clone(),
                         ));
                     }
@@ -2000,7 +1995,7 @@ pub fn typecheck_expression(
                     "baml.fetch_value"
                 };
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>", fn_name_display, fn_name_display),
+                    &format!("Generic function {fn_name_display} must have a type argument. Try adding a type argument like this: {fn_name_display}<Type>"),
                     span.clone(),
                 ));
             }
@@ -2851,8 +2846,9 @@ fn typecheck_emit(
                 }
             }
         }
-        WatchWhen::True => {}
+        WatchWhen::Auto => {}
         WatchWhen::Manual => {}
+        WatchWhen::Never => {}
     }
 }
 

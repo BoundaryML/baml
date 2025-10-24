@@ -113,9 +113,9 @@ function NotificationItem({ notification, index }: { notification: WatchNotifica
               })()}
             </pre>
           </div>
-          {notification.function_name && (
+          {notification.block_name && (
             <div className="mt-1">
-              <span className="text-muted-foreground text-xs">Function: {notification.function_name}</span>
+              <span className="text-muted-foreground text-xs">Function: {notification.block_name}</span>
             </div>
           )}
         </div>

@@ -390,7 +390,7 @@ impl FunctionMetadata {
                                 new_channel.clone(),
                                 crate::watch::WatchSpec {
                                     name: new_channel.clone(),
-                                    when: crate::watch::WatchWhen::True,
+                                    when: crate::watch::WatchWhen::Auto,
                                     span: span.clone(),
                                 },
                                 var_type.clone(),
