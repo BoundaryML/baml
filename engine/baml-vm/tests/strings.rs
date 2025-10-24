@@ -111,3 +111,163 @@ fn string_greater_than_or_equal() -> anyhow::Result<()> {
         expected: ExecState::Complete(Value::Bool(true)),
     })
 }
+
+#[test]
+fn string_length() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> int {
+                let s = "hello";
+                s.length()
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Int(5)),
+    })
+}
+
+#[test]
+fn string_to_lower_case() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> string {
+                let s = "HELLO World";
+                s.toLowerCase()
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::String("hello world".to_string()))),
+    })
+}
+
+#[test]
+fn string_to_upper_case() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> string {
+                let s = "hello WORLD";
+                s.toUpperCase()
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::String("HELLO WORLD".to_string()))),
+    })
+}
+
+#[test]
+fn string_trim() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> string {
+                let s = "  hello world  ";
+                s.trim()
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::String("hello world".to_string()))),
+    })
+}
+
+#[test]
+fn string_includes() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> bool {
+                let s = "hello world";
+                s.includes("world")
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(true)),
+    })
+}
+
+#[test]
+fn string_starts_with() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> bool {
+                let s = "hello world";
+                s.startsWith("hello")
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(true)),
+    })
+}
+
+#[test]
+fn string_ends_with() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> bool {
+                let s = "hello world";
+                s.endsWith("world")
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(true)),
+    })
+}
+
+#[test]
+fn string_split() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> string[] {
+                let s = "hello,world,test";
+                s.split(",")
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::Array(vec![
+            Value::Object(Object::String("hello".to_string())),
+            Value::Object(Object::String("world".to_string())),
+            Value::Object(Object::String("test".to_string())),
+        ]))),
+    })
+}
+
+#[test]
+fn string_substring() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> string {
+                let s = "hello world";
+                s.substring(0, 5)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::String("hello".to_string()))),
+    })
+}
+
+#[test]
+fn string_substring_bounds() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> string {
+                let s = "hello";
+                s.substring(2, 10)  // Should clamp to string length
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::String("llo".to_string()))),
+    })
+}
+
+#[test]
+fn string_replace() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> string {
+                let s = "hello world world";
+                s.replace("world", "BAML")
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::String(
+            "hello BAML world".to_string(),
+        ))),
+    })
+}

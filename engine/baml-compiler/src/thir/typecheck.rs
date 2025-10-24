@@ -140,6 +140,32 @@ pub fn typecheck_returning_context<'a>(
                 ],
                 TypeIR::bool(),
             ),
+            // String methods
+            "baml.String.length" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::int()),
+            "baml.String.toLowerCase" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::string()),
+            "baml.String.toUpperCase" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::string()),
+            "baml.String.trim" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::string()),
+            "baml.String.includes" => {
+                TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::bool())
+            }
+            "baml.String.startsWith" => {
+                TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::bool())
+            }
+            "baml.String.endsWith" => {
+                TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::bool())
+            }
+            "baml.String.split" => TypeIR::arrow(
+                vec![TypeIR::string(), TypeIR::string()],
+                TypeIR::List(Box::new(TypeIR::string()), Default::default()),
+            ),
+            "baml.String.substring" => TypeIR::arrow(
+                vec![TypeIR::string(), TypeIR::int(), TypeIR::int()],
+                TypeIR::string(),
+            ),
+            "baml.String.replace" => TypeIR::arrow(
+                vec![TypeIR::string(), TypeIR::string(), TypeIR::string()],
+                TypeIR::string(),
+            ),
             "baml.media.image.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::image()),
             "baml.media.audio.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::audio()),
             "baml.media.video.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::video()),
@@ -1960,6 +1986,15 @@ pub fn typecheck_expression(
 
                 Some(TypeIR::Primitive(TypeValue::String, _)) => match method.as_str() {
                     "length" => Some("baml.String.length".to_string()),
+                    "toLowerCase" => Some("baml.String.toLowerCase".to_string()),
+                    "toUpperCase" => Some("baml.String.toUpperCase".to_string()),
+                    "trim" => Some("baml.String.trim".to_string()),
+                    "split" => Some("baml.String.split".to_string()),
+                    "substring" => Some("baml.String.substring".to_string()),
+                    "includes" => Some("baml.String.includes".to_string()),
+                    "startsWith" => Some("baml.String.startsWith".to_string()),
+                    "endsWith" => Some("baml.String.endsWith".to_string()),
+                    "replace" => Some("baml.String.replace".to_string()),
                     _ => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             &format!("Method `{method}` is not available on type `string`"),

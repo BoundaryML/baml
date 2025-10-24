@@ -239,6 +239,108 @@ pub fn media_mime_type(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     Ok(vm.alloc_string(media.mime_type.clone().unwrap_or("".to_string())))
 }
 
+/// String length
+pub fn string_length(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    // Arity is already checked by the VM.
+    let string = vm.objects.as_string(&args[0])?;
+    Ok(Value::Int(string.len() as i64))
+}
+
+/// String to lowercase
+pub fn string_to_lower_case(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    let string = vm.objects.as_string(&args[0])?;
+    Ok(vm.alloc_string(string.to_lowercase()))
+}
+
+/// String to uppercase
+pub fn string_to_upper_case(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    let string = vm.objects.as_string(&args[0])?;
+    Ok(vm.alloc_string(string.to_uppercase()))
+}
+
+/// String trim
+pub fn string_trim(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    let string = vm.objects.as_string(&args[0])?;
+    Ok(vm.alloc_string(string.trim().to_string()))
+}
+
+/// String includes
+pub fn string_includes(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    let string = vm.objects.as_string(&args[0])?;
+    let search = vm.objects.as_string(&args[1])?;
+    Ok(Value::Bool(string.contains(search)))
+}
+
+/// String starts with
+pub fn string_starts_with(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    let string = vm.objects.as_string(&args[0])?;
+    let prefix = vm.objects.as_string(&args[1])?;
+    Ok(Value::Bool(string.starts_with(prefix)))
+}
+
+/// String ends with
+pub fn string_ends_with(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    let string = vm.objects.as_string(&args[0])?;
+    let suffix = vm.objects.as_string(&args[1])?;
+    Ok(Value::Bool(string.ends_with(suffix)))
+}
+
+/// String split
+pub fn string_split(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    let string = vm.objects.as_string(&args[0])?.to_owned();
+    let delimiter = vm.objects.as_string(&args[1])?.to_owned();
+
+    let parts: Vec<Value> = string
+        .split(&delimiter)
+        .map(|s| vm.alloc_string(s.to_string()))
+        .collect();
+
+    Ok(vm.alloc_array(parts))
+}
+
+/// String substring
+pub fn string_substring(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    let string = vm.objects.as_string(&args[0])?;
+
+    let start = match &args[1] {
+        Value::Int(i) => *i as usize,
+        _ => {
+            return Err(VmError::RuntimeError(RuntimeError::Other(
+                "substring() start index must be an integer".to_string(),
+            )))
+        }
+    };
+
+    let end = match &args[2] {
+        Value::Int(i) => *i as usize,
+        _ => {
+            return Err(VmError::RuntimeError(RuntimeError::Other(
+                "substring() end index must be an integer".to_string(),
+            )))
+        }
+    };
+
+    // Handle bounds
+    let len = string.len();
+    let start = start.min(len);
+    let end = end.min(len).max(start);
+
+    // Note: This is byte indexing, not char indexing
+    // For full Unicode support, we'd need to use char_indices()
+    Ok(vm.alloc_string(string[start..end].to_string()))
+}
+
+/// String replace
+pub fn string_replace(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    let string = vm.objects.as_string(&args[0])?;
+    let search = vm.objects.as_string(&args[1])?;
+    let replacement = vm.objects.as_string(&args[2])?;
+
+    // Replace first occurrence only (matching JavaScript behavior)
+    let result = string.replacen(search, replacement, 1);
+    Ok(vm.alloc_string(result))
+}
+
 pub fn deep_copy_object(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
     let mut copied_objects = HashMap::new();
@@ -604,6 +706,17 @@ pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
         // Map.
         ("baml.Map.length", (map_len, 1)),
         ("baml.Map.has", (map_has, 2)),
+        // String methods
+        ("baml.String.length", (string_length, 1)),
+        ("baml.String.toLowerCase", (string_to_lower_case, 1)),
+        ("baml.String.toUpperCase", (string_to_upper_case, 1)),
+        ("baml.String.trim", (string_trim, 1)),
+        ("baml.String.includes", (string_includes, 2)),
+        ("baml.String.startsWith", (string_starts_with, 2)),
+        ("baml.String.endsWith", (string_ends_with, 2)),
+        ("baml.String.split", (string_split, 2)),
+        ("baml.String.substring", (string_substring, 3)),
+        ("baml.String.replace", (string_replace, 3)),
         // Media
         ("baml.media.image.from_url", (image_from_url, 1)),
         ("baml.media.audio.from_url", (audio_from_url, 1)),
