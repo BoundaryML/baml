@@ -9,7 +9,7 @@ use walkdir::WalkDir;
 
 // const PROJECT_DIR: &'static str = "/Users/sam/baml4/c2/baml_src";
 // const PROJECT_DIR: &'static str = "/Users/sam/baml/engine/playground-server/tests/codelens-bugs";
-const PROJECT_DIR: &'static str = "/Users/sam/baml/integ-tests/baml_src";
+const PROJECT_DIR: &str = "/Users/sam/baml/integ-tests/baml_src";
 
 #[derive(Debug)]
 pub struct Playground2Server {
@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn load_project_from_directory(dir_path: &'static str) -> BamlNotification {
+fn load_project_from_directory(dir_path: &str) -> BamlNotification {
     let mut files = HashMap::new();
     let base_path = Path::new(dir_path);
 
@@ -103,7 +103,7 @@ pub async fn run_server() -> anyhow::Result<()> {
     let server = Playground2Server {
         app_state: AppState {
             webview_router_to_websocket_rx_provider: webview_router_to_websocket_tx.clone().into(),
-            to_webview_router_tx: to_webview_router_tx,
+            to_webview_router_tx,
             playground_port: port_picks.playground_port,
             proxy_port: port_picks.proxy_port,
             editor_config: std::sync::Arc::new(std::sync::RwLock::new(

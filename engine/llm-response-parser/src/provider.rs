@@ -31,7 +31,7 @@ impl LLMProvider {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn try_from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "openai" => Some(LLMProvider::OpenAI),
             "anthropic" => Some(LLMProvider::Anthropic),
