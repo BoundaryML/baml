@@ -11,7 +11,7 @@ use internal_baml_diagnostics::Span;
 
 use crate::{
     thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, THir},
-    watch::{shared_handler, SharedWatchHandler, WatchNotification},
+    watch::{SharedWatchHandler, WatchNotification},
 };
 
 // Type alias for pinned boxed futures - conditionally Send for non-WASM targets
@@ -2246,8 +2246,16 @@ where
                 args,
                 meta,
             } => {
-                let receiver_val = expect_value(
-                    evaluate_expr(
+                // Extract method name
+                let method_name = match method.as_ref() {
+                    Expr::Var(name, _) => name.clone(),
+                    _ => bail!("method name must be an identifier at {:?}", meta.0),
+                };
+
+                // For mutating methods like push(), we need the cell reference
+                if method_name == "push" {
+                    // Get the receiver as a reference (cell) if possible
+                    let receiver_eval = evaluate_expr(
                         receiver,
                         scopes,
                         thir,
@@ -2255,22 +2263,48 @@ where
                         watch_handler,
                         function_name,
                     )
-                    .await?,
-                )?;
+                    .await?;
 
-                // Extract method name
-                let method_name = match method.as_ref() {
-                    Expr::Var(name, _) => name.clone(),
-                    _ => bail!("method name must be an identifier at {:?}", meta.0),
-                };
+                    let receiver_cell = match receiver_eval {
+                        EvalValue::Reference(cell) => cell,
+                        _ => bail!("push() can only be called on a variable at {:?}", meta.0),
+                    };
 
-                // Evaluate arguments
-                let mut arg_vals: Vec<BamlValueWithMeta<ExprMetadata>> =
-                    Vec::with_capacity(args.len());
-                for arg in args.iter() {
-                    arg_vals.push(expect_value(
+                    // Evaluate arguments
+                    let mut arg_vals: Vec<BamlValueWithMeta<ExprMetadata>> =
+                        Vec::with_capacity(args.len());
+                    for arg in args.iter() {
+                        arg_vals.push(expect_value(
+                            evaluate_expr(
+                                arg,
+                                scopes,
+                                thir,
+                                run_llm_function,
+                                watch_handler,
+                                function_name,
+                            )
+                            .await?,
+                        )?);
+                    }
+
+                    // Mutate the array
+                    let mut receiver_val = receiver_cell.lock().unwrap();
+                    match &mut *receiver_val {
+                        BamlValueWithMeta::List(items, _) => {
+                            if arg_vals.len() != 1 {
+                                bail!("push() expects exactly one argument at {:?}", meta.0);
+                            }
+                            items.push(arg_vals[0].clone());
+                            // Return void/unit
+                            EvalValue::Value(BamlValueWithMeta::Null(meta.clone()))
+                        }
+                        _ => bail!("push() can only be called on arrays at {:?}", meta.0),
+                    }
+                } else {
+                    // Non-mutating methods
+                    let receiver_val = expect_value(
                         evaluate_expr(
-                            arg,
+                            receiver,
                             scopes,
                             thir,
                             run_llm_function,
@@ -2278,11 +2312,29 @@ where
                             function_name,
                         )
                         .await?,
-                    )?);
-                }
+                    )?;
 
-                let result = evaluate_method_call(&receiver_val, &method_name, &arg_vals, meta)?;
-                EvalValue::Value(result)
+                    // Evaluate arguments
+                    let mut arg_vals: Vec<BamlValueWithMeta<ExprMetadata>> =
+                        Vec::with_capacity(args.len());
+                    for arg in args.iter() {
+                        arg_vals.push(expect_value(
+                            evaluate_expr(
+                                arg,
+                                scopes,
+                                thir,
+                                run_llm_function,
+                                watch_handler,
+                                function_name,
+                            )
+                            .await?,
+                        )?);
+                    }
+
+                    let result =
+                        evaluate_method_call(&receiver_val, &method_name, &arg_vals, meta)?;
+                    EvalValue::Value(result)
+                }
             }
             Expr::Paren(inner, _) => {
                 evaluate_expr(
@@ -2881,15 +2933,13 @@ mod tests {
             + Send
             + Sync,
     {
-        let handle_watch = shared_handler(|notification: WatchNotification| {
-            eprintln!("Ignoring watch notification: {notification}");
-        });
+        let noop_watch_handler = crate::watch::shared_noop_handler();
         interpret_thir(
             "test".to_string(),
             thir,
             expr,
             handle_llm_call,
-            handle_watch,
+            noop_watch_handler,
             extra_bindings,
             env_vars,
         )

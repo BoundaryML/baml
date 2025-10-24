@@ -2628,7 +2628,16 @@ pub fn typecheck_expression(
                 }) => {
                     // Look up field in enum definition
                     if let Some(enum_def) = context.enums.get(enum_name) {
-                        Some(TypeIR::r#enum(&enum_def.name))
+                        // Validate that the variant exists in the enum
+                        if enum_def.variants.iter().any(|v| &v.name == field) {
+                            Some(TypeIR::r#enum(&enum_def.name))
+                        } else {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Enum {} has no variant {}", enum_name, field),
+                                span.clone(),
+                            ));
+                            None
+                        }
                     } else {
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             &format!("Enum {enum_name} not found"),
