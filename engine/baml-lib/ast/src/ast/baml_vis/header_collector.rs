@@ -377,18 +377,149 @@ impl HeaderCollector {
                 }
             }
             Expression::UnaryOperation { expr, .. } => self.visit_expression(expr),
-            _ => {} // Expression::BoolValue(_, span) => todo!(),
-                    // Expression::NumericValue(_, span) => todo!(),
-                    // Expression::Identifier(identifier) => todo!(),
-                    // Expression::StringValue(_, span) => todo!(),
-                    // Expression::RawStringValue(raw_string) => todo!(),
-                    // Expression::JinjaExpressionValue(jinja_expression, span) => todo!(),
-                    // Expression::App(app) => todo!(),
-                    // Expression::ArrayAccess(expression, expression1, span) => todo!(),
-                    // Expression::FieldAccess(expression, identifier, span) => todo!(),
-                    // Expression::MethodCall { receiver, method, args, type_args, span } => todo!(),
-                    // Expression::BinaryOperation { left, operator, right, span } => todo!(),
-                    // Expression::Paren(expression, span) => todo!(),
+            Expression::BoolValue(_, _) => {}
+            Expression::NumericValue(_, _) => {}
+            Expression::Identifier(_) => {}
+            Expression::StringValue(_, _) => {}
+            Expression::RawStringValue(_) => {}
+            Expression::JinjaExpressionValue(_, _) => {}
+            Expression::App(app) => {
+                for arg in &app.args {
+                    self.visit_expression(arg);
+                }
+            }
+            Expression::ArrayAccess(expression, index, _) => {
+                self.visit_expression(expression);
+                self.visit_expression(index);
+            }
+            Expression::FieldAccess(expression, _, _) => {
+                self.visit_expression(expression);
+            }
+            Expression::MethodCall { receiver, args, .. } => {
+                self.visit_expression(receiver);
+                for arg in args {
+                    self.visit_expression(arg);
+                }
+            }
+            Expression::BinaryOperation { left, right, .. } => {
+                self.visit_expression(left);
+                self.visit_expression(right);
+            }
+            Expression::Paren(expression, _) => self.visit_expression(expression),
+        }
+    }
+
+    fn collect_statement(&mut self, stmt: &Stmt) {
+        match stmt {
+            Stmt::Let(let_stmt) => {
+                let label_kind = Self::label_kind_for_expr(&let_stmt.expr);
+                let stmt_header_ids =
+                    self.add_headers_for_annotations(&let_stmt.annotations, label_kind);
+                self.attribute_calls_to_headers(&stmt_header_ids, &let_stmt.expr);
+                self.visit_expression(&let_stmt.expr);
+            }
+            Stmt::ForLoop(for_stmt) => {
+                let _ =
+                    self.add_headers_for_annotations(&for_stmt.annotations, HeaderLabelKind::For);
+                self.visit_expression(&for_stmt.iterator);
+                self.visit_expression_block(&for_stmt.body);
+            }
+            Stmt::Expression(es) => {
+                let kind = Self::label_kind_for_expr(&es.expr);
+                let hids = self.add_headers_for_annotations(&es.annotations, kind);
+                self.attribute_calls_to_headers(&hids, &es.expr);
+                self.visit_expression(&es.expr);
+            }
+            Stmt::Semicolon(es) => {
+                let kind = Self::label_kind_for_expr(&es.expr);
+                let hids = self.add_headers_for_annotations(&es.annotations, kind);
+                self.attribute_calls_to_headers(&hids, &es.expr);
+                self.visit_expression(&es.expr);
+            }
+            Stmt::Assign(assign_stmt) => {
+                let hids = self.add_headers_for_annotations(
+                    &assign_stmt.annotations,
+                    HeaderLabelKind::Expression,
+                );
+                self.attribute_calls_to_headers(&hids, &assign_stmt.expr);
+                self.visit_expression(&assign_stmt.expr);
+            }
+            Stmt::AssignOp(assign_op_stmt) => {
+                let hids = self.add_headers_for_annotations(
+                    &assign_op_stmt.annotations,
+                    HeaderLabelKind::Expression,
+                );
+                self.attribute_calls_to_headers(&hids, &assign_op_stmt.expr);
+                self.visit_expression(&assign_op_stmt.expr);
+            }
+            Stmt::CForLoop(c_for_stmt) => {
+                let _ =
+                    self.add_headers_for_annotations(&c_for_stmt.annotations, HeaderLabelKind::For);
+
+                if let Some(init_stmt) = &c_for_stmt.init_stmt {
+                    self.collect_statement(init_stmt.as_ref());
+                }
+
+                if let Some(condition) = &c_for_stmt.condition {
+                    self.visit_expression(condition);
+                }
+
+                if let Some(after_stmt) = &c_for_stmt.after_stmt {
+                    self.collect_statement(after_stmt.as_ref());
+                }
+
+                self.visit_expression_block(&c_for_stmt.body);
+            }
+            Stmt::WhileLoop(while_stmt) => {
+                let _ = self.add_headers_for_annotations(
+                    &while_stmt.annotations,
+                    HeaderLabelKind::Expression,
+                );
+                self.visit_expression(&while_stmt.condition);
+                self.visit_expression_block(&while_stmt.body);
+            }
+            Stmt::Break(break_stmt) => {
+                let _ = self.add_headers_for_annotations(
+                    &break_stmt.annotations,
+                    HeaderLabelKind::Expression,
+                );
+            }
+            Stmt::Continue(continue_stmt) => {
+                let _ = self.add_headers_for_annotations(
+                    &continue_stmt.annotations,
+                    HeaderLabelKind::Expression,
+                );
+            }
+            Stmt::Return(return_stmt) => {
+                let hids = self.add_headers_for_annotations(
+                    &return_stmt.annotations,
+                    HeaderLabelKind::Expression,
+                );
+                self.attribute_calls_to_headers(&hids, &return_stmt.value);
+                self.visit_expression(&return_stmt.value);
+            }
+            Stmt::Assert(assert_stmt) => {
+                let hids = self.add_headers_for_annotations(
+                    &assert_stmt.annotations,
+                    HeaderLabelKind::Expression,
+                );
+                self.attribute_calls_to_headers(&hids, &assert_stmt.value);
+                self.visit_expression(&assert_stmt.value);
+            }
+            Stmt::WatchOptions(options_stmt) => {
+                let hids = self.add_headers_for_annotations(
+                    &options_stmt.annotations,
+                    HeaderLabelKind::Expression,
+                );
+                self.attribute_calls_to_headers(&hids, &options_stmt.options_expr);
+                self.visit_expression(&options_stmt.options_expr);
+            }
+            Stmt::WatchNotify(notify_stmt) => {
+                let _ = self.add_headers_for_annotations(
+                    &notify_stmt.annotations,
+                    HeaderLabelKind::Expression,
+                );
+            }
         }
     }
 
@@ -397,80 +528,7 @@ impl HeaderCollector {
 
         // Visit statements first (preserve source order for MD parenting)
         for stmt in &block.stmts {
-            match stmt {
-                Stmt::Let(let_stmt) => {
-                    let label_kind = Self::label_kind_for_expr(&let_stmt.expr);
-                    let stmt_header_ids =
-                        self.add_headers_for_annotations(&let_stmt.annotations, label_kind);
-                    // Collect top-level calls for the statement expression and attribute to all headers
-                    self.attribute_calls_to_headers(&stmt_header_ids, &let_stmt.expr);
-                    self.visit_expression(&let_stmt.expr);
-                }
-                Stmt::ForLoop(for_stmt) => {
-                    // Record for-loop annotation headers in the current (outer) scope
-                    let _ = self
-                        .add_headers_for_annotations(&for_stmt.annotations, HeaderLabelKind::For);
-                    // Iterate expression evaluated in current scope
-                    self.visit_expression(&for_stmt.iterator);
-                    self.visit_expression_block(&for_stmt.body);
-                }
-                Stmt::Expression(es) => {
-                    let kind = Self::label_kind_for_expr(&es.expr);
-                    let hids = self.add_headers_for_annotations(&es.annotations, kind);
-                    self.attribute_calls_to_headers(&hids, &es.expr);
-                    self.visit_expression(&es.expr);
-                }
-                Stmt::Assign(assign_stmt) => self.visit_expression(&assign_stmt.expr),
-                Stmt::AssignOp(assign_op_stmt) => self.visit_expression(&assign_op_stmt.expr),
-                Stmt::CForLoop(c_for_stmt) => {
-                    // Visit init statement if present
-                    if let Some(init_stmt) = &c_for_stmt.init_stmt {
-                        // Recursively visit the init statement
-                        match init_stmt.as_ref() {
-                            Stmt::Let(let_stmt) => {
-                                let label_kind = Self::label_kind_for_expr(&let_stmt.expr);
-                                let stmt_header_ids = self
-                                    .add_headers_for_annotations(&let_stmt.annotations, label_kind);
-                                self.attribute_calls_to_headers(&stmt_header_ids, &let_stmt.expr);
-                                self.visit_expression(&let_stmt.expr);
-                            }
-                            Stmt::Assign(assign_stmt) => self.visit_expression(&assign_stmt.expr),
-                            Stmt::AssignOp(assign_op_stmt) => {
-                                self.visit_expression(&assign_op_stmt.expr)
-                            }
-                            _ => {} // Other statement types in init don't need special handling here
-                        }
-                    }
-                    // Visit condition if present
-                    if let Some(condition) = &c_for_stmt.condition {
-                        self.visit_expression(condition);
-                    }
-                    // Visit after statement if present
-                    if let Some(after_stmt) = &c_for_stmt.after_stmt {
-                        match after_stmt.as_ref() {
-                            Stmt::Assign(assign_stmt) => self.visit_expression(&assign_stmt.expr),
-                            Stmt::AssignOp(assign_op_stmt) => {
-                                self.visit_expression(&assign_op_stmt.expr)
-                            }
-                            _ => {} // Other statement types don't need special handling here
-                        }
-                    }
-                    self.visit_expression_block(&c_for_stmt.body);
-                }
-                Stmt::WhileLoop(while_stmt) => {
-                    self.visit_expression(&while_stmt.condition);
-                    self.visit_expression_block(&while_stmt.body);
-                }
-                Stmt::Semicolon(expr) => self.visit_expression(expr),
-                Stmt::Break(_) => {} // Break statements don't contain expressions to visit
-                Stmt::Continue(_) => {} // Continue statements don't contain expressions to visit
-                Stmt::Return(return_stmt) => {
-                    self.visit_expression(&return_stmt.value);
-                }
-                Stmt::Assert(assert_stmt) => self.visit_expression(&assert_stmt.value),
-                Stmt::WatchOptions(_) => {} // Watch options don't contain expressions to visit
-                Stmt::WatchNotify(_) => {} // Watch notify statements don't contain expressions to visit
-            }
+            self.collect_statement(stmt);
         }
 
         // Headers that apply to the final expression belong to this scope and come last

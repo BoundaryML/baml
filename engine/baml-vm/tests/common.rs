@@ -3,7 +3,9 @@
 use baml_compiler::test::ast;
 use baml_types::{BamlMap, BamlMedia};
 use baml_vm::{
+    bytecode::{BlockNotification as VmBlockNotification, BlockNotificationType},
     errors::VmError,
+    vm::WatchNotification as VmWatchNotification,
     watch::{self, Watch},
     BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool, Instruction,
     Object as VmObject, ObjectIndex, ObjectPool, StackIndex, Value as VmValue, Vm, VmExecState,
@@ -127,16 +129,42 @@ pub struct Variant {
     pub variant: String,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct BlockEvent {
+    pub function_name: String,
+    pub block_name: String,
+    pub level: usize,
+    pub block_type: BlockNotificationType,
+    pub is_enter: bool,
+}
+
+impl BlockEvent {
+    fn from_vm(notification: VmBlockNotification) -> Self {
+        Self {
+            function_name: notification.function_name.as_str().to_owned(),
+            block_name: notification.block_name.as_str().to_owned(),
+            level: notification.level,
+            block_type: notification.block_type,
+            is_enter: notification.is_enter,
+        }
+    }
+}
+
 /// Test-friendly representation of NodeId that uses variable names and test Objects.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Notification {
     Channel(String),
     Object(Object),
+    Block(BlockEvent),
 }
 
 impl Notification {
     pub fn on_channel(name: &str) -> Self {
         Notification::Channel(name.to_string())
+    }
+
+    pub fn block(notification: VmBlockNotification) -> Self {
+        Notification::Block(BlockEvent::from_vm(notification))
     }
 }
 
@@ -182,13 +210,18 @@ impl ExecState {
             VmExecState::Complete(value) => {
                 Value::from_vm_value(&value, vm).map(ExecState::Complete)
             }
-            VmExecState::Notify(nodes) => {
-                let notifications = nodes
-                    .iter()
-                    .map(|node_id| Notification::from_node_id(node_id, vm))
-                    .collect::<anyhow::Result<Vec<_>>>()?;
-                Ok(ExecState::Emit(notifications))
-            }
+            VmExecState::Notify(notification) => match notification {
+                VmWatchNotification::Variables(nodes) => {
+                    let notifications = nodes
+                        .iter()
+                        .map(|node_id| Notification::from_node_id(node_id, vm))
+                        .collect::<anyhow::Result<Vec<_>>>()?;
+                    Ok(ExecState::Emit(notifications))
+                }
+                VmWatchNotification::Block(notification) => {
+                    Ok(ExecState::Emit(vec![Notification::block(notification)]))
+                }
+            },
         }
     }
 }

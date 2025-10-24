@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use arraystring::{typenum::U255, ArrayString};
 use baml_types::{ir_type::TypeIR, BamlMap, BamlMediaType, BamlValueWithMeta, TypeValue};
 use baml_vm::{
     BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex,
@@ -549,7 +550,12 @@ impl<'g> HirCompiler<'g> {
     fn compile_statement(&mut self, statement: &thir::Statement<(Span, Option<TypeIR>)>) {
         match statement {
             thir::Statement::AnnotatedStatement { headers, statement } => {
-                // TODO
+                for header in headers {
+                    self.emit_annotated_block(header);
+                }
+                if let Some(statement) = statement {
+                    self.compile_statement(statement);
+                }
             }
             thir::Statement::Let { name, value, .. } => {
                 self.compile_expression(value);
@@ -1573,6 +1579,20 @@ impl<'g> HirCompiler<'g> {
         // Add a constant that points to the string object
         let const_index = self.add_constant(Value::Object(object_index));
         self.emit(Instruction::LoadConst(const_index));
+    }
+
+    fn emit_annotated_block(&mut self, v: &str) {
+        self.emit_string_literal(v);
+
+        self.emit(Instruction::NotifyBlock(
+            baml_vm::bytecode::BlockNotification {
+                function_name: ArrayString::<U255>::from_str_truncate(v),
+                block_name: ArrayString::<U255>::from_str_truncate(v),
+                level: 1,
+                block_type: baml_vm::bytecode::BlockNotificationType::Statement,
+                is_enter: true,
+            },
+        ));
     }
 
     /// Emits a single instruction and returns the index of the instruction.

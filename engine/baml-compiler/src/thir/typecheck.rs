@@ -1215,7 +1215,7 @@ fn typecheck_statement(
             // Check that the variable exists in context
             if !context.vars.contains_key(variable) {
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Unknown variable '{}' in watch options", variable),
+                    &format!("Unknown variable '{variable}' in watch options"),
                     span.clone(),
                 ));
             }
@@ -1249,7 +1249,7 @@ fn typecheck_statement(
             // Check that the variable exists in context
             if !context.vars.contains_key(variable) {
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Unknown variable '{}' in watch notify", variable),
+                    &format!("Unknown variable '{variable}' in watch notify"),
                     span.clone(),
                 ));
             }
@@ -1556,7 +1556,7 @@ pub fn typecheck_expression(
                     "baml.fetch_value"
                 };
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>", fn_name_display, fn_name_display),
+                        &format!("Generic function {fn_name_display} must have a type argument. Try adding a type argument like this: {fn_name_display}<Type>"),
                         function.span().clone(),
                     ));
             }
@@ -1692,7 +1692,7 @@ pub fn typecheck_expression(
                             "baml.fetch_value"
                         };
                         diagnostics.push_error(DatamodelError::new_validation_error(
-                            &format!("Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>", fn_name_display, fn_name_display),
+                            &format!("Generic function {fn_name_display} must have a type argument. Try adding a type argument like this: {fn_name_display}<Type>"),
                             span.clone(),
                         ));
                     }
@@ -1995,7 +1995,7 @@ pub fn typecheck_expression(
                     "baml.fetch_value"
                 };
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>", fn_name_display, fn_name_display),
+                    &format!("Generic function {fn_name_display} must have a type argument. Try adding a type argument like this: {fn_name_display}<Type>"),
                     span.clone(),
                 ));
             }

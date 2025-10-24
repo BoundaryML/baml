@@ -62,9 +62,9 @@ pub fn on_wasm_init() {
     // this is disabled by default because its slows down release mode builds.
     cfg_if::cfg_if! {
         if #[cfg(debug_assertions)] {
-            const LOG_LEVEL: log::Level = log::Level::Info;
+            const LOG_LEVEL: log::Level = log::Level::Debug;
         } else {
-            const LOG_LEVEL: log::Level = log::Level::Info;
+            const LOG_LEVEL: log::Level = log::Level::Debug;
         }
     };
     // I dont think we need this line anymore -- seems to break logging if you add it.
@@ -675,7 +675,7 @@ impl WasmTestResponse {
                 if let Some(expr_response) = &test_response.expr_function_response {
                     log::debug!(
                         "[BAML parsed_response_impl] Found expr_function_response: {:?}",
-                        expr_response.as_ref().map(|v| format!("{:?}", v))
+                        expr_response.as_ref().map(|v| format!("{v:?}"))
                     );
                     match expr_response {
                         Ok(value) => {
@@ -685,7 +685,7 @@ impl WasmTestResponse {
                             Ok(value)
                         }
                         Err(e) => {
-                            log::debug!("[BAML parsed_response_impl] Expr function error: {}", e);
+                            log::debug!("[BAML parsed_response_impl] Expr function error: {e}");
                             Err(anyhow::anyhow!("Expr function error: {}", e))
                         }
                     }
@@ -1896,7 +1896,7 @@ impl WasmRuntime {
                             baml_compiler::watch::WatchBamlValue::Value(v) => {
                                 let value: BamlValue = v.clone().into();
                                 serde_json::to_string(&value)
-                                    .unwrap_or_else(|_| format!("{:?}", value))
+                                    .unwrap_or_else(|_| format!("{value:?}"))
                             }
                             baml_compiler::watch::WatchBamlValue::Block(s) => {
                                 serde_json::json!({ "type": "block", "label": s }).to_string()
@@ -1907,7 +1907,7 @@ impl WasmRuntime {
                             baml_compiler::watch::WatchBamlValue::StreamUpdate(id, v) => {
                                 let value: BamlValue = v.clone().into();
                                 let value_json = serde_json::to_string(&value)
-                                    .unwrap_or_else(|_| format!("{:?}", value));
+                                    .unwrap_or_else(|_| format!("{value:?}"));
                                 serde_json::json!({ "type": "stream_update", "id": id, "value": value_json }).to_string()
                             }
                             baml_compiler::watch::WatchBamlValue::StreamEnd(id) => {
@@ -2005,10 +2005,9 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
 
                 let adjusted_path =
                     if is_windows && (path.starts_with("../") || path.starts_with("./")) {
-                        let result = format!("baml_src/{}", path);
+                        let result = format!("baml_src/{path}");
                         web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(&format!(
-                            "WASM Windows path fix applied: '{}' → '{}'",
-                            path, result
+                            "WASM Windows path fix applied: '{path}' → '{result}'"
                         )));
                         result
                     } else {
@@ -2335,7 +2334,7 @@ impl WasmFunction {
             let value_json = match &notification.value {
                 baml_compiler::watch::WatchBamlValue::Value(v) => {
                     let value: BamlValue = v.clone().into();
-                    serde_json::to_string(&value).unwrap_or_else(|_| format!("{:?}", value))
+                    serde_json::to_string(&value).unwrap_or_else(|_| format!("{value:?}"))
                 }
                 baml_compiler::watch::WatchBamlValue::Block(s) => {
                     serde_json::json!({ "type": "block", "label": s }).to_string()
@@ -2346,7 +2345,7 @@ impl WasmFunction {
                 baml_compiler::watch::WatchBamlValue::StreamUpdate(id, v) => {
                     let value: BamlValue = v.clone().into();
                     let value_json =
-                        serde_json::to_string(&value).unwrap_or_else(|_| format!("{:?}", value));
+                        serde_json::to_string(&value).unwrap_or_else(|_| format!("{value:?}"));
                     serde_json::json!({ "type": "stream_update", "id": id, "value": value_json })
                         .to_string()
                 }
@@ -2520,7 +2519,7 @@ impl WasmFunction {
             let value_json = match &notification.value {
                 baml_compiler::watch::WatchBamlValue::Value(v) => {
                     let value: BamlValue = v.clone().into();
-                    serde_json::to_string(&value).unwrap_or_else(|_| format!("{:?}", value))
+                    serde_json::to_string(&value).unwrap_or_else(|_| format!("{value:?}"))
                 }
                 baml_compiler::watch::WatchBamlValue::Block(s) => {
                     serde_json::json!({ "type": "block", "label": s }).to_string()
@@ -2531,7 +2530,7 @@ impl WasmFunction {
                 baml_compiler::watch::WatchBamlValue::StreamUpdate(id, v) => {
                     let value: BamlValue = v.clone().into();
                     let value_json =
-                        serde_json::to_string(&value).unwrap_or_else(|_| format!("{:?}", value));
+                        serde_json::to_string(&value).unwrap_or_else(|_| format!("{value:?}"));
                     serde_json::json!({ "type": "stream_update", "id": id, "value": value_json })
                         .to_string()
                 }

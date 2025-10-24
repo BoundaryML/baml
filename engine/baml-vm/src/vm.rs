@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use baml_types::{BamlMap, BamlMedia};
 
 use crate::{
-    bytecode::{BinOp, CmpOp, Instruction},
+    bytecode::{BinOp, BlockNotification, CmpOp, Instruction},
     errors::{ErrorLocation, InternalError, RuntimeError, VmError},
     indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex},
     types::{
@@ -207,6 +207,7 @@ pub struct Vm {
 /// Similarly, when the VM encounters an await point, it returns control flow to
 /// the embedder, expecting the embedder to await the future and fulfil it with
 /// the final result before yielding back control flow to the VM.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 pub enum VmExecState {
     /// VM cannot proceed. It is awaiting a pending future to complete.
@@ -222,7 +223,14 @@ pub enum VmExecState {
     Complete(Value),
 
     /// Notify about watched variables.
-    Notify(Vec<watch::NodeId>),
+    Notify(WatchNotification),
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, PartialEq)]
+pub enum WatchNotification {
+    Variables(Vec<watch::NodeId>),
+    Block(BlockNotification),
 }
 
 #[derive(Clone, Debug)]
@@ -631,6 +639,9 @@ impl Vm {
             // }
 
             match function.bytecode.instructions[instruction_ptr as usize] {
+                Instruction::NotifyBlock(notification) => {
+                    return Ok(VmExecState::Notify(WatchNotification::Block(notification)));
+                }
                 Instruction::LoadConst(index) => {
                     let value = &function.bytecode.constants[index];
                     self.stack.push(*value);
@@ -691,7 +702,9 @@ impl Vm {
                         function = self.objects[frame.function].as_function()?;
 
                         if !notifications.is_empty() {
-                            return Ok(VmExecState::Notify(notifications));
+                            return Ok(VmExecState::Notify(WatchNotification::Variables(
+                                notifications,
+                            )));
                         }
                     }
                 }
@@ -768,7 +781,9 @@ impl Vm {
                     function = self.objects[frame.function].as_function()?;
 
                     if !notifications.is_empty() {
-                        return Ok(VmExecState::Notify(notifications));
+                        return Ok(VmExecState::Notify(WatchNotification::Variables(
+                            notifications,
+                        )));
                     }
                 }
 
@@ -1241,7 +1256,9 @@ impl Vm {
                     function = self.objects[frame.function].as_function()?;
 
                     if !notifications.is_empty() {
-                        return Ok(VmExecState::Notify(notifications));
+                        return Ok(VmExecState::Notify(WatchNotification::Variables(
+                            notifications,
+                        )));
                     }
                 }
 
@@ -1294,7 +1311,9 @@ impl Vm {
                     function = self.objects[frame.function].as_function()?;
 
                     if !notifications.is_empty() {
-                        return Ok(VmExecState::Notify(notifications));
+                        return Ok(VmExecState::Notify(WatchNotification::Variables(
+                            notifications,
+                        )));
                     }
                 }
 
@@ -1538,7 +1557,9 @@ impl Vm {
                         return Err(RuntimeError::Other("Invalid manual notify".to_string()).into());
                     }
 
-                    return Ok(VmExecState::Notify(notifications));
+                    return Ok(VmExecState::Notify(WatchNotification::Variables(
+                        notifications,
+                    )));
                 }
 
                 Instruction::Call(arg_count) => {

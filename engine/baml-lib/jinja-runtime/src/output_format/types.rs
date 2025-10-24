@@ -363,7 +363,7 @@ impl std::fmt::Display for ClassRender {
         if let Some(desc) = &self.description {
             // Write description as comment before opening brace
             for line in desc.lines() {
-                writeln!(f, "// {}", line)?;
+                writeln!(f, "// {line}")?;
             }
         }
 

@@ -774,9 +774,7 @@ impl BamlRuntime {
         baml_log::set_from_env(&env_vars).unwrap();
 
         log::info!(
-            "[Runtime] run_test_with_expr_events start function={} test={}",
-            function_name,
-            test_name
+            "[Runtime] run_test_with_expr_events start function={function_name} test={test_name}"
         );
 
         let call = self
@@ -798,33 +796,24 @@ impl BamlRuntime {
         // If it's an expr function, use the simpler expr execution path
         if is_expr_fn {
             log::info!(
-                "[Runtime] run_test_with_expr_events taking expr path for function={} test={}",
-                function_name,
-                test_name
+                "[Runtime] run_test_with_expr_events taking expr path for function={function_name} test={test_name}"
             );
             let result = self
                 .run_expr_test(function_name, test_name, ctx, env_vars, watch_handler)
                 .await;
             match &result.0 {
                 Ok(_) => log::info!(
-                    "[Runtime] run_test_with_expr_events expr path success function={} test={}",
-                    function_name,
-                    test_name
+                    "[Runtime] run_test_with_expr_events expr path success function={function_name} test={test_name}"
                 ),
                 Err(e) => log::error!(
-                    "[Runtime] run_test_with_expr_events expr path error function={} test={} err={:?}",
-                    function_name,
-                    test_name,
-                    e
+                    "[Runtime] run_test_with_expr_events expr path error function={function_name} test={test_name} err={e:?}"
                 ),
             }
             return result;
         }
 
         log::info!(
-            "[Runtime] run_test_with_expr_events taking LLM path function={} test={}",
-            function_name,
-            test_name
+            "[Runtime] run_test_with_expr_events taking LLM path function={function_name} test={test_name}"
         );
 
         let run_to_response = || async {
@@ -920,15 +909,10 @@ impl BamlRuntime {
         let response = run_to_response().await;
         match &response {
             Ok(_) => log::info!(
-                "[Runtime] run_test_with_expr_events LLM path success function={} test={}",
-                function_name,
-                test_name
+                "[Runtime] run_test_with_expr_events LLM path success function={function_name} test={test_name}"
             ),
             Err(e) => log::error!(
-                "[Runtime] run_test_with_expr_events LLM path error function={} test={} err={:?}",
-                function_name,
-                test_name,
-                e
+                "[Runtime] run_test_with_expr_events LLM path error function={function_name} test={test_name} err={e:?}"
             ),
         }
 
@@ -1002,11 +986,7 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
         watch_handler: Option<SharedWatchHandler>,
     ) -> (Result<TestResponse>, FunctionCallId) {
-        log::info!(
-            "[Runtime] run_expr_test start function={} test={}",
-            function_name,
-            test_name
-        );
+        log::info!("[Runtime] run_expr_test start function={function_name} test={test_name}");
         // Get test parameters
         let rctx = ctx.create_ctx_with_default();
         let params = match self.get_test_params(function_name, test_name, &rctx, true) {
@@ -1114,20 +1094,13 @@ impl BamlRuntime {
 
         match &test_response.expr_function_response {
             Some(Ok(_)) => log::info!(
-                "[Runtime] run_expr_test success function={} test={}",
-                function_name,
-                test_name
+                "[Runtime] run_expr_test success function={function_name} test={test_name}"
             ),
             Some(Err(e)) => log::error!(
-                "[Runtime] run_expr_test evaluation error function={} test={} err={:?}",
-                function_name,
-                test_name,
-                e
+                "[Runtime] run_expr_test evaluation error function={function_name} test={test_name} err={e:?}"
             ),
             None => log::warn!(
-                "[Runtime] run_expr_test produced no response function={} test={}",
-                function_name,
-                test_name
+                "[Runtime] run_expr_test produced no response function={function_name} test={test_name}"
             ),
         }
 

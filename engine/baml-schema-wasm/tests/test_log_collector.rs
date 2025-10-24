@@ -73,6 +73,7 @@ pub(crate) mod tests {
                 js_sys::Function::new_no_args(""),
                 env_vars_js.clone().into(),
                 None,
+                js_sys::Function::new_no_args(""),
             )
             .await
             .expect("run_test should succeed");
@@ -170,6 +171,7 @@ pub(crate) mod tests {
                 on_expr_fn,
                 env_vars_js.clone().into(),
                 None,
+                js_sys::Function::new_no_args(""),
             )
             .await
             .expect("streaming run_test_with_expr_events should succeed");

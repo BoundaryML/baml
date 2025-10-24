@@ -743,7 +743,7 @@ impl MermaidDiagramGenerator {
             Stmt::Semicolon(expr) => {
                 let label = "Semicolon Expression".to_string();
                 let stmt_id = self.get_node_id_with_class(&key, &label, "statementNode");
-                let expr_id = self.visit_expression(expr);
+                let expr_id = self.visit_expression(&expr.expr);
                 self.connect(&stmt_id, &expr_id, Some("expr"));
                 stmt_id
             }

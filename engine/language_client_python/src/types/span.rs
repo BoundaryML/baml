@@ -81,13 +81,13 @@ impl BamlSpan {
                         if let Ok(lines) = formatted.extract::<Vec<String>>() {
                             lines.join("")
                         } else {
-                            format!("{:?}", bound_result)
+                            format!("{bound_result:?}")
                         }
                     } else {
-                        format!("{:?}", bound_result)
+                        format!("{bound_result:?}")
                     }
                 } else {
-                    format!("{:?}", bound_result)
+                    format!("{bound_result:?}")
                 };
 
                 // Get exception type name

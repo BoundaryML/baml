@@ -57,6 +57,9 @@ pub fn display_instruction(
     let instruction = &function.bytecode.instructions[instruction_ptr as usize];
 
     let metadata = match instruction {
+        Instruction::NotifyBlock(notification) => {
+            format!("({})", &notification.block_name)
+        }
         Instruction::LoadConst(index) => format!(
             "({})",
             display_value(&function.bytecode.constants[*index], objects)
@@ -174,6 +177,7 @@ const COLUMN_MARGIN: usize = 3;
 /// Get color for instruction based on its type
 fn instruction_color(instruction: &Instruction) -> Color {
     match instruction {
+        Instruction::NotifyBlock(_) => Color::BrightYellow,
         Instruction::LoadConst(_)
         | Instruction::LoadVar(_)
         | Instruction::LoadGlobal(_)

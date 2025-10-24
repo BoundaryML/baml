@@ -9,6 +9,7 @@ import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import { functionGraphAtom } from '../../../atoms-orch-graph';
 import { vscode } from '../../../../vscode';
 import { flashRangesAtom } from '../../../atoms';
+import { highlightedBlocksAtom } from '../atoms';
 
 // === BAML Mermaid CSS Override (media-like styling) ===
 // This CSS is injected into the generated Mermaid SVG so it overrides Mermaid's defaults.
@@ -42,7 +43,7 @@ const MERMAID_CSS_OVERRIDE = `
   #bamlMermaidSvg foreignObject div,
   #bamlMermaidSvg foreignObject span,
   #bamlMermaidSvg foreignObject p {
-    font-family: inherit !important;
+    font-family: var(--font-sans) !important;
     font-size: 1em !important;
     line-height: 1.4;
   }
@@ -92,6 +93,18 @@ const MERMAID_CSS_OVERRIDE = `
     // stroke-linejoin: round !important;
   }
 
+  /* Highlighted node state driven by watch notifications */
+  #bamlMermaidSvg .baml-mermaid-highlight rect,
+  #bamlMermaidSvg .baml-mermaid-highlight circle,
+  #bamlMermaidSvg .baml-mermaid-highlight ellipse,
+  #bamlMermaidSvg .baml-mermaid-highlight polygon,
+  #bamlMermaidSvg .baml-mermaid-highlight path {
+    fill: color-mix(in oklab, var(--vscode-focusBorder, var(--ring)) 50%, transparent) !important;
+    stroke: var(--vscode-focusBorder) !important;
+    stroke-width: 6.3px !important;
+    filter: drop-shadow(0 0 0.45rem rgba(124, 93, 255, 0.45));
+  }
+
   /* Normalize Mermaid thickness utility classes to our desired thickness */
   #bamlMermaidSvg .edge-thickness-normal { stroke-width: 5.7px !important; }
   #bamlMermaidSvg .edge-thickness-thick { stroke-width: 6.9px !important; }
@@ -127,11 +140,86 @@ const MermaidHeader: React.FC = () => {
 
 export const MermaidGraphView: React.FC = () => {
   const { graph } = useAtomValue(functionGraphAtom);
+  const highlightedBlocks = useAtomValue(highlightedBlocksAtom);
   const mermaidRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const transformRef = useRef<ReactZoomPanPinchRef | null>(null);
   const setFlashRanges = useSetAtom(flashRangesAtom);
+  const labelNodeMapRef = useRef<Map<string, SVGElement[]>>(new Map());
+  const highlightedNodesRef = useRef<Set<SVGElement>>(new Set());
+  const pendingLabelsRef = useRef<Set<string>>(new Set());
+
+  const normalizeLabel = useCallback((label: string) => label.replace(/\s+/g, ' ').trim().toLowerCase(), []);
+
+  const clearAllHighlights = useCallback(() => {
+    highlightedNodesRef.current.forEach((node) => {
+      node.classList.remove('baml-mermaid-highlight');
+    });
+    highlightedNodesRef.current.clear();
+  }, []);
+
+  const findNodesForLabel = useCallback(
+    (label: string, map: Map<string, SVGElement[]>) => {
+      const normalized = normalizeLabel(label);
+      const directMatches = map.get(normalized);
+      if (directMatches && directMatches.length > 0) {
+        return directMatches;
+      }
+
+      const partialMatches: SVGElement[] = [];
+      map.forEach((nodes, key) => {
+        if (key.includes(normalized)) {
+          partialMatches.push(...nodes);
+        }
+      });
+      return partialMatches;
+    },
+    [normalizeLabel],
+  );
+
+  const applyHighlightSet = useCallback(
+    (labels: Iterable<string>) => {
+      const map = labelNodeMapRef.current;
+      const labelArray = Array.from(labels);
+
+      if (!map || map.size === 0) {
+        pendingLabelsRef.current = new Set(labelArray);
+        clearAllHighlights();
+        return;
+      }
+
+      if (labelArray.length === 0) {
+        clearAllHighlights();
+        pendingLabelsRef.current.clear();
+        return;
+      }
+
+      const nextNodes = new Set<SVGElement>();
+      labelArray.forEach((label) => {
+        const nodes = findNodesForLabel(label, map);
+        nodes.forEach((node) => {
+          nextNodes.add(node);
+        });
+      });
+
+      highlightedNodesRef.current.forEach((node) => {
+        if (!nextNodes.has(node)) {
+          node.classList.remove('baml-mermaid-highlight');
+        }
+      });
+
+      nextNodes.forEach((node) => {
+        if (!highlightedNodesRef.current.has(node)) {
+          node.classList.add('baml-mermaid-highlight');
+        }
+      });
+
+      highlightedNodesRef.current = nextNodes;
+      pendingLabelsRef.current = new Set(labelArray);
+    },
+    [clearAllHighlights, findNodesForLabel],
+  );
 
   const computeFitScale = useCallback(() => {
     const containerEl = containerRef.current;
@@ -285,6 +373,27 @@ export const MermaidGraphView: React.FC = () => {
         svgRef.current = svgEl;
         // Ensure the SVG keeps its natural size while preserving aspect ratio
         svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+        // Rebuild label ↔︎ node lookup for highlighting
+        const labelNodeMap = new Map<string, SVGElement[]>();
+        svgEl.querySelectorAll('g.node').forEach((node) => {
+          const textContent = node.textContent;
+          if (!textContent) return;
+          const normalized = normalizeLabel(textContent);
+          if (!normalized) return;
+          const existing = labelNodeMap.get(normalized);
+          if (existing) {
+            existing.push(node as SVGElement);
+          } else {
+            labelNodeMap.set(normalized, [node as SVGElement]);
+          }
+        });
+        labelNodeMapRef.current = labelNodeMap;
+        const pendingLabels = pendingLabelsRef.current;
+        clearAllHighlights();
+        if (pendingLabels.size > 0) {
+          applyHighlightSet(pendingLabels);
+        }
 
         // Inject CSS override so it takes precedence over Mermaid defaults inside the SVG
         try {
@@ -445,7 +554,11 @@ export const MermaidGraphView: React.FC = () => {
         }
       } catch { }
     };
-  }, [graph, centerGraph, computeFitScale]);
+  }, [graph, centerGraph, computeFitScale, normalizeLabel, clearAllHighlights, applyHighlightSet]);
+
+  useEffect(() => {
+    applyHighlightSet(highlightedBlocks);
+  }, [highlightedBlocks, applyHighlightSet]);
 
   return (
     <div className="flex flex-col w-full h-full min-h-0">
