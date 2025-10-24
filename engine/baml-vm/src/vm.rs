@@ -226,6 +226,7 @@ pub enum VmExecState {
     Notify(WatchNotification),
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 pub enum WatchNotification {
     Variables(Vec<watch::NodeId>),
