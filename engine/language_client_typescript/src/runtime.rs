@@ -87,7 +87,6 @@ pub struct StreamEvent {
 
 // Storage for event handlers extracted from EventCollector
 // Using the full ThreadsafeFunction type with all generics to match what build_threadsafe_function creates
-#[cfg(feature = "interpreter")]
 struct EmitCallbacks {
     var_handlers: HashMap<
         String,
@@ -121,7 +120,6 @@ struct EmitCallbacks {
 }
 
 // Helper function to recursively extract handlers from a bindings object
-#[cfg(feature = "interpreter")]
 fn extract_handlers_recursive(
     bindings: &Object,
     var_handlers: &mut HashMap<
@@ -257,7 +255,6 @@ fn extract_handlers_recursive(
 }
 
 // Extract event handlers from the EventCollector.__handlers() result
-#[cfg(feature = "interpreter")]
 fn extract_emit_callbacks(env: &Env, events_obj: &Object) -> napi::Result<Option<EmitCallbacks>> {
     // Call __handlers() method to get InternalEventBindings
     let handlers_fn: Function = match events_obj.get_named_property("__handlers") {
@@ -373,8 +370,7 @@ impl BamlRuntime {
         // Convert AbortSignal to Tripwire
         let tripwire = js_abort_signal_to_rust_tripwire(env, signal)?;
 
-        // Extract emit callbacks from EventCollector (only for interpreter)
-        #[cfg(feature = "interpreter")]
+        // Extract emit callbacks from EventCollector
         let emit_callbacks = if let Some(ref watchers_obj) = watchers {
             extract_emit_callbacks(env, watchers_obj)?
         } else {
@@ -394,8 +390,7 @@ impl BamlRuntime {
         let function_name_clone = function_name.clone();
 
         let fut = async move {
-            // Create emit_handler closure (only for interpreter)
-            #[cfg(feature = "interpreter")]
+            // Create emit_handler closure
             let watch_handler = shared_handler(move |notification| {
                 if let Some(ref callbacks) = emit_callbacks {
                     match notification.value {
@@ -520,7 +515,6 @@ impl BamlRuntime {
                 }
             });
 
-            #[cfg(feature = "interpreter")]
             let result = baml_runtime
                 .call_function(
                     function_name,
@@ -532,22 +526,7 @@ impl BamlRuntime {
                     env_vars,
                     Some(&tags),
                     tripwire,
-                    Some(watch_handler), // pass watch handler for interpreter runtime
-                )
-                .await;
-
-            #[cfg(not(feature = "interpreter"))]
-            let result = baml_runtime
-                .call_function(
-                    function_name,
-                    &args_map,
-                    &ctx_mng,
-                    tb.as_ref(),
-                    cb.as_ref(),
-                    Some(collector_list),
-                    env_vars,
-                    Some(tags),
-                    tripwire,
+                    Some(watch_handler),
                 )
                 .await;
 
@@ -586,8 +565,7 @@ impl BamlRuntime {
         }
         let args_map = args.as_map_owned().unwrap();
 
-        // Extract emit callbacks from EventCollector (only for interpreter)
-        #[cfg(feature = "interpreter")]
+        // Extract emit callbacks from EventCollector
         let emit_callbacks = if let Some(ref watchers_obj) = watchers {
             extract_emit_callbacks(&env, watchers_obj)?
         } else {
@@ -602,7 +580,6 @@ impl BamlRuntime {
             .map(|c| c.inner.clone())
             .collect::<Vec<_>>();
 
-        #[cfg(feature = "interpreter")]
         let (result, _event_id) = {
             let watch_handler = shared_handler(move |notification| {
                 if let Some(ref callbacks) = emit_callbacks {
@@ -722,22 +699,6 @@ impl BamlRuntime {
                 Some(&tags),
                 tripwire,
                 Some(watch_handler),
-            )
-        };
-
-        #[cfg(not(feature = "interpreter"))]
-        let (result, _event_id) = {
-            let _ = watchers; // Suppress unused variable warning
-            self.inner.call_function_sync(
-                function_name,
-                &args_map,
-                &ctx_mng,
-                tb.as_ref(),
-                cb.as_ref(),
-                Some(collector_list),
-                env_vars,
-                Some(&tags),
-                tripwire,
             )
         };
 
