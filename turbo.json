@@ -28,7 +28,7 @@
     "biome.json"
   ],
   "ui": "tui",
-  "concurrency": "20",
+  "concurrency": "40",
   "tasks": {
     "//#clean": {
       "cache": false
@@ -85,7 +85,6 @@
       "persistent": true
     },
     "@baml/fern#dev": {
-      "dependsOn": ["fern-sage-chatbot#build"],
       "cache": false,
       "persistent": true
     },
