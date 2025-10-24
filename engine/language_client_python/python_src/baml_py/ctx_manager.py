@@ -143,6 +143,24 @@ class CtxManager:
         signature = inspect.signature(func).parameters
         param_names = list(signature.keys())
 
+
+        print(f"Tracing function: {func_name}, async: {asyncio.iscoroutinefunction(func)}")
+        # Print everything possible about the function
+        print(f"Function: {func}")
+        print(f"Function code: {func.__code__}")
+        print(f"Function code co_flags: {func.__code__.co_flags}")
+        print(f"Function code co_code: {func.__code__.co_code}")
+        print(f"Function code co_consts: {func.__code__.co_consts}")
+        print(f"Function code co_names: {func.__code__.co_names}")
+        print(f"Function code co_varnames: {func.__code__.co_varnames}")
+        print(f"Function code co_filename: {func.__code__.co_filename}")
+        print(f"Function code co_name: {func.__code__.co_name}")
+        print(f"Function code co_firstlineno: {func.__code__.co_firstlineno}")
+        print(f"Function code co_stacksize: {func.__code__.co_stacksize}")
+        print(f"Function code co_varnames: {func.__code__.co_varnames}")
+        print(f"Function code co_freevars: {func.__code__.co_freevars}")
+        print(f"Function code co_cellvars: {func.__code__.co_cellvars}")
+
         if asyncio.iscoroutinefunction(func):
 
             @functools.wraps(func)
@@ -154,6 +172,7 @@ class CtxManager:
                     for i, arg in enumerate(args)
                 }
                 params.update(kwargs)
+                print(f"Tracking async: {func_name} {params}")
                 span = self.start_trace_async(func_name, params, os.environ.copy())
                 try:
                     response = await func(*args, **kwargs)
@@ -174,6 +193,7 @@ class CtxManager:
                     for i, arg in enumerate(args)
                 }
                 params.update(kwargs)
+                print(f"Tracking sync: {func_name} {params}")
                 span = self.start_trace_sync(func_name, params, os.environ.copy())
                 try:
                     response = func(*args, **kwargs)
