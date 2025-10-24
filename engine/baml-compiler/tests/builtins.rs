@@ -1,6 +1,6 @@
 //! Compiler tests for built-in method calls.
 
-use baml_vm::{GlobalIndex, Instruction, ObjectIndex};
+use baml_vm::{BinOp, GlobalIndex, Instruction, ObjectIndex};
 
 mod common;
 use common::{assert_compiles, Program};
@@ -54,6 +54,49 @@ fn fetch_as() -> anyhow::Result<()> {
                 Instruction::LoadConst(1),
                 Instruction::DispatchFuture(2),
                 Instruction::Await,
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+fn fetch_as_let_binding() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            class StockApiData {
+                date string
+                prices map<string, string>
+            }
+
+            function get_stock_price(symbol: string) -> string {
+                let url = "https://mastra-stock-data.vercel.app/api/stock-data?symbol=" + symbol;
+                let data = baml.fetch_as<StockApiData>(url);
+                let price = data.prices["4. close"];
+
+                price
+            }
+
+            function main() -> string {
+                get_stock_price("AAPL")
+            }
+        "#,
+        expected: vec![(
+            "get_stock_price",
+            vec![
+                Instruction::LoadConst(0),
+                Instruction::LoadVar(1),
+                Instruction::BinOp(BinOp::Add),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(42)),
+                Instruction::LoadVar(2),
+                Instruction::LoadConst(1),
+                Instruction::DispatchFuture(2),
+                Instruction::Await,
+                Instruction::LoadVar(3),
+                Instruction::LoadField(1),
+                Instruction::LoadConst(2),
+                Instruction::LoadMapElement,
+                Instruction::LoadVar(4),
                 Instruction::Return,
             ],
         )],
