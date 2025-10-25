@@ -1979,7 +1979,6 @@ impl ExperimentalTracingInterface for BamlRuntime {
     }
 
     fn flush(&self) -> Result<()> {
-        println!("Flushing BAML...");
         #[cfg(not(target_arch = "wasm32"))]
         {
             if let Err(e) = self.async_runtime.block_on(flush()) {
