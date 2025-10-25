@@ -21,7 +21,7 @@ fn builtin_method_call() -> anyhow::Result<()> {
                 Instruction::LoadConst(1),
                 Instruction::LoadConst(2),
                 Instruction::AllocArray(3),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(4)),
+                Instruction::LoadGlobal(GlobalIndex::from_raw(5)),
                 Instruction::LoadVar(1),
                 // call with one argument (self)
                 Instruction::Call(1),

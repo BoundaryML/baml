@@ -151,6 +151,24 @@ function Len() -> int {
 //
 // Function: baml.Map.has
 //
+// Function: baml.String.toLowerCase
+//
+// Function: baml.String.toUpperCase
+//
+// Function: baml.String.trim
+//
+// Function: baml.String.includes
+//
+// Function: baml.String.startsWith
+//
+// Function: baml.String.endsWith
+//
+// Function: baml.String.split
+//
+// Function: baml.String.substring
+//
+// Function: baml.String.replace
+//
 // Function: baml.media.image.from_url
 //
 // Function: baml.media.audio.from_url
