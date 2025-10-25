@@ -42,7 +42,7 @@ use baml_compiler::watch::SharedWatchHandler;
 use baml_ids::{FunctionCallId, HttpRequestId};
 use baml_types::{
     expr::{Expr, ExprMetadata},
-    tracing::events::{ClientDetails, HTTPBody, HTTPRequest, TraceEvent},
+    tracing::events::{BamlError, ClientDetails, HTTPBody, HTTPRequest, TraceEvent},
     BamlMap, BamlValue, BamlValueWithMeta, Completion, Constraint,
 };
 use cfg_if::cfg_if;
@@ -353,10 +353,21 @@ impl Drop for TracingCallGuard<'_> {
             let result: Result<FunctionResult> = if let Some(error) = self.error_result.take() {
                 Err(error)
             } else {
-                // If we're being dropped without an error, something went wrong
-                Err(anyhow::anyhow!(
-                    "Call dropped without being properly finished"
-                ))
+                // Dropped without explicit finish - likely due to cancellation/shutdown
+                // Instead of returning an error, emit a function end event for cancellation.
+                {
+                    let function_end_event = TraceEvent::new_function_end(
+                        self.call_id_stack.clone(),
+                        Err(BamlError::External {
+                            message: "Operation cancelled".into(),
+                        }),
+                    );
+                    BAML_TRACER
+                        .lock()
+                        .unwrap()
+                        .put(Arc::new(function_end_event));
+                    Err(anyhow::anyhow!("Operation cancelled.."))
+                }
             };
 
             // Emit TraceEvent::new_function_end for the error case
@@ -375,7 +386,7 @@ impl Drop for TracingCallGuard<'_> {
                     .finish_baml_call(call, self.ctx, &result)
                 {
                     Ok(_) => {}
-                    Err(e) => baml_log::error!("Error during logging in drop: {}", e),
+                    Err(e) => baml_log::debug!("Finished call in drop handler: {}", e),
                 }
             }
 
@@ -387,7 +398,7 @@ impl Drop for TracingCallGuard<'_> {
                 wasm_bindgen_futures::spawn_local(async move {
                     match tracer.finish_baml_call(call, ctx, &result).await {
                         Ok(_) => {}
-                        Err(e) => log::error!("Error during logging in drop: {e}"),
+                        Err(e) => log::debug!("Finished call in drop handler: {e}"),
                     }
                 });
             }
@@ -1968,6 +1979,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
     }
 
     fn flush(&self) -> Result<()> {
+        println!("Flushing BAML...");
         #[cfg(not(target_arch = "wasm32"))]
         {
             if let Err(e) = self.async_runtime.block_on(flush()) {

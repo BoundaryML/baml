@@ -159,9 +159,10 @@ class CtxManager:
                     response = await func(*args, **kwargs)
                     self.end_trace(span, response, os.environ.copy())
                     return response
-                except Exception as e:
+                except BaseException as e:
+                    # Catch BaseException to handle KeyboardInterrupt and CancelledError
                     self.end_trace(span, e, os.environ.copy())
-                    raise e
+                    raise
 
             return typing.cast(F, async_wrapper)
 
@@ -179,8 +180,9 @@ class CtxManager:
                     response = func(*args, **kwargs)
                     self.end_trace(span, response, os.environ.copy())
                     return response
-                except Exception as e:
+                except BaseException as e:
+                    # Catch BaseException to handle KeyboardInterrupt and CancelledError
                     self.end_trace(span, e, os.environ.copy())
-                    raise e
+                    raise
 
             return typing.cast(F, wrapper)
