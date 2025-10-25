@@ -316,7 +316,7 @@ pub fn typecheck_returning_context<'a>(
             .as_ref()
             .and_then(|e| Some((e, e.meta().1.as_ref()?)))
         {
-            if !types_compatible(expr_return_type, &func.return_type) {
+            if !expr_return_type.is_subtype(&func.return_type) {
                 diagnostics.push_error(DatamodelError::new_validation_error(
                     &format!(
                         "Return type mismatch: function return type is {} but got {}",
@@ -1681,7 +1681,7 @@ pub fn typecheck_expression(
 
                         // Check if argument type matches expected type
                         if let Some(arg_type) = typed_arg.meta().1.as_ref() {
-                            if !types_compatible(arg_type, expected_type) {
+                            if !arg_type.is_subtype(expected_type) {
                                 diagnostics.push_error(DatamodelError::new_validation_error(
                                     "Type mismatch in argument",
                                     arg.span(),
@@ -2238,7 +2238,7 @@ pub fn typecheck_expression(
                                     }
                                 }
                                 _ => {
-                                    if !types_compatible(arg_type, expected_type) {
+                                    if !arg_type.is_subtype(expected_type) {
                                         diagnostics.push_error(
                                             DatamodelError::new_validation_error(
                                                 &format!(
@@ -3031,22 +3031,6 @@ fn typecheck_emit(
     }
 }
 
-/// Check if two types are compatible (for now, just equality)
-fn types_compatible(actual: &TypeIR, expected: &TypeIR) -> bool {
-    match (actual, expected) {
-        (TypeIR::Top(_), _) | (_, TypeIR::Top(_)) => true,
-        (TypeIR::Primitive(a, _), TypeIR::Primitive(b, _)) => a == b,
-        (TypeIR::List(a, _), TypeIR::List(b, _)) => types_compatible(a, b),
-        (TypeIR::Map(k1, v1, _), TypeIR::Map(k2, v2, _)) => {
-            types_compatible(k1, k2) && types_compatible(v1, v2)
-        }
-        (TypeIR::Class { name: a, .. }, TypeIR::Class { name: b, .. }) => a == b,
-        (TypeIR::Enum { name: a, .. }, TypeIR::Enum { name: b, .. }) => a == b,
-        // TODO: Handle union types, subtyping, etc.
-        _ => false,
-    }
-}
-
 pub trait TypeCompatibility {
     fn is_optional(&self) -> bool;
     fn is_subtype(&self, expected: &TypeIR) -> bool;
@@ -3069,6 +3053,8 @@ impl TypeCompatibility for TypeIR {
     }
 
     /// Return true if `self` is a subtype of `expected`.
+    /// TODO: Remove wildcard match
+    /// TODO: This needs to account for type aliases.
     fn is_subtype(&self, expected: &TypeIR) -> bool {
         // Semantics similar to IR's `IntermediateRepr::is_subtype`:
         // - Unions on the right: self <: (e1 | e2 | ...) if exists ei s.t. self <: ei
@@ -3097,6 +3083,10 @@ impl TypeCompatibility for TypeIR {
                 TypeIR::Primitive(baml_types::TypeValue::Null, _),
                 TypeIR::Primitive(baml_types::TypeValue::Null, _),
             ) => true,
+            (
+                TypeIR::Primitive(baml_types::TypeValue::Media(x), _),
+                TypeIR::Primitive(baml_types::TypeValue::Media(y), _),
+            ) => x == y,
 
             // Arrays: covariant element
             (TypeIR::List(a_item, _), TypeIR::List(e_item, _)) => a_item.is_subtype(e_item),

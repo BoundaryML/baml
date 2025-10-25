@@ -340,7 +340,7 @@ fn update_test_expectation(test: &InterpreterTest, new_output: &str) -> Result<(
 /// Main test function that discovers and runs all interpreter tests
 #[tokio::test]
 async fn executor_tests() -> Result<()> {
-    let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/interpreter_tests");
+    let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/executor_tests");
 
     if !test_dir.exists() {
         // No tests yet, skip
