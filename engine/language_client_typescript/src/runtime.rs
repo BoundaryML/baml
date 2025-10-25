@@ -1,10 +1,10 @@
 use std::{collections::HashMap, path::PathBuf, time::SystemTime};
 
-// Conditional runtime selection based on the "interpreter" feature flag
+// Conditional runtime selection based on the "thir-interpreter" feature flag
 use baml_compiler::watch::shared_handler;
-#[cfg(feature = "interpreter")]
+#[cfg(feature = "thir-interpreter")]
 pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
-#[cfg(not(feature = "interpreter"))]
+#[cfg(not(feature = "thir-interpreter"))]
 pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
 use baml_runtime::{on_log_event::LogEvent, runtime_interface::ExperimentalTracingInterface};
 use baml_types::BamlValue;

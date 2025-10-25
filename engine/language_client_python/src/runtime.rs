@@ -19,10 +19,10 @@ type PickleReduceResult = PyResult<(
     ),
 )>;
 
-// Conditional runtime selection based on the "interpreter" feature flag
-#[cfg(feature = "interpreter")]
+// Conditional runtime selection based on the "thir-interpreter" feature flag
+#[cfg(feature = "thir-interpreter")]
 pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
-#[cfg(not(feature = "interpreter"))]
+#[cfg(not(feature = "thir-interpreter"))]
 pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
 
 use crate::{

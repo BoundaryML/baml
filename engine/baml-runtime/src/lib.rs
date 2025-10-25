@@ -34,9 +34,9 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-#[cfg(feature = "interpreter")]
+#[cfg(feature = "thir-interpreter")]
 use async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreRuntime;
-#[cfg(not(feature = "interpreter"))]
+#[cfg(not(feature = "thir-interpreter"))]
 use async_vm_runtime::BamlAsyncVmRuntime as CoreRuntime;
 use baml_compiler::watch::SharedWatchHandler;
 use baml_ids::{FunctionCallId, HttpRequestId};

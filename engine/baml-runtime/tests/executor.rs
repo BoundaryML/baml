@@ -1,7 +1,7 @@
 //! Interpreter evaluation tests.
 //!
 //! These tests evaluate BAML expressions and compare the results to expected outputs.
-//! Test files are in the `interpreter_tests/` directory and use the format:
+//! Test files are in the `executor_tests/` directory and use the format:
 //!
 //! ```baml
 //! function Foo() -> int {
@@ -20,9 +20,9 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 // Use the CoreRuntime pattern: select implementation based on feature flag
-#[cfg(feature = "interpreter")]
+#[cfg(feature = "thir-interpreter")]
 use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreRuntime;
-#[cfg(not(feature = "interpreter"))]
+#[cfg(not(feature = "thir-interpreter"))]
 use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreRuntime;
 use baml_types::BamlValue;
 
@@ -339,7 +339,7 @@ fn update_test_expectation(test: &InterpreterTest, new_output: &str) -> Result<(
 
 /// Main test function that discovers and runs all interpreter tests
 #[tokio::test]
-async fn interpreter_tests() -> Result<()> {
+async fn executor_tests() -> Result<()> {
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/interpreter_tests");
 
     if !test_dir.exists() {
