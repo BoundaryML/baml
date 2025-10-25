@@ -5,7 +5,7 @@
 use baml_types::ir_type::TypeIR;
 use internal_baml_diagnostics::Span;
 
-use crate::watch::WatchSpec;
+use crate::watch::{WatchSpec, WatchWhen};
 
 pub mod dump;
 pub mod lowering;
@@ -192,7 +192,7 @@ pub enum Statement {
     WatchOptions {
         variable: String,
         channel: Option<String>,
-        when: Option<String>,
+        when: Option<WatchWhen>,
         span: Span,
     },
     /// Manually notify watchers of a variable.
@@ -200,6 +200,12 @@ pub enum Statement {
     WatchNotify {
         variable: String,
         span: Span,
+    },
+
+    /// Annotations that apply to the statement.
+    AnnotatedStatement {
+        headers: Vec<String>,
+        statement: Option<Box<Statement>>,
     },
 }
 

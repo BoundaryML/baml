@@ -84,11 +84,26 @@ const FunctionMetadata: React.FC = () => {
 export const PromptRenderWrapper = () => {
   const [displaySettings, setDisplaySettings] = useAtom(displaySettingsAtom);
   const renderedPrompt = useAtomValue(renderedPromptAtom);
-  const [showCopied, setShowCopied] = React.useState(false);
   const { open: isSidebarOpen } = useSidebar();
   const isBetaEnabled = useAtomValue(betaFeatureEnabledAtom);
-  const [activeTab, setActiveTab] = React.useState<'preview' | 'curl' | 'client-graph' | 'mermaid-graph'>('preview');
+  const [activeTab, setActiveTab] = React.useState<'preview' | 'curl' | 'client-graph' | 'mermaid-graph'>(
+    () => (isBetaEnabled ? 'mermaid-graph' : 'preview'),
+  );
+  const [showCopied, setShowCopied] = React.useState(false);
+  const betaWasEnabledRef = React.useRef(isBetaEnabled);
   const curl = useAtomValue(curlAtom);
+
+  React.useEffect(() => {
+    const wasEnabled = betaWasEnabledRef.current;
+
+    if (!isBetaEnabled && activeTab === 'mermaid-graph') {
+      setActiveTab('preview');
+    } else if (!wasEnabled && isBetaEnabled && activeTab === 'preview') {
+      setActiveTab('mermaid-graph');
+    }
+
+    betaWasEnabledRef.current = isBetaEnabled;
+  }, [activeTab, isBetaEnabled]);
 
   // Hide text when sidebar is open or on smaller screens
   const getButtonTextClass = () => {

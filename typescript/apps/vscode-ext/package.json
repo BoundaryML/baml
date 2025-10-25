@@ -12,7 +12,12 @@
   "engines": {
     "vscode": ">=1.63.0"
   },
-  "categories": ["Programming Languages", "Debuggers", "Testing", "Other"],
+  "categories": [
+    "Programming Languages",
+    "Debuggers",
+    "Testing",
+    "Other"
+  ],
   "main": "./dist/extension.js",
   "activationEvents": [
     "onStartupFinished",
@@ -22,13 +27,18 @@
     "onLanguage:typescriptreact"
   ],
   "contributes": {
-    "activationEvents": ["onLanguage:baml"],
+    "activationEvents": [
+      "onLanguage:baml"
+    ],
     "configuration": {
       "type": "object",
       "title": "Baml extension settings",
       "properties": {
         "baml.cliPath": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "default": null,
           "description": "Use the locally installed baml CLI instead of the one bundled with the extension. Helps keeps generated code more in sync.",
           "scope": "machine-overridable"
@@ -36,13 +46,20 @@
         "baml.generateCodeOnSave": {
           "type": "string",
           "default": "always",
-          "enum": ["never", "always"],
+          "enum": [
+            "never",
+            "always"
+          ],
           "description": "Generate code on save"
         },
         "baml.syncExtensionToGeneratorVersion": {
           "type": "string",
           "default": "auto",
-          "enum": ["auto", "never", "always"],
+          "enum": [
+            "auto",
+            "never",
+            "always"
+          ],
           "description": "Sync the extension to the currently selected baml_src generator version (provided all your generators have the same version). This will automatically download the correct version of the baml-cli to generate the client code -- preventing issues with mismatched versions. Note that on some platforms, if you have this on `auto`, it may be disabled."
         },
         "baml.enablePlaygroundProxy": {
@@ -59,7 +76,11 @@
         "baml.trace.server": {
           "scope": "window",
           "type": "string",
-          "enum": ["off", "messages", "verbose"],
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
           "default": "off",
           "description": "Setting for logging between the VS Code extension and the language server."
         },
@@ -82,7 +103,10 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["beta", "display_all_warnings"]
+            "enum": [
+              "beta",
+              "display_all_warnings"
+            ]
           },
           "uniqueItems": true,
           "default": [],
@@ -93,8 +117,13 @@
     "languages": [
       {
         "id": "baml",
-        "aliases": ["Baml", "baml"],
-        "extensions": [".baml"],
+        "aliases": [
+          "Baml",
+          "baml"
+        ],
+        "extensions": [
+          ".baml"
+        ],
         "configuration": "./language-configuration.json",
         "icon": {
           "light": "./baml-logo.png",
@@ -103,8 +132,14 @@
       },
       {
         "id": "baml-jinja",
-        "aliases": ["Jinja baml", "jinja baml"],
-        "extensions": [".baml.jinja", ".baml.jinja"],
+        "aliases": [
+          "Jinja baml",
+          "jinja baml"
+        ],
+        "extensions": [
+          ".baml.jinja",
+          ".baml.jinja"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -208,8 +243,8 @@
     "vscode-tmgrammar-test": "0.1.3",
     "@types/express": "5.0.3",
     "@types/node": "24.0.3",
-    "@types/react": "19.1.8",
-    "@types/react-dom": "19.1.6",
+    "@types/react": "19.1.9",
+    "@types/react-dom": "19.1.7",
     "@types/semver": "7.7.0",
     "@types/tar": "6.1.13",
     "@types/vscode": "1.63.0",

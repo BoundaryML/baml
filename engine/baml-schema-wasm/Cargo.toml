@@ -24,6 +24,7 @@ arc_with_non_send_sync = "allow"
 [dependencies]
 reqwest.workspace = true
 anyhow.workspace = true
+baml-compiler = { path = "../baml-compiler" }
 baml-runtime = { path = "../baml-runtime", features = [
   "internal",
 ], default-features = false }

@@ -1,9 +1,87 @@
-use std::fmt;
+use std::{
+    fmt,
+    sync::{Arc, Mutex},
+};
 
 use baml_types::{BamlValueWithMeta, Completion, Constraint, ResponseCheck, TypeIR};
 
 /// Unique identifier for a streaming watch notification
 pub type StreamId = String;
+
+/// Concrete handler for watch notifications.
+/// This replaces the trait-based approach with conditional Send bounds.
+/// Use Arc<Mutex<WatchHandler>> for shared ownership across threads.
+pub struct WatchHandler<F>
+where
+    F: FnMut(WatchNotification),
+{
+    handler: F,
+}
+
+impl<F> WatchHandler<F>
+where
+    F: FnMut(WatchNotification),
+{
+    pub fn new(handler: F) -> Self {
+        WatchHandler { handler }
+    }
+
+    pub fn notify(&mut self, notification: WatchNotification) {
+        (self.handler)(notification)
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl WatchHandler<Box<dyn FnMut(WatchNotification) + Send>> {
+    /// Create a no-op handler (native)
+    pub fn noop() -> Self {
+        WatchHandler {
+            handler: Box::new(|_| {}),
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl WatchHandler<Box<dyn FnMut(WatchNotification)>> {
+    /// Create a no-op handler (WASM)
+    pub fn noop() -> Self {
+        WatchHandler {
+            handler: Box::new(|_| {}),
+        }
+    }
+}
+
+/// Type alias for shared watch handler (thread-safe for native, single-threaded for WASM)
+#[cfg(not(target_arch = "wasm32"))]
+pub type SharedWatchHandler = Arc<Mutex<WatchHandler<Box<dyn FnMut(WatchNotification) + Send>>>>;
+
+#[cfg(target_arch = "wasm32")]
+pub type SharedWatchHandler = Arc<Mutex<WatchHandler<Box<dyn FnMut(WatchNotification)>>>>;
+
+/// Helper to create a shared watch handler from a function (native - requires Send)
+#[cfg(not(target_arch = "wasm32"))]
+pub fn shared_handler<F>(handler: F) -> SharedWatchHandler
+where
+    F: FnMut(WatchNotification) + Send + 'static,
+{
+    Arc::new(Mutex::new(WatchHandler::new(Box::new(handler))))
+}
+
+/// Helper to create a shared watch handler from a function (WASM - no Send requirement)
+#[cfg(target_arch = "wasm32")]
+pub fn shared_handler<F>(handler: F) -> SharedWatchHandler
+where
+    F: FnMut(WatchNotification) + 'static,
+{
+    #[allow(clippy::arc_with_non_send_sync)]
+    Arc::new(Mutex::new(WatchHandler::new(Box::new(handler))))
+}
+
+/// Helper to create a shared no-op handler
+pub fn shared_noop_handler() -> SharedWatchHandler {
+    #[allow(clippy::arc_with_non_send_sync)]
+    Arc::new(Mutex::new(WatchHandler::noop()))
+}
 
 #[derive(Debug)]
 pub enum WatchBamlValue {
@@ -57,7 +135,11 @@ impl fmt::Display for WatchNotification {
                 }
             },
             WatchBamlValue::Block(label) => {
-                write!(f, "(block) {label}")
+                write!(
+                    f,
+                    "(block) {function_name}.{label}",
+                    function_name = self.function_name
+                )
             }
             WatchBamlValue::StreamStart(stream_id) => {
                 write!(f, "(stream start) {stream_id}")

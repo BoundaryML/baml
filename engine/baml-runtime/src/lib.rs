@@ -38,6 +38,7 @@ use anyhow::{Context, Result};
 use async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreRuntime;
 #[cfg(not(feature = "interpreter"))]
 use async_vm_runtime::BamlAsyncVmRuntime as CoreRuntime;
+use baml_compiler::watch::SharedWatchHandler;
 use baml_ids::{FunctionCallId, HttpRequestId};
 use baml_types::{
     expr::{Expr, ExprMetadata},
@@ -924,12 +925,17 @@ impl BamlRuntime {
         tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
         on_tick: Option<G>,
+        watch_handler: Option<SharedWatchHandler>,
     ) -> (Result<TestResponse>, FunctionCallId)
     where
         F: Fn(FunctionResult),
         G: Fn(),
     {
         baml_log::set_from_env(&env_vars).unwrap();
+
+        log::info!(
+            "[Runtime] run_test_with_expr_events start function={function_name} test={test_name}"
+        );
 
         let call = self
             .tracer_wrapper
@@ -949,10 +955,26 @@ impl BamlRuntime {
 
         // If it's an expr function, use the simpler expr execution path
         if is_expr_fn {
-            return self
-                .run_expr_test(function_name, test_name, ctx, env_vars)
+            log::info!(
+                "[Runtime] run_test_with_expr_events taking expr path for function={function_name} test={test_name}"
+            );
+            let result = self
+                .run_expr_test(function_name, test_name, ctx, env_vars, watch_handler)
                 .await;
+            match &result.0 {
+                Ok(_) => log::info!(
+                    "[Runtime] run_test_with_expr_events expr path success function={function_name} test={test_name}"
+                ),
+                Err(e) => log::error!(
+                    "[Runtime] run_test_with_expr_events expr path error function={function_name} test={test_name} err={e:?}"
+                ),
+            }
+            return result;
         }
+
+        log::info!(
+            "[Runtime] run_test_with_expr_events taking LLM path function={function_name} test={test_name}"
+        );
 
         let run_to_response = || async {
             // acceptable clone, just used for testing
@@ -1045,6 +1067,14 @@ impl BamlRuntime {
         };
 
         let response = run_to_response().await;
+        match &response {
+            Ok(_) => log::info!(
+                "[Runtime] run_test_with_expr_events LLM path success function={function_name} test={test_name}"
+            ),
+            Err(e) => log::error!(
+                "[Runtime] run_test_with_expr_events LLM path error function={function_name} test={test_name} err={e:?}"
+            ),
+        }
 
         let call_id = call.curr_call_id();
         {
@@ -1083,6 +1113,7 @@ impl BamlRuntime {
         tags: Option<HashMap<String, String>>,
         cancel_tripwire: Arc<TripWire>,
         on_tick: Option<G>,
+        watch_handler: Option<SharedWatchHandler>,
     ) -> (Result<TestResponse>, FunctionCallId)
     where
         F: Fn(FunctionResult),
@@ -1100,6 +1131,7 @@ impl BamlRuntime {
                 tags,
                 cancel_tripwire,
                 on_tick,
+                watch_handler,
             )
             .await;
         res
@@ -1112,7 +1144,9 @@ impl BamlRuntime {
         test_name: &str,
         ctx: &RuntimeContextManager,
         env_vars: HashMap<String, String>,
+        watch_handler: Option<SharedWatchHandler>,
     ) -> (Result<TestResponse>, FunctionCallId) {
+        log::info!("[Runtime] run_expr_test start function={function_name} test={test_name}");
         // Get test parameters
         let rctx = ctx.create_ctx_with_default();
         let params = match self.get_test_params(function_name, test_name, &rctx, true) {
@@ -1161,7 +1195,7 @@ impl BamlRuntime {
                 env_vars.clone(),
                 None, // tags
                 TripWire::new(None),
-                None::<fn(baml_compiler::watch::WatchNotification)>, // watch_handler
+                watch_handler,
             )
             .await;
 
@@ -1217,6 +1251,18 @@ impl BamlRuntime {
             function_call: call_id.clone(),
             constraints_result,
         };
+
+        match &test_response.expr_function_response {
+            Some(Ok(_)) => log::info!(
+                "[Runtime] run_expr_test success function={function_name} test={test_name}"
+            ),
+            Some(Err(e)) => log::error!(
+                "[Runtime] run_expr_test evaluation error function={function_name} test={test_name} err={e:?}"
+            ),
+            None => log::warn!(
+                "[Runtime] run_expr_test produced no response function={function_name} test={test_name}"
+            ),
+        }
 
         (Ok(test_response), call_id)
     }
@@ -1966,10 +2012,15 @@ impl InternalRuntimeInterface for BamlRuntime {
         client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self)
     }
 
-    fn function_graph(&self, _function_name: &str, _ctx: &RuntimeContext) -> Result<String> {
+    fn function_graph(&self, function_name: &str, _ctx: &RuntimeContext) -> Result<String> {
         let ast = self.db.ast();
-        let graph =
-            internal_baml_core::ast::BamlVisDiagramGenerator::generate_headers_flowchart(ast);
+        let graph = internal_baml_core::ast::diagram_generator::generate_with_styling(
+            internal_baml_core::ast::diagram_generator::MermaidGeneratorContext {
+                use_fancy: false,
+                function_filter: Some(function_name.to_string()),
+            },
+            ast,
+        );
         Ok(graph)
     }
 

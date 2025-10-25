@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
-use super::{
-    App, Argument, ArgumentsList, Assignment, Ast, Attribute, BlockArgs, ClassConstructor,
-    ClassConstructorField, ExprFn, Expression, ExpressionBlock, Field, FieldType, Header,
-    HeaderCollector, HeaderIndex, Identifier, RawString, Stmt, TemplateString, Top,
-    TopLevelAssignment, TypeExpressionBlock, ValueExprBlock, WithIdentifier, WithName, WithSpan,
+use super::header_collector::{HeaderCollector, HeaderIndex};
+use crate::ast::{
+    traits::{WithIdentifier, WithName},
+    Argument, ArgumentsList, Assignment, Ast, Attribute, BlockArgs, ClassConstructor,
+    ClassConstructorField, ExprFn, Expression, ExpressionBlock, Field, FieldType, Header, Stmt,
+    TemplateString, Top, TopLevelAssignment, TypeExpressionBlock, ValueExprBlock,
 };
 
 /// A debug utility for converting AST structures to Mermaid diagrams
@@ -742,7 +743,7 @@ impl MermaidDiagramGenerator {
             Stmt::Semicolon(expr) => {
                 let label = "Semicolon Expression".to_string();
                 let stmt_id = self.get_node_id_with_class(&key, &label, "statementNode");
-                let expr_id = self.visit_expression(expr);
+                let expr_id = self.visit_expression(&expr.expr);
                 self.connect(&stmt_id, &expr_id, Some("expr"));
                 stmt_id
             }
@@ -866,7 +867,7 @@ impl MermaidDiagramGenerator {
 
     /// Render the header-only diagram using simplified HeaderIndex
     fn render_headers_only(&mut self, ast: &Ast) {
-        let index: HeaderIndex = HeaderCollector::collect(ast);
+        let index: HeaderIndex = HeaderCollector::collect(ast, None);
 
         // Create all header nodes first
         let mut header_node_ids: HashMap<String, String> = HashMap::new();

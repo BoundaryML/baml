@@ -8,6 +8,7 @@ import type {
   WasmTestResponse,
 } from '@gloo-ai/baml-schema-wasm-web';
 import { atomFamily } from 'jotai/utils';
+import type { WatchNotification } from './prompt-preview/test-panel/types';
 
 export const runtimeStateAtom: Atom<{
   functions: WasmFunction[];
@@ -190,16 +191,19 @@ export type TestState =
   | {
     status: 'running';
     response?: WasmFunctionResponse;
+    watchNotifications?: WatchNotification[];  // NEW
   }
   | {
     status: 'done';
     response_status: DoneTestStatusType;
     response: WasmTestResponse;
     latency_ms: number;
+    watchNotifications?: WatchNotification[];  // NEW
   }
   | {
     status: 'error';
     message: string;
+    watchNotifications?: WatchNotification[];  // NEW
   };
 
 export const testCaseAtom = atomFamily(

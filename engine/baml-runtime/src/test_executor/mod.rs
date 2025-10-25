@@ -145,6 +145,7 @@ fn file_reader_pinned(
 }
 
 impl TestExecutor for BamlRuntime {
+    #[allow(clippy::print_stdout)]
     fn cli_list_tests(&self, args: &TestFilter) -> Result<()> {
         let func_test_pairs = {
             let ir = &self.ir;
@@ -198,6 +199,7 @@ impl TestExecutor for BamlRuntime {
         Ok(())
     }
 
+    #[allow(clippy::print_stdout)]
     async fn cli_run_tests(
         self: std::sync::Arc<Self>,
         args: &TestFilter,
@@ -310,6 +312,7 @@ impl TestExecutor for BamlRuntime {
                                     None,                // tags
                                     TripWire::new(None), // No tripwire for test executor,
                                     on_tick,
+                                    None,
                                 )
                                 .await
                         }
@@ -321,6 +324,7 @@ impl TestExecutor for BamlRuntime {
                                     &test_name,
                                     &ctx_manager,
                                     env_vars.clone(),
+                                    None,
                                 )
                                 .await
                         }

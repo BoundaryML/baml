@@ -21,6 +21,7 @@ pub struct AssignStmt {
     pub left: Expression,
     pub expr: Expression,
     pub span: Span,
+    pub annotations: Vec<std::sync::Arc<Header>>,
 }
 
 #[derive(Debug, Clone)]
@@ -29,6 +30,7 @@ pub struct AssignOpStmt {
     pub assign_op: AssignOp,
     pub expr: Expression,
     pub span: Span,
+    pub annotations: Vec<std::sync::Arc<Header>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,6 +83,7 @@ pub struct CForLoopStmt {
     pub after_stmt: Option<Box<Stmt>>,
     pub body: ExpressionBlock,
     pub span: Span,
+    pub annotations: Vec<std::sync::Arc<Header>>,
 }
 
 #[derive(Debug, Clone)]
@@ -88,18 +91,21 @@ pub struct WhileStmt {
     pub condition: Expression,
     pub body: ExpressionBlock,
     pub span: Span,
+    pub annotations: Vec<std::sync::Arc<Header>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ReturnStmt {
     pub value: Expression,
     pub span: Span,
+    pub annotations: Vec<std::sync::Arc<Header>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct AssertStmt {
     pub value: Expression,
     pub span: Span,
+    pub annotations: Vec<std::sync::Arc<Header>>,
 }
 
 /// Special statement for configuring watch options on a watched variable.
@@ -112,6 +118,7 @@ pub struct WatchOptionsStmt {
     /// The WatchOptions constructor expression
     pub options_expr: Expression,
     pub span: Span,
+    pub annotations: Vec<std::sync::Arc<Header>>,
 }
 
 /// Special statement for manually notifying watchers of a variable.
@@ -121,6 +128,19 @@ pub struct WatchNotifyStmt {
     /// The variable to notify watchers about
     pub variable: Identifier,
     pub span: Span,
+    pub annotations: Vec<std::sync::Arc<Header>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BreakStmt {
+    pub span: Span,
+    pub annotations: Vec<std::sync::Arc<Header>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ContinueStmt {
+    pub span: Span,
+    pub annotations: Vec<std::sync::Arc<Header>>,
 }
 
 // Stmt(statements) perform actions and not often return values.
@@ -133,11 +153,11 @@ pub enum Stmt {
     /// Expression without a trailing semicolon.
     Expression(ExprStmt),
     /// Expression with a trailing semicolon.
-    Semicolon(Expression),
+    Semicolon(ExprStmt),
     Assign(AssignStmt),
     AssignOp(AssignOpStmt),
-    Break(Span),
-    Continue(Span),
+    Break(BreakStmt),
+    Continue(ContinueStmt),
     Return(ReturnStmt),
     Assert(AssertStmt),
     WatchOptions(WatchOptionsStmt),
@@ -212,7 +232,7 @@ impl fmt::Display for Stmt {
                 write!(f, ") {}", stmt.body)
             }
             Stmt::Expression(es) => write!(f, "{}", es.expr),
-            Stmt::Semicolon(expr) => write!(f, "{expr};"),
+            Stmt::Semicolon(es) => write!(f, "{};", es.expr),
             Stmt::Assign(stmt) => write!(f, "{} = {}", stmt.left, stmt.expr),
             Stmt::AssignOp(stmt) => {
                 write!(f, "{} {} {}", stmt.left, stmt.assign_op, stmt.expr)
@@ -273,8 +293,8 @@ impl Stmt {
             (Stmt::Expression(es1), Stmt::Expression(es2)) => {
                 es1.expr.assert_eq_up_to_span(&es2.expr);
             }
-            (Stmt::Semicolon(expr1), Stmt::Semicolon(expr2)) => {
-                expr1.assert_eq_up_to_span(expr2);
+            (Stmt::Semicolon(es1), Stmt::Semicolon(es2)) => {
+                es1.expr.assert_eq_up_to_span(&es2.expr);
             }
 
             (Stmt::Assign(stmt1), Stmt::Assign(stmt2)) => {
@@ -413,14 +433,14 @@ impl Stmt {
             | Stmt::AssignOp(AssignOpStmt { span, .. })
             | Stmt::WhileLoop(WhileStmt { span, .. })
             | Stmt::Return(ReturnStmt { span, .. })
-            | Stmt::Break(span)
-            | Stmt::Continue(span)
+            | Stmt::Break(BreakStmt { span, .. })
+            | Stmt::Continue(ContinueStmt { span, .. })
             | Stmt::Assert(AssertStmt { span, .. })
             | Stmt::WatchOptions(WatchOptionsStmt { span, .. })
             | Stmt::WatchNotify(WatchNotifyStmt { span, .. }) => span,
 
             Stmt::Expression(es) => &es.span,
-            Stmt::Semicolon(expr) => expr.span(),
+            Stmt::Semicolon(es) => &es.span,
         }
     }
 

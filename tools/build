@@ -119,6 +119,25 @@ case "$_path" in
     fi
     ;;
 
+  /engine/baml-lib/baml/tests/validation_files/headers/mermaid-sandbox | /engine/baml-lib/baml/tests/validation_files/headers/mermaid-sandbox/* )
+    command="cd ${_repo_root}/engine && UPDATE=1 cargo test -p baml-lib --test mermaid_graph_tests -- --nocapture"
+
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --ext rs,toml,baml \
+        --watch "${_repo_root}/engine" \
+        --ignore '**/target/**' \
+        --ignore '**/target-rust-analyzer/**' \
+        --ignore '**/tmp/**' \
+        --ignore 'prompt_fiddle_example.baml' \
+        --ignore 'baml_cli_init.baml' \
+        --exec "${command}"
+    else
+      eval "${command}"
+      date
+    fi
+    ;;
+
   /engine/baml-schema-wasm | /engine/baml-schema-wasm/* )
     command="cargo build --target=wasm32-unknown-unknown"
 
@@ -318,6 +337,21 @@ case "$_path" in
       date
     fi
     ;;
+
+  /typescript/apps/fiddle-web-app | /typescript/apps/fiddle-web-app/* )
+    command="(cd ${_repo_root} && turbo run dev --filter=@baml/fiddle-web-app... --force)"
+
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --ext grammar,js,ts,tsx,json \
+        --ignore '**/dist' \
+        --exec "${command}"
+    else
+      eval "${comamnd}"
+      date
+    fi
+    ;;
+    
 
   /typescript/packages/codemirror-lang-baml | /typescript/packages/codemirror-lang-baml/* )
     if [ "$_watch_mode" -eq 1 ]; then

@@ -51,6 +51,7 @@ impl<T: ?Sized> Ord for HashByPtr<'_, T> {
 impl<T: ?Sized> Eq for HashByPtr<'_, T> {}
 
 impl<'a, T: ?Sized> PartialOrd for HashByPtr<'a, T> {
+    #[allow(clippy::non_canonical_partial_ord_impl)]
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         // NOTE: (Jesus) cast to *const () removes metadata so that we're sure that we're only
         // comparing raw addresses.

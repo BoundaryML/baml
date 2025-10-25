@@ -110,7 +110,7 @@ fn set_exit_handlers() {
     // Install our custom Ctrl+C handler
     // This will run in a separate thread when SIGINT is received
     ctrlc::set_handler(move || {
-        println!("\nShutting Down BAML...");
+        eprintln!("\nShutting Down BAML...");
         // Notify the main thread through the channel
         // Using ok() to ignore send errors if the receiver is already dropped
         interrupt_send.send(()).ok();

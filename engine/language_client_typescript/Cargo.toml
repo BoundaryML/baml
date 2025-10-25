@@ -55,6 +55,6 @@ tracing-subscriber = { version = "0.3.18", features = [
 napi-build = "2.2.3"
 
 [features]
-default = ["interpreter"]
+default = []
 # Use the THIR interpreter runtime instead of the VM bytecode runtime
 interpreter = ["baml-runtime/interpreter"]

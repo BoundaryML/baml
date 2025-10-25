@@ -42,7 +42,6 @@ default-members = [
   "cli",
   "language_client_cffi",
   "language_client_python",
-  "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
   "language_server",
   "generators/utils/*",
@@ -51,6 +50,7 @@ default-members = [
 
 [workspace.dependencies]
 anyhow = "1.0"
+arraystring = "0.3.0"
 askama = { version = "0.14.0", features = ["code-in-doc"] }
 axum = "0.7.5"
 baml-cli = { path = "cli" }

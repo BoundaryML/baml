@@ -93,18 +93,12 @@ pub fn typecheck_returning_context<'a>(
 
     // Add builtin functions to typing context
     // baml.fetch_as<T>(url: string) -> T
-    // baml.fetch_value<T>(request: baml.Request) -> T
     // These are generic functions. For now, we'll add a placeholder with a Top type.
     let generic_return_type = TypeIR::Top(Default::default()); // Placeholder for generic T
     let fetch_as_type = crate::builtin::baml_fetch_as_signature(generic_return_type.clone());
     typing_context.symbols.insert(
         crate::builtin::functions::FETCH_AS.to_string(),
         fetch_as_type,
-    );
-    let fetch_value_type = crate::builtin::baml_fetch_as_signature(generic_return_type);
-    typing_context.symbols.insert(
-        crate::builtin::functions::FETCH_VALUE.to_string(),
-        fetch_value_type,
     );
 
     // Add native functions to typing context
@@ -760,6 +754,88 @@ impl TypeContext<'_> {
     }
 }
 
+/// Analyzes an instanceof expression and returns type narrowing information
+/// Returns Some((variable_name, narrowed_type)) if the expression is `var instanceof ClassName`
+fn extract_instanceof_narrowing(
+    expr: &hir::Expression,
+    context: &TypeContext,
+) -> Option<(String, TypeIR)> {
+    match expr {
+        hir::Expression::BinaryOperation {
+            left,
+            operator: hir::BinaryOperator::InstanceOf,
+            right,
+            ..
+        } => {
+            // Extract variable name from left side
+            let var_name = match left.as_ref() {
+                hir::Expression::Identifier(name, _) => name.clone(),
+                _ => return None, // Only handle simple variable instanceof for now
+            };
+
+            // Extract class name from right side
+            let class_name = match right.as_ref() {
+                hir::Expression::Identifier(name, _) => name.clone(),
+                _ => return None,
+            };
+
+            // Verify the class exists
+            if !context.classes.contains_key(&class_name) {
+                return None;
+            }
+
+            // Create the narrowed type
+            let narrowed_type = TypeIR::class(&class_name);
+
+            Some((var_name, narrowed_type))
+        }
+        _ => None,
+    }
+}
+
+/// Analyzes a negated instanceof (!(...))
+fn extract_negated_instanceof_narrowing(
+    expr: &hir::Expression,
+    context: &TypeContext,
+) -> Option<(String, TypeIR)> {
+    match expr {
+        hir::Expression::UnaryOperation {
+            operator: hir::UnaryOperator::Not,
+            expr,
+            ..
+        } => extract_instanceof_narrowing(expr, context),
+        _ => None,
+    }
+}
+
+/// Determines if a type should be narrowed based on instanceof check
+fn should_narrow_type(current_type: &TypeIR, target_type: &TypeIR) -> bool {
+    match current_type {
+        TypeIR::Union(items, _) => {
+            // Check if target type is one of the union members
+            items.iter_include_null().iter().any(|t| match t {
+                TypeIR::Class { name, .. } => match target_type {
+                    TypeIR::Class {
+                        name: target_name, ..
+                    } => name == target_name,
+                    _ => false,
+                },
+                _ => false,
+            })
+        }
+        TypeIR::Class { name, .. } => {
+            // Allow narrowing if it's the same class (redundant but harmless)
+            match target_type {
+                TypeIR::Class {
+                    name: target_name, ..
+                } => name == target_name,
+                _ => false,
+            }
+        }
+        _ => false, // Don't narrow other types
+    }
+}
+
 /// Convert HIR block to THIR block with type inference
 fn typecheck_block(
     block: &hir::Block,
@@ -826,6 +902,21 @@ fn typecheck_statement(
     diagnostics: &mut Diagnostics,
 ) -> Option<thir::Statement<ExprMetadata>> {
     match stmt {
+        hir::Statement::AnnotatedStatement { headers, statement } => {
+            if let Some(statement) = statement {
+                typecheck_statement(statement, context, diagnostics).map(|stmt| {
+                    thir::Statement::AnnotatedStatement {
+                        headers: headers.clone(),
+                        statement: Some(Box::new(stmt)),
+                    }
+                })
+            } else {
+                Some(thir::Statement::AnnotatedStatement {
+                    headers: headers.clone(),
+                    statement: None,
+                })
+            }
+        }
         hir::Statement::Let {
             name,
             value,
@@ -1200,18 +1291,13 @@ fn typecheck_statement(
             // Check that the variable exists in context
             if !context.vars.contains_key(variable) {
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Unknown variable '{}' in watch options", variable),
+                    &format!("Unknown variable '{variable}' in watch options"),
                     span.clone(),
                 ));
             }
 
             // Validate the 'when' function if provided
-            if let Some(when_str) = when {
-                // Parse the when string to get the function name
-                // For now, when is just a string with the function name
-                let fn_name =
-                    internal_baml_ast::ast::Identifier::Local(when_str.clone(), span.clone());
-
+            if let Some(when) = when {
                 // Get the variable's type for validation (clone to avoid borrow issues)
                 let var_type = context.vars.get(variable).map(|vi| vi.ty.clone());
 
@@ -1219,7 +1305,7 @@ fn typecheck_statement(
                     // Create a WatchSpec to validate
                     let watch_spec = crate::watch::WatchSpec {
                         name: variable.clone(),
-                        when: crate::watch::WatchWhen::FunctionName(fn_name),
+                        when: when.clone(),
                         span: span.clone(),
                     };
 
@@ -1239,7 +1325,7 @@ fn typecheck_statement(
             // Check that the variable exists in context
             if !context.vars.contains_key(variable) {
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Unknown variable '{}' in watch notify", variable),
+                    &format!("Unknown variable '{variable}' in watch notify"),
                     span.clone(),
                 ));
             }
@@ -1536,19 +1622,11 @@ pub fn typecheck_expression(
             let func_type = context.get_type(&func_name).cloned();
 
             // TODO: Handle generics uniformly, not with this kind of one-off handler.
-            if (func_name == crate::builtin::functions::FETCH_AS
-                || func_name == crate::builtin::functions::FETCH_VALUE)
-                && type_args.is_empty()
-            {
-                let fn_name_display = if func_name == crate::builtin::functions::FETCH_AS {
-                    "baml.fetch_as"
-                } else {
-                    "baml.fetch_value"
-                };
+            if (func_name == crate::builtin::functions::FETCH_AS) && type_args.is_empty() {
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>", fn_name_display, fn_name_display),
-                        function.span().clone(),
-                    ));
+                    &format!("Generic function {func_name} must have a type argument. Try adding a type argument like this: {func_name}<Type>"),
+                    function.span().clone(),
+                ));
             }
 
             let (param_types, return_type, is_known_function) = match &func_type {
@@ -1649,7 +1727,6 @@ pub fn typecheck_expression(
                     ("baml", "deep_copy") => Some("baml.deep_copy"),
                     ("baml", "deep_equals") => Some("baml.deep_equals"),
                     ("baml", "fetch_as") => Some("baml.fetch_as"),
-                    ("baml", "fetch_value") => Some("baml.fetch_value"),
                     ("image", "from_url") => Some("baml.media.image.from_url"),
                     ("audio", "from_url") => Some("baml.media.audio.from_url"),
                     ("video", "from_url") => Some("baml.media.video.from_url"),
@@ -1672,17 +1749,9 @@ pub fn typecheck_expression(
                     let mut return_type = None;
 
                     // Validate type arguments for generic functions
-                    if (full_name == crate::builtin::functions::FETCH_AS
-                        || full_name == crate::builtin::functions::FETCH_VALUE)
-                        && type_args.is_empty()
-                    {
-                        let fn_name_display = if full_name == crate::builtin::functions::FETCH_AS {
-                            "baml.fetch_as"
-                        } else {
-                            "baml.fetch_value"
-                        };
+                    if (full_name == crate::builtin::functions::FETCH_AS) && type_args.is_empty() {
                         diagnostics.push_error(DatamodelError::new_validation_error(
-                            &format!("Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>", fn_name_display, fn_name_display),
+                            &format!("Generic function {full_name} must have a type argument. Try adding a type argument like this: {full_name}<Type>"),
                             span.clone(),
                         ));
                     }
@@ -1737,6 +1806,46 @@ pub fn typecheck_expression(
                                         TypeIR::string(),
                                     ));
                                     return_type = Some(TypeIR::string());
+                                }
+                            }
+                        }
+
+                        "baml.fetch_as" => {
+                            let has_type_args = !type_args.is_empty();
+
+                            return_type = match type_args.first() {
+                                Some(hir::TypeArg::Type(t)) => Some(t.to_owned()),
+                                Some(hir::TypeArg::TypeName(n)) => context
+                                    .classes
+                                    .get(n)
+                                    .map(|c| TypeIR::class(c.name.clone()))
+                                    .or_else(|| {
+                                        context.enums.get(n).map(|e| TypeIR::r#enum(&e.name))
+                                    })
+                                    .or_else(|| context.get_type(n).map(|t| t.to_owned())),
+                                None => None,
+                            };
+
+                            match &return_type {
+                                Some(t) => {
+                                    func_type =
+                                        Some(TypeIR::arrow(vec![TypeIR::string()], t.clone()));
+                                }
+
+                                None => {
+                                    if has_type_args {
+                                        diagnostics.push_error(
+                                            DatamodelError::new_validation_error(
+                                                "could not infer return type of baml.fetch_as",
+                                                span.clone(),
+                                            ),
+                                        );
+                                    } else {
+                                        diagnostics.push_error(DatamodelError::new_validation_error(
+                                            &format!("Generic function {full_name} must have a type argument. Try adding a type argument like this: {full_name}<Type>"),
+                                            span.clone(),
+                                        ));
+                                    }
                                 }
                             }
                         }
@@ -1910,7 +2019,6 @@ pub fn typecheck_expression(
                             ("baml", "deep_equals") => Some("baml.deep_equals".to_string()),
 
                             ("baml", "fetch_as") => Some("baml.fetch_as".to_string()),
-                            ("baml", "fetch_value") => Some("baml.fetch_value".to_string()),
 
                             ("baml.unstable", "string") => Some("baml.unstable.string".to_string()),
 
@@ -1975,17 +2083,9 @@ pub fn typecheck_expression(
             };
 
             // Validate type arguments for generic functions
-            if (full_name == crate::builtin::functions::FETCH_AS
-                || full_name == crate::builtin::functions::FETCH_VALUE)
-                && type_args.is_empty()
-            {
-                let fn_name_display = if full_name == crate::builtin::functions::FETCH_AS {
-                    "baml.fetch_as"
-                } else {
-                    "baml.fetch_value"
-                };
+            if (full_name == crate::builtin::functions::FETCH_AS) && type_args.is_empty() {
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>", fn_name_display, fn_name_display),
+                    &format!("Generic function {full_name} must have a type argument. Try adding a type argument like this: {full_name}<Type>"),
                     span.clone(),
                 ));
             }
@@ -2090,47 +2190,6 @@ pub fn typecheck_expression(
                                         }
                                     }
                                 }
-                                "baml.fetch_value" => {
-                                    generic_return_type_inferred = if !type_args.is_empty() {
-                                        match &type_args[0] {
-                                            hir::TypeArg::Type(t) => Some(t.to_owned()),
-                                            hir::TypeArg::TypeName(n) => context
-                                                .classes
-                                                .get(n)
-                                                .map(|c| TypeIR::class(c.name.clone()))
-                                                .or_else(|| {
-                                                    context
-                                                        .enums
-                                                        .get(n)
-                                                        .map(|e| TypeIR::r#enum(&e.name))
-                                                })
-                                                .or_else(|| {
-                                                    context.get_type(n).map(|t| t.to_owned())
-                                                }),
-                                        }
-                                    } else {
-                                        None
-                                    };
-
-                                    match &generic_return_type_inferred {
-                                        Some(t) => {
-                                            func_type = Some(TypeIR::arrow(
-                                                vec![TypeIR::class(
-                                                    crate::builtin::classes::HTTP_REQUEST,
-                                                )],
-                                                t.clone(),
-                                            ));
-                                        }
-
-                                        None => {
-                                            diagnostics
-                                                .push_error(DatamodelError::new_validation_error(
-                                                "could not infer return type of baml.fetch_value",
-                                                arg.span(),
-                                            ));
-                                        }
-                                    }
-                                }
                                 _ => {
                                     if !types_compatible(arg_type, expected_type) {
                                         diagnostics.push_error(
@@ -2200,7 +2259,7 @@ pub fn typecheck_expression(
                         full_name.clone(),
                         (span.clone(), func_type.clone()),
                     )),
-                    type_args: if (full_name == "baml.fetch_as" || full_name == "baml.fetch_value")
+                    type_args: if (full_name == "baml.fetch_as")
                         && generic_return_type_inferred.is_some()
                     {
                         vec![generic_return_type_inferred.clone().unwrap()]
@@ -2436,10 +2495,41 @@ pub fn typecheck_expression(
                 }
             }
 
-            let typed_then = typecheck_expression(if_branch, context, diagnostics);
-            let typed_else = else_branch
-                .as_ref()
-                .map(|e| Arc::new(typecheck_expression(e, context, diagnostics)));
+            // Extract type narrowing information from instanceof
+            let then_narrowing = extract_instanceof_narrowing(condition, context);
+            let else_narrowing = extract_negated_instanceof_narrowing(condition, context);
+
+            // Typecheck then-branch with narrowed context
+            let typed_then = if let Some((var_name, narrowed_type)) = then_narrowing {
+                // Clone context for then-branch
+                let mut then_context = context.clone();
+
+                // Update variable type if it exists
+                if let Some(var_info) = then_context.vars.get_mut(&var_name) {
+                    // Only narrow if current type is compatible (union or the class itself)
+                    if should_narrow_type(&var_info.ty, &narrowed_type) {
+                        var_info.ty = narrowed_type;
+                    }
+                }
+
+                // Typecheck with narrowed context
+                typecheck_expression(if_branch, &then_context, diagnostics)
+            } else {
+                // No narrowing, use original context
+                typecheck_expression(if_branch, context, diagnostics)
+            };
+
+            // Typecheck else-branch (with potential narrowing for negated instanceof)
+            let typed_else = else_branch.as_ref().map(|e| {
+                if let Some((var_name, excluded_type)) = else_narrowing {
+                    // For else branch after instanceof, we could implement
+                    // exclusion narrowing (remove type from union)
+                    // For now, just use original context
+                    Arc::new(typecheck_expression(e, context, diagnostics))
+                } else {
+                    Arc::new(typecheck_expression(e, context, diagnostics))
+                }
+            });
 
             // Infer type from branches
             let if_type = typed_then.meta().1.clone();
@@ -2538,10 +2628,64 @@ pub fn typecheck_expression(
                 }) => {
                     // Look up field in enum definition
                     if let Some(enum_def) = context.enums.get(enum_name) {
-                        Some(TypeIR::r#enum(&enum_def.name))
+                        // Validate that the variant exists in the enum
+                        if enum_def.variants.iter().any(|v| &v.name == field) {
+                            Some(TypeIR::r#enum(&enum_def.name))
+                        } else {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Enum {} has no variant {}", enum_name, field),
+                                span.clone(),
+                            ));
+                            None
+                        }
                     } else {
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             &format!("Enum {enum_name} not found"),
+                            span.clone(),
+                        ));
+                        None
+                    }
+                }
+                Some(TypeIR::Union(items, _)) => {
+                    // Try to find the field in all non-null union members
+                    let mut field_types = Vec::new();
+                    let mut all_have_field = true;
+
+                    for item in items.iter_skip_null() {
+                        match item {
+                            TypeIR::Class {
+                                name: class_name, ..
+                            } => {
+                                if let Some(class_def) = context.classes.get(class_name) {
+                                    if let Some(class_field) =
+                                        class_def.fields.iter().find(|f| &f.name == field)
+                                    {
+                                        field_types.push(class_field.r#type.clone());
+                                    } else {
+                                        all_have_field = false;
+                                        break;
+                                    }
+                                } else {
+                                    all_have_field = false;
+                                    break;
+                                }
+                            }
+                            _ => {
+                                // Non-class types in union don't have fields
+                                all_have_field = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if all_have_field && !field_types.is_empty() {
+                        // All union members have the field
+                        // For now, return the first field type (could create union of field types)
+                        Some(field_types[0].clone())
+                    } else {
+                        // Not all members have the field
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Not all members of union have field '{}'", field),
                             span.clone(),
                         ));
                         None
@@ -2593,8 +2737,6 @@ pub fn typecheck_expression(
                     }
 
                     if !is_namespace {
-                        eprintln!("This shit aint working add err");
-
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             "Can only access fields on class instances",
                             base.span(),
@@ -2836,8 +2978,9 @@ fn typecheck_emit(
                 }
             }
         }
-        WatchWhen::True => {}
+        WatchWhen::Auto => {}
         WatchWhen::Manual => {}
+        WatchWhen::Never => {}
     }
 }
 

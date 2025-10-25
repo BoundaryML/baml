@@ -23,12 +23,10 @@ function BadFunction2(i: string) -> bool {
 //    | 
 //  3 |   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
 //  4 |   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
-//  5 |   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
 //    | 
 // error: Error validating: Function 'BadFunction2' has incorrect type. Expected (T) -> bool, where T matches the variable type
 //   -->  expr/watch_when.baml:5
 //    | 
 //  4 |   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
 //  5 |   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
-//  6 |   1
 //    | 

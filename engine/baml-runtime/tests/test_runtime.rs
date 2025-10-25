@@ -313,8 +313,14 @@ mod internal_tests {
 
         // Verify the rendered prompt contains the class description
         let prompt_str = prompt.to_string();
-        assert!(prompt_str.contains("// Represents a system user"));
-        assert!(prompt_str.contains("// Full name"));
+        assert!(
+            prompt_str.contains("// Represents a system user"),
+            "Missing class description"
+        );
+        assert!(
+            prompt_str.contains("// Full name"),
+            "Missing field description"
+        );
 
         Ok(())
     }
@@ -665,6 +671,7 @@ test RecursiveAliasCycle {
             None,
             TripWire::new(None),
             on_tick,
+            None,
         );
         let (res, call) = runtime.async_runtime.block_on(run_test_future);
 
@@ -1112,6 +1119,7 @@ test RecursiveAliasCycle {
             None,
             TripWire::new(None),
             on_tick,
+            None,
         );
         let (res1, _) = runtime.async_runtime.block_on(run_test_future);
         // Get the first client instance
@@ -1130,6 +1138,7 @@ test RecursiveAliasCycle {
             None,
             TripWire::new(None),
             on_tick,
+            None,
         );
         let (res2, _) = runtime.async_runtime.block_on(run_test_future);
         let client2 = runtime.llm_provider_from_function(

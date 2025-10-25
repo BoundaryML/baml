@@ -1,10 +1,10 @@
 flowchart TD
   subgraph sg0["Main Processing Pipeline"]
-    direction LR
+    direction TB
     n2["Generate Summary"]
     n3["Create Final Output"]
     subgraph sg1["Test"]
-      direction LR
+      direction TB
       n0{"Test"}
       class n0 decisionNode;
       n1["Generate Title"]

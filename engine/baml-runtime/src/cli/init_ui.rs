@@ -285,6 +285,7 @@ impl InitUIContext {
         }
     }
 
+    #[allow(clippy::print_stdout)]
     pub fn finish(self) -> Result<()> {
         if let Some(ui) = self.ui {
             // Show final state for a moment

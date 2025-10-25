@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use baml_types::{BamlMap, BamlMedia};
 
 use crate::{
-    bytecode::{BinOp, CmpOp, Instruction},
+    bytecode::{BinOp, BlockNotification, CmpOp, Instruction},
     errors::{ErrorLocation, InternalError, RuntimeError, VmError},
     indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex},
     types::{
@@ -207,6 +207,7 @@ pub struct Vm {
 /// Similarly, when the VM encounters an await point, it returns control flow to
 /// the embedder, expecting the embedder to await the future and fulfil it with
 /// the final result before yielding back control flow to the VM.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 pub enum VmExecState {
     /// VM cannot proceed. It is awaiting a pending future to complete.
@@ -222,7 +223,14 @@ pub enum VmExecState {
     Complete(Value),
 
     /// Notify about watched variables.
-    Notify(Vec<watch::NodeId>),
+    Notify(WatchNotification),
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, PartialEq)]
+pub enum WatchNotification {
+    Variables(Vec<watch::NodeId>),
+    Block(BlockNotification),
 }
 
 #[derive(Clone, Debug)]
@@ -441,6 +449,130 @@ impl Vm {
         self.exec()
     }
 
+    // Runs filters and returns remaining notifications for the watched node.
+    fn process_notifications(
+        &mut self,
+        watched_node: NodeId,
+    ) -> Result<Vec<watch::NodeId>, VmError> {
+        // Make a copy of all the roots that reach the watched node.
+        let mut notifications = self.watch.copy_roots_reaching(watched_node);
+
+        // Some notifications might be removed with filters,  we'll return this.
+        let mut filtered_notifications = vec![];
+
+        // Sort them by variables first. At the moment this is not really used
+        // because we only have variables, at this point it's unlikely we will
+        // implement notifications on objects (references), so we might be able
+        // to get rid of this.
+        notifications.sort_by(|a, b| match (a, b) {
+            (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
+            (NodeId::LocalVar(_), NodeId::HeapObject(_)) => std::cmp::Ordering::Less,
+            (NodeId::HeapObject(_), NodeId::LocalVar(_)) => std::cmp::Ordering::Greater,
+            (NodeId::HeapObject(a), NodeId::HeapObject(b)) => a.cmp(b),
+        });
+
+        for notification in notifications {
+            // The call to copy_roots_reaching() should always return valid
+            // roots, so this should really be unreachable.
+            let Some(state) = self.watch.root_state(notification) else {
+                continue;
+            };
+
+            match state.filter {
+                // Manual notify means skip this notification. If paused also skip
+                WatchFilter::Manual | WatchFilter::Paused => continue,
+
+                // Default filter is a basic diff. If the value has actually
+                // changed, then notify.
+                WatchFilter::Default => {
+                    let Some(last_assigned) = state.last_assigned else {
+                        filtered_notifications.push(notification);
+                        continue;
+                    };
+
+                    match crate::native::deep_equals(self, &[last_assigned, state.value]) {
+                        Ok(Value::Bool(b)) => {
+                            if !b {
+                                filtered_notifications.push(notification);
+                            }
+                        }
+
+                        other => {
+                            return Err(RuntimeError::Other(format!(
+                                "Invalid deep equals result during watch: {other:?}"
+                            ))
+                            .into());
+                        }
+                    }
+                }
+
+                // Run user function to decide if we should notify.
+                WatchFilter::Function(filter_func) => {
+                    match self.interrupt(filter_func, &[state.value]) {
+                        Ok(VmExecState::Complete(Value::Bool(notify))) => {
+                            if notify {
+                                filtered_notifications.push(notification);
+                            }
+                        }
+
+                        other => {
+                            return Err(RuntimeError::Other(format!(
+                                "Invalid filter function return: {other:?}"
+                            ))
+                            .into())
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(filtered_notifications)
+    }
+
+    /// When a watched node changes, we need to update the graph topology
+    /// and copy the previous values of the affected roots.
+    fn update_watched_node(
+        &mut self,
+        watched_node: NodeId,
+        path: watch::Path,
+        old_value: Value,
+        new_value: Value,
+    ) -> Result<(), VmError> {
+        if let Value::Object(old) = old_value {
+            self.watch
+                .unlink_edge(watched_node, path.clone(), NodeId::HeapObject(old));
+        }
+
+        if let Value::Object(new) = new_value {
+            self.watch
+                .link_edge(watched_node, path, NodeId::HeapObject(new), &self.objects);
+        }
+
+        // Copy previous values.
+        let mut old_roots_copies = vec![];
+
+        for root in self.watch.copy_roots_reaching(watched_node) {
+            if let Some(state) = self.watch.root_state(root) {
+                let deep_copy = crate::native::deep_copy_object(self, &[state.value])?;
+                old_roots_copies.push(deep_copy);
+            }
+        }
+
+        for (root, old_value) in self
+            .watch
+            .copy_roots_reaching(watched_node)
+            .iter()
+            .zip(old_roots_copies)
+        {
+            if let Some(state) = self.watch.root_state_mut(*root) {
+                state.last_assigned = Some(old_value);
+                // current value has not really changes, top level object is the same.
+            }
+        }
+
+        Ok(())
+    }
+
     /// Main VM execution loop.
     ///
     /// Each "cycle" (loop iteration) executes a single instruction.
@@ -507,6 +639,9 @@ impl Vm {
             // }
 
             match function.bytecode.instructions[instruction_ptr as usize] {
+                Instruction::NotifyBlock(notification) => {
+                    return Ok(VmExecState::Notify(WatchNotification::Block(notification)));
+                }
                 Instruction::LoadConst(index) => {
                     let value = &function.bytecode.constants[index];
                     self.stack.push(*value);
@@ -560,71 +695,16 @@ impl Vm {
                             state.value = value;
                         }
 
-                        let mut notifications = self.watch.copy_roots_reaching(watched_node);
-                        notifications.sort_by(|a, b| match (a, b) {
-                            (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
-                            (NodeId::LocalVar(_), NodeId::HeapObject(_)) => {
-                                std::cmp::Ordering::Less
-                            }
-                            (NodeId::HeapObject(_), NodeId::LocalVar(_)) => {
-                                std::cmp::Ordering::Greater
-                            }
-                            (NodeId::HeapObject(a), NodeId::HeapObject(b)) => a.cmp(b),
-                        });
+                        let notifications = self.process_notifications(watched_node)?;
 
-                        let mut filtered_notifications = vec![];
-
-                        for notification in notifications {
-                            if let Some(state) = self.watch.root_state(notification) {
-                                match state.filter {
-                                    WatchFilter::Manual => continue,
-                                    WatchFilter::Default => {
-                                        if let Some(last_assigned) = state.last_assigned {
-                                            match crate::native::deep_equals(
-                                                self,
-                                                &[last_assigned, state.value],
-                                            ) {
-                                                Ok(Value::Bool(b)) => {
-                                                    if !b {
-                                                        filtered_notifications.push(notification);
-                                                    }
-                                                }
-                                                other => {
-                                                    return Err(RuntimeError::Other(format!(
-                                                        "Invalid deep equals result during watch: {other:?}"
-                                                    ))
-                                                    .into());
-                                                }
-                                            }
-                                        } else {
-                                            filtered_notifications.push(notification);
-                                        }
-                                    }
-                                    WatchFilter::Function(function_index) => {
-                                        match self.interrupt(function_index, &[state.value]) {
-                                            Ok(VmExecState::Complete(Value::Bool(b))) => {
-                                                if b {
-                                                    filtered_notifications.push(notification);
-                                                }
-                                            }
-
-                                            other => {
-                                                return Err(RuntimeError::Other(
-                                                    "Invalid filter function return".to_string(),
-                                                )
-                                                .into())
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        frame = self.frames.last_mut().expect("last_mut() was pushed above");
+                        // borrow checker.
+                        frame = self.frames.last_mut().expect("last_mut() must exist");
                         function = self.objects[frame.function].as_function()?;
 
-                        if !filtered_notifications.is_empty() {
-                            return Ok(VmExecState::Notify(filtered_notifications));
+                        if !notifications.is_empty() {
+                            return Ok(VmExecState::Notify(WatchNotification::Variables(
+                                notifications,
+                            )));
                         }
                     }
                 }
@@ -659,135 +739,51 @@ impl Vm {
                 }
 
                 Instruction::StoreField(index) => {
-                    let instance_index = self.objects.as_object(
-                        &self.stack[self.stack.ensure_slot_from_top(1)?],
-                        ObjectType::Instance,
-                    )?;
-
-                    let Object::Instance(instance) = &mut self.objects[instance_index] else {
-                        return Err(InternalError::TypeError {
-                            expected: ObjectType::Instance.into(),
-                            got: ObjectType::of(&self.objects[instance_index]).into(),
-                        }
-                        .into());
-                    };
-
-                    // Consume the new value.
+                    // Consume the new value to be set from the stack.
                     let new_value = self.stack.ensure_pop()?;
 
-                    // Consume the instance.
-                    self.stack.ensure_pop()?;
+                    // Consume the instance value from the stack.
+                    let instance_index = self
+                        .objects
+                        .as_object(&self.stack.ensure_pop()?, ObjectType::Instance)?;
+
+                    // Read old value (and typecheck).
+                    let old_value = match &self.objects[instance_index] {
+                        Object::Instance(instance) => instance.fields[index],
+
+                        other => {
+                            return Err(VmError::from(InternalError::TypeError {
+                                expected: ObjectType::Instance.into(),
+                                got: ObjectType::of(other).into(),
+                            }));
+                        }
+                    };
 
                     // Change graph topology.
                     let watched_node = NodeId::HeapObject(instance_index);
-                    if let Value::Object(old_node) = instance.fields[index] {
-                        self.watch.unlink_edge(
-                            watched_node,
-                            watch::Path::InstanceField(index),
-                            NodeId::HeapObject(old_node),
-                        );
-                    }
-                    if let Value::Object(new_node) = new_value {
-                        self.watch.link_edge(
-                            watched_node,
-                            watch::Path::InstanceField(index),
-                            NodeId::HeapObject(new_node),
-                            &self.objects,
-                        );
-                    }
 
-                    // Copy previous values.
-                    let mut old_roots_copies = vec![];
-                    for root in self.watch.copy_roots_reaching(watched_node) {
-                        if let Some(state) = self.watch.root_state(root) {
-                            old_roots_copies
-                                .push(crate::native::deep_copy_object(self, &[state.value])?);
-                        }
-                    }
-
-                    // borrow check
-                    let Object::Instance(instance) = &mut self.objects[instance_index] else {
-                        unreachable!()
-                    };
+                    self.update_watched_node(
+                        watched_node,
+                        watch::Path::InstanceField(index),
+                        old_value,
+                        new_value,
+                    )?;
 
                     // Set the new value.
-                    instance.fields[index] = new_value;
-
-                    for (root, old_value) in self
-                        .watch
-                        .copy_roots_reaching(watched_node)
-                        .iter()
-                        .zip(old_roots_copies)
-                    {
-                        if let Some(state) = self.watch.root_state_mut(*root) {
-                            state.last_assigned = Some(old_value);
-                            // current value has not really changes, top level object is the same.
-                        }
+                    if let Object::Instance(instance) = &mut self.objects[instance_index] {
+                        instance.fields[index] = new_value;
                     }
 
-                    let mut notifications = self.watch.copy_roots_reaching(watched_node);
+                    let notifications = self.process_notifications(watched_node)?;
 
-                    notifications.sort_by(|a, b| match (a, b) {
-                        (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
-                        (NodeId::LocalVar(_), NodeId::HeapObject(_)) => std::cmp::Ordering::Less,
-                        (NodeId::HeapObject(_), NodeId::LocalVar(_)) => std::cmp::Ordering::Greater,
-                        (NodeId::HeapObject(a), NodeId::HeapObject(b)) => a.cmp(b),
-                    });
-
-                    let mut filtered_notifications = vec![];
-
-                    for notification in notifications {
-                        if let Some(state) = self.watch.root_state(notification) {
-                            match state.filter {
-                                WatchFilter::Manual => continue,
-                                WatchFilter::Default => {
-                                    if let Some(last_assigned) = state.last_assigned {
-                                        match crate::native::deep_equals(
-                                            self,
-                                            &[last_assigned, state.value],
-                                        ) {
-                                            Ok(Value::Bool(b)) => {
-                                                if !b {
-                                                    filtered_notifications.push(notification);
-                                                }
-                                            }
-                                            other => {
-                                                return Err(RuntimeError::Other(format!(
-                                                    "Invalid deep equals result during watch: {other:?}"
-                                                ))
-                                                .into());
-                                            }
-                                        }
-                                    } else {
-                                        filtered_notifications.push(notification);
-                                    }
-                                }
-                                WatchFilter::Function(function_index) => {
-                                    match self.interrupt(function_index, &[state.value]) {
-                                        Ok(VmExecState::Complete(Value::Bool(b))) => {
-                                            if b {
-                                                filtered_notifications.push(notification);
-                                            }
-                                        }
-
-                                        other => {
-                                            return Err(RuntimeError::Other(
-                                                "Invalid filter function return".to_string(),
-                                            )
-                                            .into())
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // TODO: Borrow checker stuff.
-                    frame = self.frames.last_mut().expect("frame must exist");
+                    // Borrow checker.
+                    frame = self.frames.last_mut().expect("last_mut() must exist");
                     function = self.objects[frame.function].as_function()?;
 
-                    if !filtered_notifications.is_empty() {
-                        return Ok(VmExecState::Notify(filtered_notifications));
+                    if !notifications.is_empty() {
+                        return Ok(VmExecState::Notify(WatchNotification::Variables(
+                            notifications,
+                        )));
                     }
                 }
 
@@ -1194,37 +1190,14 @@ impl Vm {
                 }
 
                 Instruction::StoreArrayElement => {
-                    // StoreArrayElement Instruction
-                    //
-                    // Stack before: [array, index, value]
-                    // Stack after: []
-                    //
-                    // Interpretation steps:
-                    // 1. Pop value from stack (top element)
-                    // 2. Pop index from stack (next element)
-                    // 3. Pop array reference from stack (bottom element)
-                    // 4. Validate that the popped array reference is indeed an array object
-                    // 5. Validate that index is an integer
-                    // 6. Check if index is non-negative
-                    // 7. Check if index is within array bounds
-                    // 8. Store the value at array[index]
-                    // 9. No value is pushed back to stack (mutation in place)
-
-                    let value = self.stack.ensure_pop()?;
+                    // Instruction args.
+                    let new_value = self.stack.ensure_pop()?;
                     let index_value = self.stack.ensure_pop()?;
-                    let array_value = self.stack.ensure_pop()?;
+                    let array_object_index = self
+                        .objects
+                        .as_object(&self.stack.ensure_pop()?, ObjectType::Array)?;
 
-                    let array_obj_index =
-                        self.objects.as_object(&array_value, ObjectType::Array)?;
-
-                    let Object::Array(array) = &mut self.objects[array_obj_index] else {
-                        return Err(VmError::from(InternalError::TypeError {
-                            expected: ObjectType::Array.into(),
-                            got: ObjectType::of(&self.objects[array_obj_index]).into(),
-                        }));
-                    };
-
-                    // Get the index
+                    // Verify index.
                     let index = match index_value {
                         Value::Int(i) => {
                             if i < 0 {
@@ -1232,153 +1205,66 @@ impl Vm {
                             }
                             i as usize
                         }
-                        _ => {
-                            return Err(InternalError::TypeError {
+                        other => {
+                            return Err(VmError::from(InternalError::TypeError {
                                 expected: Type::Int,
-                                got: self.objects.type_of(&index_value),
-                            }
-                            .into());
+                                got: self.objects.type_of(&other),
+                            }));
                         }
                     };
 
-                    // Check bounds
-                    if index >= array.len() {
-                        return Err(VmError::from(InternalError::ArrayIndexOutOfBounds {
-                            index,
-                            length: array.len(),
-                        }));
-                    }
+                    // Read old value (and typecheck).
+                    let old_value = match &self.objects[array_object_index] {
+                        Object::Array(array) => {
+                            // Check bounds.
+                            if index >= array.len() {
+                                return Err(VmError::from(InternalError::ArrayIndexOutOfBounds {
+                                    index,
+                                    length: array.len(),
+                                }));
+                            }
+
+                            array[index]
+                        }
+
+                        other => {
+                            return Err(VmError::from(InternalError::TypeError {
+                                expected: ObjectType::Array.into(),
+                                got: ObjectType::of(other).into(),
+                            }));
+                        }
+                    };
 
                     // Change graph topology
-                    let watched_node = NodeId::HeapObject(array_obj_index);
-                    if let Value::Object(old_child) = array[index] {
-                        self.watch.unlink_edge(
-                            watched_node,
-                            watch::Path::ArrayIndex(index),
-                            NodeId::HeapObject(old_child),
-                        );
-                    }
-                    if let Value::Object(new_child) = value {
-                        self.watch.link_edge(
-                            watched_node,
-                            watch::Path::ArrayIndex(index),
-                            NodeId::HeapObject(new_child),
-                            &self.objects,
-                        );
+                    let watched_node = NodeId::HeapObject(array_object_index);
+                    self.update_watched_node(
+                        watched_node,
+                        watch::Path::ArrayIndex(index),
+                        old_value,
+                        new_value,
+                    )?;
+
+                    // Set the new value.
+                    if let Object::Array(array) = &mut self.objects[array_object_index] {
+                        array[index] = new_value;
                     }
 
-                    // Copy previous values.
-                    let mut old_roots_copies = vec![];
-                    for root in self.watch.copy_roots_reaching(watched_node) {
-                        if let Some(state) = self.watch.root_state(root) {
-                            old_roots_copies
-                                .push(crate::native::deep_copy_object(self, &[state.value])?);
-                        }
-                    }
+                    let notifications = self.process_notifications(watched_node)?;
 
-                    // borrow check.
-                    let Object::Array(array) = &mut self.objects[array_obj_index] else {
-                        unreachable!("array: borrow checker");
-                    };
-
-                    // Store the value at the index
-                    array[index] = value;
-
-                    for (root, old_value) in self
-                        .watch
-                        .copy_roots_reaching(watched_node)
-                        .iter()
-                        .zip(old_roots_copies)
-                    {
-                        if let Some(state) = self.watch.root_state_mut(*root) {
-                            state.last_assigned = Some(old_value);
-                            // current value has not really changes, top level object is the same.
-                        }
-                    }
-
-                    let mut notifications = self.watch.copy_roots_reaching(watched_node);
-                    notifications.sort_by(|a, b| match (a, b) {
-                        (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
-                        (NodeId::LocalVar(_), NodeId::HeapObject(_)) => std::cmp::Ordering::Less,
-                        (NodeId::HeapObject(_), NodeId::LocalVar(_)) => std::cmp::Ordering::Greater,
-                        (NodeId::HeapObject(a), NodeId::HeapObject(b)) => a.cmp(b),
-                    });
-
-                    let mut filtered_notifications = vec![];
-
-                    for notification in notifications {
-                        if let Some(state) = self.watch.root_state(notification) {
-                            match state.filter {
-                                WatchFilter::Manual => continue,
-                                WatchFilter::Default => {
-                                    if let Some(last_assigned) = state.last_assigned {
-                                        match crate::native::deep_equals(
-                                            self,
-                                            &[last_assigned, state.value],
-                                        ) {
-                                            Ok(Value::Bool(b)) => {
-                                                if !b {
-                                                    filtered_notifications.push(notification);
-                                                }
-                                            }
-                                            other => {
-                                                return Err(RuntimeError::Other(format!(
-                                                    "Invalid deep equals result during watch: {other:?}"
-                                                ))
-                                                .into());
-                                            }
-                                        }
-                                    } else {
-                                        filtered_notifications.push(notification);
-                                    }
-                                }
-                                WatchFilter::Function(function_index) => {
-                                    match self.interrupt(function_index, &[state.value]) {
-                                        Ok(VmExecState::Complete(Value::Bool(b))) => {
-                                            if b {
-                                                filtered_notifications.push(notification);
-                                            }
-                                        }
-
-                                        other => {
-                                            return Err(RuntimeError::Other(
-                                                "Invalid filter function return".to_string(),
-                                            )
-                                            .into())
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // TODO: Borrow checker stuff.
-                    frame = self.frames.last_mut().expect("frame must exist");
+                    // borrow checker.
+                    frame = self.frames.last_mut().expect("last_mut() must exist");
                     function = self.objects[frame.function].as_function()?;
 
-                    if !filtered_notifications.is_empty() {
-                        return Ok(VmExecState::Notify(filtered_notifications));
+                    if !notifications.is_empty() {
+                        return Ok(VmExecState::Notify(WatchNotification::Variables(
+                            notifications,
+                        )));
                     }
                 }
 
                 Instruction::StoreMapElement => {
-                    // StoreMapElement Instruction
-                    //
-                    // Stack before: [map, key, value]
-                    // Stack after: []
-                    //
-                    // Interpretation steps:
-                    // 1. Pop value from stack (top element)
-                    // 2. Pop key from stack (next element)
-                    // 3. Pop map reference from stack (bottom element)
-                    // 4. Validate that the popped map reference is indeed a map object
-                    // 5. Get the key as a string from the objects pool (maps use string keys)
-                    //    - Validate key_value is an object reference to a String
-                    //    - Clone the string from the objects pool
-                    // 6. Store/update the value at map[key]
-                    // 7. No value is pushed back to stack (mutation in place)
-
-                    let value = self.stack.ensure_pop()?;
+                    // Instruction args.
+                    let new_value = self.stack.ensure_pop()?;
                     let key_value = self.stack.ensure_pop()?;
                     let map_value = self.stack.ensure_pop()?;
 
@@ -1388,121 +1274,46 @@ impl Vm {
 
                     let map_index = self.objects.as_object(&map_value, ObjectType::Map)?;
 
-                    let Object::Map(map) = &mut self.objects[map_index] else {
-                        return Err(VmError::from(InternalError::TypeError {
-                            expected: ObjectType::Map.into(),
-                            got: ObjectType::of(&self.objects[map_index]).into(),
-                        }));
+                    // Read old value (and typecheck).
+                    //
+                    // If the map didn't contain any value we'll use null so
+                    // there's not watch graph edge to update.
+                    let old_value = match &self.objects[map_index] {
+                        Object::Map(map) => map.get(&key).copied().unwrap_or(Value::Null),
+
+                        other => {
+                            return Err(VmError::from(InternalError::TypeError {
+                                expected: ObjectType::Map.into(),
+                                got: ObjectType::of(other).into(),
+                            }));
+                        }
                     };
 
                     // Change graph topology
                     let watched_node = NodeId::HeapObject(map_index);
-                    if let Some(Value::Object(old_node)) = map.get(&key) {
-                        self.watch.unlink_edge(
-                            watched_node,
-                            watch::Path::MapKey(key.clone()),
-                            NodeId::HeapObject(*old_node),
-                        );
-                    }
-                    if let Value::Object(new_node) = value {
-                        self.watch.link_edge(
-                            watched_node,
-                            watch::Path::MapKey(key.clone()),
-                            NodeId::HeapObject(new_node),
-                            &self.objects,
-                        );
+
+                    self.update_watched_node(
+                        watched_node,
+                        watch::Path::MapKey(key.clone()),
+                        old_value,
+                        new_value,
+                    )?;
+
+                    // Set the new value.
+                    if let Object::Map(map) = &mut self.objects[map_index] {
+                        map.insert(key, new_value);
                     }
 
-                    // Copy previous values.
-                    let mut old_roots_copies = vec![];
-                    for root in self.watch.copy_roots_reaching(watched_node) {
-                        if let Some(state) = self.watch.root_state(root) {
-                            old_roots_copies
-                                .push(crate::native::deep_copy_object(self, &[state.value])?);
-                        }
-                    }
+                    let notifications = self.process_notifications(watched_node)?;
 
-                    let Object::Map(map) = &mut self.objects[map_index] else {
-                        unreachable!("map: borrow checker");
-                    };
-
-                    // Store the value at the key
-                    map.insert(key, value);
-
-                    for (root, old_value) in self
-                        .watch
-                        .copy_roots_reaching(watched_node)
-                        .iter()
-                        .zip(old_roots_copies)
-                    {
-                        if let Some(state) = self.watch.root_state_mut(*root) {
-                            state.last_assigned = Some(old_value);
-                            // current value has not really changes, top level object is the same.
-                        }
-                    }
-
-                    let mut notifications = self.watch.copy_roots_reaching(watched_node);
-                    notifications.sort_by(|a, b| match (a, b) {
-                        (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
-                        (NodeId::LocalVar(_), NodeId::HeapObject(_)) => std::cmp::Ordering::Less,
-                        (NodeId::HeapObject(_), NodeId::LocalVar(_)) => std::cmp::Ordering::Greater,
-                        (NodeId::HeapObject(a), NodeId::HeapObject(b)) => a.cmp(b),
-                    });
-
-                    let mut filtered_notifications = vec![];
-
-                    for notification in notifications {
-                        if let Some(state) = self.watch.root_state(notification) {
-                            match state.filter {
-                                WatchFilter::Manual => continue,
-                                WatchFilter::Default => {
-                                    if let Some(last_assigned) = state.last_assigned {
-                                        match crate::native::deep_equals(
-                                            self,
-                                            &[last_assigned, state.value],
-                                        ) {
-                                            Ok(Value::Bool(b)) => {
-                                                if !b {
-                                                    filtered_notifications.push(notification);
-                                                }
-                                            }
-                                            other => {
-                                                return Err(RuntimeError::Other(format!(
-                                                    "Invalid deep equals result during watch: {other:?}"
-                                                ))
-                                                .into());
-                                            }
-                                        }
-                                    } else {
-                                        filtered_notifications.push(notification);
-                                    }
-                                }
-                                WatchFilter::Function(function_index) => {
-                                    match self.interrupt(function_index, &[state.value]) {
-                                        Ok(VmExecState::Complete(Value::Bool(b))) => {
-                                            if b {
-                                                filtered_notifications.push(notification);
-                                            }
-                                        }
-
-                                        other => {
-                                            return Err(RuntimeError::Other(
-                                                "Invalid filter function return".to_string(),
-                                            )
-                                            .into())
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // TODO: Borrow checker stuff.
-                    frame = self.frames.last_mut().expect("frame must exist");
+                    // borrow checker.
+                    frame = self.frames.last_mut().expect("last_mut() must exist");
                     function = self.objects[frame.function].as_function()?;
 
-                    if !filtered_notifications.is_empty() {
-                        return Ok(VmExecState::Notify(filtered_notifications));
+                    if !notifications.is_empty() {
+                        return Ok(VmExecState::Notify(WatchNotification::Variables(
+                            notifications,
+                        )));
                     }
                 }
 
@@ -1682,6 +1493,7 @@ impl Vm {
                         Value::Object(object_index) => match &self.objects[object_index] {
                             Object::Function(_) => WatchFilter::Function(object_index),
                             Object::String(mode) if mode == "manual" => WatchFilter::Manual,
+                            Object::String(mode) if mode == "never" => WatchFilter::Paused,
                             _ => {
                                 return Err(RuntimeError::Other("Invalid filter".to_string()).into())
                             }
@@ -1695,11 +1507,11 @@ impl Vm {
                         .as_string(&self.stack.ensure_pop()?)?
                         .to_owned();
 
-                    let value_index = StackIndex::from_raw(frame.locals_offset.raw() + index);
-                    let value = self.stack[value_index];
+                    let local_var_index = StackIndex::from_raw(frame.locals_offset.raw() + index);
+                    let value = self.stack[local_var_index];
 
                     // The variable index should be the same as where the value is stored
-                    let var_node = NodeId::LocalVar(value_index);
+                    let var_node = NodeId::LocalVar(local_var_index);
 
                     // Register this variable as an emittable root.
                     self.watch.register_root(
@@ -1717,7 +1529,7 @@ impl Vm {
                         [function.bytecode.scopes[instruction_ptr as usize]][index];
                     // Track this so we can unregister on scope exit
                     self.watched_vars.insert(
-                        value_index,
+                        local_var_index,
                         (watched_var_name.to_string(), function.name.clone()),
                     );
 
@@ -1733,6 +1545,21 @@ impl Vm {
                             &self.objects,
                         );
                     }
+                }
+
+                Instruction::Notify(index) => {
+                    let local_var_index = StackIndex::from_raw(frame.locals_offset.raw() + index);
+                    let var_node = NodeId::LocalVar(local_var_index);
+
+                    let notifications = self.watch.copy_roots_reaching(var_node);
+
+                    if notifications.len() != 1 && notifications.first() != Some(&var_node) {
+                        return Err(RuntimeError::Other("Invalid manual notify".to_string()).into());
+                    }
+
+                    return Ok(VmExecState::Notify(WatchNotification::Variables(
+                        notifications,
+                    )));
                 }
 
                 Instruction::Call(arg_count) => {

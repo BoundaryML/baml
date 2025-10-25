@@ -1,16 +1,16 @@
 flowchart TD
   n0["Section One"]
-  n1["Section Two"]
-  n2["Subsection 2.1"]
-  n3["Subsubsection 2.1.1"]
-  n4["Section Three"]
-  n2 --> n3
-  n1 --> n2
+  n2["Section Three"]
+  subgraph sg0["Section Two"]
+    direction TB
+    subgraph sg1["Subsection 2.1"]
+      direction TB
+      n1["Subsubsection 2.1.1"]
+    end
+  end
   n0 --> n1
-  n3 --> n4
-%%__BAML_SPANMAP__={"n0":{"file_path":"tests/validation_files/headers/multiple_levels.baml","start_line":1,"start":4,"end_line":1,"end":19},"n1":{"file_path":"tests/validation_files/headers/multiple_levels.baml","start_line":4,"start":4,"end_line":4,"end":19},"n2":{"file_path":"tests/validation_files/headers/multiple_levels.baml","start_line":7,"start":4,"end_line":7,"end":23},"n3":{"file_path":"tests/validation_files/headers/multiple_levels.baml","start_line":10,"start":4,"end_line":10,"end":29},"n4":{"file_path":"tests/validation_files/headers/multiple_levels.baml","start_line":13,"start":4,"end_line":13,"end":21}}
+  n1 --> n2
+%%__BAML_SPANMAP__={"n0":{"file_path":"tests/validation_files/headers/multiple_levels.baml","start_line":1,"start":4,"end_line":1,"end":19},"n1":{"file_path":"tests/validation_files/headers/multiple_levels.baml","start_line":10,"start":4,"end_line":10,"end":29},"n2":{"file_path":"tests/validation_files/headers/multiple_levels.baml","start_line":13,"start":4,"end_line":13,"end":21}}
   click n0 call bamlMermaidNodeClick() "Go to source"
   click n1 call bamlMermaidNodeClick() "Go to source"
   click n2 call bamlMermaidNodeClick() "Go to source"
-  click n3 call bamlMermaidNodeClick() "Go to source"
-  click n4 call bamlMermaidNodeClick() "Go to source"

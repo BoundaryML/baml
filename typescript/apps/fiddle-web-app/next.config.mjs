@@ -17,6 +17,7 @@ const nextConfig = {
       ...config.experiments,
       asyncWebAssembly: true,
       syncWebAssembly: true,
+      // esmExternals: 'loose',
       layers: true,
       topLevelAwait: true,
     };
