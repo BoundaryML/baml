@@ -354,7 +354,9 @@ impl Drop for TracingCallGuard<'_> {
                 Err(error)
             } else {
                 // If we're being dropped without an error, something went wrong
-                Err(anyhow::anyhow!("Call dropped without being properly finished"))
+                Err(anyhow::anyhow!(
+                    "Call dropped without being properly finished"
+                ))
             };
 
             // Emit TraceEvent::new_function_end for the error case
@@ -1378,31 +1380,31 @@ impl BamlRuntime {
         );
 
         let fake_syntax_span = Span::fake();
-        let response =
-            match ctx.create_ctx(tb, cb, env_vars.clone(), guard.call_id_stack().clone()) {
-                Ok(rctx) => {
-                    let call_id_stack = rctx.call_id_stack.clone();
-                    // TODO: is this the right naming?
-                    let prepared_func = match self.prepare_function(function_name.clone(), params) {
-                        Ok(prepared_func) => prepared_func,
-                        Err(e) => {
-                            let err_anyhow = e.into_error();
-                            // Set error in guard - it will emit TraceEvent and finish the call on drop
-                            guard.set_error(anyhow::anyhow!("{}", err_anyhow));
-                            return (Err(err_anyhow), curr_call_id);
-                        }
-                    };
+        let response = match ctx.create_ctx(tb, cb, env_vars.clone(), guard.call_id_stack().clone())
+        {
+            Ok(rctx) => {
+                let call_id_stack = rctx.call_id_stack.clone();
+                // TODO: is this the right naming?
+                let prepared_func = match self.prepare_function(function_name.clone(), params) {
+                    Ok(prepared_func) => prepared_func,
+                    Err(e) => {
+                        let err_anyhow = e.into_error();
+                        // Set error in guard - it will emit TraceEvent and finish the call on drop
+                        guard.set_error(anyhow::anyhow!("{}", err_anyhow));
+                        return (Err(err_anyhow), curr_call_id);
+                    }
+                };
 
-                    // Call the function implementation
-                    self.call_function_impl(prepared_func, rctx, cancel_tripwire)
-                        .await
-                }
-                Err(e) => {
-                    // Set error in guard - it will emit TraceEvent and finish the call on drop
-                    guard.set_error(anyhow::anyhow!("{}", e));
-                    Err(e)
-                }
-            };
+                // Call the function implementation
+                self.call_function_impl(prepared_func, rctx, cancel_tripwire)
+                    .await
+            }
+            Err(e) => {
+                // Set error in guard - it will emit TraceEvent and finish the call on drop
+                guard.set_error(anyhow::anyhow!("{}", e));
+                Err(e)
+            }
+        };
 
         // Finish the call explicitly with the response
         #[cfg(not(target_arch = "wasm32"))]
@@ -1836,10 +1838,12 @@ impl BamlRuntime {
 
                 // Also include BOUNDARY_* env vars if they exist, for tracing/telemetry
                 if let Some(boundary_api_key) = ctx.env_vars().get("BOUNDARY_API_KEY") {
-                    required_env_vars.insert("BOUNDARY_API_KEY".to_string(), boundary_api_key.to_owned());
+                    required_env_vars
+                        .insert("BOUNDARY_API_KEY".to_string(), boundary_api_key.to_owned());
                 }
                 if let Some(boundary_api_url) = ctx.env_vars().get("BOUNDARY_API_URL") {
-                    required_env_vars.insert("BOUNDARY_API_URL".to_string(), boundary_api_url.to_owned());
+                    required_env_vars
+                        .insert("BOUNDARY_API_URL".to_string(), boundary_api_url.to_owned());
                 }
 
                 clients.insert(

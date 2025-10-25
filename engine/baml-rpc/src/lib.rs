@@ -22,10 +22,10 @@ pub use ui::{
     ui_baml_src::{GetBamlSrcBundle, GetBamlSrcBundleRequest, GetBamlSrcBundleResponse},
     ui_control_plane_orgs::{
         CreateOrganization, CreateOrganizationRequest, CreateOrganizationResponse,
-        DeleteOrganization, DeleteOrganizationRequest, DeleteOrganizationResponse,
-        GetOrganization, GetOrganizationRequest, GetOrganizationResponse, Organization,
-        SyncStripeSubscription, SyncStripeSubscriptionRequest, SyncStripeSubscriptionResponse,
-        UpdateOrganization, UpdateOrganizationRequest, UpdateOrganizationResponse,
+        DeleteOrganization, DeleteOrganizationRequest, DeleteOrganizationResponse, GetOrganization,
+        GetOrganizationRequest, GetOrganizationResponse, Organization, SyncStripeSubscription,
+        SyncStripeSubscriptionRequest, SyncStripeSubscriptionResponse, UpdateOrganization,
+        UpdateOrganizationRequest, UpdateOrganizationResponse,
     },
     ui_control_plane_projects::{
         CreateProject, CreateProjectRequest, CreateProjectResponse, ListProjects,
