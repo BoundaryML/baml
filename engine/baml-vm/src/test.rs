@@ -38,6 +38,26 @@ impl Value {
             VmValue::Object(index) => Object::from_vm_object(*index, vm).map(Value::Object),
         }
     }
+
+    /// Shorthand for creating a function value.
+    pub fn function(name: &str) -> Self {
+        Value::Object(Object::Function(name.to_string()))
+    }
+
+    /// Shorthand for creating a class value.
+    pub fn class(name: &str) -> Self {
+        Value::Object(Object::Class(name.to_string()))
+    }
+
+    /// Shorthand for creating an enum value.
+    pub fn enm(name: &str) -> Self {
+        Value::Object(Object::Enum(name.to_string()))
+    }
+
+    /// Shorthand for creating a string value.
+    pub fn string(s: &str) -> Self {
+        Value::Object(Object::String(s.to_string()))
+    }
 }
 
 /// Test-friendly representation of VM objects.

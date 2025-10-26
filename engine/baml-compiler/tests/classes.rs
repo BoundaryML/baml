@@ -23,7 +23,7 @@ fn class_constructor() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::AllocInstance(Value::Object(Object::class("Point"))),
+                Instruction::AllocInstance(Value::class("Point")),
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreField(0),
@@ -60,8 +60,8 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::AllocInstance(Value::Object(Object::class("Point"))),
-                Instruction::LoadGlobal(Value::Object(Object::function("default_point"))),
+                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::LoadGlobal(Value::function("default_point")),
                 Instruction::Call(0),
                 Instruction::Copy(1),
                 Instruction::Copy(1),
@@ -110,8 +110,8 @@ fn class_constructor_with_spread_before_named_fields() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::AllocInstance(Value::Object(Object::class("Point"))),
-                Instruction::LoadGlobal(Value::Object(Object::function("default_point"))),
+                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::LoadGlobal(Value::function("default_point")),
                 Instruction::Call(0),
                 Instruction::Copy(1),
                 Instruction::Copy(1),
@@ -158,8 +158,8 @@ fn class_constructor_with_spread_after_named_fields() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::AllocInstance(Value::Object(Object::class("Point"))),
-                Instruction::LoadGlobal(Value::Object(Object::function("default_point"))),
+                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::LoadGlobal(Value::function("default_point")),
                 Instruction::Call(0),
                 Instruction::Copy(1),
                 Instruction::Copy(1),
@@ -218,8 +218,8 @@ fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
             (
                 "xy_one_last",
                 vec![
-                    Instruction::AllocInstance(Value::Object(Object::class("Point"))),
-                    Instruction::LoadGlobal(Value::Object(Object::function("xy_one"))),
+                    Instruction::AllocInstance(Value::class("Point")),
+                    Instruction::LoadGlobal(Value::function("xy_one")),
                     Instruction::Call(0),
                     Instruction::Copy(1),
                     Instruction::Copy(1),
@@ -245,8 +245,8 @@ fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
             (
                 "x_one_last",
                 vec![
-                    Instruction::AllocInstance(Value::Object(Object::class("Point"))),
-                    Instruction::LoadGlobal(Value::Object(Object::function("x_one"))),
+                    Instruction::AllocInstance(Value::class("Point")),
+                    Instruction::LoadGlobal(Value::function("x_one")),
                     Instruction::Call(0),
                     Instruction::Copy(1),
                     Instruction::Copy(1),
@@ -297,8 +297,8 @@ fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Res
         expected: vec![(
             "main",
             vec![
-                Instruction::AllocInstance(Value::Object(Object::class("Point"))),
-                Instruction::LoadGlobal(Value::Object(Object::function("default_point"))),
+                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::LoadGlobal(Value::function("default_point")),
                 Instruction::Call(0),
                 Instruction::Copy(1),
                 Instruction::Copy(1),
@@ -377,10 +377,10 @@ fn nested_field_read_bytecode() -> anyhow::Result<()> {
             "main",
             vec![
                 // Create Outer { inner: Inner { value: 42 } }
-                Instruction::AllocInstance(Value::Object(Object::class("Outer"))), // Outer class
+                Instruction::AllocInstance(Value::class("Outer")), // Outer class
                 Instruction::Copy(0),                                 // Copy Outer instance
                 // Create Inner inline
-                Instruction::AllocInstance(Value::Object(Object::class("Inner"))), // Inner class
+                Instruction::AllocInstance(Value::class("Inner")), // Inner class
                 Instruction::Copy(0),                                 // Copy Inner instance
                 Instruction::LoadConst(Value::Int(42)),                            // 42
                 Instruction::StoreField(0),                           // Inner.value = 42
@@ -420,10 +420,10 @@ fn nested_object_construction_bytecode() -> anyhow::Result<()> {
             "main",
             vec![
                 // Outer constructor
-                Instruction::AllocInstance(Value::Object(Object::class("Outer"))), // Outer
+                Instruction::AllocInstance(Value::class("Outer")), // Outer
                 Instruction::Copy(0),                                 // Copy Outer instance
                 // Nested Inner construction
-                Instruction::AllocInstance(Value::Object(Object::class("Inner"))), // Inner
+                Instruction::AllocInstance(Value::class("Inner")), // Inner
                 Instruction::Copy(0),                                 // Copy Inner instance
                 Instruction::LoadConst(Value::Int(10)),                            // 10
                 Instruction::StoreField(0),                           // x = 10

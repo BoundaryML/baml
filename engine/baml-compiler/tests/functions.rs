@@ -22,7 +22,7 @@ fn return_function_call() -> anyhow::Result<()> {
             (
                 "main",
                 vec![
-                    Instruction::LoadGlobal(Value::Object(Object::function("one"))),
+                    Instruction::LoadGlobal(Value::function("one")),
                     Instruction::Call(0),
                     Instruction::Return,
                 ],
@@ -49,7 +49,7 @@ fn call_function() -> anyhow::Result<()> {
             (
                 "main",
                 vec![
-                    Instruction::LoadGlobal(Value::Object(Object::function("two"))),
+                    Instruction::LoadGlobal(Value::function("two")),
                     Instruction::Call(0),
                     Instruction::LoadVar(1),
                     Instruction::Return,
@@ -67,7 +67,7 @@ fn function_returning_string() -> anyhow::Result<()> {
                 "hello"
             }
         "#,
-        expected: vec![("main", vec![Instruction::LoadConst(Value::Object(Object::string("hello"))), Instruction::Return])],
+        expected: vec![("main", vec![Instruction::LoadConst(Value::string("hello")), Instruction::Return])],
     })
 }
 

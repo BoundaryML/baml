@@ -17,7 +17,7 @@ fn concat_strings() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Object(Object::String(String::from("Hello World")))),
+        expected: ExecState::Complete(Value::string("Hello World")),
     })
 }
 
@@ -136,7 +136,7 @@ fn string_to_lower_case() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Object(Object::String("hello world".to_string()))),
+        expected: ExecState::Complete(Value::string("hello world")),
     })
 }
 
@@ -150,7 +150,7 @@ fn string_to_upper_case() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Object(Object::String("HELLO WORLD".to_string()))),
+        expected: ExecState::Complete(Value::string("HELLO WORLD")),
     })
 }
 
@@ -164,7 +164,7 @@ fn string_trim() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Object(Object::String("hello world".to_string()))),
+        expected: ExecState::Complete(Value::string("hello world")),
     })
 }
 
@@ -221,9 +221,9 @@ fn string_split() -> anyhow::Result<()> {
         "#,
         function: "main",
         expected: ExecState::Complete(Value::Object(Object::Array(vec![
-            Value::Object(Object::String("hello".to_string())),
-            Value::Object(Object::String("world".to_string())),
-            Value::Object(Object::String("test".to_string())),
+            Value::string("hello"),
+            Value::string("world"),
+            Value::string("test"),
         ]))),
     })
 }
@@ -238,7 +238,7 @@ fn string_substring() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Object(Object::String("hello".to_string()))),
+        expected: ExecState::Complete(Value::string("hello")),
     })
 }
 
@@ -252,7 +252,7 @@ fn string_substring_bounds() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Object(Object::String("llo".to_string()))),
+        expected: ExecState::Complete(Value::string("llo")),
     })
 }
 
@@ -266,8 +266,6 @@ fn string_replace() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Object(Object::String(
-            "hello BAML world".to_string(),
-        ))),
+        expected: ExecState::Complete(Value::string("hello BAML world")),
     })
 }

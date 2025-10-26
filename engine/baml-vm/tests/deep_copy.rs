@@ -28,13 +28,13 @@ fn deep_copy_object() -> anyhow::Result<()> {
         expected: ExecState::Complete(Value::Object(Object::Instance(Instance {
             class: String::from("Tree"),
             fields: Instance::fields(indexmap! {
-                "value" => Value::Object(Object::String(String::from("1"))),
+                "value" => Value::string("1"),
 
                 "children" => Value::Object(Object::Array(vec![
                     Value::Object(Object::Instance(Instance {
                         class: String::from("Tree"),
                         fields: Instance::fields(indexmap! {
-                            "value" => Value::Object(Object::String(String::from("2"))),
+                            "value" => Value::string("2"),
                             "children" => Value::Object(Object::Array(vec![])),
                         }),
                     })),
@@ -42,7 +42,7 @@ fn deep_copy_object() -> anyhow::Result<()> {
                     Value::Object(Object::Instance(Instance {
                         class: String::from("Tree"),
                         fields: Instance::fields(indexmap! {
-                            "value" => Value::Object(Object::String(String::from("3"))),
+                            "value" => Value::string("3"),
                             "children" => Value::Object(Object::Array(vec![])),
                         }),
                     })),

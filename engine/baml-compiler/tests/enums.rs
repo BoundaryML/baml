@@ -23,7 +23,7 @@ fn return_enum_variant() -> anyhow::Result<()> {
             "main",
             vec![
                 Instruction::LoadConst(Value::Int(1)), // Rectangle is variant index 1
-                Instruction::AllocVariant(Value::Object(Object::enm("Shape"))),
+                Instruction::AllocVariant(Value::enm("Shape")),
                 Instruction::Return,
             ],
         )],
@@ -49,7 +49,7 @@ fn assign_enum_variant() -> anyhow::Result<()> {
             "main",
             vec![
                 Instruction::LoadConst(Value::Int(1)), // Rectangle is variant index 1
-                Instruction::AllocVariant(Value::Object(Object::enm("Shape"))),
+                Instruction::AllocVariant(Value::enm("Shape")),
                 Instruction::LoadVar(1),
                 Instruction::Return,
             ],

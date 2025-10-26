@@ -150,9 +150,7 @@ fn media_as_url() -> anyhow::Result<()> {
                 }
             "#,
         function: "media_as_url",
-        expected: ExecState::Complete(Value::Object(Object::String(
-            "https://example.com/image.png".to_string(),
-        ))),
+        expected: ExecState::Complete(Value::string("https://example.com/image.png")),
     })
 }
 
@@ -167,7 +165,7 @@ fn media_as_base64() -> anyhow::Result<()> {
             }
         "#,
         function: "media_as_base64",
-        expected: ExecState::Complete(Value::Object(Object::String("abc==".to_string()))),
+        expected: ExecState::Complete(Value::string("abc==")),
     })
 }
 
@@ -182,6 +180,6 @@ fn media_as_mime() -> anyhow::Result<()> {
             }
         "#,
         function: "media_as_mime",
-        expected: ExecState::Complete(Value::Object(Object::String("image/png".to_string()))),
+        expected: ExecState::Complete(Value::string("image/png")),
     })
 }
