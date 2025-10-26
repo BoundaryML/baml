@@ -7,8 +7,10 @@ description = "BAML Virtual Machine"
 license-file.workspace = true
 
 [dependencies]
+anyhow = { workspace = true }
 arraystring.workspace = true
 colored.workspace = true
+indexmap = { workspace = true }
 tokio = { workspace = true }
 baml-types = { path = "../baml-lib/baml-types" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }

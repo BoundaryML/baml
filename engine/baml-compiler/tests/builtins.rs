@@ -1,6 +1,6 @@
 //! Compiler tests for built-in method calls.
 
-use baml_vm::{GlobalIndex, Instruction, ObjectIndex};
+use baml_vm::test::{Instruction, Object, Value};
 
 mod common;
 use common::{assert_compiles, Program};
@@ -17,11 +17,11 @@ fn builtin_method_call() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::LoadConst(1),
-                Instruction::LoadConst(2),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::LoadConst(Value::Int(3)),
                 Instruction::AllocArray(3),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(5)),
+                Instruction::LoadGlobal(Value::Object(Object::function("baml.Array.length"))),
                 Instruction::LoadVar(1),
                 // call with one argument (self)
                 Instruction::Call(1),
@@ -49,9 +49,9 @@ fn fetch_as() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadGlobal(GlobalIndex::from_raw(51)),
-                Instruction::LoadConst(0),
-                Instruction::LoadConst(1),
+                Instruction::LoadGlobal(Value::Object(Object::function("baml.fetch_as"))),
+                Instruction::LoadConst(Value::Object(Object::string("https://dummyjson.com/todos/1"))),
+                Instruction::LoadConst(Value::Object(Object::class("DummyJsonTodo"))),
                 Instruction::DispatchFuture(2),
                 Instruction::Await,
                 Instruction::Return,
@@ -86,25 +86,26 @@ fn fetch_as_with_request_param() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadGlobal(GlobalIndex::from_raw(51)),
-                Instruction::AllocInstance(ObjectIndex::from_raw(7)),
+                Instruction::LoadGlobal(Value::Object(Object::function("baml.fetch_as"))),
+                Instruction::AllocInstance(Value::Object(Object::class("baml.HttpRequest"))),
                 Instruction::Copy(0),
-                Instruction::LoadConst(0),
-                Instruction::AllocVariant(ObjectIndex::from_raw(10)),
+                Instruction::LoadConst(Value::Int(1)), // Enum variant index for Post
+                Instruction::AllocVariant(Value::Object(Object::enm("baml.HttpMethod"))),
                 Instruction::StoreField(1),
                 Instruction::Copy(0),
-                Instruction::LoadConst(1),
+                Instruction::LoadConst(Value::Object(Object::string("https://dummyjson.com/todos/add"))),
                 Instruction::StoreField(0),
                 Instruction::Copy(0),
-                Instruction::LoadConst(2),
-                Instruction::LoadConst(3),
-                Instruction::LoadConst(4),
-                Instruction::LoadConst(5),
-                Instruction::LoadConst(6),
-                Instruction::LoadConst(7),
+                // Map values first, then keys
+                Instruction::LoadConst(Value::Object(Object::string("Buy milk"))),
+                Instruction::LoadConst(Value::Bool(false)),
+                Instruction::LoadConst(Value::Int(5)),
+                Instruction::LoadConst(Value::Object(Object::string("todo"))),
+                Instruction::LoadConst(Value::Object(Object::string("completed"))),
+                Instruction::LoadConst(Value::Object(Object::string("userId"))),
                 Instruction::AllocMap(3),
                 Instruction::StoreField(4),
-                Instruction::LoadConst(8),
+                Instruction::LoadConst(Value::Object(Object::class("DummyJsonTodo"))),
                 Instruction::DispatchFuture(2),
                 Instruction::Await,
                 Instruction::Return,

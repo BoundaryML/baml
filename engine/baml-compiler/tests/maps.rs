@@ -1,6 +1,7 @@
 //! Compiler tests for map operations.
 
-use baml_vm::{BinOp, GlobalIndex, Instruction};
+use baml_vm::BinOp;
+use baml_vm::test::{Instruction, Object, Value};
 
 mod common;
 use common::{assert_compiles, Program};
@@ -22,8 +23,8 @@ fn create_and_access() -> anyhow::Result<()> {
             (
                 "CreateMap",
                 vec![
-                    Instruction::LoadConst(0),
-                    Instruction::LoadConst(1),
+                    Instruction::LoadConst(Value::Object(Object::string("world"))),
+                    Instruction::LoadConst(Value::Object(Object::string("hello"))),
                     Instruction::AllocMap(1),
                     Instruction::Return,
                 ],
@@ -31,10 +32,10 @@ fn create_and_access() -> anyhow::Result<()> {
             (
                 "UseMap",
                 vec![
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                    Instruction::LoadGlobal(Value::Object(Object::function("CreateMap"))),
                     Instruction::Call(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadConst(0),
+                    Instruction::LoadConst(Value::Object(Object::string("hello"))),
                     Instruction::LoadMapElement,
                     Instruction::Return,
                 ],
@@ -60,8 +61,8 @@ fn access_no_key() -> anyhow::Result<()> {
             (
                 "CreateMap",
                 vec![
-                    Instruction::LoadConst(0),
-                    Instruction::LoadConst(1),
+                    Instruction::LoadConst(Value::Object(Object::string("world"))),
+                    Instruction::LoadConst(Value::Object(Object::string("hello"))),
                     Instruction::AllocMap(1),
                     Instruction::Return,
                 ],
@@ -69,10 +70,10 @@ fn access_no_key() -> anyhow::Result<()> {
             (
                 "UseMapNoKey",
                 vec![
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                    Instruction::LoadGlobal(Value::Object(Object::function("CreateMap"))),
                     Instruction::Call(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadConst(0),
+                    Instruction::LoadConst(Value::Object(Object::string("world"))),
                     Instruction::LoadMapElement,
                     Instruction::Return,
                 ],
@@ -101,8 +102,8 @@ fn contains() -> anyhow::Result<()> {
             (
                 "CreateMapJSON",
                 vec![
-                    Instruction::LoadConst(0),
-                    Instruction::LoadConst(1),
+                    Instruction::LoadConst(Value::Object(Object::string("world"))),
+                    Instruction::LoadConst(Value::Object(Object::string("hello"))),
                     Instruction::AllocMap(1),
                     Instruction::Return,
                 ],
@@ -110,20 +111,20 @@ fn contains() -> anyhow::Result<()> {
             (
                 "UseMapContains",
                 vec![
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                    Instruction::LoadGlobal(Value::Object(Object::function("CreateMapJSON"))),
                     Instruction::Call(0),
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(9)),
+                    Instruction::LoadGlobal(Value::Object(Object::function("baml.Map.has"))),
                     Instruction::LoadVar(1),
-                    Instruction::LoadConst(0),
+                    Instruction::LoadConst(Value::Object(Object::string("hello"))),
                     Instruction::Call(2),
                     Instruction::JumpIfFalse(6),
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
-                    Instruction::LoadConst(1),
+                    Instruction::LoadConst(Value::Object(Object::string("hello"))),
                     Instruction::LoadMapElement,
                     Instruction::Jump(3),
                     Instruction::Pop(1),
-                    Instruction::LoadConst(2),
+                    Instruction::LoadConst(Value::Object(Object::string("hi"))),
                     Instruction::Return,
                 ],
             ),
@@ -148,25 +149,25 @@ fn modify() -> anyhow::Result<()> {
         expected: vec![(
             "EditMapKey",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::LoadConst(1),
+                Instruction::LoadConst(Value::Int(123)),
+                Instruction::LoadConst(Value::Object(Object::string("hi"))),
                 Instruction::AllocMap(1),
                 Instruction::LoadVar(1),
-                Instruction::LoadConst(2),
-                Instruction::LoadConst(3),
-                Instruction::LoadConst(4),
+                Instruction::LoadConst(Value::Object(Object::string("hi"))),
+                Instruction::LoadConst(Value::Int(42)),
+                Instruction::LoadConst(Value::Int(4)),
                 Instruction::BinOp(BinOp::Sub),
                 Instruction::StoreMapElement,
                 Instruction::LoadVar(1),
-                Instruction::LoadConst(5),
+                Instruction::LoadConst(Value::Object(Object::string("hi"))),
                 Instruction::Copy(1),
                 Instruction::Copy(1),
                 Instruction::LoadMapElement,
-                Instruction::LoadConst(6),
+                Instruction::LoadConst(Value::Int(4)),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreMapElement,
                 Instruction::LoadVar(1),
-                Instruction::LoadConst(7),
+                Instruction::LoadConst(Value::Object(Object::string("hi"))),
                 Instruction::LoadMapElement,
                 Instruction::Return,
             ],
@@ -189,12 +190,12 @@ fn len() -> anyhow::Result<()> {
         expected: vec![(
             "Len",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::LoadConst(1),
-                Instruction::LoadConst(2),
-                Instruction::LoadConst(3),
+                Instruction::LoadConst(Value::Int(123)),
+                Instruction::LoadConst(Value::Int(456)),
+                Instruction::LoadConst(Value::Object(Object::string("hi"))),
+                Instruction::LoadConst(Value::Object(Object::string("it_works"))),
                 Instruction::AllocMap(2),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(7)),
+                Instruction::LoadGlobal(Value::Object(Object::function("baml.Map.length"))),
                 Instruction::LoadVar(1),
                 Instruction::Call(1),
                 Instruction::Return,

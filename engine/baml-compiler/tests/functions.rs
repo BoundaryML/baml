@@ -1,6 +1,6 @@
 //! Compiler tests for function calls, parameters, and returns.
 
-use baml_vm::{GlobalIndex, Instruction};
+use baml_vm::test::{Instruction, Object, Value};
 
 mod common;
 use common::{assert_compiles, Program};
@@ -18,11 +18,11 @@ fn return_function_call() -> anyhow::Result<()> {
             }
         ",
         expected: vec![
-            ("one", vec![Instruction::LoadConst(0), Instruction::Return]),
+            ("one", vec![Instruction::LoadConst(Value::Int(1)), Instruction::Return]),
             (
                 "main",
                 vec![
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                    Instruction::LoadGlobal(Value::Object(Object::function("one"))),
                     Instruction::Call(0),
                     Instruction::Return,
                 ],
@@ -45,11 +45,11 @@ fn call_function() -> anyhow::Result<()> {
             }
         ",
         expected: vec![
-            ("two", vec![Instruction::LoadConst(0), Instruction::Return]),
+            ("two", vec![Instruction::LoadConst(Value::Int(2)), Instruction::Return]),
             (
                 "main",
                 vec![
-                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                    Instruction::LoadGlobal(Value::Object(Object::function("two"))),
                     Instruction::Call(0),
                     Instruction::LoadVar(1),
                     Instruction::Return,
@@ -67,7 +67,7 @@ fn function_returning_string() -> anyhow::Result<()> {
                 "hello"
             }
         "#,
-        expected: vec![("main", vec![Instruction::LoadConst(0), Instruction::Return])],
+        expected: vec![("main", vec![Instruction::LoadConst(Value::Object(Object::string("hello"))), Instruction::Return])],
     })
 }
 
@@ -93,8 +93,8 @@ fn mutable_variables() -> anyhow::Result<()> {
             (
                 "DeclareMutableInFunction",
                 vec![
-                    Instruction::LoadConst(0),
-                    Instruction::LoadConst(1),
+                    Instruction::LoadConst(Value::Int(3)),
+                    Instruction::LoadConst(Value::Int(5)),
                     Instruction::StoreVar(2),
                     Instruction::LoadVar(2),
                     Instruction::Return,
@@ -103,7 +103,7 @@ fn mutable_variables() -> anyhow::Result<()> {
             (
                 "MutableInArg",
                 vec![
-                    Instruction::LoadConst(0),
+                    Instruction::LoadConst(Value::Int(3)),
                     Instruction::StoreVar(1),
                     Instruction::LoadVar(1),
                     Instruction::Return,
