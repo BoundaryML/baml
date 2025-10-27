@@ -91,7 +91,10 @@ fn abort(id: u32) {
 
 /// Abort all currently active operations (used during shutdown/flush)
 pub(crate) fn abort_all_active_operations() {
-    let ids: Vec<u32> = OPERATION_TRIGGERS.iter().map(|entry| *entry.key()).collect();
+    let ids: Vec<u32> = OPERATION_TRIGGERS
+        .iter()
+        .map(|entry| *entry.key())
+        .collect();
     for id in ids {
         abort(id);
     }
