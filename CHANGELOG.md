@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.212.0](https://github.com/boundaryml/baml/compare/0.211.2..0.212.0) - 2025-10-27
+
+### Bug Fixes
+
+- Fix issue where a test would stay stuck in running if there was a wasm panic (#2601) - ([ac0ede8](https://github.com/boundaryml/baml/commit/ac0ede85306c6dada5423faeb651aa0288497410)) - aaronvg
+- Move class descriptions inside braces for better formatting (#2646) - ([71cc0fa](https://github.com/boundaryml/baml/commit/71cc0fa7c7db0f9243dc248ac847835652f44c57)) - hellovai
+- fix literal return values (#2663)
+- actually emit the version when opening baml file to make LSP switch versions (#2612) - ([700bd39](https://github.com/boundaryml/baml/commit/700bd39b22c7265905b8385e09fed595a9735e19)) - aaronvg
+
+Fixes several typechecker subsumption bugs - ([716b7b1](https://github.com/boundaryml/baml/commit/716b7b120e91c9735bdd68bc7a6580318c3d7000)) - Greg Hale
+
+### Features
+- Configurable timeouts (#2628) - ([276f878](https://github.com/boundaryml/baml/commit/276f878e9517037580ca5b6a9306a2189295795d)) - Greg Hale
+- Add configurable media URL resolution via media_url_resolver (#2578) - ([8530e7f](https://github.com/boundaryml/baml/commit/8530e7fb39cfe36647bf7a61ccaee0591e4efb28)) - hellovai
+- Add Windows support for Go BAML client (#2619) - ([5430aa6](https://github.com/boundaryml/baml/commit/5430aa61c22727a6f43d392e30fd9e75d905c18c)) - hellovai
+- Add placeholder API keys for new VSCode playground users (#2640) - ([cc995c2](https://github.com/boundaryml/baml/commit/cc995c21a903dab74581efee8ee78976a13e287d)) - hellovai
+- Add block-level @@description for BAML classes (#2643) - ([bbe489a](https://github.com/boundaryml/baml/commit/bbe489a7623c31077320e9fa5d4c54d8e1b803e9)) - hellovai
+- Add type narrowing for instanceof checks in BAML (#2656) - ([46c3266](https://github.com/boundaryml/baml/commit/46c32663fe42d40ef96402b298b2f05c75c696fc)) - hellovai
+
+### Miscellaneous Chores
+- **(zed)** get zed release working again (#2625) - ([5be2647](https://github.com/boundaryml/baml/commit/5be2647c08782d1e411a56aa22b675dee4d89568)) - Sam Lijin
+- set up sync path for engine/zed to zed-industries/extensions (#2626) - ([8f85ba7](https://github.com/boundaryml/baml/commit/8f85ba70c001196e01c6c683dbe247119113e132)) - Sam Lijin
+- ban println to prevent lsp crashes, since it uses stdio to communicate (#2659) - ([7f9e749](https://github.com/boundaryml/baml/commit/7f9e749f7f990a8f49b9ffd8e78f175ee834b5e5)) - aaronvg
+- Evaluation tests suite (#2660) - ([ce250d4](https://github.com/boundaryml/baml/commit/ce250d468cf2eadb023293412d887318f471e138)) - Greg Hale
+- Bump version to 0.212.0 - ([d6975ea](https://github.com/boundaryml/baml/commit/d6975eafdf74fec1de68ce9e1813a95a9607ed5c)) - Aaron Villalpando
+
 ## [0.211.2](https://github.com/boundaryml/baml/compare/0.211.1..0.211.2) - 2025-10-12
 
 ### Bug Fixes
