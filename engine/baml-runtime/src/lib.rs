@@ -394,9 +394,9 @@ impl Drop for TracingCallGuard<'_> {
             {
                 // For WASM, we need to spawn a local task since Drop can't be async
                 let tracer = self.tracer_wrapper.get_or_create_tracer(&self.env_vars);
-                let ctx = self.ctx;
+                let ctx = self.ctx.clone();
                 wasm_bindgen_futures::spawn_local(async move {
-                    match tracer.finish_baml_call(call, ctx, &result).await {
+                    match tracer.finish_baml_call(call, &ctx, &result).await {
                         Ok(_) => {}
                         Err(e) => log::debug!("Finished call in drop handler: {e}"),
                     }
