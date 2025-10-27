@@ -28,3 +28,4 @@ share/python-wheels/
 MANIFEST
 
 trace-events-debug.json
+trace-events-debug.jsonl
