@@ -201,7 +201,7 @@ defaults = ["skip-integ-tests"]
 internal = []
 skip-integ-tests = []
 # Use the THIR interpreter runtime instead of the VM bytecode runtime
-interpreter = []
+thir-interpreter = []
 
 
 [dev-dependencies]
