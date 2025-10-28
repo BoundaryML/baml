@@ -238,7 +238,7 @@ jobs:
           # Build baml_cffi shared library
           cargo build --package baml_cffi
 
-          BAML_LIBRARY_PATH=${{ github.workspace }}/engine/target/debug/baml_cffi.so
+          export BAML_LIBRARY_PATH=${{ github.workspace }}/engine/target/debug/libbaml_cffi.so
           # Run tests
           cargo test --features skip-integ-tests
         working-directory: engine
