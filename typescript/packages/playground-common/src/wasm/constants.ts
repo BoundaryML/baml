@@ -1,1 +1,0 @@
-export const MAX_SAFE_VALUE_i32 = 2147483647;

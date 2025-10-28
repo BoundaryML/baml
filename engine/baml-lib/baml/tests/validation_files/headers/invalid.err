@@ -1,7 +1,0 @@
-[1;91merror[0m: [1mError validating: This line is invalid. It does not start with any known Baml schema keyword.[0m
-  [1;94m-->[0m  [4mtests/validation_files/headers/invalid.baml:11[0m
-[1;94m   | [0m
-[1;94m10 | [0m
-[1;94m11 | [0m[1;91mfunction MixedOnSameLine() -> string {[0m
-[1;94m12 | [0m    let x = "hello" ## Inline Header // Should fail
-[1;94m   | [0m

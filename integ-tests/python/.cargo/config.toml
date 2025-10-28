@@ -1,3 +1,0 @@
-# to enable json logging we need this serialization feaure. https://docs.rs/tracing-subscriber/latest/tracing_subscriber/#unstable-features
-[build]
-rustflags = ["--cfg", "tracing_unstable"]

@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-linux:
     strategy:
       fail-fast: false
       matrix:
@@ -26,7 +26,8 @@ jobs:
           - platform: aarch64-linux
           - platform: aarch64-linux-musl
           - platform: arm-linux
-          - platform: arm64-darwin
+          # Note: macOS builds moved to build-macos job for platform-specific versions
+          # - platform: arm64-darwin
           # - platform: x64-mingw32
           # - platform: x86-mingw-ucrt
 
@@ -119,6 +120,51 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gem-${{ matrix._.platform }}
+          path: engine/language_client_ruby/pkg/*.gem
+          if-no-files-found: error
+
+  build-macos:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-13
+            ruby-version: "3.4"
+          - os: macos-14
+            ruby-version: "3.4"
+    name: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: engine/language_client_ruby
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby-version }}
+          bundler-cache: false
+      
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+      
+      - name: Install dependencies
+        run: bundle install
+      
+      - name: Build native gem
+        run: |
+          bundle exec rake compile
+          bundle exec rake build
+      
+      - name: Show built gems
+        run: ls -la pkg/*.gem
+      
+      - name: Upload gem
+        uses: actions/upload-artifact@v4
+        with:
+          name: gem-${{ matrix.os }}
           path: engine/language_client_ruby/pkg/*.gem
           if-no-files-found: error
 
