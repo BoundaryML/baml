@@ -2,6 +2,25 @@ use anyhow::Result;
 use baml_runtime::{cli::RuntimeCliDefaults, BamlRuntime};
 use clap::{Parser, Subcommand};
 
+/// Environment variable name to enable internal CLI commands
+const INTERNAL_CLI_ENV_VAR: &str = "BAML_INTERNAL_CLI";
+
+/// Check if internal CLI commands are enabled via environment variable
+fn is_internal_cli_enabled() -> bool {
+    std::env::var(INTERNAL_CLI_ENV_VAR).is_ok()
+}
+
+/// Check if internal CLI commands are enabled, returning an error if not
+fn require_internal_cli_enabled() -> Result<()> {
+    if !is_internal_cli_enabled() {
+        anyhow::bail!(
+            "This is an internal command. Set the {} environment variable to enable it.",
+            INTERNAL_CLI_ENV_VAR
+        );
+    }
+    Ok(())
+}
+
 #[derive(Parser, Debug)]
 #[command(author, version, about = "A CLI tool for working with BAML. Learn more at https://docs.boundaryml.com.", long_about = None)]
 #[command(styles = clap_cargo::style::CLAP_STYLING)]
@@ -55,16 +74,16 @@ pub(crate) enum Commands {
     #[command(about = "Run BAML tests")]
     Test(baml_runtime::cli::testing::TestArgs),
 
-    #[command(about = "Print HIR from BAML files")]
+    #[command(about = "Print HIR from BAML files", hide = true)]
     DumpHIR(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
 
-    #[command(about = "Print Bytecode from BAML files")]
+    #[command(about = "Print Bytecode from BAML files", hide = true)]
     DumpBytecode(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
 
-    #[command(about = "Starts a language server", name = "lsp")]
+    #[command(about = "Starts a language server", name = "lsp", hide = true)]
     LanguageServer(crate::lsp::LanguageServerArgs),
 
-    #[command(about = "Start an interactive REPL for BAML expressions")]
+    #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
     Repl(baml_runtime::cli::repl::ReplArgs),
 }
 
@@ -201,6 +220,7 @@ impl RuntimeCli {
                 }
             }
             Commands::DumpHIR(args) => {
+                require_internal_cli_enabled()?;
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
                 match args.run(
                     baml_runtime::cli::dump_intermediate::DumpType::HIR,
@@ -214,6 +234,7 @@ impl RuntimeCli {
                 }
             }
             Commands::DumpBytecode(args) => {
+                require_internal_cli_enabled()?;
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
                 match args.run(
                     baml_runtime::cli::dump_intermediate::DumpType::Bytecode,
@@ -226,17 +247,23 @@ impl RuntimeCli {
                     }
                 }
             }
-            Commands::LanguageServer(args) => match args.run() {
-                Ok(()) => Ok(crate::ExitCode::Success),
-                Err(_) => Ok(crate::ExitCode::Other),
-            },
-            Commands::Repl(args) => match t.block_on(async { args.run().await }) {
-                Ok(()) => Ok(crate::ExitCode::Success),
-                Err(e) => {
-                    eprintln!("Error: {e}");
-                    Ok(crate::ExitCode::Other)
+            Commands::LanguageServer(args) => {
+                require_internal_cli_enabled()?;
+                match args.run() {
+                    Ok(()) => Ok(crate::ExitCode::Success),
+                    Err(_) => Ok(crate::ExitCode::Other),
                 }
-            },
+            }
+            Commands::Repl(args) => {
+                require_internal_cli_enabled()?;
+                match t.block_on(async { args.run().await }) {
+                    Ok(()) => Ok(crate::ExitCode::Success),
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        Ok(crate::ExitCode::Other)
+                    }
+                }
+            }
         }
     }
 }
