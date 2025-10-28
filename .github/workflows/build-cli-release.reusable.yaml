@@ -15,6 +15,7 @@ on:
   push:
     branches:
       - sam/mise-protoc-gen-go
+      - aaron/fix-windows
 env:
   MACOSX_DEPLOYMENT_TARGET: "10.13"
   # Turbo remote caching
@@ -82,10 +83,17 @@ jobs:
       - name: Setup Go
         uses: ./.github/actions/setup-go
 
-
       - uses: jdx/mise-action@v2
+        if: matrix._.os != 'windows-2022'
         with:
           install_args: "protoc-gen-go"
+
+      - name: Install protoc-gen-go (Windows)
+        if: matrix._.os == 'windows-2022'
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34.1
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+        shell: bash
 
       - name: Test protoc-gen-go availability
         id: protoc_gen_go_setup
