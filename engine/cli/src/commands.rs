@@ -3,7 +3,7 @@ use baml_runtime::{cli::RuntimeCliDefaults, BamlRuntime};
 use clap::{Parser, Subcommand};
 
 /// Environment variable name to enable internal CLI commands
-const INTERNAL_CLI_ENV_VAR: &str = "BAML_INTERNAL_CLI";
+pub(crate) const INTERNAL_CLI_ENV_VAR: &str = "BAML_INTERNAL_CLI";
 
 /// Check if internal CLI commands are enabled via environment variable
 fn is_internal_cli_enabled() -> bool {
@@ -74,16 +74,16 @@ pub(crate) enum Commands {
     #[command(about = "Run BAML tests")]
     Test(baml_runtime::cli::testing::TestArgs),
 
-    #[command(about = "Print HIR from BAML files", hide = true)]
+    #[command(about = "Print HIR from BAML files")]
     DumpHIR(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
 
-    #[command(about = "Print Bytecode from BAML files", hide = true)]
+    #[command(about = "Print Bytecode from BAML files")]
     DumpBytecode(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
 
-    #[command(about = "Starts a language server", name = "lsp", hide = true)]
+    #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
 
-    #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
+    #[command(about = "Start an interactive REPL for BAML expressions")]
     Repl(baml_runtime::cli::repl::ReplArgs),
 }
 

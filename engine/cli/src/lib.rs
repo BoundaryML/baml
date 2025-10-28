@@ -8,7 +8,6 @@ pub(crate) mod lsp;
 pub(crate) mod propelauth;
 pub(crate) mod tui;
 use anyhow::Result;
-use clap::Parser;
 
 #[derive(Debug, Clone)]
 pub enum ExitCode {
@@ -63,7 +62,24 @@ pub fn run_cli(
     argv: Vec<String>,
     caller_type: baml_runtime::RuntimeCliDefaults,
 ) -> Result<ExitCode> {
-    let mut cli = commands::RuntimeCli::parse_from(argv);
+    use clap::{CommandFactory, FromArgMatches};
+
+    // Build the command and conditionally hide internal subcommands
+    let mut cmd = commands::RuntimeCli::command();
+
+    // If the internal CLI env var is not set, hide the internal commands
+    if std::env::var(commands::INTERNAL_CLI_ENV_VAR).is_err() {
+        cmd = cmd
+            .mut_subcommand("dump-hir", |subcmd| subcmd.hide(true))
+            .mut_subcommand("dump-bytecode", |subcmd| subcmd.hide(true))
+            .mut_subcommand("lsp", |subcmd| subcmd.hide(true))
+            .mut_subcommand("repl", |subcmd| subcmd.hide(true));
+    }
+
+    // Parse the arguments with our modified command
+    let matches = cmd.get_matches_from(argv);
+    let mut cli = commands::RuntimeCli::from_arg_matches(&matches)?;
+
     if !matches!(cli.command, commands::Commands::Test(_)) {
         // We only need to set the exit handlers if we're not running tests
         // and the caller is Python.
