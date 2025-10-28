@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-linux:
     strategy:
       fail-fast: false
       matrix:
@@ -26,7 +26,6 @@ jobs:
           - platform: aarch64-linux
           - platform: aarch64-linux-musl
           - platform: arm-linux
-          - platform: arm64-darwin
           # - platform: x64-mingw32
           # - platform: x86-mingw-ucrt
 
@@ -122,7 +121,51 @@ jobs:
           path: engine/language_client_ruby/pkg/*.gem
           if-no-files-found: error
 
-      # - run: |
-      #     for i in $(ls pkg/*.gem); do
-      #       gem push $i
-      #     done
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-13
+            ruby-version: "3.4"
+          - os: macos-14
+            ruby-version: "3.4"
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: engine/language_client_ruby
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby-version }}
+          bundler-cache: false
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          cache: false
+
+      - name: Install dependencies
+        run: bundle install
+
+      - name: Compile native extension
+        run: bundle exec rake compile
+
+      - name: Build gem
+        run: bundle exec rake build
+
+      - name: Show built gem
+        run: find pkg -name '*.gem'
+
+      - name: Upload Ruby artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gem-${{ matrix.os }}
+          path: engine/language_client_ruby/pkg/*.gem
+          if-no-files-found: error
