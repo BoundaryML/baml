@@ -25,14 +25,16 @@ import type { Checked, Check } from "./types"
 import type * as types from "./types"
 import type {AllNullable, BooleanEdgeCases, CircularReference, DeepRecursion, EmptyCollections, InnerNullable, LargeStructure, MixedEdgeCases, NestedNullable, NullEdgeCases, NumberEdgeCases, OptionalEverything, OuterNullable, SomeNullable, SpecialCharacters, User, VeryLongStrings} from "./types"
 import type TypeBuilder from "./type_builder"
+import type * as events from "./events"
 
 type TickReason = "Unknown";
 
-type BamlCallOptions = {
+type BamlCallOptions<EventsT = never> = {
 tb?: TypeBuilder
 clientRegistry?: ClientRegistry
 env?: Record<string, string | undefined>
   onTick?: (reason: TickReason, log: FunctionLog | null) => void
+  events?: EventsT
   }
 
   export class AsyncHttpRequest {
@@ -41,7 +43,7 @@ env?: Record<string, string | undefined>
   
   async TestCircularReference(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -66,7 +68,7 @@ env?: Record<string, string | undefined>
       
   async TestDeepRecursion(
   depth: number,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -91,7 +93,7 @@ env?: Record<string, string | undefined>
       
   async TestEmptyCollections(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -116,7 +118,7 @@ env?: Record<string, string | undefined>
       
   async TestLargeStructure(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -141,7 +143,7 @@ env?: Record<string, string | undefined>
       
   async TestNumberEdgeCases(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -166,7 +168,7 @@ env?: Record<string, string | undefined>
       
   async TestSpecialCharacters(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -197,7 +199,7 @@ env?: Record<string, string | undefined>
       
       async TestCircularReference(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -222,7 +224,7 @@ env?: Record<string, string | undefined>
           
       async TestDeepRecursion(
       depth: number,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -247,7 +249,7 @@ env?: Record<string, string | undefined>
           
       async TestEmptyCollections(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -272,7 +274,7 @@ env?: Record<string, string | undefined>
           
       async TestLargeStructure(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -297,7 +299,7 @@ env?: Record<string, string | undefined>
           
       async TestNumberEdgeCases(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -322,7 +324,7 @@ env?: Record<string, string | undefined>
           
       async TestSpecialCharacters(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };

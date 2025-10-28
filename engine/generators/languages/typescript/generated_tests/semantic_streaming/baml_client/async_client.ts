@@ -30,6 +30,7 @@ import { AsyncHttpRequest, AsyncHttpStreamRequest } from "./async_request"
 import { LlmResponseParser, LlmStreamParser } from "./parser"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX,
 DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
+import type * as events from "./events"
 
 /**
 * @deprecated Use RecursivePartialNull from 'baml_client/types' instead.
@@ -38,7 +39,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
     type TickReason = "Unknown";
 
-    type BamlCallOptions = {
+    type BamlCallOptions<WatchersT = never> = {
     tb?: TypeBuilder
     clientRegistry?: ClientRegistry
     collector?: Collector | Collector[]
@@ -46,6 +47,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
       tags?: Record<string, string>
         signal?: AbortSignal
         onTick?: (reason: TickReason, log: FunctionLog | null) => void
+        watchers?: WatchersT
         }
 
         export class BamlAsyncClient {
@@ -96,7 +98,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         
         async MakeClassWithBlockDone(
         
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.ClassWithBlockDone> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -134,6 +136,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.ClassWithBlockDone
             } catch (error) {
@@ -143,7 +146,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async MakeClassWithExternalDone(
         
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.ClassWithoutDone> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -181,6 +184,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.ClassWithoutDone
             } catch (error) {
@@ -190,7 +194,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async MakeSemanticContainer(
         
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.SemanticContainer> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -228,6 +232,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.SemanticContainer
             } catch (error) {
@@ -251,7 +256,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
             MakeClassWithBlockDone(
             
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<types.ClassWithBlockDone, types.ClassWithBlockDone>
               {
               try {
@@ -317,7 +322,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             MakeClassWithExternalDone(
             
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<types.ClassWithoutDone, types.ClassWithoutDone>
               {
               try {
@@ -383,7 +388,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             MakeSemanticContainer(
             
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.SemanticContainer, types.SemanticContainer>
               {
               try {

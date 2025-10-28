@@ -30,6 +30,7 @@ import { AsyncHttpRequest, AsyncHttpStreamRequest } from "./async_request"
 import { LlmResponseParser, LlmStreamParser } from "./parser"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX,
 DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
+import type * as events from "./events"
 
 /**
 * @deprecated Use RecursivePartialNull from 'baml_client/types' instead.
@@ -38,7 +39,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
     type TickReason = "Unknown";
 
-    type BamlCallOptions = {
+    type BamlCallOptions<WatchersT = never> = {
     tb?: TypeBuilder
     clientRegistry?: ClientRegistry
     collector?: Collector | Collector[]
@@ -46,6 +47,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
       tags?: Record<string, string>
         signal?: AbortSignal
         onTick?: (reason: TickReason, log: FunctionLog | null) => void
+        watchers?: WatchersT
         }
 
         export class BamlAsyncClient {
@@ -96,7 +98,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         
         async TestComplexMaps(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.ComplexMaps> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -134,6 +136,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.ComplexMaps
             } catch (error) {
@@ -143,7 +146,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestEdgeCaseMaps(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.EdgeCaseMaps> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -181,6 +184,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.EdgeCaseMaps
             } catch (error) {
@@ -190,7 +194,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestLargeMaps(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.SimpleMaps> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -228,6 +232,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.SimpleMaps
             } catch (error) {
@@ -237,7 +242,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestNestedMaps(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.NestedMaps> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -275,6 +280,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.NestedMaps
             } catch (error) {
@@ -284,7 +290,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestSimpleMaps(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.SimpleMaps> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -322,6 +328,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.SimpleMaps
             } catch (error) {
@@ -331,7 +338,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelBoolMap(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<Record<string, boolean>> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -369,6 +376,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as Record<string, boolean>
             } catch (error) {
@@ -378,7 +386,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelEmptyMap(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<Record<string, string>> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -416,6 +424,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as Record<string, string>
             } catch (error) {
@@ -425,7 +434,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelFloatMap(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<Record<string, number>> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -463,6 +472,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as Record<string, number>
             } catch (error) {
@@ -472,7 +482,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelIntMap(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<Record<string, number>> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -510,6 +520,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as Record<string, number>
             } catch (error) {
@@ -519,7 +530,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelMapOfArrays(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<Record<string, number[]>> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -557,6 +568,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as Record<string, number[]>
             } catch (error) {
@@ -566,7 +578,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelMapOfObjects(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<Record<string, types.User>> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -604,6 +616,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as Record<string, types.User>
             } catch (error) {
@@ -613,7 +626,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelMapWithNullable(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<Record<string, string | null>> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -651,6 +664,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as Record<string, string | null>
             } catch (error) {
@@ -660,7 +674,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelNestedMap(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<Record<string, Record<string, string>>> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -698,6 +712,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as Record<string, Record<string, string>>
             } catch (error) {
@@ -707,7 +722,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelStringMap(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<Record<string, string>> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -745,6 +760,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as Record<string, string>
             } catch (error) {
@@ -768,7 +784,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
             TestComplexMaps(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.ComplexMaps, types.ComplexMaps>
               {
               try {
@@ -834,7 +850,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestEdgeCaseMaps(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.EdgeCaseMaps, types.EdgeCaseMaps>
               {
               try {
@@ -900,7 +916,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestLargeMaps(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.SimpleMaps, types.SimpleMaps>
               {
               try {
@@ -966,7 +982,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestNestedMaps(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.NestedMaps, types.NestedMaps>
               {
               try {
@@ -1032,7 +1048,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestSimpleMaps(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.SimpleMaps, types.SimpleMaps>
               {
               try {
@@ -1098,7 +1114,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelBoolMap(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<Record<string, boolean>, Record<string, boolean>>
               {
               try {
@@ -1164,7 +1180,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelEmptyMap(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<Record<string, string>, Record<string, string>>
               {
               try {
@@ -1230,7 +1246,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelFloatMap(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<Record<string, number>, Record<string, number>>
               {
               try {
@@ -1296,7 +1312,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelIntMap(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<Record<string, number>, Record<string, number>>
               {
               try {
@@ -1362,7 +1378,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelMapOfArrays(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<Record<string, number[]>, Record<string, number[]>>
               {
               try {
@@ -1428,7 +1444,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelMapOfObjects(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<Record<string, partial_types.User>, Record<string, types.User>>
               {
               try {
@@ -1494,7 +1510,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelMapWithNullable(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<Record<string, string | null>, Record<string, string | null>>
               {
               try {
@@ -1560,7 +1576,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelNestedMap(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<Record<string, Record<string, string>>, Record<string, Record<string, string>>>
               {
               try {
@@ -1626,7 +1642,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelStringMap(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<Record<string, string>, Record<string, string>>
               {
               try {

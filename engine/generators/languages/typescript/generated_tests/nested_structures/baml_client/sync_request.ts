@@ -24,11 +24,13 @@ import type { Checked, Check } from "./types"
 import type * as types from "./types"
 import type {Address, Approval, Budget, Company, CompanyMetadata, ComplexNested, Contact, Coordinates, DeeplyNested, Department, DisplaySettings, Employee, Level1, Level2, Level3, Level4, Level5, Metadata, Milestone, NotificationSettings, Preferences, PrivacySettings, Profile, Project, RecursiveStructure, SimpleNested, SocialLinks, Task, User, UserSettings} from "./types"
 import type TypeBuilder from "./type_builder"
+import type * as events from "./events"
 
-type BamlCallOptions = {
+type BamlCallOptions<EventsT = never> = {
   tb?: TypeBuilder
   clientRegistry?: ClientRegistry
   env?: Record<string, string | undefined>
+  events?: EventsT
 }
 
 export class HttpRequest {
@@ -37,7 +39,7 @@ export class HttpRequest {
   
   TestComplexNested(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -62,7 +64,7 @@ export class HttpRequest {
   
   TestDeeplyNested(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -87,7 +89,7 @@ export class HttpRequest {
   
   TestRecursiveStructure(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -112,7 +114,7 @@ export class HttpRequest {
   
   TestSimpleNested(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -143,7 +145,7 @@ export class HttpStreamRequest {
   
   TestComplexNested(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -168,7 +170,7 @@ export class HttpStreamRequest {
   
   TestDeeplyNested(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -193,7 +195,7 @@ export class HttpStreamRequest {
   
   TestRecursiveStructure(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -218,7 +220,7 @@ export class HttpStreamRequest {
   
   TestSimpleNested(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };

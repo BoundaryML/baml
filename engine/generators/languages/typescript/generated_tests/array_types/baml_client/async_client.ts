@@ -30,6 +30,7 @@ import { AsyncHttpRequest, AsyncHttpStreamRequest } from "./async_request"
 import { LlmResponseParser, LlmStreamParser } from "./parser"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX,
 DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
+import type * as events from "./events"
 
 /**
 * @deprecated Use RecursivePartialNull from 'baml_client/types' instead.
@@ -38,7 +39,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
     type TickReason = "Unknown";
 
-    type BamlCallOptions = {
+    type BamlCallOptions<WatchersT = never> = {
     tb?: TypeBuilder
     clientRegistry?: ClientRegistry
     collector?: Collector | Collector[]
@@ -46,6 +47,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
       tags?: Record<string, string>
         signal?: AbortSignal
         onTick?: (reason: TickReason, log: FunctionLog | null) => void
+        watchers?: WatchersT
         }
 
         export class BamlAsyncClient {
@@ -96,7 +98,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         
         async TestEmptyArrays(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.SimpleArrays> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -134,6 +136,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.SimpleArrays
             } catch (error) {
@@ -143,7 +146,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestLargeArrays(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.SimpleArrays> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -181,6 +184,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.SimpleArrays
             } catch (error) {
@@ -190,7 +194,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestMixedArrays(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.MixedArrays> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -228,6 +232,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.MixedArrays
             } catch (error) {
@@ -237,7 +242,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestNestedArrays(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.NestedArrays> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -275,6 +280,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.NestedArrays
             } catch (error) {
@@ -284,7 +290,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestObjectArrays(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.ObjectArrays> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -322,6 +328,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.ObjectArrays
             } catch (error) {
@@ -331,7 +338,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestSimpleArrays(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.SimpleArrays> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -369,6 +376,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.SimpleArrays
             } catch (error) {
@@ -378,7 +386,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevel3DArray(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<string[][][]> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -416,6 +424,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as string[][][]
             } catch (error) {
@@ -425,7 +434,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelArrayOfMaps(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<Record<string, number>[]> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -463,6 +472,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as Record<string, number>[]
             } catch (error) {
@@ -472,7 +482,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelBoolArray(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<boolean[]> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -510,6 +520,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as boolean[]
             } catch (error) {
@@ -519,7 +530,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelEmptyArray(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<string[]> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -557,6 +568,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as string[]
             } catch (error) {
@@ -566,7 +578,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelFloatArray(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<number[]> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -604,6 +616,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as number[]
             } catch (error) {
@@ -613,7 +626,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelIntArray(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<number[]> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -651,6 +664,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as number[]
             } catch (error) {
@@ -660,7 +674,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelMixedArray(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<(string | number | boolean)[]> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -698,6 +712,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as (string | number | boolean)[]
             } catch (error) {
@@ -707,7 +722,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelNestedArray(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<number[][]> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -745,6 +760,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as number[][]
             } catch (error) {
@@ -754,7 +770,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelNullableArray(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<(string | null)[]> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -792,6 +808,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as (string | null)[]
             } catch (error) {
@@ -801,7 +818,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelObjectArray(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.User[]> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -839,6 +856,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.User[]
             } catch (error) {
@@ -848,7 +866,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestTopLevelStringArray(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<string[]> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -886,6 +904,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as string[]
             } catch (error) {
@@ -909,7 +928,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
             TestEmptyArrays(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.SimpleArrays, types.SimpleArrays>
               {
               try {
@@ -975,7 +994,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestLargeArrays(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.SimpleArrays, types.SimpleArrays>
               {
               try {
@@ -1041,7 +1060,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestMixedArrays(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.MixedArrays, types.MixedArrays>
               {
               try {
@@ -1107,7 +1126,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestNestedArrays(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.NestedArrays, types.NestedArrays>
               {
               try {
@@ -1173,7 +1192,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestObjectArrays(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.ObjectArrays, types.ObjectArrays>
               {
               try {
@@ -1239,7 +1258,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestSimpleArrays(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.SimpleArrays, types.SimpleArrays>
               {
               try {
@@ -1305,7 +1324,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevel3DArray(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<string[][][], string[][][]>
               {
               try {
@@ -1371,7 +1390,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelArrayOfMaps(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<Record<string, number>[], Record<string, number>[]>
               {
               try {
@@ -1437,7 +1456,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelBoolArray(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<boolean[], boolean[]>
               {
               try {
@@ -1503,7 +1522,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelEmptyArray(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<string[], string[]>
               {
               try {
@@ -1569,7 +1588,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelFloatArray(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<number[], number[]>
               {
               try {
@@ -1635,7 +1654,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelIntArray(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<number[], number[]>
               {
               try {
@@ -1701,7 +1720,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelMixedArray(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<(string | number | boolean)[], (string | number | boolean)[]>
               {
               try {
@@ -1767,7 +1786,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelNestedArray(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<number[][], number[][]>
               {
               try {
@@ -1833,7 +1852,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelNullableArray(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<(string | null)[], (string | null)[]>
               {
               try {
@@ -1899,7 +1918,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelObjectArray(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.User[], types.User[]>
               {
               try {
@@ -1965,7 +1984,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestTopLevelStringArray(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<string[], string[]>
               {
               try {

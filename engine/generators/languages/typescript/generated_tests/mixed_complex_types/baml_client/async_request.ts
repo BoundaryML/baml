@@ -25,14 +25,16 @@ import type { Checked, Check } from "./types"
 import type * as types from "./types"
 import type {Action, Asset, AssetMetadata, ButtonWidget, ComplexData, Condition, Configuration, ContainerWidget, DataObject, Dimensions, Environment, Error, ErrorDetail, Feature, ImageWidget, Item, KitchenSink, Node, NodeMetadata, PrimaryData, Record, ResponseMetadata, Rule, SecondaryData, Setting, SimpleCondition, Success, TertiaryData, TextWidget, UltraComplex, User, UserProfile, UserResponse, Variant, Widget} from "./types"
 import type TypeBuilder from "./type_builder"
+import type * as events from "./events"
 
 type TickReason = "Unknown";
 
-type BamlCallOptions = {
+type BamlCallOptions<EventsT = never> = {
 tb?: TypeBuilder
 clientRegistry?: ClientRegistry
 env?: Record<string, string | undefined>
   onTick?: (reason: TickReason, log: FunctionLog | null) => void
+  events?: EventsT
   }
 
   export class AsyncHttpRequest {
@@ -41,7 +43,7 @@ env?: Record<string, string | undefined>
   
   async TestKitchenSink(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -66,7 +68,7 @@ env?: Record<string, string | undefined>
       
   async TestRecursiveComplexity(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -91,7 +93,7 @@ env?: Record<string, string | undefined>
       
   async TestUltraComplex(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -122,7 +124,7 @@ env?: Record<string, string | undefined>
       
       async TestKitchenSink(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -147,7 +149,7 @@ env?: Record<string, string | undefined>
           
       async TestRecursiveComplexity(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -172,7 +174,7 @@ env?: Record<string, string | undefined>
           
       async TestUltraComplex(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };

@@ -30,6 +30,7 @@ import { AsyncHttpRequest, AsyncHttpStreamRequest } from "./async_request"
 import { LlmResponseParser, LlmStreamParser } from "./parser"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX,
 DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
+import type * as events from "./events"
 
 /**
 * @deprecated Use RecursivePartialNull from 'baml_client/types' instead.
@@ -38,7 +39,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
     type TickReason = "Unknown";
 
-    type BamlCallOptions = {
+    type BamlCallOptions<WatchersT = never> = {
     tb?: TypeBuilder
     clientRegistry?: ClientRegistry
     collector?: Collector | Collector[]
@@ -46,6 +47,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
       tags?: Record<string, string>
         signal?: AbortSignal
         onTick?: (reason: TickReason, log: FunctionLog | null) => void
+        watchers?: WatchersT
         }
 
         export class BamlAsyncClient {
@@ -96,7 +98,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         
         async TestAllNull(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.NullableTypes> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -134,6 +136,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.NullableTypes
             } catch (error) {
@@ -143,7 +146,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestAllOptionalOmitted(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.OptionalFields> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -181,6 +184,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.OptionalFields
             } catch (error) {
@@ -190,7 +194,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestMixedOptionalNullable(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.MixedOptionalNullable> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -228,6 +232,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.MixedOptionalNullable
             } catch (error) {
@@ -237,7 +242,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestNullableTypes(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.NullableTypes> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -275,6 +280,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.NullableTypes
             } catch (error) {
@@ -284,7 +290,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestOptionalFields(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.OptionalFields> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -322,6 +328,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.OptionalFields
             } catch (error) {
@@ -345,7 +352,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
             TestAllNull(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.NullableTypes, types.NullableTypes>
               {
               try {
@@ -411,7 +418,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestAllOptionalOmitted(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.OptionalFields, types.OptionalFields>
               {
               try {
@@ -477,7 +484,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestMixedOptionalNullable(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.MixedOptionalNullable, types.MixedOptionalNullable>
               {
               try {
@@ -543,7 +550,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestNullableTypes(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.NullableTypes, types.NullableTypes>
               {
               try {
@@ -609,7 +616,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestOptionalFields(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.OptionalFields, types.OptionalFields>
               {
               try {
