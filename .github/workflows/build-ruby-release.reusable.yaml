@@ -3,7 +3,7 @@ name: BAML Release - Build Ruby
 on:
   workflow_call: {}
   push:
-    branches: [gemini-fix]
+    branches: [gemini-fix, fix/ruby-macos-platform-builds]
 
 permissions:
   contents: read
