@@ -57,8 +57,12 @@ pub fn display_instruction(
     let instruction = &function.bytecode.instructions[instruction_ptr as usize];
 
     let metadata = match instruction {
-        Instruction::NotifyBlock(notification) => {
-            format!("({})", &notification.block_name)
+        Instruction::NotifyBlock(block_index) => {
+            if let Some(notification) = function.block_notifications.get(*block_index) {
+                format!("({})", &notification.block_name)
+            } else {
+                format!("(invalid block index: {})", block_index)
+            }
         }
         Instruction::LoadConst(index) => format!(
             "({})",
