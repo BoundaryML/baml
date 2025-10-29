@@ -1,7 +1,7 @@
 //! VM tests for built-in methods and operations.
 
 mod common;
-use common::{assert_vm_executes, ExecState, Object, Program, Value};
+use common::{assert_vm_executes, ExecState, Program, Value};
 
 #[test]
 fn builtin_method_call() -> anyhow::Result<()> {
