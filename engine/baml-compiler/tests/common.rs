@@ -9,12 +9,37 @@ pub struct Program {
     pub expected: Vec<(&'static str, Vec<test::Instruction>)>,
 }
 
+/// Resolve a variable index to its name using scope information.
+fn resolve_var_name(
+    var_idx: usize,
+    inst_idx: usize,
+    function: &baml_vm::Function,
+) -> anyhow::Result<String> {
+    // Get the scope ID for this instruction
+    let scope_id = function.bytecode.scopes.get(inst_idx)
+        .ok_or_else(|| anyhow::anyhow!("No scope ID for instruction at index {}", inst_idx))?;
+
+    // Get the locals for this scope
+    let scope_locals = function.locals_in_scope.get(*scope_id)
+        .ok_or_else(|| anyhow::anyhow!("No locals for scope {}", scope_id))?;
+
+    // Direct lookup: the Vec is indexed by variable index
+    scope_locals.get(var_idx)
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!(
+            "Variable index {} not found in scope {} (scope has {} variables)",
+            var_idx, scope_id, scope_locals.len()
+        ))
+}
+
 /// Convert a runtime Instruction to a test Instruction by resolving indices to values.
 fn convert_instruction(
     inst: &Instruction,
+    inst_idx: usize,
     constants: &[Value],
     objects: &ObjectPool,
     globals: &GlobalPool,
+    function: &baml_vm::Function,
 ) -> anyhow::Result<test::Instruction> {
     Ok(match inst {
         Instruction::LoadConst(idx) => {
@@ -22,8 +47,14 @@ fn convert_instruction(
             let test_value = convert_value(value, objects)?;
             test::Instruction::LoadConst(test_value)
         }
-        Instruction::LoadVar(idx) => test::Instruction::LoadVar(*idx),
-        Instruction::StoreVar(idx) => test::Instruction::StoreVar(*idx),
+        Instruction::LoadVar(idx) => {
+            let var_name = resolve_var_name(*idx, inst_idx, function)?;
+            test::Instruction::LoadVar(var_name)
+        }
+        Instruction::StoreVar(idx) => {
+            let var_name = resolve_var_name(*idx, inst_idx, function)?;
+            test::Instruction::StoreVar(var_name)
+        }
         Instruction::LoadGlobal(global_idx) => {
             let value = &globals[*global_idx];
             let test_value = convert_value(value, objects)?;
@@ -75,7 +106,12 @@ fn convert_instruction(
         Instruction::Call(n) => test::Instruction::Call(*n),
         Instruction::Return => test::Instruction::Return,
         Instruction::Assert => test::Instruction::Assert,
-        Instruction::NotifyBlock(notification) => test::Instruction::NotifyBlock(*notification),
+        Instruction::NotifyBlock(block_idx) => {
+            // Get the block notification from the function's block_notifications array
+            let notification = function.block_notifications.get(*block_idx)
+                .ok_or_else(|| anyhow::anyhow!("Block notification index {} not found", block_idx))?;
+            test::Instruction::NotifyBlock(notification.clone())
+        }
     })
 }
 
@@ -146,7 +182,8 @@ pub fn assert_compiles(input: Program) -> anyhow::Result<()> {
             .bytecode
             .instructions
             .iter()
-            .map(|inst| convert_instruction(inst, &function.bytecode.constants, &objects, &globals))
+            .enumerate()
+            .map(|(inst_idx, inst)| convert_instruction(inst, inst_idx, &function.bytecode.constants, &objects, &globals, function))
             .collect::<anyhow::Result<Vec<_>>>()?;
 
         assert_eq!(

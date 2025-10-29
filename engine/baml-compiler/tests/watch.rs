@@ -25,8 +25,8 @@ fn watch_primitive() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),            // filter null
                 Instruction::Watch(1),
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar(1),
-                Instruction::LoadVar(1),
+                Instruction::StoreVar("value".to_string()),
+                Instruction::LoadVar("value".to_string()),
                 Instruction::Return,
             ],
         )],

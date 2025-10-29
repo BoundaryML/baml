@@ -57,7 +57,7 @@ fn call_function() -> anyhow::Result<()> {
                 vec![
                     Instruction::LoadGlobal(Value::function("two")),
                     Instruction::Call(0),
-                    Instruction::LoadVar(1),
+                    Instruction::LoadVar("a".to_string()),
                     Instruction::Return,
                 ],
             ),
@@ -107,8 +107,8 @@ fn mutable_variables() -> anyhow::Result<()> {
                 vec![
                     Instruction::LoadConst(Value::Int(3)),
                     Instruction::LoadConst(Value::Int(5)),
-                    Instruction::StoreVar(2),
-                    Instruction::LoadVar(2),
+                    Instruction::StoreVar("y".to_string()),
+                    Instruction::LoadVar("y".to_string()),
                     Instruction::Return,
                 ],
             ),
@@ -116,8 +116,8 @@ fn mutable_variables() -> anyhow::Result<()> {
                 "MutableInArg",
                 vec![
                     Instruction::LoadConst(Value::Int(3)),
-                    Instruction::StoreVar(1),
-                    Instruction::LoadVar(1),
+                    Instruction::StoreVar("x".to_string()),
+                    Instruction::LoadVar("x".to_string()),
                     Instruction::Return,
                 ],
             ),

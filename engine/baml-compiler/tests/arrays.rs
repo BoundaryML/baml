@@ -21,7 +21,7 @@ fn array_constructor() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::AllocArray(3),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
         )],

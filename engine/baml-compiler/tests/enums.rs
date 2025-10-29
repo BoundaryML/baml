@@ -50,7 +50,7 @@ fn assign_enum_variant() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(Value::Int(1)), // Rectangle is variant index 1
                 Instruction::AllocVariant(Value::enm("Shape")),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("s".to_string()),
                 Instruction::Return,
             ],
         )],

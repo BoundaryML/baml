@@ -285,8 +285,8 @@ impl ExecState {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Instruction {
     LoadConst(Value),
-    LoadVar(usize),
-    StoreVar(usize),
+    LoadVar(String),
+    StoreVar(String),
     LoadGlobal(Value),
     StoreGlobal(Value),
     LoadField(usize),
@@ -314,5 +314,5 @@ pub enum Instruction {
     Call(usize),
     Return,
     Assert,
-    NotifyBlock(usize),
+    NotifyBlock(VmBlockNotification),
 }

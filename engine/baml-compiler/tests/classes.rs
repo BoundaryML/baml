@@ -32,7 +32,7 @@ fn class_constructor() -> anyhow::Result<()> {
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreField(1),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("p".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -82,7 +82,7 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                 Instruction::LoadField(3),
                 Instruction::StoreField(3),
                 Instruction::Pop(1),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("p".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -130,7 +130,7 @@ fn class_constructor_with_spread_before_named_fields() -> anyhow::Result<()> {
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreField(1),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("p".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -180,7 +180,7 @@ fn class_constructor_with_spread_after_named_fields() -> anyhow::Result<()> {
                 Instruction::LoadField(3),
                 Instruction::StoreField(3),
                 Instruction::Pop(1),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("p".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -240,7 +240,7 @@ fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
                     Instruction::LoadField(3),
                     Instruction::StoreField(3),
                     Instruction::Pop(1),
-                    Instruction::LoadVar(1),
+                    Instruction::LoadVar("p".to_string()),
                     Instruction::Return,
                 ],
             ),
@@ -267,7 +267,7 @@ fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
                     Instruction::LoadField(3),
                     Instruction::StoreField(3),
                     Instruction::Pop(1),
-                    Instruction::LoadVar(1),
+                    Instruction::LoadVar("p".to_string()),
                     Instruction::Return,
                 ],
             ),
@@ -320,7 +320,7 @@ fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Res
                 Instruction::StoreField(3),
                 Instruction::Pop(1),
                 Instruction::LoadConst(Value::Int(0)),
-                Instruction::LoadVar(2),
+                Instruction::LoadVar("x".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -344,15 +344,15 @@ fn field_assignment_compound_add_bytecode() -> anyhow::Result<()> {
             "incrementCounter",
             vec![
                 // c.value += 10
-                Instruction::LoadVar(1),                // Load c
+                Instruction::LoadVar("c".to_string()),  // Load c
                 Instruction::Copy(0),                   // Duplicate c reference
                 Instruction::LoadField(0),              // Load c.value
                 Instruction::LoadConst(Value::Int(10)), // Load 10
                 Instruction::BinOp(BinOp::Add),         // Add
                 Instruction::StoreField(0),             // Store back to c.value
                 // c.value
-                Instruction::LoadVar(1),   // Load c
-                Instruction::LoadField(0), // Load c.value
+                Instruction::LoadVar("c".to_string()), // Load c
+                Instruction::LoadField(0),             // Load c.value
                 Instruction::Return,
             ],
         )],
@@ -388,9 +388,9 @@ fn nested_field_read_bytecode() -> anyhow::Result<()> {
                 Instruction::StoreField(0),                        // Inner.value = 42
                 Instruction::StoreField(0),                        // Outer.inner = Inner instance
                 // o.inner.value
-                Instruction::LoadVar(1),   // Load o
-                Instruction::LoadField(0), // Load o.inner (returns Inner)
-                Instruction::LoadField(0), // Load inner.value (returns 42)
+                Instruction::LoadVar("o".to_string()), // Load o
+                Instruction::LoadField(0),             // Load o.inner (returns Inner)
+                Instruction::LoadField(0),             // Load inner.value (returns 42)
                 Instruction::Return,
             ],
         )],
@@ -437,8 +437,8 @@ fn nested_object_construction_bytecode() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(30)),            // 30
                 Instruction::StoreField(1),                        // Outer.value = 30
                 // o.value
-                Instruction::LoadVar(1),   // o
-                Instruction::LoadField(1), // value
+                Instruction::LoadVar("o".to_string()), // o
+                Instruction::LoadField(1),             // value
                 Instruction::Return,
             ],
         )],
@@ -465,14 +465,14 @@ fn nested_field_assignment_bytecode() -> anyhow::Result<()> {
             "setNestedValue",
             vec![
                 // o.inner.value = 99
-                Instruction::LoadVar(2),                // Load o
-                Instruction::LoadField(0),              // Load o.inner (returns Inner object)
+                Instruction::LoadVar("o".to_string()), // Load o
+                Instruction::LoadField(0),             // Load o.inner (returns Inner object)
                 Instruction::LoadConst(Value::Int(99)), // Load 99
-                Instruction::StoreField(0),             // Store to inner.value
+                Instruction::StoreField(0),            // Store to inner.value
                 // o.inner.value
-                Instruction::LoadVar(2),   // Load o
-                Instruction::LoadField(0), // Load o.inner
-                Instruction::LoadField(0), // Load inner.value
+                Instruction::LoadVar("o".to_string()), // Load o
+                Instruction::LoadField(0),             // Load o.inner
+                Instruction::LoadField(0),             // Load inner.value
                 Instruction::Return,
             ],
         )],
@@ -499,17 +499,17 @@ fn nested_field_assignment_compound_bytecode() -> anyhow::Result<()> {
             "incrementNestedValue",
             vec![
                 // o.inner.value += 10
-                Instruction::LoadVar(1),                // Load o
-                Instruction::LoadField(0),              // Load o.inner (returns Inner object)
-                Instruction::Copy(0),                   // Duplicate inner reference
-                Instruction::LoadField(0),              // Load inner.value
+                Instruction::LoadVar("o".to_string()), // Load o
+                Instruction::LoadField(0),             // Load o.inner (returns Inner object)
+                Instruction::Copy(0),                  // Duplicate inner reference
+                Instruction::LoadField(0),             // Load inner.value
                 Instruction::LoadConst(Value::Int(10)), // Load 10
-                Instruction::BinOp(BinOp::Add),         // Add
-                Instruction::StoreField(0),             // Store back to inner.value
+                Instruction::BinOp(BinOp::Add),        // Add
+                Instruction::StoreField(0),            // Store back to inner.value
                 // o.inner.value
-                Instruction::LoadVar(1),   // Load o
-                Instruction::LoadField(0), // Load o.inner
-                Instruction::LoadField(0), // Load inner.value
+                Instruction::LoadVar("o".to_string()), // Load o
+                Instruction::LoadField(0),             // Load o.inner
+                Instruction::LoadField(0),             // Load inner.value
                 Instruction::Return,
             ],
         )],
@@ -533,12 +533,12 @@ fn field_assignment_simple_bytecode() -> anyhow::Result<()> {
             "setDataValue",
             vec![
                 // d.value = 42
-                Instruction::LoadVar(1),                // Load d
+                Instruction::LoadVar("d".to_string()), // Load d
                 Instruction::LoadConst(Value::Int(42)), // Load 42
-                Instruction::StoreField(0),             // Store to d.value
+                Instruction::StoreField(0),            // Store to d.value
                 // d.value
-                Instruction::LoadVar(1),   // Load d
-                Instruction::LoadField(0), // Load d.value
+                Instruction::LoadVar("d".to_string()), // Load d
+                Instruction::LoadField(0),             // Load d.value
                 Instruction::Return,
             ],
         )],

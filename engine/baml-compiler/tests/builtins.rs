@@ -22,7 +22,7 @@ fn builtin_method_call() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::AllocArray(3),
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("arr".to_string()),
                 // call with one argument (self)
                 Instruction::Call(1),
                 Instruction::Return,
