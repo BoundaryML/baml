@@ -1,0 +1,1 @@
+{"rustc":17575471286409424799,"features":"[]","declared_features":"[\"loom\"]","target":14005189747090323467,"profile":11238291552139498522,"path":4898910758093971284,"deps":[],"local":[{"CheckDepInfo":{"dep_info":"release/.fingerprint/boxcar-b8d73e4af3846571/dep-lib-boxcar","checksum":false}}],"rustflags":[],"config":2069994364910194474,"compile_kind":0}

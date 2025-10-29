@@ -18,10 +18,6 @@ pub struct RawString {
     pub raw_value: String,
     pub inner_value: String,
 
-    /// If set indicates the language of the raw string.
-    /// By default it is a text string.
-    pub language: Option<(String, Span)>,
-
     // This is useful for getting the final offset.
     pub indent: usize,
     inner_span_start: usize,
@@ -34,7 +30,7 @@ impl WithSpan for RawString {
 }
 
 impl RawString {
-    pub(crate) fn new(value: String, span: Span, language: Option<(String, Span)>) -> Self {
+    pub(crate) fn new(value: String, span: Span) -> Self {
         let dedented_value = value.trim_start_matches(['\n', '\r']);
         let start_trim_count = value.len() - dedented_value.len();
         let dedented_value = dedented_value.trim_end();
@@ -45,7 +41,6 @@ impl RawString {
             inner_value: dedented.content,
             indent: dedented.indent_size,
             inner_span_start: start_trim_count,
-            language,
         }
     }
 
@@ -86,7 +81,6 @@ impl RawString {
     pub fn assert_eq_up_to_span(&self, other: &RawString) {
         assert_eq!(self.inner_value, other.inner_value);
         assert_eq!(self.raw_value, other.raw_value);
-        assert_eq!(self.language, other.language);
         assert_eq!(self.indent, other.indent);
     }
 }

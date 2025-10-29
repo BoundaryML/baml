@@ -1,0 +1,2 @@
+cargo:rustc-check-cfg=cfg(rust_1_82)
+cargo:rustc-cfg=rust_1_82

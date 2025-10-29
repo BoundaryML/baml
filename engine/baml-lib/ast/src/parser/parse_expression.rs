@@ -534,15 +534,10 @@ fn parse_config_map_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expre
 pub(super) fn parse_raw_string(token: Pair<'_>, diagnostics: &mut Diagnostics) -> RawString {
     assert_correct_parser(&token, &[Rule::raw_string_literal], diagnostics);
 
-    let mut language = None;
     let mut content = None;
 
     for current in token.into_inner() {
         match current.as_rule() {
-            Rule::single_word => {
-                let contents = current.as_str().to_string();
-                language = Some((contents, diagnostics.span(current.as_span())));
-            }
             Rule::raw_string_literal_content_1
             | Rule::raw_string_literal_content_2
             | Rule::raw_string_literal_content_3
@@ -557,7 +552,7 @@ pub(super) fn parse_raw_string(token: Pair<'_>, diagnostics: &mut Diagnostics) -
         };
     }
     match content {
-        Some((content, span)) => RawString::new(content, span, language),
+        Some((content, span)) => RawString::new(content, span),
         _ => unreachable!("Encountered impossible raw string during parsing"),
     }
 }

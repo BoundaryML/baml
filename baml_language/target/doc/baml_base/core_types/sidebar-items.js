@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Severity"],"struct":["FileId","ModuleId","Span"],"trait":["Diagnostic"],"type":["Name"]};

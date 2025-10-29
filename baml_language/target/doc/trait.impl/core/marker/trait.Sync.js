@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["baml_base",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.89.0/core/marker/trait.Sync.html\" title=\"trait core::marker::Sync\">Sync</a> for <a class=\"enum\" href=\"baml_base/core_types/enum.Severity.html\" title=\"enum baml_base::core_types::Severity\">Severity</a>",1,["baml_base::core_types::Severity"]],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.89.0/core/marker/trait.Sync.html\" title=\"trait core::marker::Sync\">Sync</a> for <a class=\"struct\" href=\"baml_base/core_types/struct.FileId.html\" title=\"struct baml_base::core_types::FileId\">FileId</a>",1,["baml_base::core_types::FileId"]],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.89.0/core/marker/trait.Sync.html\" title=\"trait core::marker::Sync\">Sync</a> for <a class=\"struct\" href=\"baml_base/core_types/struct.ModuleId.html\" title=\"struct baml_base::core_types::ModuleId\">ModuleId</a>",1,["baml_base::core_types::ModuleId"]],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.89.0/core/marker/trait.Sync.html\" title=\"trait core::marker::Sync\">Sync</a> for <a class=\"struct\" href=\"baml_base/core_types/struct.Span.html\" title=\"struct baml_base::core_types::Span\">Span</a>",1,["baml_base::core_types::Span"]],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.89.0/core/marker/trait.Sync.html\" title=\"trait core::marker::Sync\">Sync</a> for <a class=\"struct\" href=\"baml_base/files/struct.SourceFile.html\" title=\"struct baml_base::files::SourceFile\">SourceFile</a>",1,["baml_base::files::SourceFile"]]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[1563]}
