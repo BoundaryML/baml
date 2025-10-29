@@ -355,8 +355,8 @@ fn manual_notify() -> anyhow::Result<()> {
 
 #[test]
 fn basic_block_notification() -> anyhow::Result<()> {
-    use common::BlockEvent;
     use baml_vm::bytecode::BlockNotificationType;
+    use common::BlockEvent;
 
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -368,22 +368,20 @@ fn basic_block_notification() -> anyhow::Result<()> {
             }
         "#,
         function: "test_blocks",
-        expected: vec![
-            vec![Notification::Block(BlockEvent {
-                function_name: "test_blocks".to_string(),  // The actual function name
-                block_name: "entering_computation".to_string(),  // The annotation text
-                level: 1,
-                block_type: BlockNotificationType::Statement,
-                is_enter: true,
-            })]
-        ],
+        expected: vec![vec![Notification::Block(BlockEvent {
+            function_name: "test_blocks".to_string(), // The actual function name
+            block_name: "entering_computation".to_string(), // The annotation text
+            level: 1,
+            block_type: BlockNotificationType::Statement,
+            is_enter: true,
+        })]],
     })
 }
 
 #[test]
 fn multiple_block_notifications() -> anyhow::Result<()> {
-    use common::BlockEvent;
     use baml_vm::bytecode::BlockNotificationType;
+    use common::BlockEvent;
 
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -400,15 +398,15 @@ fn multiple_block_notifications() -> anyhow::Result<()> {
         function: "test_multiple_blocks",
         expected: vec![
             vec![Notification::Block(BlockEvent {
-                function_name: "test_multiple_blocks".to_string(),  // The actual function name
-                block_name: "first_block".to_string(),  // The annotation text
+                function_name: "test_multiple_blocks".to_string(), // The actual function name
+                block_name: "first_block".to_string(),             // The annotation text
                 level: 1,
                 block_type: BlockNotificationType::Statement,
                 is_enter: true,
             })],
             vec![Notification::Block(BlockEvent {
-                function_name: "test_multiple_blocks".to_string(),  // The actual function name
-                block_name: "second_block".to_string(),  // The annotation text
+                function_name: "test_multiple_blocks".to_string(), // The actual function name
+                block_name: "second_block".to_string(),            // The annotation text
                 level: 1,
                 block_type: BlockNotificationType::Statement,
                 is_enter: true,

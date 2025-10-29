@@ -249,7 +249,7 @@ pub enum Instruction {
 /// The function_name field is populated at runtime from the Function containing this notification.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BlockNotification {
-    pub function_name: String,  // Populated at runtime from Function::name
+    pub function_name: String, // Populated at runtime from Function::name
     pub block_name: String,
     pub level: usize,
     pub block_type: BlockNotificationType,
