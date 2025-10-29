@@ -30,6 +30,7 @@ import { AsyncHttpRequest, AsyncHttpStreamRequest } from "./async_request"
 import { LlmResponseParser, LlmStreamParser } from "./parser"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX,
 DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
+import type * as events from "./events"
 
 /**
 * @deprecated Use RecursivePartialNull from 'baml_client/types' instead.
@@ -38,7 +39,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
     type TickReason = "Unknown";
 
-    type BamlCallOptions = {
+    type BamlCallOptions<WatchersT = never> = {
     tb?: TypeBuilder
     clientRegistry?: ClientRegistry
     collector?: Collector | Collector[]
@@ -46,6 +47,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
       tags?: Record<string, string>
         signal?: AbortSignal
         onTick?: (reason: TickReason, log: FunctionLog | null) => void
+        watchers?: WatchersT
         }
 
         export class BamlAsyncClient {
@@ -96,7 +98,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         
         async TestComplexUnions(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.ComplexUnions> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -134,6 +136,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.ComplexUnions
             } catch (error) {
@@ -143,7 +146,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestDiscriminatedUnions(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.DiscriminatedUnions> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -181,6 +184,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.DiscriminatedUnions
             } catch (error) {
@@ -190,7 +194,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestPrimitiveUnions(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.PrimitiveUnions> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -228,6 +232,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.PrimitiveUnions
             } catch (error) {
@@ -237,7 +242,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
         async TestUnionArrays(
         input: string,
-        __baml_options__?: BamlCallOptions
+        __baml_options__?: BamlCallOptions<never>
         ): Promise<types.UnionArrays> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -275,6 +280,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             options.tags || {},
             env,
             signal,
+            options.watchers,
             )
             return raw.parsed(false) as types.UnionArrays
             } catch (error) {
@@ -298,7 +304,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             
             TestComplexUnions(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.ComplexUnions, types.ComplexUnions>
               {
               try {
@@ -364,7 +370,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestDiscriminatedUnions(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.DiscriminatedUnions, types.DiscriminatedUnions>
               {
               try {
@@ -430,7 +436,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestPrimitiveUnions(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.PrimitiveUnions, types.PrimitiveUnions>
               {
               try {
@@ -496,7 +502,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   
             TestUnionArrays(
             input: string,
-            __baml_options__?: BamlCallOptions
+            __baml_options__?: BamlCallOptions<never>
             ): BamlStream<partial_types.UnionArrays, types.UnionArrays>
               {
               try {

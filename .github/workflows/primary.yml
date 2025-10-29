@@ -237,8 +237,14 @@ jobs:
           export LD_LIBRARY_PATH="${RUBY_LIB_PATH}:${LD_LIBRARY_PATH}"
           # Build baml_cffi shared library
           cargo build --package baml_cffi
+          echo "Listing release directory:"
+          ls -la engine/target/release/libbaml_cffi.* || true
+          ls -la engine/target/release/baml_cffi.* || true
+
+          export BAML_LIBRARY_PATH=${{ github.workspace }}/engine/target/debug/libbaml_cffi.so
           # Run tests
-          cargo test --features skip-integ-tests
+          echo "BAML_LIBRARY_PATH=${{ github.workspace }}/engine/target/debug/libbaml_cffi.so" >> $GITHUB_ENV
+          cargo test --features skip-integ-tests --verbose -- --nocapture
         working-directory: engine
 
       - name: Run Python integration tests

@@ -24,11 +24,13 @@ import type { Checked, Check } from "./types"
 import type * as types from "./types"
 import type {SimpleClass} from "./types"
 import type TypeBuilder from "./type_builder"
+import type * as events from "./events"
 
-type BamlCallOptions = {
+type BamlCallOptions<EventsT = never> = {
   tb?: TypeBuilder
   clientRegistry?: ClientRegistry
   env?: Record<string, string | undefined>
+  events?: EventsT
 }
 
 export class HttpRequest {
@@ -37,7 +39,7 @@ export class HttpRequest {
   
   ConsumeSimpleClass(
       item: types.SimpleClass,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -62,7 +64,7 @@ export class HttpRequest {
   
   MakeSimpleClass(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -93,7 +95,7 @@ export class HttpStreamRequest {
   
   ConsumeSimpleClass(
       item: types.SimpleClass,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -118,7 +120,7 @@ export class HttpStreamRequest {
   
   MakeSimpleClass(
       
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };

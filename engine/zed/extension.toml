@@ -2,7 +2,7 @@ id = "baml"
 name = "Baml"
 description = "Baml support."
 # This is the version that gets published into the Zed extension ecosystem
-version = "0.211.2"
+version = "0.212.0"
 schema_version = 1
 authors = ["Boundary <contact@boundaryml.com>"]
 repository = "https://github.com/BoundaryML/zed-baml"

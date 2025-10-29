@@ -561,3 +561,8 @@ class BamlClientHttpError(BamlClientError):
     """Raised for HTTP-related client errors."""
 
     ...
+
+class BamlAbortError(BamlError):
+    """Raised when a BAML operation is cancelled (abort)."""
+
+    ...

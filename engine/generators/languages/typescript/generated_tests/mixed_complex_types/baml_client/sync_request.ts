@@ -24,11 +24,13 @@ import type { Checked, Check } from "./types"
 import type * as types from "./types"
 import type {Action, Asset, AssetMetadata, ButtonWidget, ComplexData, Condition, Configuration, ContainerWidget, DataObject, Dimensions, Environment, Error, ErrorDetail, Feature, ImageWidget, Item, KitchenSink, Node, NodeMetadata, PrimaryData, Record, ResponseMetadata, Rule, SecondaryData, Setting, SimpleCondition, Success, TertiaryData, TextWidget, UltraComplex, User, UserProfile, UserResponse, Variant, Widget} from "./types"
 import type TypeBuilder from "./type_builder"
+import type * as events from "./events"
 
-type BamlCallOptions = {
+type BamlCallOptions<EventsT = never> = {
   tb?: TypeBuilder
   clientRegistry?: ClientRegistry
   env?: Record<string, string | undefined>
+  events?: EventsT
 }
 
 export class HttpRequest {
@@ -37,7 +39,7 @@ export class HttpRequest {
   
   TestKitchenSink(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -62,7 +64,7 @@ export class HttpRequest {
   
   TestRecursiveComplexity(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -87,7 +89,7 @@ export class HttpRequest {
   
   TestUltraComplex(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -118,7 +120,7 @@ export class HttpStreamRequest {
   
   TestKitchenSink(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -143,7 +145,7 @@ export class HttpStreamRequest {
   
   TestRecursiveComplexity(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -168,7 +170,7 @@ export class HttpStreamRequest {
   
   TestUltraComplex(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };

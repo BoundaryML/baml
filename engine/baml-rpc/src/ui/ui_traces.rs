@@ -327,7 +327,7 @@ impl Default for ListTraceFunctionSummariesRequest {
     fn default() -> Self {
         Self {
             project_id: ProjectId::new(),
-            limit: Some(100),
+            limit: Some(400),
             starting_after: None,
             relative_time: None,
             start_time: None,
@@ -350,6 +350,7 @@ pub struct FunctionSummary {
     pub function_id: Option<ui_types::UiFunctionIdString>,
     pub function_name: String,
     pub function_type: String, // 'baml_llm' or 'native'
+    pub language: String,
     #[ts(type = "Record<string, unknown>")]
     pub tags: serde_json::Map<String, serde_json::Value>,
 

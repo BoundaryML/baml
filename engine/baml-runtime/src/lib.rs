@@ -42,7 +42,7 @@ use baml_compiler::watch::SharedWatchHandler;
 use baml_ids::{FunctionCallId, HttpRequestId};
 use baml_types::{
     expr::{Expr, ExprMetadata},
-    tracing::events::{ClientDetails, HTTPBody, HTTPRequest, TraceEvent},
+    tracing::events::{BamlError, ClientDetails, HTTPBody, HTTPRequest, TraceEvent},
     BamlMap, BamlValue, BamlValueWithMeta, Completion, Constraint,
 };
 use cfg_if::cfg_if;
@@ -232,6 +232,179 @@ cfg_if::cfg_if!(
         use dashmap::DashMap;
     }
 );
+
+/// RAII guard that ensures both TraceEvent::new_function_end and finish_baml_call
+/// are properly called, even if the function returns early due to an error.
+pub struct TracingCallGuard<'a> {
+    call: Option<TracingCall>,
+    call_id_stack: Vec<baml_ids::FunctionCallId>,
+    ctx: &'a RuntimeContextManager,
+    env_vars: HashMap<String, String>,
+    tracer_wrapper: Arc<BamlTracerWrapper>,
+    ir: &'a IntermediateRepr,
+    // We only use this for error paths (early returns)
+    // For success paths, finish_with() must be called explicitly
+    error_result: Option<anyhow::Error>,
+}
+
+impl<'a> TracingCallGuard<'a> {
+    fn new(
+        call: TracingCall,
+        ctx: &'a RuntimeContextManager,
+        env_vars: HashMap<String, String>,
+        tracer_wrapper: Arc<BamlTracerWrapper>,
+        ir: &'a IntermediateRepr,
+    ) -> Self {
+        let call_id_stack = call.new_call_id_stack.clone();
+        Self {
+            call: Some(call),
+            call_id_stack,
+            ctx,
+            env_vars,
+            tracer_wrapper,
+            ir,
+            error_result: None,
+        }
+    }
+
+    /// Set the error result for early returns
+    fn set_error(&mut self, error: anyhow::Error) {
+        self.error_result = Some(error);
+    }
+
+    /// Emit trace event and finish the call with a result (consumes the guard)
+    #[cfg(not(target_arch = "wasm32"))]
+    fn finish_with(mut self, result: &Result<FunctionResult>) -> Result<()> {
+        if let Some(call) = self.call.take() {
+            // Emit TraceEvent::new_function_end
+            let trace_event = TraceEvent::new_function_end(
+                self.call_id_stack.clone(),
+                match result {
+                    Ok(func_result) => match func_result.result_with_constraints_content() {
+                        Ok(value) => Ok(value.0.map_meta(|f| f.3.to_non_streaming_type(self.ir))),
+                        Err(e) => Err((&e).to_baml_error()),
+                    },
+                    Err(e) => Err(e.to_baml_error()),
+                },
+            );
+            BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+
+            // Finish the baml call
+            match self
+                .tracer_wrapper
+                .get_or_create_tracer(&self.env_vars)
+                .finish_baml_call(call, self.ctx, result)
+            {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    baml_log::error!("Error during logging: {}", e);
+                    Err(e)
+                }
+            }
+        } else {
+            Ok(())
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    async fn finish_with(mut self, result: &Result<FunctionResult>) -> Result<()> {
+        if let Some(call) = self.call.take() {
+            // Emit TraceEvent::new_function_end
+            let trace_event = TraceEvent::new_function_end(
+                self.call_id_stack.clone(),
+                match result {
+                    Ok(func_result) => match func_result.result_with_constraints_content() {
+                        Ok(value) => Ok(value.0.map_meta(|f| f.3.to_non_streaming_type(self.ir))),
+                        Err(e) => Err((&e).to_baml_error()),
+                    },
+                    Err(e) => Err(e.to_baml_error()),
+                },
+            );
+            BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+
+            // Finish the baml call
+            match self
+                .tracer_wrapper
+                .get_or_create_tracer(&self.env_vars)
+                .finish_baml_call(call, self.ctx, result)
+                .await
+            {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    log::error!("Error during logging: {e}");
+                    Err(e)
+                }
+            }
+        } else {
+            Ok(())
+        }
+    }
+
+    fn call_id_stack(&self) -> &Vec<baml_ids::FunctionCallId> {
+        &self.call_id_stack
+    }
+}
+
+// Automatically finish the call when the guard is dropped (only for error paths)
+impl Drop for TracingCallGuard<'_> {
+    fn drop(&mut self) {
+        if let Some(call) = self.call.take() {
+            // Only execute drop logic if we have an error (early return case)
+            let result: Result<FunctionResult> = if let Some(error) = self.error_result.take() {
+                Err(error)
+            } else {
+                // Dropped without explicit finish - likely due to cancellation/shutdown
+                // Instead of returning an error, emit a function end event for cancellation.
+                {
+                    let function_end_event = TraceEvent::new_function_end(
+                        self.call_id_stack.clone(),
+                        Err(BamlError::External {
+                            message: "Operation cancelled".into(),
+                        }),
+                    );
+                    BAML_TRACER
+                        .lock()
+                        .unwrap()
+                        .put(Arc::new(function_end_event));
+                    Err(anyhow::anyhow!("Operation cancelled.."))
+                }
+            };
+
+            // Emit TraceEvent::new_function_end for the error case
+            let trace_event = TraceEvent::new_function_end(
+                self.call_id_stack.clone(),
+                Err(result.as_ref().err().unwrap().to_baml_error()),
+            );
+            BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+
+            // Finish the baml call
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                match self
+                    .tracer_wrapper
+                    .get_or_create_tracer(&self.env_vars)
+                    .finish_baml_call(call, self.ctx, &result)
+                {
+                    Ok(_) => {}
+                    Err(e) => baml_log::debug!("Finished call in drop handler: {}", e),
+                }
+            }
+
+            #[cfg(target_arch = "wasm32")]
+            {
+                // For WASM, we need to spawn a local task since Drop can't be async
+                let tracer = self.tracer_wrapper.get_or_create_tracer(&self.env_vars);
+                let ctx = self.ctx.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    match tracer.finish_baml_call(call, &ctx, &result).await {
+                        Ok(_) => {}
+                        Err(e) => log::debug!("Finished call in drop handler: {e}"),
+                    }
+                });
+            }
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct BamlRuntime {
@@ -1208,75 +1381,48 @@ impl BamlRuntime {
             .start_call(&function_name, ctx, params, true, false, collectors, tags);
         let curr_call_id = call.curr_call_id();
 
+        // Create guard that will automatically finish the call on drop
+        let mut guard = TracingCallGuard::new(
+            call,
+            ctx,
+            env_vars.clone(),
+            self.tracer_wrapper.clone(),
+            self.ir(),
+        );
+
         let fake_syntax_span = Span::fake();
-        let response =
-            match ctx.create_ctx(tb, cb, env_vars.clone(), call.new_call_id_stack.clone()) {
-                Ok(rctx) => {
-                    let call_id_stack = rctx.call_id_stack.clone();
-                    // TODO: is this the right naming?
-                    let prepared_func = match self.prepare_function(function_name.clone(), params) {
-                        Ok(prepared_func) => prepared_func,
-                        Err(e) => {
-                            let err_anyhow = e.into_error();
-                            let trace_event = TraceEvent::new_function_end(
-                                call_id_stack.clone(),
-                                Err((&err_anyhow).to_baml_error()),
-                            );
-                            BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
-                            return (Err(err_anyhow), curr_call_id);
-                        }
-                    };
+        let response = match ctx.create_ctx(tb, cb, env_vars.clone(), guard.call_id_stack().clone())
+        {
+            Ok(rctx) => {
+                let call_id_stack = rctx.call_id_stack.clone();
+                // TODO: is this the right naming?
+                let prepared_func = match self.prepare_function(function_name.clone(), params) {
+                    Ok(prepared_func) => prepared_func,
+                    Err(e) => {
+                        let err_anyhow = e.into_error();
+                        // Set error in guard - it will emit TraceEvent and finish the call on drop
+                        guard.set_error(anyhow::anyhow!("{}", err_anyhow));
+                        return (Err(err_anyhow), curr_call_id);
+                    }
+                };
 
-                    // Call (CANNOT RETURN HERE until trace event is finished)
-                    let result = self
-                        .call_function_impl(prepared_func, rctx, cancel_tripwire)
-                        .await;
-                    // Trace event
-                    let trace_event = TraceEvent::new_function_end(
-                        call_id_stack.clone(),
-                        match &result {
-                            Ok(result) => match result.result_with_constraints_content() {
-                                Ok(value) => {
-                                    Ok(value.0.map_meta(|f| f.3.to_non_streaming_type(self.ir())))
-                                }
-                                Err(e) => Err((&e).to_baml_error()),
-                            },
-                            Err(e) => Err(e.to_baml_error()),
-                        },
-                    );
-                    BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+                // Call the function implementation
+                self.call_function_impl(prepared_func, rctx, cancel_tripwire)
+                    .await
+            }
+            Err(e) => {
+                // Set error in guard - it will emit TraceEvent and finish the call on drop
+                guard.set_error(anyhow::anyhow!("{}", e));
+                Err(e)
+            }
+        };
 
-                    result
-                }
-                Err(e) => {
-                    let trace_event = TraceEvent::new_function_end(
-                        call.new_call_id_stack.clone(),
-                        Err((&e).to_baml_error()),
-                    );
-                    BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
-                    Err(e)
-                }
-            };
-
+        // Finish the call explicitly with the response
         #[cfg(not(target_arch = "wasm32"))]
-        match self
-            .tracer_wrapper
-            .get_or_create_tracer(&env_vars)
-            .finish_baml_call(call, ctx, &response)
-        {
-            Ok(id) => {}
-            Err(e) => baml_log::error!("Error during logging: {}", e),
-        }
+        let _ = guard.finish_with(&response);
+
         #[cfg(target_arch = "wasm32")]
-        match self
-            .tracer_wrapper
-            .get_or_create_tracer(&env_vars)
-            .finish_baml_call(call, ctx, &response)
-            .await
-        {
-            Ok(id) => {}
-            Err(e) => log::error!("Error during logging: {e}"),
-        }
+        let _ = guard.finish_with(&response).await;
 
         (response, curr_call_id)
     }
@@ -1699,6 +1845,16 @@ impl BamlRuntime {
                             "LLM client '{client_name}' requires environment variable '{key}' to be set but it is not"
                         );
                     }
+                }
+
+                // Also include BOUNDARY_* env vars if they exist, for tracing/telemetry
+                if let Some(boundary_api_key) = ctx.env_vars().get("BOUNDARY_API_KEY") {
+                    required_env_vars
+                        .insert("BOUNDARY_API_KEY".to_string(), boundary_api_key.to_owned());
+                }
+                if let Some(boundary_api_url) = ctx.env_vars().get("BOUNDARY_API_URL") {
+                    required_env_vars
+                        .insert("BOUNDARY_API_URL".to_string(), boundary_api_url.to_owned());
                 }
 
                 clients.insert(

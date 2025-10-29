@@ -985,6 +985,12 @@ impl BamlRuntime {
 
     #[pyo3()]
     fn flush(&self) -> PyResult<()> {
+        // Abort any active operations before flushing
+        crate::abort_controller::abort_all_active_operations();
+
+        // Give operations a moment to finish and emit their events
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
         self.inner.flush().map_err(BamlError::from_anyhow)
     }
 
