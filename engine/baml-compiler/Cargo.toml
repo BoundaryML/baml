@@ -8,7 +8,6 @@ license-file.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-arraystring.workspace = true
 baml-types = { path = "../baml-lib/baml-types" }
 baml-vm = { path = "../baml-vm" }
 internal-baml-ast = { path = "../baml-lib/ast" }

@@ -314,5 +314,5 @@ pub enum Instruction {
     Call(usize),
     Return,
     Assert,
-    NotifyBlock(VmBlockNotification),
+    NotifyBlock(usize),
 }

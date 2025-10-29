@@ -1,7 +1,5 @@
 //! Instruction set and bytecode representation.
 
-use arraystring::{typenum::U255, ArrayString};
-
 use crate::{types::Value, GlobalIndex, ObjectIndex};
 
 /// Individual bytecode instruction.
@@ -242,15 +240,17 @@ pub enum Instruction {
 
     /// Notifies about entering or exiting a block.
     ///
-    /// Format: `NOTIFY_BLOCK function_name block_name`
-    NotifyBlock(BlockNotification),
+    /// Format: `NOTIFY_BLOCK block_index` where `block_index` is the index
+    /// into the current function's block_notifications array.
+    NotifyBlock(usize),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// Block notification metadata stored in the Function struct.
+/// The function_name field is populated at runtime from the Function containing this notification.
+#[derive(Clone, Debug, PartialEq)]
 pub struct BlockNotification {
-    // This is a hack cause i don't wanna deal with implementing Copy by allocating this on the heap + doing an object pointer.
-    pub function_name: ArrayString<U255>,
-    pub block_name: ArrayString<U255>,
+    pub function_name: String, // Populated at runtime from Function::name
+    pub block_name: String,
     pub level: usize,
     pub block_type: BlockNotificationType,
     pub is_enter: bool,
@@ -368,18 +368,8 @@ impl std::fmt::Display for Instruction {
             Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
             Instruction::Watch(i) => write!(f, "WATCH {i}"),
-            Instruction::NotifyBlock(notification) => {
-                write!(
-                    f,
-                    "{}_BLOCK {function_name}.{block_name}",
-                    if notification.is_enter {
-                        "ENTER"
-                    } else {
-                        "EXIT"
-                    },
-                    function_name = &notification.function_name,
-                    block_name = &notification.block_name,
-                )
+            Instruction::NotifyBlock(block_index) => {
+                write!(f, "NOTIFY_BLOCK {block_index}")
             }
             Instruction::Notify(i) => write!(f, "NOTIFY {i}"),
         }

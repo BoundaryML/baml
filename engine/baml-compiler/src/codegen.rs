@@ -2,7 +2,6 @@
 
 use std::collections::{HashMap, HashSet};
 
-use arraystring::{typenum::U255, ArrayString};
 use baml_types::{ir_type::TypeIR, BamlMap, BamlMediaType, BamlValueWithMeta, TypeValue};
 use baml_vm::{
     BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex,
@@ -152,6 +151,7 @@ fn compile_thir_to_bytecode(
             kind: FunctionKind::Llm,
             locals_in_scope: vec![func.parameters.iter().map(|p| p.name.clone()).collect()],
             span: func.span.clone(),
+            block_notifications: Vec::new(),
         });
 
         let object_index = objects.insert(bytecode_llm_function);
@@ -235,6 +235,7 @@ fn compile_thir_to_bytecode(
             kind: FunctionKind::Native(func),
             locals_in_scope: vec![], // TODO.
             span: Span::fake_builtin_baml(),
+            block_notifications: Vec::new(),
         });
 
         let object_index = objects.insert(native_function);
@@ -247,6 +248,7 @@ fn compile_thir_to_bytecode(
         kind: FunctionKind::Future,
         locals_in_scope: vec![],
         span: Span::fake_builtin_baml(),
+        block_notifications: Vec::new(),
     }))));
 
     let mut resolved_class_names = HashMap::new();
@@ -431,6 +433,9 @@ struct HirCompiler<'g> {
     /// `AllocInstance` instructions that have a placeholder, which must be resolved when location
     /// of the class object is resolved.
     class_alloc_patch_list: &'g mut Vec<AllocInstancePatch>,
+
+    /// Block notifications for the current function being compiled.
+    block_notifications: Vec<baml_vm::bytecode::BlockNotification>,
 }
 
 #[derive(Debug)]
@@ -470,6 +475,7 @@ impl<'g> HirCompiler<'g> {
             scopes: Vec::new(),
             current_source_line: 0,
             locals_in_scope: Vec::new(),
+            block_notifications: Vec::new(),
         }
     }
 
@@ -508,6 +514,7 @@ impl<'g> HirCompiler<'g> {
             })),
 
             span: func.span.clone(),
+            block_notifications: self.block_notifications.clone(),
         })
     }
 
@@ -1585,18 +1592,24 @@ impl<'g> HirCompiler<'g> {
         self.emit(Instruction::LoadConst(const_index));
     }
 
-    fn emit_annotated_block(&mut self, v: &str) {
-        self.emit_string_literal(v);
+    fn emit_annotated_block(&mut self, annotation: &str) {
+        // Create the notification metadata
+        let notification = baml_vm::bytecode::BlockNotification {
+            function_name: String::new(), // Will be populated at runtime from Function::name
+            block_name: annotation.to_string(),
+            level: self.scopes.len(), // Current scope depth (1-based)
+            block_type: baml_vm::bytecode::BlockNotificationType::Statement,
+            is_enter: true,
+        };
 
-        self.emit(Instruction::NotifyBlock(
-            baml_vm::bytecode::BlockNotification {
-                function_name: ArrayString::<U255>::from_str_truncate(v),
-                block_name: ArrayString::<U255>::from_str_truncate(v),
-                level: 1,
-                block_type: baml_vm::bytecode::BlockNotificationType::Statement,
-                is_enter: true,
-            },
-        ));
+        // Add to the function's notification list
+        let notification_index = self.block_notifications.len();
+        self.block_notifications.push(notification);
+
+        // Emit instruction with just the index
+        self.emit(Instruction::NotifyBlock(notification_index));
+
+        // TODO: Emit exit notification when leaving the block
     }
 
     /// Emits a single instruction and returns the index of the instruction.

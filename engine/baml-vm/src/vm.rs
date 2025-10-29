@@ -639,8 +639,22 @@ impl Vm {
             // }
 
             match function.bytecode.instructions[instruction_ptr as usize] {
-                Instruction::NotifyBlock(notification) => {
-                    return Ok(VmExecState::Notify(WatchNotification::Block(notification)));
+                Instruction::NotifyBlock(block_index) => {
+                    // Get the notification from the function's storage
+                    let notification = &function.block_notifications[block_index];
+
+                    // Create a copy with the function name populated
+                    let full_notification = crate::bytecode::BlockNotification {
+                        function_name: function.name.clone(),
+                        block_name: notification.block_name.clone(),
+                        level: notification.level,
+                        block_type: notification.block_type,
+                        is_enter: notification.is_enter,
+                    };
+
+                    return Ok(VmExecState::Notify(WatchNotification::Block(
+                        full_notification,
+                    )));
                 }
                 Instruction::LoadConst(index) => {
                     let value = &function.bytecode.constants[index];

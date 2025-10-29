@@ -122,15 +122,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76a2e8124351fda1ef8aaaa3bbd7ebbcb486bbcd4225aca0aa0d84bb2db8fecb"
 
 [[package]]
-name = "arraystring"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d517c467117e1d8ca795bc8cc90857ff7f79790cca0e26f6e9462694ece0185"
-dependencies = [
- "typenum",
-]
-
-[[package]]
 name = "arrayvec"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1008,7 +999,6 @@ name = "baml-compiler"
 version = "0.212.0"
 dependencies = [
  "anyhow",
- "arraystring",
  "baml-types",
  "baml-vm",
  "internal-baml-ast",
@@ -1428,7 +1418,6 @@ name = "baml-vm"
 version = "0.212.0"
 dependencies = [
  "anyhow",
- "arraystring",
  "baml-compiler",
  "baml-runtime",
  "baml-types",
