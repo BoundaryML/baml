@@ -3,16 +3,14 @@
 //! Re-exports types from baml_vm::test and adds helper functions that require baml-compiler.
 
 // Re-export all types from baml_vm::test
-pub use baml_vm::test::*;
-
 // Additional imports for helper functions
 use baml_compiler::test::ast;
+pub use baml_vm::test::*;
 use baml_vm::{
-    BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool,
+    watch::Watch, BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool,
     Instruction as VmInstruction, Object as VmObject, ObjectIndex, ObjectPool, StackIndex,
     Value as VmValue, Vm, VmExecState,
 };
-use baml_vm::watch::Watch;
 
 /// Helper struct for testing VM execution.
 pub struct ProgramInput<Expect> {

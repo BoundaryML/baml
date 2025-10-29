@@ -77,7 +77,7 @@ fn any_value_to_string() -> anyhow::Result<()> {
         "math": 95
         "english": 88
     }
-}"#
+}"#,
         )),
     })
 }

@@ -1,7 +1,9 @@
 //! Compiler tests for control flow statements (if/else, while loops, break, continue, returns).
 
-use baml_vm::{BinOp, CmpOp};
-use baml_vm::test::{Instruction, Object, Value};
+use baml_vm::{
+    test::{Instruction, Value},
+    BinOp, CmpOp,
+};
 
 mod common;
 use common::{assert_compiles, Program};
@@ -751,7 +753,7 @@ fn early_return() -> anyhow::Result<()> {
         expected: vec![(
             "EarlyReturn",
             vec![
-                Instruction::LoadVar(1),   // x
+                Instruction::LoadVar(1),                // x
                 Instruction::LoadConst(Value::Int(42)), // 42
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::JumpIfFalse(5), // to 8
@@ -760,7 +762,7 @@ fn early_return() -> anyhow::Result<()> {
                 Instruction::Return,
                 Instruction::Jump(2), // to 9
                 Instruction::Pop(1),
-                Instruction::LoadVar(1),   // x
+                Instruction::LoadVar(1),               // x
                 Instruction::LoadConst(Value::Int(5)), // 5
                 Instruction::BinOp(BinOp::Add),
                 Instruction::Return,
@@ -804,7 +806,7 @@ fn return_with_stack() -> anyhow::Result<()> {
             "WithStack",
             vec![
                 Instruction::LoadConst(Value::Int(1)), // 1
-                Instruction::LoadVar(2),   // a
+                Instruction::LoadVar(2),               // a
                 Instruction::LoadConst(Value::Int(0)), // 0
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::JumpIfFalse(5), // to 9
@@ -814,8 +816,8 @@ fn return_with_stack() -> anyhow::Result<()> {
                 Instruction::Jump(2), // to 10
                 Instruction::Pop(1),
                 Instruction::LoadConst(Value::Int(1)), // 1
-                Instruction::LoadVar(2),   // a
-                Instruction::LoadVar(3),   // b
+                Instruction::LoadVar(2),               // a
+                Instruction::LoadVar(3),               // b
                 Instruction::CmpOp(CmpOp::NotEq),
                 Instruction::JumpIfFalse(5), // to 19
                 Instruction::Pop(1),
@@ -826,13 +828,13 @@ fn return_with_stack() -> anyhow::Result<()> {
                 Instruction::Pop(1),
                 Instruction::LoadConst(Value::Int(2)), // 2
                 Instruction::LoadConst(Value::Int(3)), // 3
-                Instruction::LoadVar(4),   // b
-                Instruction::LoadVar(3),   // c
+                Instruction::LoadVar(4),               // b
+                Instruction::LoadVar(3),               // c
                 Instruction::CmpOp(CmpOp::NotEq),
                 Instruction::JumpIfFalse(10), // to 36
                 Instruction::Pop(1),
-                Instruction::LoadConst(Value::Bool(true)),   // true
-                Instruction::JumpIfFalse(5), // to 34
+                Instruction::LoadConst(Value::Bool(true)), // true
+                Instruction::JumpIfFalse(5),               // to 34
                 Instruction::Pop(1),
                 Instruction::LoadConst(Value::Int(0)), // 0
                 Instruction::Return,

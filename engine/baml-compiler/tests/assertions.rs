@@ -1,7 +1,9 @@
 //! Compiler tests for assert statements.
 
-use baml_vm::test::{Instruction, Object, Value};
-use baml_vm::{BinOp, CmpOp};
+use baml_vm::{
+    test::{Instruction, Value},
+    BinOp, CmpOp,
+};
 
 mod common;
 use common::{assert_compiles, Program};

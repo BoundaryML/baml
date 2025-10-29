@@ -1,6 +1,6 @@
 //! Compiler tests for watch functionality.
 
-use baml_vm::test::{Instruction, Object, Value};
+use baml_vm::test::{Instruction, Value};
 
 mod common;
 use common::{assert_compiles, Program};
@@ -22,7 +22,7 @@ fn watch_primitive() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::LoadConst(Value::string("value")), // channel "value"
-                Instruction::LoadConst(Value::Null), // filter null
+                Instruction::LoadConst(Value::Null),            // filter null
                 Instruction::Watch(1),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar(1),

@@ -1,8 +1,7 @@
 //! Common test utilities for compiler tests.
 
 use baml_types::TypeIR;
-use baml_vm::{BamlVmProgram, EvalStack, GlobalPool, Instruction, Object, ObjectPool, Value};
-use baml_vm::test;
+use baml_vm::{test, BamlVmProgram, EvalStack, GlobalPool, Instruction, Object, ObjectPool, Value};
 
 /// Helper struct for testing bytecode compilation.
 pub struct Program {
@@ -54,18 +53,18 @@ fn convert_instruction(
         Instruction::AllocInstance(obj_idx) => {
             let obj = &objects[*obj_idx];
             match obj {
-                Object::Class(class) => {
-                    test::Instruction::AllocInstance(test::Value::Object(test::Object::class(&class.name)))
-                }
+                Object::Class(class) => test::Instruction::AllocInstance(test::Value::Object(
+                    test::Object::class(&class.name),
+                )),
                 _ => anyhow::bail!("Expected Class object for AllocInstance, got {:?}", obj),
             }
         }
         Instruction::AllocVariant(obj_idx) => {
             let obj = &objects[*obj_idx];
             match obj {
-                Object::Enum(enm) => {
-                    test::Instruction::AllocVariant(test::Value::Object(test::Object::enm(&enm.name)))
-                }
+                Object::Enum(enm) => test::Instruction::AllocVariant(test::Value::Object(
+                    test::Object::enm(&enm.name),
+                )),
                 _ => anyhow::bail!("Expected Enum object for AllocVariant, got {:?}", obj),
             }
         }
@@ -100,7 +99,9 @@ fn convert_value(value: &Value, objects: &ObjectPool) -> anyhow::Result<test::Va
                     match baml_type {
                         TypeIR::Class { name, .. } => test::Object::class(name),
                         TypeIR::Enum { name, .. } => test::Object::enm(name),
-                        _ => anyhow::bail!("Unsupported BamlType in constant pool: {:?}", baml_type),
+                        _ => {
+                            anyhow::bail!("Unsupported BamlType in constant pool: {:?}", baml_type)
+                        }
                     }
                 }
                 _ => anyhow::bail!("Unsupported object type in constant pool: {:?}", obj),

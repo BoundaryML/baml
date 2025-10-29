@@ -1,7 +1,9 @@
 //! Compiler tests for map operations.
 
-use baml_vm::BinOp;
-use baml_vm::test::{Instruction, Object, Value};
+use baml_vm::{
+    test::{Instruction, Value},
+    BinOp,
+};
 
 mod common;
 use common::{assert_compiles, Program};

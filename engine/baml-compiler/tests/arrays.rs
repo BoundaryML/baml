@@ -1,7 +1,6 @@
 //! Compiler tests for array construction.
 
-use baml_vm::{BinOp, CmpOp};
-use baml_vm::test::{Instruction, Object, Value};
+use baml_vm::test::{Instruction, Value};
 
 mod common;
 use common::{assert_compiles, Program};

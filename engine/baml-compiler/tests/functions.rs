@@ -1,6 +1,6 @@
 //! Compiler tests for function calls, parameters, and returns.
 
-use baml_vm::test::{Instruction, Object, Value};
+use baml_vm::test::{Instruction, Value};
 
 mod common;
 use common::{assert_compiles, Program};
@@ -18,7 +18,10 @@ fn return_function_call() -> anyhow::Result<()> {
             }
         ",
         expected: vec![
-            ("one", vec![Instruction::LoadConst(Value::Int(1)), Instruction::Return]),
+            (
+                "one",
+                vec![Instruction::LoadConst(Value::Int(1)), Instruction::Return],
+            ),
             (
                 "main",
                 vec![
@@ -45,7 +48,10 @@ fn call_function() -> anyhow::Result<()> {
             }
         ",
         expected: vec![
-            ("two", vec![Instruction::LoadConst(Value::Int(2)), Instruction::Return]),
+            (
+                "two",
+                vec![Instruction::LoadConst(Value::Int(2)), Instruction::Return],
+            ),
             (
                 "main",
                 vec![
@@ -67,7 +73,13 @@ fn function_returning_string() -> anyhow::Result<()> {
                 "hello"
             }
         "#,
-        expected: vec![("main", vec![Instruction::LoadConst(Value::string("hello")), Instruction::Return])],
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::LoadConst(Value::string("hello")),
+                Instruction::Return,
+            ],
+        )],
     })
 }
 

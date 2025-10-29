@@ -1,7 +1,9 @@
 //! Compiler tests for class construction and field operations.
 
-use baml_vm::BinOp;
-use baml_vm::test::{Instruction, Object, Value};
+use baml_vm::{
+    test::{Instruction, Object, Value},
+    BinOp,
+};
 
 mod common;
 use common::{assert_compiles, Program};
@@ -342,12 +344,12 @@ fn field_assignment_compound_add_bytecode() -> anyhow::Result<()> {
             "incrementCounter",
             vec![
                 // c.value += 10
-                Instruction::LoadVar(1),        // Load c
-                Instruction::Copy(0),           // Duplicate c reference
-                Instruction::LoadField(0),      // Load c.value
-                Instruction::LoadConst(Value::Int(10)),      // Load 10
-                Instruction::BinOp(BinOp::Add), // Add
-                Instruction::StoreField(0),     // Store back to c.value
+                Instruction::LoadVar(1),                // Load c
+                Instruction::Copy(0),                   // Duplicate c reference
+                Instruction::LoadField(0),              // Load c.value
+                Instruction::LoadConst(Value::Int(10)), // Load 10
+                Instruction::BinOp(BinOp::Add),         // Add
+                Instruction::StoreField(0),             // Store back to c.value
                 // c.value
                 Instruction::LoadVar(1),   // Load c
                 Instruction::LoadField(0), // Load c.value
@@ -378,13 +380,13 @@ fn nested_field_read_bytecode() -> anyhow::Result<()> {
             vec![
                 // Create Outer { inner: Inner { value: 42 } }
                 Instruction::AllocInstance(Value::class("Outer")), // Outer class
-                Instruction::Copy(0),                                 // Copy Outer instance
+                Instruction::Copy(0),                              // Copy Outer instance
                 // Create Inner inline
                 Instruction::AllocInstance(Value::class("Inner")), // Inner class
-                Instruction::Copy(0),                                 // Copy Inner instance
-                Instruction::LoadConst(Value::Int(42)),                            // 42
-                Instruction::StoreField(0),                           // Inner.value = 42
-                Instruction::StoreField(0), // Outer.inner = Inner instance
+                Instruction::Copy(0),                              // Copy Inner instance
+                Instruction::LoadConst(Value::Int(42)),            // 42
+                Instruction::StoreField(0),                        // Inner.value = 42
+                Instruction::StoreField(0),                        // Outer.inner = Inner instance
                 // o.inner.value
                 Instruction::LoadVar(1),   // Load o
                 Instruction::LoadField(0), // Load o.inner (returns Inner)
@@ -421,19 +423,19 @@ fn nested_object_construction_bytecode() -> anyhow::Result<()> {
             vec![
                 // Outer constructor
                 Instruction::AllocInstance(Value::class("Outer")), // Outer
-                Instruction::Copy(0),                                 // Copy Outer instance
+                Instruction::Copy(0),                              // Copy Outer instance
                 // Nested Inner construction
                 Instruction::AllocInstance(Value::class("Inner")), // Inner
-                Instruction::Copy(0),                                 // Copy Inner instance
-                Instruction::LoadConst(Value::Int(10)),                            // 10
-                Instruction::StoreField(0),                           // x = 10
-                Instruction::Copy(0),                                 // Copy Inner instance again
-                Instruction::LoadConst(Value::Int(20)),                            // 20
-                Instruction::StoreField(1),                           // y = 20
-                Instruction::StoreField(0),                           // Outer.inner = Inner
-                Instruction::Copy(0),                                 // Copy Outer instance
-                Instruction::LoadConst(Value::Int(30)),                            // 30
-                Instruction::StoreField(1),                           // Outer.value = 30
+                Instruction::Copy(0),                              // Copy Inner instance
+                Instruction::LoadConst(Value::Int(10)),            // 10
+                Instruction::StoreField(0),                        // x = 10
+                Instruction::Copy(0),                              // Copy Inner instance again
+                Instruction::LoadConst(Value::Int(20)),            // 20
+                Instruction::StoreField(1),                        // y = 20
+                Instruction::StoreField(0),                        // Outer.inner = Inner
+                Instruction::Copy(0),                              // Copy Outer instance
+                Instruction::LoadConst(Value::Int(30)),            // 30
+                Instruction::StoreField(1),                        // Outer.value = 30
                 // o.value
                 Instruction::LoadVar(1),   // o
                 Instruction::LoadField(1), // value
@@ -463,10 +465,10 @@ fn nested_field_assignment_bytecode() -> anyhow::Result<()> {
             "setNestedValue",
             vec![
                 // o.inner.value = 99
-                Instruction::LoadVar(2),    // Load o
-                Instruction::LoadField(0),  // Load o.inner (returns Inner object)
-                Instruction::LoadConst(Value::Int(99)),  // Load 99
-                Instruction::StoreField(0), // Store to inner.value
+                Instruction::LoadVar(2),                // Load o
+                Instruction::LoadField(0),              // Load o.inner (returns Inner object)
+                Instruction::LoadConst(Value::Int(99)), // Load 99
+                Instruction::StoreField(0),             // Store to inner.value
                 // o.inner.value
                 Instruction::LoadVar(2),   // Load o
                 Instruction::LoadField(0), // Load o.inner
@@ -497,13 +499,13 @@ fn nested_field_assignment_compound_bytecode() -> anyhow::Result<()> {
             "incrementNestedValue",
             vec![
                 // o.inner.value += 10
-                Instruction::LoadVar(1),        // Load o
-                Instruction::LoadField(0),      // Load o.inner (returns Inner object)
-                Instruction::Copy(0),           // Duplicate inner reference
-                Instruction::LoadField(0),      // Load inner.value
-                Instruction::LoadConst(Value::Int(10)),      // Load 10
-                Instruction::BinOp(BinOp::Add), // Add
-                Instruction::StoreField(0),     // Store back to inner.value
+                Instruction::LoadVar(1),                // Load o
+                Instruction::LoadField(0),              // Load o.inner (returns Inner object)
+                Instruction::Copy(0),                   // Duplicate inner reference
+                Instruction::LoadField(0),              // Load inner.value
+                Instruction::LoadConst(Value::Int(10)), // Load 10
+                Instruction::BinOp(BinOp::Add),         // Add
+                Instruction::StoreField(0),             // Store back to inner.value
                 // o.inner.value
                 Instruction::LoadVar(1),   // Load o
                 Instruction::LoadField(0), // Load o.inner
@@ -531,9 +533,9 @@ fn field_assignment_simple_bytecode() -> anyhow::Result<()> {
             "setDataValue",
             vec![
                 // d.value = 42
-                Instruction::LoadVar(1),    // Load d
-                Instruction::LoadConst(Value::Int(42)),  // Load 42
-                Instruction::StoreField(0), // Store to d.value
+                Instruction::LoadVar(1),                // Load d
+                Instruction::LoadConst(Value::Int(42)), // Load 42
+                Instruction::StoreField(0),             // Store to d.value
                 // d.value
                 Instruction::LoadVar(1),   // Load d
                 Instruction::LoadField(0), // Load d.value

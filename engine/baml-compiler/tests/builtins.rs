@@ -1,6 +1,6 @@
 //! Compiler tests for built-in method calls.
 
-use baml_vm::test::{Instruction, Object, Value};
+use baml_vm::test::{Instruction, Value};
 
 mod common;
 use common::{assert_compiles, Program};

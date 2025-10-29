@@ -5,16 +5,16 @@
 //! order of globals, constants, and objects.
 
 use baml_types::{BamlMap, BamlMedia};
-use crate::{
-    bytecode::{BlockNotification as VmBlockNotification, BlockNotificationType, BinOp, CmpOp, UnaryOp},
-    errors::VmError,
-    vm::WatchNotification as VmWatchNotification,
-    watch::{self, Watch},
-    BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool,
-    Instruction as VmInstruction,
-    Object as VmObject, ObjectIndex, ObjectPool, StackIndex, Value as VmValue, Vm, VmExecState,
-};
 use indexmap::IndexMap;
+
+use crate::{
+    bytecode::{
+        BinOp, BlockNotification as VmBlockNotification, BlockNotificationType, CmpOp, UnaryOp,
+    },
+    vm::WatchNotification as VmWatchNotification,
+    watch::{self},
+    Object as VmObject, ObjectIndex, Value as VmValue, Vm, VmExecState,
+};
 
 /// Test-friendly representation of VM values that doesn't rely on object
 /// indices.
