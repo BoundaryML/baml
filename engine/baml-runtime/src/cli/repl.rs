@@ -256,6 +256,7 @@ impl ReplState {
         }
     }
 
+    #[allow(clippy::print_stdout)]
     fn load_baml_sources(&mut self, path: PathBuf) -> Result<()> {
         let runtime =
             BamlRuntime::from_directory(&path, self.env_vars.clone(), Default::default()).context(
@@ -395,6 +396,7 @@ impl ReplState {
         Ok(output)
     }
 
+    #[allow(clippy::print_stdout)]
     fn reset(&mut self) {
         self.variables.clear();
         println!("✓ Reset interpreter environment");
@@ -842,6 +844,7 @@ impl ReplState {
 }
 
 impl ReplArgs {
+    #[allow(clippy::print_stdout)]
     pub async fn run(&self) -> Result<()> {
         // Suppress logging while TUI is active so logs don't corrupt the UI
         let _ = baml_log::set_log_level(baml_log::Level::Off);
@@ -1629,6 +1632,7 @@ impl ReplArgs {
         Ok(())
     }
 
+    #[allow(clippy::print_stdout)]
     fn handle_command(&self, state: &mut ReplState, input: &str) -> Result<Option<String>> {
         let parts: Vec<&str> = input[1..].split_whitespace().collect();
         if parts.is_empty() {

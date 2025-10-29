@@ -233,7 +233,7 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                 run_and_stream(&mut cmd)?;
             }
         } else {
-            println!("Not running! Set RUN_GENERATOR_TESTS=1 to run tests");
+            eprintln!("Not running! Set RUN_GENERATOR_TESTS=1 to run tests");
         }
 
         Ok(())
@@ -246,6 +246,7 @@ use std::{
     thread,
 };
 
+#[allow(clippy::print_stdout)]
 fn run_and_stream(cmd: &mut Command) -> anyhow::Result<()> {
     // Pipe both streams before we spawn.
     let mut child = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;

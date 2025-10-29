@@ -11,7 +11,7 @@ use internal_baml_diagnostics::Span;
 
 use crate::{
     thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, THir},
-    watch::{shared_handler, SharedWatchHandler, WatchNotification},
+    watch::{SharedWatchHandler, WatchNotification},
 };
 
 // Type alias for pinned boxed futures - conditionally Send for non-WASM targets
@@ -2156,31 +2156,69 @@ where
                 right,
                 meta,
             } => {
-                let left_val = expect_value(
-                    evaluate_expr(
-                        left,
-                        scopes,
-                        thir,
-                        run_llm_function,
-                        watch_handler,
-                        function_name,
-                    )
-                    .await?,
-                )?;
-                let right_val = expect_value(
-                    evaluate_expr(
-                        right,
-                        scopes,
-                        thir,
-                        run_llm_function,
-                        watch_handler,
-                        function_name,
-                    )
-                    .await?,
-                )?;
+                // Special handling for instanceof: right operand is a type name, not a value
+                if matches!(operator, crate::hir::BinaryOperator::InstanceOf) {
+                    let left_val = expect_value(
+                        evaluate_expr(
+                            left,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
+                    )?;
 
-                let result = evaluate_binary_op(operator, &left_val, &right_val, meta)?;
-                EvalValue::Value(result)
+                    // Extract class name from right side (should be Expr::Var)
+                    let class_name = match right.as_ref() {
+                        Expr::Var(name, _) => name.clone(),
+                        _ => bail!(
+                            "instanceof requires a class name on the right side at {:?}",
+                            meta.0
+                        ),
+                    };
+
+                    // Check if left value is a class instance matching the class name
+                    let result = match left_val {
+                        BamlValueWithMeta::Class(ref left_class, ..) => {
+                            BamlValueWithMeta::Bool(left_class == &class_name, meta.clone())
+                        }
+                        _ => bail!(
+                            "instanceof requires a class instance on the left side at {:?}",
+                            meta.0
+                        ),
+                    };
+
+                    EvalValue::Value(result)
+                } else {
+                    // Normal binary operation: evaluate both sides
+                    let left_val = expect_value(
+                        evaluate_expr(
+                            left,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
+                    )?;
+                    let right_val = expect_value(
+                        evaluate_expr(
+                            right,
+                            scopes,
+                            thir,
+                            run_llm_function,
+                            watch_handler,
+                            function_name,
+                        )
+                        .await?,
+                    )?;
+
+                    let result = evaluate_binary_op(operator, &left_val, &right_val, meta)?;
+                    EvalValue::Value(result)
+                }
             }
             Expr::UnaryOperation {
                 operator,
@@ -2208,8 +2246,16 @@ where
                 args,
                 meta,
             } => {
-                let receiver_val = expect_value(
-                    evaluate_expr(
+                // Extract method name
+                let method_name = match method.as_ref() {
+                    Expr::Var(name, _) => name.clone(),
+                    _ => bail!("method name must be an identifier at {:?}", meta.0),
+                };
+
+                // For mutating methods like push(), we need the cell reference
+                if method_name == "push" {
+                    // Get the receiver as a reference (cell) if possible
+                    let receiver_eval = evaluate_expr(
                         receiver,
                         scopes,
                         thir,
@@ -2217,22 +2263,48 @@ where
                         watch_handler,
                         function_name,
                     )
-                    .await?,
-                )?;
+                    .await?;
 
-                // Extract method name
-                let method_name = match method.as_ref() {
-                    Expr::Var(name, _) => name.clone(),
-                    _ => bail!("method name must be an identifier at {:?}", meta.0),
-                };
+                    let receiver_cell = match receiver_eval {
+                        EvalValue::Reference(cell) => cell,
+                        _ => bail!("push() can only be called on a variable at {:?}", meta.0),
+                    };
 
-                // Evaluate arguments
-                let mut arg_vals: Vec<BamlValueWithMeta<ExprMetadata>> =
-                    Vec::with_capacity(args.len());
-                for arg in args.iter() {
-                    arg_vals.push(expect_value(
+                    // Evaluate arguments
+                    let mut arg_vals: Vec<BamlValueWithMeta<ExprMetadata>> =
+                        Vec::with_capacity(args.len());
+                    for arg in args.iter() {
+                        arg_vals.push(expect_value(
+                            evaluate_expr(
+                                arg,
+                                scopes,
+                                thir,
+                                run_llm_function,
+                                watch_handler,
+                                function_name,
+                            )
+                            .await?,
+                        )?);
+                    }
+
+                    // Mutate the array
+                    let mut receiver_val = receiver_cell.lock().unwrap();
+                    match &mut *receiver_val {
+                        BamlValueWithMeta::List(items, _) => {
+                            if arg_vals.len() != 1 {
+                                bail!("push() expects exactly one argument at {:?}", meta.0);
+                            }
+                            items.push(arg_vals[0].clone());
+                            // Return void/unit
+                            EvalValue::Value(BamlValueWithMeta::Null(meta.clone()))
+                        }
+                        _ => bail!("push() can only be called on arrays at {:?}", meta.0),
+                    }
+                } else {
+                    // Non-mutating methods
+                    let receiver_val = expect_value(
                         evaluate_expr(
-                            arg,
+                            receiver,
                             scopes,
                             thir,
                             run_llm_function,
@@ -2240,11 +2312,29 @@ where
                             function_name,
                         )
                         .await?,
-                    )?);
-                }
+                    )?;
 
-                let result = evaluate_method_call(&receiver_val, &method_name, &arg_vals, meta)?;
-                EvalValue::Value(result)
+                    // Evaluate arguments
+                    let mut arg_vals: Vec<BamlValueWithMeta<ExprMetadata>> =
+                        Vec::with_capacity(args.len());
+                    for arg in args.iter() {
+                        arg_vals.push(expect_value(
+                            evaluate_expr(
+                                arg,
+                                scopes,
+                                thir,
+                                run_llm_function,
+                                watch_handler,
+                                function_name,
+                            )
+                            .await?,
+                        )?);
+                    }
+
+                    let result =
+                        evaluate_method_call(&receiver_val, &method_name, &arg_vals, meta)?;
+                    EvalValue::Value(result)
+                }
             }
             Expr::Paren(inner, _) => {
                 evaluate_expr(
@@ -2732,33 +2822,193 @@ fn evaluate_method_call(
     meta: &ExprMetadata,
 ) -> Result<BamlValueWithMeta<ExprMetadata>> {
     match method_name {
-        "len" => {
-            // Array/List length method
+        "length" => {
+            // Array/List/String/Map length method
             match receiver {
                 BamlValueWithMeta::List(items, _) => {
                     if !args.is_empty() {
-                        bail!("len() method takes no arguments at {:?}", meta.0);
+                        bail!("length() method takes no arguments at {:?}", meta.0);
                     }
                     Ok(BamlValueWithMeta::Int(items.len() as i64, meta.clone()))
                 }
                 BamlValueWithMeta::String(s, _) => {
                     if !args.is_empty() {
-                        bail!("len() method takes no arguments at {:?}", meta.0);
+                        bail!("length() method takes no arguments at {:?}", meta.0);
                     }
-                    Ok(BamlValueWithMeta::Int(s.len() as i64, meta.clone()))
+                    Ok(BamlValueWithMeta::Int(
+                        s.chars().count() as i64,
+                        meta.clone(),
+                    ))
                 }
                 BamlValueWithMeta::Map(map, _) => {
                     if !args.is_empty() {
-                        bail!("len() method takes no arguments at {:?}", meta.0);
+                        bail!("length() method takes no arguments at {:?}", meta.0);
                     }
                     Ok(BamlValueWithMeta::Int(map.len() as i64, meta.clone()))
                 }
                 _ => bail!(
-                    "len() method not available on type {:?} at {:?}",
+                    "length() method not available on type {:?} at {:?}",
                     receiver,
                     meta.0
                 ),
             }
+        }
+        "toLowerCase" => {
+            let BamlValueWithMeta::String(s, _) = receiver else {
+                bail!(
+                    "toLowerCase() method only available on strings at {:?}",
+                    meta.0
+                );
+            };
+            if !args.is_empty() {
+                bail!("toLowerCase() method takes no arguments at {:?}", meta.0);
+            }
+            Ok(BamlValueWithMeta::String(s.to_lowercase(), meta.clone()))
+        }
+        "toUpperCase" => {
+            let BamlValueWithMeta::String(s, _) = receiver else {
+                bail!(
+                    "toUpperCase() method only available on strings at {:?}",
+                    meta.0
+                );
+            };
+            if !args.is_empty() {
+                bail!("toUpperCase() method takes no arguments at {:?}", meta.0);
+            }
+            Ok(BamlValueWithMeta::String(s.to_uppercase(), meta.clone()))
+        }
+        "trim" => {
+            let BamlValueWithMeta::String(s, _) = receiver else {
+                bail!("trim() method only available on strings at {:?}", meta.0);
+            };
+            if !args.is_empty() {
+                bail!("trim() method takes no arguments at {:?}", meta.0);
+            }
+            Ok(BamlValueWithMeta::String(
+                s.trim().to_string(),
+                meta.clone(),
+            ))
+        }
+        "includes" => {
+            let BamlValueWithMeta::String(s, _) = receiver else {
+                bail!(
+                    "includes() method only available on strings at {:?}",
+                    meta.0
+                );
+            };
+            if args.len() != 1 {
+                bail!("includes() method takes exactly 1 argument at {:?}", meta.0);
+            }
+            let BamlValueWithMeta::String(search, _) = &args[0] else {
+                bail!("includes() argument must be a string at {:?}", meta.0);
+            };
+            Ok(BamlValueWithMeta::Bool(
+                s.contains(search.as_str()),
+                meta.clone(),
+            ))
+        }
+        "startsWith" => {
+            let BamlValueWithMeta::String(s, _) = receiver else {
+                bail!(
+                    "startsWith() method only available on strings at {:?}",
+                    meta.0
+                );
+            };
+            if args.len() != 1 {
+                bail!(
+                    "startsWith() method takes exactly 1 argument at {:?}",
+                    meta.0
+                );
+            }
+            let BamlValueWithMeta::String(prefix, _) = &args[0] else {
+                bail!("startsWith() argument must be a string at {:?}", meta.0);
+            };
+            Ok(BamlValueWithMeta::Bool(
+                s.starts_with(prefix.as_str()),
+                meta.clone(),
+            ))
+        }
+        "endsWith" => {
+            let BamlValueWithMeta::String(s, _) = receiver else {
+                bail!(
+                    "endsWith() method only available on strings at {:?}",
+                    meta.0
+                );
+            };
+            if args.len() != 1 {
+                bail!("endsWith() method takes exactly 1 argument at {:?}", meta.0);
+            }
+            let BamlValueWithMeta::String(suffix, _) = &args[0] else {
+                bail!("endsWith() argument must be a string at {:?}", meta.0);
+            };
+            Ok(BamlValueWithMeta::Bool(
+                s.ends_with(suffix.as_str()),
+                meta.clone(),
+            ))
+        }
+        "split" => {
+            let BamlValueWithMeta::String(s, _) = receiver else {
+                bail!("split() method only available on strings at {:?}", meta.0);
+            };
+            if args.len() != 1 {
+                bail!("split() method takes exactly 1 argument at {:?}", meta.0);
+            }
+            let BamlValueWithMeta::String(delimiter, _) = &args[0] else {
+                bail!("split() argument must be a string at {:?}", meta.0);
+            };
+            let parts: Vec<BamlValueWithMeta<ExprMetadata>> = s
+                .split(delimiter.as_str())
+                .map(|part| BamlValueWithMeta::String(part.to_string(), meta.clone()))
+                .collect();
+            Ok(BamlValueWithMeta::List(parts, meta.clone()))
+        }
+        "substring" => {
+            let BamlValueWithMeta::String(s, _) = receiver else {
+                bail!(
+                    "substring() method only available on strings at {:?}",
+                    meta.0
+                );
+            };
+            if args.len() != 2 {
+                bail!(
+                    "substring() method takes exactly 2 arguments at {:?}",
+                    meta.0
+                );
+            }
+            let BamlValueWithMeta::Int(start, _) = &args[0] else {
+                bail!("substring() start argument must be an int at {:?}", meta.0);
+            };
+            let BamlValueWithMeta::Int(end, _) = &args[1] else {
+                bail!("substring() end argument must be an int at {:?}", meta.0);
+            };
+
+            let start = (*start as usize).min(s.len());
+            let end = (*end as usize).min(s.len()).max(start);
+
+            Ok(BamlValueWithMeta::String(
+                s[start..end].to_string(),
+                meta.clone(),
+            ))
+        }
+        "replace" => {
+            let BamlValueWithMeta::String(s, _) = receiver else {
+                bail!("replace() method only available on strings at {:?}", meta.0);
+            };
+            if args.len() != 2 {
+                bail!("replace() method takes exactly 2 arguments at {:?}", meta.0);
+            }
+            let BamlValueWithMeta::String(search, _) = &args[0] else {
+                bail!("replace() search argument must be a string at {:?}", meta.0);
+            };
+            let BamlValueWithMeta::String(replacement, _) = &args[1] else {
+                bail!(
+                    "replace() replacement argument must be a string at {:?}",
+                    meta.0
+                );
+            };
+            // Replace first occurrence only (matching JavaScript behavior)
+            let result = s.replacen(search.as_str(), replacement.as_str(), 1);
+            Ok(BamlValueWithMeta::String(result, meta.clone()))
         }
         _ => bail!(
             "unknown method '{}' at {:?}, should have been caught during typechecking",
@@ -2843,15 +3093,13 @@ mod tests {
             + Send
             + Sync,
     {
-        let handle_watch = shared_handler(|notification: WatchNotification| {
-            eprintln!("Ignoring watch notification: {notification}");
-        });
+        let noop_watch_handler = crate::watch::shared_noop_handler();
         interpret_thir(
             "test".to_string(),
             thir,
             expr,
             handle_llm_call,
-            handle_watch,
+            noop_watch_handler,
             extra_bindings,
             env_vars,
         )
@@ -2965,46 +3213,6 @@ mod tests {
         let out = result.unwrap();
         match out {
             BamlValueWithMeta::Int(i, _) => assert_eq!(i, 10),
-            v => panic!("expected int, got {v:?}"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_method_call_array_len() {
-        let (thir, expr) = thir_from_src("", "[1, 2, 3].len()");
-
-        let result = interpret_thir_ignoring_watch(
-            thir,
-            expr,
-            mock_llm_function,
-            BamlMap::new(),
-            HashMap::new(),
-        )
-        .await
-        .unwrap();
-
-        match result {
-            BamlValueWithMeta::Int(len, _) => assert_eq!(len, 3),
-            v => panic!("expected int, got {v:?}"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_method_call_string_len() {
-        let (thir, expr) = thir_from_src("", r#""hello".len()"#);
-
-        let result = interpret_thir_ignoring_watch(
-            thir,
-            expr,
-            mock_llm_function,
-            BamlMap::new(),
-            HashMap::new(),
-        )
-        .await
-        .unwrap();
-
-        match result {
-            BamlValueWithMeta::Int(len, _) => assert_eq!(len, 5),
             v => panic!("expected int, got {v:?}"),
         }
     }

@@ -1,3 +1,4 @@
+#![deny(clippy::print_stdout)]
 use std::num::NonZeroUsize;
 
 use anyhow::Context;

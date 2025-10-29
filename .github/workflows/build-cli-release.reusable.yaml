@@ -15,6 +15,7 @@ on:
   push:
     branches:
       - sam/mise-protoc-gen-go
+      - aaron/fix-windows
 env:
   MACOSX_DEPLOYMENT_TARGET: "10.13"
   # Turbo remote caching
@@ -82,10 +83,28 @@ jobs:
       - name: Setup Go
         uses: ./.github/actions/setup-go
 
-
       - uses: jdx/mise-action@v2
+        if: matrix._.os != 'windows-2022'
         with:
           install_args: "protoc-gen-go"
+
+      - name: Setup Protoc (Windows)
+        if: matrix._.os == 'windows-2022'
+        shell: bash
+        run: |
+          # Download protoc directly to avoid rate limiting
+          PROTOC_VERSION="27.1"
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-win64.zip"
+          unzip -q protoc-${PROTOC_VERSION}-win64.zip -d $HOME/.local
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          rm protoc-${PROTOC_VERSION}-win64.zip
+
+      - name: Install protoc-gen-go (Windows)
+        if: matrix._.os == 'windows-2022'
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34.1
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+        shell: bash
 
       - name: Test protoc-gen-go availability
         id: protoc_gen_go_setup
@@ -135,7 +154,8 @@ jobs:
           --no-default-features
         working-directory: engine
 
-      - name: Build CFFI Library
+      - name: Build CFFI Library (Unix)
+        if: ${{ !contains(matrix._.os, 'windows') }}
         shell: bash
         run: |
           # Set the correct protoc-gen-go path based on whether we're using cross (Linux) or native build
@@ -155,6 +175,13 @@ jobs:
           export PATH=$PATH:$GOROOT:$GOPATH:$GOBIN
 
           ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
+        working-directory: engine
+
+      - name: Build CFFI Library (Windows)
+        if: ${{ contains(matrix._.os, 'windows') }}
+        shell: bash
+        run: |
+          cargo build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
         working-directory: engine
 
       # Determine CFFI library name and artifact suffix based on OS

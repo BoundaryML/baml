@@ -92,6 +92,8 @@ function Nested() -> int {
 // Class: baml.HttpRequest with 5 fields
 // Class: baml.WatchOptions with 2 fields
 // Enum baml.HttpMethod
+// Function: baml.String.length
+//
 // Function: baml.Array.length
 //
 // Function: baml.Array.push
@@ -99,6 +101,24 @@ function Nested() -> int {
 // Function: baml.Map.length
 //
 // Function: baml.Map.has
+//
+// Function: baml.String.toLowerCase
+//
+// Function: baml.String.toUpperCase
+//
+// Function: baml.String.trim
+//
+// Function: baml.String.includes
+//
+// Function: baml.String.startsWith
+//
+// Function: baml.String.endsWith
+//
+// Function: baml.String.split
+//
+// Function: baml.String.substring
+//
+// Function: baml.String.replace
 //
 // Function: baml.media.image.from_url
 //

@@ -92,11 +92,11 @@ impl BamlAsyncVmRuntime {
             .get(function_name)
             .map(|(index, _)| *index)
         else {
-            return println!("function not found: {function_name}");
+            return eprintln!("function not found: {function_name}");
         };
 
         let baml_vm::Object::Function(function) = &self.program.objects[index] else {
-            return println!("not a function: {function_name}");
+            return eprintln!("not a function: {function_name}");
         };
 
         baml_vm::debug::disassemble(

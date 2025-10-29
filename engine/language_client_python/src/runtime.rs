@@ -19,10 +19,10 @@ type PickleReduceResult = PyResult<(
     ),
 )>;
 
-// Conditional runtime selection based on the "interpreter" feature flag
-#[cfg(feature = "interpreter")]
+// Conditional runtime selection based on the "thir-interpreter" feature flag
+#[cfg(feature = "thir-interpreter")]
 pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
-#[cfg(not(feature = "interpreter"))]
+#[cfg(not(feature = "thir-interpreter"))]
 pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
 
 use crate::{
@@ -985,6 +985,12 @@ impl BamlRuntime {
 
     #[pyo3()]
     fn flush(&self) -> PyResult<()> {
+        // Abort any active operations before flushing
+        crate::abort_controller::abort_all_active_operations();
+
+        // Give operations a moment to finish and emit their events
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
         self.inner.flush().map_err(BamlError::from_anyhow)
     }
 

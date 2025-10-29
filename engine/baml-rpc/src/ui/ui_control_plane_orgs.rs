@@ -15,6 +15,13 @@ pub struct Organization {
     pub stripe_subscription_id: Option<String>,
     #[ts(optional)]
     pub stripe_subscription_status: Option<String>,
+    #[ts(optional)]
+    pub stripe_entitlements: Option<Vec<String>>,
+    /// Complete Stripe subscription state (single source of truth)
+    /// Contains subscription data + entitlements from 2 Stripe API calls
+    /// stripe_entitlements[] is derived from this JSON for fast indexed queries
+    #[ts(optional, type = "any")]
+    pub stripe_subscription_data: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -54,6 +61,10 @@ pub struct UpdateOrganizationRequest {
     pub stripe_subscription_id: Option<String>,
     #[ts(optional)]
     pub stripe_subscription_status: Option<String>,
+    #[ts(optional)]
+    pub stripe_entitlements: Option<Vec<String>>,
+    #[ts(optional, type = "any")]
+    pub stripe_subscription_data: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -90,4 +101,50 @@ impl ApiEndpoint for GetOrganization {
     type Response<'a> = GetOrganizationResponse;
 
     const PATH: &'static str = "/v1/get-organization";
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct DeleteOrganizationRequest {
+    pub org_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct DeleteOrganizationResponse {
+    pub success: bool,
+}
+
+pub struct DeleteOrganization;
+
+impl ApiEndpoint for DeleteOrganization {
+    type Request<'a> = DeleteOrganizationRequest;
+    type Response<'a> = DeleteOrganizationResponse;
+
+    const PATH: &'static str = "/v1/delete-organization";
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct SyncStripeSubscriptionRequest {
+    pub org_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct SyncStripeSubscriptionResponse {
+    pub success: bool,
+    #[ts(optional)]
+    pub error: Option<String>,
+    #[ts(optional, type = "any")]
+    pub data: Option<serde_json::Value>,
+}
+
+pub struct SyncStripeSubscription;
+
+impl ApiEndpoint for SyncStripeSubscription {
+    type Request<'a> = SyncStripeSubscriptionRequest;
+    type Response<'a> = SyncStripeSubscriptionResponse;
+
+    const PATH: &'static str = "/v1/billing/sync-stripe-subscription";
 }

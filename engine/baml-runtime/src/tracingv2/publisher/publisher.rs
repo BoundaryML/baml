@@ -660,7 +660,7 @@ impl TracePublisher {
         #[cfg(not(target_arch = "wasm32"))]
         {
             if let Ok(trace_file_path) = std::env::var("BAML_TRACE_FILE") {
-                println!("Writing trace events to file: {trace_file_path}");
+                eprintln!("Writing trace events to file: {trace_file_path}");
                 use tokio::fs::OpenOptions;
                 if let Ok(mut file) = OpenOptions::new()
                     .create(true)

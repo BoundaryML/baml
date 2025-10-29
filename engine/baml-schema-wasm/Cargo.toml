@@ -73,7 +73,7 @@ futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
 [features]
 default = []
 # Use the THIR interpreter runtime instead of the VM bytecode runtime
-interpreter = ["baml-runtime/interpreter"]
+thir-interpreter = ["baml-runtime/thir-interpreter"]
 
 # [profile.release]
 # debug = true

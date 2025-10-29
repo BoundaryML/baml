@@ -911,6 +911,7 @@ async def test_tracing_async_only():
         # )
         return 1
 
+
     # Set up trace file for verification
     trace_file = os.environ["BAML_TRACE_FILE"]
     if os.path.exists(trace_file):
@@ -938,6 +939,84 @@ async def test_tracing_async_only():
         assert_that(event_counts["function_start"]).is_equal_to(
             event_counts["function_end"]
         )
+
+        # Verify callstack hierarchy and parent IDs
+        events = []
+        with open(trace_file, "r") as f:
+            for line in f:
+                try:
+                    event = json.loads(line.strip())
+                    events.append(event)
+                except json.JSONDecodeError:
+                    continue
+
+        # Build a map of call_id -> event for function_start events
+        call_map = {}
+        for event in events:
+            if event.get("content", {}).get("type") == "function_start":
+                call_id = event["call_id"]
+                call_stack = event["call_stack"]
+                function_name = event["content"]["data"]["function_display_name"]
+                call_map[call_id] = {
+                    "call_stack": call_stack,
+                    "function_name": function_name,
+                }
+
+        # Find top_level_async_tracing - it should have a call_stack of length 1
+        top_level_id = None
+        for call_id, info in call_map.items():
+            if info["function_name"] == "top_level_async_tracing":
+                top_level_id = call_id
+                assert_that(info["call_stack"]).is_equal_to([call_id])
+                print(f"✓ top_level_async_tracing: call_stack = [{call_id}]")
+                break
+
+        assert_that(top_level_id).is_not_none()
+
+        # Find all dummy_fn calls - they should have call_stack [top_level_id, dummy_fn_id]
+        dummy_fn_ids = []
+        for call_id, info in call_map.items():
+            if info["function_name"] == "dummy_fn":
+                assert_that(info["call_stack"]).is_equal_to([top_level_id, call_id])
+                dummy_fn_ids.append(call_id)
+                print(f"✓ dummy_fn: call_stack = [top_level_async_tracing, {call_id}]")
+
+        # Should have 3 dummy_fn calls
+        assert_that(len(dummy_fn_ids)).is_equal_to(3)
+
+        # Find all nested_dummy_fn calls - they should have call_stack [top_level_id, parent_dummy_fn_id, nested_dummy_fn_id]
+        nested_dummy_fn_count = 0
+        for call_id, info in call_map.items():
+            if info["function_name"] == "nested_dummy_fn":
+                call_stack = info["call_stack"]
+                assert_that(len(call_stack)).is_equal_to(3)
+                assert_that(call_stack[0]).is_equal_to(top_level_id)
+                assert_that(call_stack[1]).is_in(*dummy_fn_ids)
+                assert_that(call_stack[2]).is_equal_to(call_id)
+                parent_dummy_fn_id = call_stack[1]
+                print(f"✓ nested_dummy_fn: call_stack = [top_level_async_tracing, dummy_fn:{parent_dummy_fn_id}, {call_id}]")
+                nested_dummy_fn_count += 1
+
+        # Should have 3 nested_dummy_fn calls (one per dummy_fn)
+        assert_that(nested_dummy_fn_count).is_equal_to(3)
+
+        # Find all FnOutputClass calls - they should have call_stack [top_level_id, parent_dummy_fn_id, FnOutputClass_id]
+        fn_output_class_count = 0
+        for call_id, info in call_map.items():
+            if info["function_name"] == "FnOutputClass":
+                call_stack = info["call_stack"]
+                assert_that(len(call_stack)).is_equal_to(3)
+                assert_that(call_stack[0]).is_equal_to(top_level_id)
+                assert_that(call_stack[1]).is_in(*dummy_fn_ids)
+                assert_that(call_stack[2]).is_equal_to(call_id)
+                parent_dummy_fn_id = call_stack[1]
+                print(f"✓ FnOutputClass: call_stack = [top_level_async_tracing, dummy_fn:{parent_dummy_fn_id}, {call_id}]")
+                fn_output_class_count += 1
+
+        # Should have 3 FnOutputClass calls (one per dummy_fn, called in failsafe_baml_fn)
+        assert_that(fn_output_class_count).is_equal_to(3)
+
+        print("✓ Callstack verification complete!")
     finally:
         pass
 

@@ -241,6 +241,8 @@ pub struct OrderBy {
 #[derive(Debug, Deserialize, Serialize, TS, Clone)]
 #[ts(export)]
 pub enum RelativeTime {
+    #[serde(rename = "5m")]
+    FiveMinutes,
     #[serde(rename = "1h")]
     OneHour,
     #[serde(rename = "6h")]

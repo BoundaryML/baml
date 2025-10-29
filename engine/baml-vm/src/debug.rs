@@ -370,5 +370,5 @@ pub fn disassemble(
 
     let disassembly = display_bytecode(function, stack, objects, globals, use_colors);
 
-    println!("{disassembly}");
+    eprintln!("{disassembly}");
 }

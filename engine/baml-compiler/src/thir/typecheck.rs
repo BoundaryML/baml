@@ -106,6 +106,7 @@ pub fn typecheck_returning_context<'a>(
         // For now, create a simple function signature
         // baml.Array.length takes an array and returns int
         let function_type = match name.as_str() {
+            "baml.String.length" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::int()),
             "baml.Array.length" => TypeIR::arrow(
                 vec![TypeIR::List(Box::new(TypeIR::null()), Default::default())],
                 TypeIR::int(),
@@ -138,6 +139,32 @@ pub fn typecheck_returning_context<'a>(
                     TypeIR::string(),
                 ],
                 TypeIR::bool(),
+            ),
+            // String methods
+            "baml.String.length" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::int()),
+            "baml.String.toLowerCase" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::string()),
+            "baml.String.toUpperCase" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::string()),
+            "baml.String.trim" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::string()),
+            "baml.String.includes" => {
+                TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::bool())
+            }
+            "baml.String.startsWith" => {
+                TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::bool())
+            }
+            "baml.String.endsWith" => {
+                TypeIR::arrow(vec![TypeIR::string(), TypeIR::string()], TypeIR::bool())
+            }
+            "baml.String.split" => TypeIR::arrow(
+                vec![TypeIR::string(), TypeIR::string()],
+                TypeIR::List(Box::new(TypeIR::string()), Default::default()),
+            ),
+            "baml.String.substring" => TypeIR::arrow(
+                vec![TypeIR::string(), TypeIR::int(), TypeIR::int()],
+                TypeIR::string(),
+            ),
+            "baml.String.replace" => TypeIR::arrow(
+                vec![TypeIR::string(), TypeIR::string(), TypeIR::string()],
+                TypeIR::string(),
             ),
             "baml.media.image.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::image()),
             "baml.media.audio.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::audio()),
@@ -289,7 +316,7 @@ pub fn typecheck_returning_context<'a>(
             .as_ref()
             .and_then(|e| Some((e, e.meta().1.as_ref()?)))
         {
-            if !types_compatible(expr_return_type, &func.return_type) {
+            if !expr_return_type.is_subtype(&func.return_type) {
                 diagnostics.push_error(DatamodelError::new_validation_error(
                     &format!(
                         "Return type mismatch: function return type is {} but got {}",
@@ -1654,7 +1681,7 @@ pub fn typecheck_expression(
 
                         // Check if argument type matches expected type
                         if let Some(arg_type) = typed_arg.meta().1.as_ref() {
-                            if !types_compatible(arg_type, expected_type) {
+                            if !arg_type.is_subtype(expected_type) {
                                 diagnostics.push_error(DatamodelError::new_validation_error(
                                     "Type mismatch in argument",
                                     arg.span(),
@@ -1957,6 +1984,26 @@ pub fn typecheck_expression(
                     }
                 },
 
+                Some(TypeIR::Primitive(TypeValue::String, _)) => match method.as_str() {
+                    "length" => Some("baml.String.length".to_string()),
+                    "toLowerCase" => Some("baml.String.toLowerCase".to_string()),
+                    "toUpperCase" => Some("baml.String.toUpperCase".to_string()),
+                    "trim" => Some("baml.String.trim".to_string()),
+                    "split" => Some("baml.String.split".to_string()),
+                    "substring" => Some("baml.String.substring".to_string()),
+                    "includes" => Some("baml.String.includes".to_string()),
+                    "startsWith" => Some("baml.String.startsWith".to_string()),
+                    "endsWith" => Some("baml.String.endsWith".to_string()),
+                    "replace" => Some("baml.String.replace".to_string()),
+                    _ => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Method `{method}` is not available on type `string`"),
+                            span.clone(),
+                        ));
+                        None
+                    }
+                },
+
                 Some(TypeIR::Primitive(TypeValue::Media(media_type), _)) => {
                     let subtype = match media_type {
                         BamlMediaType::Image => "baml.media.image",
@@ -2191,7 +2238,7 @@ pub fn typecheck_expression(
                                     }
                                 }
                                 _ => {
-                                    if !types_compatible(arg_type, expected_type) {
+                                    if !arg_type.is_subtype(expected_type) {
                                         diagnostics.push_error(
                                             DatamodelError::new_validation_error(
                                                 &format!(
@@ -2628,7 +2675,16 @@ pub fn typecheck_expression(
                 }) => {
                     // Look up field in enum definition
                     if let Some(enum_def) = context.enums.get(enum_name) {
-                        Some(TypeIR::r#enum(&enum_def.name))
+                        // Validate that the variant exists in the enum
+                        if enum_def.variants.iter().any(|v| &v.name == field) {
+                            Some(TypeIR::r#enum(&enum_def.name))
+                        } else {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Enum {} has no variant {}", enum_name, field),
+                                span.clone(),
+                            ));
+                            None
+                        }
                     } else {
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             &format!("Enum {enum_name} not found"),
@@ -2975,22 +3031,6 @@ fn typecheck_emit(
     }
 }
 
-/// Check if two types are compatible (for now, just equality)
-fn types_compatible(actual: &TypeIR, expected: &TypeIR) -> bool {
-    match (actual, expected) {
-        (TypeIR::Top(_), _) | (_, TypeIR::Top(_)) => true,
-        (TypeIR::Primitive(a, _), TypeIR::Primitive(b, _)) => a == b,
-        (TypeIR::List(a, _), TypeIR::List(b, _)) => types_compatible(a, b),
-        (TypeIR::Map(k1, v1, _), TypeIR::Map(k2, v2, _)) => {
-            types_compatible(k1, k2) && types_compatible(v1, v2)
-        }
-        (TypeIR::Class { name: a, .. }, TypeIR::Class { name: b, .. }) => a == b,
-        (TypeIR::Enum { name: a, .. }, TypeIR::Enum { name: b, .. }) => a == b,
-        // TODO: Handle union types, subtyping, etc.
-        _ => false,
-    }
-}
-
 pub trait TypeCompatibility {
     fn is_optional(&self) -> bool;
     fn is_subtype(&self, expected: &TypeIR) -> bool;
@@ -3013,6 +3053,8 @@ impl TypeCompatibility for TypeIR {
     }
 
     /// Return true if `self` is a subtype of `expected`.
+    /// TODO: Remove wildcard match
+    /// TODO: This needs to account for type aliases.
     fn is_subtype(&self, expected: &TypeIR) -> bool {
         // Semantics similar to IR's `IntermediateRepr::is_subtype`:
         // - Unions on the right: self <: (e1 | e2 | ...) if exists ei s.t. self <: ei
@@ -3041,6 +3083,10 @@ impl TypeCompatibility for TypeIR {
                 TypeIR::Primitive(baml_types::TypeValue::Null, _),
                 TypeIR::Primitive(baml_types::TypeValue::Null, _),
             ) => true,
+            (
+                TypeIR::Primitive(baml_types::TypeValue::Media(x), _),
+                TypeIR::Primitive(baml_types::TypeValue::Media(y), _),
+            ) => x == y,
 
             // Arrays: covariant element
             (TypeIR::List(a_item, _), TypeIR::List(e_item, _)) => a_item.is_subtype(e_item),

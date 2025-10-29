@@ -369,7 +369,7 @@ impl BamlProject {
             match internal_baml_core::FeatureFlags::from_vec(feature_flags.to_vec()) {
                 Ok(flags) => {
                     tracing::info!(
-                        "Successfully converted feature flags to FeatureFlags struct: {:?}",
+                        "Successfully converted feature flags to FeatureFlags struct: {:?}.",
                         flags
                     );
                     flags
