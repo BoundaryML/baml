@@ -344,12 +344,12 @@ fn field_assignment_compound_add_bytecode() -> anyhow::Result<()> {
             "incrementCounter",
             vec![
                 // c.value += 10
-                Instruction::LoadVar("c".to_string()),  // Load c
-                Instruction::Copy(0),                   // Duplicate c reference
-                Instruction::LoadField(0),              // Load c.value
+                Instruction::LoadVar("c".to_string()), // Load c
+                Instruction::Copy(0),                  // Duplicate c reference
+                Instruction::LoadField(0),             // Load c.value
                 Instruction::LoadConst(Value::Int(10)), // Load 10
-                Instruction::BinOp(BinOp::Add),         // Add
-                Instruction::StoreField(0),             // Store back to c.value
+                Instruction::BinOp(BinOp::Add),        // Add
+                Instruction::StoreField(0),            // Store back to c.value
                 // c.value
                 Instruction::LoadVar("c".to_string()), // Load c
                 Instruction::LoadField(0),             // Load c.value

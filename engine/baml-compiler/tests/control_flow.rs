@@ -762,7 +762,7 @@ fn early_return() -> anyhow::Result<()> {
                 Instruction::Return,
                 Instruction::Jump(2), // to 9
                 Instruction::Pop(1),
-                Instruction::LoadVar("x".to_string()),  // x
+                Instruction::LoadVar("x".to_string()), // x
                 Instruction::LoadConst(Value::Int(5)), // 5
                 Instruction::BinOp(BinOp::Add),
                 Instruction::Return,
