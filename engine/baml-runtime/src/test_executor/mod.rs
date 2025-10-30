@@ -145,6 +145,7 @@ fn file_reader_pinned(
 }
 
 impl TestExecutor for BamlRuntime {
+    #[allow(clippy::print_stdout)]
     fn cli_list_tests(&self, args: &TestFilter) -> Result<()> {
         let func_test_pairs = {
             let ir = &self.ir;
@@ -198,6 +199,7 @@ impl TestExecutor for BamlRuntime {
         Ok(())
     }
 
+    #[allow(clippy::print_stdout)]
     async fn cli_run_tests(
         self: std::sync::Arc<Self>,
         args: &TestFilter,

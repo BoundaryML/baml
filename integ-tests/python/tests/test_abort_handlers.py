@@ -3,6 +3,7 @@ import asyncio
 import time
 from baml_client import b
 from baml_py import AbortController
+from baml_py.errors import BamlAbortError
 
 
 @pytest.mark.asyncio
@@ -170,12 +171,17 @@ async def test_early_abort():
     abort_controller = AbortController()
     abort_controller.abort()
 
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(BamlAbortError):
         await b.ExtractName(
             text="John Doe", baml_options={"abort_controller": abort_controller}
         )
 
-    assert "abort" in str(exc_info.value).lower()
+
+def test_baml_abort_error_import_and_instanceof():
+    try:
+        raise BamlAbortError("Operation was aborted")
+    except Exception as e:
+        assert isinstance(e, BamlAbortError)
 
 
 @pytest.mark.asyncio

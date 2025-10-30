@@ -21,8 +21,10 @@ pub use s3::S3UploadMetadata;
 pub use ui::{
     ui_baml_src::{GetBamlSrcBundle, GetBamlSrcBundleRequest, GetBamlSrcBundleResponse},
     ui_control_plane_orgs::{
-        CreateOrganization, CreateOrganizationRequest, CreateOrganizationResponse, GetOrganization,
-        GetOrganizationRequest, GetOrganizationResponse, Organization, UpdateOrganization,
+        CreateOrganization, CreateOrganizationRequest, CreateOrganizationResponse,
+        DeleteOrganization, DeleteOrganizationRequest, DeleteOrganizationResponse, GetOrganization,
+        GetOrganizationRequest, GetOrganizationResponse, Organization, SyncStripeSubscription,
+        SyncStripeSubscriptionRequest, SyncStripeSubscriptionResponse, UpdateOrganization,
         UpdateOrganizationRequest, UpdateOrganizationResponse,
     },
     ui_control_plane_projects::{

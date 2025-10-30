@@ -284,7 +284,69 @@ func run() error {
 </Tabs>
 
 Notes:
-- Tags from `set_tags`/`setTags` on a parent `trace` are merged into the BAML function’s tags.
+- Tags from `set_tags`/`setTags` on a parent `trace` are merged into the BAML function's tags.
 - Per-call tags are provided via `baml_options` in Python and the options object in TypeScript; in Go use `b.WithTags(map[string]string)`.
 - Retrieve tags from a `FunctionLog` using `log.tags` (Python/TypeScript) or `log.Tags()` (Go).
+
+### Tracing with ThreadPoolExecutor (Python)
+
+When using Python's `concurrent.futures.ThreadPoolExecutor`, traced functions submitted to the thread pool will start with **fresh, independent tracing contexts**. This is by design and differs from async/await execution.
+
+#### Expected Behavior
+
+<CodeGroup>
+```python Python
+from concurrent.futures import ThreadPoolExecutor
+from baml_client.tracing import trace
+
+@trace
+def parent_function():
+    with ThreadPoolExecutor() as executor:
+        # Submit worker to thread pool
+        future = executor.submit(worker_function, "data")
+        result = future.result()
+
+@trace
+def worker_function(data):
+    # This will be an independent root trace
+    # NOT a child of parent_function
+    process_data(data)
+
+@trace
+def process_data(data):
+    # This WILL be a child of worker_function
+    # (same thread execution)
+    return data.upper()
+```
+</CodeGroup>
+
+In the trace hierarchy, you'll see:
+- `parent_function` as a root trace (depth 1)
+- `worker_function` as an **independent root** trace (depth 1) - not a child
+- `process_data` as a child of `worker_function` (depth 2)
+
+#### Why This Happens
+
+Python's `contextvars` (used for tracing context) don't automatically propagate to thread pool threads. Each worker thread starts with a fresh context to:
+- Avoid complexity with context sharing across threads
+- Prevent potential race conditions
+- Maintain clear thread boundaries
+
+#### Best Practices
+
+1. **Use async/await for related work**: If you need to maintain parent-child relationships for parallel execution, use `asyncio` instead of thread pools:
+
+```python
+@trace
+async def parent_async():
+    # These will maintain parent-child relationship
+    results = await asyncio.gather(
+        async_worker("task1"),
+        async_worker("task2")
+    )
+```
+
+2. **Understand the trace hierarchy**: When debugging, remember that thread pool workers appear as separate root traces in your observability dashboard.
+
+3. **Tags don't propagate**: Tags set in the parent function won't automatically appear in thread pool workers since they have independent contexts.
 

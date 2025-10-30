@@ -72,7 +72,7 @@ impl<Meta: Clone> PropertyHandler<Meta> {
     }
 
     pub fn print_options(&self) {
-        println!(
+        eprintln!(
             "options: {:#?}",
             self.options
                 .iter()

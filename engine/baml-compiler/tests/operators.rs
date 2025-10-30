@@ -1,6 +1,9 @@
 //! Compiler tests for operators (arithmetic, logical, assignment).
 
-use baml_vm::{BinOp, GlobalIndex, Instruction};
+use baml_vm::{
+    test::{Instruction, Value},
+    BinOp,
+};
 
 mod common;
 use common::{assert_compiles, Program};
@@ -20,10 +23,10 @@ fn basic_and() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadConst(0),
+                Instruction::LoadConst(Value::Bool(true)),
                 Instruction::JumpIfFalse(4),
                 Instruction::Pop(1),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                Instruction::LoadGlobal(Value::function("ret_bool")),
                 Instruction::Call(0),
                 Instruction::Return,
             ],
@@ -46,11 +49,11 @@ fn basic_or() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadConst(0),
+                Instruction::LoadConst(Value::Bool(true)),
                 Instruction::JumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::Pop(1),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                Instruction::LoadGlobal(Value::function("ret_bool")),
                 Instruction::Call(0),
                 Instruction::Return,
             ],
@@ -70,10 +73,10 @@ fn basic_add() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::LoadConst(1),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadConst(Value::Int(2)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -93,12 +96,12 @@ fn basic_assign_add() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(1),
-                Instruction::LoadConst(1),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadVar("x".to_string()),
+                Instruction::LoadConst(Value::Int(2)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar(1),
-                Instruction::LoadVar(1),
+                Instruction::StoreVar("x".to_string()),
+                Instruction::LoadVar("x".to_string()),
                 Instruction::Return,
             ],
         )],

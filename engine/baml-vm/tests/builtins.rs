@@ -1,7 +1,7 @@
 //! VM tests for built-in methods and operations.
 
 mod common;
-use common::{assert_vm_executes, ExecState, Object, Program, Value};
+use common::{assert_vm_executes, ExecState, Program, Value};
 
 #[test]
 fn builtin_method_call() -> anyhow::Result<()> {
@@ -64,7 +64,7 @@ fn any_value_to_string() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Object(Object::String(String::from(
+        expected: ExecState::Complete(Value::string(
             r#"Person {
     name: "Alice"
     age: 25
@@ -78,6 +78,6 @@ fn any_value_to_string() -> anyhow::Result<()> {
         "english": 88
     }
 }"#,
-        )))),
+        )),
     })
 }

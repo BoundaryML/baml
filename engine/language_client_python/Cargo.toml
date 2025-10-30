@@ -71,4 +71,4 @@ pyo3-build-config = "0.21.2"
 [features]
 default = []
 # Use the THIR interpreter runtime instead of the VM bytecode runtime
-interpreter = ["baml-runtime/interpreter"]
+thir-interpreter = ["baml-runtime/thir-interpreter"]

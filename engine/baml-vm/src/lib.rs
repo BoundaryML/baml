@@ -15,6 +15,7 @@ pub mod debug;
 pub mod errors;
 pub mod indexable;
 pub mod native;
+pub mod test;
 pub mod types;
 pub mod vm;
 pub mod watch;

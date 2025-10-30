@@ -1,6 +1,6 @@
 //! Compiler tests for enum variants.
 
-use baml_vm::{Instruction, ObjectIndex};
+use baml_vm::test::{Instruction, Value};
 
 mod common;
 use common::{assert_compiles, Program};
@@ -22,8 +22,8 @@ fn return_enum_variant() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::AllocVariant(ObjectIndex::from_raw(4)),
+                Instruction::LoadConst(Value::Int(1)), // Rectangle is variant index 1
+                Instruction::AllocVariant(Value::enm("Shape")),
                 Instruction::Return,
             ],
         )],
@@ -48,9 +48,9 @@ fn assign_enum_variant() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::AllocVariant(ObjectIndex::from_raw(4)),
-                Instruction::LoadVar(1),
+                Instruction::LoadConst(Value::Int(1)), // Rectangle is variant index 1
+                Instruction::AllocVariant(Value::enm("Shape")),
+                Instruction::LoadVar("s".to_string()),
                 Instruction::Return,
             ],
         )],

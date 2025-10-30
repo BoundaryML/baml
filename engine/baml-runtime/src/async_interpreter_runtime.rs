@@ -102,10 +102,10 @@ impl BamlAsyncInterpreterRuntime {
             .iter()
             .find(|f| f.name == function_name)
         {
-            println!("THIR for expression function '{function_name}':");
-            println!("{}", expr_fn.body.dump_str());
+            eprintln!("THIR for expression function '{function_name}':");
+            eprintln!("{}", expr_fn.body.dump_str());
         } else {
-            println!("Function '{function_name}' not found or is not an expression function");
+            eprintln!("Function '{function_name}' not found or is not an expression function");
         }
     }
 

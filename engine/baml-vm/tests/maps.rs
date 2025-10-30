@@ -20,7 +20,7 @@ fn create_and_access() -> anyhow::Result<()> {
                 }
             "#,
         function: "UseMap",
-        expected: ExecState::Complete(Value::Object(Object::String(String::from("world")))),
+        expected: ExecState::Complete(Value::string("world")),
     })
 }
 
@@ -59,7 +59,7 @@ fn contains() -> anyhow::Result<()> {
             }
         "#,
         function: "UseMapContains",
-        expected: ExecState::Complete(Value::Object(Object::String(String::from("world")))),
+        expected: ExecState::Complete(Value::string("world")),
     })
 }
 

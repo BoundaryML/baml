@@ -468,6 +468,7 @@ impl ConfigSetting<Level> for LogLevel {
         }
     }
 
+    #[allow(clippy::print_stdout)]
     fn set(value: Level) -> Result<(), LogError> {
         match CONFIG.write() {
             Ok(mut config) => {

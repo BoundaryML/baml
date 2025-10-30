@@ -589,6 +589,7 @@ async def test_collector_parallel_async_calls():
 
 
 @pytest.mark.asyncio
+@trace
 async def test_collector_failures_arg_type():
     collector = Collector(name="my-collector")
     with pytest.raises(BamlInvalidArgumentError):

@@ -68,7 +68,7 @@ fn function_returning_string() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Object(Object::String(String::from("hello")))),
+        expected: ExecState::Complete(Value::string("hello")),
     })
 }
 
@@ -87,7 +87,7 @@ fn multiple_strings() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::Object(Object::String(String::from("Hello")))),
+        expected: ExecState::Complete(Value::string("Hello")),
     })
 }
 

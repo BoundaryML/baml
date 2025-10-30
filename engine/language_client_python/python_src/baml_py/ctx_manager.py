@@ -37,7 +37,7 @@ class CtxManager:
             "baml_ctx", default={current_thread_id(): self.rt.create_context_manager()}
         )
         atexit.register(self.rt.flush)
-    
+
     def __getstate__(self) -> typing.Dict[str, typing.Any]:
         return {"rt": self.rt}
 
@@ -159,9 +159,10 @@ class CtxManager:
                     response = await func(*args, **kwargs)
                     self.end_trace(span, response, os.environ.copy())
                     return response
-                except Exception as e:
+                except BaseException as e:
+                    # Catch BaseException to handle KeyboardInterrupt and CancelledError
                     self.end_trace(span, e, os.environ.copy())
-                    raise e
+                    raise
 
             return typing.cast(F, async_wrapper)
 
@@ -179,9 +180,9 @@ class CtxManager:
                     response = func(*args, **kwargs)
                     self.end_trace(span, response, os.environ.copy())
                     return response
-                except Exception as e:
-                    print("Except but ending trace!")
+                except BaseException as e:
+                    # Catch BaseException to handle KeyboardInterrupt and CancelledError
                     self.end_trace(span, e, os.environ.copy())
-                    raise e
+                    raise
 
             return typing.cast(F, wrapper)

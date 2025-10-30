@@ -25,14 +25,16 @@ import type { Checked, Check } from "./types"
 import type * as types from "./types"
 import type {ComplexMaps, Config, EdgeCaseMaps, MixedKeyMaps, NestedMaps, Product, SimpleMaps, Status, User} from "./types"
 import type TypeBuilder from "./type_builder"
+import type * as events from "./events"
 
 type TickReason = "Unknown";
 
-type BamlCallOptions = {
+type BamlCallOptions<EventsT = never> = {
 tb?: TypeBuilder
 clientRegistry?: ClientRegistry
 env?: Record<string, string | undefined>
   onTick?: (reason: TickReason, log: FunctionLog | null) => void
+  events?: EventsT
   }
 
   export class AsyncHttpRequest {
@@ -41,7 +43,7 @@ env?: Record<string, string | undefined>
   
   async TestComplexMaps(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -66,7 +68,7 @@ env?: Record<string, string | undefined>
       
   async TestEdgeCaseMaps(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -91,7 +93,7 @@ env?: Record<string, string | undefined>
       
   async TestLargeMaps(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -116,7 +118,7 @@ env?: Record<string, string | undefined>
       
   async TestNestedMaps(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -141,7 +143,7 @@ env?: Record<string, string | undefined>
       
   async TestSimpleMaps(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -166,7 +168,7 @@ env?: Record<string, string | undefined>
       
   async TestTopLevelBoolMap(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -191,7 +193,7 @@ env?: Record<string, string | undefined>
       
   async TestTopLevelEmptyMap(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -216,7 +218,7 @@ env?: Record<string, string | undefined>
       
   async TestTopLevelFloatMap(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -241,7 +243,7 @@ env?: Record<string, string | undefined>
       
   async TestTopLevelIntMap(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -266,7 +268,7 @@ env?: Record<string, string | undefined>
       
   async TestTopLevelMapOfArrays(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -291,7 +293,7 @@ env?: Record<string, string | undefined>
       
   async TestTopLevelMapOfObjects(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -316,7 +318,7 @@ env?: Record<string, string | undefined>
       
   async TestTopLevelMapWithNullable(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -341,7 +343,7 @@ env?: Record<string, string | undefined>
       
   async TestTopLevelNestedMap(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -366,7 +368,7 @@ env?: Record<string, string | undefined>
       
   async TestTopLevelStringMap(
   input: string,
-  __baml_options__?: BamlCallOptions
+  __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -397,7 +399,7 @@ env?: Record<string, string | undefined>
       
       async TestComplexMaps(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -422,7 +424,7 @@ env?: Record<string, string | undefined>
           
       async TestEdgeCaseMaps(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -447,7 +449,7 @@ env?: Record<string, string | undefined>
           
       async TestLargeMaps(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -472,7 +474,7 @@ env?: Record<string, string | undefined>
           
       async TestNestedMaps(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -497,7 +499,7 @@ env?: Record<string, string | undefined>
           
       async TestSimpleMaps(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -522,7 +524,7 @@ env?: Record<string, string | undefined>
           
       async TestTopLevelBoolMap(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -547,7 +549,7 @@ env?: Record<string, string | undefined>
           
       async TestTopLevelEmptyMap(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -572,7 +574,7 @@ env?: Record<string, string | undefined>
           
       async TestTopLevelFloatMap(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -597,7 +599,7 @@ env?: Record<string, string | undefined>
           
       async TestTopLevelIntMap(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -622,7 +624,7 @@ env?: Record<string, string | undefined>
           
       async TestTopLevelMapOfArrays(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -647,7 +649,7 @@ env?: Record<string, string | undefined>
           
       async TestTopLevelMapOfObjects(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -672,7 +674,7 @@ env?: Record<string, string | undefined>
           
       async TestTopLevelMapWithNullable(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -697,7 +699,7 @@ env?: Record<string, string | undefined>
           
       async TestTopLevelNestedMap(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -722,7 +724,7 @@ env?: Record<string, string | undefined>
           
       async TestTopLevelStringMap(
       input: string,
-      __baml_options__?: BamlCallOptions
+      __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };

@@ -40,6 +40,7 @@ impl CheckArgs {
         Ok(())
     }
 
+    #[allow(clippy::print_stdout)]
     fn check(
         &self,
         defaults: super::RuntimeCliDefaults,

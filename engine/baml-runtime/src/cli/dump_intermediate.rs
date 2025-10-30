@@ -33,16 +33,16 @@ impl DumpIntermediateArgs {
 
         match dump_type {
             DumpType::HIR => {
-                println!("=== HIGH-LEVEL INTERMEDIATE REPRESENTATION (HIR) ===");
-                println!("Source directory: {:?}", self.from);
-                println!();
+                eprintln!("=== HIGH-LEVEL INTERMEDIATE REPRESENTATION (HIR) ===");
+                eprintln!("Source directory: {:?}", self.from);
+                eprintln!();
 
                 self.dump_hir(&validated_schema)?;
             }
             DumpType::Bytecode => {
-                println!("=== BYTECODE ===");
-                println!("Source directory: {:?}", self.from);
-                println!();
+                eprintln!("=== BYTECODE ===");
+                eprintln!("Source directory: {:?}", self.from);
+                eprintln!();
 
                 self.dump_bytecode(&validated_schema)?;
             }
@@ -98,7 +98,7 @@ impl DumpIntermediateArgs {
         hir.to_doc()
             .render(78, &mut w)
             .expect("Rendering should succeed");
-        println!(
+        eprintln!(
             "{}",
             String::from_utf8(w).expect("UTF-8 conversion should succeed")
         );
@@ -117,8 +117,8 @@ impl DumpIntermediateArgs {
                     if baml_compiler::builtin::is_builtin_identifier(&f.name) {
                         continue;
                     }
-                    println!("{}", f.name);
-                    println!(
+                    eprintln!("{}", f.name);
+                    eprintln!(
                         "{}",
                         baml_vm::debug::display_bytecode(
                             f,
@@ -131,12 +131,12 @@ impl DumpIntermediateArgs {
                 }
                 Object::Class(c) => {
                     if !baml_compiler::builtin::is_builtin_class(&c.name) {
-                        println!("Class: {} with {} fields", c.name, c.field_names.len());
+                        eprintln!("Class: {} with {} fields", c.name, c.field_names.len());
                     }
                 }
                 Object::Enum(e) => {
                     if !baml_compiler::builtin::is_builtin_enum(&e.name) {
-                        println!("Enum {}", e.name);
+                        eprintln!("Enum {}", e.name);
                     }
                 }
                 _ => {

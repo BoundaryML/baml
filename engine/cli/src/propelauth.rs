@@ -102,6 +102,7 @@ impl PropelAuthClient {
         ))
     }
 
+    #[allow(clippy::print_stdout)]
     pub(crate) async fn request_authorization_code(
         &self,
         code_verifier: &str,
