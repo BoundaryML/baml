@@ -134,17 +134,30 @@ impl FunctionResult {
                             crate::internal::llm_client::ErrorCode::Other(2) => {
                                 Err(anyhow::anyhow!(err.message.clone()))
                             }
-                            _ => {
-                                Err(anyhow::anyhow!(crate::errors::ExposedError::ClientHttpError {
+                            _ => Err(anyhow::anyhow!(
+                                crate::errors::ExposedError::ClientHttpError {
                                     client_name: err.client.clone(),
                                     message: err.message.clone(),
                                     status_code: err.code.clone(),
                                     detailed_message: err.message.clone(),
-                                }))
-                            }
+                                }
+                            )),
                         }
                     }
-                    _ => Err(anyhow::anyhow!("No result from baml - Please report this error to our team with BAML_LOG=info enabled so we can improve this error message"))
+                    LLMResponse::UserFailure(message) => {
+                        Err(anyhow::anyhow!("User Failure: {message}.\nPlease report this error to our team with BAML_LOG=info enabled so we can catch this error earlier and improve your development experience."))
+                    }
+                    LLMResponse::InternalFailure(message) => {
+                        Err(anyhow::anyhow!("Internal Failure: {message}.\nThis should not happen - please report this error to our team with BAML_LOG=info enabled so we can catch this error earlier and improve your development experience."))
+                    }
+                    LLMResponse::Cancelled(message) => {
+                        Err(anyhow::anyhow!(crate::errors::ExposedError::AbortError {
+                            detailed_message: message.clone(),
+                        }))
+                    }
+                    LLMResponse::Success(_) => {
+                        Err(anyhow::anyhow!("This should never happen - Please report this error to our team with BAML_LOG=info enabled so we can improve this error message"))
+                    }
                 }
             })
     }
