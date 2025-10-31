@@ -44,6 +44,7 @@ use serde_json::{json, Map};
 use shell_escape::escape;
 use uuid::Uuid;
 use web_time::{Instant, SystemTime};
+use url::Url;
 
 // See https://github.com/awslabs/aws-sdk-rust/issues/169
 use super::custom_http_client;
@@ -71,6 +72,77 @@ fn strip_mime_prefix(mime: &str) -> &str {
     mime.split_once('/').map(|(_, s)| s).unwrap_or(mime)
 }
 
+const BEDROCK_VIDEO_FORMAT_LIST: &str = "mp4, mpeg, mov, flv, mkv, webm, mpg, wmv, three_gp";
+
+const BEDROCK_VIDEO_FORMAT_MIME_MAP: &[(&str, &[&str])] = &[
+    ("mp4", &["video/mp4", "video/mp4v-es"]),
+    ("mpeg", &["video/mpeg"]),
+    ("mov", &["video/quicktime", "video/mov"]),
+    ("flv", &["video/x-flv", "video/flv"]),
+    ("mkv", &["video/x-matroska", "video/mkv"]),
+    ("webm", &["video/webm"]),
+    ("mpg", &["video/mpg"]),
+    ("wmv", &["video/x-ms-wmv", "video/wmv"]),
+    ("three_gp", &["video/3gpp", "video/3gp", "video/3gpp2"]),
+];
+
+fn bedrock_video_format_from_mime(mime: &str) -> Result<&'static str> {
+    let normalized = mime.trim().to_ascii_lowercase();
+    let primary = normalized.split(';').next().unwrap().trim();
+    for (format, mime_types) in BEDROCK_VIDEO_FORMAT_MIME_MAP {
+        if mime_types.iter().any(|candidate| primary == *candidate) {
+            return Ok(*format);
+        }
+    }
+
+    anyhow::bail!(
+        "AWS Bedrock video format not supported: {}. Supported formats: {}",
+        mime,
+        BEDROCK_VIDEO_FORMAT_LIST
+    );
+}
+
+fn s3_location_from_url(url: &str) -> Result<serde_json::Value> {
+    let parsed = Url::parse(url)
+        .with_context(|| format!("Invalid S3 URI for AWS Bedrock video source: {url}"))?;
+
+    if parsed.scheme() != "s3" {
+        anyhow::bail!(
+            "AWS Bedrock modular requests only accept s3:// URIs for video URLs, but got: {}",
+            url
+        );
+    }
+
+    let bucket = parsed
+        .host_str()
+        .with_context(|| format!("Missing bucket name in S3 URI: {url}"))?;
+
+    let mut uri = format!("s3://{}", bucket);
+    let path = parsed.path();
+    if !path.is_empty() && path != "/" {
+        uri.push_str(path);
+    }
+
+    let bucket_owner = parsed
+        .query_pairs()
+        .find(|(k, _)| k == "bucketOwner" || k == "bucket-owner")
+        .map(|(_, v)| v.into_owned());
+
+    let mut location = serde_json::Map::new();
+    location.insert("uri".into(), json!(uri));
+    if let Some(owner) = bucket_owner {
+        location.insert("bucketOwner".into(), json!(owner));
+    }
+
+    Ok(serde_json::Value::Object(location))
+}
+
+/// Convert a `BamlMedia` instance into the JSON "content block" Bedrock expects for modular requests.
+///
+/// Image and document payloads must be resolved to base64 before this layer. For video we accept
+/// either a base64 payload (exposed as `source.bytes`) or an `s3://` URI (emitted as `source.s3Location`).
+/// Other remote video sources are rejected so that we fail fast rather than hand Bedrock unsupported
+/// content.
 fn media_to_content_block_json(media: &BamlMedia) -> Result<serde_json::Value> {
     match media.media_type {
         BamlMediaType::Image => match &media.content {
@@ -98,14 +170,29 @@ fn media_to_content_block_json(media: &BamlMedia) -> Result<serde_json::Value> {
         },
         BamlMediaType::Video => match &media.content {
             BamlMediaContent::Base64(b64) => {
-                let mut video_obj = serde_json::Map::new();
-                if let Some(mime) = media.mime_type.as_deref() {
-                    video_obj.insert("format".into(), json!(strip_mime_prefix(mime)));
-                }
-                video_obj.insert("source".into(), json!({ "bytes": b64.base64 }));
-                Ok(json!({ "video": serde_json::Value::Object(video_obj) }))
+                let mime = media.mime_type_as_ok()?;
+                let format = bedrock_video_format_from_mime(&mime)?;
+                Ok(json!({
+                    "video": {
+                        "format": format,
+                        "source": { "bytes": b64.base64 }
+                    }
+                }))
             }
-            _ => anyhow::bail!("AWS Bedrock only supports base64 video inputs in modular requests"),
+            BamlMediaContent::Url(url_media) => {
+                let mime = media.mime_type_as_ok()?;
+                let format = bedrock_video_format_from_mime(&mime)?;
+                let s3_location = s3_location_from_url(&url_media.url)?;
+                Ok(json!({
+                    "video": {
+                        "format": format,
+                        "source": { "s3Location": s3_location }
+                    }
+                }))
+            }
+            BamlMediaContent::File(_) => anyhow::bail!(
+                "AWS Bedrock video parts must be provided as base64 bytes or an s3:// URI"
+            ),
         },
         BamlMediaType::Audio => anyhow::bail!("AWS Bedrock does not support audio media parts"),
     }
