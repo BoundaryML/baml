@@ -464,7 +464,7 @@ def ChainedCalls() -> ChainedCallsEventCollector:
     return ChainedCallsEventCollector()
 
 
-class EchoWorkflowEventCollector:
+class ComplexHeaderTestEventCollector:
     def __init__(self):
         self._block_handlers: list[BlockHandler] = []
         self._lock = threading.Lock()
@@ -512,7 +512,7 @@ class EchoWorkflowEventCollector:
 
             class Bindings:
                 def __init__(self):
-                    self.function_name = "EchoWorkflow"
+                    self.function_name = "ComplexHeaderTest"
                     self.block = block_handlers
                     self.vars = vars_dict
                     self.streams = streams_dict
@@ -520,8 +520,8 @@ class EchoWorkflowEventCollector:
 
             return Bindings()
 
-def EchoWorkflow() -> EchoWorkflowEventCollector:
-    return EchoWorkflowEventCollector()
+def ComplexHeaderTest() -> ComplexHeaderTestEventCollector:
+    return ComplexHeaderTestEventCollector()
 
 
 class ExecFetchAsEventCollector:

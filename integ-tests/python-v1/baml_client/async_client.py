@@ -2179,6 +2179,21 @@ class BamlAsyncClient:
                 "input": input,
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestAwsVideoDescribe(self, video_input: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestAwsVideoDescribe(video_input=video_input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestAwsVideoDescribe", args={
+                "video_input": video_input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestAzure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -3664,21 +3679,21 @@ class BamlAsyncClient:
                 
             })
             return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
-    async def EchoWorkflow(self, 
+    async def ComplexHeaderTest(self, x: int,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> int:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.EchoWorkflow(
+            stream = self.stream.ComplexHeaderTest(x=x,
                 baml_options=baml_options)
             return await stream.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="EchoWorkflow", args={
-                
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="ComplexHeaderTest", args={
+                "x": x,
             })
-            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     async def ExecFetchAs(self, url: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DummyJsonTodo:
@@ -5713,6 +5728,18 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def TestAwsVideoDescribe(self, video_input: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestAwsVideoDescribe", args={
+            "video_input": video_input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def TestAzure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[str, str]:
@@ -6901,16 +6928,16 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def EchoWorkflow(self, 
+    def ComplexHeaderTest(self, x: int,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional[str], str]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="EchoWorkflow", args={
-            
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ComplexHeaderTest", args={
+            "x": x,
         })
-        return baml_py.BamlStream[typing.Optional[str], str](
+        return baml_py.BamlStream[typing.Optional[int], int](
           result,
-          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ExecFetchAs(self, url: str,
@@ -8177,6 +8204,13 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
+    async def TestAwsVideoDescribe(self, video_input: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestAwsVideoDescribe", args={
+            "video_input": video_input,
+        }, mode="request")
+        return result
     async def TestAzure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -8870,11 +8904,11 @@ class BamlHttpRequestClient:
             
         }, mode="request")
         return result
-    async def EchoWorkflow(self, 
+    async def ComplexHeaderTest(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="EchoWorkflow", args={
-            
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ComplexHeaderTest", args={
+            "x": x,
         }, mode="request")
         return result
     async def ExecFetchAs(self, url: str,
@@ -10026,6 +10060,13 @@ class BamlHttpStreamRequestClient:
             "input": input,
         }, mode="stream")
         return result
+    async def TestAwsVideoDescribe(self, video_input: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestAwsVideoDescribe", args={
+            "video_input": video_input,
+        }, mode="stream")
+        return result
     async def TestAzure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -10719,11 +10760,11 @@ class BamlHttpStreamRequestClient:
             
         }, mode="stream")
         return result
-    async def EchoWorkflow(self, 
+    async def ComplexHeaderTest(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="EchoWorkflow", args={
-            
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ComplexHeaderTest", args={
+            "x": x,
         }, mode="stream")
         return result
     async def ExecFetchAs(self, url: str,

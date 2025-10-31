@@ -7374,6 +7374,56 @@ export function useTestAwsInvalidSessionToken(
   }
 }
 /**
+ * A specialized hook for the TestAwsVideoDescribe BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - video_input: Video
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestAwsVideoDescribe({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestAwsVideoDescribe({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestAwsVideoDescribe(props: HookInput<'TestAwsVideoDescribe', { stream: false }>): HookOutput<'TestAwsVideoDescribe', { stream: false }>
+export function useTestAwsVideoDescribe(props?: HookInput<'TestAwsVideoDescribe', { stream?: true }>): HookOutput<'TestAwsVideoDescribe', { stream: true }>
+export function useTestAwsVideoDescribe(
+  props: HookInput<'TestAwsVideoDescribe', { stream?: boolean }> = {},
+): HookOutput<'TestAwsVideoDescribe', { stream: true }> | HookOutput<'TestAwsVideoDescribe', { stream: false }> {
+  let action: ServerAction = Actions.TestAwsVideoDescribe;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestAwsVideoDescribe;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TestAwsVideoDescribe', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the TestAzure BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -12314,15 +12364,17 @@ export function useChainedCalls(
   }
 }
 /**
- * A specialized hook for the EchoWorkflow BAML function that supports both streaming and non‑streaming responses.
+ * A specialized hook for the ComplexHeaderTest BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
  *
+ * - x: number
+ *
  *
  * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
- * - **Streaming Final:** string
+ * - **Non‑streaming:** number
+ * - **Streaming Partial:** number | null
+ * - **Streaming Final:** number
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**
@@ -12337,10 +12389,10 @@ export function useChainedCalls(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useEchoWorkflow({ stream: false});
+ * const { data, error, isLoading, mutate } = useComplexHeaderTest({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useEchoWorkflow({
+ * const { data, streamData, isLoading, error, mutate } = useComplexHeaderTest({
  *   stream: true | undefined,
  *   onStreamData: (partial) => console.log('Partial update:', partial),
  *   onFinalData: (final) => console.log('Final result:', final),
@@ -12348,17 +12400,17 @@ export function useChainedCalls(
  * });
  * ```
  */
-export function useEchoWorkflow(props: HookInput<'EchoWorkflow', { stream: false }>): HookOutput<'EchoWorkflow', { stream: false }>
-export function useEchoWorkflow(props?: HookInput<'EchoWorkflow', { stream?: true }>): HookOutput<'EchoWorkflow', { stream: true }>
-export function useEchoWorkflow(
-  props: HookInput<'EchoWorkflow', { stream?: boolean }> = {},
-): HookOutput<'EchoWorkflow', { stream: true }> | HookOutput<'EchoWorkflow', { stream: false }> {
-  let action: ServerAction = Actions.EchoWorkflow;
+export function useComplexHeaderTest(props: HookInput<'ComplexHeaderTest', { stream: false }>): HookOutput<'ComplexHeaderTest', { stream: false }>
+export function useComplexHeaderTest(props?: HookInput<'ComplexHeaderTest', { stream?: true }>): HookOutput<'ComplexHeaderTest', { stream: true }>
+export function useComplexHeaderTest(
+  props: HookInput<'ComplexHeaderTest', { stream?: boolean }> = {},
+): HookOutput<'ComplexHeaderTest', { stream: true }> | HookOutput<'ComplexHeaderTest', { stream: false }> {
+  let action: ServerAction = Actions.ComplexHeaderTest;
   if (isStreamingProps(props)) {
-    action = StreamingActions.EchoWorkflow;
+    action = StreamingActions.ComplexHeaderTest;
     return useBamlAction(action, props)
   } else {
-    return useBamlAction(action, props as HookInput<'EchoWorkflow', { stream: false }>)
+    return useBamlAction(action, props as HookInput<'ComplexHeaderTest', { stream: false }>)
   }
 }
 /**

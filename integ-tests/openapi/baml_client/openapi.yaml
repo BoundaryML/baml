@@ -2014,6 +2014,19 @@ paths:
                 title: TestAwsInvalidSessionTokenResponse
                 type: string
       operationId: TestAwsInvalidSessionToken
+  /call/TestAwsVideoDescribe:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAwsVideoDescribe'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAwsVideoDescribeResponse
+                type: string
+      operationId: TestAwsVideoDescribe
   /call/TestAzure:
     post:
       requestBody:
@@ -5569,6 +5582,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    TestAwsVideoDescribe:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAwsVideoDescribeRequest
+            type: object
+            properties:
+              video_input:
+                $ref: '#/components/schemas/BamlVideo'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - video_input
             additionalProperties: false
     TestAzure:
       required: true

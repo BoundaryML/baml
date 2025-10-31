@@ -864,6 +864,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsInvalidSessionToken", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def TestAwsVideoDescribe(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsVideoDescribe", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def TestAzure(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -1458,11 +1464,11 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ChainedCalls", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
-    def EchoWorkflow(
+    def ComplexHeaderTest(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> str:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="request")
-        return typing.cast(str, result)
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ComplexHeaderTest", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
 
     def ExecFetchAs(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2450,6 +2456,12 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsInvalidSessionToken", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
+    def TestAwsVideoDescribe(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsVideoDescribe", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
     def TestAzure(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -3044,11 +3056,11 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ChainedCalls", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
-    def EchoWorkflow(
+    def ComplexHeaderTest(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ComplexHeaderTest", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
 
     def ExecFetchAs(
         self, llm_response: str, baml_options: BamlCallOptions = {},

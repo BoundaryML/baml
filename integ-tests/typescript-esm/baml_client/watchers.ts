@@ -850,13 +850,13 @@ export function ChainedCalls(): ChainedCallsEventCollector {
 
 
 
-export interface EchoWorkflowEventCollector extends EventCollectorInternal {
+export interface ComplexHeaderTestEventCollector extends EventCollectorInternal {
   on_block(handler: BlockHandler): void
   
   
 }
 
-export function EchoWorkflow(): EchoWorkflowEventCollector {
+export function ComplexHeaderTest(): ComplexHeaderTestEventCollector {
   const blockHandlers = new Set<BlockHandler>()
 
   
@@ -931,7 +931,7 @@ export function EchoWorkflow(): EchoWorkflowEventCollector {
         if (handlers.size > 0) {
           // Create a wrapper that processes stream lifecycle events
           const wrapper: InternalStreamHandler = (event: InternalStreamEvent) => {
-            handleInternalStreamEvent(channel, event, "EchoWorkflow")
+            handleInternalStreamEvent(channel, event, "ComplexHeaderTest")
           }
           streams[channel] = [wrapper]
         }
@@ -943,7 +943,7 @@ export function EchoWorkflow(): EchoWorkflowEventCollector {
       }
 
       return {
-        functionName: "EchoWorkflow",
+        functionName: "ComplexHeaderTest",
         block: Array.from(blockHandlers),
         vars,
         streams,

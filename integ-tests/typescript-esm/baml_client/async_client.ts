@@ -6816,6 +6816,54 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             }
             }
             
+        async TestAwsVideoDescribe(
+        video_input: Video,
+        __baml_options__?: BamlCallOptions<never>
+        ): Promise<string> {
+          try {
+          const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const signal = options.signal;
+
+          if (signal?.aborted) {
+          throw new BamlAbortError('Operation was aborted', signal.reason);
+          }
+
+          // Check if onTick is provided - route through streaming if so
+          if (options.onTick) {
+          const stream = this.stream.TestAwsVideoDescribe(
+          video_input,
+          __baml_options__
+          );
+
+          return await stream.getFinalResponse();
+          }
+
+          const collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
+          [options.collector]) : [];
+          const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const env: Record<string, string> = Object.fromEntries(
+            Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+            );
+            const raw = await this.runtime.callFunction(
+            "TestAwsVideoDescribe",
+            {
+            "video_input": video_input
+            },
+            this.ctxManager.cloneContext(),
+            options.tb?.__tb(),
+            options.clientRegistry,
+            collector,
+            options.tags || {},
+            env,
+            signal,
+            options.watchers,
+            )
+            return raw.parsed(false) as string
+            } catch (error) {
+            throw toBamlError(error);
+            }
+            }
+            
         async TestAzure(
         input: string,
         __baml_options__?: BamlCallOptions<never>
@@ -11568,10 +11616,10 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             }
             }
             
-        async EchoWorkflow(
-        
-        __baml_options__?: BamlCallOptions<events.EchoWorkflowEventCollector>
-        ): Promise<string> {
+        async ComplexHeaderTest(
+        x: number,
+        __baml_options__?: BamlCallOptions<events.ComplexHeaderTestEventCollector>
+        ): Promise<number> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
           const signal = options.signal;
@@ -11582,8 +11630,8 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           // Check if onTick is provided - route through streaming if so
           if (options.onTick) {
-          const stream = this.stream.EchoWorkflow(
-          
+          const stream = this.stream.ComplexHeaderTest(
+          x,
           __baml_options__
           );
 
@@ -11597,9 +11645,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
             );
             const raw = await this.runtime.callFunction(
-            "EchoWorkflow",
+            "ComplexHeaderTest",
             {
-            
+            "x": x
             },
             this.ctxManager.cloneContext(),
             options.tb?.__tb(),
@@ -11610,7 +11658,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             signal,
             options.watchers,
             )
-            return raw.parsed(false) as string
+            return raw.parsed(false) as number
             } catch (error) {
             throw toBamlError(error);
             }
@@ -21974,6 +22022,72 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   }
                   }
                   
+            TestAwsVideoDescribe(
+            video_input: Video,
+            __baml_options__?: BamlCallOptions<never>
+            ): BamlStream<string, string>
+              {
+              try {
+              const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const signal = options.signal;
+
+              if (signal?.aborted) {
+              throw new BamlAbortError('Operation was aborted', signal.reason);
+              }
+
+              let collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
+              [options.collector]) : [];
+
+              let onTickWrapper: (() => void) | undefined;
+
+              // Create collector and wrap onTick if provided
+              if (options.onTick) {
+              const tickCollector = new Collector("on-tick-collector");
+              collector = [...collector, tickCollector];
+
+              onTickWrapper = () => {
+              const log = tickCollector.last;
+              if (log) {
+              try {
+              options.onTick!("Unknown", log);
+              } catch (error) {
+              console.error("Error in onTick callback for TestAwsVideoDescribe", error);
+              }
+              }
+              };
+              }
+
+              const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const env: Record<string, string> = Object.fromEntries(
+                Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+                );
+                const raw = this.runtime.streamFunction(
+                "TestAwsVideoDescribe",
+                {
+                "video_input": video_input
+                },
+                undefined,
+                this.ctxManager.cloneContext(),
+                options.tb?.__tb(),
+                options.clientRegistry,
+                collector,
+                options.tags || {},
+                env,
+                signal,
+                onTickWrapper,
+                )
+                return new BamlStream<string, string>(
+                  raw,
+                  (a): string => a,
+                  (a): string => a,
+                  this.ctxManager.cloneContext(),
+                  options.signal,
+                  )
+                  } catch (error) {
+                  throw toBamlError(error);
+                  }
+                  }
+                  
             TestAzure(
             input: string,
             __baml_options__?: BamlCallOptions<never>
@@ -28508,10 +28622,10 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   }
                   }
                   
-            EchoWorkflow(
-            
-            __baml_options__?: BamlCallOptions<events.EchoWorkflowEventCollector>
-            ): BamlStream<string | null, string>
+            ComplexHeaderTest(
+            x: number,
+            __baml_options__?: BamlCallOptions<events.ComplexHeaderTestEventCollector>
+            ): BamlStream<number | null, number>
               {
               try {
               const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -28537,7 +28651,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               try {
               options.onTick!("Unknown", log);
               } catch (error) {
-              console.error("Error in onTick callback for EchoWorkflow", error);
+              console.error("Error in onTick callback for ComplexHeaderTest", error);
               }
               }
               };
@@ -28548,9 +28662,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
                 const raw = this.runtime.streamFunction(
-                "EchoWorkflow",
+                "ComplexHeaderTest",
                 {
-                
+                "x": x
                 },
                 undefined,
                 this.ctxManager.cloneContext(),
@@ -28562,10 +28676,10 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 signal,
                 onTickWrapper,
                 )
-                return new BamlStream<string | null, string>(
+                return new BamlStream<number | null, number>(
                   raw,
-                  (a): string | null => a,
-                  (a): string => a,
+                  (a): number | null => a,
+                  (a): number => a,
                   this.ctxManager.cloneContext(),
                   options.signal,
                   )

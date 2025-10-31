@@ -2592,6 +2592,24 @@ export const TestAwsInvalidSessionToken = async (
 };
 
 /**
+ * Executes the "TestAwsVideoDescribe" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestAwsVideoDescribe"
+ * with the specified parameters.
+ *
+ * @param { Video } video_input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestAwsVideoDescribe = async (
+  video_input: Video,
+): Promise<string> => {
+  return b.TestAwsVideoDescribe(
+    video_input,
+  );
+};
+
+/**
  * Executes the "TestAzure" BAML action.
  *
  * This server action calls the underlying BAML function "TestAzure"
@@ -4359,17 +4377,20 @@ export const ChainedCalls = async (
 };
 
 /**
- * Executes the "EchoWorkflow" BAML action.
+ * Executes the "ComplexHeaderTest" BAML action.
  *
- * This server action calls the underlying BAML function "EchoWorkflow"
+ * This server action calls the underlying BAML function "ComplexHeaderTest"
  * with the specified parameters.
  *
+ * @param { number } x - Input parameter.
  *
- * @returns {Promise<string>} A promise that resolves with the result of the action.
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
  */
-export const EchoWorkflow = async (
-): Promise<string> => {
-  return b.EchoWorkflow(
+export const ComplexHeaderTest = async (
+  x: number,
+): Promise<number> => {
+  return b.ComplexHeaderTest(
+    x,
   );
 };
 
