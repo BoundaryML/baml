@@ -5,6 +5,17 @@ function TestAws(input: string) -> string {
   "#
 }
 
+function TestAwsVideoDescribe(video_input: video) -> string {
+  client AwsBedrock
+  prompt #"
+    {{ _.role("user") }}
+
+    Describe the following video in one sentence.
+
+    {{ video_input }}
+  "#
+}
+
 /// my docs
 class UniverseQuestion {
   question string

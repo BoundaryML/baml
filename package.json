@@ -32,14 +32,14 @@
     "fern": "pnpm --filter @baml/fern run dev"
   },
   "devDependencies": {
-    "@infisical/cli": "0.41.89",
     "@biomejs/biome": "1.9.4",
+    "@infisical/cli": "0.41.89",
     "@types/node": "24.0.3",
+    "pnpm": "9.12.0",
     "turbo": "2.5.4",
     "typescript": "5.8.3",
     "vercel": "^44.5.5",
-    "vitest": "3.2.3",
-    "pnpm": "9.12.0"
+    "vitest": "3.2.3"
   },
   "pnpm": {
     "patchedDependencies": {
@@ -47,5 +47,10 @@
     }
   },
   "packageManager": "pnpm@9.12.0",
-  "name": "@baml/root"
+  "name": "@baml/root",
+  "dependencies": {
+    "@xyflow/react": "12.7.0",
+    "d3-hierarchy": "^3.1.2",
+    "lucide-react": "^0.545.0"
+  }
 }
