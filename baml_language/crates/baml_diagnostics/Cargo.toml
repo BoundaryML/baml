@@ -17,6 +17,7 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_base = { workspace = true }
+
 ariadne = { workspace = true }
-baml_base = { path = "../baml_base" }
 text-size = { workspace = true }

@@ -17,8 +17,9 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_base = { workspace = true }
+baml_lexer = { workspace = true }
+baml_syntax = { workspace = true }
+
 salsa = { workspace = true }
 rowan = { workspace = true }
-baml_base = { path = "../baml_base" }
-baml_lexer = { path = "../baml_lexer" }
-baml_syntax = { path = "../baml_syntax" }

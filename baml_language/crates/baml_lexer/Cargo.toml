@@ -17,7 +17,8 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_base = { workspace = true }
+
 logos = { workspace = true }
 salsa = { workspace = true }
 text-size = { workspace = true }
-baml_base = { path = "../baml_base" }

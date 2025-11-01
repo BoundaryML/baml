@@ -1,0 +1,60 @@
+# Configuration for cargo-deny
+# https://github.com/EmbarkStudios/cargo-deny
+
+# More detailed docs can be found at https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+# All targets to check
+targets = []
+
+[bans]
+# Lint level for when multiple versions of the same crate are detected
+multiple-versions = "warn"
+# Allow wildcard dependencies
+wildcards = "allow"
+# The graph highlighting used when creating dotgraphs for crates with multiple versions
+highlight = "all"
+# List of explicitly disallowed crates
+deny = []
+# Certain crates/versions that will be skipped when doing duplicate detection
+skip = [
+    # These duplicates are from transitive dependencies and are acceptable
+    { name = "hashbrown", version = "*" },
+    { name = "rustc-hash", version = "*" },
+    { name = "windows-sys", version = "*" },
+]
+# Similarly named crates that are allowed to coexist
+allow = []
+
+[licenses]
+# See https://spdx.org/licenses/ for list of possible licenses
+# List of explicitly allowed licenses
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+# Confidence threshold for license detection (0.0 to 1.0)
+confidence-threshold = 0.8
+# Allow licenses that have not been identified
+private = { ignore = true }
+
+[sources]
+# Lint level for what to happen when a crate from a crate registry that is not in the allow list is encountered
+unknown-registry = "allow"
+# Lint level for what to happen when a crate from a git repository that is not in the allow list is encountered
+unknown-git = "allow"
+# A list of advisory DBs to use
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+[advisories]
+# The advisories section is used to configure how security advisories are handled
+version = 2
+# The url(s) of the advisory databases to use
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# The lint level for crates that have been yanked
+yanked = "warn"
+# Ignore advisories for crates that are not used
+ignore = []

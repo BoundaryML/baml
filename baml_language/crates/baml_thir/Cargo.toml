@@ -18,5 +18,5 @@ workspace = true
 
 [dependencies]
 salsa = { workspace = true }
-baml_base = { path = "../baml_base" }
-baml_hir = { path = "../baml_hir" }
+baml_base = { workspace = true }
+baml_hir = { workspace = true }

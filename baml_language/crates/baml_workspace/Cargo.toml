@@ -17,7 +17,8 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_base = { workspace = true }
+
 salsa = { workspace = true }
-baml_base = { path = "../baml_base" }
 walkdir = { workspace = true }
 glob = { workspace = true }

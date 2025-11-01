@@ -20,14 +20,14 @@ workspace = true
 salsa = { workspace = true }
 
 # All compiler crates
-baml_base = { path = "../baml_base" }
-baml_workspace = { path = "../baml_workspace" }
-baml_lexer = { path = "../baml_lexer" }
-baml_syntax = { path = "../baml_syntax" }
-baml_parser = { path = "../baml_parser" }
-baml_hir = { path = "../baml_hir" }
-baml_thir = { path = "../baml_thir" }
-baml_codegen = { path = "../baml_codegen" }
-baml_diagnostics = { path = "../baml_diagnostics" }
+baml_base = { workspace = true }
+baml_workspace = { workspace = true }
+baml_lexer = { workspace = true }
+baml_syntax = { workspace = true }
+baml_parser = { workspace = true }
+baml_hir = { workspace = true }
+baml_thir = { workspace = true }
+baml_codegen = { workspace = true }
+baml_diagnostics = { workspace = true }
 
 # No dev-dependencies needed anymore!
