@@ -5,8 +5,8 @@ on:
     branches: [main, canary]
   pull_request:
     paths:
-      - 'baml_language/**'
-      - '.github/workflows/ci.yaml'
+      - "baml_language/**"
+      - ".github/workflows/ci.yaml"
   workflow_dispatch:
 
 concurrency:
@@ -398,7 +398,7 @@ jobs:
       - name: "Check dependencies"
         run: cargo deny check
         working-directory: baml_language
-        continue-on-error: true  # For now, just warn
+        continue-on-error: true # For now, just warn
 
   snapshot-tests:
     name: "snapshot tests"
@@ -452,7 +452,6 @@ jobs:
     runs-on: ubuntu-24.04
     needs: determine_changes
     if: |
-      github.repository == 'BoundaryML/baml-2' &&
       (
         github.ref == 'refs/heads/main' ||
         github.ref == 'refs/heads/canary' ||
