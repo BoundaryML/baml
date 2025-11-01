@@ -279,10 +279,12 @@ fn generate_lexer_test(
         "        let content = include_str!(r\"{}\");",
         baml_file.full_path.display()
     )?;
+    writeln!(file, "        // Normalize line endings for cross-platform compatibility")?;
+    writeln!(file, "        let content = content.replace(\"\\r\\n\", \"\\n\");")?;
     writeln!(file, "        let mut db = RootDatabase::new();")?;
     writeln!(
         file,
-        "        let source_file = db.add_file(\"{}\", content);",
+        "        let source_file = db.add_file(\"{}\", &content);",
         baml_file.relative_path.display()
     )?;
     writeln!(
@@ -337,10 +339,12 @@ fn generate_parser_test(
         "        let content = include_str!(r\"{}\");",
         baml_file.full_path.display()
     )?;
+    writeln!(file, "        // Normalize line endings for cross-platform compatibility")?;
+    writeln!(file, "        let content = content.replace(\"\\r\\n\", \"\\n\");")?;
     writeln!(file, "        let mut db = RootDatabase::new();")?;
     writeln!(
         file,
-        "        let source_file = db.add_file(\"{}\", content);",
+        "        let source_file = db.add_file(\"{}\", &content);",
         baml_file.relative_path.display()
     )?;
     writeln!(
@@ -404,18 +408,22 @@ fn generate_hir_test(file: &mut File, project: &TestProject) -> std::io::Result<
 
     // Load all files
     for baml_file in &project.files {
-        writeln!(file, "        db.add_file(")?;
+        writeln!(file, "        {{")?;
         writeln!(
             file,
-            "            \"{}\",",
-            baml_file.relative_path.display()
-        )?;
-        writeln!(
-            file,
-            "            include_str!(r\"{}\"),",
+            "            let content = include_str!(r\"{}\");",
             baml_file.full_path.display()
         )?;
-        writeln!(file, "        );")?;
+        writeln!(file, "            let content = content.replace(\"\\r\\n\", \"\\n\");")?;
+        writeln!(file, "            db.add_file(")?;
+        writeln!(
+            file,
+            "                \"{}\",",
+            baml_file.relative_path.display()
+        )?;
+        writeln!(file, "                &content,")?;
+        writeln!(file, "            );")?;
+        writeln!(file, "        }}")?;
     }
 
     writeln!(file)?;
@@ -470,18 +478,22 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
 
     // Load all files
     for baml_file in &project.files {
-        writeln!(file, "        db.add_file(")?;
+        writeln!(file, "        {{")?;
         writeln!(
             file,
-            "            \"{}\",",
-            baml_file.relative_path.display()
-        )?;
-        writeln!(
-            file,
-            "            include_str!(r\"{}\"),",
+            "            let content = include_str!(r\"{}\");",
             baml_file.full_path.display()
         )?;
-        writeln!(file, "        );")?;
+        writeln!(file, "            let content = content.replace(\"\\r\\n\", \"\\n\");")?;
+        writeln!(file, "            db.add_file(")?;
+        writeln!(
+            file,
+            "                \"{}\",",
+            baml_file.relative_path.display()
+        )?;
+        writeln!(file, "                &content,")?;
+        writeln!(file, "            );")?;
+        writeln!(file, "        }}")?;
     }
 
     writeln!(file)?;
@@ -552,17 +564,19 @@ fn generate_diagnostics_test(file: &mut File, project: &TestProject) -> std::io:
 
     for baml_file in &project.files {
         writeln!(file, "        {{")?;
+        writeln!(
+            file,
+            "            let content = include_str!(r\"{}\");",
+            baml_file.full_path.display()
+        )?;
+        writeln!(file, "            let content = content.replace(\"\\r\\n\", \"\\n\");")?;
         writeln!(file, "            let source_file = db.add_file(")?;
         writeln!(
             file,
             "                \"{}\",",
             baml_file.relative_path.display()
         )?;
-        writeln!(
-            file,
-            "                include_str!(r\"{}\"),",
-            baml_file.full_path.display()
-        )?;
+        writeln!(file, "                &content,")?;
         writeln!(file, "            );")?;
         writeln!(file)?;
         writeln!(
@@ -626,17 +640,19 @@ fn generate_codegen_test(file: &mut File, project: &TestProject) -> std::io::Res
 
     for baml_file in &project.files {
         writeln!(file, "        {{")?;
+        writeln!(
+            file,
+            "            let content = include_str!(r\"{}\");",
+            baml_file.full_path.display()
+        )?;
+        writeln!(file, "            let content = content.replace(\"\\r\\n\", \"\\n\");")?;
         writeln!(file, "            db.add_file(")?;
         writeln!(
             file,
             "                \"{}\",",
             baml_file.relative_path.display()
         )?;
-        writeln!(
-            file,
-            "                include_str!(r\"{}\"),",
-            baml_file.full_path.display()
-        )?;
+        writeln!(file, "                &content,")?;
         writeln!(file, "            );")?;
         writeln!(file, "        }}")?;
     }
@@ -800,9 +816,14 @@ fn generate_incremental_benchmark(
     for (i, path) in before_files.iter().enumerate() {
         writeln!(
             file,
-            "    let before_{} = include_str!(r\"{}\");",
+            "    let before_{}_raw = include_str!(r\"{}\");",
             i,
             path.display()
+        )?;
+        writeln!(
+            file,
+            "    let before_{} = before_{}_raw.replace(\"\\r\\n\", \"\\n\");",
+            i, i
         )?;
     }
 
@@ -810,9 +831,14 @@ fn generate_incremental_benchmark(
     for (i, path) in after_files.iter().enumerate() {
         writeln!(
             file,
-            "    let after_{} = include_str!(r\"{}\");",
+            "    let after_{}_raw = include_str!(r\"{}\");",
             i,
             path.display()
+        )?;
+        writeln!(
+            file,
+            "    let after_{} = after_{}_raw.replace(\"\\r\\n\", \"\\n\");",
+            i, i
         )?;
     }
 
@@ -829,7 +855,7 @@ fn generate_incremental_benchmark(
     writeln!(file, "        // Initial compilation")?;
     for (i, path) in before_files.iter().enumerate() {
         let rel_path = path.file_name().unwrap().to_str().unwrap();
-        writeln!(file, "        db.add_file(\"{}\", before_{});", rel_path, i)?;
+        writeln!(file, "        db.add_file(\"{}\", &before_{});", rel_path, i)?;
     }
     writeln!(
         file,
@@ -849,7 +875,7 @@ fn generate_incremental_benchmark(
         // Simply add the file again - Salsa will handle incremental compilation
         writeln!(
             file,
-            "        db.add_file(\"{}\", after_{});  // Updated/New file",
+            "        db.add_file(\"{}\", &after_{});  // Updated/New file",
             after_filename, after_idx
         )?;
     }
@@ -879,9 +905,10 @@ fn generate_scale_benchmark(file: &mut File, name: &str, path: PathBuf) -> std::
     writeln!(file, "fn {}(b: &mut Bencher) {{", fn_name)?;
     writeln!(
         file,
-        "    let content = include_str!(r\"{}\");",
+        "    let content_raw = include_str!(r\"{}\");",
         path.display()
     )?;
+    writeln!(file, "    let content = content_raw.replace(\"\\r\\n\", \"\\n\");")?;
     writeln!(file, "    ")?;
     writeln!(file, "    b.iter(|| {{")?;
     writeln!(file, "        let mut db = RootDatabase::new();")?;
@@ -889,7 +916,7 @@ fn generate_scale_benchmark(file: &mut File, name: &str, path: PathBuf) -> std::
         file,
         "        let root = db.set_project_root(std::path::PathBuf::from(\".\"));"
     )?;
-    writeln!(file, "        db.add_file(\"{}.baml\", content);", name)?;
+    writeln!(file, "        db.add_file(\"{}.baml\", &content);", name)?;
     writeln!(
         file,
         "        let _ = codspeed_bencher_compat::black_box(baml_hir::project_items(&db, root));"
