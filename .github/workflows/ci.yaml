@@ -226,12 +226,15 @@ jobs:
 
       - name: "Run tests with nextest"
         run: cargo nextest run --all-features
+        working-directory: baml_language
 
       - name: "Run snapshot tests with insta"
         run: cargo insta test --all-features --unreferenced reject
+        working-directory: baml_language
 
       - name: "Check documentation"
         run: cargo doc --all --no-deps
+        working-directory: baml_language
         env:
           RUSTDOCFLAGS: "-D warnings"
 
