@@ -2592,6 +2592,24 @@ export const TestAwsInvalidSessionToken = async (
 };
 
 /**
+ * Executes the "TestAwsVideoDescribe" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestAwsVideoDescribe"
+ * with the specified parameters.
+ *
+ * @param { Video } video_input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestAwsVideoDescribe = async (
+  video_input: Video,
+): Promise<string> => {
+  return b.TestAwsVideoDescribe(
+    video_input,
+  );
+};
+
+/**
  * Executes the "TestAzure" BAML action.
  *
  * This server action calls the underlying BAML function "TestAzure"

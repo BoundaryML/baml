@@ -7,10 +7,12 @@ Video values to BAML functions can be created in client libraries. This document
 
 <Info>
   When you create a `Video` using `from_url` (Python) or `fromUrl` (TypeScript), the URL is passed directly to the model without any intermediate fetching. If the model cannot access external media, it will fail on such inputs. In these cases, convert the video to Base64 before passing it to the model.
+
+  For AWS Bedrock models with video support, you can pass `s3://` URIs through `Video.from_url`. BAML forwards the URI as an `s3Location` and includes the `media_type` you provide so Bedrock can fetch the object without uploading it through BAML first. BAML does **not** infer video MIME types for Bedrock requests, so always supply the correct `media_type` (for example, `video/mp4`).
 </Info>
 
 <Warning>
-  Only Google Gemini and Vertex AI currently support video input directly. Other providers (Anthropic Claude, OpenAI GPT-4o, AWS Bedrock) will error or require you to extract frames as images or provide transcripts. See the model compatibility table below for details.
+  Direct video inputs are only supported by Google Gemini, Google Vertex AI, and AWS Bedrock models that advertise video support. Other providers (Anthropic Claude, OpenAI GPT-4o) will error or require you to extract frames as images or provide transcripts. See the model compatibility table below for details.
 </Warning>
 
 ## Usage Examples
@@ -29,6 +31,12 @@ async def test_video_input():
     video_b64 = "AAAAGGZ0eXBpc29t..."
     video = Video.from_base64("video/mp4", video_b64)
     res = await b.TestVideoInput(video=video)
+
+    # Pass an S3 video reference directly to an AWS Bedrock model
+    bedrock_video = Video.from_url(
+        "s3://baml-test-bucket/example/path/video.mp4", media_type="video/mp4"
+    )
+    res = await b.TestAwsVideoDescribe(video_input=bedrock_video)
 ```
 
 ```typescript
@@ -45,6 +53,13 @@ const video_b64 = "AAAAGGZ0eXBpc29t..."
 res = await b.TestVideoInput(
     Video.fromBase64('video/mp4', video_b64)
 )
+
+// Pass an S3 video reference directly to an AWS Bedrock model
+const bedrockVideo = Video.fromUrl(
+  's3://baml-test-bucket/example/path/video.mp4',
+  'video/mp4',
+)
+// Pass `bedrockVideo` to any function backed by a Bedrock model with video support
 
 // Browser-specific methods
 const fileVideo = await Video.fromFile(file)
@@ -85,7 +100,7 @@ export function TestVideoInput() {
   path="fromUrl"
   type="(url: string, mediaType?: string) => Video"
 >
-  Creates a Video object from a URL. Optionally specify the media type, otherwise it will be inferred from the URL.
+  Creates a Video object from a URL. Optionally specify the media type, otherwise it will be inferred from the URL. When targeting AWS Bedrock with an `s3://` URI, pass the media type explicitly so the request includes the expected `format`.
 </ParamField>
 
 <ParamField
@@ -164,6 +179,8 @@ Provider defaults:
 - **[Vertex AI](/ref/llm-client-providers/google-vertex#media_url_handler)**: Keeps URLs as-is (`send_url`)
 - **[AWS Bedrock](/ref/llm-client-providers/aws-bedrock#media_url_handler)**: Keeps URLs as-is (`send_url`)
 
+For Bedrock, `s3://` URLs are passed through unchanged and encoded in the request body as an `s3Location`, allowing Bedrock to fetch the object directly from S3 without routing bytes through BAML.
+
 You can override this behavior using `media_url_handler.video` in your client configuration, but be aware of size limitations when using `send_base64` mode.
 
 ## Model Compatibility
@@ -179,5 +196,5 @@ Different AI models have varying levels of support for video input methods **(As
 | **Google Vertex AI**  | ✓ | Accepts video via Cloud Storage `gs://` URI (up to 2GB), public HTTP/HTTPS URL (&le;15MB), YouTube URL, or inline Base64. Requires `mimeType`.|
 
 <Info>
-  For most models, direct video input is only supported by Google Gemini and Vertex AI. For other providers, you must extract frames as images or use transcripts. Always specify the correct MIME type (e.g., video/mp4) when required.
-</Info> 
+  For most models, direct video input is limited to Google Gemini, Google Vertex AI, and AWS Bedrock models with video support. For other providers, you must extract frames as images or use transcripts. Always specify the correct MIME type (e.g., video/mp4) when required.
+</Info>

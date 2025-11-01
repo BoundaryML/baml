@@ -242,7 +242,7 @@ case "$_path" in
       # command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=dev -- uv run pytest -s tests/test_functions.py::test_openai_responses_all_roles"
       # command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=dev -- uv run pytest -s tests/test_errors.py"
       # command="${command} && BAML_LOG=debug,baml_runtime=trace  uv run pytest -s tests/test_functions.py::test_aws_bedrock_invalid_endpoint"
-      command="${command} && BAML_LOG=info infisical run --env=dev -- uv run pytest"
+      command="${command} && BAML_LOG=info infisical run --env=dev -- uv run pytest -s tests/providers/test_aws_video_request.py"
       # command="${command} && BAML_LOG=info  uv run pytest -s tests/test_dynamic_enum_request.py"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
@@ -266,7 +266,8 @@ case "$_path" in
     command="(cd ${_repo_root}/engine/language_client_typescript && pnpm build:debug)"
     command="${command} && pnpm baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
     if [ "$_test_mode" -eq 1 ]; then
-      command="${command} && infisical run --env=dev -- pnpm integ-tests tests/type-aliases.test.ts"
+      # command="${command} && infisical run --env=dev -- pnpm integ-tests tests/type-aliases.test.ts"
+      command="${command} && infisical run --env=dev -- pnpm integ-tests tests/providers/aws-video-request.test.ts "
       # command="${command} && infisical run -- pnpm integ-tests tests/modular.test.ts"
       # command="${command} && infisical run -- pnpm integ-tests tests/prompt_renderer.test.ts"
       # command="${command} && infisical run -- pnpm integ-tests tests/providers/openai.test.ts"

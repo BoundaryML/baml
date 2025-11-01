@@ -2051,6 +2051,20 @@ class BamlSyncClient:
                 "input": input,
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestAwsVideoDescribe(self, video_input: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.TestAwsVideoDescribe(video_input=video_input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAwsVideoDescribe", args={
+                "video_input": video_input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAzure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -5462,6 +5476,18 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def TestAwsVideoDescribe(self, video_input: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestAwsVideoDescribe", args={
+            "video_input": video_input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def TestAzure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
@@ -7926,6 +7952,13 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
+    def TestAwsVideoDescribe(self, video_input: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestAwsVideoDescribe", args={
+            "video_input": video_input,
+        }, mode="request")
+        return result
     def TestAzure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -9773,6 +9806,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestAwsInvalidSessionToken", args={
             "input": input,
+        }, mode="stream")
+        return result
+    def TestAwsVideoDescribe(self, video_input: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestAwsVideoDescribe", args={
+            "video_input": video_input,
         }, mode="stream")
         return result
     def TestAzure(self, input: str,

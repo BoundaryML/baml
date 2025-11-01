@@ -195,6 +195,7 @@ export type StreamingServerTypes = {
   TestAwsInvalidProfile: string,
   TestAwsInvalidRegion: string,
   TestAwsInvalidSessionToken: string,
+  TestAwsVideoDescribe: string,
   TestAzure: string,
   TestAzureFailure: string,
   TestAzureO1NoMaxTokens: string,
