@@ -12,16 +12,6 @@ patchedDependencies:
 importers:
 
   .:
-    dependencies:
-      '@xyflow/react':
-        specifier: 12.7.0
-        version: 12.7.0(@types/react@19.1.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
-      d3-hierarchy:
-        specifier: ^3.1.2
-        version: 3.1.2
-      lucide-react:
-        specifier: ^0.545.0
-        version: 0.545.0(react@19.2.0)
     devDependencies:
       '@biomejs/biome':
         specifier: 1.9.4
@@ -9668,11 +9658,6 @@ packages:
 
   lucide-react@0.536.0:
     resolution: {integrity: sha512-2PgvNa9v+qz4Jt/ni8vPLt4jwoFybXHuubQT8fv4iCW5TjDxkbZjNZZHa485ad73NSEn/jdsEtU57eE1g+ma8A==}
-    peerDependencies:
-      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
-
-  lucide-react@0.545.0:
-    resolution: {integrity: sha512-7r1/yUuflQDSt4f1bpn5ZAocyIxcTyVyBBChSVtBKn5M+392cPmI5YJMWOJKk/HUWGm5wg83chlAZtCcGbEZtw==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
@@ -20181,17 +20166,6 @@ snapshots:
       - '@types/react'
       - immer
 
-  '@xyflow/react@12.7.0(@types/react@19.1.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)':
-    dependencies:
-      '@xyflow/system': 0.0.62
-      classcat: 5.0.5
-      react: 19.2.0
-      react-dom: 19.2.0(react@19.2.0)
-      zustand: 4.5.7(@types/react@19.1.9)(react@19.2.0)
-    transitivePeerDependencies:
-      - '@types/react'
-      - immer
-
   '@xyflow/system@0.0.62':
     dependencies:
       '@types/d3-drag': 3.0.7
@@ -23860,10 +23834,6 @@ snapshots:
   lucide-react@0.536.0(react@19.1.1):
     dependencies:
       react: 19.1.1
-
-  lucide-react@0.545.0(react@19.2.0):
-    dependencies:
-      react: 19.2.0
 
   lz-string@1.5.0: {}
 
@@ -27713,10 +27683,6 @@ snapshots:
     dependencies:
       react: 19.1.1
 
-  use-sync-external-store@1.5.0(react@19.2.0):
-    dependencies:
-      react: 19.2.0
-
   util-deprecate@1.0.2: {}
 
   util@0.12.5:
@@ -28468,13 +28434,6 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.1.9
       react: 19.1.0
-
-  zustand@4.5.7(@types/react@19.1.9)(react@19.2.0):
-    dependencies:
-      use-sync-external-store: 1.5.0(react@19.2.0)
-    optionalDependencies:
-      '@types/react': 19.1.9
-      react: 19.2.0
 
   zustand@5.0.7(@types/react@19.1.9)(react@19.1.0)(use-sync-external-store@1.5.0(react@19.1.0)):
     optionalDependencies:
