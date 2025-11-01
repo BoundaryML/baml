@@ -72,18 +72,6 @@ fn strip_mime_prefix(mime: &str) -> &str {
     mime.split_once('/').map(|(_, s)| s).unwrap_or(mime)
 }
 
-fn build_base64_content_block(
-    media: &BamlMedia,
-    b64: &baml_types::MediaBase64,
-) -> serde_json::Map<String, serde_json::Value> {
-    let mut obj = Map::new();
-    if let Some(mime) = media.mime_type.as_deref() {
-        obj.insert("format".into(), json!(strip_mime_prefix(mime)));
-    }
-    obj.insert("source".into(), json!({ "bytes": b64.base64.clone() }));
-    obj
-}
-
 fn media_to_content_block_json(media: &BamlMedia) -> Result<serde_json::Value> {
     let content_block = {
         let mut obj = Map::new();
