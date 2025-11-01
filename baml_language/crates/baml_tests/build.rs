@@ -233,6 +233,8 @@ fn generate_project_tests(file: &mut File, project: &TestProject) -> std::io::Re
 
     // Get the manifest dir at compile time and use it in the test
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    // Replace backslashes with forward slashes for cross-platform compatibility
+    let manifest_dir = manifest_dir.replace('\\', "/");
     writeln!(
         file,
         "    const SNAPSHOT_PATH: &str = \"{}/snapshots\";",
