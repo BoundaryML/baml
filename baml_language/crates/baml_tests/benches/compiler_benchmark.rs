@@ -51,11 +51,21 @@ client GPT4 {
 }
 
 #[divan::bench]
-fn bench_incremental_simple_change(bencher: Bencher) {
+fn bench_incremental_add_field(bencher: Bencher) {
     let initial = r###"
 class User {
     id: string
     name: string
+}
+
+function GetUser(id: string) -> User {
+    client GPT4
+    prompt #"Get user {{id}}"#
+}
+
+client GPT4 {
+    provider: "openai"
+    model: "gpt-4"
 }
 "###;
 
@@ -63,24 +73,174 @@ class User {
 class User {
     id: string
     name: string
-    email: string
+    email: string  // Added field
+}
+
+function GetUser(id: string) -> User {
+    client GPT4
+    prompt #"Get user {{id}}"#
+}
+
+client GPT4 {
+    provider: "openai"
+    model: "gpt-4"
 }
 "###;
 
-    bencher.bench_local(|| {
-        let mut db = RootDatabase::new();
-        let root = db.set_project_root(std::path::PathBuf::from("."));
-        let filename = format!("types{}", BAML_EXT);
+    bencher
+        .with_inputs(|| {
+            // Setup: Create and warm up the database
+            let mut db = RootDatabase::new();
+            let root = db.set_project_root(std::path::PathBuf::from("."));
+            let filename = format!("types{}", BAML_EXT);
 
-        // Initial compilation
-        db.add_file(&filename, initial);
-        let _ = baml_hir::project_items(&db, root);
+            // Initial compilation to warm up Salsa
+            db.add_file(&filename, initial);
+            let _ = baml_hir::project_items(&db, root);
 
-        // Simulate incremental update by adding the same file again
-        // In Salsa, this should trigger incremental recompilation
-        db.add_file(&filename, updated);
-        let _ = black_box(baml_hir::project_items(&db, root));
-    });
+            (db, root, filename)
+        })
+        .bench_values(|(mut db, root, filename)| {
+            // Measure only the incremental update
+            db.add_file(&filename, updated);
+            let _ = black_box(baml_hir::project_items(&db, root));
+        });
+}
+
+#[divan::bench]
+fn bench_incremental_modify_function(bencher: Bencher) {
+    let initial = r###"
+class User {
+    id: string
+    name: string
+}
+
+function GetUser(id: string) -> User {
+    client GPT4
+    prompt #"Get user {{id}}"#
+}
+
+client GPT4 {
+    provider: "openai"
+    model: "gpt-4"
+}
+"###;
+
+    let updated = r###"
+class User {
+    id: string
+    name: string
+}
+
+function GetUser(id: string) -> User {
+    client GPT4
+    prompt #"Get user {{id}} with additional details"#  // Modified prompt
+}
+
+client GPT4 {
+    provider: "openai"
+    model: "gpt-4"
+}
+"###;
+
+    bencher
+        .with_inputs(|| {
+            // Setup: Create and warm up the database
+            let mut db = RootDatabase::new();
+            let root = db.set_project_root(std::path::PathBuf::from("."));
+            let filename = format!("app{}", BAML_EXT);
+
+            // Initial compilation to warm up Salsa
+            db.add_file(&filename, initial);
+            let _ = baml_hir::project_items(&db, root);
+
+            (db, root, filename)
+        })
+        .bench_values(|(mut db, root, filename)| {
+            // Measure only the incremental update
+            db.add_file(&filename, updated);
+            let _ = black_box(baml_hir::project_items(&db, root));
+        });
+}
+
+#[divan::bench]
+fn bench_incremental_add_new_file(bencher: Bencher) {
+    let existing_file = r###"
+class User {
+    id: string
+    name: string
+}
+"###;
+
+    let new_file = r###"
+class Post {
+    id: string
+    title: string
+    content: string
+    author: User
+}
+
+function CreatePost(title: string, content: string) -> Post {
+    client GPT4
+    prompt #"Create a post with title: {{title}} and content: {{content}}"#
+}
+"###;
+
+    bencher
+        .with_inputs(|| {
+            // Setup: Create database with initial file
+            let mut db = RootDatabase::new();
+            let root = db.set_project_root(std::path::PathBuf::from("."));
+
+            // Add first file and compile
+            db.add_file("user.baml", existing_file);
+            let _ = baml_hir::project_items(&db, root);
+
+            (db, root)
+        })
+        .bench_values(|(mut db, root)| {
+            // Measure adding a new file to existing project
+            db.add_file("post.baml", new_file);
+            let _ = black_box(baml_hir::project_items(&db, root));
+        });
+}
+
+#[divan::bench]
+fn bench_incremental_no_change(bencher: Bencher) {
+    // This benchmarks the overhead of checking when nothing changed
+    let content = r###"
+class User {
+    id: string
+    name: string
+}
+
+function GetUser(id: string) -> User {
+    client GPT4
+    prompt #"Get user {{id}}"#
+}
+
+client GPT4 {
+    provider: "openai"
+    model: "gpt-4"
+}
+"###;
+
+    bencher
+        .with_inputs(|| {
+            // Setup: Create and compile
+            let mut db = RootDatabase::new();
+            let root = db.set_project_root(std::path::PathBuf::from("."));
+
+            db.add_file("app.baml", content);
+            let _ = baml_hir::project_items(&db, root);
+
+            (db, root)
+        })
+        .bench_values(|(db, root)| {
+            // Measure cost of re-checking when nothing changed
+            // Salsa should return memoized results immediately
+            let _ = black_box(baml_hir::project_items(&db, root));
+        });
 }
 
 #[divan::bench]
