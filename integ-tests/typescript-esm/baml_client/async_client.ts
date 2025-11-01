@@ -11616,10 +11616,10 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             }
             }
             
-        async ComplexHeaderTest(
-        x: number,
-        __baml_options__?: BamlCallOptions<events.ComplexHeaderTestEventCollector>
-        ): Promise<number> {
+        async EchoWorkflow(
+        
+        __baml_options__?: BamlCallOptions<events.EchoWorkflowEventCollector>
+        ): Promise<string> {
           try {
           const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
           const signal = options.signal;
@@ -11630,8 +11630,8 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           // Check if onTick is provided - route through streaming if so
           if (options.onTick) {
-          const stream = this.stream.ComplexHeaderTest(
-          x,
+          const stream = this.stream.EchoWorkflow(
+          
           __baml_options__
           );
 
@@ -11645,9 +11645,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
             );
             const raw = await this.runtime.callFunction(
-            "ComplexHeaderTest",
+            "EchoWorkflow",
             {
-            "x": x
+            
             },
             this.ctxManager.cloneContext(),
             options.tb?.__tb(),
@@ -11658,7 +11658,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             signal,
             options.watchers,
             )
-            return raw.parsed(false) as number
+            return raw.parsed(false) as string
             } catch (error) {
             throw toBamlError(error);
             }
@@ -28622,10 +28622,10 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                   }
                   }
                   
-            ComplexHeaderTest(
-            x: number,
-            __baml_options__?: BamlCallOptions<events.ComplexHeaderTestEventCollector>
-            ): BamlStream<number | null, number>
+            EchoWorkflow(
+            
+            __baml_options__?: BamlCallOptions<events.EchoWorkflowEventCollector>
+            ): BamlStream<string | null, string>
               {
               try {
               const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
@@ -28651,7 +28651,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               try {
               options.onTick!("Unknown", log);
               } catch (error) {
-              console.error("Error in onTick callback for ComplexHeaderTest", error);
+              console.error("Error in onTick callback for EchoWorkflow", error);
               }
               }
               };
@@ -28662,9 +28662,9 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
                 const raw = this.runtime.streamFunction(
-                "ComplexHeaderTest",
+                "EchoWorkflow",
                 {
-                "x": x
+                
                 },
                 undefined,
                 this.ctxManager.cloneContext(),
@@ -28676,10 +28676,10 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 signal,
                 onTickWrapper,
                 )
-                return new BamlStream<number | null, number>(
+                return new BamlStream<string | null, string>(
                   raw,
-                  (a): number | null => a,
-                  (a): number => a,
+                  (a): string | null => a,
+                  (a): string => a,
                   this.ctxManager.cloneContext(),
                   options.signal,
                   )

@@ -1084,42 +1084,46 @@ impl AwsClient {
         media: &baml_types::BamlMedia,
     ) -> Result<bedrock::types::ContentBlock> {
         match media.media_type {
-            BamlMediaType::Image => match &media.content {
-                BamlMediaContent::File(_) => {
-                    anyhow::bail!(
+            BamlMediaType::Image => {
+                let format = bedrock::types::ImageFormat::from(
+                    {
+                        let mime_type = media.mime_type_as_ok()?;
+                        match mime_type.strip_prefix("image/") {
+                            Some(s) => s.to_string(),
+                            None => mime_type,
+                        }
+                    }
+                    .as_str(),
+                );
+                match &media.content {
+                    BamlMediaContent::File(_) => {
+                        anyhow::bail!(
                             "BAML internal error (AWSBedrock): file should have been resolved to base64"
                         )
+                    }
+                    BamlMediaContent::Url(url) => Ok(bedrock::types::ContentBlock::Image(
+                        bedrock::types::ImageBlock::builder()
+                            .set_format(Some(format))
+                            .set_source(Some(bedrock::types::ImageSource::S3Location(
+                                bedrock::types::S3Location::builder()
+                                    .set_uri(Some(url.url.clone()))
+                                    .build()
+                                    .context("Failed to build S3Location block")?,
+                            )))
+                            .build()
+                            .context("Failed to build Image block")?,
+                    )),
+                    BamlMediaContent::Base64(b64_media) => Ok(bedrock::types::ContentBlock::Image(
+                        bedrock::types::ImageBlock::builder()
+                            .set_format(Some(format))
+                            .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
+                                aws_smithy_types::base64::decode(b64_media.base64.clone())?,
+                            ))))
+                            .build()
+                            .context("Failed to build image block")?,
+                    )),
                 }
-                BamlMediaContent::Url(url) => Ok(bedrock::types::ContentBlock::Image(
-                    bedrock::types::ImageBlock::builder()
-                        .set_source(Some(bedrock::types::ImageSource::S3Location(
-                            bedrock::types::S3Location::builder()
-                                .set_uri(Some(url.url.clone()))
-                                .build()
-                                .context("Failed to build S3Location block")?,
-                        )))
-                        .build()
-                        .context("Failed to build Image block")?,
-                )),
-                BamlMediaContent::Base64(b64_media) => Ok(bedrock::types::ContentBlock::Image(
-                    bedrock::types::ImageBlock::builder()
-                        .set_format(Some(bedrock::types::ImageFormat::from(
-                            {
-                                let mime_type = media.mime_type_as_ok()?;
-                                match mime_type.strip_prefix("image/") {
-                                    Some(s) => s.to_string(),
-                                    None => mime_type,
-                                }
-                            }
-                            .as_str(),
-                        )))
-                        .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
-                            aws_smithy_types::base64::decode(b64_media.base64.clone())?,
-                        ))))
-                        .build()
-                        .context("Failed to build image block")?,
-                )),
-            },
+            }
             BamlMediaType::Pdf => {
                 match &media.content {
                     BamlMediaContent::File(_) => {
@@ -1159,22 +1163,17 @@ impl AwsClient {
                 }
             }
             BamlMediaType::Video => {
-                // AWS Bedrock supports video for Nova models with specific format
-                let mime_type = media.mime_type_as_ok()?;
-                let format = match mime_type.as_str() {
-                    "video/mp4" => bedrock::types::VideoFormat::Mp4,
-                    "video/mpeg" => bedrock::types::VideoFormat::Mpeg,
-                    "video/mov" => bedrock::types::VideoFormat::Mov,
-                    "video/x-flv" => bedrock::types::VideoFormat::Flv,
-                    "video/mkv" => bedrock::types::VideoFormat::Mkv,
-                    "video/webm" => bedrock::types::VideoFormat::Webm,
-                    _ => {
-                        anyhow::bail!(
-                                    "AWS Bedrock video format not supported: {}. Supported formats: mp4, mpeg, mov, flv, mkv, webm",
-                                    mime_type
-                                );
+                let format = bedrock::types::VideoFormat::from(
+                    {
+                        let mime_type = media.mime_type_as_ok()?;
+                        match mime_type.strip_prefix("video/") {
+                            Some(s) => s.to_string(),
+                            None => mime_type,
+                        }
                     }
-                };
+                    .as_str(),
+                );
+                // AWS Bedrock supports video for Nova models with specific format
                 match &media.content {
                     BamlMediaContent::File(_) => {
                         anyhow::bail!(

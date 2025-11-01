@@ -5550,24 +5550,24 @@ export class LlmResponseParser {
     }
   }
   
-  ComplexHeaderTest(
+  EchoWorkflow(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "ComplexHeaderTest",
+        "EchoWorkflow",
         llmResponse,
         false,
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as number
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -11628,24 +11628,24 @@ export class LlmStreamParser {
     }
   }
   
-  ComplexHeaderTest(
+  EchoWorkflow(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number | null {
+  ): string | null {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "ComplexHeaderTest",
+        "EchoWorkflow",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as number | null
+      ) as string | null
     } catch (error) {
       throw toBamlError(error);
     }

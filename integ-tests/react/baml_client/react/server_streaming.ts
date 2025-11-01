@@ -4617,20 +4617,17 @@ export const ChainedCalls = async (
 };
 
 /**
- * Executes the streaming variant of the "ComplexHeaderTest" BAML action.
+ * Executes the streaming variant of the "EchoWorkflow" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { number } x - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
-export const ComplexHeaderTest = async (
-  x: number,
+export const EchoWorkflow = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ComplexHeaderTest(
-    x,
+  const stream = b.stream.EchoWorkflow(
   );
   return Promise.resolve(stream.toStreamable());
 };

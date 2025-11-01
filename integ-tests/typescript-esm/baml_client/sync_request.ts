@@ -6037,9 +6037,9 @@ export class HttpRequest {
     }
   }
   
-  ComplexHeaderTest(
-      x: number,
-      __baml_options__?: BamlCallOptions<events.ComplexHeaderTestEventCollector>
+  EchoWorkflow(
+      
+      __baml_options__?: BamlCallOptions<events.EchoWorkflowEventCollector>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6047,9 +6047,9 @@ export class HttpRequest {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
-        "ComplexHeaderTest",
+        "EchoWorkflow",
         {
-          "x": x
+          
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -12643,9 +12643,9 @@ export class HttpStreamRequest {
     }
   }
   
-  ComplexHeaderTest(
-      x: number,
-      __baml_options__?: BamlCallOptions<events.ComplexHeaderTestEventCollector>
+  EchoWorkflow(
+      
+      __baml_options__?: BamlCallOptions<events.EchoWorkflowEventCollector>
   ): HTTPRequest {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12653,9 +12653,9 @@ export class HttpStreamRequest {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
-        "ComplexHeaderTest",
+        "EchoWorkflow",
         {
-          "x": x
+          
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),

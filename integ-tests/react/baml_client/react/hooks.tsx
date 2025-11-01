@@ -12364,17 +12364,15 @@ export function useChainedCalls(
   }
 }
 /**
- * A specialized hook for the ComplexHeaderTest BAML function that supports both streaming and non‑streaming responses.
+ * A specialized hook for the EchoWorkflow BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
  *
- * - x: number
- *
  *
  * **Return Type:**
- * - **Non‑streaming:** number
- * - **Streaming Partial:** number | null
- * - **Streaming Final:** number
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string | null
+ * - **Streaming Final:** string
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**
@@ -12389,10 +12387,10 @@ export function useChainedCalls(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useComplexHeaderTest({ stream: false});
+ * const { data, error, isLoading, mutate } = useEchoWorkflow({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useComplexHeaderTest({
+ * const { data, streamData, isLoading, error, mutate } = useEchoWorkflow({
  *   stream: true | undefined,
  *   onStreamData: (partial) => console.log('Partial update:', partial),
  *   onFinalData: (final) => console.log('Final result:', final),
@@ -12400,17 +12398,17 @@ export function useChainedCalls(
  * });
  * ```
  */
-export function useComplexHeaderTest(props: HookInput<'ComplexHeaderTest', { stream: false }>): HookOutput<'ComplexHeaderTest', { stream: false }>
-export function useComplexHeaderTest(props?: HookInput<'ComplexHeaderTest', { stream?: true }>): HookOutput<'ComplexHeaderTest', { stream: true }>
-export function useComplexHeaderTest(
-  props: HookInput<'ComplexHeaderTest', { stream?: boolean }> = {},
-): HookOutput<'ComplexHeaderTest', { stream: true }> | HookOutput<'ComplexHeaderTest', { stream: false }> {
-  let action: ServerAction = Actions.ComplexHeaderTest;
+export function useEchoWorkflow(props: HookInput<'EchoWorkflow', { stream: false }>): HookOutput<'EchoWorkflow', { stream: false }>
+export function useEchoWorkflow(props?: HookInput<'EchoWorkflow', { stream?: true }>): HookOutput<'EchoWorkflow', { stream: true }>
+export function useEchoWorkflow(
+  props: HookInput<'EchoWorkflow', { stream?: boolean }> = {},
+): HookOutput<'EchoWorkflow', { stream: true }> | HookOutput<'EchoWorkflow', { stream: false }> {
+  let action: ServerAction = Actions.EchoWorkflow;
   if (isStreamingProps(props)) {
-    action = StreamingActions.ComplexHeaderTest;
+    action = StreamingActions.EchoWorkflow;
     return useBamlAction(action, props)
   } else {
-    return useBamlAction(action, props as HookInput<'ComplexHeaderTest', { stream: false }>)
+    return useBamlAction(action, props as HookInput<'EchoWorkflow', { stream: false }>)
   }
 }
 /**

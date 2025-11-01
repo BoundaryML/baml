@@ -10176,10 +10176,10 @@ export class BamlSyncClient {
     }
   }
   
-  ComplexHeaderTest(
-      x: number,
-      __baml_options__?: BamlCallOptions<events.ComplexHeaderTestEventCollector>
-  ): number {
+  EchoWorkflow(
+      
+      __baml_options__?: BamlCallOptions<events.EchoWorkflowEventCollector>
+  ): string {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const signal = options.signal;
@@ -10199,9 +10199,9 @@ export class BamlSyncClient {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       const raw = this.runtime.callFunctionSync(
-        "ComplexHeaderTest",
+        "EchoWorkflow",
         {
-          "x": x
+          
         },
         this.ctxManager.cloneContext(),
         options.tb?.__tb(),
@@ -10212,7 +10212,7 @@ export class BamlSyncClient {
         signal,
         options.watchers,
       )
-      return raw.parsed(false) as number
+      return raw.parsed(false) as string
     } catch (error: any) {
       throw toBamlError(error);
     }

@@ -3451,20 +3451,20 @@ class BamlSyncClient:
                 
             })
             return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
-    def ComplexHeaderTest(self, x: int,
+    def EchoWorkflow(self, 
         baml_options: BamlCallOptions = {},
-    ) -> int:
+    ) -> str:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.ComplexHeaderTest(x=x,
+            stream = self.stream.EchoWorkflow(
                 baml_options=baml_options)
             return stream.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="ComplexHeaderTest", args={
-                "x": x,
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="EchoWorkflow", args={
+                
             })
-            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def ExecFetchAs(self, url: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DummyJsonTodo:
@@ -6676,16 +6676,16 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def ComplexHeaderTest(self, x: int,
+    def EchoWorkflow(self, 
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ComplexHeaderTest", args={
-            "x": x,
+    ) -> baml_py.BamlSyncStream[typing.Optional[str], str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="EchoWorkflow", args={
+            
         })
-        return baml_py.BamlSyncStream[typing.Optional[int], int](
+        return baml_py.BamlSyncStream[typing.Optional[str], str](
           result,
-          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ExecFetchAs(self, url: str,
@@ -8652,11 +8652,11 @@ class BamlHttpRequestClient:
             
         }, mode="request")
         return result
-    def ComplexHeaderTest(self, x: int,
+    def EchoWorkflow(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ComplexHeaderTest", args={
-            "x": x,
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="EchoWorkflow", args={
+            
         }, mode="request")
         return result
     def ExecFetchAs(self, url: str,
@@ -10508,11 +10508,11 @@ class BamlHttpStreamRequestClient:
             
         }, mode="stream")
         return result
-    def ComplexHeaderTest(self, x: int,
+    def EchoWorkflow(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ComplexHeaderTest", args={
-            "x": x,
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="EchoWorkflow", args={
+            
         }, mode="stream")
         return result
     def ExecFetchAs(self, url: str,

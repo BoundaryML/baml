@@ -4377,20 +4377,17 @@ export const ChainedCalls = async (
 };
 
 /**
- * Executes the "ComplexHeaderTest" BAML action.
+ * Executes the "EchoWorkflow" BAML action.
  *
- * This server action calls the underlying BAML function "ComplexHeaderTest"
+ * This server action calls the underlying BAML function "EchoWorkflow"
  * with the specified parameters.
  *
- * @param { number } x - Input parameter.
  *
- * @returns {Promise<number>} A promise that resolves with the result of the action.
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
  */
-export const ComplexHeaderTest = async (
-  x: number,
-): Promise<number> => {
-  return b.ComplexHeaderTest(
-    x,
+export const EchoWorkflow = async (
+): Promise<string> => {
+  return b.EchoWorkflow(
   );
 };
 

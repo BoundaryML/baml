@@ -6041,9 +6041,9 @@ env?: Record<string, string | undefined>
       }
       }
       
-  async ComplexHeaderTest(
-  x: number,
-  __baml_options__?: BamlCallOptions<events.ComplexHeaderTestEventCollector>
+  async EchoWorkflow(
+  
+  __baml_options__?: BamlCallOptions<events.EchoWorkflowEventCollector>
   ): Promise<HTTPRequest> {
     try {
     const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -6051,9 +6051,9 @@ env?: Record<string, string | undefined>
       Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
-      "ComplexHeaderTest",
+      "EchoWorkflow",
       {
-      "x": x
+      
       },
       this.ctxManager.cloneContext(),
       __baml_options__?.tb?.__tb(),
@@ -12647,9 +12647,9 @@ env?: Record<string, string | undefined>
           }
           }
           
-      async ComplexHeaderTest(
-      x: number,
-      __baml_options__?: BamlCallOptions<events.ComplexHeaderTestEventCollector>
+      async EchoWorkflow(
+      
+      __baml_options__?: BamlCallOptions<events.EchoWorkflowEventCollector>
       ): Promise<HTTPRequest> {
         try {
         const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -12657,9 +12657,9 @@ env?: Record<string, string | undefined>
           Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
-          "ComplexHeaderTest",
+          "EchoWorkflow",
           {
-          "x": x
+          
           },
           this.ctxManager.cloneContext(),
           __baml_options__?.tb?.__tb(),
