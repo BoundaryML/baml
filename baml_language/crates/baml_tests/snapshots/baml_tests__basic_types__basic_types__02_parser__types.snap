@@ -1,0 +1,19 @@
+---
+source: target/debug/build/baml_tests-f9742c9ea847d59f/out/generated_tests.rs
+assertion_line: 114
+expression: output
+---
+=== SYNTAX TREE ===
+ROOT "class User {
+    id int
+    name string
+    email string
+}
+
+enum Status {
+    Active
+    Inactive
+}"
+
+=== ERRORS ===
+None

@@ -1,0 +1,64 @@
+//! Root database that assembles all compiler phases.
+//!
+//! This crate purely combines all the compiler traits into a single database.
+//! All testing happens in the separate `baml_tests` crate.
+
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicU32;
+
+// Re-export all public APIs
+pub use baml_base::*;
+pub use baml_codegen;
+pub use baml_diagnostics;
+pub use baml_hir;
+pub use baml_lexer;
+pub use baml_parser;
+pub use baml_syntax;
+pub use baml_thir;
+pub use baml_workspace;
+use salsa::Storage;
+
+/// Root database combining all compiler phases.
+/// With Salsa 2022, we use the #[`salsa::db`] attribute
+#[salsa::db]
+#[derive(Clone)]
+pub struct RootDatabase {
+    storage: salsa::Storage<Self>,
+    next_file_id: std::sync::Arc<AtomicU32>,
+}
+
+#[salsa::db]
+impl salsa::Database for RootDatabase {}
+
+impl RootDatabase {
+    /// Create a new empty database.
+    pub fn new() -> Self {
+        Self {
+            storage: Storage::default(),
+            next_file_id: Arc::new(AtomicU32::new(0)),
+        }
+    }
+
+    /// Add a file to the database.
+    pub fn add_file(&mut self, path: impl Into<PathBuf>, text: impl Into<String>) -> SourceFile {
+        let file_id = FileId::new(
+            self.next_file_id
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+        );
+
+        // Create a new SourceFile input
+        SourceFile::new(self, text.into(), path.into(), file_id)
+    }
+
+    /// Create a project root
+    pub fn set_project_root(&mut self, path: impl Into<PathBuf>) -> baml_workspace::ProjectRoot {
+        baml_workspace::ProjectRoot::new(self, path.into())
+    }
+}
+
+impl Default for RootDatabase {
+    fn default() -> Self {
+        Self::new()
+    }
+}

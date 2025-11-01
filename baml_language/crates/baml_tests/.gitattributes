@@ -1,0 +1,2 @@
+# Treat insta snapshots as generated so GitHub collapses them
+snapshots/*.snap linguist-generated=true

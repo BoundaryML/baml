@@ -1,0 +1,18 @@
+---
+source: target/debug/build/baml_tests-f9742c9ea847d59f/out/generated_tests.rs
+assertion_line: 89
+expression: output
+---
+=== SYNTAX TREE ===
+ROOT "function GetUser(id: int) -> User {
+    client GPT4
+    prompt #"Get user {{id}}"#
+}
+
+function GetStatus() -> Status {
+    client GPT4
+    prompt #"Get status"#
+}"
+
+=== ERRORS ===
+None

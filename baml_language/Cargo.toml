@@ -1,0 +1,155 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+# Please update rustfmt.toml when bumping the Rust edition
+edition = "2024"
+rust-version = "1.88"
+authors = ["Vaibhav Gupta <vbv@boundaryml.com>"]
+homepage = "https://github.com/BoundaryML/baml"
+documentation = "https://docs.boundaryml.com"
+repository = "https://github.com/BoundaryML/baml"
+license = "Apache-2.0"
+# This needs to be updated manually when bumping the version
+version = "0.0.0"
+
+[workspace.dependencies]
+# workspace dependencies
+baml_base = { path = "crates/baml_base" }
+baml_codegen = { path = "crates/baml_codegen" }
+baml_db = { path = "crates/baml_db" }
+baml_diagnostics = { path = "crates/baml_diagnostics" }
+baml_hir = { path = "crates/baml_hir" }
+baml_lexer = { path = "crates/baml_lexer" }
+baml_parser = { path = "crates/baml_parser" }
+baml_syntax = { path = "crates/baml_syntax" }
+baml_tests = { path = "crates/baml_tests" }
+baml_thir = { path = "crates/baml_thir" }
+baml_workspace = { path = "crates/baml_workspace" }
+
+# external dependencies
+ariadne = { version = "0.4" }
+glob = { version = "0.3" }
+insta = { version = "1.34", features = ["yaml", "redactions"] }
+insta-cmd = { version = "0.6.0" }
+logos = { version = "0.14" }
+pretty_assertions = { version = "1.4" }
+rowan = { version = "0.15" }
+# When updating salsa, make sure to also update the revision in `fuzz/Cargo.toml`
+salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18b8a6d17a2279a96ed6c3e198", default-features = false, features = [
+    "compact_str",
+    "macros",
+    "salsa_unstable",
+    "inventory",
+] }
+smol_str = { version = "0.2" }
+text-size = { version = "1.1" }
+walkdir = { version = "2.4" }
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+unreachable_pub = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = [
+    "cfg(fuzzing)",
+    "cfg(codspeed)",
+] }
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -2 }
+# Enabled at the crate level
+disallowed_methods = "allow"
+# Allowed pedantic lints
+char_lit_as_u8 = "allow"
+collapsible_else_if = "allow"
+collapsible_if = "allow"
+implicit_hasher = "allow"
+map_unwrap_or = "allow"
+match_same_arms = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+similar_names = "allow"
+single_match_else = "allow"
+too_many_lines = "allow"
+needless_continue = "allow" # An explicit continue can be more readable, especially if the alternative is an empty block.
+unnecessary_debug_formatting = "allow" # too many instances, the display also doesn't quote the path which is often desired in logs where we use them the most often.
+# Without the hashes we run into a `rustfmt` bug in some snapshot tests, see #13250
+needless_raw_string_hashes = "allow"
+# Disallowed restriction lints
+ignore_without_reason = "allow" # Too many exsisting instances, and there's no auto fix.
+print_stdout = "deny" # deny print! and println! (LSP requires stdout/stderr for communication)
+print_stderr = "deny"
+dbg_macro = "deny"    # deny dbg! macro (LSP requires stdout/stderr for communication)
+empty_drop = "warn"
+empty_structs_with_brackets = "warn"
+exit = "warn"
+get_unwrap = "warn"
+rc_buffer = "warn"
+rc_mutex = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+# nursery rules
+redundant_clone = "warn"
+debug_assert_with_mut_call = "warn"
+unused_peekable = "warn"
+# This lint sometimes flags code whose `if` and `else`
+# bodies could be flipped when a `!` operator is removed.
+# While perhaps sometimes a good idea, it is also often
+# not a good idea due to other factors impacting
+# readability. For example, if flipping the bodies results
+# in the `if` being an order of magnitude bigger than the
+# `else`, then some might consider that harder to read.
+if_not_else = "allow"
+
+# Diagnostics are not actionable: Enable once https://github.com/rust-lang/rust-clippy/issues/13774 is resolved.
+large_stack_arrays = "allow"
+
+
+[profile.release]
+lto = "fat"
+codegen-units = 16
+
+# Some crates don't change as much but benefit more from
+# more expensive optimization passes, so we selectively
+# decrease codegen-units in some cases.
+[profile.release.package.salsa]
+codegen-units = 1
+
+[profile.dev.package.insta]
+opt-level = 3
+
+[profile.dev.package.similar]
+opt-level = 3
+
+[profile.dev.package.salsa]
+opt-level = 3
+
+# This profile is meant to mimic the `release` profile as closely as
+# possible, but using settings that are more beneficial for iterative
+# development. That is, the `release` profile is intended for actually
+# building the release, where as `profiling` is meant for building ty/ruff
+# for running benchmarks.
+#
+# The main differences here are to avoid stripping debug information
+# and disabling fat lto. This does result in a mismatch between our release
+# configuration and our benchmarking configuration, which is unfortunate.
+# But compile times with `lto = fat` are completely untenable.
+#
+# This setup does risk that we are measuring something in benchmarks
+# that we aren't shipping, but in order to make those two the same, we'd
+# either need to make compile times way worse for development, or take
+# a hit to binary size and a slight hit to runtime performance in our
+# release builds.
+#
+# Use the `--profile profiling` flag to show symbols in release mode.
+# e.g. `cargo build --profile profiling`
+[profile.profiling]
+inherits = "release"
+strip = false
+debug = "full"
+lto = false
+
+# The profile that 'cargo dist' will build with.
+[profile.dist]
+inherits = "release"

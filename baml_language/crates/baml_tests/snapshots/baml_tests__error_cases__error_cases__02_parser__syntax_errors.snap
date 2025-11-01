@@ -1,0 +1,15 @@
+---
+source: target/debug/build/baml_tests-f9742c9ea847d59f/out/generated_tests.rs
+assertion_line: 312
+expression: output
+---
+=== SYNTAX TREE ===
+ROOT "// Missing closing brace
+class Broken {
+    field int
+
+// Invalid syntax
+function 123Invalid() {}"
+
+=== ERRORS ===
+None

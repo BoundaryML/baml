@@ -1,0 +1,30 @@
+---
+source: target/debug/build/baml_tests-f9742c9ea847d59f/out/generated_tests.rs
+assertion_line: 469
+expression: output
+---
+Function "function"
+Identifier "HelloWorld"
+LParen "("
+Identifier "name"
+Colon ":"
+Identifier "string"
+RParen ")"
+Arrow "->"
+Identifier "string"
+LBrace "{"
+Client "client"
+Identifier "GPT4"
+Identifier "prompt"
+Error "#"
+String "\"\n    Say hello to {{name}}\n  \""
+Error "#"
+RBrace "}"
+Class "class"
+Identifier "User"
+LBrace "{"
+Identifier "name"
+Identifier "string"
+Identifier "age"
+Identifier "int"
+RBrace "}"

@@ -1,0 +1,21 @@
+---
+source: target/debug/build/baml_tests-f9742c9ea847d59f/out/generated_tests.rs
+assertion_line: 64
+expression: output
+---
+Class "class"
+Identifier "User"
+LBrace "{"
+Identifier "id"
+Identifier "int"
+Identifier "name"
+Identifier "string"
+Identifier "email"
+Identifier "string"
+RBrace "}"
+Enum "enum"
+Identifier "Status"
+LBrace "{"
+Identifier "Active"
+Identifier "Inactive"
+RBrace "}"

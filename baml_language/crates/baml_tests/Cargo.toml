@@ -1,0 +1,26 @@
+[package]
+name = "baml_tests"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+build = "build.rs"
+
+[lib]
+doctest = false
+
+[dependencies]
+baml_db = { path = "../baml_db" }
+insta.workspace = true
+
+[build-dependencies]
+walkdir = "2.4"
+
+[dev-dependencies]
+# For benchmarks
+baml_db = { path = "../baml_db" }
+codspeed-bencher-compat = "2.10.1"
+
+[[bench]]
+name = "compiler_benchmark"
+harness = false
