@@ -5,7 +5,8 @@ resolver = "2"
 [workspace.package]
 # Please update rustfmt.toml when bumping the Rust edition
 edition = "2024"
-rust-version = "1.88"
+# This is the MSRV (Minimum Supported Rust Version) for the workspace
+rust-version = "1.89"
 authors = ["Vaibhav Gupta <vbv@boundaryml.com>"]
 homepage = "https://github.com/BoundaryML/baml"
 documentation = "https://docs.boundaryml.com"
