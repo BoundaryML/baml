@@ -1199,7 +1199,7 @@ impl AwsClient {
                                 aws_smithy_types::base64::decode(b64_media.base64.clone())?,
                             ))))
                             .build()
-                            .context("Failed to build video block")?,
+                            .context("AWS Bedrock error: mime_type must be explicitly set on base64 videos")?,
                     )),
                 }
             }
