@@ -29,13 +29,14 @@ baml_thir = { path = "crates/baml_thir" }
 baml_workspace = { path = "crates/baml_workspace" }
 
 # external dependencies
-ariadne = { version = "0.4" }
+ariadne = { version = "0.6" }
+codspeed-bencher-compat = "4.0"
 glob = { version = "0.3" }
 insta = { version = "1.34", features = ["yaml", "redactions"] }
 insta-cmd = { version = "0.6.0" }
-logos = { version = "0.14" }
+logos = { version = "0.15" }
 pretty_assertions = { version = "1.4" }
-rowan = { version = "0.15" }
+rowan = { version = "0.16" }
 # When updating salsa, make sure to also update the revision in `fuzz/Cargo.toml`
 salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18b8a6d17a2279a96ed6c3e198", default-features = false, features = [
     "compact_str",
@@ -43,7 +44,7 @@ salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18
     "salsa_unstable",
     "inventory",
 ] }
-smol_str = { version = "0.2" }
+smol_str = { version = "0.3" }
 text-size = { version = "1.1" }
 walkdir = { version = "2.4" }
 

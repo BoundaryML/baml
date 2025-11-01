@@ -30,7 +30,7 @@ pub fn render_diagnostic(diag: &dyn Diagnostic, sources: &HashMap<FileId, String
 
     let (file_id, range) = span_to_ariadne(span);
 
-    let report = Report::build(kind, file_id, range.start)
+    let report = Report::build(kind, (file_id, range.clone()))
         .with_message(diag.message())
         .with_label(
             Label::new((file_id, range))

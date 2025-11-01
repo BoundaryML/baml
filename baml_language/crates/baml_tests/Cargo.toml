@@ -15,11 +15,11 @@ baml_db = { workspace = true }
 insta.workspace = true
 
 [build-dependencies]
-walkdir = "2.4"
+walkdir = { workspace = true }
 
 [dev-dependencies]
 # For benchmarks
-codspeed-bencher-compat = "2.10.1"
+codspeed-bencher-compat = { workspace = true }
 
 [[bench]]
 name = "compiler_benchmark"

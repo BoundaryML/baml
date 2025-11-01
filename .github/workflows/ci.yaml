@@ -483,7 +483,7 @@ jobs:
           tool: cargo-codspeed
 
       - name: "Build benchmarks"
-        run: cargo codspeed build --features "codspeed" -p baml_db
+        run: cargo codspeed build -p baml_db
         working-directory: baml_language
 
       - name: "Run benchmarks"

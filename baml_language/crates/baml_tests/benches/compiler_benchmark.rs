@@ -4,6 +4,7 @@
 
 use baml_db::*;
 use codspeed_bencher_compat::{Bencher, benchmark_group, benchmark_main};
+use std::hint::black_box;
 
 // Additional manual benchmarks
 const BAML_EXT: &str = ".baml";
@@ -12,7 +13,7 @@ fn bench_empty_project(b: &mut Bencher) {
     b.iter(|| {
         let mut db = RootDatabase::new();
         let root = db.set_project_root(std::path::PathBuf::from("."));
-        let _ = codspeed_bencher_compat::black_box(baml_hir::project_items(&db, root));
+        let _ = black_box(baml_hir::project_items(&db, root));
     });
 }
 
@@ -39,7 +40,7 @@ client GPT4 {
         let root = db.set_project_root(std::path::PathBuf::from("."));
         let filename = format!("test{}", BAML_EXT);
         db.add_file(&filename, content);
-        let _ = codspeed_bencher_compat::black_box(baml_hir::project_items(&db, root));
+        let _ = black_box(baml_hir::project_items(&db, root));
     });
 }
 
@@ -71,7 +72,7 @@ class User {
         // Simulate incremental update by adding the same file again
         // In Salsa, this should trigger incremental recompilation
         db.add_file(&filename, updated);
-        let _ = codspeed_bencher_compat::black_box(baml_hir::project_items(&db, root));
+        let _ = black_box(baml_hir::project_items(&db, root));
     });
 }
 
@@ -106,7 +107,7 @@ client GPT4 {
         let mut db = RootDatabase::new();
         let filename = format!("test{}", BAML_EXT);
         let file = db.add_file(&filename, content);
-        let _ = codspeed_bencher_compat::black_box(baml_parser::syntax_tree(&db, file));
+        let _ = black_box(baml_parser::syntax_tree(&db, file));
     });
 }
 
@@ -141,7 +142,7 @@ client GPT4 {
         let mut db = RootDatabase::new();
         let filename = format!("test{}", BAML_EXT);
         let file = db.add_file(&filename, content);
-        let _ = codspeed_bencher_compat::black_box(baml_lexer::lex_file(&db, file));
+        let _ = black_box(baml_lexer::lex_file(&db, file));
     });
 }
 
