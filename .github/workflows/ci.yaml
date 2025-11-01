@@ -16,7 +16,6 @@ concurrency:
 defaults:
   run:
     shell: bash
-    working-directory: baml_language
 
 env:
   CARGO_INCREMENTAL: 0
@@ -163,6 +162,7 @@ jobs:
 
       - name: "Check formatting"
         run: cargo fmt --all --check
+        working-directory: baml_language
 
   cargo-clippy:
     name: "cargo clippy"
@@ -187,9 +187,11 @@ jobs:
 
       - name: "Clippy"
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+        working-directory: baml_language
 
       - name: "Clippy (wasm)"
         run: cargo clippy --workspace --target wasm32-unknown-unknown --all-features --locked -- -D warnings
+        working-directory: baml_language
 
   cargo-test-linux:
     name: "cargo test (linux)"
@@ -266,6 +268,7 @@ jobs:
         run: |
           cargo nextest run --all-features
           cargo test --all-features --doc
+        working-directory: baml_language
 
   cargo-test-windows:
     name: "cargo test (windows)"
@@ -294,6 +297,7 @@ jobs:
         run: |
           cargo nextest run --all-features
           cargo test --all-features --doc
+        working-directory: baml_language
 
   cargo-test-wasm:
     name: "cargo test (wasm)"
@@ -319,12 +323,14 @@ jobs:
         run: |
           cargo build --target wasm32-unknown-unknown --no-default-features
           cargo build --target wasm32-unknown-unknown --no-default-features --release
+        working-directory: baml_language
 
       - name: "Check WASM size"
         run: |
           ls -lh target/wasm32-unknown-unknown/release/*.wasm || true
           echo "WASM build artifacts:"
           find target/wasm32-unknown-unknown -name "*.wasm" -exec ls -lh {} \;
+        working-directory: baml_language
 
   cargo-build-msrv:
     name: "cargo build (msrv)"
@@ -358,6 +364,7 @@ jobs:
         env:
           MSRV: ${{ steps.msrv.outputs.value }}
         run: cargo "+${MSRV}" test --no-run --all-features
+        working-directory: baml_language
 
   check-dependencies:
     name: "check dependencies"
@@ -379,6 +386,7 @@ jobs:
 
       - name: "Check dependencies"
         run: cargo deny check
+        working-directory: baml_language
         continue-on-error: true  # For now, just warn
 
   snapshot-tests:
@@ -408,6 +416,7 @@ jobs:
         run: |
           cargo insta test --all-features --unreferenced=reject
           cargo insta test --all-features --review
+        working-directory: baml_language
 
       - name: "Check for snapshot changes"
         run: |
@@ -462,6 +471,7 @@ jobs:
 
       - name: "Build benchmarks"
         run: cargo codspeed build --features "codspeed" -p baml_db
+        working-directory: baml_language
 
       - name: "Run benchmarks"
         uses: CodSpeedHQ/action@v3
