@@ -734,11 +734,12 @@ fn discover_incremental_benchmarks(dir: &Path, benchmarks: &mut Vec<Benchmark>) 
                 if path.extension().and_then(|s| s.to_str()) == Some("baml") {
                     after_files.push(path.to_path_buf());
                 } else if let Some(filename) = path.file_name().and_then(|s| s.to_str())
-                    && filename.ends_with(".baml.delete") {
-                        // Extract the original filename
-                        let original = filename.strip_suffix(".delete").unwrap();
-                        delete_files.push(original.to_string());
-                    }
+                    && filename.ends_with(".baml.delete")
+                {
+                    // Extract the original filename
+                    let original = filename.strip_suffix(".delete").unwrap();
+                    delete_files.push(original.to_string());
+                }
             }
 
             benchmarks.push(Benchmark::IncrementalMultiFile {
