@@ -24,7 +24,6 @@ members = [
   "llm-response-parser",
   "boundary-udf",
   "playground-server",
-  "vertex-auth-example",
 ]
 default-members = [
   "baml-compiler",
