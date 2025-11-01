@@ -31,7 +31,7 @@ baml_workspace = { path = "crates/baml_workspace" }
 
 # external dependencies
 ariadne = { version = "0.6" }
-codspeed-bencher-compat = "4.0"
+divan = { package = "codspeed-divan-compat", version = "*" }
 glob = { version = "0.3" }
 insta = { version = "1.34", features = ["yaml", "redactions"] }
 insta-cmd = { version = "0.6.0" }

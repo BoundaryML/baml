@@ -3,21 +3,27 @@
 //! Run with: cargo bench --bench compiler_benchmark
 
 use baml_db::*;
-use codspeed_bencher_compat::{Bencher, benchmark_group, benchmark_main};
-use std::hint::black_box;
+use divan::{Bencher, black_box};
+
+fn main() {
+    // Run registered benchmarks
+    divan::main();
+}
 
 // Additional manual benchmarks
 const BAML_EXT: &str = ".baml";
 
-fn bench_empty_project(b: &mut Bencher) {
-    b.iter(|| {
+#[divan::bench]
+fn bench_empty_project(bencher: Bencher) {
+    bencher.bench(|| {
         let mut db = RootDatabase::new();
         let root = db.set_project_root(std::path::PathBuf::from("."));
         let _ = black_box(baml_hir::project_items(&db, root));
     });
 }
 
-fn bench_single_simple_file(b: &mut Bencher) {
+#[divan::bench]
+fn bench_single_simple_file(bencher: Bencher) {
     let content = r###"
 class User {
     id: string
@@ -35,7 +41,7 @@ client GPT4 {
 }
 "###;
 
-    b.iter(|| {
+    bencher.bench_local(|| {
         let mut db = RootDatabase::new();
         let root = db.set_project_root(std::path::PathBuf::from("."));
         let filename = format!("test{}", BAML_EXT);
@@ -44,7 +50,8 @@ client GPT4 {
     });
 }
 
-fn bench_incremental_simple_change(b: &mut Bencher) {
+#[divan::bench]
+fn bench_incremental_simple_change(bencher: Bencher) {
     let initial = r###"
 class User {
     id: string
@@ -60,7 +67,7 @@ class User {
 }
 "###;
 
-    b.iter(|| {
+    bencher.bench_local(|| {
         let mut db = RootDatabase::new();
         let root = db.set_project_root(std::path::PathBuf::from("."));
         let filename = format!("types{}", BAML_EXT);
@@ -76,7 +83,8 @@ class User {
     });
 }
 
-fn bench_parse_only_simple(b: &mut Bencher) {
+#[divan::bench]
+fn bench_parse_only_simple(bencher: Bencher) {
     let content = r###"
 class User {
     id: string
@@ -103,7 +111,7 @@ client GPT4 {
 }
 "###;
 
-    b.iter(|| {
+    bencher.bench_local(|| {
         let mut db = RootDatabase::new();
         let filename = format!("test{}", BAML_EXT);
         let file = db.add_file(&filename, content);
@@ -111,7 +119,8 @@ client GPT4 {
     });
 }
 
-fn bench_lexer_only_simple(b: &mut Bencher) {
+#[divan::bench]
+fn bench_lexer_only_simple(bencher: Bencher) {
     let content = r###"
 class User {
     id: string
@@ -138,7 +147,7 @@ client GPT4 {
 }
 "###;
 
-    b.iter(|| {
+    bencher.bench_local(|| {
         let mut db = RootDatabase::new();
         let filename = format!("test{}", BAML_EXT);
         let file = db.add_file(&filename, content);
@@ -148,21 +157,3 @@ client GPT4 {
 
 // Include generated benchmarks from build script
 include!(concat!(env!("OUT_DIR"), "/generated_benchmarks.rs"));
-
-// Combine all benchmarks into groups
-benchmark_group!(
-    manual_benches,
-    bench_empty_project,
-    bench_single_simple_file,
-    bench_incremental_simple_change,
-    bench_parse_only_simple,
-    bench_lexer_only_simple
-);
-
-// The generated benchmarks are expected to define their own benchmark_group! macro call
-// So we just need to reference them in benchmark_main
-benchmark_main!(
-    manual_benches,
-    generated_incremental_benches,
-    generated_scale_benches
-);

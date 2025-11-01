@@ -30,13 +30,4 @@ baml_thir = { workspace = true }
 baml_codegen = { workspace = true }
 baml_diagnostics = { workspace = true }
 
-[dev-dependencies]
-codspeed-bencher-compat = { workspace = true }
-
-[features]
-default = []
-codspeed = []
-
-[[bench]]
-name = "build_benchmark"
-harness = false
+# No dev-dependencies needed anymore!

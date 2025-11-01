@@ -19,7 +19,7 @@ walkdir = { workspace = true }
 
 [dev-dependencies]
 # For benchmarks
-codspeed-bencher-compat = { workspace = true }
+divan = { package = "codspeed-divan-compat", workspace = true }
 
 [[bench]]
 name = "compiler_benchmark"
