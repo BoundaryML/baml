@@ -456,6 +456,7 @@ jobs:
       (
         github.ref == 'refs/heads/main' ||
         github.ref == 'refs/heads/canary' ||
+        contains(github.event.pull_request.body, 'RUN_CODSPEED=1') ||
         needs.determine_changes.outputs.lexer == 'true' ||
         needs.determine_changes.outputs.parser == 'true' ||
         needs.determine_changes.outputs.hir == 'true' ||
