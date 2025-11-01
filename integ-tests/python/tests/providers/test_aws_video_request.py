@@ -36,6 +36,8 @@ async def test_bedrock_video_request_prefers_s3_location(monkeypatch):
 @pytest.mark.asyncio
 async def test_bedrock_video_request_with_real_s3_upload(monkeypatch):
     resp = await b.TestAwsVideoDescribe(
-        video_input=baml_py.Video.from_url("s3://baml-integ-tests/sample-5s.mp4"),
+        video_input=baml_py.Video.from_url(
+            "s3://baml-integ-tests/sample-5s.mp4", media_type="video/mp4"
+        ),
     )
     assert "lorem ipsum" in resp
