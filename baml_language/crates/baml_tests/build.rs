@@ -279,8 +279,14 @@ fn generate_lexer_test(
         "        let content = include_str!(r\"{}\");",
         baml_file.full_path.display()
     )?;
-    writeln!(file, "        // Normalize line endings for cross-platform compatibility")?;
-    writeln!(file, "        let content = content.replace(\"\\r\\n\", \"\\n\");")?;
+    writeln!(
+        file,
+        "        // Normalize line endings for cross-platform compatibility"
+    )?;
+    writeln!(
+        file,
+        "        let content = content.replace(\"\\r\\n\", \"\\n\");"
+    )?;
     writeln!(file, "        let mut db = RootDatabase::new();")?;
     writeln!(
         file,
@@ -339,8 +345,14 @@ fn generate_parser_test(
         "        let content = include_str!(r\"{}\");",
         baml_file.full_path.display()
     )?;
-    writeln!(file, "        // Normalize line endings for cross-platform compatibility")?;
-    writeln!(file, "        let content = content.replace(\"\\r\\n\", \"\\n\");")?;
+    writeln!(
+        file,
+        "        // Normalize line endings for cross-platform compatibility"
+    )?;
+    writeln!(
+        file,
+        "        let content = content.replace(\"\\r\\n\", \"\\n\");"
+    )?;
     writeln!(file, "        let mut db = RootDatabase::new();")?;
     writeln!(
         file,
@@ -414,7 +426,10 @@ fn generate_hir_test(file: &mut File, project: &TestProject) -> std::io::Result<
             "            let content = include_str!(r\"{}\");",
             baml_file.full_path.display()
         )?;
-        writeln!(file, "            let content = content.replace(\"\\r\\n\", \"\\n\");")?;
+        writeln!(
+            file,
+            "            let content = content.replace(\"\\r\\n\", \"\\n\");"
+        )?;
         writeln!(file, "            db.add_file(")?;
         writeln!(
             file,
@@ -484,7 +499,10 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
             "            let content = include_str!(r\"{}\");",
             baml_file.full_path.display()
         )?;
-        writeln!(file, "            let content = content.replace(\"\\r\\n\", \"\\n\");")?;
+        writeln!(
+            file,
+            "            let content = content.replace(\"\\r\\n\", \"\\n\");"
+        )?;
         writeln!(file, "            db.add_file(")?;
         writeln!(
             file,
@@ -569,7 +587,10 @@ fn generate_diagnostics_test(file: &mut File, project: &TestProject) -> std::io:
             "            let content = include_str!(r\"{}\");",
             baml_file.full_path.display()
         )?;
-        writeln!(file, "            let content = content.replace(\"\\r\\n\", \"\\n\");")?;
+        writeln!(
+            file,
+            "            let content = content.replace(\"\\r\\n\", \"\\n\");"
+        )?;
         writeln!(file, "            let source_file = db.add_file(")?;
         writeln!(
             file,
@@ -645,7 +666,10 @@ fn generate_codegen_test(file: &mut File, project: &TestProject) -> std::io::Res
             "            let content = include_str!(r\"{}\");",
             baml_file.full_path.display()
         )?;
-        writeln!(file, "            let content = content.replace(\"\\r\\n\", \"\\n\");")?;
+        writeln!(
+            file,
+            "            let content = content.replace(\"\\r\\n\", \"\\n\");"
+        )?;
         writeln!(file, "            db.add_file(")?;
         writeln!(
             file,
@@ -855,7 +879,11 @@ fn generate_incremental_benchmark(
     writeln!(file, "        // Initial compilation")?;
     for (i, path) in before_files.iter().enumerate() {
         let rel_path = path.file_name().unwrap().to_str().unwrap();
-        writeln!(file, "        db.add_file(\"{}\", &before_{});", rel_path, i)?;
+        writeln!(
+            file,
+            "        db.add_file(\"{}\", &before_{});",
+            rel_path, i
+        )?;
     }
     writeln!(
         file,
@@ -908,7 +936,10 @@ fn generate_scale_benchmark(file: &mut File, name: &str, path: PathBuf) -> std::
         "    let content_raw = include_str!(r\"{}\");",
         path.display()
     )?;
-    writeln!(file, "    let content = content_raw.replace(\"\\r\\n\", \"\\n\");")?;
+    writeln!(
+        file,
+        "    let content = content_raw.replace(\"\\r\\n\", \"\\n\");"
+    )?;
     writeln!(file, "    ")?;
     writeln!(file, "    b.iter(|| {{")?;
     writeln!(file, "        let mut db = RootDatabase::new();")?;
