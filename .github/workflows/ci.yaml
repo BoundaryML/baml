@@ -159,6 +159,7 @@ jobs:
         run: |
           rustup show
           rustup component add rustfmt
+        working-directory: baml_language
 
       - name: "Check formatting"
         run: cargo fmt --all --check
@@ -184,6 +185,7 @@ jobs:
           rustup show
           rustup component add clippy
           rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
 
       - name: "Clippy"
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
@@ -210,6 +212,7 @@ jobs:
 
       - name: "Install Rust toolchain"
         run: rustup show
+        working-directory: baml_language
 
       - name: "Install cargo insta"
         uses: taiki-e/install-action@v2
@@ -258,6 +261,7 @@ jobs:
 
       - name: "Install Rust toolchain"
         run: rustup show
+        working-directory: baml_language
 
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
@@ -287,6 +291,7 @@ jobs:
 
       - name: "Install Rust toolchain"
         run: rustup show
+        working-directory: baml_language
 
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
@@ -318,6 +323,7 @@ jobs:
         run: |
           rustup show
           rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
 
       - name: "Build for WASM"
         run: |
@@ -359,6 +365,7 @@ jobs:
         run: |
           rustup toolchain install "${MSRV}"
           rustup default "${MSRV}"
+        working-directory: baml_language
 
       - name: "Build with MSRV"
         env:
@@ -378,6 +385,7 @@ jobs:
 
       - name: "Install Rust toolchain"
         run: rustup show
+        working-directory: baml_language
 
       - name: "Install cargo-deny"
         uses: taiki-e/install-action@v2
@@ -406,6 +414,7 @@ jobs:
 
       - name: "Install Rust toolchain"
         run: rustup show
+        working-directory: baml_language
 
       - name: "Install cargo insta"
         uses: taiki-e/install-action@v2
@@ -463,6 +472,7 @@ jobs:
 
       - name: "Install Rust toolchain"
         run: rustup show
+        working-directory: baml_language
 
       - name: "Install codspeed"
         uses: taiki-e/install-action@v2
