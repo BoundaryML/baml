@@ -449,7 +449,7 @@ jobs:
 
   benchmarks-instrumented:
     name: "benchmarks instrumented (baml)"
-    runs-on: ubuntu-24.04
+    runs-on: codspeed-macro
     needs: determine_changes
     if: |
       (
@@ -489,6 +489,7 @@ jobs:
       - name: "Run benchmarks"
         uses: CodSpeedHQ/action@v3
         with:
+          mode: walltime
           run: cd baml_language && cargo codspeed run
           token: ${{ secrets.CODSPEED_TOKEN }}
 
