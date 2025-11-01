@@ -2,8 +2,8 @@
 //!
 //! Run with: cargo bench --bench compiler_benchmark
 
-use codspeed_bencher_compat::{benchmark_group, benchmark_main, Bencher};
 use baml_db::*;
+use codspeed_bencher_compat::{Bencher, benchmark_group, benchmark_main};
 
 // Additional manual benchmarks
 const BAML_EXT: &str = ".baml";

@@ -82,15 +82,27 @@ fn generate_benchmarks(out_dir: &str, manifest_dir: &str) {
 
     for benchmark in &benchmarks {
         match benchmark {
-            Benchmark::IncrementalMultiFile { name, before_files, after_files, delete_files } => {
+            Benchmark::IncrementalMultiFile {
+                name,
+                before_files,
+                after_files,
+                delete_files,
+            } => {
                 let fn_name = format!("bench_incremental_{}", name.replace("-", "_"));
                 incremental_bench_names.push(fn_name.clone());
-                generate_incremental_benchmark(&mut file, &name, before_files.clone(), after_files.clone(), delete_files.clone()).unwrap();
+                generate_incremental_benchmark(
+                    &mut file,
+                    name,
+                    before_files.clone(),
+                    after_files.clone(),
+                    delete_files.clone(),
+                )
+                .unwrap();
             }
             Benchmark::Scale { name, path } => {
                 let fn_name = format!("bench_scale_{}", name.replace("-", "_"));
                 scale_bench_names.push(fn_name.clone());
-                generate_scale_benchmark(&mut file, &name, path.clone()).unwrap();
+                generate_scale_benchmark(&mut file, name, path.clone()).unwrap();
             }
         }
     }
@@ -98,7 +110,11 @@ fn generate_benchmarks(out_dir: &str, manifest_dir: &str) {
     // Generate benchmark groups
     if !incremental_bench_names.is_empty() {
         writeln!(file).unwrap();
-        writeln!(file, "// Generated benchmark group for incremental benchmarks").unwrap();
+        writeln!(
+            file,
+            "// Generated benchmark group for incremental benchmarks"
+        )
+        .unwrap();
         writeln!(file, "benchmark_group!(").unwrap();
         write!(file, "    generated_incremental_benches").unwrap();
         for name in &incremental_bench_names {
@@ -694,7 +710,9 @@ fn discover_incremental_benchmarks(dir: &Path, benchmarks: &mut Vec<Benchmark>) 
     for entry in fs::read_dir(dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
-        if !path.is_dir() { continue; }
+        if !path.is_dir() {
+            continue;
+        }
 
         let before_dir = path.join("before");
         let after_dir = path.join("after");
@@ -715,13 +733,12 @@ fn discover_incremental_benchmarks(dir: &Path, benchmarks: &mut Vec<Benchmark>) 
 
                 if path.extension().and_then(|s| s.to_str()) == Some("baml") {
                     after_files.push(path.to_path_buf());
-                } else if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
-                    if filename.ends_with(".baml.delete") {
+                } else if let Some(filename) = path.file_name().and_then(|s| s.to_str())
+                    && filename.ends_with(".baml.delete") {
                         // Extract the original filename
                         let original = filename.strip_suffix(".delete").unwrap();
                         delete_files.push(original.to_string());
                     }
-                }
             }
 
             benchmarks.push(Benchmark::IncrementalMultiFile {
@@ -770,7 +787,7 @@ fn generate_incremental_benchmark(
     name: &str,
     before_files: Vec<PathBuf>,
     after_files: Vec<PathBuf>,
-    delete_files: Vec<String>
+    delete_files: Vec<String>,
 ) -> std::io::Result<()> {
     let fn_name = format!("bench_incremental_{}", name.replace("-", "_"));
 
@@ -778,18 +795,31 @@ fn generate_incremental_benchmark(
 
     // Include all before files
     for (i, path) in before_files.iter().enumerate() {
-        writeln!(file, "    let before_{} = include_str!(r\"{}\");", i, path.display())?;
+        writeln!(
+            file,
+            "    let before_{} = include_str!(r\"{}\");",
+            i,
+            path.display()
+        )?;
     }
 
     // Include sparse after files (not .delete files)
     for (i, path) in after_files.iter().enumerate() {
-        writeln!(file, "    let after_{} = include_str!(r\"{}\");", i, path.display())?;
+        writeln!(
+            file,
+            "    let after_{} = include_str!(r\"{}\");",
+            i,
+            path.display()
+        )?;
     }
 
     writeln!(file, "    ")?;
     writeln!(file, "    b.iter(|| {{")?;
     writeln!(file, "        let mut db = RootDatabase::new();")?;
-    writeln!(file, "        let root = db.set_project_root(std::path::PathBuf::from(\".\"));")?;
+    writeln!(
+        file,
+        "        let root = db.set_project_root(std::path::PathBuf::from(\".\"));"
+    )?;
     writeln!(file)?;
 
     // Initial compilation - load all before files
@@ -798,25 +828,41 @@ fn generate_incremental_benchmark(
         let rel_path = path.file_name().unwrap().to_str().unwrap();
         writeln!(file, "        db.add_file(\"{}\", before_{});", rel_path, i)?;
     }
-    writeln!(file, "        let _ = baml_hir::project_items(&db, root);  // Full compilation")?;
+    writeln!(
+        file,
+        "        let _ = baml_hir::project_items(&db, root);  // Full compilation"
+    )?;
     writeln!(file)?;
 
     // Apply incremental changes by re-adding files with new content
-    writeln!(file, "        // Apply incremental changes (re-add files with new content)")?;
+    writeln!(
+        file,
+        "        // Apply incremental changes (re-add files with new content)"
+    )?;
 
     // Handle updates and new files
     for (after_idx, after_path) in after_files.iter().enumerate() {
         let after_filename = after_path.file_name().unwrap().to_str().unwrap();
         // Simply add the file again - Salsa will handle incremental compilation
-        writeln!(file, "        db.add_file(\"{}\", after_{});  // Updated/New file", after_filename, after_idx)?;
+        writeln!(
+            file,
+            "        db.add_file(\"{}\", after_{});  // Updated/New file",
+            after_filename, after_idx
+        )?;
     }
 
     // Note: Since there's no remove_file, we can't test deletion scenarios
     if !delete_files.is_empty() {
-        writeln!(file, "        // Note: File deletions cannot be tested without remove_file API")?;
+        writeln!(
+            file,
+            "        // Note: File deletions cannot be tested without remove_file API"
+        )?;
     }
 
-    writeln!(file, "        let _ = codspeed_bencher_compat::black_box(baml_hir::project_items(&db, root));  // Incremental compilation")?;
+    writeln!(
+        file,
+        "        let _ = codspeed_bencher_compat::black_box(baml_hir::project_items(&db, root));  // Incremental compilation"
+    )?;
     writeln!(file, "    }});")?;
     writeln!(file, "}}")?;
     writeln!(file)?;
@@ -824,21 +870,27 @@ fn generate_incremental_benchmark(
     Ok(())
 }
 
-fn generate_scale_benchmark(
-    file: &mut File,
-    name: &str,
-    path: PathBuf
-) -> std::io::Result<()> {
+fn generate_scale_benchmark(file: &mut File, name: &str, path: PathBuf) -> std::io::Result<()> {
     let fn_name = format!("bench_scale_{}", name.replace("-", "_"));
 
     writeln!(file, "fn {}(b: &mut Bencher) {{", fn_name)?;
-    writeln!(file, "    let content = include_str!(r\"{}\");", path.display())?;
+    writeln!(
+        file,
+        "    let content = include_str!(r\"{}\");",
+        path.display()
+    )?;
     writeln!(file, "    ")?;
     writeln!(file, "    b.iter(|| {{")?;
     writeln!(file, "        let mut db = RootDatabase::new();")?;
-    writeln!(file, "        let root = db.set_project_root(std::path::PathBuf::from(\".\"));")?;
+    writeln!(
+        file,
+        "        let root = db.set_project_root(std::path::PathBuf::from(\".\"));"
+    )?;
     writeln!(file, "        db.add_file(\"{}.baml\", content);", name)?;
-    writeln!(file, "        let _ = codspeed_bencher_compat::black_box(baml_hir::project_items(&db, root));")?;
+    writeln!(
+        file,
+        "        let _ = codspeed_bencher_compat::black_box(baml_hir::project_items(&db, root));"
+    )?;
     writeln!(file, "    }});")?;
     writeln!(file, "}}")?;
     writeln!(file)?;
