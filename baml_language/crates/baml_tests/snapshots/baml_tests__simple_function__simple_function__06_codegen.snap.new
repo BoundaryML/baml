@@ -1,8 +1,0 @@
----
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
-assertion_line: 637
-expression: output
----
-=== BYTECODE ===
-Instructions: 0 bytes
-Constants: 0
