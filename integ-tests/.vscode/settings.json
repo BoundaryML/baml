@@ -1,4 +1,3 @@
 {
-  "baml.enablePlaygroundProxy": true,
-  "baml.featureFlags": ["beta"]
+  "baml.enablePlaygroundProxy": true
 }
