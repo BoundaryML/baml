@@ -526,4 +526,4 @@ jobs:
             exit 1
           fi
 
-          echo " All required checks passed!"
+          echo "All required checks passed!"
