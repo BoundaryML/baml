@@ -466,9 +466,8 @@ jobs:
       - name: "Run benchmarks"
         uses: CodSpeedHQ/action@v3
         with:
-          run: cargo codspeed run
+          run: cd baml_language && cargo codspeed run
           token: ${{ secrets.CODSPEED_TOKEN }}
-          working-directory: baml_language
 
   test-summary:
     name: "Test Summary"
