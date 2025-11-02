@@ -38,7 +38,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         // Literals
         TokenKind::Word => SyntaxKind::WORD,
         TokenKind::String => SyntaxKind::STRING,
-        TokenKind::RawString => SyntaxKind::RAW_STRING,
+        TokenKind::Hash => SyntaxKind::HASH,
         TokenKind::Integer => SyntaxKind::INTEGER,
         TokenKind::Float => SyntaxKind::FLOAT,
 

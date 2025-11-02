@@ -16,7 +16,7 @@ pub enum SyntaxKind {
 
     WORD,
     STRING,
-    RAW_STRING,
+    HASH,
     INTEGER,
     FLOAT,
 
