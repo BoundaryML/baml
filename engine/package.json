@@ -5,7 +5,7 @@
   "scripts": {
     "clean": "cargo clean && git clean -xdf .turbo node_modules target",
 		"build": "cargo build --workspace",
-    "check": "cargo check --workspace",
+    "typecheck": "cargo check --workspace",
 		"release": "cargo build --release --workspace",
 		"dev": "cargo build --workspace",
 		"format": "cargo fmt --workspace -- --config imports_granularity=Crate --config group_imports=StdExternalCrate",

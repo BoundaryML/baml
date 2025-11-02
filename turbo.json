@@ -69,7 +69,7 @@
       "env": ["SKIP_BAML_SRC_CHECK"]
     },
     "@baml/playground-common#typecheck": {
-      "dependsOn": ["@gloo-ai/baml-schema-wasm-web#build"]
+      "dependsOn": ["@gloo-ai/baml-schema-wasm-web#typecheck"]
     },
     "@baml/playground-common#dev": {
       "dependsOn": ["@gloo-ai/baml-schema-wasm-web#build"],
