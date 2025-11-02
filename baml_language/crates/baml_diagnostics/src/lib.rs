@@ -3,9 +3,10 @@
 //! This crate converts compiler diagnostics into beautiful error messages.
 //! It doesn't define error types - those live in each compiler phase.
 
+use std::collections::HashMap;
+
 use ariadne::{Color, Label, Report, ReportKind, Source};
 use baml_base::{Diagnostic, FileId, Severity, Span};
-use std::collections::HashMap;
 
 /// Convert a compiler diagnostic to Ariadne span format.
 fn span_to_ariadne(span: Span) -> (usize, std::ops::Range<usize>) {
@@ -72,9 +73,10 @@ pub fn render_diagnostics(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_base::{FileId, Span};
     use text_size::{TextRange, TextSize};
+
+    use super::*;
 
     // A simple test diagnostic
     #[derive(Debug)]

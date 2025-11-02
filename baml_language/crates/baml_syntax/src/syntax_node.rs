@@ -33,8 +33,9 @@ pub type SyntaxElement = rowan::SyntaxElement<BamlLanguage>;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use rowan::GreenNodeBuilder;
+
+    use super::*;
 
     #[test]
     fn test_syntax_tree_construction() {

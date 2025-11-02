@@ -2,8 +2,9 @@
 //!
 //! Handles discovering BAML files in a project directory and managing the project structure.
 
-use baml_base::{FileId, SourceFile};
 use std::path::PathBuf;
+
+use baml_base::{FileId, SourceFile};
 
 mod discovery;
 pub use discovery::discover_baml_files;

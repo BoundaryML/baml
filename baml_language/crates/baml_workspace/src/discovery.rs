@@ -1,6 +1,7 @@
 //! File discovery utilities.
 
 use std::path::{Path, PathBuf};
+
 use walkdir::WalkDir;
 
 /// Discover all BAML files in a project directory.
@@ -36,9 +37,9 @@ pub fn discover_baml_files(root: &Path) -> Vec<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use std::{fs, io::Write};
+
     use super::*;
-    use std::fs;
-    use std::io::Write;
 
     #[test]
     fn test_discovers_baml_files() {

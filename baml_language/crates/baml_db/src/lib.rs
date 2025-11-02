@@ -3,9 +3,10 @@
 //! This crate purely combines all the compiler traits into a single database.
 //! All testing happens in the separate `baml_tests` crate.
 
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::AtomicU32;
+use std::{
+    path::PathBuf,
+    sync::{Arc, atomic::AtomicU32},
+};
 
 // Re-export all public APIs
 pub use baml_base::*;

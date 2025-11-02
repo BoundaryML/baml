@@ -2,8 +2,9 @@
 //!
 //! Defines the core structures for accessing file contents and paths.
 
-use crate::FileId;
 use std::path::PathBuf;
+
+use crate::FileId;
 
 /// Input structure representing a source file in the compilation.
 ///

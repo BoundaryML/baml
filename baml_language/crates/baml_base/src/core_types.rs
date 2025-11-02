@@ -1,7 +1,8 @@
 //! Core types used throughout the compiler.
 
-use smol_str::SmolStr;
 use std::fmt;
+
+use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
 
 /// Unique identifier for a source file

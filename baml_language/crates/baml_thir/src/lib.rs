@@ -2,9 +2,10 @@
 //!
 //! Provides type checking and inference for BAML.
 
+use std::collections::HashMap;
+
 use baml_base::Name;
 use baml_hir::{ClassId, EnumId, FunctionId};
-use std::collections::HashMap;
 
 mod types;
 pub use types::*;

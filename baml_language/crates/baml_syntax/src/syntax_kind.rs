@@ -14,8 +14,9 @@ pub enum SyntaxKind {
     TEST_KW,
     GENERATOR_KW,
 
-    IDENTIFIER,
+    WORD,
     STRING,
+    RAW_STRING,
     INTEGER,
     FLOAT,
 
@@ -28,12 +29,57 @@ pub enum SyntaxKind {
     COMMA,
     COLON,
     DOUBLE_COLON,
+    SEMICOLON,
+    DOT,
     ARROW,
     AT,
     AT_AT,
     PIPE,
     QUESTION,
+
+    // Assignment operators
     EQUALS,
+    PLUS_EQUALS,
+    MINUS_EQUALS,
+    STAR_EQUALS,
+    SLASH_EQUALS,
+    PERCENT_EQUALS,
+    AND_EQUALS,
+    PIPE_EQUALS,
+    CARET_EQUALS,
+    LESS_LESS_EQUALS,
+    GREATER_GREATER_EQUALS,
+
+    // Comparison operators
+    EQUALS_EQUALS,
+    NOT_EQUALS,
+    LESS,
+    GREATER,
+    LESS_EQUALS,
+    GREATER_EQUALS,
+
+    // Shift operators
+    LESS_LESS,
+    GREATER_GREATER,
+
+    // Logical operators
+    AND_AND,
+    OR_OR,
+    NOT,
+
+    // Bitwise operators
+    AND,
+    CARET,
+    TILDE,
+
+    // Arithmetic operators
+    PLUS,
+    MINUS,
+    STAR,
+    SLASH,
+    PERCENT,
+    PLUS_PLUS,
+    MINUS_MINUS,
 
     WHITESPACE,
     NEWLINE,

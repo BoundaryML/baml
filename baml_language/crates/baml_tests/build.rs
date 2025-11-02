@@ -1,10 +1,13 @@
 //! Build script that generates tests from projects/ directory and benchmarks from benches/.
 //! Each folder becomes a test module with comprehensive compiler phase tests.
 
-use std::env;
-use std::fs::{self, File};
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::{
+    env,
+    fs::{self, File},
+    io::Write,
+    path::{Path, PathBuf},
+};
+
 use walkdir::WalkDir;
 
 fn main() {
