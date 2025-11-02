@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - "baml_language/**"
+      - "baml-vm/**"
       - ".github/workflows/ci.yaml"
   workflow_dispatch:
 
