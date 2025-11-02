@@ -15,7 +15,7 @@ pub enum SyntaxKind {
     GENERATOR_KW,
 
     WORD,
-    STRING,
+    QUOTE,
     HASH,
     INTEGER,
     FLOAT,

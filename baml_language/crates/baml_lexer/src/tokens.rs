@@ -19,13 +19,19 @@ use text_size::{TextRange, TextSize};
 /// The lexer tokenizes normally: `"gpt-4o"` → `WORD("gpt"), MINUS, INTEGER("4"), WORD("o")`
 /// The parser assembles these into unquoted strings in appropriate contexts.
 ///
-/// **Raw Strings**: Raw strings like `#"..."#` and `##"..."##` are also assembled by the parser:
+/// **Raw Strings**: Raw strings like `#"..."#` and `##"..."##` are assembled by the parser:
 /// ```baml
-/// #"Hello {{name}}"#  → Hash, String("Hello {{name}}"), Hash
-/// ##"Contains "#""##  → Hash, Hash, String("Contains \"#\""), Hash, Hash
+/// #"Hello {{name}}"#  → Hash, Quote, Word("Hello"), ..., Quote, Hash
+/// ##"Contains "#""##  → Hash, Hash, Quote, Word("Contains"), ..., Quote, Hash, Hash
 /// ```
-/// The parser recognizes the `Hash+ String Hash+` pattern and validates matching delimiter counts.
-/// This provides better error recovery for unclosed raw strings.
+/// The parser collects all tokens between `Hash+ Quote` and `Quote Hash+` and validates matching
+/// delimiter counts. This provides better error recovery for unclosed raw strings.
+///
+/// **Regular Strings**: Regular strings are also assembled by the parser:
+/// ```baml
+/// "hello world"  → Quote, Word("hello"), Word("world"), Quote
+/// ```
+/// The parser collects all tokens between quotes and handles escape sequences.
 ///
 /// This keeps the lexer simple, context-free, and fast.
 #[derive(Logos, Debug, PartialEq, Eq, Clone, Copy)]
@@ -36,13 +42,15 @@ pub enum TokenKind {
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_-]*")]
     Word,
 
-    /// Quoted string literal (matches both closed and unclosed strings for error recovery)
-    #[regex(r#""([^"\\]|\\.)*"?"#)]
-    String,
+    /// Quote symbol - used for string delimiters
+    /// Parser assembles strings by collecting tokens between quotes
+    /// E.g., "hello" → Quote, Word("hello"), Quote
+    #[token("\"")]
+    Quote,
 
     /// Hash symbol - used for raw string delimiters
-    /// Parser combines Hash tokens with String to form raw strings
-    /// E.g., #"..."# → Hash, String, Hash
+    /// Parser combines Hash + Quote + tokens + Quote + Hash to form raw strings
+    /// E.g., #"hello"# → Hash, Quote, Word("hello"), Quote, Hash
     #[token("#")]
     Hash,
 
@@ -447,14 +455,24 @@ mod tests {
         let file_id = FileId::new(0);
         let tokens = lex_lossless(source, file_id);
 
-        // Should lex as: Hash, String, Hash
-        assert_eq!(tokens.len(), 3);
-        assert_eq!(tokens[0].kind, TokenKind::Hash);
-        assert_eq!(tokens[0].text, "#");
-        assert_eq!(tokens[1].kind, TokenKind::String);
-        assert_eq!(tokens[1].text, r#""Hello World""#);
-        assert_eq!(tokens[2].kind, TokenKind::Hash);
-        assert_eq!(tokens[2].text, "#");
+        // Should lex as: Hash, Quote, Word("Hello"), Word("World"), Quote, Hash
+        let kinds: Vec<TokenKind> = tokens
+            .iter()
+            .filter(|t| t.kind != TokenKind::Whitespace)
+            .map(|t| t.kind)
+            .collect();
+
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Hash,
+                TokenKind::Quote,
+                TokenKind::Word,
+                TokenKind::Word,
+                TokenKind::Quote,
+                TokenKind::Hash,
+            ]
+        );
 
         // Lossless
         assert_eq!(reconstruct_source(&tokens), source);
@@ -462,19 +480,26 @@ mod tests {
 
     #[test]
     fn test_raw_string_multiple_hashes() {
-        // Note: String with quotes inside gets split into multiple String tokens
-        // That's OK - parser will handle raw string assembly and see the quotes are escaped
+        // With Quote tokens, quotes inside are just more tokens
         let source = r###"##"String with quotes inside"##"###;
         let file_id = FileId::new(0);
         let tokens = lex_lossless(source, file_id);
 
-        // Should lex as: Hash, Hash, String, Hash, Hash
-        assert_eq!(tokens.len(), 5);
-        assert_eq!(tokens[0].kind, TokenKind::Hash);
-        assert_eq!(tokens[1].kind, TokenKind::Hash);
-        assert_eq!(tokens[2].kind, TokenKind::String);
-        assert_eq!(tokens[3].kind, TokenKind::Hash);
-        assert_eq!(tokens[4].kind, TokenKind::Hash);
+        let kinds: Vec<TokenKind> = tokens
+            .iter()
+            .filter(|t| t.kind != TokenKind::Whitespace)
+            .map(|t| t.kind)
+            .collect();
+
+        // Hash, Hash, Quote, ...(words)..., Quote, Hash, Hash
+        assert_eq!(kinds[0], TokenKind::Hash);
+        assert_eq!(kinds[1], TokenKind::Hash);
+        assert_eq!(kinds[2], TokenKind::Quote);
+        // ... words in between ...
+        assert_eq!(kinds[kinds.len() - 3], TokenKind::Quote);
+        assert_eq!(kinds[kinds.len() - 2], TokenKind::Hash);
+        assert_eq!(kinds[kinds.len() - 1], TokenKind::Hash);
+
         assert_eq!(reconstruct_source(&tokens), source);
     }
 
@@ -484,29 +509,37 @@ mod tests {
         let file_id = FileId::new(0);
         let tokens = lex_lossless(source, file_id);
 
-        // Should lex as: Hash, String, Hash
-        assert_eq!(tokens.len(), 3);
-        assert_eq!(tokens[0].kind, TokenKind::Hash);
-        assert_eq!(tokens[1].kind, TokenKind::String);
-        assert_eq!(tokens[1].text, r#""Hello {{ name }}""#);
-        assert_eq!(tokens[2].kind, TokenKind::Hash);
+        let kinds: Vec<TokenKind> = tokens
+            .iter()
+            .filter(|t| t.kind != TokenKind::Whitespace)
+            .map(|t| t.kind)
+            .collect();
+
+        // Should start with: Hash, Quote
+        assert_eq!(kinds[0], TokenKind::Hash);
+        assert_eq!(kinds[1], TokenKind::Quote);
+        // And end with: Quote, Hash
+        assert_eq!(kinds[kinds.len() - 2], TokenKind::Quote);
+        assert_eq!(kinds[kinds.len() - 1], TokenKind::Hash);
+
         assert_eq!(reconstruct_source(&tokens), source);
     }
 
     #[test]
     fn test_raw_string_unclosed() {
-        // Unclosed raw string - lexer just emits Hash and unclosed String
+        // Unclosed raw string - lexer just emits Hash, Quote, and words
         // Parser will detect the error
         let source = r##"#"Unclosed"##;
         let file_id = FileId::new(0);
         let tokens = lex_lossless(source, file_id);
 
-        // Lexes as: Hash, String (unclosed)
-        assert_eq!(tokens.len(), 2);
+        // Starts with Hash, Quote
         assert_eq!(tokens[0].kind, TokenKind::Hash);
         assert_eq!(tokens[0].text, "#");
-        assert_eq!(tokens[1].kind, TokenKind::String);
-        assert_eq!(tokens[1].text, r##""Unclosed"##);
+        assert_eq!(tokens[1].kind, TokenKind::Quote);
+        assert_eq!(tokens[1].text, "\"");
+        // Then Word, then rest of source as unrecognized
+
         assert_eq!(reconstruct_source(&tokens), source);
     }
 
@@ -522,16 +555,13 @@ mod tests {
             .map(|t| t.kind)
             .collect();
 
-        // Should be: Word, Hash, String, Hash
-        assert_eq!(
-            kinds,
-            vec![
-                TokenKind::Word,
-                TokenKind::Hash,
-                TokenKind::String,
-                TokenKind::Hash
-            ]
-        );
+        // Should start with: Word("prompt"), Hash, Quote
+        assert_eq!(kinds[0], TokenKind::Word);
+        assert_eq!(kinds[1], TokenKind::Hash);
+        assert_eq!(kinds[2], TokenKind::Quote);
+        // And end with: Quote, Hash
+        assert_eq!(kinds[kinds.len() - 2], TokenKind::Quote);
+        assert_eq!(kinds[kinds.len() - 1], TokenKind::Hash);
 
         // Lossless
         assert_eq!(reconstruct_source(&tokens), source);
@@ -549,18 +579,17 @@ mod tests {
             .map(|t| t.kind)
             .collect();
 
-        // Should be: Hash, String, Hash, Hash, String, Hash
-        assert_eq!(
-            kinds,
-            vec![
-                TokenKind::Hash,
-                TokenKind::String,
-                TokenKind::Hash,
-                TokenKind::Hash,
-                TokenKind::String,
-                TokenKind::Hash,
-            ]
-        );
+        // Should be: Hash, Quote, Word, Quote, Hash, Hash, Quote, Word, Quote, Hash
+        assert_eq!(kinds[0], TokenKind::Hash);
+        assert_eq!(kinds[1], TokenKind::Quote);
+        assert_eq!(kinds[2], TokenKind::Word);
+        assert_eq!(kinds[3], TokenKind::Quote);
+        assert_eq!(kinds[4], TokenKind::Hash);
+        assert_eq!(kinds[5], TokenKind::Hash);
+        assert_eq!(kinds[6], TokenKind::Quote);
+        assert_eq!(kinds[7], TokenKind::Word);
+        assert_eq!(kinds[8], TokenKind::Quote);
+        assert_eq!(kinds[9], TokenKind::Hash);
 
         // Lossless
         assert_eq!(reconstruct_source(&tokens), source);
@@ -568,20 +597,25 @@ mod tests {
 
     #[test]
     fn test_five_hash_delimiter() {
-        // Note: Since the string contains quotes, it will be split into multiple String tokens
-        // Use simpler content for this test
         let source = r######"#####"Complex content here"#####"######;
         let file_id = FileId::new(0);
         let tokens = lex_lossless(source, file_id);
 
-        // Should be: 5 Hash, String, 5 Hash
-        assert_eq!(tokens.len(), 11);
-        for token in tokens.iter().take(5) {
-            assert_eq!(token.kind, TokenKind::Hash);
+        let kinds: Vec<TokenKind> = tokens
+            .iter()
+            .filter(|t| t.kind != TokenKind::Whitespace)
+            .map(|t| t.kind)
+            .collect();
+
+        // Should be: 5 Hash, Quote, ...(words)..., Quote, 5 Hash
+        for kind in kinds.iter().take(5) {
+            assert_eq!(*kind, TokenKind::Hash);
         }
-        assert_eq!(tokens[5].kind, TokenKind::String);
-        for token in tokens.iter().skip(6).take(5) {
-            assert_eq!(token.kind, TokenKind::Hash);
+        assert_eq!(kinds[5], TokenKind::Quote);
+        // ... words in middle ...
+        assert_eq!(kinds[kinds.len() - 6], TokenKind::Quote);
+        for kind in kinds.iter().skip(kinds.len() - 5) {
+            assert_eq!(*kind, TokenKind::Hash);
         }
         assert_eq!(reconstruct_source(&tokens), source);
     }

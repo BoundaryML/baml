@@ -37,7 +37,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
     match kind {
         // Literals
         TokenKind::Word => SyntaxKind::WORD,
-        TokenKind::String => SyntaxKind::STRING,
+        TokenKind::Quote => SyntaxKind::QUOTE,
         TokenKind::Hash => SyntaxKind::HASH,
         TokenKind::Integer => SyntaxKind::INTEGER,
         TokenKind::Float => SyntaxKind::FLOAT,
