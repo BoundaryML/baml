@@ -6,7 +6,6 @@ on:
   pull_request:
     paths:
       - "baml_language/**"
-      - "baml-vm/**"
       - ".github/workflows/ci.yaml"
   workflow_dispatch:
 
@@ -483,7 +482,7 @@ jobs:
         with:
           tool: cargo-codspeed
 
-      - name: "Build parser benchmarks"
+      - name: "Build benchmarks"
         run: cargo codspeed build -p baml_tests
         working-directory: baml_language
 
@@ -492,16 +491,6 @@ jobs:
         with:
           mode: walltime
           run: cd baml_language && cargo codspeed run
-          token: ${{ secrets.CODSPEED_TOKEN }}
-
-      - name: "Build VM benchmarks"
-        run: cargo codspeed build -p baml-vm
-
-      - name: "Run benchmarks"
-        uses: CodSpeedHQ/action@v3
-        with:
-          mode: walltime
-          run: cd baml-vm && cargo codspeed run
           token: ${{ secrets.CODSPEED_TOKEN }}
 
   test-summary:
