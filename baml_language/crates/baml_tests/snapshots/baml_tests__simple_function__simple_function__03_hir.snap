@@ -1,7 +1,0 @@
----
-source: target/debug/build/baml_tests-f9742c9ea847d59f/out/generated_tests.rs
-assertion_line: 520
-expression: output
----
-=== HIR ITEMS ===
-No items found.

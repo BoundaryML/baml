@@ -1,0 +1,16 @@
+---
+source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE "function ExtractData(text string) -> JsonData {
+  client GPT4
+  prompt #"
+    Extract structured data from: {{ text }}
+    Return as JSON.
+  "#
+}
+"
+
+=== ERRORS ===
+None

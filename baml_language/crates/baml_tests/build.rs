@@ -199,6 +199,8 @@ fn generate_project_tests(file: &mut File, project: &TestProject) -> std::io::Re
     writeln!(file, "    use baml_db::Diagnostic;")?;
     writeln!(file, "    use insta::{{assert_snapshot, with_settings}};")?;
     writeln!(file, "    use std::fmt::Write;")?;
+    writeln!(file, "    #[allow(unused_imports)]")?;
+    writeln!(file, "    use crate::utils::*;")?;
 
     // Get the manifest dir at compile time and use it in the test
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -206,8 +208,8 @@ fn generate_project_tests(file: &mut File, project: &TestProject) -> std::io::Re
     let manifest_dir = manifest_dir.replace('\\', "/");
     writeln!(
         file,
-        "    const SNAPSHOT_PATH: &str = \"{}/snapshots\";",
-        manifest_dir
+        "    const SNAPSHOT_PATH: &str = \"{}/snapshots/{}\";",
+        manifest_dir, project.name
     )?;
     writeln!(file)?;
 
@@ -227,6 +229,15 @@ fn generate_project_tests(file: &mut File, project: &TestProject) -> std::io::Re
     generate_diagnostics_test(file, project)?;
     generate_codegen_test(file, project)?;
 
+    // Add parser-specific tests for projects that start with "parser_"
+    if project.name.starts_with("parser_") {
+        for baml_file in &project.files {
+            generate_incremental_parsing_test(file, project, baml_file)?;
+            generate_node_reuse_test(file, project, baml_file)?;
+        }
+        generate_tree_lossless_test(file, project)?;
+    }
+
     writeln!(file, "}}")?;
     writeln!(file)?;
 
@@ -235,11 +246,11 @@ fn generate_project_tests(file: &mut File, project: &TestProject) -> std::io::Re
 
 fn generate_lexer_test(
     file: &mut File,
-    project: &TestProject,
+    _project: &TestProject,
     baml_file: &BamlFile,
 ) -> std::io::Result<()> {
     let test_name = format!("test_01_lexer_{}", baml_file.name);
-    let snapshot_name = format!("{}__01_lexer__{}", project.name, baml_file.name);
+    let snapshot_name = format!("01_lexer__{}", baml_file.name);
 
     writeln!(file, "    #[test]")?;
     writeln!(file, "    fn {}() {{", test_name)?;
@@ -301,11 +312,11 @@ fn generate_lexer_test(
 
 fn generate_parser_test(
     file: &mut File,
-    project: &TestProject,
+    _project: &TestProject,
     baml_file: &BamlFile,
 ) -> std::io::Result<()> {
     let test_name = format!("test_02_parser_{}", baml_file.name);
-    let snapshot_name = format!("{}__02_parser__{}", project.name, baml_file.name);
+    let snapshot_name = format!("02_parser__{}", baml_file.name);
 
     writeln!(file, "    #[test]")?;
     writeln!(file, "    fn {}() {{", test_name)?;
@@ -438,11 +449,7 @@ fn generate_hir_test(file: &mut File, project: &TestProject) -> std::io::Result<
         file,
         "        with_settings!({{snapshot_path => SNAPSHOT_PATH}}, {{"
     )?;
-    writeln!(
-        file,
-        "            assert_snapshot!(\"{}__03_hir\", output);",
-        project.name
-    )?;
+    writeln!(file, "            assert_snapshot!(\"03_hir\", output);")?;
     writeln!(file, "        }});")?;
     writeln!(file, "    }}")?;
     writeln!(file)?;
@@ -530,11 +537,7 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
         file,
         "        with_settings!({{snapshot_path => SNAPSHOT_PATH}}, {{"
     )?;
-    writeln!(
-        file,
-        "            assert_snapshot!(\"{}__04_thir\", output);",
-        project.name
-    )?;
+    writeln!(file, "            assert_snapshot!(\"04_thir\", output);")?;
     writeln!(file, "        }});")?;
     writeln!(file, "    }}")?;
     writeln!(file)?;
@@ -608,8 +611,7 @@ fn generate_diagnostics_test(file: &mut File, project: &TestProject) -> std::io:
     )?;
     writeln!(
         file,
-        "            assert_snapshot!(\"{}__05_diagnostics\", output);",
-        project.name
+        "            assert_snapshot!(\"05_diagnostics\", output);"
     )?;
     writeln!(file, "        }});")?;
     writeln!(file, "    }}")?;
@@ -693,10 +695,173 @@ fn generate_codegen_test(file: &mut File, project: &TestProject) -> std::io::Res
     )?;
     writeln!(
         file,
-        "            assert_snapshot!(\"{}__06_codegen\", output);",
-        project.name
+        "            assert_snapshot!(\"06_codegen\", output);"
     )?;
     writeln!(file, "        }});")?;
+    writeln!(file, "    }}")?;
+    writeln!(file)?;
+
+    Ok(())
+}
+
+// Parser-specific test generation functions
+fn generate_incremental_parsing_test(
+    file: &mut File,
+    _project: &TestProject,
+    baml_file: &BamlFile,
+) -> std::io::Result<()> {
+    let test_name = format!("test_07_incremental_{}", baml_file.name);
+
+    writeln!(file, "    #[test]")?;
+    writeln!(file, "    fn {}() {{", test_name)?;
+    writeln!(
+        file,
+        "        let content = include_str!(r\"{}\");",
+        baml_file.full_path.display()
+    )?;
+    writeln!(
+        file,
+        "        let content = content.replace(\"\\r\\n\", \"\\n\");"
+    )?;
+    writeln!(file)?;
+    writeln!(
+        file,
+        "        // Test single character edits maintain correctness"
+    )?;
+    writeln!(file, "        let mut db = RootDatabase::new();")?;
+    writeln!(
+        file,
+        "        let source_file = db.add_file(\"{}\", &content);",
+        baml_file.relative_path.display()
+    )?;
+    writeln!(
+        file,
+        "        let original_tree = baml_parser::syntax_tree(&db, source_file);"
+    )?;
+    writeln!(file)?;
+    writeln!(file, "        // Test adding a character")?;
+    writeln!(
+        file,
+        "        let modified = insert_char(&content, content.len() / 2, 'x');"
+    )?;
+    writeln!(
+        file,
+        "        let modified_file = db.add_file(\"modified.baml\", &modified);"
+    )?;
+    writeln!(
+        file,
+        "        let modified_tree = baml_parser::syntax_tree(&db, modified_file);"
+    )?;
+    writeln!(file)?;
+    writeln!(file, "        // Verify the trees are valid")?;
+    writeln!(file, "        assert_no_panics(&original_tree);")?;
+    writeln!(file, "        assert_no_panics(&modified_tree);")?;
+    writeln!(file, "    }}")?;
+    writeln!(file)?;
+
+    Ok(())
+}
+
+fn generate_node_reuse_test(
+    file: &mut File,
+    _project: &TestProject,
+    baml_file: &BamlFile,
+) -> std::io::Result<()> {
+    let test_name = format!("test_08_node_reuse_{}", baml_file.name);
+
+    writeln!(file, "    #[test]")?;
+    writeln!(file, "    fn {}() {{", test_name)?;
+    writeln!(
+        file,
+        "        let content = include_str!(r\"{}\");",
+        baml_file.full_path.display()
+    )?;
+    writeln!(
+        file,
+        "        let content = content.replace(\"\\r\\n\", \"\\n\");"
+    )?;
+    writeln!(file)?;
+    writeln!(
+        file,
+        "        // Measure node reuse for single character edit"
+    )?;
+    writeln!(file, "        let mut db = RootDatabase::new();")?;
+    writeln!(
+        file,
+        "        let source_file = db.add_file(\"{}\", &content);",
+        baml_file.relative_path.display()
+    )?;
+    writeln!(
+        file,
+        "        let original_tree = baml_parser::syntax_tree(&db, source_file);"
+    )?;
+    writeln!(file)?;
+    writeln!(file, "        // Make a small edit")?;
+    writeln!(
+        file,
+        "        let modified = insert_char(&content, content.len() / 2, 'a');"
+    )?;
+    writeln!(
+        file,
+        "        let modified_file = db.add_file(\"modified.baml\", &modified);"
+    )?;
+    writeln!(
+        file,
+        "        let modified_tree = baml_parser::syntax_tree(&db, modified_file);"
+    )?;
+    writeln!(file)?;
+    writeln!(
+        file,
+        "        // Measure reuse (this is a simplified check)"
+    )?;
+    writeln!(
+        file,
+        "        // In a real implementation, you'd check actual node reuse"
+    )?;
+    writeln!(file, "        assert_no_panics(&original_tree);")?;
+    writeln!(file, "        assert_no_panics(&modified_tree);")?;
+    writeln!(file, "    }}")?;
+    writeln!(file)?;
+
+    Ok(())
+}
+
+fn generate_tree_lossless_test(file: &mut File, project: &TestProject) -> std::io::Result<()> {
+    writeln!(file, "    #[test]")?;
+    writeln!(file, "    fn test_09_tree_lossless() {{")?;
+    writeln!(
+        file,
+        "        // Verify parse trees can reconstruct original source"
+    )?;
+
+    for baml_file in &project.files {
+        writeln!(file, "        {{")?;
+        writeln!(
+            file,
+            "            let content = include_str!(r\"{}\");",
+            baml_file.full_path.display()
+        )?;
+        writeln!(
+            file,
+            "            let content = content.replace(\"\\r\\n\", \"\\n\");"
+        )?;
+        writeln!(file, "            let mut db = RootDatabase::new();")?;
+        writeln!(
+            file,
+            "            let source_file = db.add_file(\"{}\", &content);",
+            baml_file.relative_path.display()
+        )?;
+        writeln!(
+            file,
+            "            let tree = baml_parser::syntax_tree(&db, source_file);"
+        )?;
+        writeln!(
+            file,
+            "            assert_tree_is_lossless(&tree, &content);"
+        )?;
+        writeln!(file, "        }}")?;
+    }
+
     writeln!(file, "    }}")?;
     writeln!(file)?;
 

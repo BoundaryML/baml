@@ -1,5 +1,6 @@
 # Insta configuration for baml_tests
 snapshot_path: snapshots
 prepend_module_to_snapshot: false
+omit_module_from_snapshot: true
 omit_expression: true
 sort_maps: true

@@ -1,0 +1,14 @@
+---
+source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE "class Test {
+  field1 string @alias("closed string")
+  field2 string @alias("unclosed string
+  field3 string @alias("another closed string")  // Should still parse this
+}
+"
+
+=== ERRORS ===
+None

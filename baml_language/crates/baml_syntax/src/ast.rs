@@ -57,6 +57,8 @@ ast_node!(TypeAliasDef, TYPE_ALIAS_DEF);
 ast_node!(ParameterList, PARAMETER_LIST);
 ast_node!(Parameter, PARAMETER);
 ast_node!(FunctionBody, FUNCTION_BODY);
+ast_node!(LlmFunctionBody, LLM_FUNCTION_BODY);
+ast_node!(ExprFunctionBody, EXPR_FUNCTION_BODY);
 ast_node!(Field, FIELD);
 ast_node!(EnumVariant, ENUM_VARIANT);
 ast_node!(ConfigBlock, CONFIG_BLOCK);
@@ -103,9 +105,29 @@ impl FunctionDef {
         self.syntax.children().find_map(TypeExpr::cast)
     }
 
-    /// Get the function body.
+    /// Get the function body (generic, could be any type).
     pub fn body(&self) -> Option<FunctionBody> {
         self.syntax.children().find_map(FunctionBody::cast)
+    }
+
+    /// Get the LLM function body if this is an LLM function.
+    pub fn llm_body(&self) -> Option<LlmFunctionBody> {
+        self.syntax.children().find_map(LlmFunctionBody::cast)
+    }
+
+    /// Get the expression function body if this is an expression function.
+    pub fn expr_body(&self) -> Option<ExprFunctionBody> {
+        self.syntax.children().find_map(ExprFunctionBody::cast)
+    }
+
+    /// Check if this is an LLM function.
+    pub fn is_llm_function(&self) -> bool {
+        self.llm_body().is_some()
+    }
+
+    /// Check if this is an expression function.
+    pub fn is_expr_function(&self) -> bool {
+        self.expr_body().is_some()
     }
 }
 

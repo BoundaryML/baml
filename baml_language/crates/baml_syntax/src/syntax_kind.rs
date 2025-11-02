@@ -106,8 +106,11 @@ pub enum SyntaxKind {
     PARAMETER_LIST,
     PARAMETER,
     FUNCTION_BODY,
+    LLM_FUNCTION_BODY,  // Function body with client/prompt
+    EXPR_FUNCTION_BODY, // Function body with expressions/statements
     PROMPT_FIELD,
     CLIENT_REFERENCE,
+    CLIENT_FIELD, // 'client' field in LLM function
     DEFAULT_IMPL,
 
     // Class components

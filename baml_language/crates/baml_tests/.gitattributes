@@ -1,2 +1,14 @@
-# Treat insta snapshots as generated so GitHub collapses them
-snapshots/*.snap linguist-generated=true
+# Snapshot test files
+*.snap linguist-generated=true
+*.snap -diff
+*.snap merge=ours
+
+# Alternative: treat as binary (more aggressive, hides content entirely)
+# *.snap binary
+
+# Mark snapshots directory as generated
+snapshots/** linguist-generated=true
+
+# Large stress test snapshots - use LFS to avoid bloating repo
+**/parser_stress/large_file.baml filter=lfs diff=lfs merge=lfs -text
+**/parser_stress/*large_file.snap filter=lfs diff=lfs merge=lfs -text
