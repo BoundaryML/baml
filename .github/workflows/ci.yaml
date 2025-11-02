@@ -205,7 +205,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          lfs: true
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -411,7 +410,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          lfs: true
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -470,7 +468,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-          lfs: true
 
       - uses: Swatinem/rust-cache@v2
         with:
