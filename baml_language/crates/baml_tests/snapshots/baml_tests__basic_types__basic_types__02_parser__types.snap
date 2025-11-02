@@ -1,10 +1,9 @@
 ---
-source: target/debug/build/baml_tests-f9742c9ea847d59f/out/generated_tests.rs
-assertion_line: 114
+source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
-ROOT "class User {
+SOURCE_FILE "class User {
     id int
     name string
     email string

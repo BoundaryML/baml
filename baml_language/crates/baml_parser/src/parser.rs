@@ -13,12 +13,12 @@ use crate::ParseError;
 ///
 /// Returns the green tree and any parse errors encountered.
 ///
-/// **STUB**: Currently just wraps all tokens in a ROOT node.
+/// **STUB**: Currently just wraps all tokens in a `SOURCE_FILE` node.
 pub fn parse_file(tokens: &[Token]) -> (GreenNode, Vec<ParseError>) {
     let mut builder = GreenNodeBuilder::new();
     let errors = Vec::new();
 
-    builder.start_node(SyntaxKind::ROOT.into());
+    builder.start_node(SyntaxKind::SOURCE_FILE.into());
 
     // Stub: Just add all tokens as-is
     for token in tokens {

@@ -10,11 +10,7 @@ impl rowan::Language for BamlLanguage {
     type Kind = SyntaxKind;
 
     fn kind_from_raw(raw: rowan::SyntaxKind) -> Self::Kind {
-        assert!(raw.0 <= SyntaxKind::ERROR_NODE as u16);
-        #[allow(unsafe_code)]
-        unsafe {
-            std::mem::transmute(raw.0)
-        }
+        SyntaxKind::from(raw)
     }
 
     fn kind_to_raw(kind: Self::Kind) -> rowan::SyntaxKind {
@@ -41,13 +37,13 @@ mod tests {
     fn test_syntax_tree_construction() {
         let mut builder = GreenNodeBuilder::new();
 
-        builder.start_node(SyntaxKind::ROOT.into());
-        builder.token(SyntaxKind::FUNCTION_KW.into(), "function");
+        builder.start_node(SyntaxKind::SOURCE_FILE.into());
+        builder.token(SyntaxKind::WORD.into(), "function");
         builder.finish_node();
 
         let green = builder.finish();
         let root = SyntaxNode::new_root(green);
 
-        assert_eq!(root.kind(), SyntaxKind::ROOT);
+        assert_eq!(root.kind(), SyntaxKind::SOURCE_FILE);
     }
 }
