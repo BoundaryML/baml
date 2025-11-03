@@ -279,6 +279,7 @@ fn build_function_log(
 
     // Build each LLM call candidate first so we can compute the selected one by timestamp
     struct CallCandidate {
+        request_id: HttpRequestId,
         is_stream: bool,
         client: String,
         provider: String,
@@ -294,7 +295,7 @@ fn build_function_log(
 
     let mut candidates: Vec<CallCandidate> = Vec::new();
 
-    for (_rid, call_acc) in calls_map {
+    for (rid, call_acc) in calls_map {
         let (client, provider) = parse_llm_client_and_provider(call_acc.llm_request.as_ref());
         let start_t = call_acc.timestamp_first_seen.unwrap_or(start_ms);
         let end_t = call_acc.timestamp_last_seen.unwrap_or(start_t);
@@ -330,6 +331,7 @@ fn build_function_log(
             .unwrap_or(false);
 
         candidates.push(CallCandidate {
+            request_id: rid.clone(),
             is_stream,
             client,
             provider,
@@ -347,27 +349,20 @@ fn build_function_log(
     // Determine which candidate should be marked selected
     let mut selected_idx: Option<usize> = None;
     if !candidates.is_empty() {
-        // Find the index of the latest call by end_t
-        let mut latest_idx = 0usize;
-        for (i, c) in candidates.iter().enumerate() {
-            if c.end_t > candidates[latest_idx].end_t {
-                latest_idx = i;
-            }
-        }
-        if candidates[latest_idx].is_success {
-            selected_idx = Some(latest_idx);
-        } else {
-            // pick the most recent successful call (max end_t among successes)
-            let mut best_success: Option<(usize, i64)> = None;
-            for (i, c) in candidates.iter().enumerate() {
-                if c.is_success {
-                    match best_success {
-                        Some((_, best_end)) if c.end_t <= best_end => {}
-                        _ => best_success = Some((i, c.end_t)),
-                    }
-                }
-            }
-            selected_idx = best_success.map(|(i, _)| i);
+        // Filter successful candidates
+        let mut successful_calls: Vec<(usize, &CallCandidate)> = candidates
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.is_success)
+            .collect();
+
+        if !successful_calls.is_empty() {
+            // Sort successful calls by lexicographic order of request_id (ULID UUID)
+            successful_calls
+                .sort_by(|(_, a), (_, b)| a.request_id.to_string().cmp(&b.request_id.to_string()));
+
+            // Pick the first (earliest lexicographically)
+            selected_idx = Some(successful_calls[0].0);
         }
     }
 
@@ -1337,7 +1332,10 @@ mod tests {
                 client_name: "client_a".into(),
                 client_provider: "provider_a".into(),
                 params: IndexMap::new(),
-                prompt: vec![LLMChatMessage { role: "user".into(), content: vec![LLMChatMessagePart::Text("hi".into())] }],
+                prompt: vec![LLMChatMessage {
+                    role: "user".into(),
+                    content: vec![LLMChatMessagePart::Text("hi".into())],
+                }],
             };
             let failed_resp = LoggedLLMResponse::new_failure(
                 rid_fail.clone(),
@@ -1352,13 +1350,21 @@ mod tests {
                 client_name: "client_b".into(),
                 client_provider: "provider_b".into(),
                 params: IndexMap::new(),
-                prompt: vec![LLMChatMessage { role: "user".into(), content: vec![LLMChatMessagePart::Text("hello".into())] }],
+                prompt: vec![LLMChatMessage {
+                    role: "user".into(),
+                    content: vec![LLMChatMessagePart::Text("hello".into())],
+                }],
             };
             let ok_resp = LoggedLLMResponse::new_success(
                 rid_success.clone(),
                 "m2".into(),
                 Some("stop".into()),
-                LLMUsage { input_tokens: Some(1), output_tokens: Some(2), total_tokens: Some(3), cached_input_tokens: Some(0) },
+                LLMUsage {
+                    input_tokens: Some(1),
+                    output_tokens: Some(2),
+                    total_tokens: Some(3),
+                    cached_input_tokens: Some(0),
+                },
                 "ok".into(),
                 vec![],
             );
@@ -1415,13 +1421,21 @@ mod tests {
                 client_name: "client_ok".into(),
                 client_provider: "provider_ok".into(),
                 params: IndexMap::new(),
-                prompt: vec![LLMChatMessage { role: "user".into(), content: vec![LLMChatMessagePart::Text("hello".into())] }],
+                prompt: vec![LLMChatMessage {
+                    role: "user".into(),
+                    content: vec![LLMChatMessagePart::Text("hello".into())],
+                }],
             };
             let ok_resp = LoggedLLMResponse::new_success(
                 rid_success.clone(),
                 "m2".into(),
                 Some("stop".into()),
-                LLMUsage { input_tokens: Some(1), output_tokens: Some(2), total_tokens: Some(3), cached_input_tokens: Some(0) },
+                LLMUsage {
+                    input_tokens: Some(1),
+                    output_tokens: Some(2),
+                    total_tokens: Some(3),
+                    cached_input_tokens: Some(0),
+                },
                 "ok".into(),
                 vec![],
             );
@@ -1431,7 +1445,10 @@ mod tests {
                 client_name: "client_fail".into(),
                 client_provider: "provider_fail".into(),
                 params: IndexMap::new(),
-                prompt: vec![LLMChatMessage { role: "user".into(), content: vec![LLMChatMessagePart::Text("hi".into())] }],
+                prompt: vec![LLMChatMessage {
+                    role: "user".into(),
+                    content: vec![LLMChatMessagePart::Text("hi".into())],
+                }],
             };
             let failed_resp = LoggedLLMResponse::new_failure(
                 rid_fail.clone(),
