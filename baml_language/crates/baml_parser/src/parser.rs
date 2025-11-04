@@ -1332,9 +1332,15 @@ impl<'a> Parser<'a> {
             // Array literal
             self.parse_array_literal();
         } else if self.at(TokenKind::LBrace) {
-            // Block expression (not object literal - that's handled in parse_expr_bp)
-            // This only triggers for blocks at expression start position
-            self.parse_block_expr();
+            // Could be block expression or map literal
+            // Peek ahead to determine which one
+            if self.looks_like_map() {
+                // Map literal: { "key": value, ... }
+                self.parse_map_literal();
+            } else {
+                // Block expression: { statements... }
+                self.parse_block_expr();
+            }
         } else {
             self.error("Expected expression".to_string());
             self.bump(); // Consume unexpected token.
@@ -1376,6 +1382,120 @@ impl<'a> Parser<'a> {
             }
 
             p.expect(TokenKind::RBracket);
+        });
+    }
+
+    /// Check if the current position looks like a map literal rather than a block
+    /// Maps start with { "string": or { identifier:
+    /// Blocks typically start with { keyword or { expression (but not field:value pattern)
+    fn looks_like_map(&self) -> bool {
+        // Must start with {
+        if !self.at(TokenKind::LBrace) {
+            return false;
+        }
+
+        // Look at the token after {
+        if let Some(token_after_brace) = self.peek(1) {
+            // Empty braces - treat as empty map
+            if token_after_brace.kind == TokenKind::RBrace {
+                return true;
+            }
+
+            // Check for string literal key
+            if token_after_brace.kind == TokenKind::Quote
+                || token_after_brace.kind == TokenKind::Hash
+            {
+                // Likely a map with string key
+                return true;
+            }
+
+            // Check for identifier followed by colon (map with identifier key)
+            if token_after_brace.kind == TokenKind::Word {
+                // Check if it's a keyword that starts statements
+                let text = &token_after_brace.text;
+                if text == "let"
+                    || text == "return"
+                    || text == "if"
+                    || text == "while"
+                    || text == "for"
+                    || text == "break"
+                    || text == "continue"
+                {
+                    return false; // It's a block with a statement
+                }
+
+                // Check if word is followed by colon (map field)
+                if let Some(token_after_word) = self.peek(2) {
+                    if token_after_word.kind == TokenKind::Colon {
+                        return true; // word: pattern indicates a map
+                    }
+                }
+            }
+        }
+
+        false // Default to block
+    }
+
+    /// Parse a map literal: { "key": value, ... }
+    fn parse_map_literal(&mut self) {
+        self.with_node(SyntaxKind::MAP_LITERAL, |p| {
+            p.expect(TokenKind::LBrace);
+
+            // Parse map entries
+            while !p.at(TokenKind::RBrace) && !p.at_end() {
+                // Check for valid entry start
+                if p.at(TokenKind::Word) || p.at(TokenKind::Quote) || p.at(TokenKind::Hash) {
+                    p.parse_map_entry();
+
+                    // Handle comma between entries
+                    if !p.at(TokenKind::RBrace) {
+                        if !p.eat(TokenKind::Comma) {
+                            // Missing comma - error but try to continue
+                            p.error("Expected ',' or '}' after map entry".to_string());
+                            // Try to recover
+                            if !p.at(TokenKind::Word)
+                                && !p.at(TokenKind::Quote)
+                                && !p.at(TokenKind::Hash)
+                                && !p.at(TokenKind::RBrace)
+                            {
+                                // Skip unexpected token
+                                p.bump();
+                            }
+                        }
+                    }
+                } else if p.eat(TokenKind::Comma) {
+                    // Trailing comma or double comma - just continue
+                    continue;
+                } else {
+                    // Unexpected token in map
+                    p.error("Expected map key or '}'".to_string());
+                    // Skip the unexpected token to avoid getting stuck
+                    p.bump();
+                }
+            }
+
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse a single map entry: key: value
+    fn parse_map_entry(&mut self) {
+        self.with_node(SyntaxKind::OBJECT_FIELD, |p| {
+            // Key - can be identifier or string literal
+            if p.at(TokenKind::Word) {
+                p.bump(); // identifier key
+            } else if !p.parse_any_string() {
+                p.error("Expected map key".to_string());
+                return;
+            }
+
+            // Colon
+            if !p.expect(TokenKind::Colon) {
+                return; // Error already emitted by expect
+            }
+
+            // Value - any expression (including nested maps)
+            p.parse_expr();
         });
     }
 

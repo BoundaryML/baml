@@ -24,29 +24,31 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        BLOCK_EXPR
+        MAP_LITERAL
           L_BRACE "{"
-          STRING_LITERAL "
+          OBJECT_FIELD
+            STRING_LITERAL "
     "hello""
-            QUOTE """
-            WORD "hello"
-            QUOTE """
-          COLON ":"
-          STRING_LITERAL " "world""
-            QUOTE """
-            WORD "world"
-            QUOTE """
+              QUOTE """
+              WORD "hello"
+              QUOTE """
+            COLON ":"
+            STRING_LITERAL " "world""
+              QUOTE """
+              WORD "world"
+              QUOTE """
           COMMA ","
-          STRING_LITERAL "
+          OBJECT_FIELD
+            STRING_LITERAL "
     "test""
-            QUOTE """
-            WORD "test"
-            QUOTE """
-          COLON ":"
-          STRING_LITERAL " "test""
-            QUOTE """
-            WORD "test"
-            QUOTE """
+              QUOTE """
+              WORD "test"
+              QUOTE """
+            COLON ":"
+            STRING_LITERAL " "test""
+              QUOTE """
+              WORD "test"
+              QUOTE """
           R_BRACE "}"
         R_BRACE "}"
   FUNCTION_DEF
@@ -69,23 +71,25 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        BLOCK_EXPR
+        MAP_LITERAL
           L_BRACE "{"
-          STRING_LITERAL "
+          OBJECT_FIELD
+            STRING_LITERAL "
     "hello""
-            QUOTE """
-            WORD "hello"
-            QUOTE """
-          COLON ":"
-          INTEGER "1"
+              QUOTE """
+              WORD "hello"
+              QUOTE """
+            COLON ":"
+            INTEGER "1"
           COMMA ","
-          STRING_LITERAL "
+          OBJECT_FIELD
+            STRING_LITERAL "
     "test""
-            QUOTE """
-            WORD "test"
-            QUOTE """
-          COLON ":"
-          INTEGER "2"
+              QUOTE """
+              WORD "test"
+              QUOTE """
+            COLON ":"
+            INTEGER "2"
           R_BRACE "}"
         R_BRACE "}"
   FUNCTION_DEF
@@ -108,23 +112,25 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        BLOCK_EXPR
+        MAP_LITERAL
           L_BRACE "{"
-          STRING_LITERAL "
+          OBJECT_FIELD
+            STRING_LITERAL "
     "hello""
-            QUOTE """
-            WORD "hello"
-            QUOTE """
-          COLON ":"
-          FLOAT "1.0"
+              QUOTE """
+              WORD "hello"
+              QUOTE """
+            COLON ":"
+            FLOAT "1.0"
           COMMA ","
-          STRING_LITERAL "
+          OBJECT_FIELD
+            STRING_LITERAL "
     "test""
-            QUOTE """
-            WORD "test"
-            QUOTE """
-          COLON ":"
-          FLOAT "2.0"
+              QUOTE """
+              WORD "test"
+              QUOTE """
+            COLON ":"
+            FLOAT "2.0"
           R_BRACE "}"
         R_BRACE "}"
   FUNCTION_DEF
@@ -147,36 +153,27 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        BLOCK_EXPR
+        MAP_LITERAL
           L_BRACE "{"
-          STRING_LITERAL "
+          OBJECT_FIELD
+            STRING_LITERAL "
     "hello""
-            QUOTE """
-            WORD "hello"
-            QUOTE """
-          COLON ":"
-          WORD "true"
+              QUOTE """
+              WORD "hello"
+              QUOTE """
+            COLON ":"
+            WORD "true"
           COMMA ","
-          STRING_LITERAL "
+          OBJECT_FIELD
+            STRING_LITERAL "
     "test""
-            QUOTE """
-            WORD "test"
-            QUOTE """
-          COLON ":"
-          WORD "false"
+              QUOTE """
+              WORD "test"
+              QUOTE """
+            COLON ":"
+            WORD "false"
           R_BRACE "}"
         R_BRACE "}"
 
 === ERRORS ===
-  Expected Expected expression, found Expected expression
-  Expected Expected expression, found Expected expression
-  Expected Expected expression, found Expected expression
-  Expected Expected expression, found Expected expression
-  Expected Expected expression, found Expected expression
-  Expected Expected expression, found Expected expression
-  Expected Expected expression, found Expected expression
-  Expected Expected expression, found Expected expression
-  Expected Expected expression, found Expected expression
-  Expected Expected expression, found Expected expression
-  Expected Expected expression, found Expected expression
-  Expected Expected expression, found Expected expression
+None
