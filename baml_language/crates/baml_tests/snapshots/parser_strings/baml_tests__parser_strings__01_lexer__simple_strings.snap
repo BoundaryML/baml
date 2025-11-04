@@ -1,7 +1,17 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
+Slash "/"
+Slash "/"
+Word "Test"
+Word "basic"
+Word "string"
+Word "parsing"
+Word "in"
+Word "attributes"
+Word "and"
+Word "types"
 Word "class"
 Word "Messages"
 LBrace "{"
@@ -61,6 +71,12 @@ Quote "\""
 Quote "\""
 RParen ")"
 RBrace "}"
+Slash "/"
+Slash "/"
+Word "String"
+Word "literal"
+Word "union"
+Word "types"
 Word "function"
 Word "GetRole"
 LParen "("

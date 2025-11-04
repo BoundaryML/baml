@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -56,6 +56,14 @@ class User {
           WORD "age"
           WORD "int"
           R_BRACE "}"
+  SLASH "/"
+  SLASH "/"
+  WORD "Added"
+  WORD "comment"
+  SLASH "/"
+  SLASH "/"
+  WORD "Test"
+  WORD "comment"
 
 === ERRORS ===
   Expected Unclosed raw string (expected "#"), found Unclosed raw string (expected "#")

@@ -8,6 +8,6 @@ class Todo {
 function GetTodo() -> Todo {
     baml.fetch_as<Todo>(baml.HttpRequest {
         method: baml.HttpMethod.Get,
-        url: "dummyjson.com/todos/1", // TODO: can't use https:// because lexer is broken
+        url: "dummyjson.com/todos/1",
     })
 }

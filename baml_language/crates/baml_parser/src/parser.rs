@@ -85,11 +85,9 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::PlusPlus => SyntaxKind::PLUS_PLUS,
         TokenKind::MinusMinus => SyntaxKind::MINUS_MINUS,
 
-        // Whitespace and comments
+        // Whitespace
         TokenKind::Whitespace => SyntaxKind::WHITESPACE,
         TokenKind::Newline => SyntaxKind::NEWLINE,
-        TokenKind::LineComment => SyntaxKind::LINE_COMMENT,
-        TokenKind::BlockComment => SyntaxKind::BLOCK_COMMENT,
 
         // Error
         TokenKind::Error => SyntaxKind::ERROR_TOKEN,
@@ -130,12 +128,56 @@ impl<'a> Parser<'a> {
 
     // ============ Navigation ============
 
-    /// Get current token (skipping trivia by default)
+    /// Get current token (skipping all trivia: whitespace, newlines, and comments)
     fn current(&self) -> Option<&Token> {
+        self.current_impl(true)
+    }
+
+    /// Peek ahead n tokens (skipping all trivia: whitespace, newlines, and comments)
+    fn peek(&self, n: usize) -> Option<&Token> {
+        self.peek_impl(n, true)
+    }
+
+    /// Skip a comment pattern starting at position i, returning the new position
+    fn skip_comment_at(&self, mut i: usize) -> usize {
+        if self.is_line_comment_at(i) {
+            // Skip until newline
+            i += 2; // Skip //
+            while i < self.tokens.len() && self.tokens[i].kind != TokenKind::Newline {
+                i += 1;
+            }
+        } else if self.is_block_comment_at(i) {
+            // Skip until */
+            i += 2; // Skip /*
+            while i < self.tokens.len() {
+                if self.tokens[i].kind == TokenKind::Star
+                    && i + 1 < self.tokens.len()
+                    && self.tokens[i + 1].kind == TokenKind::Slash
+                {
+                    i += 2; // Skip */
+                    break;
+                }
+                i += 1;
+            }
+        }
+        i
+    }
+
+    /// Internal: Get current token, optionally skipping comment patterns
+    fn current_impl(&self, skip_comments: bool) -> Option<&Token> {
         let mut i = self.current;
         while i < self.tokens.len() {
+            // Skip comment patterns if requested
+            if skip_comments {
+                let new_i = self.skip_comment_at(i);
+                if new_i != i {
+                    i = new_i;
+                    continue;
+                }
+            }
+
             let token = &self.tokens[i];
-            if !self.is_trivia(token.kind) {
+            if !self.is_basic_trivia(token.kind) {
                 return Some(token);
             }
             i += 1;
@@ -143,13 +185,22 @@ impl<'a> Parser<'a> {
         None
     }
 
-    /// Peek ahead n tokens (skipping trivia)
-    fn peek(&self, n: usize) -> Option<&Token> {
+    /// Internal: Peek ahead n tokens, optionally skipping comment patterns
+    fn peek_impl(&self, n: usize, skip_comments: bool) -> Option<&Token> {
         let mut count = 0;
         let mut i = self.current;
         while i < self.tokens.len() {
+            // Skip comment patterns if requested
+            if skip_comments {
+                let new_i = self.skip_comment_at(i);
+                if new_i != i {
+                    i = new_i;
+                    continue;
+                }
+            }
+
             let token = &self.tokens[i];
-            if !self.is_trivia(token.kind) {
+            if !self.is_basic_trivia(token.kind) {
                 if count == n {
                     return Some(token);
                 }
@@ -177,36 +228,154 @@ impl<'a> Parser<'a> {
             .unwrap_or(false)
     }
 
+    /// Check if a token kind is basic trivia (whitespace/newlines, not comments).
+    /// Comments are also conceptually trivia, but they're assembled from token patterns (// and /*).
     #[allow(clippy::unused_self)]
-    fn is_trivia(&self, kind: TokenKind) -> bool {
-        matches!(
-            kind,
-            TokenKind::Whitespace
-                | TokenKind::Newline
-                | TokenKind::LineComment
-                | TokenKind::BlockComment
-        )
+    fn is_basic_trivia(&self, kind: TokenKind) -> bool {
+        matches!(kind, TokenKind::Whitespace | TokenKind::Newline)
+    }
+
+    /// Check if position i starts a line comment (//)
+    fn is_line_comment_at(&self, i: usize) -> bool {
+        i + 1 < self.tokens.len()
+            && self.tokens[i].kind == TokenKind::Slash
+            && self.tokens[i + 1].kind == TokenKind::Slash
+    }
+
+    /// Check if position i starts a block comment (/*)
+    fn is_block_comment_at(&self, i: usize) -> bool {
+        i + 1 < self.tokens.len()
+            && self.tokens[i].kind == TokenKind::Slash
+            && self.tokens[i + 1].kind == TokenKind::Star
+    }
+
+    /// Check if we're at the start of a line comment (//)
+    fn at_line_comment_start(&self) -> bool {
+        self.is_line_comment_at(self.current)
+    }
+
+    /// Check if we're at the start of a block comment (/*)
+    fn at_block_comment_start(&self) -> bool {
+        self.is_block_comment_at(self.current)
+    }
+
+    /// Consume a line comment (//) as a single LINE_COMMENT token
+    fn consume_line_comment(&mut self) {
+        // Consume both slashes
+        let mut text = String::new();
+        text.push_str(&self.tokens[self.current].text);
+        self.current += 1;
+        text.push_str(&self.tokens[self.current].text);
+        self.current += 1;
+
+        // Consume everything until newline
+        while self.current < self.tokens.len() {
+            let token = &self.tokens[self.current];
+            if token.kind == TokenKind::Newline {
+                break;
+            }
+            text.push_str(&token.text);
+            self.current += 1;
+        }
+
+        // Emit as a single token (not wrapped in a node)
+        self.events.push(Event::Token {
+            kind: SyntaxKind::LINE_COMMENT,
+            text,
+        });
+    }
+
+    /// Consume a block comment (/* ... */) as a single BLOCK_COMMENT token
+    fn consume_block_comment(&mut self) {
+        // Consume /* and everything until */
+        let mut text = String::new();
+        text.push_str(&self.tokens[self.current].text); // /
+        self.current += 1;
+        text.push_str(&self.tokens[self.current].text); // *
+        self.current += 1;
+
+        // Find the closing */
+        let mut found_close = false;
+        while self.current < self.tokens.len() {
+            let token = &self.tokens[self.current];
+            text.push_str(&token.text);
+            self.current += 1;
+
+            // Check if we just consumed * and next is /
+            if token.kind == TokenKind::Star
+                && self.current < self.tokens.len()
+                && self.tokens[self.current].kind == TokenKind::Slash
+            {
+                text.push_str(&self.tokens[self.current].text);
+                self.current += 1;
+                found_close = true;
+                break;
+            }
+        }
+
+        if !found_close {
+            // Unclosed block comment - will be handled as an error by validation
+        }
+
+        // Emit as a single token (not wrapped in a node)
+        self.events.push(Event::Token {
+            kind: SyntaxKind::BLOCK_COMMENT,
+            text,
+        });
     }
 
     // ============ Consumption ============
 
-    /// Consume current token (including trivia before it)
+    /// Consume current token, including all trivia before it (whitespace, newlines, comments).
+    /// This is used for normal top-level parsing.
     fn bump(&mut self) {
-        // Emit any trivia before the token
-        while self.current < self.tokens.len() {
-            let token = &self.tokens[self.current];
-            let kind = token_kind_to_syntax_kind(token.kind);
+        self.bump_impl(true);
+    }
 
+    /// Consume current token, including only basic trivia (whitespace, newlines).
+    /// Does NOT recognize comment patterns - treats // and /* as literal tokens.
+    /// This is used when parsing string content where // should not start a comment.
+    fn bump_raw(&mut self) {
+        self.bump_impl(false);
+    }
+
+    /// Internal: Consume current token with optional comment pattern recognition
+    fn bump_impl(&mut self, recognize_comments: bool) {
+        // Emit all trivia before the token
+        while self.current < self.tokens.len() {
+            // Recognize and assemble comment patterns if requested
+            if recognize_comments {
+                if self.at_line_comment_start() {
+                    self.consume_line_comment();
+                    continue;
+                }
+                if self.at_block_comment_start() {
+                    self.consume_block_comment();
+                    continue;
+                }
+            }
+
+            let token = &self.tokens[self.current];
+
+            // Emit basic trivia (whitespace, newlines)
+            if self.is_basic_trivia(token.kind) {
+                let kind = token_kind_to_syntax_kind(token.kind);
+                self.events.push(Event::Token {
+                    kind,
+                    text: token.text.clone(),
+                });
+                self.current += 1;
+                continue;
+            }
+
+            // Non-trivia token - emit it and stop
+            let kind = token_kind_to_syntax_kind(token.kind);
             self.events.push(Event::Token {
                 kind,
                 text: token.text.clone(),
             });
-
             self.current += 1;
-
-            if !self.is_trivia(token.kind) {
-                break;
-            }
+            break;
         }
     }
 
@@ -327,7 +496,7 @@ impl<'a> Parser<'a> {
 
     // ============ String Parsing ============
 
-    /// Count consecutive Hash tokens starting at current position (raw skip trivia)
+    /// Count consecutive Hash tokens starting at current position (skipping basic trivia only)
     fn count_consecutive_hashes(&self) -> usize {
         let mut count = 0;
         let mut i = self.current;
@@ -337,7 +506,7 @@ impl<'a> Parser<'a> {
             if token.kind == TokenKind::Hash {
                 count += 1;
                 i += 1;
-            } else if self.is_trivia(token.kind) {
+            } else if self.is_basic_trivia(token.kind) {
                 i += 1;
             } else {
                 break;
@@ -347,7 +516,7 @@ impl<'a> Parser<'a> {
         count
     }
 
-    /// Find the token position after consuming N hashes (skipping trivia)
+    /// Find the token position after consuming N hashes (skipping basic trivia only)
     fn find_token_after_hashes(&self, hash_count: usize) -> Option<usize> {
         let mut hashes_seen = 0;
         let mut i = self.current;
@@ -358,13 +527,13 @@ impl<'a> Parser<'a> {
                 hashes_seen += 1;
                 i += 1;
                 if hashes_seen == hash_count {
-                    // Found all hashes, now skip trivia to find next token
-                    while i < self.tokens.len() && self.is_trivia(self.tokens[i].kind) {
+                    // Found all hashes, now skip basic trivia to find next token
+                    while i < self.tokens.len() && self.is_basic_trivia(self.tokens[i].kind) {
                         i += 1;
                     }
                     return Some(i);
                 }
-            } else if self.is_trivia(token.kind) {
+            } else if self.is_basic_trivia(token.kind) {
                 i += 1;
             } else {
                 break;
@@ -374,7 +543,7 @@ impl<'a> Parser<'a> {
         None
     }
 
-    /// Count Hash tokens immediately after current Quote token (raw skip trivia)
+    /// Count Hash tokens immediately after current Quote token (skipping basic trivia only)
     fn count_consecutive_hashes_after_quote(&self) -> usize {
         let mut count = 0;
         let mut i = self.current + 1;
@@ -384,7 +553,7 @@ impl<'a> Parser<'a> {
             if token.kind == TokenKind::Hash {
                 count += 1;
                 i += 1;
-            } else if self.is_trivia(token.kind) {
+            } else if self.is_basic_trivia(token.kind) {
                 i += 1;
             } else {
                 break;
@@ -413,8 +582,8 @@ impl<'a> Parser<'a> {
                     return;
                 }
                 // Not a quote - consume as string content
-                // This includes Words, Colons, Slashes, etc. that make up the string
-                p.bump();
+                // Use bump_raw() to avoid treating // as comments inside strings
+                p.bump_raw();
             }
 
             // If we get here, we reached EOF without finding closing quote
@@ -477,7 +646,8 @@ impl<'a> Parser<'a> {
                 }
 
                 // Not the closing delimiter, consume as content
-                p.bump();
+                // Use bump_raw() to avoid treating // as comments inside raw strings
+                p.bump_raw();
             }
         });
 

@@ -176,13 +176,6 @@ pub enum TokenKind {
     #[token("%")]
     Percent,
 
-    // ============ Comments (for lossless lexing) ============
-    #[regex(r"//[^\n]*")]
-    LineComment,
-
-    #[regex(r"/\*([^*]|\*[^/])*\*/")]
-    BlockComment,
-
     // ============ Whitespace (preserved for losslessness) ============
     #[regex(r"[ \t]+")]
     Whitespace,
@@ -617,6 +610,84 @@ mod tests {
         for kind in kinds.iter().skip(kinds.len() - 5) {
             assert_eq!(*kind, TokenKind::Hash);
         }
+        assert_eq!(reconstruct_source(&tokens), source);
+    }
+
+    #[test]
+    fn test_url_in_string() {
+        // Test that URLs with // inside strings are not treated as comments
+        let source = r#""https://google.com""#;
+        let file_id = FileId::new(0);
+        let tokens = lex_lossless(source, file_id);
+
+        let kinds: Vec<TokenKind> = tokens.iter().map(|t| t.kind).collect();
+
+        // Should be: Quote, Word("https"), Colon, Slash, Slash, Word("google"), Dot, Word("com"), Quote
+        // NOT: Quote, Word("https"), Colon, LineComment
+        assert_eq!(kinds[0], TokenKind::Quote);
+        assert_eq!(kinds[1], TokenKind::Word); // https
+        assert_eq!(kinds[2], TokenKind::Colon);
+        assert_eq!(kinds[3], TokenKind::Slash); // First slash
+        assert_eq!(kinds[4], TokenKind::Slash); // Second slash (NOT LineComment!)
+        assert_eq!(kinds[5], TokenKind::Word); // google
+        assert_eq!(kinds[6], TokenKind::Dot);
+        assert_eq!(kinds[7], TokenKind::Word); // com
+        assert_eq!(kinds[8], TokenKind::Quote);
+
+        // Verify lossless
+        assert_eq!(reconstruct_source(&tokens), source);
+    }
+
+    #[test]
+    fn test_line_comment() {
+        // Test that actual line comments (outside strings) are lexed as individual tokens
+        let source = "// This is a comment\ncode";
+        let file_id = FileId::new(0);
+        let tokens = lex_lossless(source, file_id);
+
+        // Should be: Slash, Slash, Whitespace, Word("This"), ..., Newline, Word("code")
+        // The parser will recognize Slash Slash as a comment pattern
+        assert_eq!(tokens[0].kind, TokenKind::Slash);
+        assert_eq!(tokens[1].kind, TokenKind::Slash);
+
+        // Find the newline
+        let newline_pos = tokens
+            .iter()
+            .position(|t| t.kind == TokenKind::Newline)
+            .unwrap();
+        assert!(newline_pos > 2); // Should have comment content before newline
+
+        // After newline should be the code
+        assert_eq!(tokens[newline_pos + 1].kind, TokenKind::Word);
+        assert_eq!(tokens[newline_pos + 1].text, "code");
+
+        // Verify lossless
+        assert_eq!(reconstruct_source(&tokens), source);
+    }
+
+    #[test]
+    fn test_block_comment() {
+        // Test that block comments are lexed as individual tokens
+        let source = "/* block comment */ code";
+        let file_id = FileId::new(0);
+        let tokens = lex_lossless(source, file_id);
+
+        // Should be: Slash, Star, ..., Star, Slash, Whitespace, Word("code")
+        // The parser will recognize Slash Star as block comment start
+        assert_eq!(tokens[0].kind, TokenKind::Slash);
+        assert_eq!(tokens[1].kind, TokenKind::Star);
+
+        // Find the closing */
+        let mut star_slash_pos = None;
+        for i in 0..tokens.len() - 1 {
+            if tokens[i].kind == TokenKind::Star && tokens[i + 1].kind == TokenKind::Slash {
+                star_slash_pos = Some(i);
+                break;
+            }
+        }
+        assert!(star_slash_pos.is_some());
+
+        // Verify lossless
         assert_eq!(reconstruct_source(&tokens), source);
     }
 }

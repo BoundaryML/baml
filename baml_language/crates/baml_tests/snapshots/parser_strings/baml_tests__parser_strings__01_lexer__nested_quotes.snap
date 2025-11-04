@@ -1,7 +1,15 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
+Slash "/"
+Slash "/"
+Word "Test"
+Word "nested"
+Word "quote"
+Word "handling"
+Word "in"
+Word "strings"
 Word "class"
 Word "NestedQuotes"
 LBrace "{"
@@ -88,6 +96,13 @@ RBrace "}"
 Quote "\""
 RParen ")"
 RBrace "}"
+Slash "/"
+Slash "/"
+Word "Test"
+Word "quotes"
+Word "in"
+Word "template"
+Word "strings"
 Word "function"
 Word "FormatMessage"
 LParen "("
