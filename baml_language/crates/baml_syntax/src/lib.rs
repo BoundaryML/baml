@@ -13,9 +13,8 @@ mod tests;
 
 pub use ast::*;
 pub use builder::SyntaxTreeBuilder;
+// Re-export useful rowan types
+pub use rowan::{GreenNode, NodeOrToken, TextRange, TextSize, TokenAtOffset, WalkEvent};
 pub use syntax_kind::SyntaxKind;
 pub use syntax_node::{BamlLanguage, SyntaxElement, SyntaxNode, SyntaxToken};
 pub use traversal::*;
-
-// Re-export useful rowan types
-pub use rowan::{GreenNode, NodeOrToken, TextRange, TextSize, TokenAtOffset, WalkEvent};

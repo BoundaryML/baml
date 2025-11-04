@@ -127,6 +127,7 @@ dependencies = [
  "baml_syntax",
  "rowan",
  "salsa",
+ "text-size",
 ]
 
 [[package]]

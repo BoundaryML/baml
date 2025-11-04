@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod builder_tests {
-    use crate::{SyntaxKind, SyntaxNode, ast, builder::SyntaxTreeBuilder};
     use rowan::ast::AstNode;
+
+    use crate::{SyntaxKind, SyntaxNode, ast, builder::SyntaxTreeBuilder};
 
     #[test]
     fn test_build_function() {

@@ -1,8 +1,9 @@
 //! Utilities for building syntax trees programmatically.
 //! Primarily used for testing.
 
-use crate::SyntaxKind;
 use rowan::{GreenNode, GreenNodeBuilder};
+
+use crate::SyntaxKind;
 
 /// Builder for constructing syntax trees.
 pub struct SyntaxTreeBuilder {

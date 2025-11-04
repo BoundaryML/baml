@@ -3,12 +3,30 @@ source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
-SOURCE_FILE "// Missing closing brace
-class Broken {
-    field int
-
-// Invalid syntax
-function 123Invalid() {}"
+SOURCE_FILE
+  CLASS_DEF
+    WORD "class"
+    WORD "Broken"
+    L_BRACE "{"
+    FIELD
+      WORD "field"
+      TYPE_EXPR " int"
+        WORD "int"
+    FIELD
+      WORD "function"
+      TYPE_EXPR
+    INTEGER "123"
+    FIELD
+      WORD "Invalid"
+      TYPE_EXPR
+        L_PAREN "("
+        TYPE_EXPR
+        R_PAREN ")"
+    L_BRACE "{"
+    R_BRACE "}"
 
 === ERRORS ===
-None
+  Expected Expected type, found Expected type
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Expected type, found Expected type
+  Expected Unexpected token in class body, found Unexpected token in class body

@@ -3,4 +3,5 @@ source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-No errors found.
+  [parse] Expected Unclosed raw string (expected "#"), found Unclosed raw string (expected "#")
+  [parse] Expected Expected RBrace, found EOF, found Expected RBrace, found EOF

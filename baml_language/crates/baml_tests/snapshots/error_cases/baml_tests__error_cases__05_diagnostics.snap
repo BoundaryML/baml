@@ -3,4 +3,7 @@ source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-No errors found.
+  [parse] Expected Expected type, found Expected type
+  [parse] Expected Unexpected token in class body, found Unexpected token in class body
+  [parse] Expected Expected type, found Expected type
+  [parse] Expected Unexpected token in class body, found Unexpected token in class body

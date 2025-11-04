@@ -3,14 +3,58 @@ source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
-SOURCE_FILE "function Calculate() -> int {
+SOURCE_FILE
+  FUNCTION_DEF
+    WORD "function"
+    WORD "Calculate"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR " {
   let a = 1 + 2
   let b = a * 3
   let c = b / 2 - 1
   let d = (a + b) * c
   return d
-}
-"
+}"
+        L_BRACE "{"
+        WORD "let"
+        WORD "a"
+        EQUALS "="
+        INTEGER "1"
+        PLUS "+"
+        INTEGER "2"
+        WORD "let"
+        WORD "b"
+        EQUALS "="
+        WORD "a"
+        STAR "*"
+        INTEGER "3"
+        WORD "let"
+        WORD "c"
+        EQUALS "="
+        WORD "b"
+        SLASH "/"
+        INTEGER "2"
+        MINUS "-"
+        INTEGER "1"
+        WORD "let"
+        WORD "d"
+        EQUALS "="
+        L_PAREN "("
+        WORD "a"
+        PLUS "+"
+        WORD "b"
+        R_PAREN ")"
+        STAR "*"
+        WORD "c"
+        WORD "return"
+        WORD "d"
+        R_BRACE "}"
 
 === ERRORS ===
 None
