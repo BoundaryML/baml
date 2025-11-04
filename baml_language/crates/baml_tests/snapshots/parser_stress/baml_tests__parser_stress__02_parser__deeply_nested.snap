@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -59,50 +59,68 @@ SOURCE_FILE
     TYPE_EXPR " int"
       WORD "int"
     EXPR_FUNCTION_BODY
-      BLOCK_EXPR " {
-  return ((((((((((1 + 2) * 3) - 4) / 5) + 6) * 7) - 8) / 9) + 10))
-}"
+      BLOCK_EXPR
         L_BRACE "{"
-        WORD "return"
-        L_PAREN "("
-        L_PAREN "("
-        L_PAREN "("
-        L_PAREN "("
-        L_PAREN "("
-        L_PAREN "("
-        L_PAREN "("
-        L_PAREN "("
-        L_PAREN "("
-        L_PAREN "("
-        INTEGER "1"
-        PLUS "+"
-        INTEGER "2"
-        R_PAREN ")"
-        STAR "*"
-        INTEGER "3"
-        R_PAREN ")"
-        MINUS "-"
-        INTEGER "4"
-        R_PAREN ")"
-        SLASH "/"
-        INTEGER "5"
-        R_PAREN ")"
-        PLUS "+"
-        INTEGER "6"
-        R_PAREN ")"
-        STAR "*"
-        INTEGER "7"
-        R_PAREN ")"
-        MINUS "-"
-        INTEGER "8"
-        R_PAREN ")"
-        SLASH "/"
-        INTEGER "9"
-        R_PAREN ")"
-        PLUS "+"
-        INTEGER "10"
-        R_PAREN ")"
-        R_PAREN ")"
+        RETURN_STMT
+          WORD "return"
+          PAREN_EXPR
+            L_PAREN "("
+            PAREN_EXPR
+              L_PAREN "("
+              BINARY_EXPR
+                PAREN_EXPR
+                  L_PAREN "("
+                  BINARY_EXPR
+                    PAREN_EXPR
+                      L_PAREN "("
+                      BINARY_EXPR
+                        PAREN_EXPR
+                          L_PAREN "("
+                          BINARY_EXPR
+                            PAREN_EXPR
+                              L_PAREN "("
+                              BINARY_EXPR
+                                PAREN_EXPR
+                                  L_PAREN "("
+                                  BINARY_EXPR
+                                    PAREN_EXPR
+                                      L_PAREN "("
+                                      BINARY_EXPR
+                                        PAREN_EXPR
+                                          L_PAREN "("
+                                          BINARY_EXPR
+                                            PAREN_EXPR
+                                              L_PAREN "("
+                                              BINARY_EXPR "1 + 2"
+                                                INTEGER "1"
+                                                PLUS "+"
+                                                INTEGER "2"
+                                              R_PAREN ")"
+                                            STAR "*"
+                                            INTEGER "3"
+                                          R_PAREN ")"
+                                        MINUS "-"
+                                        INTEGER "4"
+                                      R_PAREN ")"
+                                    SLASH "/"
+                                    INTEGER "5"
+                                  R_PAREN ")"
+                                PLUS "+"
+                                INTEGER "6"
+                              R_PAREN ")"
+                            STAR "*"
+                            INTEGER "7"
+                          R_PAREN ")"
+                        MINUS "-"
+                        INTEGER "8"
+                      R_PAREN ")"
+                    SLASH "/"
+                    INTEGER "9"
+                  R_PAREN ")"
+                PLUS "+"
+                INTEGER "10"
+              R_PAREN ")"
+            R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
     WORD "function"

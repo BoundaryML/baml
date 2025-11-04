@@ -995,23 +995,422 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Placeholder for block expression parsing (Phase 4)
+    /// Parse a block expression with statements
     fn parse_block_expr(&mut self) {
-        // For now, just consume the entire block
         self.with_node(SyntaxKind::BLOCK_EXPR, |p| {
             p.expect(TokenKind::LBrace);
 
-            // Consume until closing brace
-            let mut depth = 1;
-            while depth > 0 && !p.at_end() {
-                if p.at(TokenKind::LBrace) {
-                    depth += 1;
-                } else if p.at(TokenKind::RBrace) {
-                    depth -= 1;
-                }
+            // Parse statements until closing brace
+            while !p.at(TokenKind::RBrace) && !p.at_end() {
+                p.parse_stmt();
+            }
+
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    // ============ Statement Parsing ============
+
+    /// Parse a statement
+    fn parse_stmt(&mut self) {
+        if self.at_keyword("let") {
+            self.parse_let_stmt();
+        } else if self.at_keyword("return") {
+            self.parse_return_stmt();
+        } else if self.at_keyword("if") {
+            self.parse_if_expr();
+        } else if self.at_keyword("while") {
+            self.parse_while_stmt();
+        } else if self.at_keyword("for") {
+            self.parse_for_expr();
+        } else if self.at_keyword("break") {
+            self.parse_break_stmt();
+        } else if self.at_keyword("continue") {
+            self.parse_continue_stmt();
+        } else {
+            // Expression statement
+            self.parse_expr_stmt();
+        }
+    }
+
+    fn parse_let_stmt(&mut self) {
+        self.with_node(SyntaxKind::LET_STMT, |p| {
+            p.expect_keyword("let");
+
+            // Variable name
+            if p.at(TokenKind::Word) {
                 p.bump();
+            } else {
+                p.error("Expected variable name".to_string());
+            }
+
+            // Optional type annotation
+            if p.eat(TokenKind::Colon) {
+                p.parse_type();
+            }
+
+            // Initializer
+            if p.eat(TokenKind::Equals) {
+                // Parse expression but exclude assignment operators (parse_expr_bp with min_bp=3)
+                // This prevents `let a = b = c` from being parsed as nested assignment
+                p.parse_expr_bp(3);
+            } else {
+                p.error("Expected initializer (=)".to_string());
             }
         });
+    }
+
+    fn parse_return_stmt(&mut self) {
+        self.with_node(SyntaxKind::RETURN_STMT, |p| {
+            p.expect_keyword("return");
+
+            // Optional return value
+            if !p.at(TokenKind::RBrace) && !p.at_end() {
+                p.parse_expr();
+            }
+        });
+    }
+
+    fn parse_if_expr(&mut self) {
+        self.with_node(SyntaxKind::IF_EXPR, |p| {
+            p.expect_keyword("if");
+
+            // Condition
+            p.parse_expr();
+
+            // Then block
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error("Expected block after if condition".to_string());
+            }
+
+            // Optional else
+            if p.at_keyword("else") {
+                p.bump(); // else
+
+                if p.at_keyword("if") {
+                    // else if
+                    p.parse_if_expr();
+                } else if p.at(TokenKind::LBrace) {
+                    // else block
+                    p.parse_block_expr();
+                } else {
+                    p.error("Expected 'if' or block after 'else'".to_string());
+                }
+            }
+        });
+    }
+
+    fn parse_while_stmt(&mut self) {
+        self.with_node(SyntaxKind::WHILE_STMT, |p| {
+            p.expect_keyword("while");
+
+            // Condition
+            p.parse_expr();
+
+            // Body
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error("Expected block after while condition".to_string());
+            }
+        });
+    }
+
+    fn parse_for_expr(&mut self) {
+        self.with_node(SyntaxKind::FOR_EXPR, |p| {
+            p.expect_keyword("for");
+
+            // Loop variable
+            if p.at(TokenKind::Word) {
+                p.bump();
+            } else {
+                p.error("Expected loop variable".to_string());
+            }
+
+            // 'in' keyword
+            p.expect_keyword("in");
+
+            // Iterator expression
+            p.parse_expr();
+
+            // Body
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error("Expected block after for expression".to_string());
+            }
+        });
+    }
+
+    fn parse_break_stmt(&mut self) {
+        self.with_node(SyntaxKind::BREAK_STMT, |p| {
+            p.expect_keyword("break");
+        });
+    }
+
+    fn parse_continue_stmt(&mut self) {
+        self.with_node(SyntaxKind::CONTINUE_STMT, |p| {
+            p.expect_keyword("continue");
+        });
+    }
+
+    fn parse_expr_stmt(&mut self) {
+        // Just an expression followed by optional semicolon
+        self.parse_expr();
+        self.eat(TokenKind::Semicolon); // Optional semicolon
+    }
+
+    // ============ Expression Parsing (Pratt Parser) ============
+
+    /// Parse an expression with operator precedence
+    fn parse_expr(&mut self) {
+        self.parse_expr_bp(0);
+    }
+
+    /// Parse expression with binding power (Pratt parsing)
+    fn parse_expr_bp(&mut self, min_bp: u8) {
+        // Mark the start of this expression to prevent wrapping earlier tokens
+        let expr_start = self.events.len();
+
+        // Parse prefix (primary expression or unary operator)
+        self.parse_prefix();
+
+        // Parse infix operators
+        loop {
+            let op = if let Some(token) = self.current() {
+                token.kind
+            } else {
+                break;
+            };
+
+            // Check if this is an infix operator
+            if let Some((left_bp, right_bp)) = self.infix_binding_power(op) {
+                if left_bp < min_bp {
+                    break;
+                }
+
+                // Mark where to start wrapping (before the LHS we just parsed)
+                // but not before the expr_start marker
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+
+                // Consume the operator
+                self.bump();
+
+                // Parse right-hand side
+                self.parse_expr_bp(right_bp);
+
+                // Wrap everything from lhs_start in a BINARY_EXPR
+                self.wrap_events_in_node(lhs_start, SyntaxKind::BINARY_EXPR);
+                self.finish_node();
+            } else if op == TokenKind::LParen {
+                // Function call
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::CALL_EXPR);
+                self.parse_call_args();
+                self.finish_node();
+            } else if op == TokenKind::LBracket {
+                // Index expression
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::INDEX_EXPR);
+                self.bump(); // [
+                self.parse_expr();
+                self.expect(TokenKind::RBracket);
+                self.finish_node();
+            } else if op == TokenKind::Dot {
+                // Field access
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::FIELD_ACCESS_EXPR);
+                self.bump(); // .
+                if self.at(TokenKind::Word) {
+                    self.bump();
+                } else {
+                    self.error("Expected field name after '.'".to_string());
+                }
+                self.finish_node();
+            } else {
+                break;
+            }
+        }
+    }
+
+    /// Find the start of the most recent complete expression
+    /// This walks backward through events to find where the last expression began
+    fn find_previous_expr_start(&self) -> usize {
+        self.find_previous_expr_start_after(0)
+    }
+
+    /// Find the start of the most recent complete expression, but not before min_index
+    /// This walks backward through events to find where the last expression began
+    fn find_previous_expr_start_after(&self, min_index: usize) -> usize {
+        let mut depth = 0;
+        let mut i = self.events.len();
+
+        while i > min_index {
+            i -= 1;
+            match &self.events[i] {
+                Event::FinishNode => depth += 1,
+                Event::StartNode { .. } => {
+                    if depth == 0 {
+                        return i;
+                    }
+                    depth -= 1;
+                }
+                Event::Token { .. } => {
+                    if depth == 0 {
+                        return i;
+                    }
+                }
+                Event::Error { .. } => {}
+            }
+        }
+
+        min_index
+    }
+
+    /// Wrap events from start_index onwards in a new node
+    /// This allows us to retroactively wrap parsed expressions
+    fn wrap_events_in_node(&mut self, start_index: usize, kind: SyntaxKind) {
+        // Insert StartNode at the beginning
+        self.events.insert(start_index, Event::StartNode { kind });
+    }
+
+    /// Parse prefix expression (primary or unary operator)
+    fn parse_prefix(&mut self) {
+        // Check for unary operators
+        if self.at(TokenKind::Minus)
+            || self.at(TokenKind::Not)
+            || self.at(TokenKind::Tilde)
+            || self.at(TokenKind::PlusPlus)
+            || self.at(TokenKind::MinusMinus)
+        {
+            self.with_node(SyntaxKind::UNARY_EXPR, |p| {
+                p.bump(); // operator
+                p.parse_prefix(); // operand
+            });
+        } else {
+            self.parse_primary_expr();
+        }
+    }
+
+    /// Parse primary expression (literals, identifiers, parentheses)
+    fn parse_primary_expr(&mut self) {
+        if self.at(TokenKind::Integer) || self.at(TokenKind::Float) {
+            // Numeric literal
+            self.bump();
+        } else if self.parse_any_string() {
+            // String literal
+        } else if self.at_keyword("true") || self.at_keyword("false") {
+            // Boolean literal
+            self.bump();
+        } else if self.at_keyword("null") {
+            // Null literal
+            self.bump();
+        } else if self.at(TokenKind::Word) {
+            // Identifier or path
+            self.bump();
+        } else if self.at(TokenKind::LParen) {
+            // Parenthesized expression
+            self.with_node(SyntaxKind::PAREN_EXPR, |p| {
+                p.bump(); // (
+                p.parse_expr();
+                p.expect(TokenKind::RParen);
+            });
+        } else if self.at(TokenKind::LBracket) {
+            // Array literal
+            self.parse_array_literal();
+        } else if self.at(TokenKind::LBrace) {
+            // Block expression or object literal
+            // For now, treat as block
+            self.parse_block_expr();
+        } else {
+            self.error("Expected expression".to_string());
+        }
+    }
+
+    fn parse_call_args(&mut self) {
+        self.with_node(SyntaxKind::CALL_ARGS, |p| {
+            p.expect(TokenKind::LParen);
+
+            if !p.at(TokenKind::RParen) {
+                p.parse_expr();
+
+                while p.eat(TokenKind::Comma) {
+                    if p.at(TokenKind::RParen) {
+                        break; // Trailing comma
+                    }
+                    p.parse_expr();
+                }
+            }
+
+            p.expect(TokenKind::RParen);
+        });
+    }
+
+    fn parse_array_literal(&mut self) {
+        self.with_node(SyntaxKind::ARRAY_LITERAL, |p| {
+            p.expect(TokenKind::LBracket);
+
+            if !p.at(TokenKind::RBracket) {
+                p.parse_expr();
+
+                while p.eat(TokenKind::Comma) {
+                    if p.at(TokenKind::RBracket) {
+                        break; // Trailing comma
+                    }
+                    p.parse_expr();
+                }
+            }
+
+            p.expect(TokenKind::RBracket);
+        });
+    }
+
+    /// Get infix operator binding power (precedence)
+    /// Returns (left_bp, right_bp) for left and right associativity
+    fn infix_binding_power(&self, op: TokenKind) -> Option<(u8, u8)> {
+        use TokenKind::*;
+
+        Some(match op {
+            // Assignment operators (right associative)
+            Equals | PlusEquals | MinusEquals | StarEquals | SlashEquals | PercentEquals
+            | AndEquals | PipeEquals | CaretEquals | LessLessEquals | GreaterGreaterEquals => {
+                (2, 1)
+            }
+
+            // Logical OR (left associative)
+            OrOr => (3, 4),
+
+            // Logical AND (left associative)
+            AndAnd => (5, 6),
+
+            // Bitwise OR (left associative)
+            Pipe => (7, 8),
+
+            // Bitwise XOR (left associative)
+            Caret => (9, 10),
+
+            // Bitwise AND (left associative)
+            And => (11, 12),
+
+            // Equality (left associative)
+            EqualsEquals | NotEquals => (13, 14),
+
+            // Comparison (left associative)
+            Less | Greater | LessEquals | GreaterEquals => (15, 16),
+
+            // Bitwise shift (left associative)
+            LessLess | GreaterGreater => (17, 18),
+
+            // Addition/Subtraction (left associative)
+            Plus | Minus => (19, 20),
+
+            // Multiplication/Division/Modulo (left associative)
+            Star | Slash | Percent => (21, 22),
+
+            _ => return None,
+        })
     }
 
     // ============ Client Parsing ============

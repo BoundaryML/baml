@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -14,46 +14,53 @@ SOURCE_FILE
     TYPE_EXPR " int"
       WORD "int"
     EXPR_FUNCTION_BODY
-      BLOCK_EXPR " {
-  let a = 1 + 2
-  let b = a * 3
-  let c = b / 2 - 1
-  let d = (a + b) * c
-  return d
-}"
+      BLOCK_EXPR
         L_BRACE "{"
-        WORD "let"
-        WORD "a"
-        EQUALS "="
-        INTEGER "1"
-        PLUS "+"
-        INTEGER "2"
-        WORD "let"
-        WORD "b"
-        EQUALS "="
-        WORD "a"
-        STAR "*"
-        INTEGER "3"
-        WORD "let"
-        WORD "c"
-        EQUALS "="
-        WORD "b"
-        SLASH "/"
-        INTEGER "2"
-        MINUS "-"
-        INTEGER "1"
-        WORD "let"
-        WORD "d"
-        EQUALS "="
-        L_PAREN "("
-        WORD "a"
-        PLUS "+"
-        WORD "b"
-        R_PAREN ")"
-        STAR "*"
-        WORD "c"
-        WORD "return"
-        WORD "d"
+        LET_STMT
+          WORD "let"
+          WORD "a"
+          EQUALS "="
+          BINARY_EXPR "1 + 2"
+            INTEGER "1"
+            PLUS "+"
+            INTEGER "2"
+        LET_STMT
+          WORD "let"
+          WORD "b"
+          EQUALS "="
+          BINARY_EXPR "a * 3"
+            WORD "a"
+            STAR "*"
+            INTEGER "3"
+        LET_STMT
+          WORD "let"
+          WORD "c"
+          EQUALS "="
+          BINARY_EXPR
+            BINARY_EXPR "b / 2"
+              WORD "b"
+              SLASH "/"
+              INTEGER "2"
+            MINUS "-"
+            INTEGER "1"
+        LET_STMT
+          WORD "let"
+          WORD "d"
+          EQUALS "="
+          BINARY_EXPR
+            PAREN_EXPR
+              L_PAREN "("
+              BINARY_EXPR "a + b"
+                WORD "a"
+                PLUS "+"
+                WORD "b"
+              R_PAREN ")"
+            STAR "*"
+            WORD "c"
+        RETURN_STMT "
+  return d"
+          WORD "return"
+          WORD "d"
         R_BRACE "}"
 
 === ERRORS ===
