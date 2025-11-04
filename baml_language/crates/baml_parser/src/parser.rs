@@ -1225,6 +1225,21 @@ impl<'a> Parser<'a> {
                     self.error("Expected field name after '.'".to_string());
                 }
                 self.finish_node();
+            } else if op == TokenKind::LBrace {
+                // Object literal/constructor
+                // Check if we have a preceding expression (constructor name/expression)
+                // by checking if we've emitted any events since expr_start
+                if self.events.len() > expr_start {
+                    // We have a preceding expression, treat as object literal/constructor
+                    let lhs_start = self.find_previous_expr_start_after(expr_start);
+                    self.wrap_events_in_node(lhs_start, SyntaxKind::OBJECT_LITERAL);
+                    self.parse_object_literal_body();
+                    self.finish_node();
+                } else {
+                    // No preceding expression, this is a block expression
+                    // Break and let parse_primary_expr handle it
+                    break;
+                }
             } else {
                 break;
             }
@@ -1317,11 +1332,12 @@ impl<'a> Parser<'a> {
             // Array literal
             self.parse_array_literal();
         } else if self.at(TokenKind::LBrace) {
-            // Block expression or object literal
-            // For now, treat as block
+            // Block expression (not object literal - that's handled in parse_expr_bp)
+            // This only triggers for blocks at expression start position
             self.parse_block_expr();
         } else {
             self.error("Expected expression".to_string());
+            self.bump(); // Consume unexpected token.
         }
     }
 
@@ -1360,6 +1376,67 @@ impl<'a> Parser<'a> {
             }
 
             p.expect(TokenKind::RBracket);
+        });
+    }
+
+    /// Parse the body of an object literal/constructor: { field: value, ... }
+    fn parse_object_literal_body(&mut self) {
+        self.expect(TokenKind::LBrace);
+
+        // Parse fields until we hit the closing brace
+        while !self.at(TokenKind::RBrace) && !self.at_end() {
+            // Check for valid field start
+            if self.at(TokenKind::Word) || self.at(TokenKind::Quote) || self.at(TokenKind::Hash) {
+                self.parse_object_field();
+
+                // Handle comma between fields
+                if !self.at(TokenKind::RBrace) {
+                    if !self.eat(TokenKind::Comma) {
+                        // Missing comma - error but try to continue
+                        self.error("Expected ',' or '}' after object field".to_string());
+                        // Try to recover by looking for next field or closing brace
+                        if !self.at(TokenKind::Word)
+                            && !self.at(TokenKind::Quote)
+                            && !self.at(TokenKind::Hash)
+                            && !self.at(TokenKind::RBrace)
+                        {
+                            // Skip unexpected token
+                            self.bump();
+                        }
+                    }
+                }
+            } else if self.eat(TokenKind::Comma) {
+                // Trailing comma or double comma - just continue
+                continue;
+            } else {
+                // Unexpected token in object literal
+                self.error("Expected field name or '}'".to_string());
+                // Skip the unexpected token to avoid getting stuck
+                self.bump();
+            }
+        }
+
+        self.expect(TokenKind::RBrace);
+    }
+
+    /// Parse a single object field: name: value
+    fn parse_object_field(&mut self) {
+        self.with_node(SyntaxKind::OBJECT_FIELD, |p| {
+            // Field name - can be identifier or string literal
+            if p.at(TokenKind::Word) {
+                p.bump(); // identifier field name
+            } else if !p.parse_any_string() {
+                p.error("Expected field name".to_string());
+                return;
+            }
+
+            // Colon
+            if !p.expect(TokenKind::Colon) {
+                return; // Error already emitted by expect
+            }
+
+            // Field value - any expression (including nested constructors)
+            p.parse_expr();
         });
     }
 
