@@ -1235,12 +1235,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Find the start of the most recent complete expression
-    /// This walks backward through events to find where the last expression began
-    fn find_previous_expr_start(&self) -> usize {
-        self.find_previous_expr_start_after(0)
-    }
-
     /// Find the start of the most recent complete expression, but not before min_index
     /// This walks backward through events to find where the last expression began
     fn find_previous_expr_start_after(&self, min_index: usize) -> usize {
@@ -1647,6 +1641,18 @@ pub fn parse_file(tokens: &[Token]) -> (GreenNode, Vec<ParseError>) {
             parser.error("Expected top-level declaration".to_string());
             parser.bump(); // Skip unknown token
         }
+    }
+
+    // Consume any remaining trailing trivia (whitespace, comments, newlines)
+    // at_end() skips trivia, so we need to explicitly consume it for lossless parsing
+    while parser.current < parser.tokens.len() {
+        let token = &parser.tokens[parser.current];
+        let kind = token_kind_to_syntax_kind(token.kind);
+        parser.events.push(Event::Token {
+            kind,
+            text: token.text.clone(),
+        });
+        parser.current += 1;
     }
 
     parser.finish_node();
