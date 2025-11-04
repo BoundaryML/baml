@@ -167,6 +167,7 @@ pub enum SyntaxKind {
     OBJECT_LITERAL,
     OBJECT_FIELD,
     ARRAY_LITERAL,
+    MAP_LITERAL,
 
     // String components (assembled by parser)
     STRING_LITERAL,

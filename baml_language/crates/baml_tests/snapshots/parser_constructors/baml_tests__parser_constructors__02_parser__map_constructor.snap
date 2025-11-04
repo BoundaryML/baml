@@ -1,0 +1,179 @@
+---
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    WORD "function"
+    WORD "stringValues"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR " string"
+          WORD "string"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MAP_LITERAL
+          L_BRACE "{"
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "hello""
+              QUOTE """
+              WORD "hello"
+              QUOTE """
+            COLON ":"
+            STRING_LITERAL " "world""
+              QUOTE """
+              WORD "world"
+              QUOTE """
+          COMMA ","
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "test""
+              QUOTE """
+              WORD "test"
+              QUOTE """
+            COLON ":"
+            STRING_LITERAL " "test""
+              QUOTE """
+              WORD "test"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    WORD "function"
+    WORD "intValues"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR " int"
+          WORD "int"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MAP_LITERAL
+          L_BRACE "{"
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "hello""
+              QUOTE """
+              WORD "hello"
+              QUOTE """
+            COLON ":"
+            INTEGER "1"
+          COMMA ","
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "test""
+              QUOTE """
+              WORD "test"
+              QUOTE """
+            COLON ":"
+            INTEGER "2"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    WORD "function"
+    WORD "floatValues"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR " float"
+          WORD "float"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MAP_LITERAL
+          L_BRACE "{"
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "hello""
+              QUOTE """
+              WORD "hello"
+              QUOTE """
+            COLON ":"
+            FLOAT "1.0"
+          COMMA ","
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "test""
+              QUOTE """
+              WORD "test"
+              QUOTE """
+            COLON ":"
+            FLOAT "2.0"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    WORD "function"
+    WORD "boolValues"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR " bool"
+          WORD "bool"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MAP_LITERAL
+          L_BRACE "{"
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "hello""
+              QUOTE """
+              WORD "hello"
+              QUOTE """
+            COLON ":"
+            WORD "true"
+          COMMA ","
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "test""
+              QUOTE """
+              WORD "test"
+              QUOTE """
+            COLON ":"
+            WORD "false"
+          R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

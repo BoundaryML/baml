@@ -406,17 +406,19 @@ impl<'a> Parser<'a> {
             p.bump(); // Opening quote
 
             // Collect all tokens until closing quote
-            let mut depth = 1;
-            while depth > 0 && !p.at_end() {
+            while !p.at_end() {
+                // Check if next token is the closing quote
                 if p.at(TokenKind::Quote) {
-                    depth -= 1;
+                    p.bump(); // Consume closing quote
+                    return;
                 }
+                // Not a quote - consume as string content
+                // This includes Words, Colons, Slashes, etc. that make up the string
                 p.bump();
             }
 
-            if depth != 0 {
-                p.error("Unclosed string literal".to_string());
-            }
+            // If we get here, we reached EOF without finding closing quote
+            p.error("Unclosed string literal".to_string());
         });
 
         true
@@ -1177,29 +1179,19 @@ impl<'a> Parser<'a> {
         // Parse prefix (primary expression or unary operator)
         self.parse_prefix();
 
-        // Parse infix operators
+        // Parse infix operators and postfix operations
         while let Some(token) = self.current() {
             let op = token.kind;
 
-            // Check if this is an infix operator
-            if let Some((left_bp, right_bp)) = Self::infix_binding_power(op) {
-                if left_bp < min_bp {
-                    break;
-                }
-
-                // Mark where to start wrapping (before the LHS we just parsed)
-                // but not before the expr_start marker
+            // Check for special cases first
+            if op == TokenKind::Less && self.looks_like_generic_args() {
+                // Parse as generic arguments: foo<T>
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
-
-                // Consume the operator
-                self.bump();
-
-                // Parse right-hand side
-                self.parse_expr_bp(right_bp);
-
-                // Wrap everything from lhs_start in a BINARY_EXPR
-                self.wrap_events_in_node(lhs_start, SyntaxKind::BINARY_EXPR);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::PATH_EXPR);
+                self.parse_generic_args();
                 self.finish_node();
+                // Continue to potentially parse function call
+                continue;
             } else if op == TokenKind::LParen {
                 // Function call
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
@@ -1224,6 +1216,40 @@ impl<'a> Parser<'a> {
                 } else {
                     self.error("Expected field name after '.'".to_string());
                 }
+                self.finish_node();
+            } else if op == TokenKind::LBrace {
+                // Object literal/constructor
+                // Check if we have a preceding expression (constructor name/expression)
+                // by checking if we've emitted any events since expr_start
+                if self.events.len() > expr_start {
+                    // We have a preceding expression, treat as object literal/constructor
+                    let lhs_start = self.find_previous_expr_start_after(expr_start);
+                    self.wrap_events_in_node(lhs_start, SyntaxKind::OBJECT_LITERAL);
+                    self.parse_object_literal_body();
+                    self.finish_node();
+                } else {
+                    // No preceding expression, this is a block expression
+                    // Break and let parse_primary_expr handle it
+                    break;
+                }
+            } else if let Some((left_bp, right_bp)) = Self::infix_binding_power(op) {
+                // General infix operators (including < when it's not generic args)
+                if left_bp < min_bp {
+                    break;
+                }
+
+                // Mark where to start wrapping (before the LHS we just parsed)
+                // but not before the expr_start marker
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+
+                // Consume the operator
+                self.bump();
+
+                // Parse right-hand side
+                self.parse_expr_bp(right_bp);
+
+                // Wrap everything from lhs_start in a BINARY_EXPR
+                self.wrap_events_in_node(lhs_start, SyntaxKind::BINARY_EXPR);
                 self.finish_node();
             } else {
                 break;
@@ -1304,8 +1330,8 @@ impl<'a> Parser<'a> {
             // Null literal
             self.bump();
         } else if self.at(TokenKind::Word) {
-            // Identifier or path
-            self.bump();
+            // Identifier or path (could be multi-segment like baml.HttpMethod.Get)
+            self.parse_path_or_ident();
         } else if self.at(TokenKind::LParen) {
             // Parenthesized expression
             self.with_node(SyntaxKind::PAREN_EXPR, |p| {
@@ -1317,11 +1343,18 @@ impl<'a> Parser<'a> {
             // Array literal
             self.parse_array_literal();
         } else if self.at(TokenKind::LBrace) {
-            // Block expression or object literal
-            // For now, treat as block
-            self.parse_block_expr();
+            // Could be block expression or map literal
+            // Peek ahead to determine which one
+            if self.looks_like_map() {
+                // Map literal: { "key": value, ... }
+                self.parse_map_literal();
+            } else {
+                // Block expression: { statements... }
+                self.parse_block_expr();
+            }
         } else {
             self.error("Expected expression".to_string());
+            self.bump(); // Consume unexpected token.
         }
     }
 
@@ -1360,6 +1393,272 @@ impl<'a> Parser<'a> {
             }
 
             p.expect(TokenKind::RBracket);
+        });
+    }
+
+    /// Check if < starts generic arguments rather than a comparison
+    /// Generic args: foo<Type>, foo<A, B>
+    /// Comparison: a < b
+    fn looks_like_generic_args(&self) -> bool {
+        if !self.at(TokenKind::Less) {
+            return false;
+        }
+
+        // Look ahead to see if it's a type name followed by > or ,
+        if let Some(token_after_less) = self.peek(1) {
+            // Must be a word (type name)
+            if token_after_less.kind == TokenKind::Word {
+                // Check what comes after the word
+                if let Some(token_after_word) = self.peek(2) {
+                    // Generic args end with > or have comma for multiple args
+                    if token_after_word.kind == TokenKind::Greater
+                        || token_after_word.kind == TokenKind::Comma
+                    {
+                        return true;
+                    }
+                    // Could also have nested generics: Foo<Bar<T>>
+                    if token_after_word.kind == TokenKind::Less {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Parse generic arguments: <Type1, Type2, ...>
+    fn parse_generic_args(&mut self) {
+        self.with_node(SyntaxKind::GENERIC_ARGS, |p| {
+            p.expect(TokenKind::Less);
+
+            // Parse first type argument
+            if !p.at(TokenKind::Greater) {
+                p.parse_type();
+
+                // Parse remaining type arguments
+                while p.eat(TokenKind::Comma) {
+                    if p.at(TokenKind::Greater) {
+                        break; // Trailing comma
+                    }
+                    p.parse_type();
+                }
+            }
+
+            p.expect(TokenKind::Greater);
+        });
+    }
+
+    /// Check if the current position looks like a map literal rather than a block
+    /// Maps start with { "string": or { identifier:
+    /// Blocks typically start with { keyword or { expression (but not field:value pattern)
+    fn looks_like_map(&self) -> bool {
+        // Must start with {
+        if !self.at(TokenKind::LBrace) {
+            return false;
+        }
+
+        // Look at the token after {
+        if let Some(token_after_brace) = self.peek(1) {
+            // Empty braces - treat as empty map
+            if token_after_brace.kind == TokenKind::RBrace {
+                return true;
+            }
+
+            // Check for string literal key
+            if token_after_brace.kind == TokenKind::Quote
+                || token_after_brace.kind == TokenKind::Hash
+            {
+                // Likely a map with string key
+                return true;
+            }
+
+            // Check for identifier followed by colon (map with identifier key)
+            if token_after_brace.kind == TokenKind::Word {
+                // Check if it's a keyword that starts statements
+                let text = &token_after_brace.text;
+                if text == "let"
+                    || text == "return"
+                    || text == "if"
+                    || text == "while"
+                    || text == "for"
+                    || text == "break"
+                    || text == "continue"
+                {
+                    return false; // It's a block with a statement
+                }
+
+                // Check if word is followed by colon (map field)
+                if let Some(token_after_word) = self.peek(2) {
+                    if token_after_word.kind == TokenKind::Colon {
+                        return true; // word: pattern indicates a map
+                    }
+                }
+            }
+        }
+
+        false // Default to block
+    }
+
+    /// Parse a map literal: { "key": value, ... }
+    fn parse_map_literal(&mut self) {
+        self.with_node(SyntaxKind::MAP_LITERAL, |p| {
+            p.expect(TokenKind::LBrace);
+
+            // Parse map entries
+            while !p.at(TokenKind::RBrace) && !p.at_end() {
+                // Check for valid entry start
+                if p.at(TokenKind::Word) || p.at(TokenKind::Quote) || p.at(TokenKind::Hash) {
+                    p.parse_map_entry();
+
+                    // Handle comma between entries
+                    if !p.at(TokenKind::RBrace) {
+                        if !p.eat(TokenKind::Comma) {
+                            // Missing comma - error but try to continue
+                            p.error("Expected ',' or '}' after map entry".to_string());
+                            // Try to recover
+                            if !p.at(TokenKind::Word)
+                                && !p.at(TokenKind::Quote)
+                                && !p.at(TokenKind::Hash)
+                                && !p.at(TokenKind::RBrace)
+                            {
+                                // Skip unexpected token
+                                p.bump();
+                            }
+                        }
+                    }
+                } else if p.eat(TokenKind::Comma) {
+                    // Trailing comma or double comma - just continue
+                    continue;
+                } else {
+                    // Unexpected token in map
+                    p.error("Expected map key or '}'".to_string());
+                    // Skip the unexpected token to avoid getting stuck
+                    p.bump();
+                }
+            }
+
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse a path or simple identifier
+    /// Paths: baml.HttpMethod.Get
+    /// Identifiers: foo
+    fn parse_path_or_ident(&mut self) {
+        if !self.at(TokenKind::Word) {
+            return;
+        }
+
+        // Check if this looks like a path (word followed by dot and another word)
+        if self
+            .peek(1)
+            .map(|t| t.kind == TokenKind::Dot)
+            .unwrap_or(false)
+            && self
+                .peek(2)
+                .map(|t| t.kind == TokenKind::Word)
+                .unwrap_or(false)
+        {
+            // It's a path
+            self.with_node(SyntaxKind::PATH_EXPR, |p| {
+                p.bump(); // First segment
+
+                // Parse remaining segments
+                while p.eat(TokenKind::Dot) {
+                    if p.at(TokenKind::Word) {
+                        p.bump(); // Next segment
+                    } else {
+                        p.error("Expected path segment after '.'".to_string());
+                        break;
+                    }
+                }
+            });
+        } else {
+            // Simple identifier
+            self.bump();
+        }
+    }
+
+    /// Parse a single map entry: key: value
+    fn parse_map_entry(&mut self) {
+        self.with_node(SyntaxKind::OBJECT_FIELD, |p| {
+            // Key - can be identifier or string literal
+            if p.at(TokenKind::Word) {
+                p.bump(); // identifier key
+            } else if !p.parse_any_string() {
+                p.error("Expected map key".to_string());
+                return;
+            }
+
+            // Colon
+            if !p.expect(TokenKind::Colon) {
+                return; // Error already emitted by expect
+            }
+
+            // Value - any expression (including nested maps)
+            p.parse_expr();
+        });
+    }
+
+    /// Parse the body of an object literal/constructor: { field: value, ... }
+    fn parse_object_literal_body(&mut self) {
+        self.expect(TokenKind::LBrace);
+
+        // Parse fields until we hit the closing brace
+        while !self.at(TokenKind::RBrace) && !self.at_end() {
+            // Check for valid field start
+            if self.at(TokenKind::Word) || self.at(TokenKind::Quote) || self.at(TokenKind::Hash) {
+                self.parse_object_field();
+
+                // Handle comma between fields
+                if !self.at(TokenKind::RBrace) {
+                    if !self.eat(TokenKind::Comma) {
+                        // Missing comma - error but try to continue
+                        self.error("Expected ',' or '}' after object field".to_string());
+                        // Try to recover by looking for next field or closing brace
+                        if !self.at(TokenKind::Word)
+                            && !self.at(TokenKind::Quote)
+                            && !self.at(TokenKind::Hash)
+                            && !self.at(TokenKind::RBrace)
+                        {
+                            // Skip unexpected token
+                            self.bump();
+                        }
+                    }
+                }
+            } else if self.eat(TokenKind::Comma) {
+                // Trailing comma or double comma - just continue
+                continue;
+            } else {
+                // Unexpected token in object literal
+                self.error("Expected field name or '}'".to_string());
+                // Skip the unexpected token to avoid getting stuck
+                self.bump();
+            }
+        }
+
+        self.expect(TokenKind::RBrace);
+    }
+
+    /// Parse a single object field: name: value
+    fn parse_object_field(&mut self) {
+        self.with_node(SyntaxKind::OBJECT_FIELD, |p| {
+            // Field name - can be identifier or string literal
+            if p.at(TokenKind::Word) {
+                p.bump(); // identifier field name
+            } else if !p.parse_any_string() {
+                p.error("Expected field name".to_string());
+                return;
+            }
+
+            // Colon
+            if !p.expect(TokenKind::Colon) {
+                return; // Error already emitted by expect
+            }
+
+            // Field value - any expression (including nested constructors)
+            p.parse_expr();
         });
     }
 

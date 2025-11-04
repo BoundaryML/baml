@@ -1,0 +1,24 @@
+class Point {
+  x int
+  y int
+}
+
+function stringArray() -> string[] {
+  ["hello", "world", "test"]
+}
+
+function intArray() -> int[] {
+  [1, 2, 3]
+}
+
+function floatArray() -> float[] {
+  [1.0, 2.0, 3.0]
+}
+
+function boolArray() -> bool[] {
+  [true, false, true]
+}
+
+function pointArray() -> Point[] {
+  [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }, Point { x: 5, y: 6 }]
+}
