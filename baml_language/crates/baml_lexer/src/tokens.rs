@@ -6,8 +6,7 @@ use text_size::{TextRange, TextSize};
 
 /// Token kinds for BAML.
 ///
-/// The lexer produces structural tokens only - it does not detect keywords.
-/// The parser is responsible for checking if a Word token is a keyword.
+/// The lexer recognizes keywords as distinct tokens per the BAML specification.
 ///
 /// # Note on Unquoted Strings and Raw Strings
 ///
@@ -36,9 +35,59 @@ use text_size::{TextRange, TextSize};
 /// This keeps the lexer simple, context-free, and fast.
 #[derive(Logos, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenKind {
+    // ============ Keywords ============
+    // Top-level declaration keywords
+    #[token("class")]
+    Class,
+    #[token("enum")]
+    Enum,
+    #[token("function")]
+    Function,
+    #[token("client")]
+    Client,
+    #[token("generator")]
+    Generator,
+    #[token("test")]
+    Test,
+    #[token("retry_policy")]
+    RetryPolicy,
+    #[token("template_string")]
+    TemplateString,
+    #[token("type_builder")]
+    TypeBuilder,
+
+    // Control flow keywords
+    #[token("if")]
+    If,
+    #[token("else")]
+    Else,
+    #[token("for")]
+    For,
+    #[token("while")]
+    While,
+    #[token("let")]
+    Let,
+    #[token("in")]
+    In,
+    #[token("break")]
+    Break,
+    #[token("continue")]
+    Continue,
+    #[token("return")]
+    Return,
+
+    // Other keywords
+    #[token("watch")]
+    Watch,
+    #[token("instanceof")]
+    Instanceof,
+    #[token("env")]
+    Env,
+    #[token("dynamic")]
+    Dynamic,
+
     // ============ Identifiers and Literals ============
-    /// Any identifier-like word (includes what were keywords!)
-    /// Parser will check text to determine if it's a keyword
+    /// Any identifier-like word (non-keyword)
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_-]*")]
     Word,
 
@@ -56,11 +105,11 @@ pub enum TokenKind {
 
     /// Integer literal
     #[regex(r"[0-9]+")]
-    Integer,
+    IntegerLiteral,
 
     /// Float literal (must come after Integer in regex priority)
     #[regex(r"[0-9]+\.[0-9]+")]
-    Float,
+    FloatLiteral,
 
     // ============ Operators and Punctuation ============
 
@@ -242,38 +291,6 @@ mod tests {
         let tokens = lex_lossless(source, file_id);
         let reconstructed = reconstruct_source(&tokens);
         assert_eq!(source, reconstructed);
-    }
-
-    #[test]
-    fn test_words_not_keywords() {
-        let source = "function class enum client";
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
-
-        let kinds: Vec<TokenKind> = tokens
-            .iter()
-            .filter(|t| t.kind != TokenKind::Whitespace)
-            .map(|t| t.kind)
-            .collect();
-
-        // All should be Word tokens now
-        assert_eq!(
-            kinds,
-            vec![
-                TokenKind::Word,
-                TokenKind::Word,
-                TokenKind::Word,
-                TokenKind::Word,
-            ]
-        );
-
-        // Verify text is preserved
-        let words: Vec<&str> = tokens
-            .iter()
-            .filter(|t| t.kind == TokenKind::Word)
-            .map(|t| t.text.as_str())
-            .collect();
-        assert_eq!(words, vec!["function", "class", "enum", "client"]);
     }
 
     #[test]

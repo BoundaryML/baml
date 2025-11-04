@@ -1,21 +1,20 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 360
 expression: output
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
   CLASS_DEF
-    WORD "class"
+    KW_CLASS "class"
     WORD "Broken"
     L_BRACE "{"
     FIELD
       WORD "field"
       TYPE_EXPR " int"
         WORD "int"
-    FIELD
-      WORD "function"
-      TYPE_EXPR
-    INTEGER "123"
+    KW_FUNCTION "function"
+    INTEGER_LITERAL "123"
     FIELD
       WORD "Invalid"
       TYPE_EXPR
@@ -26,7 +25,7 @@ SOURCE_FILE
     R_BRACE "}"
 
 === ERRORS ===
-  Expected Expected type, found Expected type
+  Expected Unexpected token in class body, found Unexpected token in class body
   Expected Unexpected token in class body, found Unexpected token in class body
   Expected Expected type, found Expected type
   Expected Unexpected token in class body, found Unexpected token in class body

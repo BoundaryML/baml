@@ -1,11 +1,12 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 872
 expression: output
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
   FUNCTION_DEF
-    WORD "function"
+    KW_FUNCTION "function"
     WORD "stringValues"
     PARAMETER_LIST "()"
       L_PAREN "("
@@ -42,17 +43,17 @@ SOURCE_FILE
             STRING_LITERAL "
     "test""
               QUOTE """
-              WORD "test"
+              KW_TEST "test"
               QUOTE """
             COLON ":"
             STRING_LITERAL " "test""
               QUOTE """
-              WORD "test"
+              KW_TEST "test"
               QUOTE """
           R_BRACE "}"
         R_BRACE "}"
   FUNCTION_DEF
-    WORD "function"
+    KW_FUNCTION "function"
     WORD "intValues"
     PARAMETER_LIST "()"
       L_PAREN "("
@@ -80,20 +81,20 @@ SOURCE_FILE
               WORD "hello"
               QUOTE """
             COLON ":"
-            INTEGER "1"
+            INTEGER_LITERAL "1"
           COMMA ","
           OBJECT_FIELD
             STRING_LITERAL "
     "test""
               QUOTE """
-              WORD "test"
+              KW_TEST "test"
               QUOTE """
             COLON ":"
-            INTEGER "2"
+            INTEGER_LITERAL "2"
           R_BRACE "}"
         R_BRACE "}"
   FUNCTION_DEF
-    WORD "function"
+    KW_FUNCTION "function"
     WORD "floatValues"
     PARAMETER_LIST "()"
       L_PAREN "("
@@ -121,20 +122,20 @@ SOURCE_FILE
               WORD "hello"
               QUOTE """
             COLON ":"
-            FLOAT "1.0"
+            FLOAT_LITERAL "1.0"
           COMMA ","
           OBJECT_FIELD
             STRING_LITERAL "
     "test""
               QUOTE """
-              WORD "test"
+              KW_TEST "test"
               QUOTE """
             COLON ":"
-            FLOAT "2.0"
+            FLOAT_LITERAL "2.0"
           R_BRACE "}"
         R_BRACE "}"
   FUNCTION_DEF
-    WORD "function"
+    KW_FUNCTION "function"
     WORD "boolValues"
     PARAMETER_LIST "()"
       L_PAREN "("
@@ -168,7 +169,7 @@ SOURCE_FILE
             STRING_LITERAL "
     "test""
               QUOTE """
-              WORD "test"
+              KW_TEST "test"
               QUOTE """
             COLON ":"
             WORD "false"

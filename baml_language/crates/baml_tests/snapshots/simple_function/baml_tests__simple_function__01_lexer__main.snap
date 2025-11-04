@@ -1,8 +1,9 @@
 ---
 source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 4497
 expression: output
 ---
-Word "function"
+Function "function"
 Word "HelloWorld"
 LParen "("
 Word "name"
@@ -12,7 +13,7 @@ RParen ")"
 Arrow "->"
 Word "string"
 LBrace "{"
-Word "client"
+Client "client"
 Word "GPT4"
 Word "prompt"
 Hash "#"
@@ -28,7 +29,7 @@ RBrace "}"
 Quote "\""
 Hash "#"
 RBrace "}"
-Word "class"
+Class "class"
 Word "User"
 LBrace "{"
 Word "name"

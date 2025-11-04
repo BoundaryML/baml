@@ -1,11 +1,12 @@
 ---
 source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 3395
 expression: output
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
   CLASS_DEF
-    WORD "class"
+    KW_CLASS "class"
     WORD "Level5"
     L_BRACE "{"
     FIELD
@@ -14,7 +15,7 @@ SOURCE_FILE
         WORD "string"
     R_BRACE "}"
   CLASS_DEF
-    WORD "class"
+    KW_CLASS "class"
     WORD "Level4"
     L_BRACE "{"
     FIELD
@@ -23,7 +24,7 @@ SOURCE_FILE
         WORD "Level5"
     R_BRACE "}"
   CLASS_DEF
-    WORD "class"
+    KW_CLASS "class"
     WORD "Level3"
     L_BRACE "{"
     FIELD
@@ -32,7 +33,7 @@ SOURCE_FILE
         WORD "Level4"
     R_BRACE "}"
   CLASS_DEF
-    WORD "class"
+    KW_CLASS "class"
     WORD "Level2"
     L_BRACE "{"
     FIELD
@@ -41,7 +42,7 @@ SOURCE_FILE
         WORD "Level3"
     R_BRACE "}"
   CLASS_DEF
-    WORD "class"
+    KW_CLASS "class"
     WORD "Level1"
     L_BRACE "{"
     FIELD
@@ -50,7 +51,7 @@ SOURCE_FILE
         WORD "Level2"
     R_BRACE "}"
   FUNCTION_DEF
-    WORD "function"
+    KW_FUNCTION "function"
     WORD "DeepExpression"
     PARAMETER_LIST "()"
       L_PAREN "("
@@ -62,7 +63,7 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         RETURN_STMT
-          WORD "return"
+          KW_RETURN "return"
           PAREN_EXPR
             L_PAREN "("
             PAREN_EXPR
@@ -92,38 +93,38 @@ SOURCE_FILE
                                             PAREN_EXPR
                                               L_PAREN "("
                                               BINARY_EXPR "1 + 2"
-                                                INTEGER "1"
+                                                INTEGER_LITERAL "1"
                                                 PLUS "+"
-                                                INTEGER "2"
+                                                INTEGER_LITERAL "2"
                                               R_PAREN ")"
                                             STAR "*"
-                                            INTEGER "3"
+                                            INTEGER_LITERAL "3"
                                           R_PAREN ")"
                                         MINUS "-"
-                                        INTEGER "4"
+                                        INTEGER_LITERAL "4"
                                       R_PAREN ")"
                                     SLASH "/"
-                                    INTEGER "5"
+                                    INTEGER_LITERAL "5"
                                   R_PAREN ")"
                                 PLUS "+"
-                                INTEGER "6"
+                                INTEGER_LITERAL "6"
                               R_PAREN ")"
                             STAR "*"
-                            INTEGER "7"
+                            INTEGER_LITERAL "7"
                           R_PAREN ")"
                         MINUS "-"
-                        INTEGER "8"
+                        INTEGER_LITERAL "8"
                       R_PAREN ")"
                     SLASH "/"
-                    INTEGER "9"
+                    INTEGER_LITERAL "9"
                   R_PAREN ")"
                 PLUS "+"
-                INTEGER "10"
+                INTEGER_LITERAL "10"
               R_PAREN ")"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
-    WORD "function"
+    KW_FUNCTION "function"
     WORD "ComplexType"
     PARAMETER_LIST "()"
       L_PAREN "("
@@ -158,7 +159,7 @@ SOURCE_FILE
   GREATER_GREATER ">>"
   GREATER ">"
   L_BRACE "{"
-  WORD "return"
+  KW_RETURN "return"
   L_BRACE "{"
   R_BRACE "}"
   R_BRACE "}"

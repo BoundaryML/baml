@@ -12,12 +12,36 @@ use crate::ParseError;
 /// Map lexer token kinds to syntax kinds.
 fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
     match kind {
+        // Keywords
+        TokenKind::Class => SyntaxKind::KW_CLASS,
+        TokenKind::Enum => SyntaxKind::KW_ENUM,
+        TokenKind::Function => SyntaxKind::KW_FUNCTION,
+        TokenKind::Client => SyntaxKind::KW_CLIENT,
+        TokenKind::Generator => SyntaxKind::KW_GENERATOR,
+        TokenKind::Test => SyntaxKind::KW_TEST,
+        TokenKind::RetryPolicy => SyntaxKind::KW_RETRY_POLICY,
+        TokenKind::TemplateString => SyntaxKind::KW_TEMPLATE_STRING,
+        TokenKind::TypeBuilder => SyntaxKind::KW_TYPE_BUILDER,
+        TokenKind::If => SyntaxKind::KW_IF,
+        TokenKind::Else => SyntaxKind::KW_ELSE,
+        TokenKind::For => SyntaxKind::KW_FOR,
+        TokenKind::While => SyntaxKind::KW_WHILE,
+        TokenKind::Let => SyntaxKind::KW_LET,
+        TokenKind::In => SyntaxKind::KW_IN,
+        TokenKind::Break => SyntaxKind::KW_BREAK,
+        TokenKind::Continue => SyntaxKind::KW_CONTINUE,
+        TokenKind::Return => SyntaxKind::KW_RETURN,
+        TokenKind::Watch => SyntaxKind::KW_WATCH,
+        TokenKind::Instanceof => SyntaxKind::KW_INSTANCEOF,
+        TokenKind::Env => SyntaxKind::KW_ENV,
+        TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
+
         // Literals
         TokenKind::Word => SyntaxKind::WORD,
         TokenKind::Quote => SyntaxKind::QUOTE,
         TokenKind::Hash => SyntaxKind::HASH,
-        TokenKind::Integer => SyntaxKind::INTEGER,
-        TokenKind::Float => SyntaxKind::FLOAT,
+        TokenKind::IntegerLiteral => SyntaxKind::INTEGER_LITERAL,
+        TokenKind::FloatLiteral => SyntaxKind::FLOAT_LITERAL,
 
         // Brackets
         TokenKind::LBrace => SyntaxKind::L_BRACE,
@@ -221,13 +245,6 @@ impl<'a> Parser<'a> {
         self.current().map(|t| t.kind == kind).unwrap_or(false)
     }
 
-    /// Check if current token is a keyword
-    fn at_keyword(&self, keyword: &str) -> bool {
-        self.current()
-            .map(|t| t.kind == TokenKind::Word && t.text == keyword)
-            .unwrap_or(false)
-    }
-
     /// Check if a token kind is basic trivia (whitespace/newlines, not comments).
     /// Comments are also conceptually trivia, but they're assembled from token patterns (// and /*).
     #[allow(clippy::unused_self)]
@@ -389,16 +406,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Consume keyword if text matches
-    fn eat_keyword(&mut self, keyword: &str) -> bool {
-        if self.at_keyword(keyword) {
-            self.bump();
-            true
-        } else {
-            false
-        }
-    }
-
     /// Expect a token, emit error if not found
     fn expect(&mut self, kind: TokenKind) -> bool {
         if self.eat(kind) {
@@ -409,17 +416,6 @@ impl<'a> Parser<'a> {
                 .map(|t| format!("{:?}", t.kind))
                 .unwrap_or_else(|| "EOF".to_string());
             self.error(format!("Expected {kind:?}, found {found}"));
-            false
-        }
-    }
-
-    /// Expect a keyword, emit error if not found
-    fn expect_keyword(&mut self, keyword: &str) -> bool {
-        if self.eat_keyword(keyword) {
-            true
-        } else {
-            let found = self.current().map(|t| t.text.as_str()).unwrap_or("EOF");
-            self.error(format!("Expected keyword '{keyword}', found '{found}'"));
             false
         }
     }
@@ -849,7 +845,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_enum(&mut self) {
         self.with_node(SyntaxKind::ENUM_DEF, |p| {
             // 'enum' keyword
-            p.expect_keyword("enum");
+            p.expect(TokenKind::Enum);
 
             // Enum name
             if p.at(TokenKind::Word) {
@@ -901,7 +897,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_class(&mut self) {
         self.with_node(SyntaxKind::CLASS_DEF, |p| {
             // 'class' keyword
-            p.expect_keyword("class");
+            p.expect(TokenKind::Class);
 
             // Class name
             if p.at(TokenKind::Word) {
@@ -956,7 +952,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_function(&mut self) {
         self.with_node(SyntaxKind::FUNCTION_DEF, |p| {
             // 'function' keyword
-            p.expect_keyword("function");
+            p.expect(TokenKind::Function);
 
             // Function name
             if p.at(TokenKind::Word) {
@@ -1055,13 +1051,15 @@ impl<'a> Parser<'a> {
             let mut has_prompt = false;
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                if p.at_keyword("client") {
+                if p.at(TokenKind::Client) {
                     if has_client {
                         errors.push("Duplicate 'client' field".to_string());
                     }
                     has_client = true;
                     p.parse_client_field();
-                } else if p.at_keyword("prompt") {
+                } else if p.at(TokenKind::Word)
+                    && p.current().map(|t| t.text == "prompt").unwrap_or(false)
+                {
                     if has_prompt {
                         errors.push("Duplicate 'prompt' field".to_string());
                     }
@@ -1145,7 +1143,7 @@ impl<'a> Parser<'a> {
 
     fn parse_client_field(&mut self) {
         self.with_node(SyntaxKind::CLIENT_FIELD, |p| {
-            p.expect_keyword("client");
+            p.expect(TokenKind::Client);
 
             // Client name
             if p.at(TokenKind::Word) {
@@ -1158,7 +1156,12 @@ impl<'a> Parser<'a> {
 
     fn parse_prompt_field(&mut self) {
         self.with_node(SyntaxKind::PROMPT_FIELD, |p| {
-            p.expect_keyword("prompt");
+            // Expect 'prompt' keyword (as Word token)
+            if p.at(TokenKind::Word) && p.current().map(|t| t.text == "prompt").unwrap_or(false) {
+                p.bump();
+            } else {
+                p.error("Expected 'prompt' keyword".to_string());
+            }
 
             // Prompt value (usually a raw string)
             if !p.parse_any_string() {
@@ -1185,19 +1188,19 @@ impl<'a> Parser<'a> {
 
     /// Parse a statement
     fn parse_stmt(&mut self) {
-        if self.at_keyword("let") {
+        if self.at(TokenKind::Let) {
             self.parse_let_stmt();
-        } else if self.at_keyword("return") {
+        } else if self.at(TokenKind::Return) {
             self.parse_return_stmt();
-        } else if self.at_keyword("if") {
+        } else if self.at(TokenKind::If) {
             self.parse_if_expr();
-        } else if self.at_keyword("while") {
+        } else if self.at(TokenKind::While) {
             self.parse_while_stmt();
-        } else if self.at_keyword("for") {
+        } else if self.at(TokenKind::For) {
             self.parse_for_expr();
-        } else if self.at_keyword("break") {
+        } else if self.at(TokenKind::Break) {
             self.parse_break_stmt();
-        } else if self.at_keyword("continue") {
+        } else if self.at(TokenKind::Continue) {
             self.parse_continue_stmt();
         } else {
             // Expression statement
@@ -1207,7 +1210,7 @@ impl<'a> Parser<'a> {
 
     fn parse_let_stmt(&mut self) {
         self.with_node(SyntaxKind::LET_STMT, |p| {
-            p.expect_keyword("let");
+            p.expect(TokenKind::Let);
 
             // Variable name
             if p.at(TokenKind::Word) {
@@ -1234,7 +1237,7 @@ impl<'a> Parser<'a> {
 
     fn parse_return_stmt(&mut self) {
         self.with_node(SyntaxKind::RETURN_STMT, |p| {
-            p.expect_keyword("return");
+            p.expect(TokenKind::Return);
 
             // Optional return value
             if !p.at(TokenKind::RBrace) && !p.at_end() {
@@ -1245,7 +1248,7 @@ impl<'a> Parser<'a> {
 
     fn parse_if_expr(&mut self) {
         self.with_node(SyntaxKind::IF_EXPR, |p| {
-            p.expect_keyword("if");
+            p.expect(TokenKind::If);
 
             // Condition
             p.parse_expr();
@@ -1258,10 +1261,10 @@ impl<'a> Parser<'a> {
             }
 
             // Optional else
-            if p.at_keyword("else") {
+            if p.at(TokenKind::Else) {
                 p.bump(); // else
 
-                if p.at_keyword("if") {
+                if p.at(TokenKind::If) {
                     // else if
                     p.parse_if_expr();
                 } else if p.at(TokenKind::LBrace) {
@@ -1276,7 +1279,7 @@ impl<'a> Parser<'a> {
 
     fn parse_while_stmt(&mut self) {
         self.with_node(SyntaxKind::WHILE_STMT, |p| {
-            p.expect_keyword("while");
+            p.expect(TokenKind::While);
 
             // Condition
             p.parse_expr();
@@ -1292,7 +1295,7 @@ impl<'a> Parser<'a> {
 
     fn parse_for_expr(&mut self) {
         self.with_node(SyntaxKind::FOR_EXPR, |p| {
-            p.expect_keyword("for");
+            p.expect(TokenKind::For);
 
             // Loop variable
             if p.at(TokenKind::Word) {
@@ -1302,7 +1305,7 @@ impl<'a> Parser<'a> {
             }
 
             // 'in' keyword
-            p.expect_keyword("in");
+            p.expect(TokenKind::In);
 
             // Iterator expression
             p.parse_expr();
@@ -1318,13 +1321,13 @@ impl<'a> Parser<'a> {
 
     fn parse_break_stmt(&mut self) {
         self.with_node(SyntaxKind::BREAK_STMT, |p| {
-            p.expect_keyword("break");
+            p.expect(TokenKind::Break);
         });
     }
 
     fn parse_continue_stmt(&mut self) {
         self.with_node(SyntaxKind::CONTINUE_STMT, |p| {
-            p.expect_keyword("continue");
+            p.expect(TokenKind::Continue);
         });
     }
 
@@ -1488,20 +1491,23 @@ impl<'a> Parser<'a> {
 
     /// Parse primary expression (literals, identifiers, parentheses)
     fn parse_primary_expr(&mut self) {
-        if self.at(TokenKind::Integer) || self.at(TokenKind::Float) {
+        if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
             // Numeric literal
             self.bump();
         } else if self.parse_any_string() {
             // String literal
-        } else if self.at_keyword("true") || self.at_keyword("false") {
-            // Boolean literal
-            self.bump();
-        } else if self.at_keyword("null") {
-            // Null literal
-            self.bump();
         } else if self.at(TokenKind::Word) {
-            // Identifier or path (could be multi-segment like baml.HttpMethod.Get)
-            self.parse_path_or_ident();
+            let text = self.current().map(|t| t.text.as_str()).unwrap_or("");
+            if text == "true" || text == "false" {
+                // Boolean literal
+                self.bump();
+            } else if text == "null" {
+                // Null literal
+                self.bump();
+            } else {
+                // Identifier or path (could be multi-segment like baml.HttpMethod.Get)
+                self.parse_path_or_ident();
+            }
         } else if self.at(TokenKind::LParen) {
             // Parenthesized expression
             self.with_node(SyntaxKind::PAREN_EXPR, |p| {
@@ -1889,7 +1895,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_client(&mut self) {
         self.with_node(SyntaxKind::CLIENT_DEF, |p| {
             // 'client' keyword
-            p.expect_keyword("client");
+            p.expect(TokenKind::Client);
 
             // Optional client type: <llm>
             if p.at(TokenKind::Less) {
@@ -1984,7 +1990,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_test(&mut self) {
         self.with_node(SyntaxKind::TEST_DEF, |p| {
             // 'test' keyword
-            p.expect_keyword("test");
+            p.expect(TokenKind::Test);
 
             // Test name
             if p.at(TokenKind::Word) {
@@ -2008,7 +2014,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_retry_policy(&mut self) {
         self.with_node(SyntaxKind::RETRY_POLICY_DEF, |p| {
             // 'retry_policy' keyword
-            p.expect_keyword("retry_policy");
+            p.expect(TokenKind::RetryPolicy);
 
             // Policy name
             if p.at(TokenKind::Word) {
@@ -2032,7 +2038,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_template_string(&mut self) {
         self.with_node(SyntaxKind::TEMPLATE_STRING_DEF, |p| {
             // 'template_string' keyword
-            p.expect_keyword("template_string");
+            p.expect(TokenKind::TemplateString);
 
             // Template name
             if p.at(TokenKind::Word) {
@@ -2057,7 +2063,11 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_type_alias(&mut self) {
         self.with_node(SyntaxKind::TYPE_ALIAS_DEF, |p| {
             // 'type' keyword
-            p.expect_keyword("type");
+            if p.at(TokenKind::Word) && p.current().map(|t| t.text == "type").unwrap_or(false) {
+                p.bump();
+            } else {
+                p.error("Expected 'type' keyword".to_string());
+            }
 
             // Type alias name
             if p.at(TokenKind::Word) {
@@ -2090,21 +2100,23 @@ pub fn parse_file(tokens: &[Token]) -> (GreenNode, Vec<ParseError>) {
 
     // Parse top-level declarations
     while !parser.at_end() {
-        if parser.at_keyword("enum") {
+        if parser.at(TokenKind::Enum) {
             parser.parse_enum();
-        } else if parser.at_keyword("class") {
+        } else if parser.at(TokenKind::Class) {
             parser.parse_class();
-        } else if parser.at_keyword("function") {
+        } else if parser.at(TokenKind::Function) {
             parser.parse_function();
-        } else if parser.at_keyword("client") {
+        } else if parser.at(TokenKind::Client) {
             parser.parse_client();
-        } else if parser.at_keyword("test") {
+        } else if parser.at(TokenKind::Test) {
             parser.parse_test();
-        } else if parser.at_keyword("retry_policy") {
+        } else if parser.at(TokenKind::RetryPolicy) {
             parser.parse_retry_policy();
-        } else if parser.at_keyword("template_string") {
+        } else if parser.at(TokenKind::TemplateString) {
             parser.parse_template_string();
-        } else if parser.at_keyword("type") {
+        } else if parser.at(TokenKind::Word)
+            && parser.current().map(|t| t.text == "type").unwrap_or(false)
+        {
             parser.parse_type_alias();
         } else {
             // Unknown top-level item - error recovery

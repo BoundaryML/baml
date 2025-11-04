@@ -1,11 +1,12 @@
 ---
 source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 4524
 expression: output
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
   FUNCTION_DEF
-    WORD "function"
+    KW_FUNCTION "function"
     WORD "HelloWorld"
     PARAMETER_LIST
       L_PAREN "("
@@ -22,7 +23,7 @@ SOURCE_FILE
       L_BRACE "{"
       CLIENT_FIELD "
   client GPT4"
-        WORD "client"
+        KW_CLIENT "client"
         WORD "GPT4"
       PROMPT_FIELD
         WORD "prompt"
@@ -48,7 +49,7 @@ class User {
           QUOTE """
           HASH "#"
           R_BRACE "}"
-          WORD "class"
+          KW_CLASS "class"
           WORD "User"
           L_BRACE "{"
           WORD "name"

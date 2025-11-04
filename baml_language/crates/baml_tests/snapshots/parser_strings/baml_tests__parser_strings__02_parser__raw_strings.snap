@@ -1,11 +1,12 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 3954
 expression: output
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
   CLASS_DEF
-    WORD "class"
+    KW_CLASS "class"
     WORD "RawStrings"
     L_BRACE "{"
     FIELD
@@ -118,7 +119,7 @@ function ProcessText(input string) -> string {
             HASH "#"
             R_PAREN ")"
             R_BRACE "}"
-            WORD "function"
+            KW_FUNCTION "function"
             WORD "ProcessText"
             L_PAREN "("
             WORD "input"
@@ -127,7 +128,7 @@ function ProcessText(input string) -> string {
             ARROW "->"
             WORD "string"
             L_BRACE "{"
-            WORD "client"
+            KW_CLIENT "client"
             WORD "GPT4"
             WORD "prompt"
             HASH "#"

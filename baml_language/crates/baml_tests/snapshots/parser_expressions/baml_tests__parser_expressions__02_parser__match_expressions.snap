@@ -1,11 +1,12 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 2103
 expression: output
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
   ENUM_DEF
-    WORD "enum"
+    KW_ENUM "enum"
     WORD "Status"
     L_BRACE "{"
     ENUM_VARIANT "
@@ -22,7 +23,7 @@ SOURCE_FILE
       WORD "SUSPENDED"
     R_BRACE "}"
   FUNCTION_DEF
-    WORD "function"
+    KW_FUNCTION "function"
     WORD "HandleStatus"
     PARAMETER_LIST
       L_PAREN "("
@@ -43,7 +44,7 @@ SOURCE_FILE
   GREATER ">"
   QUOTE """
   WORD "Waiting"
-  WORD "for"
+  KW_FOR "for"
   WORD "approval"
   QUOTE """
   WORD "Status"
@@ -76,7 +77,7 @@ SOURCE_FILE
   R_BRACE "}"
   R_BRACE "}"
   FUNCTION_DEF
-    WORD "function"
+    KW_FUNCTION "function"
     WORD "ComplexMatch"
     PARAMETER_LIST
       L_PAREN "("
@@ -90,26 +91,26 @@ SOURCE_FILE
   WORD "match"
   WORD "value"
   L_BRACE "{"
-  INTEGER "0"
+  INTEGER_LITERAL "0"
   EQUALS "="
   GREATER ">"
   QUOTE """
   WORD "zero"
   QUOTE """
-  INTEGER "1"
+  INTEGER_LITERAL "1"
   PIPE "|"
-  INTEGER "2"
+  INTEGER_LITERAL "2"
   PIPE "|"
-  INTEGER "3"
+  INTEGER_LITERAL "3"
   EQUALS "="
   GREATER ">"
   QUOTE """
   WORD "small"
   QUOTE """
-  INTEGER "4"
+  INTEGER_LITERAL "4"
   DOT "."
   DOT "."
-  INTEGER "10"
+  INTEGER_LITERAL "10"
   EQUALS "="
   GREATER ">"
   QUOTE """
